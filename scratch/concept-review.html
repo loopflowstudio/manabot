@@ -1,75 +1,138 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Battlefield identity · MTG-420</title>
-<style>:root{color-scheme:light dark;font:17px/1.5 system-ui}body{max-width:53rem;margin:3rem auto;padding:0 1rem}h1,h2{line-height:1.15}th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid GrayText}table{border-collapse:collapse}code{overflow-wrap:anywhere}section{border-inline-start:.25rem solid #628980;padding-inline:1rem}</style>
-<main><small>MTG-420 · engine review · d12eb496 → 9dbe17ee</small>
-<h1>Do the engine’s battlefield records match what a policy can act on?</h1>
-<p>A policy can target a permanent by its public identity. Resolution may need its physical cards, a waiting trigger may need its last copiable form, and the acting viewer may know only a face-down 2/2. The branch separates these questions for meld and departed copies. Manifest Dread puts all three in the same position.</p>
-<section><h2>Biggest mismatch · can a copy record claim an ability its token never received?</h2>
-<p><b>Existing · No fit.</b> The rules author specifies what changes in the copied characteristics. Both entry copies and token copies accept the full <code>Modification</code> vocabulary here. For example, <code>CantBlock</code> returns false from <code>apply_copiable</code>. In debug, <code>Object::apply_copy_exceptions</code> asserts. In release, it appends the exception to <code>CopyEffect.exceptions</code> anyway. A search branch can then expose the exception as a fact while executing a creature that can block. This is a code-path counterexample. The Driver fixture uses supported exceptions.</p>
-<p><b>Proposed.</b> Give the author a copy-exception type with an exhaustive operation on the copiable face. Resolve numeric parameters once. Use that value for entry, token creation, face changes and recording. Keep the existing serialized variant names and learning tokens. An effect such as a temporary blocking restriction continues to belong to the live effect system. Tightening just the debug check would leave the error discoverable only when a game reaches that instruction.</p></section>
-<h2>Existing · which Driver goes on the stack?</h2>
-<table><thead><tr><th>Decision<th>Electroduplicate under Doubling Season<th>The Fire Crystal control
-<tbody><tr><th>Copy a creature<td>Flashback creates two Drivers. Each has haste, a printed death ability and an intrinsic end-step ability.<td>The activated ability creates one Ogre and schedules its sacrifice.
-<tr><th>Copy the token with Rite<td>Two more Drivers inherit both abilities. The original Driver has no haste.<td>Kicked Rite makes five more Ogres. Removing the Crystal removes haste from all seven.
-<tr><th>Restore the end-step decision<td>Take first and last offered ordering choices in separate forks. Four exact sources appear in reverse orders. Each sacrifices itself and offers every remaining eligible Elves appearance. Both forks return all four Elves and leave the original Driver.<td>One sacrifice resolves. The original Ogre and the five Rite copies survive.</table>
-<p><b>Fit · Yes.</b> The copy definition owns an intrinsic ability. Trigger placement binds each occurrence to its token. A delayed trigger owns an exact recipient independently of the recipient’s characteristics. In-memory restore exercises ordering here. Portable replay and stale-Command checks for this position are still open.</p>
-<p><b>Next batch · proposed.</b> Copy a blue 3/3 Serpent named Koma’s Coil with Electroduplicate. Give the resulting token a temporary death trigger, then copy it with Rite before end step. Both tokens should sacrifice themselves. Only the first should fire the temporary grant. Check both source references in the chooser’s observations and replay the ordering Command from its recorded root. Use the same copy path for the remaining targeted spells and upkeep trigger.</p>
-<h2>Existing · restore either library order</h2>
-<table><thead><tr><th>Decision or continuation<th>Battlefield<th>Library, next draw first<th>Clues
-<tbody><tr><td>Snapshot before owner answers<td>Ragnarok<td>Unrelated card<td>0
-<tr><td>Restore → Fang first<td>Pair has left<td>Unrelated card → Fang → Vanille<td>1
-<tr><td>Restore → Vanille first<td>Pair has left<td>Unrelated card → Vanille → Fang<td>1
-<tr><td>Target a token copy instead<td>Original Ragnarok remains<td>Original library order<td>1</table>
-<p>The FIN fixtures compare both original card identities through the final draw. The token branch returns to priority. A namesake can also satisfy Vanille’s name check and still fail to meld after exile. The name identifies a candidate. Physical backing determines the result.</p>
-<h2>Do the caller’s concepts line up with the engine?</h2>
-<table><thead><tr><th>What the caller needs<th>Engine owner<th>Fit
-<tbody><tr><td>One target across an in-place transformation<td>PermanentId and exact ObjectId for Cecil. Esper Origins instead acquires a new appearance through exile.<td>Yes
-<tr><td>Two physical cards under one target<td>Both CardIds resolve to Ragnarok’s ObjectId. A token copy owns neither constituent.<td>Yes
-<tr><td>A triggered copy effect can finish after its source leaves<td>CopiableValues for the departed appearance. The Horde trigger survives Clone returning as Gray Ogre.<td>Yes
-<tr><td>Resolve a departure and keep its consequences together<td>EventResult carries both arrivals. The general move_object_with_entry API completes immediately and returns its first arrival.<td>No · the same zone change has two caller contracts.
-<tr><td>Give the decision to the responsible seat<td>meld_order_choice reads the owner for library and graveyard. Epic Downfall supplies its controller for exile.<td>Yes · the native Commands distinguish owner and exiling opponent.
-<tr><td>Search a hidden battlefield from the acting viewer’s knowledge<td>Both native samplers fill hidden manifest slots under the existing target.<td>Yes for the paired Forest/Ogre roots. Restricted-selection weighting remains open.</table>
-<section><h2>Movement contract · asking for the successor of a permanent</h2>
-<p><b>Existing.</b> An object handle alone admits a token, an ordinary card or a genuine pair. An immediate move returning one handle cannot express a pending order or tell a linked effect which two arrivals it owns.</p>
-<p><b>Proposed.</b> A battlefield departure submits one zone-change proposal. After replacements fix the destination, the batch retains any ordering decision and resumes the original instruction with all its arrivals. Carry the player performing the exile into this decision. Preserve the cheap single-card path where the source zone guarantees it, including a draw from the library.</p></section>
-<h2>Existing · one exile, two recoverable histories</h2>
-<table><thead><tr><th>Epic Downfall decision<th>Owner’s exile list, earliest first<th>What the fork retains
-<tbody><tr><td>Opponent has two offers<td>Existing entries<td>One targetable Ragnarok
-<tr><td>Restore and choose Fang first<td>Existing entries → Fang → Vanille<td>Two new exact appearances
-<tr><td>Restore and choose Vanille first<td>Existing entries → Vanille → Fang<td>The same physical cards in reverse order
-<tr><td>Submit either spent Command again<td>Identical entries and order<td>Rejection leaves the event ledger intact</table>
-<p>The FIN test <code>ragnarok_exile_timestamps_are_chosen_by_the_exiling_opponent</code> checks both branches from one native snapshot. Portable replay remains an open check.</p>
-<h2>Existing · one death, two arrivals, one trigger</h2>
-<p>After Blasphemous Act, the owner restores either graveyard order. The observation returned by each Command reports one death with Ragnarok’s identity and incarnation. Both fronts enter above the previous graveyard. One stacked ability destroys the chosen opposing Island and returns the chosen Gray Ogre. The previous behavior review recorded five passing native Ragnarok tests, including Airbending Lesson.</p>
-<section><h2>Existing · airbend Ragnarok, then draw</h2>
-<table><thead><tr><th>Search checkpoint<th>Opponent casting Airbending Lesson<th>Owner of Fang and Vanille
-<tbody><tr><td>Fork at the pending order<td>Two Commands. Draw still pending.<td>Controls one Ragnarok in this fixture.
-<tr><td>Restore either Command<td>Chooses the earlier exile timestamp. Records airbending and draws once.<td>Receives a {2} cast permission on each exact exile arrival.
-<tr><td>Submit the spent Command<td>Rejection preserves the draw, order and event history.<td>Both original grants survive.
-<tr><td>Cast one front when timing permits<td>Spell has finished resolving.<td>The other front retains its grant.</table>
-<p>The retained movement batch delivers both arrivals before the Lesson continues. In each restored branch the owner casts both fronts with four colorless mana. A token copy has no surviving card to receive a grant.</p></section>
-<h2>Existing · same target, two private roots</h2>
-<table><thead><tr><th>After manifest entry<th>Root A<th>Root B</thead>
-<tbody><tr><th>Controller inspects<td>Gray Ogre<td>Forest
-<tr><th>Public graveyard arrival<td>Plains<td>Plains
-<tr><th>Other hidden library card<td>Forest<td>Gray Ogre
-<tr><th>Opponent at priority<td colspan="2">One nameless 2/2. Both roots have identical permanent records and encoded permanent buffers. The registry key is −1 and the object join names the battlefield permanent.
-<tr><th>Exact snapshot restored<td>Gray Ogre under the permanent<td>Forest under the permanent</table>
-<p><b>Fit: Yes.</b> The fixture in <code>cards/tests/cards/dsk.rs</code> supplies the private selection and calls <code>Game::manifest</code>. A real choice between Ogre and Forest would expose the unselected card in the graveyard. Those two outcomes should be distinguishable.</p>
-<h2>Existing · one private choice, two public outcomes</h2>
-<table><thead><tr><th>Restored Command<th>Controller inspects<th>Public graveyard arrival<th>Opponent can target</thead><tbody>
-<tr><td>Select Gray Ogre<td>Gray Ogre<td>Forest, once<td>Nameless 2/2
-<tr><td>Select Forest<td>Forest<td>Gray Ogre, once<td>Nameless 2/2</table>
-<p><b>Fit · Yes.</b> The cast fixture restores the pending native choice for each Command and rejects reuse after resolution. One remaining library card enters directly. An empty library produces no permanent. These forks deliberately have different public graveyards. The paired roots above isolate disclosure by keeping Plains in both graveyards.</p>
-<h2>Existing · copy the 2/2 twice</h2>
-<p><b>Yes.</b> Clone Legion copies manifested Aang. Aang goes to the graveyard. A second Clone Legion copies the remaining token. Both tokens are face-up, nameless 2/2s. Neither carries a back face. <code>CopiableValues.definition_id</code> can be absent. The DSK fixtures exercise both seats’ encoded permanent rows. The semantic text fixture separately exercises Lightning Bolt from both seats. Each can target the original by its battlefield alias. Only the controller can inspect its printing in this position.</p>
-<section><h2>Existing · fork at Lightning Bolt</h2>
-<p><b>Fit · Yes.</b> The public Plains and Bolt target fix the graveyard and battlefield appearance. Forest and Gray Ogre occupy the two unknown slots. For each sampler, seeds 0–7 yield the same assignments from either private root and reach both printings. The controller sees the assigned printing in each sampled world. Restoring the original snapshot recovers the original printing. The indexed world and hand materializer agree for each seed.</p>
-<p>In the reveal fixture, Cecil keeps its counter and public reference when payment completes. An Ember Island Production copy taken before payment stays anonymous. A copy taken after payment has Cecil’s back face. Restoring and passing retains the face-down target, mana and pending Bolt. The Academy replay fixture separately exercises reconnect and replay with Llanowar Elves.</p>
-<p>The seven native DSK fixtures passed at ff22e98e. This paired deal has no pending private selection. Its seed agreement does not establish constrained-world probabilities.</p></section>
-<p>At 9dbe17ee the native card test filters <code>copy_sacrifice</code>, <code>dsk::</code> and <code>ragnarok</code> passed 2, 7 and 5 tests respectively. Search-64 throughput and fork allocation costs remain unmeasured for this review.</p>
-<h2>Review questions</h2><ol>
-<li>Where should an unsupported copy exception be caught? <b>1a · At authorship through a restricted type (selected).</b> 1b · At execution when a game first uses it.</li>
-<li>Which paired case should lead the next copy batch? <b>2a · The named Coil with an intrinsic sacrifice and a temporary death grant (selected).</b> 2b · The named Coil with only the intrinsic sacrifice.</li>
-</ol></main></html>
+<title>Battlefield lifetimes, LKI and exact links · MTG-420</title>
+<style>
+:root{color-scheme:light dark;font:16.5px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas)}
+body{max-width:56rem;margin:2.5rem auto;padding:0 1.1rem}
+h1,h2,h3{line-height:1.18}
+h2{margin-top:2.2rem}
+table{width:100%;border-collapse:collapse;margin:.9rem 0 1.2rem}
+th,td{text-align:left;vertical-align:top;padding:.58rem .65rem;border-bottom:1px solid var(--line)}
+thead th{font-size:.9rem;color:var(--muted)}
+code{font-size:.9em;overflow-wrap:anywhere}
+.callout{border-inline-start:.28rem solid var(--accent);background:var(--card);padding:.9rem 1.1rem;margin:1.2rem 0;border-radius:0 .35rem .35rem 0}
+.callout.warn{border-inline-start-color:var(--no)}
+.tag{display:inline-block;font-size:.76rem;font-weight:600;letter-spacing:.02em;padding:.08rem .42rem;border-radius:.25rem;vertical-align:baseline;margin-inline-end:.35rem}
+.existing{background:color-mix(in srgb,CanvasText 12%,Canvas);color:CanvasText}
+.proposed{background:color-mix(in srgb,var(--prop) 20%,Canvas);color:var(--prop)}
+.yes{background:color-mix(in srgb,var(--yes) 20%,Canvas);color:var(--yes)}
+.no{background:color-mix(in srgb,var(--no) 20%,Canvas);color:var(--no)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:.8rem 0}
+.panel{border:1px solid var(--line);border-radius:.35rem;padding:.85rem 1rem;background:var(--card)}
+.panel h3{margin:0 0 .45rem;font-size:1rem}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+<main>
+<small>MTG-420 · concept review · main <code>dca0a901</code> → <code>dbbc24a8</code></small>
+<h1>Do the engine’s lifetime, LKI and link records match what survives a battlefield departure?</h1>
+
+<p><strong>Area reviewed.</strong> Battlefield object lifetimes, last-known characteristics, exact exile links and form backing across <code>managym/state/src/{game_object,permanent,zone,ability,effect}.rs</code> and <code>managym/src/flow/{zones,triggers,resolution,proposed_event,layers,statics,cast_permission}.rs</code>. The form and copy probes are done; the next three batches build 25+ Foundations lifetime, graveyard and characteristics cards on top of these owners, so reviewing the whole area now catches broken concepts before Batch 1 locks them in.</p>
+
+<section class="callout warn">
+<h2>Biggest mismatch · departure triggers ignore last-known characteristics</h2>
+<p><span class="tag existing">Existing</span><span class="tag no">No fit</span> Before a permanent leaves the battlefield, <code>advance_event_batch</code> snapshots an <code>ObjectLki</code> and stores it in <code>GameState::object_lki</code>. Then <code>commit_zone_move</code> mints the freshly reset graveyard card (<code>moved_object</code>). Immediately afterward, <code>subject_matches_moved_object</code> (<code>triggers.rs:2142</code>) and <code>delayed_triggers_for_event</code> (<code>triggers.rs:1261</code>) match predicates against <code>&amp;self.state[moved_object]</code> — the <em>printed graveyard card</em> — patching in only one boolean (<code>animated_creature</code>). <code>ObjectLki</code> itself holds an ad-hoc subset (missing effective card types, non-creature subtypes, colors, legendary status, name, mana value and <code>attached_to</code>), <code>Condition::SourceMatches</code> checks only live permanents, and <code>ObjectSelector::Triggering</code> returns nothing once the triggering permanent has died.</p>
+
+<div class="grid">
+<div class="panel">
+<h3><span class="tag existing">Existing</span> Before · printed card in graveyard</h3>
+<p>Valkyrie’s Call returns Gray Ogre with <code>AddSubtypes(["Angel"])</code> and <code>AddKeywords(Flying)</code>. When that 3/3 Angel Ogre dies:</p>
+<ul>
+<li><code>ObjectLki</code> records <code>creature_types: ["Angel", "Ogre"]</code>.</li>
+<li><code>subject_matches_moved_object</code> reads <code>state[moved_object]</code> — printed Gray Ogre, not an Angel.</li>
+<li><strong>Result:</strong> Valkyrie’s Call loops infinitely. Infernal Vessel (“if it wasn’t a Demon”) loops infinitely. A manifested Forest dying reads as a noncreature Land and misses creature-death triggers. An Imprisoned-in-the-Moon creature dying reads as a Creature and falsely fires them.</li>
+<li><code>ObjectSelector::Triggering</code> calls <code>permanent_object(id)</code> → <code>None</code>, so Valkyrie’s Call cannot even return “that card”.</li>
+</ul>
+</div>
+<div class="panel">
+<h3><span class="tag proposed">Proposed</span> After · one battlefield matcher, live or departed</h3>
+<p>Complete <code>ObjectLki</code>’s compact battlefield facts (effective <code>types</code>, <code>subtypes</code>, <code>colors</code>, <code>is_legendary</code>, <code>name</code>, <code>mana_value</code>, <code>attached_to</code>) and evaluate predicates through one borrowed <code>CharacteristicView</code> shared by live permanents (<code>layers::matches_view</code>) and departed permanents.</p>
+<ul>
+<li><code>subject_matches_moved_object</code>, <code>DelayedTriggerEvent::CreatureDies</code>, <code>Condition::SourceMatches</code>, <code>TriggerSubject::EnchantedCreature</code> and <code>additional_trigger_times</code> all read <code>ObjectLki</code> on departure.</li>
+<li><code>ObjectSelector::Triggering</code> follows <code>departed_permanent_lki(id) → zones.successor(departed)</code> in graveyard/exile, matching <code>ObjectSelector::This</code>.</li>
+<li><strong>Result:</strong> Second-death Angel Ogre and Demon Vessel stay dead. Manifested lands die as creatures; mooned creatures die as lands. Simultaneous Aura + creature death still fires Angelic Destiny.</li>
+</ul>
+</div>
+</div>
+</section>
+
+<h2>Concrete walk · normal path, failure and recovery</h2>
+<table>
+<thead><tr><th>Step</th><th>Valkyrie’s Call + Infernal Vessel</th><th>Hoarding Dragon + Banishing Light</th></tr></thead>
+<tbody>
+<tr><th>Normal path</th>
+<td>Gray Ogre (non-Angel) dies. Death LKI matches <code>nontoken, non-Angel creature</code>. Trigger resolves, follows <code>Triggering</code> to the exact graveyard appearance, returns it under its owner’s control with a +1/+1 counter, flying and subtype Angel.</td>
+<td>Banishing Light exiles target permanent under <code>UntilSourceLeaves</code>. Hoarding Dragon exiles a searched artifact under <code>WithSource</code>. Two Dragons each key on their own exact <code>ObjectId</code>.</td></tr>
+<tr><th>Counterexample / failure</th>
+<td><strong>Existing fails:</strong> Killing the returned Angel Ogre (or Demon Vessel) re-reads the printed graveyard card and loops forever. Exiling the card in response before the return trigger resolves must make the return find nothing.</td>
+<td><strong>Existing fails:</strong> When Hoarding Dragon dies, <code>handle_leaves_battlefield</code> (<code>zones.rs:1076</code>) partitions and deletes <em>all</em> <code>exile_links</code> for <code>departing_object</code> — including <code>returns: false</code> — before the dies trigger even stacks.</td></tr>
+<tr><th>Recovery / fork</th>
+<td>Fork before answering simultaneous-death trigger order or before graveyard exile. Restoring either snapshot keeps the exact graveyard <code>ObjectId</code>: exile invalidates <code>successor(departed)</code> so nothing returns; passing returns the exact card once.</td>
+<td><strong>Proposed:</strong> <code>UntilSourceLeaves</code> ends and queues immediate return on departure; <code>WithSource</code> survives departure while the exiled appearance remains in exile and a live trigger/stack ability still names that source. Bouncing and replaying Dragon mints a new <code>ObjectId</code>, so the old link never fires.</td></tr>
+</tbody>
+</table>
+
+<h2>Do the product concepts and the code concepts line up?</h2>
+<table>
+<thead><tr><th>Product concept (rules &amp; player view)</th><th>Code concept (types &amp; owners)</th><th>Fit &amp; diagnosis</th></tr></thead>
+<tbody>
+<tr><td><strong>What a permanent was when it left</strong><br>Effective types, subtypes, P/T, colors, keywords, counters, attachment (CR 603.10a).</td>
+<td><code>ObjectLki</code> (<code>game_object.rs:298</code>); <code>subject_matches_moved_object</code> (<code>triggers.rs:2142</code>); <code>Condition::SourceMatches</code> (<code>statics.rs:904</code>).</td>
+<td><span class="tag no">No</span> Two readers for one idea: live permanents use <code>layers::matches_view</code>; departed permanents fall back to printed cards + <code>animated_creature</code>.</td></tr>
+
+<tr><td><strong>Follow a departed trigger subject to its card</strong><br>“Return that card” / “exile it” in graveyard or exile (CR 400.7e).</td>
+<td><code>ObjectSelector::This</code> follows <code>successor</code> (<code>resolution.rs:2455</code>); <code>ObjectSelector::Triggering</code> checks live permanents only (<code>resolution.rs:2301</code>); bespoke <code>MayExileTriggeringWithSource</code>.</td>
+<td><span class="tag no">No</span> Same CR 400.7e rule implemented for <code>This</code>, missing for <code>Triggering</code>, duplicated in a one-off effect.</td></tr>
+
+<tr><td><strong>Exiled “until this leaves” vs “exiled with this” vs cast grant</strong><br>CR 610.3 return duration vs CR 607.2a linked ability vs exile cast permission.</td>
+<td><code>ExileLink { returns: bool }</code> (<code>trigger.rs:137</code>); <code>handle_leaves_battlefield</code> deletes both (<code>zones.rs:1076</code>); <code>Effect::ExileLinked</code> writes <code>ExileCastGrant</code> instead; <code>effect_target_requirements</code> forces <code>UntilSourceLeaves</code> to <code>min: 0</code>.</td>
+<td><span class="tag no">No</span> One name for three mechanisms; one departure hook destroys links that must outlive their source (contradicting <code>LinkedExile::WithSource</code>’s own doc comment); mandatory Banishing Light / Stasis Snare silently become optional without an explicit <code>TargetClause</code>.</td></tr>
+
+<tr><td><strong>How a permanent was cast</strong><br>Cast vs blinked, announced X, mana spent, kicked (CR 400.7d, 603.4).</td>
+<td><code>SpellOnStack</code> has <code>kicked</code>, <code>x</code>, <code>spent</code>; <code>Permanent</code> keeps <code>was_cast</code>, <code>cast_x</code>, <code>cast_spent</code> but drops <code>kicked</code> (<code>zones.rs:878</code>); <code>PendingTrigger</code> / <code>TriggeredAbilityOnStack</code> drop <code>kicked</code>; <code>Condition::Kicked</code> is resolution-only.</td>
+<td><span class="tag no">No</span> One cast receipt split across partial field tuples; blocks Sun-Blessed Healer and Nullpriest of Oblivion’s intervening-if “if it was kicked”.</td></tr>
+
+<tr><td><strong>Delayed return with a death-time count</strong><br>Nine-Lives Familiar’s <code>revival - 1</code> counters; Infernal Vessel’s two +1/+1 counters.</td>
+<td><code>Effect::Move</code> has <code>with_counter: Option&lt;CounterKind&gt;</code> (count 1 only); <code>DelayedTrigger</code> remembers exact <code>ObjectBinding</code>s but cannot freeze a numeric count at creation.</td>
+<td><span class="tag no">No</span> Count cannot be re-read from a counterless graveyard card at end step; <code>Move</code> cannot express N entry counters.</td></tr>
+
+<tr><td><strong>Battlefield form vs copiable values</strong><br>Single card, DFC transform, melded pair, face-down manifest, token copy (CR 707, 712).</td>
+<td><code>Object.printed</code> overloaded for copy, meld and manifest; <code>Object.front</code> for transform; <code>Permanent.manifested</code> stays true after reveal (3 callers repeat <code>manifested &amp;&amp; definition_id == ANONYMOUS</code>); <code>ZoneManager.melded_cards</code> out-of-band.</td>
+<td><span class="tag no">No</span> Counterexample: <code>transform_permanent</code> (<code>zones.rs:977</code>) checks <code>back_face(object.definition_id)</code> without checking backing form, so a non-DFC Clone copying Cecil illegally transforms (violating CR 712.9).</td></tr>
+
+<tr><td><strong>Move a battlefield permanent with full consequences</strong><br>Replacements, meld ordering, linked return without panicking.</td>
+<td>Resumable <code>EventBatch</code> on <code>EffectFrame</code> vs immediate <code>move_object</code> / <code>complete_immediate_batch</code> (<code>cast_permission.rs:260</code> <code>exile_linked</code>, etc.).</td>
+<td><span class="tag no">No</span> Two caller contracts for one zone change; immediate path panics (<code>proposed_event.rs:971</code>) if Azula exiles Ragnarok.</td></tr>
+
+<tr><td><strong>Copied token exceptions, stacked trigger faces &amp; hidden manifest views</strong><br>Driver, Koma’s Coil, Horde, Manifest Dread privacy.</td>
+<td><code>CopyException</code>, <code>TriggeredAbilityOnStack.source_face</code>, <code>CopiableValues</code>, <code>observed_permanent_definition</code> / <code>observed_object_id</code>.</td>
+<td><span class="tag yes">Yes</span> Shipped contracts match rules and policy view; only open replay/sampling checks remain.</td></tr>
+</tbody>
+</table>
+
+<section class="callout">
+<h2>Recommended model &amp; execution order <span class="tag proposed">Proposed</span></h2>
+<ol>
+<li><strong>Unify departure LKI and predicate matching first (Batch 1 foundation).</strong> Complete <code>ObjectLki</code>’s compact effective fields (<code>types</code>, <code>subtypes</code>, <code>colors</code>, <code>is_legendary</code>, <code>name</code>, <code>mana_value</code>, <code>attached_to</code>) and share one borrowed <code>CharacteristicView</code> matcher between <code>layers::matches_view</code> and departure readers (<code>subject_matches_moved_object</code>, <code>DelayedTriggerEvent::CreatureDies</code>, <code>Condition::SourceMatches</code>, <code>TriggerSubject::EnchantedCreature</code>, <code>additional_trigger_times</code>). Extend <code>ObjectSelector::Triggering</code> to follow <code>departed_permanent_lki → successor</code> in graveyard/exile.</li>
+<li><strong>Split exile-link lifetimes and remove implicit optionality (Batch 1 foundation).</strong> Only <code>UntilSourceLeaves</code> links end and queue immediate returns in <code>handle_leaves_battlefield</code>. <code>WithSource</code> links survive source departure while the exiled appearance stays in exile and a source, pending trigger, stack ability or suspended frame still references that source (pruned alongside LKI form retention). Add <code>ObjectSelector::ExiledWithSource</code> and make target optionality explicit via <code>TargetClause</code> instead of inferring <code>min: 0</code> from <code>UntilSourceLeaves</code>.</li>
+<li><strong>Carry multi-counter entry and creation-time delayed counts (Batch 1).</strong> Generalize <code>Effect::Move</code> entry counters to <code>(CounterKind, EffectValue)</code> and freeze dynamic values on <code>CreateDelayedTrigger</code> (or carry a resolved count on <code>DelayedTrigger</code>) so Nine-Lives Familiar’s end-step trigger never re-reads a counterless graveyard card.</li>
+<li><strong>Unify cast provenance on <code>Permanent</code> (Batch 2).</strong> Replace the partial <code>was_cast</code>/<code>cast_x</code>/<code>cast_spent</code> fields with <code>cast: Option&lt;CastReceipt&gt;</code> (including <code>kicked</code>), thread <code>kicked</code> onto <code>PendingTrigger</code> and <code>TriggeredAbilityOnStack</code>, and allow <code>Condition::Kicked</code> as an ETB intervening-if (CR 603.4) for Sun-Blessed Healer and Nullpriest of Oblivion.</li>
+<li><strong>Unify battlefield form backing and finish immediate-move migration (Batch 4).</strong> Replace overloaded <code>Object.printed</code> / <code>Object.front</code> / <code>Permanent.manifested</code> / <code>ZoneManager.melded_cards</code> with an explicit battlefield form (backing card(s), orientation, face-down status) separate from <code>CopiableValues</code>, gate <code>transform_permanent</code> on backing form (fixing Clone-copying-Cecil, CR 712.9), expose one <code>is_face_down()</code> authority, and move battlefield-capable <code>move_object</code> callers (starting with <code>cast_permission::exile_linked</code>) onto <code>EffectFrame.batch</code>.</li>
+</ol>
+</section>
+
+<h2>Review questions (choices recorded for review)</h2>
+<ol>
+<li>How should departed permanents be matched by death triggers and intervening-if clauses?
+  <strong>1a · Complete <code>ObjectLki</code>’s compact effective fields and share one borrowed <code>CharacteristicView</code> matcher with <code>layers::matches_view</code> (selected — zero ability-Vec cloning, single authority).</strong>
+  1b · Store a full <code>Arc&lt;Characteristics&gt;</code> inside <code>ObjectLki</code> (simpler snapshot, but crosses the <code>managym-state</code> crate boundary and carries derived ability lists into state serialization).</li>
+<li>How should <code>WithSource</code> exile links outlive Hoarding Dragon’s death without leaking memory?
+  <strong>2a · Keep <code>WithSource</code> links across departure and prune them when the exiled object leaves exile or no live permanent, pending trigger, stack ability or suspended frame references the source (selected — matches <code>ObjectLkiLog::retain_forms</code>).</strong>
+  2b · Copy linked exile IDs into every trigger/stack object at departure (duplicates link ownership across stack frames).</li>
+<li>How should cast provenance (<code>was_cast</code>, <code>kicked</code>, <code>x</code>, <code>spent</code>) live on <code>Permanent</code>?
+  <strong>3a · One <code>cast: Option&lt;CastReceipt&gt;</code> value threaded into ETB triggers and intervening-if checks (selected — makes uncast/blinked invariants unrepresentable).</strong>
+  3b · Add a fourth loose <code>cast_kicked: bool</code> field beside <code>was_cast</code>, <code>cast_x</code> and <code>cast_spent</code>.</li>
+<li>Should <code>Effect::ExileLinked</code> (Hama/Azula cast grants) be renamed now or left alone?
+  <strong>4a · Keep the existing serialized variant name to preserve learning-token stability; separate only the runtime link lifetimes and add <code>ObjectSelector::ExiledWithSource</code> (selected — avoids unnecessary token churn outside MTG-420’s cast-permission boundary).</strong>
+  4b · Rename <code>Effect::ExileLinked</code> with a <code>token_renames.rs</code> entry in this Task.</li>
+</ol>
+</main></html>

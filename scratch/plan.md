@@ -17,25 +17,57 @@ The Task brief's design constraint: “Explore one-card transform, two-card meld
 - Named Koma's Coil copies through Rite, Self-Reflection (hand and flashback), Relm's Sketching and Extravagant Replication. Ordering Commands replay from the constructed snapshot. `fdn.rs` `named_coil` at `d52156c9`.
 - Compress `9e297f0c`: waiting triggers read the captured face (`pending_trigger_definition`/`pending_trigger_face`), and target legality shares `fits_trigger_clause`. The focused nextest run passed 42 cases. The 13 Python copy-text, Academy trigger-order and pinned-game checks passed. The merge `039b275b` brought only Loopflow workflow files.
 
+## Model to build (concept review)
+
+Record of the full review: `scratch/concept-review.html`. Before authoring Batch 1's cards, fix the four structural mismatches in the shared lifetime model so each batch exercises the real representation instead of card-specific workarounds:
+
+1. **One effective-characteristic matcher for live and departed permanents (lead slice, before Batch 1 cards).**
+   - *Problem:* `subject_matches_moved_object` (`triggers.rs`) and `delayed_triggers_for_event` (`CreatureDies`) currently test `&self.state[moved_object]` (the reset printed graveyard card) with only `animated_creature: bool` patched in, ignoring layered subtypes, card types, power, keywords, colors and copy/manifest faces. `Condition::SourceMatches` only checks live permanents; `TriggerSubject::EnchantedCreature` checks only live Auras (`ObjectLki` lacks `attached_to`); `ObjectSelector::Triggering` only returns live permanents (cannot follow a dead creature to its graveyard card).
+   - *Model:* Complete `ObjectLki` (`managym/state/src/game_object.rs`) with compact effective battlefield facts — `types: CardTypes`, `subtypes: Vec<String>`, `colors: Colors`, `is_legendary: bool`, `name: String` (when set/distinct), `mana_value: u8`, `attached_to: Option<ObjectId>` — alongside its existing `power`, `toughness`, `keywords`, `counters`, `abilities_lost`, `granted_abilities`, `copiable`. Introduce one borrowed `CharacteristicView<'a>` matcher shared by `layers::matches_view` (live permanents) and departure readers (`subject_matches_moved_object`, `DelayedTriggerEvent::CreatureDies`, `Condition::SourceMatches`, `TriggerSubject::EnchantedCreature`, `additional_trigger_times`). Keep `ObjectLki` in `managym-state` free of `flow` dependencies and avoid cloning derived ability vectors.
+   - *Successor following:* Extend `ObjectSelector::Triggering` (`resolution.rs`) to follow `departed_permanent_lki(id)` → `zones.successor(departed)` in graveyard/exile (matching `ObjectSelector::This`), while battlefield-only verbs continue narrowing through `selected_permanents`. Replace the bespoke successor lookup in `MayExileTriggeringWithSource` with the shared helper.
+   - *First proof:* A creature returned by Valkyrie's Call (Angel) or Infernal Vessel (Demon) dies a second time and does **not** re-trigger; a manifested Forest dies as a creature; an Imprisoned-in-the-Moon creature dies as a noncreature Land; simultaneous Aura + enchanted-creature death still fires Angelic Destiny.
+
+2. **Separate exile-link lifetimes and explicit target optionality (lead slice, before Batch 1 cards).**
+   - *Problem:* `handle_leaves_battlefield` (`zones.rs`) deletes *all* `exile_links` matching `departing_object`, destroying `LinkedExile::WithSource` links (`returns: false`) before Hoarding Dragon's dies trigger even stacks. `ObjectSelector` cannot select cards exiled with the source, and `effect_target_requirements` (`ability.rs`) silently forces every `LinkedExile::UntilSourceLeaves` effect to `min: 0` (making mandatory Banishing Light / Stasis Snare optional unless wrapped).
+   - *Model:* Only `UntilSourceLeaves` links end and queue immediate return followups in `handle_leaves_battlefield`. `WithSource` links survive source departure while the exiled appearance remains in exile and any live permanent, pending trigger, stack ability or suspended frame still references `link.source`, pruned alongside `ObjectLkiLog::retain_forms`. Add `ObjectSelector::ExiledWithSource` so Hoarding Dragon and future CR 607.2a abilities compose with `Effect::Move` / `SelectCards`. Make target optionality explicit via `TargetClause` (`min: 0` for Prayer of Binding, `min: 1` for Banishing Light and Stasis Snare) rather than inferring `min: 0` from `UntilSourceLeaves`. Keep `Effect::ExileLinked`'s existing serialized name for learning-token stability (its runtime `ExileCastGrant` ownership stays with cast permissions).
+
+3. **Multi-counter zone entry and frozen delayed-trigger values (Batch 1).**
+   - Generalize `Effect::Move` entry counters from `with_counter: Option<CounterKind>` (hardcoded `1`) to support a count (e.g. `with_counters: Option<(CounterKind, EffectValue)>` or a count paired with `CounterKind`, preserving existing serialization for count 1 / absent).
+   - Allow `Effect::CreateDelayedTrigger` to freeze creation-time numeric quantities (e.g. resolving `Effect::Move` counter counts or storing a captured `i32` on `DelayedTrigger`) so Nine-Lives Familiar's end-step return uses `death_revival_counters - 1` captured at death rather than reading `0` from the graveyard. Also support counter-kind checks on `ObjectLki` (`SourceCountersAtLeast` reading LKI after departure) for Familiar's intervening-if.
+
+4. **Unified cast provenance on `Permanent` and ETB triggers (Batch 2).**
+   - Replace the partial `was_cast` / `cast_x` / `cast_spent` fields on `Permanent` (`permanent.rs`) with `cast: Option<CastReceipt>` carrying `{ kicked, x, spent }` (`None` for tokens, blinks and reanimations), and thread `kicked` onto `PendingTrigger` and `TriggeredAbilityOnStack`.
+   - Allow `Condition::Kicked` (and `WasCast`) to evaluate in an entering permanent's intervening-if (CR 603.4) and cast-entry replacements (Nine-Lives Familiar, Sun-Blessed Healer, Nullpriest of Oblivion).
+
+5. **Explicit battlefield form backing and resumable battlefield moves (Batch 4).**
+   - Replace the overloaded `Object.printed` / `Object.front` / `Permanent.manifested` / `ZoneManager.melded_cards` split with an explicit battlefield form recording physical backing card(s), orientation and face-down state, separate from immutable `CopiableValues`. Gate `transform_permanent` (`zones.rs`) on backing form (fixing the CR 712.9 counterexample where a non-DFC Clone copying Cecil currently transforms) and expose one `is_face_down()` authority so callers never repeat `permanent.manifested && definition_id == ANONYMOUS`.
+   - Keep `move_object` / `complete_immediate_batch` strictly for non-choice moves (draws, stack counter, setup) and migrate battlefield-capable resolution moves (starting with `cast_permission::exile_linked` for `Decision::ExileLinked`, which currently panics if Azula exiles Ragnarok) onto `EffectFrame.batch`.
+
+*Choices made for review (reversible):* (1a) compact effective fields on `ObjectLki` + shared borrowed `CharacteristicView` over storing `Arc<Characteristics>` across crate boundaries; (2a) retain `WithSource` links across departure and prune on liveness rather than copying link IDs onto stack objects; (3a) `Option<CastReceipt>` on `Permanent` over a fourth loose `cast_kicked` bool; (4a) retain `Effect::ExileLinked`'s serialized variant name to avoid learning-token churn.
+
 ## Remaining batches
 
-1. **Exact departures and linked returns (next).** Banishing Light, Stasis Snare and Prayer of Binding, then Kykar and Hoarding Dragon on the same exile, source-departure and reentry setup. Extend its graveyard and end-step branches to Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call, Fake Your Own Death, Undying Malice and Angelic Destiny.
-2. **Graveyard choices, costs and simultaneous movement.** Use one two-graveyard setup for Raise the Past, Rise of the Dark Realms, Driver of the Dead (remaining target restrictions), Fiendish Panda, Heartfire Immolator, Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane (`atq.rs`) and Ordeal of Nylea. Abyssal Harvester is blocked (see below).
-3. **Effective characteristics and grants.** Use one board before and after grant, copy, attachment movement and reentry for Celestial Armor, Dropkick Bomber, Kellan (`fdn.rs`), Mild-Mannered Librarian, Soulstone Sanctuary, Crawling Barrens, Witness Protection, Eaten by Piranhas and Imprisoned in the Moon (`emn.rs`).
-4. **Representation review, consumers and budget.** See the sections below.
+1. **Exact departures and linked returns (next).**
+   - *First slice (model proof):* Land items 1–3 above (`ObjectLki` + shared `CharacteristicView` matcher, `ObjectSelector::Triggering` successor, separated `UntilSourceLeaves` / `WithSource` lifetimes + `ObjectSelector::ExiledWithSource` + explicit `TargetClause` optionality, multi-counter `Effect::Move`, and frozen delayed-trigger count).
+   - *Cards & integrated fixtures:* Banishing Light, Stasis Snare and Prayer of Binding, then Kykar and Hoarding Dragon on the same exile, source-departure and reentry setup. Extend its graveyard and end-step branches to Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call, Fake Your Own Death, Undying Malice and Angelic Destiny (including second-death non-triggering for Angel Ogre / Demon Vessel, manifested Forest dying as a creature, and simultaneous Aura + creature death).
+2. **Graveyard choices, costs and simultaneous movement.**
+   - *Foundation:* Land item 4 (`Option<CastReceipt>` carrying `kicked`, `x`, `spent` into `Permanent` and ETB triggers/intervening-if).
+   - *Cards & fixtures:* Use one two-graveyard setup for Raise the Past, Rise of the Dark Realms, Driver of the Dead (remaining target restrictions), Fiendish Panda, Heartfire Immolator, Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane (`atq.rs`) and Ordeal of Nylea. Abyssal Harvester is blocked (see below).
+3. **Effective characteristics and grants.** Use one board before and after grant, copy, attachment movement and reentry for Celestial Armor, Dropkick Bomber, Kellan (`fdn.rs`), Mild-Mannered Librarian, Soulstone Sanctuary, Crawling Barrens, Witness Protection, Eaten by Piranhas and Imprisoned in the Moon (`emn.rs`). Include death-time LKI checks for Witness Protection (Citizen) and Imprisoned in the Moon (noncreature Land).
+4. **Representation unification, consumers and budget.** Land item 5 (battlefield form backing + CR 712.9 transform gate + `is_face_down()` authority + battlefield `move_object` audit), close the open replay/sampling checks, verify consumers and measure against the engine budget.
 
 Row identity comes from the [FDN ledger](../.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl) (Task 05 of the [milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md)). Update each row with its delivered source and checks. Reuse first printings. Match produced tokens by their full printed characteristics: Kykar needs a white flying Spirit, and the catalog already defines Treasure and Koma's Coil.
 
 | Rows | Behavior to exercise |
 | --- | --- |
-| Banishing Light, Stasis Snare, Prayer of Binding | Remove the source before its entry trigger resolves, then again after the exile resolves. Only the second has an exile to end. Move the exiled card out and back before the source leaves. The new appearance stays put. Prayer gains life with zero targets chosen. A sole target that becomes illegal loses the entire resolution. |
-| Kykar; Hoarding Dragon | Choose Kykar's blink or its Spirit. The delayed return binds to the object in exile. With two Dragons that found different artifacts, only the dying Dragon recovers its linked card. Bounce and replay the same Dragon, then check the old link. |
-| Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call | Capture the Familiar's revival count at death. Spend one on its next-end-step return. In a sibling fork, move it out of the graveyard. Vessel and Call read death-time creature types. Counters and type grants attach to the returned incarnation. Kill Call together with an eligible creature. The trigger still returns the owner's card. |
+| Banishing Light, Stasis Snare, Prayer of Binding | Remove the source before its entry trigger resolves, then again after the exile resolves. Only the second has an exile to end. Move the exiled card out and back before the source leaves. The new appearance stays put. Prayer gains life with zero targets chosen (`min: 0`); Banishing Light and Stasis Snare require a target (`min: 1`). A sole target that becomes illegal loses the entire resolution. |
+| Kykar; Hoarding Dragon | Choose Kykar's blink or its Spirit. The delayed return binds to the object in exile. With two Dragons that found different artifacts, only the dying Dragon recovers its linked card via `WithSource` surviving departure. Bounce and replay the same Dragon, then check the old link. |
+| Nine-Lives Familiar, Infernal Vessel, Valkyrie's Call | Capture the Familiar's revival count at death (`k - 1` frozen into the delayed trigger) and spend one on its next-end-step return; cast entry gives 8 revival counters while blink gives 0. In a sibling fork, move it out of the graveyard. Vessel and Call read death-time effective creature types through unified LKI so a returned Demon Vessel or Angel creature does not re-trigger on a second death. Counters and type grants attach to the returned incarnation. Kill Call together with an eligible creature; the trigger still returns the owner's card. |
 | Fake Your Own Death, Undying Malice, Celestial Armor | Track which creature received a grant and when it ends. Move the Equipment after its entry trigger resolves. The protection follows its original recipient. When Fake Your Own Death is cast on a stolen creature, its owner gets the tapped card and the trigger's controller gets the Treasure. A dying token still produces Treasure. Malice returns the card tapped with its counter. |
-| Angelic Destiny, Ordeal of Nylea | Follow the enchanted creature through death and the Aura through its own departure. Only the eligible Aura appearance is recovered. Resolve Ordeal's attack, counter threshold, sacrifice and optional library selection through its actual triggers. |
+| Angelic Destiny, Ordeal of Nylea | Follow the enchanted creature through death (including simultaneous Aura + creature departure reading `ObjectLki.attached_to`) and the Aura through its own departure. Only the eligible Aura appearance is recovered. Resolve Ordeal's attack, counter threshold, sacrifice and optional library selection through its actual triggers. |
 | Raise the Past, Rise of the Dark Realms, Driver, Fiendish Panda, Heartfire Immolator | Put qualifying and excluded cards in both graveyards. Check simultaneous entry, ownership, resulting control and ETB triggers. Driver and Panda choose legal graveyard targets when their triggers are placed, including Panda's last power and its exclusions. Pump Immolator, sacrifice it as the cost and return it before resolution. Its damage uses its departed power. |
-| Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane | Read the actual kicked cast receipt on entry. An ordinary blink supplies none. Each has its own graveyard target restrictions. Check competing restricted spends on the kicked cards. Cane exiles itself as the cost before shuffling. |
-| Characteristics subset | Kellan and Librarian: incarnation-bound upgrades. Sanctuary and Barrens: persistent versus temporary animation. Dropkick Bomber: flying and a damage trigger granted to one exact recipient. Witness Protection, Eaten by Piranhas and Moon: layered form changes across a copy. |
+| Sun-Blessed Healer, Nullpriest of Oblivion, Feldon's Cane | Read the actual kicked `CastReceipt` in the ETB intervening-if (CR 603.4). An ordinary blink supplies `None` and does not trigger. Each has its own graveyard target restrictions. Check competing restricted spends on the kicked cards. Cane exiles itself as the cost before shuffling. |
+| Characteristics subset | Kellan and Librarian: incarnation-bound upgrades. Sanctuary and Barrens: persistent versus temporary animation. Dropkick Bomber: flying and a damage trigger granted to one exact recipient. Witness Protection, Eaten by Piranhas and Moon: layered form changes across a copy and through death LKI. |
 
 Pair Malice or Valkyrie's Call with simultaneous deaths and a blink in response. Keep simultaneous reanimation and sacrificed-source power in the integrated cases.
 
@@ -47,25 +79,24 @@ Pair Malice or Valkyrie's Call with simultaneous deaths and a blink in response.
 - Horde, Driver and Fire Crystal still need viewer projections and replay of their recorded Commands from a recorded root. Their native fork and restore checks already pass.
 - The named Coil setup has no seed-to-position replay file.
 - Manifest sampling: there is no pending private selection in the fixture. Constrained sampling, paired seeded searches and comparative viewer trace exports remain open.
-- Audit immediate battlefield move callers by their legal source zones. Start with linked entry follow-ups that consume a move's arrivals.
+- Audit immediate battlefield move callers by their legal source zones. Start with `cast_permission::exile_linked` (`Decision::ExileLinked`) and linked entry follow-ups that consume a move's arrivals.
 
 ## Representation review
 
-Review the final Rust representation against these witnesses.
+Review the final Rust representation against these witnesses:
 
-- **Cecil** keeps its card, object, counters, attachments and targets across transformation.
+- **Cecil** keeps its card, object, counters, attachments and targets across transformation; a non-DFC **Clone copying Cecil** cannot transform (CR 712.9).
 - **Esper Origins** gets a new exact identity at each zone move.
 - **Ragnarok** is one permanent backed by two physical cards, and each card moves exactly once.
 - **A token copy of Ragnarok** moves no physical card.
 - **A copy of a manifested permanent** gets the public 2/2 without the hidden printing or turn-up.
+- **A returned Angel / Demon / manifested land / mooned creature dying** matches its last-known effective battlefield characteristics, never its printed graveyard card.
 
-Extending the front-face field alone can express Cecil, but it drops a physical card when Ragnarok departs and gives a copy the hidden printing. The preferred shape is a battlefield form recording its backing card(s) and orientation, plus a separate immutable value for what an effect can copy. Keep the common single-card path compact. Tokens get their own origin, including a transforming token's faces when the creating effect copies them. Keep one permanent row, even for meld, and never fabricate a physical card. Review direction for meld: “In the FIN tests, fork and restore the pending library-order choice, take each legal order, and verify that each original card moves exactly once. Repeat with a token copy of Ragnarok and verify that it moves no physical cards.”
-
-Native owners: `managym/state/src/{game_object,permanent,ability,effect}.rs`, `managym/src/flow/{identity,zones,layers,statics,trigger,triggers,proposed_event,resolution}.rs`.
+Native owners: `managym/state/src/{game_object,permanent,ability,effect,zone}.rs`, `managym/src/flow/{identity,zones,layers,statics,trigger,triggers,proposed_event,resolution,cast_permission}.rs`.
 
 - Keep `CardId`, `ObjectId`, `PermanentId` and viewer IDs distinct.
-- Capture the departing form before `Object::mint_appearance`. Bind a link to the exact object its move produced.
-- Keep `ExileLink`, `DelayedTrigger` and `AbilitySource` as separate types for their separate lifetimes.
+- Capture the departing form and effective `ObjectLki` facts before `Object::mint_appearance`. Bind every link to the exact object its move produced.
+- Keep `ExileLink` (with separate `UntilSourceLeaves` vs `WithSource` lifetimes), `DelayedTrigger` and `AbilitySource` as separate types for their separate lifetimes.
 - Preserve the two-arrival batch through replacement and rollback.
 - `CopiableValues` feeds departed-source reads and token creation. The content pack decides when a departure needs a snapshot.
 - Keep counters, animation, equipment and transient grants out of the copied payload.
@@ -73,7 +104,7 @@ Native owners: `managym/state/src/{game_object,permanent,ability,effect}.rs`, `m
 - Invalidate the layer, mana and trigger indexes on form, grant, control and zone changes.
 - Planeswalkers, emblems and castable spell-copy links stay with their milestone owners.
 
-After the cohort, review Clone, Electroduplicate, Harvester, Manifest Dread and Ragnarok together for shared movement, snapshot, ability and observation owners. Remove superseded fields and callers, and keep the directed regressions.
+After the cohort, review Clone, Electroduplicate, Hoarding Dragon, Valkyrie's Call, Manifest Dread and Ragnarok together for shared movement, snapshot, ability, LKI and observation owners. Remove superseded fields and callers, and keep the directed regressions.
 
 ## Consumer checks
 
