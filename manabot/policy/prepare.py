@@ -524,6 +524,15 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class CompactAttention[A]:
+    """Place packed tokens into [batch, longest live sequence] for batched SDPA."""
+
+    batches: A
+    slots: A
+    key_mask: A  # [B,1,1,max_live], additive zero for a live key, -inf for padding
+
+
+@dataclass(frozen=True)
 class PackedAttention[A]:
     """Flat object indexes per group (-1 pads), and inverse gather for the heads."""
 
@@ -631,8 +640,11 @@ class Prepared[A]:
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
     memory: MemoryRows[A] | None = None
-    live_index: A | None = None  # flat valid slots, including memory/value tokens
+    live_index: A | None = None  # flat valid slots, including the optional value token
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
+    compact_attention: CompactAttention[Array] | None = field(
+        default=None, metadata={"host_only": True}
+    )
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
@@ -804,7 +816,8 @@ def prepare(
                 )
                 start += native.capacities[key]
             used = np.concatenate(segments)
-        if compact:
+        # Row groups carry no per-row value token or memory summaries.
+        if compact and not value_token and not memory_summaries:
             packed_attention = pack_attention(valid, len(used))
         if packed_attention is None and 0 < len(used) < validity.shape[1]:
             columns = used
@@ -930,7 +943,7 @@ def prepare(
         ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)
     if belief is not None:
         ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
-    live_index = live_offsets = None
+    live_index = live_offsets = compact_attention = None
     if live_tokens:
         if native is None:
             present = validity != 0
@@ -952,6 +965,10 @@ def prepare(
             lengths = counts.sum(1)
             live_index = np.arange(lengths.sum()) + np.repeat(skipped, counts.ravel())
         live_offsets = np.concatenate(([0], lengths.cumsum()))
+        live_keys = np.arange(lengths.max(initial=0)) < lengths[:, None]
+        batches, slots = np.nonzero(live_keys)
+        mask = np.where(live_keys, f32(0), f32(-np.inf))
+        compact_attention = CompactAttention(batches, slots, mask[:, None, None, :])
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -1042,6 +1059,7 @@ def prepare(
         memory=memory,
         live_index=live_index,
         live_offsets=live_offsets,
+        compact_attention=compact_attention,
     )
 
 

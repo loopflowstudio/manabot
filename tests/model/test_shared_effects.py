@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy import admission

@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract

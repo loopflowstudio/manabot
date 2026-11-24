@@ -8,9 +8,9 @@ from naming_reference import packed_definitions
 import pytest
 import torch
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig

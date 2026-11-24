@@ -47,9 +47,10 @@ actual counts through Etude and publishes admitted checkpoints. This is a
 software smoke, not playing-strength evidence.
 
 Local and Elemental default to Torch on CPU. Baseline defaults to Torch on
-CUDA. All three recipes accept an explicit device. On Apple Silicon,
-`--config '{"backend": "mlx", "device": "mps"}'` runs damped self-play on
-the GPU. [MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
+CUDA. All five shipped recipes (`local`, `baseline`, `elemental`,
+`belief_policy` and `belief_sampler`) accept `backend="mlx"` on Apple Silicon
+(with `device="mps"` or `"cpu"` for self-play).
+[MLX training and recovery](backends/mlx.md#tracked-training-and-recovery)
 
 Torch MPS self-play requires Torch 2.15 or newer. Evaluation and search run
 on CPU. The device guide covers precision, belief inputs and frozen opponents.
@@ -402,8 +403,8 @@ model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. `known_library` carries exact
-viewer-known definitions and library positions; Torch reads its
-position-weighted pool. MLX continues to refuse input v11. The `decklists` rows hold
+viewer-known definitions and library positions; both Torch and MLX read its
+position-weighted pool. The `decklists` rows hold
 each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
@@ -857,7 +858,7 @@ with those packages blocked.
 - `training/state/`: game-failure ledgers and numerical incidents.
 - `belief/`: viewer histories, world distributions and belief models;
   `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`
-  fits and persists hand samplers.
+  scores hand samplers and `checkpoint.py` persists them.
 - `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
   baseline) and the settings builders they share.
 - `experiment/`: what an experiment file runs on its machine: setup of the

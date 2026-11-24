@@ -21,6 +21,7 @@ from manabot.training.loops.self_play import (
     CLOCKS,
     Counts,
     create,
+    fresh_iteration,
     root_match,
     self_play,
     write_policy,
@@ -69,6 +70,22 @@ def test_recipe_refuses_backend_device_before_opening_a_run(
         config()
 
 
+def test_torch_live_tokens_refused_before_creating_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = elemental.settings(elemental.ElementalConfig(device="cpu")).model_copy(
+        update={"live_tokens": True}
+    )
+    out = tmp_path / "training"
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        fresh_iteration(settings, backend=TORCH, seed=1, out=out)
+    assert not out.exists()
+    monkeypatch.setattr(elemental, "settings", lambda config: settings)
+    monkeypatch.setattr(elemental, "track", lambda **kwargs: pytest.fail("opened run"))
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        elemental.train(elemental.ElementalConfig(device="cpu"))
+
+
 def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -106,7 +123,7 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     dataset = read_dataset(tmp_path / "sampler/histories.json")
     assert dataset.policy_identity == hashlib.sha256(original).hexdigest()
     assert policy.read_bytes() == original
-    assert (tmp_path / "sampler/belief.pt").is_file()
+    assert (tmp_path / "sampler/belief.safetensors").is_file()
 
 
 @pytest.mark.parametrize(

@@ -19,7 +19,7 @@ from typing import Literal, Sequence
 
 import torch
 
-from manabot.belief.checkpoint import load_belief_sampler
+from manabot.belief.checkpoint import read_belief_sampler
 from manabot.belief.protocol import SamplerCodec
 from manabot.belief.sampling_data import Split, read_dataset
 from manabot.belief.sampling_fit import (
@@ -171,7 +171,7 @@ def report_saved_sampler(
         assert checkpoint is not None and checkpoint_identity is not None
         # Initialization during loading must not perturb the caller's random stream.
         with torch.random.fork_rng(devices=[]):
-            model = load_belief_sampler(
+            admitted = read_belief_sampler(
                 checkpoint,
                 expected_dataset_identity=training.identity,
                 expected_policy_identity=training.policy_identity,
@@ -180,14 +180,8 @@ def report_saved_sampler(
                 expected_checkpoint_identity=checkpoint_identity,
                 codec=codec,
             )
-        # The admitted bytes own the fit seed when historical exports retained it.
-        # Missing metadata stays unavailable; a sampling seed cannot replace it.
-        payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
-        metrics = payload.get("metrics")
-        if isinstance(metrics, dict) and "seed" in metrics:
-            if type(metrics["seed"]) is not int:
-                raise ValueError("invalid checkpoint training seed")
-            training_seed = metrics["seed"]
+        model = admitted.model
+        training_seed = admitted.training_seed
     measurements: list[SplitMeasurement] = []
     splits: tuple[Split, ...] = ("train", "validation", "test")
     with deterministic_cpu():
@@ -269,6 +263,7 @@ def report_saved_sampler(
                 for name in (
                     "manabot/reports/belief.py",
                     "manabot/belief/sampling_fit.py",
+                    "manabot/belief/checkpoint.py",
                     "manabot/backends/torch/belief_fit.py",
                     "manabot/backends/torch/belief.py",
                     "manabot/belief/sampling_data.py",
