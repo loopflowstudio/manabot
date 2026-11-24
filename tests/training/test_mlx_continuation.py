@@ -190,7 +190,13 @@ def exercise_continuation(root: Path) -> None:
         resume=True,
     ) as run:
         learner, ema = loop.create(settings, seed=37, backend=backend)
-        state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
+        restored = state.restore(run, learner, ema, run.resume(extra=loop.Counts()))
+        assert restored.host is not None
+        # The original schema-2 writer bound these exact bytes in its header.
+        host_file = saved.path / "continuation.json"
+        payload = host_file.read_bytes()
+        assert restored.host.model_dump_json().encode() == payload
+        assert metadata["continuation_sha256"] == hashlib.sha256(payload).hexdigest()
         live = state.training_arrays(learner, ema)
         assert live.keys() == arrays.keys() - {"rng.collector", "rng.mlx"}
         for name, value in live.items():
@@ -214,16 +220,27 @@ def exercise_continuation(root: Path) -> None:
         with pytest.raises(ValueError, match=match):
             attempt(2)
     current = (out / "state/current.json").read_bytes()
-    host_file = saved.path / "continuation.json"
-    payload = host_file.read_bytes()
-    for damaged in (None, payload + b" "):
+    for damaged, message in (
+        (None, r"^missing MLX continuation\.json$"),
+        (payload + b" ", "saved header differs in continuation_sha256$"),
+        (payload[:-1], "saved header differs in continuation_sha256$"),
+    ):
         mx.save_safetensors(snapshot, arrays, metadata)
         if damaged is None:
             host_file.unlink()
         else:
             host_file.write_bytes(damaged)
-        with pytest.raises(ValueError, match="continuation|incompatible MLX snapshot"):
+        with pytest.raises(ValueError, match=message):
             attempt(2)
+    malformed = payload[:-1]
+    host_file.write_bytes(malformed)
+    mx.save_safetensors(
+        snapshot,
+        arrays,
+        metadata | {"continuation_sha256": hashlib.sha256(malformed).hexdigest()},
+    )
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        attempt(2)
     host_file.write_bytes(payload)
     corrupt = arrays | {
         "rng.collector": arrays["rng.collector"] ^ mx.array([0, 1], mx.uint32)
@@ -254,7 +271,6 @@ def exercise_continuation(root: Path) -> None:
     assert milestone.read_bytes() == original
     assert not milestone.with_name("00000002-raw.safetensors").exists()
     # A historical writer supplied weights and Adam, with no stream state.
-    host_file.unlink()
     historical = {
         k: v
         for k, v in metadata.items()
@@ -265,6 +281,11 @@ def exercise_continuation(root: Path) -> None:
         {k: v for k, v in arrays.items() if not k.startswith("rng.")},
         historical | {"schema": "1"},
     )
+    with pytest.raises(
+        ValueError, match="incompatible MLX snapshot schema with host continuation"
+    ):
+        attempt(2)
+    host_file.unlink()
     with recording(
         experiment="test",
         run="mlx",

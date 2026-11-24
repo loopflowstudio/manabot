@@ -26,7 +26,12 @@ from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
-from manabot.training.state.continuation import HostContinuation, StagedContinuation
+from manabot.training.state.continuation import (
+    HOST_FILE,
+    StagedContinuation,
+    host_exists,
+    read_host,
+)
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
@@ -93,37 +98,30 @@ def restore(
             raise ValueError("incompatible MLX saved counts or input contract")
         arrays, saved = mx.load(path, return_metadata=True)
         header = metadata() | {"schema": "1"}
-        host_file = found.path / "continuation.json"
-        payload = None
         if saved.get("schema") == "2":
-            if not host_file.is_file():
-                raise ValueError("missing MLX continuation.json")
-            payload = host_file.read_bytes()
-            header.update(
-                schema="2", continuation_sha256=hashlib.sha256(payload).hexdigest()
-            )
-            for key in ("rng.collector", "rng.mlx"):
-                value = arrays.pop(key, None)
-                if value is None or value.shape != (2,) or value.dtype != mx.uint32:
-                    raise ValueError(
-                        f"incompatible MLX snapshot RNG shape or dtype for {key}"
-                    )
-                sampling[key] = value
-            header["rng_sha256"] = sampling_digest(sampling)
-        elif host_file.exists():
-            raise ValueError("incompatible MLX snapshot schema with host continuation")
-        if saved != header:
-            differing = sorted(
-                key
-                for key in saved.keys() | header.keys()
-                if saved.get(key) != header.get(key)
-            )
-            raise ValueError(
-                "incompatible MLX snapshot: saved header differs in "
-                + ", ".join(differing)
-            )
-        if payload is not None:
-            host = HostContinuation.model_validate_json(payload)
+
+            def verify_sampling(host_sha256: str) -> None:
+                header.update(schema="2", continuation_sha256=host_sha256)
+                for key in ("rng.collector", "rng.mlx"):
+                    value = arrays.pop(key, None)
+                    if value is None or value.shape != (2,) or value.dtype != mx.uint32:
+                        raise ValueError(
+                            f"incompatible MLX snapshot RNG shape or dtype for {key}"
+                        )
+                    sampling[key] = value
+                header["rng_sha256"] = sampling_digest(sampling)
+                verify_header(saved, header)
+
+            host_file = read_host(found.path, verify=verify_sampling)
+            if host_file is None:
+                raise ValueError(f"missing MLX {HOST_FILE}")
+            host = host_file.host
+        else:
+            if host_exists(found.path):
+                raise ValueError(
+                    "incompatible MLX snapshot schema with host continuation"
+                )
+            verify_header(saved, header)
         expected = training_arrays(learner, ema)
         # Adam creates its two moments lazily on the first accepted step.
         if counts.optimizer_updates:
@@ -156,18 +154,14 @@ def restore(
             high, low = sampling["rng.mlx"].tolist()
             mx.random.seed((high << 32) | low)
 
-    def export(
-        folder: Path, host: HostContinuation, session: CollectionSession
-    ) -> None:
+    def export(folder: Path, host_sha256: str, session: CollectionSession) -> None:
         keys = {
             "rng.collector": mx.array(session.snapshot_rng()),
             "rng.mlx": mx.random.state[0],
         }
-        payload = host.model_dump_json().encode()
-        (folder / "continuation.json").write_bytes(payload)
         header = metadata() | {
             "schema": "2",
-            "continuation_sha256": hashlib.sha256(payload).hexdigest(),
+            "continuation_sha256": host_sha256,
             "rng_sha256": sampling_digest(keys),
         }
         mx.save_safetensors(
@@ -175,6 +169,18 @@ def restore(
         )
 
     return StagedContinuation(host, restore_sampling, export)
+
+
+def verify_header(saved: dict[str, str], expected: dict[str, str]) -> None:
+    if saved != expected:
+        differing = sorted(
+            key
+            for key in saved.keys() | expected.keys()
+            if saved.get(key) != expected.get(key)
+        )
+        raise ValueError(
+            "incompatible MLX snapshot: saved header differs in " + ", ".join(differing)
+        )
 
 
 def sampling_digest(keys: dict[str, mx.array]) -> str:

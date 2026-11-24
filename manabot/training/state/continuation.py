@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import random
 from typing import Any, Literal
@@ -16,6 +17,8 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.rollout.snapshots import RandomState
+
+HOST_FILE = "continuation.json"
 
 
 class HostContinuation(BaseModel):
@@ -40,6 +43,38 @@ class HostContinuation(BaseModel):
         if self.collector.opponent_rng is not None:
             probe.bit_generator.state = self.collector.opponent_rng
         return self
+
+
+@dataclass(frozen=True)
+class HostFile:
+    host: HostContinuation
+    sha256: str
+
+
+def host_exists(folder: Path) -> bool:
+    """Legacy containers exclude any entry at the host file's path."""
+    return (folder / HOST_FILE).exists()
+
+
+def write_host(folder: Path, host: HostContinuation) -> str:
+    """Stage the host state and return the digest of the exact bytes written."""
+    payload = host.model_dump_json().encode()
+    (folder / HOST_FILE).write_bytes(payload)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def read_host(
+    folder: Path, *, verify: Callable[[str], None] | None = None
+) -> HostFile | None:
+    """Return the saved host state, checking any container binding before decoding."""
+    path = folder / HOST_FILE
+    if not path.is_file():
+        return None
+    payload = path.read_bytes()
+    sha256 = hashlib.sha256(payload).hexdigest()
+    if verify is not None:
+        verify(sha256)
+    return HostFile(HostContinuation.model_validate_json(payload), sha256)
 
 
 def capture_host(collector: Collector, rng: np.random.Generator) -> HostContinuation:
@@ -68,4 +103,4 @@ class StagedContinuation:
 
     host: HostContinuation | None
     restore_sampling: Callable[[CollectionSession], None]
-    export: Callable[[Path, HostContinuation, CollectionSession], None]
+    export: Callable[[Path, str, CollectionSession], None]

@@ -96,7 +96,11 @@ from manabot.training.state.backend import (
     SelfPlayLearner,
     require_continuation,
 )
-from manabot.training.state.continuation import capture_host, restore_host_rng
+from manabot.training.state.continuation import (
+    capture_host,
+    restore_host_rng,
+    write_host,
+)
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -1102,9 +1106,8 @@ def self_play(
                     staged.restore_sampling(collector.numerics)
 
                 def export(folder: Path) -> None:
-                    staged.export(
-                        folder, capture_host(collector, rng), collector.numerics
-                    )
+                    host_sha256 = write_host(folder, capture_host(collector, rng))
+                    staged.export(folder, host_sha256, collector.numerics)
 
                 run.save(export=export)
             for update in run.steps("updates", to=updates):
