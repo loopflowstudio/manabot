@@ -43,6 +43,22 @@ finding to keep visible: step and encoding is slower with typed CSR
 (+1.25 CPU ms per 256-row batch; 8.36 → 10.99 wall s over three four-stream
 updates), outweighed end to end by admission, preparation and memory savings.
 
+## Performance review (2026-11-23)
+
+`12dd3bd05b` (one validity mask for native and dense facts, actions and
+events) is Python-only; it changes no engine source, so the engine
+measurements below still describe the branch. Preparation, pinned pilot,
+observation, bucketed shape, decision memory, collection parity and package
+boundary tests pass on it (270 passed, 1 skipped). Supported gains: admission
+12x cheaper, learning preparation 36% cheaper, retained rollout bytes about
+45x smaller, peak RSS 45% lower, learner throughput 8% higher on four streams.
+Negative result kept: typed step and encode costs +1.25 CPU ms per 256-row
+batch. The bottleneck still worth attacking is that encode cost, after
+repairing `managym/examples/bench_observation.rs` so it can be isolated; it
+is a separate Task, not this transport change. Steady-state update throughput
+and peak learner RSS at 256 streams remain unmeasured
+(`uv run python -m scratch.compare_updates --streams 256 --updates 3` on an idle host).
+
 ## Measurements to carry forward
 
 `scratch/compare_spans.py` ran eight paired batches through step 320 on an
