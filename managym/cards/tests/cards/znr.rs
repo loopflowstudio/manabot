@@ -38,9 +38,14 @@ fn blight_priest_drains_once_per_reaver_hit() {
         pass_until(&mut s, ActionSpaceKind::OrderTriggers);
         assert_eq!(s.current_step(), StepKind::CombatDamage);
         pass_until(&mut s, ActionSpaceKind::Priority);
+        let expected_step = if hit == 1 {
+            StepKind::FirstStrikeCombatDamage
+        } else {
+            StepKind::CombatDamage
+        };
         for seat in 0..2 {
             let obs = Observation::for_player(s.game(), PlayerId(seat));
-            assert_eq!(obs.turn.another_damage_step, hit == 1);
+            assert_eq!(obs.turn.step, expected_step);
             assert_eq!(obs.stack_objects.len(), 2);
             assert!(obs.stack_objects.iter().any(|object| object.description.as_deref() == Some("Marauding Blight-Priest — Whenever you gain life: each opponent loses 1 life")));
         }

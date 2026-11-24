@@ -105,10 +105,9 @@ describe('primaryLabel', () => {
 
   it('names the next damage step while the stack is empty', () => {
     const frame = emptyStack();
-    frame.projection.turn.step = 'COMBAT_DAMAGE';
-    frame.projection.turn.another_damage_step = true;
+    frame.projection.turn.step = 'COMBAT_FIRST_STRIKE_DAMAGE';
     expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To regular damage');
-    frame.projection.turn.another_damage_step = false;
+    frame.projection.turn.step = 'COMBAT_DAMAGE';
     expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To end of combat');
   });
 

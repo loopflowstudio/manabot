@@ -31,8 +31,6 @@ pub struct TurnData {
     pub phase: PhaseKind,
     #[serde(deserialize_with = "super::observation_json::step")]
     pub step: StepKind,
-    #[serde(default)]
-    pub another_damage_step: bool,
     pub active_player_id: i32,
     pub agent_player_id: i32,
 }
@@ -1009,16 +1007,21 @@ impl Observation {
             .winner_index()
             .is_some_and(|winner| winner == agent_player.0);
 
+        let step = if game.state.turn.current_step_kind() == StepKind::CombatDamage
+            && game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|c| c.in_first_strike_damage_step())
+        {
+            StepKind::FirstStrikeCombatDamage
+        } else {
+            game.state.turn.current_step_kind()
+        };
         let turn = TurnData {
             turn_number: game.state.turn.turn_number,
             phase: game.state.turn.current_phase_kind(),
-            step: game.state.turn.current_step_kind(),
-            another_damage_step: game.state.turn.current_step_kind() == StepKind::CombatDamage
-                && game
-                    .state
-                    .combat
-                    .as_ref()
-                    .is_some_and(|c| c.another_damage_step()),
+            step,
             active_player_id: game.state.players[game.active_player().0].id.0 as i32,
             agent_player_id: game.state.players[agent_player.0].id.0 as i32,
         };

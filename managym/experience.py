@@ -204,7 +204,9 @@ class DecisionContextView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     # What objects have already paid toward the cost being paid, in paid order.
-    paid: list[PaidView] = Field(default_factory=list, exclude_if=lambda value: not value)
+    paid: list[PaidView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class OfferSubjectView(ProtocolModel):
@@ -426,7 +428,9 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
-    first_strike_participant: bool = Field(default=False, exclude_if=lambda value: not value)
+    first_strike_participant: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -555,7 +559,6 @@ class LegacyTurnView(ProtocolModel):
     turn_number: UInt32
     phase: str
     step: str
-    another_damage_step: bool = Field(default=False, exclude_if=lambda value: not value)
     active_player_id: UInt32
     agent_player_id: UInt32
 

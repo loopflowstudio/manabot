@@ -801,6 +801,7 @@ class StepEnum(IntEnum):
     POSTCOMBAT_MAIN_STEP = 9
     ENDING_END = 10
     ENDING_CLEANUP = 11
+    COMBAT_FIRST_STRIKE_DAMAGE = 12
 
 class ActionEnum(IntEnum):
     PRIORITY_PLAY_LAND = 0
@@ -1153,7 +1154,6 @@ class Turn:
     phase: PhaseEnum
     step: StepEnum
     active_player_id: int
-    another_damage_step: bool
     agent_player_id: int
 
 class Action:

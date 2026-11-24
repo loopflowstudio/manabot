@@ -51,6 +51,7 @@ _STEPS = (
     "second main",
     "end",
     "cleanup",
+    "first-strike combat damage",
 )
 _SPACES = (
     "game over",
@@ -1194,7 +1195,6 @@ class _Renderer:
             "Optional details are shown when provided; unavailable facts are marked explicitly.",
             "",
             f"Turn {state.turn.turn_number}. Phase: {_enum(_PHASES, int(state.turn.phase))}. Step: {_enum(_STEPS, int(state.turn.step))}.",
-            *(["Another combat damage step follows."] if state.turn.another_damage_step else []),
             f"Active player: {self.name(state.turn.active_player_id)}. Acting player: {self.name(state.turn.agent_player_id)}.",
             f"Decision: {_enum(_SPACES, int(state.action_space.action_space_type))}. Game over: {_yes(state.game_over)}. Won: {_yes(state.won)}.",
             "",

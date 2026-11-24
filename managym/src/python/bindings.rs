@@ -458,6 +458,7 @@ pub enum StepEnum {
     PostcombatMainStep = 9,
     EndingEnd = 10,
     EndingCleanup = 11,
+    CombatFirstStrikeDamage = 12,
 }
 
 #[cfg(feature = "python")]
@@ -487,6 +488,8 @@ impl StepEnum {
     const ENDING_END: Self = Self::EndingEnd;
     #[classattr]
     const ENDING_CLEANUP: Self = Self::EndingCleanup;
+    #[classattr]
+    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -513,6 +516,7 @@ impl From<StepKind> for StepEnum {
             StepKind::PostcombatMain => Self::PostcombatMainStep,
             StepKind::End => Self::EndingEnd,
             StepKind::Cleanup => Self::EndingCleanup,
+            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
         }
     }
 }
@@ -533,6 +537,7 @@ impl From<StepEnum> for StepKind {
             StepEnum::PostcombatMainStep => Self::PostcombatMain,
             StepEnum::EndingEnd => Self::End,
             StepEnum::EndingCleanup => Self::Cleanup,
+            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
         }
     }
 }
@@ -1529,8 +1534,6 @@ pub struct PyTurn {
     #[pyo3(get, set)]
     pub active_player_id: i32,
     #[pyo3(get, set)]
-    pub another_damage_step: bool,
-    #[pyo3(get, set)]
     pub agent_player_id: i32,
 }
 
@@ -1541,7 +1544,6 @@ impl From<TurnData> for PyTurn {
             turn_number: value.turn_number as i32,
             phase: value.phase.into(),
             step: value.step.into(),
-            another_damage_step: value.another_damage_step,
             active_player_id: value.active_player_id,
             agent_player_id: value.agent_player_id,
         }
@@ -1555,7 +1557,6 @@ impl From<PyTurn> for TurnData {
             turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),
-            another_damage_step: value.another_damage_step,
             active_player_id: value.active_player_id,
             agent_player_id: value.agent_player_id,
         }

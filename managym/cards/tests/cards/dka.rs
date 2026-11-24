@@ -35,16 +35,22 @@ fn drogskol_reaver_draws_once_in_each_damage_step() {
     for hit in 1..=2 {
         assert_eq!(s.current_step(), StepKind::CombatDamage);
         let id = s.game().state.permanents[reaver].as_ref().unwrap().id.0 as i32;
+        let expected_step = if hit == 1 {
+            StepKind::FirstStrikeCombatDamage
+        } else {
+            StepKind::CombatDamage
+        };
         for seat in 0..2 {
             let obs = Observation::for_player(s.game(), PlayerId(seat));
-            assert_eq!(obs.turn.another_damage_step, hit == 1);
+            assert_eq!(obs.turn.step, expected_step);
             assert!(obs
                 .opponent_cards
                 .iter()
                 .all(|card| card.zone != ZoneType::Hand));
             let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            assert_eq!(encoded.agent_player[player::STEP_COMBAT_DAMAGE], 1.0);
             assert_eq!(
-                encoded.agent_player[player::ANOTHER_DAMAGE_STEP],
+                encoded.agent_player[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
                 f32::from(hit == 1)
             );
             let (permanents, rows) = if seat == 0 {
@@ -76,7 +82,6 @@ fn drogskol_reaver_draws_once_in_each_damage_step() {
             changed.pass_priority();
             let second = projected(changed.game());
             assert_eq!(second.turn.step, StepKind::CombatDamage);
-            assert!(!second.turn.another_damage_step);
             let participant = second.agent_permanents.iter().find(|p| p.id == id).unwrap();
             assert!(participant.first_strike_participant);
             assert!(!participant.keywords.double_strike);

@@ -1791,9 +1791,6 @@
           "format": "uint32",
           "minimum": 0
         },
-        "another_damage_step": {
-          "type": "boolean"
-        },
         "phase": {
           "type": "string"
         },

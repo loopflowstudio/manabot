@@ -440,7 +440,6 @@ def serialize_observation(
             "turn_number": int(obs.turn.turn_number),
             "phase": enum_name(PhaseEnum, obs.turn.phase),
             "step": enum_name(StepEnum, obs.turn.step),
-            **({"another_damage_step": True} if obs.turn.another_damage_step else {}),
             "active_player_id": int(obs.turn.active_player_id),
             "agent_player_id": int(obs.turn.agent_player_id),
         },

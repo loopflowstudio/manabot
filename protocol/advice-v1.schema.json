@@ -3337,9 +3337,6 @@
           "title": "Agent Player Id",
           "type": "integer"
         },
-        "another_damage_step": {
-          "type": "boolean"
-        },
         "phase": {
           "title": "Phase",
           "type": "string"

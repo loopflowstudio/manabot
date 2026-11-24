@@ -96,7 +96,7 @@ const NEXT_STEP: Record<string, string> = {
   BEGINNING_UNTAP: 'To draw', BEGINNING_UPKEEP: 'To draw', BEGINNING_DRAW: 'To main',
   PRECOMBAT_MAIN_STEP: 'To combat', COMBAT_BEGIN: 'To attackers', COMBAT_DECLARE_ATTACKERS: 'To blockers',
   DECLARE_ATTACKERS_STEP: 'To blockers', COMBAT_DECLARE_BLOCKERS: 'To damage', DECLARE_BLOCKERS_STEP: 'To damage',
-  COMBAT_FIRST_STRIKE_DAMAGE: 'To damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
+  COMBAT_FIRST_STRIKE_DAMAGE: 'To regular damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
   POSTCOMBAT_MAIN_STEP: 'To end step', ENDING_END: 'To cleanup', END_STEP: 'To cleanup', ENDING_CLEANUP: 'To next turn',
 };
 
@@ -133,9 +133,7 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
   if (top) return { text: `Resolve ${top}`.length <= PRIMARY_CHARS ? `Resolve ${top}` : 'Resolve', description: `${offer}: let ${top} resolve` };
   const { turn, agent, opponent } = frame.projection;
   let next = NEXT_STEP[turn.step];
-  if (turn.another_damage_step) {
-    next = 'To regular damage';
-  } else if (turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP') {
+  if (turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP') {
     const attacking = [agent, opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
     if (!attacking) next = 'To end of combat';
   }

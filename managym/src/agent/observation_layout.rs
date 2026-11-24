@@ -21,7 +21,7 @@ impl InputLayout {
     pub fn player_columns(self) -> &'static [Column] {
         match self {
             Self::OneToken => player::COLUMNS,
-            Self::Legacy => &player::COLUMNS[..player::ANOTHER_DAMAGE_STEP],
+            Self::Legacy => &player::COLUMNS[..player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
         }
     }
 }
@@ -287,7 +287,7 @@ columns! { player {
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
-    74: ANOTHER_DAMAGE_STEP => ("another_damage_step", ValueLayout::FLAG),
+    74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).

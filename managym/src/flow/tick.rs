@@ -161,7 +161,7 @@ impl Game {
                 .state
                 .combat
                 .as_ref()
-                .is_some_and(|combat| combat.another_damage_step())
+                .is_some_and(|combat| combat.in_first_strike_damage_step())
         {
             self.state.combat.as_mut().unwrap().regular_damage_step = true;
             self.state.turn.step_initialized = false;

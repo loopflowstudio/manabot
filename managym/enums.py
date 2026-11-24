@@ -31,6 +31,7 @@ class StepEnum(IntEnum):
     POSTCOMBAT_MAIN_STEP = 9
     ENDING_END = 10
     ENDING_CLEANUP = 11
+    COMBAT_FIRST_STRIKE_DAMAGE = 12
 
 
 class ActionEnum(IntEnum):

@@ -1471,8 +1471,8 @@ fn encode_player_features(
     }
     out[player::HAND_ONLY] = bool_to_f32(player.hand_only_until.is_some());
     out[player::NO_MAXIMUM_HAND_SIZE] = bool_to_f32(player.no_maximum_hand_size);
-    if let Some(flag) = out.get_mut(player::ANOTHER_DAMAGE_STEP) {
-        *flag = bool_to_f32(turn.another_damage_step);
+    if let Some(flag) = out.get_mut(player::STEP_FIRST_STRIKE_COMBAT_DAMAGE) {
+        *flag = bool_to_f32(turn.step == StepKind::FirstStrikeCombatDamage);
     }
     out[player::TURN] = turn.turn_number as f32 / 20.0;
     // Seat 0 is on the play.
@@ -2186,7 +2186,7 @@ fn step_index(step: StepKind) -> usize {
         StepKind::BeginningOfCombat => 4,
         StepKind::DeclareAttackers => 5,
         StepKind::DeclareBlockers => 6,
-        StepKind::CombatDamage => 7,
+        StepKind::CombatDamage | StepKind::FirstStrikeCombatDamage => 7,
         StepKind::EndOfCombat => 8,
         StepKind::PostcombatMain => 9,
         StepKind::End => 10,
@@ -2302,7 +2302,6 @@ mod tests {
                 turn_number: 1,
                 phase: PhaseKind::Combat,
                 step: StepKind::DeclareAttackers,
-                another_damage_step: false,
                 active_player_id: 10,
                 agent_player_id: 10,
             },

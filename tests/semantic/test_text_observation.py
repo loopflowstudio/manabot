@@ -798,7 +798,6 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "phase": "Phase",
         "step": "Step",
         "active_player_id": "active player",
-        "another_damage_step": "another combat damage step follows",
         "agent_player_id": "the viewer's own section",
     },
 }
@@ -813,16 +812,20 @@ def test_every_observed_field_has_llm_text(kind: type) -> None:
 @pytest.mark.parametrize("creature", ["Drogskol Reaver", "Gray Ogre"])
 def test_combat_damage_windows_in_text_and_academy(creature: str) -> None:
     env = priority_root((), (creature,))
-    windows: list[bool] = []
+    windows: list[str] = []
     for _ in range(32):
         decision = capture_text_decision(env)
         frame = decision_surface_view(env, 0)
         turn = frame["turn"]
         if turn["step"] == "COMBAT_END":
             break
-        if turn["step"] == "COMBAT_DAMAGE":
-            follows = turn.get("another_damage_step", False)
-            assert ("Another combat damage step follows." in decision.text) == follows
+        if turn["step"] in ("COMBAT_FIRST_STRIKE_DAMAGE", "COMBAT_DAMAGE"):
+            expected_label = (
+                "Step: first-strike combat damage."
+                if turn["step"] == "COMBAT_FIRST_STRIKE_DAMAGE"
+                else "Step: combat damage."
+            )
+            assert expected_label in decision.text
             participant = frame["agent"]["battlefield"][0].get(
                 "first_strike_participant", False
             )
@@ -830,8 +833,8 @@ def test_combat_damage_windows_in_text_and_academy(creature: str) -> None:
             assert (
                 "participated in the first-strike damage step" in decision.text
             ) == participant
-            if not windows or windows[-1] != follows:
-                windows.append(follows)
+            if not windows or windows[-1] != turn["step"]:
+                windows.append(turn["step"])
         action = next(
             a
             for a in decision.actions
@@ -841,7 +844,11 @@ def test_combat_damage_windows_in_text_and_academy(creature: str) -> None:
         submit_response(env, decision, action.reference)
     else:
         raise AssertionError("end of combat was not reached")
-    assert windows == ([True, False] if creature == "Drogskol Reaver" else [False])
+    assert windows == (
+        ["COMBAT_FIRST_STRIKE_DAMAGE", "COMBAT_DAMAGE"]
+        if creature == "Drogskol Reaver"
+        else ["COMBAT_DAMAGE"]
+    )
 
 
 def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:

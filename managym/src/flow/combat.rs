@@ -17,7 +17,7 @@ pub struct CombatState {
 }
 
 impl CombatState {
-    pub fn another_damage_step(&self) -> bool {
+    pub fn in_first_strike_damage_step(&self) -> bool {
         !self.first_strikers.is_empty() && !self.regular_damage_step
     }
 }

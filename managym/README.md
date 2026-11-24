@@ -970,8 +970,8 @@ blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
 the rest. Without trample, that sole blocker takes all 5. The engine deals
 the assignments together after the final choice.
 
-Both damage steps use the same combat damage step identifier. During the
-first-strike step, `turn.another_damage_step` tells both viewers that regular
-damage follows. Each permanent's `first_strike_participant` remembers
-whether it had first strike or double strike when the first step began,
-including after its abilities change.
+When a combatant has first strike or double strike (CR 510.4), the first damage
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
+followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
+permanent's `first_strike_participant` remembers whether it had first strike or
+double strike when the first step began, including after its abilities change.

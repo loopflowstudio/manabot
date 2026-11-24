@@ -589,8 +589,6 @@ pub struct LegacyTurnView {
     pub phase: String,
     pub step: String,
     pub active_player_id: u32,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub another_damage_step: bool,
     pub agent_player_id: u32,
 }
 

@@ -3173,8 +3173,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     fields.extend(encoding!(TurnData {
         turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
-        step => [Columns(Player, player::STEP_UNTAP, 12)],
-        another_damage_step => [column(Player, player::ANOTHER_DAMAGE_STEP)],
+        step => [
+            Columns(Player, player::STEP_UNTAP, 12),
+            column(Player, player::STEP_FIRST_STRIKE_COMBAT_DAMAGE),
+        ],
         active_player_id => [column(Player, player::IS_ACTIVE)],
         agent_player_id => [Side],
     }));

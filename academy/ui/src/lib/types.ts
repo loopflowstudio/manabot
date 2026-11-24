@@ -294,7 +294,6 @@ export interface Observation {
     phase: string;
     step: string;
     active_player_id: number;
-    another_damage_step?: boolean;
     agent_player_id: number;
   };
   agent: PlayerState;
