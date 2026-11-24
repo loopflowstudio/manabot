@@ -4,13 +4,55 @@ use managym_state::{
         Ability, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{
+        CardDefinition, CardType, CardTypes, LayerValue, PrintedCharacteristics, StaticAbility,
+        StaticContinuous, StaticScope,
+    },
     effect::Modification,
-    mana::ManaCost,
+    mana::{Color, ManaCost},
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fake_your_own_death()]
+    vec![fake_your_own_death(), witness_protection()]
+}
+
+fn witness_protection() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature loses all abilities and is a green and white Citizen creature with base power and toughness 1/1 named Legitimate Businessperson. (It loses all other colors, card types, creature types, and names.)";
+    CardDefinition {
+        key: "snc.witness_protection",
+        scryfall_id: "a2be6f2c-8ad0-402d-a7ca-9fe817e83b72",
+        printed: PrintedCharacteristics {
+            name: "Witness Protection".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::SetName("Legitimate Businessperson".into()),
+                    Modification::SetTypes {
+                        types: vec![CardType::Creature],
+                        subtypes: vec!["Citizen".into()],
+                    },
+                    Modification::SetColors([Color::Green, Color::White].into_iter().collect()),
+                    Modification::LoseAllAbilities,
+                    Modification::SetBasePt {
+                        power: Some(LayerValue::Fixed(1)),
+                        toughness: Some(LayerValue::Fixed(1)),
+                    },
+                ],
+            })],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn fake_your_own_death() -> CardDefinition {

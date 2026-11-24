@@ -113,6 +113,8 @@ mod khm;
 mod kld;
 #[path = "cards/ktk.rs"]
 mod ktk;
+#[path = "cards/lci.rs"]
+mod lci;
 #[path = "cards/lea.rs"]
 mod lea;
 #[path = "cards/m12.rs"]
@@ -169,6 +171,8 @@ mod rtr;
 mod scryfall;
 #[path = "cards/shm.rs"]
 mod shm;
+#[path = "cards/snc.rs"]
+mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
 #[path = "cards/spm.rs"]

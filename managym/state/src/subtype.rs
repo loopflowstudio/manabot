@@ -162,6 +162,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Shard", Enchantment),
     ("Sheep", Creature),
     ("Shrine", Enchantment),
+    ("Skeleton", Creature),
     ("Sloth", Creature),
     ("Snake", Creature),
     ("Soldier", Creature),
@@ -204,6 +205,23 @@ pub fn subtype_category(subtype: &str) -> Option<SubtypeCategory> {
         .binary_search_by(|(name, _)| (*name).cmp(subtype))
         .ok()
         .map(|index| SUBTYPES[index].1)
+}
+
+/// Whether `subtype` is on the list of a card type the object has
+/// (CR 205.3d): kindred uses creature types (CR 205.3m), and instants and
+/// sorceries share spell types (CR 205.3k). Planeswalker and battle types are
+/// not in the table, so nothing corresponds to them.
+pub fn subtype_corresponds_to(subtype: &str, card_type: crate::card::CardType) -> bool {
+    use crate::card::CardType as T;
+    let wanted = match card_type {
+        T::Creature | T::Kindred => Creature,
+        T::Land => Land,
+        T::Artifact => Artifact,
+        T::Enchantment => Enchantment,
+        T::Instant | T::Sorcery => Spell,
+        T::Planeswalker | T::Battle => return false,
+    };
+    subtype_category(subtype) == Some(wanted)
 }
 
 /// CR 205.3m. An unlisted name is not a creature type; debug builds reject it,

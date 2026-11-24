@@ -1,0 +1,35 @@
+//! Tests for cards filed in `src/lci.rs`, in card order.
+
+use crate::support::{
+    game::five_color_setup,
+    play::{cast, settle},
+};
+use managym::state::{
+    card::{CardType, Keyword},
+    game_object::Target,
+    mana::Color,
+};
+
+/// The Skeleton loses its other creature types, colors and abilities
+/// (CR 205.1a): Llanowar Elves becomes a black 1/1 that taps for nothing.
+#[test]
+fn eaten_by_piranhas_makes_a_black_skeleton_without_its_other_types() {
+    let mut s = five_color_setup(&["Eaten by Piranhas", "Llanowar Elves"]);
+    let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    cast(&mut s, "Eaten by Piranhas");
+    assert!(s.choose_target(Target::Permanent(elves)));
+    settle(&mut s);
+    let view = s.game().characteristics(elves);
+    assert_eq!(view.subtypes, vec!["Skeleton".to_string()]);
+    assert_eq!(
+        view.types.types.iter().copied().collect::<Vec<_>>(),
+        vec![CardType::Creature]
+    );
+    assert_eq!(
+        view.colors.iter().copied().collect::<Vec<_>>(),
+        vec![Color::Black]
+    );
+    assert_eq!(view.pt(), (1, 1));
+    assert!(view.activated_abilities.is_empty(), "no mana ability");
+    assert!(!view.keywords.has(Keyword::Flash));
+}

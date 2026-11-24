@@ -15,7 +15,7 @@ use crate::{
         mana::{Colors, Mana, SpendingContext, SpendingObject},
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
-        subtype::is_creature_type,
+        subtype::{is_creature_type, subtype_category, subtype_corresponds_to},
         zone::ZoneType,
     },
 };
@@ -1092,9 +1092,26 @@ impl<'a> Context<'a> {
                     }
                     Modification::AddTypes(types) => view.types.types.extend(types.iter().copied()),
                     Modification::SetTypes { types, subtypes } => {
+                        // CR 205.1a, 205.3d: a subtype survives while it
+                        // corresponds to a remaining type and the effect sets
+                        // no subtype of its kind (a basic land imprisoned as a
+                        // land stays a Forest; a Citizen loses other creature
+                        // types).
+                        let keeps = |subtype: &String| {
+                            types.iter().any(|t| subtype_corresponds_to(subtype, *t))
+                                && !subtypes
+                                    .iter()
+                                    .any(|set| subtype_category(set) == subtype_category(subtype))
+                        };
                         view.types.types = types.iter().copied().collect();
-                        view.subtypes = subtypes.clone();
-                        view.added_subtypes = subtypes.clone();
+                        view.subtypes.retain(keeps);
+                        view.added_subtypes.retain(keeps);
+                        for subtype in subtypes {
+                            if !view.subtypes.contains(subtype) {
+                                view.subtypes.push(subtype.clone());
+                                view.added_subtypes.push(subtype.clone());
+                            }
+                        }
                     }
                     Modification::BecomeCreature => {
                         view.types.types.insert(CardType::Creature);

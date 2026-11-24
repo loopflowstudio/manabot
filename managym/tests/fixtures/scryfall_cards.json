@@ -7302,5 +7302,34 @@
     "colors": [
       "R"
     ]
+  },
+  "Witness Protection": {
+    "name": "Witness Protection",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature loses all abilities and is a green and white Citizen creature with base power and toughness 1/1 named Legitimate Businessperson. (It loses all other colors, card types, creature types, and names.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Eaten by Piranhas": {
+    "name": "Eaten by Piranhas",
+    "mana_cost": "{1}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature loses all abilities and is a black Skeleton creature with base power and toughness 1/1. (It loses all other colors, card types, and creature types.)",
+    "colors": [
+      "U"
+    ]
   }
 }
