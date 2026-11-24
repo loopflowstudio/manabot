@@ -190,3 +190,62 @@ fn foundations_5f_viashino_pyromancer() {
     );
     s.assert_life(1, 18);
 }
+
+/// "{3}{U}{U}: Draw two cards."
+#[test]
+fn foundations_5f_mystic_archaeologist() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::hand,
+        play::{activate, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&["Mystic Archaeologist"]);
+    let archaeologist = s.force_permanent_on_battlefield(0, "Mystic Archaeologist");
+    s.set_player_mana_pool(0, "3UU");
+    activate(&mut s, archaeologist, 0);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 2);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+}
+
+/// "{2}, {T}: Each opponent loses 1 life and you gain 1 life": a tap cost,
+/// so a summoning-sick Neonate is not offered the ability.
+#[test]
+fn foundations_5f_vampire_neonate() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::can_activate,
+        play::{activate, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&["Vampire Neonate"]);
+    let neonate = s.force_permanent_on_battlefield(0, "Vampire Neonate");
+    s.set_player_mana_pool(0, "2");
+    assert!(!can_activate(&s, neonate));
+    clear_summoning_sickness(&mut s, neonate);
+    activate(&mut s, neonate, 0);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!((s.life(0), s.life(1)), (21, 19));
+}
+
+/// "As long as you control a Dragon, this creature has flying": an
+/// opponent's Dragon grants nothing; flying ends when the Dragon leaves.
+#[test]
+fn foundations_5f_kargan_dragonrider() {
+    use crate::support::{
+        game::{five_color_setup, move_card},
+        inspect::{card_of, keywords},
+    };
+    use managym::state::{card::Keyword, zone::ZoneType};
+    let mut s = five_color_setup(&["Kargan Dragonrider", "Lathliss, Dragon Queen"]);
+    let rider = s.force_permanent_on_battlefield(0, "Kargan Dragonrider");
+    assert!(!keywords(&s, rider).has(Keyword::Flying));
+    s.force_permanent_on_battlefield(1, "Lathliss, Dragon Queen");
+    assert!(!keywords(&s, rider).has(Keyword::Flying));
+    let dragon = s.force_permanent_on_battlefield(0, "Lathliss, Dragon Queen");
+    assert!(keywords(&s, rider).has(Keyword::Flying));
+    let card = card_of(&s, dragon);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    assert!(!keywords(&s, rider).has(Keyword::Flying));
+}

@@ -254,6 +254,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
 /// here and given a witness in [`modification_witnesses`].
 fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) {
     match modification {
+        Modification::SetName(_) => ("Modification::SetName", Seen::Fact(FactKind::SetName)),
         Modification::SetCreatureTypes(_) => (
             "Modification::SetCreatureTypes",
             Seen::Fact(FactKind::AddedSubtype),
@@ -408,6 +409,7 @@ fn resolved(modification: &Modification<EffectValue>) -> Modification {
 fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
+        permanent(Modification::SetName("Legitimate Businessperson".into())),
         permanent(Modification::SetCreatureTypes(vec!["Bear".into()])),
         permanent(Modification::AddTypes(vec![CardType::Artifact])),
         permanent(Modification::SetTypes {
@@ -463,7 +465,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 37;
+const MODIFICATION_VARIANTS: usize = 38;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -713,6 +715,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
+        Effect::Reveal { .. } => "Effect::Reveal",
+        Effect::RevealUntilToHand { .. } => "Effect::RevealUntilToHand",
         Effect::If { .. } => "Effect::If",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
@@ -781,7 +785,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 88;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -855,6 +859,12 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
             count: 2,
+        },
+        Effect::Reveal {
+            what: ObjectSelector::Selected,
+        },
+        Effect::RevealUntilToHand {
+            predicate: CardPredicate::creature(),
         },
         Effect::If {
             condition: Condition::YourTurn,
@@ -1202,6 +1212,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::BattlefieldAtLeast { .. } => "Condition::BattlefieldAtLeast",
         Condition::ControlsUnownedAtLeast { .. } => "Condition::ControlsUnownedAtLeast",
         Condition::CardsInHandAtLeast { .. } => "Condition::CardsInHandAtLeast",
+        Condition::LifeAtLeast { .. } => "Condition::LifeAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
@@ -1249,6 +1260,7 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::ControlsUnownedAtLeast { count: 3 },
         Condition::CardsInHandAtLeast { count: 4 },
+        Condition::LifeAtLeast { amount: 25 },
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
@@ -4236,6 +4248,41 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
         permanent_value(&s, 0, work, permanent::ATTACHED_TO),
         (object_index(&s, 0, drake) + 1) as f32
     );
+}
+
+/// A layer 1 name and a layer 4 creature type reach their own fact rows:
+/// Witness Protection sets both, Eaten by Piranhas only the creature type.
+#[test]
+fn set_name_and_set_creature_types_reach_independent_fact_rows() {
+    for (aura, name, subtype) in [
+        (
+            "Witness Protection",
+            Some("Legitimate Businessperson"),
+            "Citizen",
+        ),
+        ("Eaten by Piranhas", None, "Skeleton"),
+    ] {
+        let mut s = five_color_setup(&[aura, "Juggernaut"]);
+        let juggernaut = s.force_permanent_on_battlefield(1, "Juggernaut");
+        cast(&mut s, aura);
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(managym::state::game_object::Target::Permanent(juggernaut)));
+        settle(&mut s);
+        let rows = facts_about(&s, 0, object_index(&s, 0, juggernaut));
+        let of_kind = |kind: FactKind| {
+            rows.iter()
+                .filter(|row| row[fact::KIND] == kind as u8 as f32)
+                .count()
+        };
+        fact_row(&rows, FactKind::SetCreatureType, name_value(subtype));
+        assert_eq!(of_kind(FactKind::SetCreatureType), 1, "{aura}");
+        match name {
+            Some(name) => {
+                fact_row(&rows, FactKind::SetName, name_value(name));
+            }
+            None => assert_eq!(of_kind(FactKind::SetName), 0, "{aura} keeps its name"),
+        }
+    }
 }
 
 /// Card and permanent keyword columns are checked by

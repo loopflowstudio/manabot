@@ -35,6 +35,9 @@ use super::{
 /// and `i32` for the resulting record.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Modification<N = i32> {
+    /// Layer 1 name replacement (CR 613.1a, 201.2): "named [name]". The
+    /// permanent loses every other name.
+    SetName(String),
     /// Replace creature subtypes, retaining land/artifact/enchantment types.
     SetCreatureTypes(Vec<String>),
     /// Add card types without replacing existing ones.
@@ -168,6 +171,7 @@ impl<N> Modification<N> {
 
     pub fn map_amount<M>(&self, mut amount: impl FnMut(&N) -> M) -> Modification<M> {
         match self {
+            Self::SetName(name) => Modification::SetName(name.clone()),
             Self::SetCreatureTypes(types) => Modification::SetCreatureTypes(types.clone()),
             Self::AddTypes(types) => Modification::AddTypes(types.clone()),
             Self::SetTypes { types, subtypes } => Modification::SetTypes {
@@ -228,6 +232,7 @@ impl Modification {
     pub fn apply_copiable(&self, definition: &mut PrintedCharacteristics) -> bool {
         match self {
             Self::LoseNonManaAbilities
+            | Self::SetName(_)
             | Self::SetCreatureTypes(_)
             | Self::AddTypes(_)
             | Self::SetTypes { .. }

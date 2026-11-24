@@ -14,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        wildheart_invoker(),
         pelakka_wurm(),
         fleeting_distraction(),
         battle_rattle_shaman(),
@@ -189,6 +190,35 @@ fn pelakka_wurm() -> CardDefinition {
                     effects: vec![Effect::DrawCards { count: 1.into() }],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wildheart_invoker() -> CardDefinition {
+    let text_box = "{8}: Target creature gets +5/+5 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)";
+    CardDefinition {
+        key: "roe.wildheart_invoker",
+        scryfall_id: "dc8315bf-03af-4f19-92c7-556e486cb099",
+        printed: PrintedCharacteristics {
+            name: "Wildheart Invoker".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Shaman".into()],
+            power: Some(4),
+            toughness: Some(3),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{8}"),
+                effects: Effect::pump_and_grant_until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    5,
+                    5,
+                    Keyword::Trample,
+                ),
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

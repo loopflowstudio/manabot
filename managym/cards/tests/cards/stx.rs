@@ -714,3 +714,55 @@ fn foundations_5f_burrog_befuddler() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
+
+/// "When this creature enters, you may search your library for a basic land
+/// card, reveal it, then shuffle and put that card on top": only basic lands
+/// are offered; the revealed card ends on top, publicly known there; declining
+/// the search leaves the library alone, and finding nothing still shuffles.
+#[test]
+fn foundations_5f_campus_guide() {
+    use crate::support::{
+        game::{five_color_setup, put_onto_battlefield},
+        inspect::{library, library_top, offered_cards},
+        play::{choose_mode, fork_selecting, pass_until, settle},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind, flow::event::GameEvent, state::game_object::PlayerId,
+    };
+    let mut s = five_color_setup(&["Campus Guide", "Gray Ogre"]);
+    put_onto_battlefield(&mut s, 0, "Campus Guide");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let order = library(&s, 0);
+    let mut decline = s.clone();
+    choose_mode(&mut decline, 1);
+    settle(&mut decline);
+    assert_eq!(library(&decline, 0), order);
+
+    choose_mode(&mut s, 0);
+    let offered = offered_cards(&s);
+    assert!(!offered.is_empty());
+    assert!(offered
+        .iter()
+        .all(|id| s.game().state[*id].types.is_land() && s.game().state[*id].name != "Gray Ogre"));
+    let mut fail = s.clone();
+    settle(&mut fail);
+    assert_ne!(library(&fail, 0), order, "finding nothing still shuffles");
+    assert!(fail.game().state.players[0].known_library.public.is_empty());
+
+    let forest = *offered
+        .iter()
+        .find(|id| s.game().state[**id].name == "Forest")
+        .unwrap();
+    let definition = s.game().state[forest].definition_id;
+    let cursor = s.game().state.events.len();
+    let mut fork = fork_selecting(&s, forest);
+    settle(&mut fork);
+    assert_eq!(library_top(&fork, 0), forest);
+    assert!(fork.game().state.events.iter().skip(cursor).any(|event| matches!(
+        event,
+        GameEvent::CardRevealed { owner: PlayerId(0), definition: shown } if *shown == definition
+    )));
+    let known = &fork.game().state.players[0].known_library;
+    assert_eq!(known.public.get(&0), Some(&definition));
+    assert_eq!(known.own.get(&0), Some(&definition));
+}

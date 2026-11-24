@@ -822,6 +822,9 @@ impl Game {
                         (from, *to, library_end)
                     {
                         self.reorder_in_library(object, *end);
+                        if *end == crate::state::ability::LibraryEnd::Top {
+                            self.remember_placed_top(object, frame);
+                        }
                         continue;
                     }
                     // A token cannot return after leaving the battlefield (CR 111.7).
@@ -1305,7 +1308,7 @@ impl Game {
                 {
                     return Some(decision);
                 }
-                self.reveal_object_to_hand(object_id, player);
+                self.reveal_object_to_hand(object_id, player, ZoneEntry::default());
                 None
             }
             Effect::CumulativeUpkeep { each } => {
@@ -1356,6 +1359,20 @@ impl Game {
                     self.put_exiled_on_bottom_in_random_order(exiled);
                 }
                 decision
+            }
+            Effect::Reveal { what } => {
+                for object in self.select(what, frame) {
+                    self.emit(GameEvent::CardRevealed {
+                        owner: self.state[object].owner,
+                        definition: self.state[object].definition_id,
+                    });
+                }
+                frame.selected_revealed |= *what == ObjectSelector::Selected;
+                None
+            }
+            Effect::RevealUntilToHand { predicate } => {
+                self.reveal_until_to_hand(frame.controller, predicate);
+                None
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
                 let Some(Target::Player(owner)) = self.present_primary_target(frame) else {

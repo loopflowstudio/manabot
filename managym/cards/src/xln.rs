@@ -1,12 +1,22 @@
 //! Ixalan.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    ability::{
+        Ability, Effect, ObjectSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
+    },
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![dive_down(), rivers_rebuke(), bishops_soldier()]
+    vec![
+        pirate_s_cutlass(),
+        dive_down(),
+        rivers_rebuke(),
+        bishops_soldier(),
+    ]
 }
 
 fn bishops_soldier() -> CardDefinition {
@@ -68,6 +78,44 @@ fn dive_down() -> CardDefinition {
                 3,
                 Keyword::Hexproof,
             ),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn pirate_s_cutlass() -> CardDefinition {
+    let text_box = "When this Equipment enters, attach it to target Pirate you control.\nEquipped creature gets +2/+1.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "xln.pirate_s_cutlass",
+        scryfall_id: "b3e7e871-19cf-486d-bacb-1499fe066974",
+        printed: PrintedCharacteristics {
+            name: "Pirate's Cutlass".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate::subtype("Pirate"),
+                    }),
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 2,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

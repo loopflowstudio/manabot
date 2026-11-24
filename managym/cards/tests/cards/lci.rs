@@ -36,3 +36,15 @@ fn foundations_5f_mischievous_pup() {
         .keywords
         .has(managym::state::card::Keyword::Flash));
 }
+
+/// Eaten by Piranhas on Juggernaut: a black 1/1 Skeleton creature with no
+/// abilities that keeps its name; removing the Aura restores it.
+#[test]
+fn foundations_5f_eaten_by_piranhas() {
+    crate::assert_sets_juggernaut_characteristics(
+        "Eaten by Piranhas",
+        "Juggernaut",
+        "Skeleton",
+        &[managym::state::mana::Color::Black],
+    );
+}

@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        axgard_cavalry(),
         goldvein_pick(),
         youthful_valkyrie(),
         snakeskin_veil(),
@@ -219,6 +220,34 @@ fn goldvein_pick() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::create_tokens("token.treasure", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn axgard_cavalry() -> CardDefinition {
+    let text_box =
+        "{T}: Target creature gains haste until end of turn. (It can attack and {T} this turn.)";
+    CardDefinition {
+        key: "khm.axgard_cavalry",
+        scryfall_id: "2411c341-a470-4484-9248-7c1d3ca12978",
+        printed: PrintedCharacteristics {
+            name: "Axgard Cavalry".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dwarf".into(), "Berserker".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                )],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

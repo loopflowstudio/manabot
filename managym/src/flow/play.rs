@@ -1498,13 +1498,15 @@ impl Game {
             .legal_targets_for_spec(&clause.spec, player)
             .into_iter()
             .filter(|target| {
+                // Only "another target" excludes the source; "target creature
+                // you control" may name the source itself.
                 let is_source = match source {
                     ActivationSource::Permanent(permanent) => {
                         *target == Target::Permanent(permanent)
                     }
                     ActivationSource::Card(_) => false,
                 };
-                !is_source && !chosen.contains(target)
+                !(clause.another && is_source) && !chosen.contains(target)
             })
             .collect();
         if !clause.shares_creature_type {

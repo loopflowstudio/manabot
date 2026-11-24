@@ -396,6 +396,7 @@ fn condition_text(condition: &Condition) -> String {
         Condition::CardsInHandAtLeast { count } => {
             format!("you have {count} or more cards in hand")
         }
+        Condition::LifeAtLeast { amount } => format!("you have {amount} or more life"),
         Condition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")
         }
@@ -1078,6 +1079,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
+        Reveal { what } => format!("Reveal {}", selector_description(what)),
+        RevealUntilToHand { predicate } => format!("Reveal cards from the top of your library until you reveal a {} card. Put that card into your hand and the rest on the bottom of your library in a random order", predicate_description(predicate, "card")),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
         SearchDistinctNames { predicate, count, end } => {
             let search = format!("Search your library for up to {count} {} with different names and reveal them", predicate_description(predicate, "card"));
@@ -1179,6 +1182,7 @@ pub(super) fn continuous_description(
         None => "unchanged".to_string(),
     };
     match modification {
+        Modification::SetName(name) => format!("{subject} is named {name}{until}"),
         Modification::SetCreatureTypes(types) => {
             format!("{subject} becomes {}{until}", types.join(" "))
         }

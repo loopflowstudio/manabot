@@ -6,15 +6,18 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::{Color, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        twinblade_paladin(),
+        goblin_smuggler(),
         devout_decree(),
         empyrean_eagle(),
         rapacious_dragon(),
@@ -189,6 +192,72 @@ fn devout_decree() -> CardDefinition {
                 })),
                 Effect::Scry { count: 1 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_smuggler() -> CardDefinition {
+    let text_box = "Haste (This creature can attack and {T} as soon as it comes under your control.)\n{T}: Another target creature with power 2 or less can't be blocked this turn.";
+    let target = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Creature),
+            max_power: Some(2),
+            ..Default::default()
+        },
+    };
+    CardDefinition {
+        key: "m20.goblin_smuggler",
+        scryfall_id: "95dc1a65-271c-455a-ae0c-f652444a53ac",
+        printed: PrintedCharacteristics {
+            name: "Goblin Smuggler".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Rogue".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::another_target(target, |target| {
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(target),
+                        Modification::CantBeBlocked,
+                    )]
+                })],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn twinblade_paladin() -> CardDefinition {
+    let text_box = "Whenever you gain life, put a +1/+1 counter on this creature.\nAs long as you have 25 or more life, this creature has double strike. (It deals both first-strike and regular combat damage.)";
+    CardDefinition {
+        key: "m20.twinblade_paladin",
+        scryfall_id: "6397d426-00e0-44da-b23c-44ccea65f5aa",
+        printed: PrintedCharacteristics {
+            name: "Twinblade Paladin".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            ))],
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::LifeAtLeast { amount: 25 }),
+                keywords: Keywords::of(&[Keyword::DoubleStrike]),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

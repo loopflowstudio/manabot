@@ -20,7 +20,7 @@ use crate::{
         game::{CastChoices, Game},
         payment::{CostComponent, Operation, Payment, PaymentProgress},
         proposed_event::{
-            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
+            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
         },
         sba::SbaProgress,
         turn::OnceEachTurnKey,
@@ -28,6 +28,7 @@ use crate::{
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
+        knowledge::LibraryKnowledge,
         mana::ManaCost,
         payment::PaymentReceipt,
         permanent::CounterKind,
@@ -169,6 +170,12 @@ pub struct EffectFrame {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub moved: Vec<ObjectId>,
+    /// Whether `Effect::Reveal` revealed the `selected` objects; a later
+    /// placement of one on top of its library keeps it public ("reveal it,
+    /// then shuffle and put that card on top"). Inline as a flag: the frame
+    /// is part of `GameState`'s size budget.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub selected_revealed: bool,
     /// The permanent the resolving player chose for the instruction now
     /// running over a `Chosen` selector; cleared once it has run.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -252,6 +259,7 @@ impl EffectFrame {
             excess_damage: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
+            selected_revealed: false,
             selected_from: None,
             moved: Vec::new(),
             chosen: None,
@@ -271,6 +279,7 @@ impl EffectFrame {
         Self {
             program: self.program.clone(),
             selected: self.selected.clone(),
+            selected_revealed: self.selected_revealed,
             selected_from: self.selected_from.clone(),
             remembered: self.remembered.clone(),
             inherited_from: self.inherited_from,
@@ -298,6 +307,7 @@ impl EffectFrame {
     ) {
         let mut child = self.child_scope(effects);
         child.selected = selected;
+        child.selected_revealed = false;
         child.selected_from = from;
         let parent = std::mem::replace(self, child);
         self.completion = FrameCompletion::Frame(Box::new(parent));
@@ -2687,7 +2697,7 @@ impl Game {
                     )]))
                 } else {
                     if *reveal {
-                        self.reveal_object_to_hand(*object_id, player);
+                        self.reveal_object_to_hand(*object_id, player, ZoneEntry::default());
                     } else {
                         self.move_object(*object_id, ZoneType::Hand);
                     }
@@ -2901,7 +2911,7 @@ impl Game {
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
                     ResolutionCastOffer::Exiled { object: object_id } => {
-                        self.reveal_object_to_hand(*object_id, *player);
+                        self.reveal_object_to_hand(*object_id, *player, ZoneEntry::default());
                     }
                     ResolutionCastOffer::Cascade { exiled, .. } => {
                         self.put_exiled_on_bottom_in_random_order(exiled.clone());
@@ -3136,7 +3146,7 @@ impl Game {
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
                 }
-                self.reveal_object_to_hand(*object_id, *player);
+                self.reveal_object_to_hand(*object_id, *player, ZoneEntry::default());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3384,7 +3394,7 @@ impl Game {
             }
             _ => {
                 for object in std::mem::take(selected) {
-                    self.reveal_object_to_hand(object, player);
+                    self.reveal_object_to_hand(object, player, ZoneEntry::default());
                 }
                 self.shuffle_library(player);
                 self.run_frame(suspended.frame);
@@ -3475,7 +3485,7 @@ impl Game {
                 self.zone_move_proposal(
                     *object,
                     ZoneType::Graveyard,
-                    crate::flow::proposed_event::ZoneEntry {
+                    ZoneEntry {
                         inspected_library_departure: true,
                         ..Default::default()
                     },
@@ -3541,10 +3551,68 @@ impl Game {
         self.reposition_library_object(owner, object, index);
     }
 
-    /// Put a card that has just entered its owner's library on top at the
-    /// bottom instead ("on the bottom of its owner's library"). Its position
-    /// is public, so this is no private permutation: facts about the cards
-    /// above it keep their places from the top.
+    /// A card the resolution put on top of its owner's library: the
+    /// resolving player saw it, and a revealed one (Campus Guide) is public.
+    pub(crate) fn remember_placed_top(&mut self, object: ObjectId, frame: &EffectFrame) {
+        let owner = self.state[object].owner;
+        let definition = self.state[object].definition_id;
+        let public = frame.selected_revealed && frame.selected.contains(&object);
+        let knowledge = self.state.known_library_mut(owner);
+        if public {
+            knowledge.public.insert(0, definition);
+            LibraryKnowledge::bound(&mut knowledge.public);
+        }
+        if public || frame.controller == owner {
+            knowledge.own.insert(0, definition);
+            LibraryKnowledge::bound(&mut knowledge.own);
+        }
+        self.assert_library_knowledge();
+    }
+
+    /// Reveal cards from the top of `player`'s library until one matches
+    /// `predicate`; it goes to their hand and the cards revealed before it to
+    /// the bottom in a random order. The cards never leave the library while
+    /// revealed, so the match leaves a public position and a single passed
+    /// card keeps every fact below it.
+    pub(crate) fn reveal_until_to_hand(&mut self, player: PlayerId, predicate: &CardPredicate) {
+        let from_top: Vec<ObjectId> = self.library_from_top(player).collect();
+        let hit = from_top
+            .iter()
+            .position(|object| self.object_matches_predicate(*object, predicate));
+        let passed = from_top[..hit.unwrap_or(from_top.len())].to_vec();
+        for object in &passed {
+            self.emit(GameEvent::CardRevealed {
+                owner: player,
+                definition: self.state[*object].definition_id,
+            });
+        }
+        if let Some(index) = hit {
+            self.reveal_object_to_hand(
+                from_top[index],
+                player,
+                ZoneEntry {
+                    inspected_library_departure: true,
+                    ..ZoneEntry::default()
+                },
+            );
+        }
+        match passed.as_slice() {
+            [] => {}
+            [top] => self.place_entrant_on_bottom(*top),
+            _ => {
+                let mut rest = passed;
+                rest.shuffle(self.state.rng_mut());
+                for object in rest {
+                    self.reposition_library_object(player, object, 0);
+                }
+            }
+        }
+    }
+
+    /// Put the top card of its owner's library on the bottom ("on the bottom
+    /// of its owner's library"), as a card that has just entered on top. Its
+    /// position is public, so this is no private permutation: facts about the
+    /// cards above it keep their places from the top.
     pub(crate) fn place_entrant_on_bottom(&mut self, object: ObjectId) {
         let owner = self.state[object].owner;
         let bottom = self.state.zones.size(ZoneType::Library, owner) - 1;

@@ -50,3 +50,13 @@ Audit the remaining 57 rows in three passes. Put the 28 triggered creatures firs
 Alignment 3 removes whole-combat prohibitions at `can_block` and leaves the declaration tick alone. A blocker that can block none of the current attackers (a ground creature against a lone flyer) is still asked with only `Decline` when `skip_trivial` is off. With `skip_trivial` on it is skipped. Changing the tick would also move the structured blocker offers, combat previews and the semantic corpus.
 
 The compound attacker offer still selects attackers with `min: 0`. A submission leaving out a Juggernaut that must attack fails as stale or illegal at the legacy `DeclareAttacker` step instead of being prevented by the offer. Expressing a required candidate in `ChoiceStep::Select` is a protocol change.
+
+Batch 5f follow-up choices:
+
+- Campus Guide and Spinner of Souls express "you may" as `Effect::Modal` with an empty second mode (Solemn Simulacrum's form), not the zero-cost `OptionalPayment` the plan sketched. Both forms exist in the catalog; Modal is the one the "you may search" cards already use.
+- `Effect::Reveal` keeps its library knowledge through a frame flag, `selected_revealed`, rather than a list of revealed objects: a `Vec` in `EffectFrame` exceeded the `GameState` size budget. Only a reveal of the `Selected` objects carries into a later top-of-library placement.
+- Activated abilities now offer their own source as a target unless the clause says "another" (`TargetRequirement::another`). Deserter's Disciple, Earth Kingdom Protectors and North Pole Patrol relied on the old blanket exclusion and now state `another` through `Effect::another_target`, which changes those three definitions' serialization and tokens.
+- `Revisions` gained `life` for `Condition::LifeAtLeast`; the `TrackedState` and `DerivedCache` size ceilings rose by 8 bytes for the fifth counter.
+- Reveal-until with exactly one passed card reuses `place_entrant_on_bottom`, which keeps the facts below it but records no public fact for the revealed card now on the bottom (lossy, never wrong).
+- The blocker compound offer also falls back to exact atomic offers when an attacker must be blocked by every able creature, since a later blocker's decline is then illegal.
+- Academy's `combat.ts`/`Board.svelte` change was not checked here: this checkout has no `node_modules`. Gate runs `npm run check` and the Vitest suite.

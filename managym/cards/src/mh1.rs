@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics,
+        Keywords, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
     },
     effect::Modification,
     mana::{Color, Mana, ManaCost},
@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        goblin_oriflamme(),
         ravenous_giant(),
         good_fortune_unicorn(),
         fists_of_flame(),
@@ -197,6 +198,35 @@ fn ravenous_giant() -> CardDefinition {
                     amount: 1.into(),
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_oriflamme() -> CardDefinition {
+    let text_box = "Attacking creatures you control get +1/+0.";
+    CardDefinition {
+        key: "mh1.goblin_oriflamme",
+        scryfall_id: "33ec7cbe-16a0-4dbb-91fe-7e445a5268c8",
+        printed: PrintedCharacteristics {
+            name: "Goblin Oriflamme".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::YouControl(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    attacking: true,
+                    ..Default::default()
+                }),
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

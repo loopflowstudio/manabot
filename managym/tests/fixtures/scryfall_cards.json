@@ -9198,5 +9198,259 @@
     "keywords": [],
     "oracle_text": "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.",
     "colors": []
+  },
+  "Apothecary Stomper": {
+    "name": "Apothecary Stomper",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Elephant",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, choose one —\n• Put two +1/+1 counters on target creature you control.\n• You gain 4 life.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Axgard Cavalry": {
+    "name": "Axgard Cavalry",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Dwarf Berserker",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{T}: Target creature gains haste until end of turn. (It can attack and {T} this turn.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Burglar Rat": {
+    "name": "Burglar Rat",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Rat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, each opponent discards a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Campus Guide": {
+    "name": "Campus Guide",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Golem",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, you may search your library for a basic land card, reveal it, then shuffle and put that card on top.",
+    "colors": []
+  },
+  "Circuitous Route": {
+    "name": "Circuitous Route",
+    "mana_cost": "{3}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for up to two basic land cards and/or Gate cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dawnwing Marshal": {
+    "name": "Dawnwing Marshal",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Cat Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\n{4}{W}: Creatures you control get +1/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Druid of the Cowl": {
+    "name": "Druid of the Cowl",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{T}: Add {G}.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Eaten by Piranhas": {
+    "name": "Eaten by Piranhas",
+    "mana_cost": "{1}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature loses all abilities and is a black Skeleton creature with base power and toughness 1/1. (It loses all other colors, card types, and creature types.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Goblin Oriflamme": {
+    "name": "Goblin Oriflamme",
+    "mana_cost": "{1}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Attacking creatures you control get +1/+0.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Goblin Smuggler": {
+    "name": "Goblin Smuggler",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Rogue",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)\n{T}: Another target creature with power 2 or less can't be blocked this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Kargan Dragonrider": {
+    "name": "Kargan Dragonrider",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Warrior",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "As long as you control a Dragon, this creature has flying.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Kitesail Corsair": {
+    "name": "Kitesail Corsair",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Pirate",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "This creature has flying as long as it's attacking.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Mystic Archaeologist": {
+    "name": "Mystic Archaeologist",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Wizard",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{3}{U}{U}: Draw two cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Pirate's Cutlass": {
+    "name": "Pirate's Cutlass",
+    "mana_cost": "{3}",
+    "type_line": "Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, attach it to target Pirate you control.\nEquipped creature gets +2/+1.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Spinner of Souls": {
+    "name": "Spinner of Souls",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Spider Spirit",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach\nWhenever another nontoken creature you control dies, you may reveal cards from the top of your library until you reveal a creature card. Put that card into your hand and the rest on the bottom of your library in a random order.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Treetop Snarespinner": {
+    "name": "Treetop Snarespinner",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Spider",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [
+      "Reach",
+      "Deathtouch"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\n{2}{G}: Put a +1/+1 counter on target creature you control. Activate only as a sorcery.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Twinblade Paladin": {
+    "name": "Twinblade Paladin",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Human Knight",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.\nAs long as you have 25 or more life, this creature has double strike. (It deals both first-strike and regular combat damage.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Vampire Neonate": {
+    "name": "Vampire Neonate",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Vampire",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{2}, {T}: Each opponent loses 1 life and you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Wildheart Invoker": {
+    "name": "Wildheart Invoker",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Elf Shaman",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{8}: Target creature gets +5/+5 and gains trample until end of turn. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Witness Protection": {
+    "name": "Witness Protection",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature loses all abilities and is a green and white Citizen creature with base power and toughness 1/1 named Legitimate Businessperson. (It loses all other colors, card types, creature types, and names.)",
+    "colors": [
+      "U"
+    ]
   }
 }

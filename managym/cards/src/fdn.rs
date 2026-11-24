@@ -18,6 +18,10 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        spinner_of_souls(),
+        dawnwing_marshal(),
+        treetop_snarespinner(),
+        apothecary_stomper(),
         sower_of_chaos(),
         ambush_wolf(),
         beast_kin_ranger(),
@@ -1500,6 +1504,142 @@ fn sower_of_chaos() -> CardDefinition {
                     Modification::CantBlock,
                 )],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dawnwing_marshal() -> CardDefinition {
+    let text_box = "Flying\n{4}{W}: Creatures you control get +1/+1 until end of turn.";
+    CardDefinition {
+        key: "fdn.dawnwing_marshal",
+        scryfall_id: "807db84f-addb-4ef0-b9ba-32b3e1bced3d",
+        printed: PrintedCharacteristics {
+            name: "Dawnwing Marshal".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Soldier".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}{W}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    Modification::pump(1, 1),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn treetop_snarespinner() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\n{2}{G}: Put a +1/+1 counter on target creature you control. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fdn.treetop_snarespinner",
+        scryfall_id: "88e68fa3-159d-49a6-8ac6-afc9bd6f1718",
+        printed: PrintedCharacteristics {
+            name: "Treetop Snarespinner".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spider".into()],
+            power: Some(1),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}{G}"),
+                sorcery_timing: true,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn apothecary_stomper() -> CardDefinition {
+    let text_box = "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, choose one —\n• Put two +1/+1 counters on target creature you control.\n• You gain 4 life.";
+    CardDefinition {
+        key: "fdn.apothecary_stomper",
+        scryfall_id: "680b7b0c-0e1b-46ce-9917-9fc6e05aa148",
+        printed: PrintedCharacteristics {
+            name: "Apothecary Stomper".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elephant".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::TriggerModes {
+                    up_to: None,
+                    unchosen: false,
+                    modes: vec![
+                        vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            2,
+                        )],
+                        vec![Effect::gain_life(4)],
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn spinner_of_souls() -> CardDefinition {
+    let text_box = "Reach\nWhenever another nontoken creature you control dies, you may reveal cards from the top of your library until you reveal a creature card. Put that card into your hand and the rest on the bottom of your library in a random order.";
+    CardDefinition {
+        key: "fdn.spinner_of_souls",
+        scryfall_id: "f50a8dec-b079-4192-9098-6cdc1026c693",
+        printed: PrintedCharacteristics {
+            name: "Spinner of Souls".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spider".into(), "Spirit".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        token: Some(false),
+                        ..CardPredicate::creature()
+                    }),
+                },
+                effects: vec![Effect::Modal {
+                    modes: vec![
+                        vec![Effect::RevealUntilToHand {
+                            predicate: CardPredicate::creature(),
+                        }],
+                        vec![],
+                    ],
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

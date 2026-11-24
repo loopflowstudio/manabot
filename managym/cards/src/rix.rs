@@ -1,9 +1,11 @@
 //! Rivals of Ixalan.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Condition, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -12,6 +14,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        kitesail_corsair(),
         moment_of_craving(),
         moment_of_triumph(),
         zetalpa_primal_dawn(),
@@ -194,6 +197,33 @@ fn moment_of_triumph() -> CardDefinition {
                 ),
                 Effect::gain_life(2),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn kitesail_corsair() -> CardDefinition {
+    let text_box = "This creature has flying as long as it's attacking.";
+    CardDefinition {
+        key: "rix.kitesail_corsair",
+        scryfall_id: "4b8d0e8d-c2d4-4682-8095-827ffd79539b",
+        printed: PrintedCharacteristics {
+            name: "Kitesail Corsair".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(1),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::SourceMatches(CardPredicate {
+                    attacking: true,
+                    ..Default::default()
+                })),
+                keywords: Keywords::of(&[Keyword::Flying]),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -200,3 +200,80 @@ fn foundations_5e_devout_decree() {
     assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
     settle(&mut s);
 }
+
+/// "{T}: Another target creature with power 2 or less can't be blocked this
+/// turn": it offers every other creature with power 2 or less, whoever
+/// controls it, and the chosen Ogre is not asked to be blocked.
+#[test]
+fn foundations_5f_goblin_smuggler() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::offered_targets,
+        play::{activate, attack_with, settle},
+    };
+    use managym::{flow::turn::StepKind, state::game_object::Target};
+    let mut s = five_color_setup(&["Goblin Smuggler", "Gray Ogre", "Craw Wurm"]);
+    let smuggler = s.force_permanent_on_battlefield(0, "Goblin Smuggler");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let blocker = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    // Haste: the Smuggler taps the turn it arrives.
+    activate(&mut s, smuggler, 0);
+    let mut offered = offered_targets(&s);
+    offered.sort_by_key(|target| format!("{target:?}"));
+    let mut wanted = vec![Target::Permanent(ogre), Target::Permanent(theirs)];
+    wanted.sort_by_key(|target| format!("{target:?}"));
+    assert_eq!(offered, wanted);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    let blocks = crate::walk_block_declaration(&mut s);
+    assert!(
+        blocks.iter().all(|(_, attackers)| attackers.is_empty()),
+        "{blocks:?}"
+    );
+    assert!(blocks.iter().any(|(who, _)| *who == blocker), "{blocks:?}");
+}
+
+/// "Whenever you gain life, put a +1/+1 counter on this creature. As long as
+/// you have 25 or more life, this creature has double strike": gaining to 25
+/// grants double strike at once, and damage below 25 removes it, with the
+/// cached characteristics read before each change.
+#[test]
+fn foundations_5f_twinblade_paladin() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::{counters, keywords},
+        play::{activate, cast, settle, spend_colorless},
+    };
+    use managym::state::{
+        card::Keyword,
+        game_object::{PlayerId, Target},
+    };
+    let mut s = five_color_setup(&["Twinblade Paladin", "Vampire Neonate", "Lightning Bolt"]);
+    let paladin = s.force_permanent_on_battlefield(0, "Twinblade Paladin");
+    let neonate = s.force_permanent_on_battlefield(0, "Vampire Neonate");
+    clear_summoning_sickness(&mut s, neonate);
+    s.game_mut().state.players[0].life = 24;
+    assert!(!keywords(&s, paladin).has(Keyword::DoubleStrike));
+
+    activate(&mut s, neonate, 0);
+    spend_colorless(&mut s);
+    // The drain resolves; the gain's trigger waits on the stack.
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.life(0), 25);
+    assert!(keywords(&s, paladin).has(Keyword::DoubleStrike));
+    settle(&mut s);
+    assert_eq!(counters(&s, paladin), 1);
+    assert_eq!(s.game().characteristics(paladin).pt(), (4, 4));
+
+    cast(&mut s, "Lightning Bolt");
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut s);
+    assert_eq!(s.life(0), 22);
+    assert!(!keywords(&s, paladin).has(Keyword::DoubleStrike));
+}

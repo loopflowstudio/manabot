@@ -245,6 +245,10 @@ pub enum Condition {
     CardsInHandAtLeast {
         count: usize,
     },
+    /// "as long as you have `amount` or more life".
+    LifeAtLeast {
+        amount: i32,
+    },
     /// "as long as you have `count` or more unspent mana" (both pools).
     UnspentManaAtLeast {
         count: u32,
@@ -369,6 +373,16 @@ impl Condition {
         }
     }
 
+    /// Whether answering reads a player's life total, so a static ability
+    /// with this condition follows the `life` revision.
+    pub fn reads_life(&self) -> bool {
+        match self {
+            Condition::LifeAtLeast { .. } => true,
+            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_life),
+            _ => false,
+        }
+    }
+
     /// Whether answering needs a resolving spell or ability, so the
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
@@ -396,6 +410,7 @@ impl Condition {
             | Condition::BattlefieldAtLeast { .. }
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
+            | Condition::LifeAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
@@ -1168,6 +1183,20 @@ pub enum Effect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         top: bool,
     },
+    /// Reveal each object `what` names (CR 701.20): its definition becomes
+    /// public, and a later library placement in this resolution keeps that
+    /// knowledge ("reveal it, then shuffle and put that card on top").
+    Reveal {
+        what: ObjectSelector,
+    },
+    /// "Reveal cards from the top of your library until you reveal a
+    /// [predicate] card. Put that card into your hand and the rest on the
+    /// bottom of your library in a random order." The cards stay in the
+    /// library while revealed; with no match, every card is revealed and the
+    /// library is put back in a random order.
+    RevealUntilToHand {
+        predicate: CardPredicate,
+    },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
     /// discards it.
@@ -1713,7 +1742,8 @@ impl Effect {
             | Effect::CounterAbility { what }
             | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
-            | Effect::Discard { what, .. } => vec![what],
+            | Effect::Discard { what, .. }
+            | Effect::Reveal { what } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
                 vec![from]
             }
@@ -1777,6 +1807,21 @@ impl Effect {
 
     pub fn any_color_mana() -> Self {
         Self::mana_choice(["W", "U", "B", "R", "G"].map(Mana::parse))
+    }
+
+    /// "another target [spec]": one target other than the source, which
+    /// `effects` read through the spec they are given.
+    pub fn another_target(
+        spec: TargetSpec,
+        effects: impl FnOnce(TargetSpec) -> Vec<Effect>,
+    ) -> Self {
+        Effect::TargetClause {
+            requirement: TargetRequirement {
+                another: true,
+                ..TargetRequirement::one(spec.clone())
+            },
+            effects: effects(spec),
+        }
     }
 
     /// "[affected] [modification] until end of turn."
@@ -1874,6 +1919,8 @@ impl Effect {
             | Effect::CounterAbility { .. }
             | Effect::Earthbend { .. }
             | Effect::Discard { .. }
+            | Effect::Reveal { .. }
+            | Effect::RevealUntilToHand { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
             | Effect::ApplyContinuous { .. }

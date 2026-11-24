@@ -35,3 +35,20 @@ fn foundations_5f_inspiring_overseer() {
     s.assert_life(0, 21);
     s.assert_zone_size(0, ZoneType::Hand, hand + 1);
 }
+
+/// Witness Protection on Juggernaut, an artifact creature that attacks each
+/// combat: it is a green and white 1/1 Citizen creature named Legitimate
+/// Businessperson with no abilities, no longer an artifact; removing the Aura
+/// restores every printed characteristic.
+#[test]
+fn foundations_5f_witness_protection() {
+    crate::assert_sets_juggernaut_characteristics(
+        "Witness Protection",
+        "Legitimate Businessperson",
+        "Citizen",
+        &[
+            managym::state::mana::Color::Green,
+            managym::state::mana::Color::White,
+        ],
+    );
+}

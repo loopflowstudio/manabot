@@ -1,9 +1,12 @@
 //! Core Set 2019.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, Per, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -12,6 +15,9 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        mystic_archaeologist(),
+        vampire_neonate(),
+        kargan_dragonrider(),
         exclusion_mage(),
         herald_of_faith(),
         skeleton_archer(),
@@ -255,6 +261,87 @@ fn viashino_pyromancer() -> CardDefinition {
                     ObjectSelector::Target(TargetSpec::PlayerOrPlaneswalker),
                 )],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn mystic_archaeologist() -> CardDefinition {
+    let text_box = "{3}{U}{U}: Draw two cards.";
+    CardDefinition {
+        key: "m19.mystic_archaeologist",
+        scryfall_id: "1b19cad0-5754-4625-8303-c8310bc7cbd5",
+        printed: PrintedCharacteristics {
+            name: "Mystic Archaeologist".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{U}{U}"),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vampire_neonate() -> CardDefinition {
+    let text_box = "{2}, {T}: Each opponent loses 1 life and you gain 1 life.";
+    CardDefinition {
+        key: "m19.vampire_neonate",
+        scryfall_id: "167822a5-2ab5-42f5-afa4-562fe2d7501b",
+        printed: PrintedCharacteristics {
+            name: "Vampire Neonate".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into()],
+            power: Some(0),
+            toughness: Some(3),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                tap_source: true,
+                effects: vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn kargan_dragonrider() -> CardDefinition {
+    let text_box = "As long as you control a Dragon, this creature has flying.";
+    CardDefinition {
+        key: "m19.kargan_dragonrider",
+        scryfall_id: "34750304-c536-47d4-922d-a3654c37ffbc",
+        printed: PrintedCharacteristics {
+            name: "Kargan Dragonrider".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(2),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::ControlsAtLeast {
+                    distinct_names: false,
+                    count: 1,
+                    predicate: CardPredicate::subtype("Dragon"),
+                }),
+                keywords: Keywords::of(&[Keyword::Flying]),
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

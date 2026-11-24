@@ -138,8 +138,14 @@ impl Game {
     }
 
     /// Reveal before moving; public hand knowledge retains definition counts,
-    /// never the identity of the physical copy.
-    pub(crate) fn reveal_object_to_hand(&mut self, object: ObjectId, player: PlayerId) {
+    /// never the identity of the physical copy. `entry` says whether the
+    /// card's library position was public as it left.
+    pub(crate) fn reveal_object_to_hand(
+        &mut self,
+        object: ObjectId,
+        player: PlayerId,
+        entry: ZoneEntry,
+    ) {
         let definition = self.state.entry_object(object).definition_id;
         self.emit(GameEvent::CardRevealed {
             owner: player,
@@ -150,7 +156,7 @@ impl Game {
             .get(&definition)
             .copied()
             .unwrap_or(0);
-        let moved = self.move_object(object, ZoneType::Hand);
+        let moved = self.move_object_with_entry(object, ZoneType::Hand, entry);
         if self.state.object(moved).is_ok()
             && self.state.zones.contains(moved, ZoneType::Hand, player)
         {

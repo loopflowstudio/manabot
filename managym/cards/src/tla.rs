@@ -2802,15 +2802,20 @@ fn deserter_s_disciple() -> CardDefinition {
             toughness: Some(2),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                effects: vec![Effect::another_target(
+                    TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Creature),
                             max_power: Some(2),
                             ..Default::default()
                         },
-                    }),
-                    Modification::CantBeBlocked,
+                    },
+                    |target| {
+                        vec![Effect::until_end_of_turn(
+                            ObjectSelector::Target(target),
+                            Modification::CantBeBlocked,
+                        )]
+                    },
                 )],
                 ..Default::default()
             }],
@@ -3017,14 +3022,16 @@ fn earth_kingdom_protectors() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Vigilance]),
             activated_abilities: vec![ActivatedAbilityDefinition {
                 sacrifice_source: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            subtype: Some("Ally".into()),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                effects: vec![Effect::another_target(
+                    TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate::subtype("Ally"),
+                    },
+                    |target| {
+                        vec![Effect::until_end_of_turn(
+                            ObjectSelector::Target(target),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                        )]
+                    },
                 )],
                 ..Default::default()
             }],
@@ -6783,11 +6790,12 @@ fn north_pole_patrol() -> CardDefinition {
                 },
                 ActivatedAbilityDefinition {
                     tap_source: true,
-                    effects: vec![Effect::untap(ObjectSelector::Target(
+                    effects: vec![Effect::another_target(
                         TargetSpec::PermanentYouControl {
                             predicate: CardPredicate::default(),
                         },
-                    ))],
+                        |target| vec![Effect::untap(ObjectSelector::Target(target))],
+                    )],
                     ..Default::default()
                 },
             ],

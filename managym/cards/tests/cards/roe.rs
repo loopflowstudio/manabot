@@ -687,3 +687,30 @@ fn foundations_5f_pelakka_wurm() {
     s.assert_zone_size(0, ZoneType::Hand, hand + 1);
     s.assert_life(0, 27);
 }
+
+/// "{8}: Target creature gets +5/+5 and gains trample until end of turn."
+#[test]
+fn foundations_5f_wildheart_invoker() {
+    use crate::support::{
+        game::five_color_setup,
+        inspect::keywords,
+        play::{activate, settle, spend_colorless},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Wildheart Invoker", "Gray Ogre"]);
+    let invoker = s.force_permanent_on_battlefield(0, "Wildheart Invoker");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, invoker, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (7, 7));
+    assert!(keywords(&s, ogre).has(Keyword::Trample));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert!(!keywords(&s, ogre).has(Keyword::Trample));
+}

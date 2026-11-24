@@ -78,6 +78,7 @@ pub(super) struct Context<'a> {
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
     pub reads_tapped: bool,
+    pub reads_life: bool,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
@@ -126,6 +127,7 @@ struct ReadSet {
     fields: u8,
     mana: bool,
     tapped: bool,
+    life: bool,
 }
 
 impl ReadSet {
@@ -179,7 +181,10 @@ impl ReadSet {
                 }
             }
             Condition::SourceTapped => self.tapped = true,
-            _ => self.mana |= condition.reads_mana_pools(),
+            _ => {
+                self.mana |= condition.reads_mana_pools();
+                self.life |= condition.reads_life();
+            }
         }
     }
 }
@@ -287,6 +292,7 @@ impl Operation {
             Self::Power(_) | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
+                Modification::SetName(_) => NAME,
                 Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
                 Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
@@ -319,6 +325,7 @@ struct Instruction {
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
+        Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
         | Modification::AddTypes(_)
@@ -359,6 +366,7 @@ impl<'a> Context<'a> {
             objects: BTreeMap::new(),
             reads_mana: false,
             reads_tapped: false,
+            reads_life: false,
         };
         let mut nodes = Vec::new();
         let mut known = BTreeSet::new();
@@ -387,6 +395,7 @@ impl<'a> Context<'a> {
                 for node in &seed.nodes {
                     context.reads_mana |= node.reads.mana;
                     context.reads_tapped |= node.reads.tapped;
+                    context.reads_life |= node.reads.life;
                     nodes.push(node.clone());
                 }
             }
@@ -607,6 +616,7 @@ impl<'a> Context<'a> {
                     if let Some(node) = self.node(id, entry) {
                         self.reads_mana |= node.reads.mana;
                         self.reads_tapped |= node.reads.tapped;
+                        self.reads_life |= node.reads.life;
                         nodes.push(node);
                     }
                 }
@@ -1029,9 +1039,9 @@ impl<'a> Context<'a> {
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
-                Operation::Name(name) => {
+                Operation::Name(name) | Operation::Modify(Modification::SetName(name)) => {
                     view.name = name.clone();
-                    view.characteristics_set = true;
+                    view.name_set = true;
                 }
                 Operation::LandType(subtype) => {
                     if !view.is_land() {
@@ -1066,6 +1076,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::Modify(modification) => match modification {
                     Modification::SetCreatureTypes(types) => {
+                        view.creature_types_set = true;
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
                         view.added_subtypes.retain(|s| !is_creature_type(s));
@@ -1088,6 +1099,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::AddTypes(types) => view.types.types.extend(types.iter().copied()),
                     Modification::SetTypes { types, subtypes } => {
+                        view.creature_types_set = true;
                         view.types.types = types.iter().copied().collect();
                         view.subtypes = subtypes.clone();
                         view.added_subtypes = subtypes.clone();

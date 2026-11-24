@@ -76,6 +76,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Dragon", Creature),
     ("Drake", Creature),
     ("Druid", Creature),
+    ("Dwarf", Creature),
     ("Elder", Creature),
     ("Eldrazi", Creature),
     ("Elemental", Creature),

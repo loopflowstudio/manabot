@@ -79,3 +79,24 @@ fn foundations_5e_moment_of_craving() {
 fn foundations_5e_moment_of_triumph() {
     crate::assert_targeted_pump("Moment of Triumph", "Gray Ogre", 0, (4, 4), &[], 2, 0);
 }
+
+/// "This creature has flying as long as it's attacking": flying from the
+/// declaration until combat ends.
+#[test]
+fn foundations_5f_kitesail_corsair() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::keywords,
+        play::attack_with,
+    };
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+    let mut s = five_color_setup(&["Kitesail Corsair"]);
+    let corsair = s.force_permanent_on_battlefield(0, "Kitesail Corsair");
+    clear_summoning_sickness(&mut s, corsair);
+    assert!(!keywords(&s, corsair).has(Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, corsair);
+    assert!(keywords(&s, corsair).has(Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert!(!keywords(&s, corsair).has(Keyword::Flying));
+}

@@ -1,14 +1,24 @@
 //! Streets of New Capenna.
 
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    ability::{
+        Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
+        TriggerSubject,
+    },
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
+        StaticAbility, StaticScope,
+    },
     effect::{EffectDuration, Modification},
-    mana::ManaCost,
+    mana::{Color, ManaCost},
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![inspiring_overseer(), involuntary_employment()]
+    vec![
+        witness_protection(),
+        inspiring_overseer(),
+        involuntary_employment(),
+    ]
 }
 
 fn involuntary_employment() -> CardDefinition {
@@ -57,6 +67,45 @@ fn inspiring_overseer() -> CardDefinition {
                 TriggerSubject::This,
                 vec![Effect::gain_life(1), Effect::DrawCards { count: 1.into() }],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn witness_protection() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature loses all abilities and is a green and white Citizen creature with base power and toughness 1/1 named Legitimate Businessperson. (It loses all other colors, card types, creature types, and names.)";
+    CardDefinition {
+        key: "snc.witness_protection",
+        scryfall_id: "a2be6f2c-8ad0-402d-a7ca-9fe817e83b72",
+        printed: PrintedCharacteristics {
+            name: "Witness Protection".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            // One effect across layers 1, 4, 5, 6 and 7b (CR 613.6).
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![
+                    Modification::SetName("Legitimate Businessperson".into()),
+                    Modification::SetTypes {
+                        types: vec![CardType::Creature],
+                        subtypes: vec!["Citizen".into()],
+                    },
+                    Modification::SetColors([Color::Green, Color::White].into_iter().collect()),
+                    Modification::LoseAllAbilities,
+                    Modification::SetBasePt {
+                        power: Some(LayerValue::Fixed(1)),
+                        toughness: Some(LayerValue::Fixed(1)),
+                    },
+                ],
+            )],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

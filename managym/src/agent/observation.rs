@@ -580,7 +580,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 37] = [
+pub const MODIFICATION_NAMES: [&str; 38] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -618,6 +618,7 @@ pub const MODIFICATION_NAMES: [&str; 37] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "SetName",
 ];
 
 impl ContinuousEffectData {
@@ -653,7 +654,8 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "SetCreatureTypes"
             }
-            Modification::AddTypes(_)
+            Modification::SetName(_)
+            | Modification::AddTypes(_)
             | Modification::SetTypes { .. }
             | Modification::SetColors(_)
             | Modification::AddColors(_)
@@ -669,6 +671,7 @@ impl ContinuousEffectData {
                     crate::cards::tokens::rules_tokens(modification, default_content_pack())
                         .expect("registered rules payload");
                 match modification {
+                    Modification::SetName(_) => "SetName",
                     Modification::AddTypes(_) => "AddTypes",
                     Modification::SetTypes { .. } => "SetTypes",
                     Modification::SetColors(_) => "SetColors",
@@ -802,9 +805,11 @@ pub struct PermanentData {
     pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
     pub attached_to: Option<i32>,
-    /// Name and creature types set by an effect (Honest Work); absent while
-    /// the printed ones apply.
+    /// The name a layer 1 effect set (Honest Work, Witness Protection);
+    /// absent while the printed one applies.
     pub name: Option<String>,
+    /// The creature types a layer 4 effect set (Eaten by Piranhas), each
+    /// independent of the name; absent while the printed ones apply.
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
     pub is_granted_land: bool,
@@ -1566,9 +1571,9 @@ impl Observation {
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
             name: characteristics
-                .characteristics_set
+                .name_set
                 .then(|| characteristics.name.to_string()),
-            creature_types: characteristics.characteristics_set.then(|| {
+            creature_types: characteristics.creature_types_set.then(|| {
                 characteristics
                     .creature_types
                     .iter()

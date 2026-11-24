@@ -1694,3 +1694,252 @@ fn foundations_5f_sower_of_chaos() {
     let blocks = crate::walk_block_declaration(&mut next_turn);
     assert_eq!(blocks.len(), 2, "{blocks:?}");
 }
+
+/// "{4}{W}: Creatures you control get +1/+1 until end of turn": the bonus
+/// reaches the Marshal and its controller's Ogre, not the opposing Ogre.
+#[test]
+fn foundations_5f_dawnwing_marshal() {
+    use crate::support::play::{activate, settle, spend_colorless};
+    let mut s = five_color_setup(&["Dawnwing Marshal", "Gray Ogre"]);
+    let marshal = s.force_permanent_on_battlefield(0, "Dawnwing Marshal");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "4W");
+    activate(&mut s, marshal, 0);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(marshal).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ours).pt(), (2, 2));
+}
+
+/// "{2}{G}: Put a +1/+1 counter on target creature you control. Activate
+/// only as a sorcery": offered in the main phase with an empty stack, only
+/// for the controller's creatures, and never during combat.
+#[test]
+fn foundations_5f_treetop_snarespinner() {
+    use crate::support::{
+        inspect::{can_activate, counters, offered_targets},
+        play::{activate, settle, spend_colorless},
+    };
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Treetop Snarespinner", "Gray Ogre"]);
+    let spinner = s.force_permanent_on_battlefield(0, "Treetop Snarespinner");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let mut combat = s.clone();
+    activate(&mut s, spinner, 0);
+    eprintln!(
+        "DBG spinner {spinner:?} ours {ours:?} space {:?}",
+        s.action_space()
+    );
+    let mut offered = offered_targets(&s);
+    offered.sort_by_key(|target| format!("{target:?}"));
+    let mut wanted = vec![Target::Permanent(spinner), Target::Permanent(ours)];
+    wanted.sort_by_key(|target| format!("{target:?}"));
+    assert_eq!(offered, wanted);
+    assert!(s.choose_target(Target::Permanent(ours)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(counters(&s, ours), 1);
+    assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
+
+    combat.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(!can_activate(&combat, spinner));
+}
+
+/// Apothecary Stomper's entry asks for one mode: two +1/+1 counters on a
+/// creature its controller controls, or 4 life.
+#[test]
+fn foundations_5f_apothecary_stomper() {
+    use crate::support::{
+        inspect::{counters, mode_labels, offered_targets},
+        play::{choose_mode, enter_and_settle, fork_stepping, pass_until, settle},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::game_object::Target};
+    let mut s = five_color_setup(&["Apothecary Stomper", "Gray Ogre"]);
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let _ = enter_and_settle;
+    crate::support::game::put_onto_battlefield(&mut s, 0, "Apothecary Stomper");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(mode_labels(&s).len(), 2);
+    let mut life = s.clone();
+    choose_mode(&mut life, 1);
+    settle(&mut life);
+    assert_eq!(life.life(0), 24);
+    assert_eq!(counters(&life, ours), 0);
+
+    choose_mode(&mut s, 0);
+    let mut offered = offered_targets(&s);
+    offered.sort_by_key(|target| format!("{target:?}"));
+    assert_eq!(offered.len(), 2, "{offered:?}");
+    assert!(offered.contains(&Target::Permanent(ours)));
+    let _ = fork_stepping;
+    assert!(s.choose_target(Target::Permanent(ours)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ours), 2);
+    assert_eq!(s.life(0), 20);
+}
+
+/// Spinner of Souls with a friendly Gray Ogre that has just died, `top`
+/// pinned on player 0's library, stopped at the "you may" choice.
+fn spinner_of_souls_trigger(
+    top: &[&str],
+) -> (
+    crate::support::game::Scenario,
+    Vec<managym::state::game_object::ObjectId>,
+) {
+    use crate::support::{
+        game::{move_card, pin_top},
+        inspect::card_of,
+        play::pass_until,
+    };
+    use managym::{agent::action::ActionSpaceKind, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Spinner of Souls", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Spinner of Souls");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let pinned = pin_top(&mut s, top);
+    let card = card_of(&s, ogre);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    (s, pinned)
+}
+
+fn revealed_since(
+    s: &crate::support::game::Scenario,
+    cursor: usize,
+) -> Vec<managym::state::card::CardDefId> {
+    use managym::flow::event::GameEvent;
+    s.game()
+        .state
+        .events
+        .iter()
+        .skip(cursor)
+        .filter_map(|event| match event {
+            GameEvent::CardRevealed { definition, .. } => Some(*definition),
+            _ => None,
+        })
+        .collect()
+}
+
+/// "Whenever another nontoken creature you control dies, you may reveal
+/// cards from the top of your library until you reveal a creature card. Put
+/// that card into your hand and the rest on the bottom of your library in a
+/// random order." The cards stay in the library while revealed: a match on
+/// top keeps every known position, one passed card keeps those below it, and
+/// two or more passed cards are put back in an unknown order.
+#[test]
+fn foundations_5f_spinner_of_souls() {
+    use crate::support::{
+        inspect::{hand, library},
+        play::{choose_mode, settle},
+    };
+    use std::collections::BTreeMap;
+    let definition = |s: &crate::support::game::Scenario,
+                      id: managym::state::game_object::ObjectId| {
+        s.game().state[id].definition_id
+    };
+
+    // Declining reveals nothing.
+    let (mut s, _) = spinner_of_souls_trigger(&["Forest", "Gray Ogre"]);
+    let order = library(&s, 0);
+    let cursor = s.game().state.events.len();
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(library(&s, 0), order);
+    assert!(hand(&s, 0).is_empty());
+    assert!(revealed_since(&s, cursor).is_empty());
+
+    // A creature on top: positions below it shift up one.
+    let (mut s, pinned) = spinner_of_souls_trigger(&["Gray Ogre", "Forest", "Island", "Plains"]);
+    let (island, plains) = (definition(&s, pinned[2]), definition(&s, pinned[3]));
+    let known = &mut s.game_mut().state.players[0].known_library;
+    known.own = BTreeMap::from([(2, island), (3, plains)]);
+    known.public = BTreeMap::from([(3, plains)]);
+    let cursor = s.game().state.events.len();
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(
+        hand(&s, 0),
+        vec![crate::support::inspect::now(&s, pinned[0])]
+    );
+    assert_eq!(
+        revealed_since(&s, cursor),
+        vec![definition(&s, crate::support::inspect::now(&s, pinned[0]))]
+    );
+    let known = &s.game().state.players[0].known_library;
+    assert_eq!(known.own, BTreeMap::from([(1, island), (2, plains)]));
+    assert_eq!(known.public, BTreeMap::from([(2, plains)]));
+
+    // One land passed: it goes to the bottom and the facts below it hold.
+    let (mut s, pinned) = spinner_of_souls_trigger(&["Forest", "Gray Ogre", "Island", "Plains"]);
+    let (forest, island, plains) = (
+        definition(&s, pinned[0]),
+        definition(&s, pinned[2]),
+        definition(&s, pinned[3]),
+    );
+    s.game_mut().state.players[0].known_library.own = BTreeMap::from([(2, island), (3, plains)]);
+    let cursor = s.game().state.events.len();
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 1);
+    assert_eq!(s.game().state[hand(&s, 0)[0]].name, "Gray Ogre");
+    assert_eq!(library(&s, 0)[0], pinned[0], "the Forest is on the bottom");
+    assert_eq!(revealed_since(&s, cursor)[0], forest);
+    assert_eq!(
+        s.game().state.players[0].known_library.own,
+        BTreeMap::from([(0, island), (1, plains)])
+    );
+
+    // Two lands passed: both go to the bottom in a random order.
+    let (mut s, pinned) = spinner_of_souls_trigger(&["Forest", "Island", "Gray Ogre"]);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(s.game().state[hand(&s, 0)[0]].name, "Gray Ogre");
+    let library = library(&s, 0);
+    let mut bottom = library[..2].to_vec();
+    bottom.sort();
+    let mut lands = pinned[..2].to_vec();
+    lands.sort();
+    assert_eq!(bottom, lands);
+    assert!(s.game().state.players[0].known_library.is_empty());
+}
+
+/// With no creature card left in the library, every card is revealed and
+/// none goes to hand; an opposing creature's death does not trigger it.
+#[test]
+fn foundations_5f_spinner_of_souls_without_a_creature() {
+    use crate::support::{
+        game::move_card,
+        inspect::{card_of, hand, library},
+        play::{choose_mode, settle},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::zone::ZoneType};
+    let (mut s, _) = spinner_of_souls_trigger(&[]);
+    for object in library(&s, 0) {
+        if s.game().state[object].types.is_creature() {
+            move_card(&mut s, object, ZoneType::Exile);
+        }
+    }
+    let mut cards = library(&s, 0);
+    let cursor = s.game().state.events.len();
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert!(hand(&s, 0).is_empty());
+    assert_eq!(revealed_since(&s, cursor).len(), cards.len());
+    let mut after = library(&s, 0);
+    cards.sort();
+    after.sort();
+    assert_eq!(after, cards);
+
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = card_of(&s, theirs);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert_ne!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert!(s.game().state.pending_triggers.is_empty());
+}

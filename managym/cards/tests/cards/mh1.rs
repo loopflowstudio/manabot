@@ -160,3 +160,32 @@ fn foundations_5f_ravenous_giant() {
     s.advance_to_active_step(0, StepKind::Main);
     assert_eq!((s.life(0), s.life(1)), (19, 20));
 }
+
+/// "Attacking creatures you control get +1/+0": only while attacking, and
+/// never for the opponent's attackers.
+#[test]
+fn foundations_5f_goblin_oriflamme() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        play::attack_with,
+    };
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Goblin Oriflamme", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Goblin Oriflamme");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let idle = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    assert_eq!(s.game().characteristics(attacker).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    assert_eq!(s.game().characteristics(attacker).pt(), (3, 2));
+    assert_eq!(s.game().characteristics(idle).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().characteristics(attacker).pt(), (2, 2));
+
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_summoning_sickness(&mut s, theirs);
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    attack_with(&mut s, theirs);
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
+}

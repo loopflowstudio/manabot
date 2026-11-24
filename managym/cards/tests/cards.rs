@@ -686,6 +686,60 @@ fn make_planeswalker(
     s.game_mut().state[object].types = CardTypes::new([CardType::Planeswalker]);
 }
 
+/// A characteristic-setting Aura cast on Juggernaut (a colorless 5/3
+/// artifact creature that attacks each combat) leaves exactly `name`, the
+/// creature type `subtype`, `colors`, base 1/1 and no abilities; moving the
+/// Aura away restores the printed values.
+fn assert_sets_juggernaut_characteristics(
+    aura: &str,
+    name: &str,
+    subtype: &str,
+    colors: &[managym::state::mana::Color],
+) {
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::CardType, game_object::Target, zone::ZoneType},
+    };
+    use support::{
+        game::{five_color_setup, move_card},
+        inspect::permanent_named,
+        play::{cast, pass_until, settle},
+    };
+    let mut s = five_color_setup(&[aura, "Juggernaut"]);
+    let juggernaut = s.force_permanent_on_battlefield(1, "Juggernaut");
+    let printed = s.game().characteristics(juggernaut);
+    assert!(printed.types.types.contains(&CardType::Artifact));
+    cast(&mut s, aura);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(juggernaut)));
+    settle(&mut s);
+    let set = s.game().characteristics(juggernaut);
+    assert_eq!(set.name, name, "{aura}");
+    assert_eq!(
+        set.types.types.iter().copied().collect::<Vec<_>>(),
+        vec![CardType::Creature],
+        "{aura}: no longer an artifact"
+    );
+    assert_eq!(set.subtypes, vec![subtype.to_string()], "{aura}");
+    assert_eq!(set.colors, colors.iter().copied().collect(), "{aura}");
+    assert_eq!(set.pt(), (1, 1), "{aura}");
+    assert!(
+        set.static_abilities.is_empty(),
+        "{aura}: loses attacks each combat"
+    );
+
+    let attached = permanent_named(&s, aura);
+    let card = support::inspect::card_of(&s, attached);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    let restored = s.game().characteristics(juggernaut);
+    assert_eq!(restored.name, printed.name);
+    assert_eq!(restored.types, printed.types);
+    assert_eq!(restored.subtypes, printed.subtypes);
+    assert_eq!(restored.colors, printed.colors);
+    assert_eq!(restored.pt(), printed.pt());
+    assert_eq!(restored.static_abilities, printed.static_abilities);
+}
+
 fn assert_optional_revealed_search(name: &str, eligible: &[&str], excluded: &[&str]) {
     use crate::support::game::{five_color_setup, put_onto_battlefield};
     use crate::support::inspect::{library, offered_cards, zone_of};

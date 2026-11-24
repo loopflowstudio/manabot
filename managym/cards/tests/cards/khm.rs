@@ -221,3 +221,39 @@ fn foundations_5d_goldvein_pick() {
         );
     }
 }
+
+/// "{T}: Target creature gains haste until end of turn": a summoning-sick
+/// Gray Ogre is asked to attack this turn and loses haste at cleanup.
+#[test]
+fn foundations_5f_axgard_cavalry() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup},
+        inspect::keywords,
+        play::{activate, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Axgard Cavalry", "Gray Ogre"]);
+    let cavalry = s.force_permanent_on_battlefield(0, "Axgard Cavalry");
+    clear_summoning_sickness(&mut s, cavalry);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let mut unhasted = s.clone();
+    activate(&mut s, cavalry, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(keywords(&s, ogre).has(Keyword::Haste));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let asked = crate::walk_attack_declaration(&mut s, &[ogre]);
+    assert!(asked.contains(&(ogre, vec![true, false])), "{asked:?}");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!keywords(&s, ogre).has(Keyword::Haste));
+
+    unhasted.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let asked = crate::walk_attack_declaration(&mut unhasted, &[]);
+    assert!(
+        asked.iter().all(|(creature, _)| *creature != ogre),
+        "{asked:?}"
+    );
+}

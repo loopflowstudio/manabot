@@ -1,11 +1,21 @@
 //! Guilds of Ravnica.
 use managym_state::{
+    ability::{
+        Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
+        TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![swiftblade_vindicator(), healer_s_hawk()]
+    vec![
+        burglar_rat(),
+        circuitous_route(),
+        swiftblade_vindicator(),
+        healer_s_hawk(),
+    ]
 }
 
 fn healer_s_hawk() -> CardDefinition {
@@ -43,6 +53,62 @@ fn swiftblade_vindicator() -> CardDefinition {
             power: Some(1),
             toughness: Some(1),
             keywords: Keywords::of(&[Keyword::Vigilance, Keyword::Trample, Keyword::DoubleStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn burglar_rat() -> CardDefinition {
+    let text_box = "When this creature enters, each opponent discards a card.";
+    CardDefinition {
+        key: "grn.burglar_rat",
+        scryfall_id: "e9f7f218-fd2a-4233-8753-065ddc314f2d",
+        printed: PrintedCharacteristics {
+            name: "Burglar Rat".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rat".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    effects: vec![Effect::discard()],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn circuitous_route() -> CardDefinition {
+    let text_box = "Search your library for up to two basic land cards and/or Gate cards, put them onto the battlefield tapped, then shuffle.";
+    CardDefinition {
+        key: "grn.circuitous_route",
+        scryfall_id: "5a970429-6369-4422-a343-00b30267f09d",
+        printed: PrintedCharacteristics {
+            name: "Circuitous Route".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::search_library(
+                CardPredicate {
+                    any_of: vec![CardPredicate::basic_land(), CardPredicate::subtype("Gate")],
+                    ..Default::default()
+                },
+                EffectValue::Fixed(2),
+                vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    true,
+                )],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

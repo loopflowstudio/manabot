@@ -294,7 +294,13 @@ fn objects(value: &serde_json::Value) -> Vec<&serde_json::Map<String, serde_json
 fn set_names(value: &serde_json::Value) -> Vec<String> {
     objects(value)
         .into_iter()
-        .filter_map(|map| map.get("named")?.as_str().map(str::to_owned))
+        // `SetCharacteristics::named` (Honest Work) and `Modification::SetName`.
+        .filter_map(|map| {
+            map.get("named")
+                .or_else(|| map.get("SetName"))?
+                .as_str()
+                .map(str::to_owned)
+        })
         .collect()
 }
 
