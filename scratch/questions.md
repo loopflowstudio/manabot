@@ -31,3 +31,20 @@
   because that format exists only on unmerged dba0f2 (PR #585); fails
   explicitly naming `training.safetensors`. Passed over: a second read-only
   loader for MLX schema 1/2.
+
+## Surfaced while writing docs
+
+- **Local CLI backend/device switching (`etude train --resume` vs `etude continue`):**
+  `SelfPlayRecipe` declares `backend` and `device` on the recipe config, and
+  `etude train RECIPE --resume` refuses any config change against the saved run.
+  Switching backend or device therefore goes through
+  `etude continue --run RUN --until updates=N --config '{"backend":"mlx","device":"mps"}'`
+  (launched runs) or direct Python `self_play(..., backend=...)` against the same
+  `ETUDE_OUT`. Confirm whether that is the intended CLI surface, or whether
+  local runs also need a way to switch `backend`/`device` without `etude continue`.
+- **Canonical `precision` spelling in `learner.safetensors`:**
+  `SelfPlay.precision` uses `"float32" | "tf32" | "bf16"` while
+  `MLXActorCritic.precision` uses `"float32" | "bfloat16"`. Record the
+  `SelfPlay.precision` spelling (`"float32"`, `"tf32"`, `"bf16"`) in
+  `learner.safetensors` so CUDA Torch `bf16` → MLX `bf16` passes exact precision
+  admission.
