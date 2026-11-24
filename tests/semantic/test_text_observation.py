@@ -287,7 +287,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
 
     owner = capture_text_decision(env)
     assert "foretold, face down" in owner.text
-    assert "may be played from exile by You: cast for {2}{R}, only after turn" in (
+    assert "may be cast from exile by You: cast for {2}{R}, only after turn" in (
         owner.text
     )
     space = ObservationSpace(ObservationConfig())
@@ -636,7 +636,7 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         [cast] = casts
     assert "Hungry Ghoul" in cast.description
     alias = cast.description.split()[1]
-    assert "may be played from graveyard by You: cast for {1}{B}, this turn only" in (
+    assert "may be cast from graveyard by You: cast for {1}{B}, this turn only" in (
         _card_line(decision.text, alias)
     )
     observation = _viewer_observation(decision)
