@@ -30,9 +30,9 @@ from typing import Literal
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import PackedSequence
 
 from manabot.backends.torch._numerics import embedding_rows
+from manabot.backends.torch._packed_gru import packed_gru
 from manabot.backends.torch._records import program_number
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.env.observation import FACT_KINDS
@@ -103,13 +103,12 @@ class FactEncoder(nn.Module):
             tokens = hidden.flatten(0, 1)[program.rows] + self.program_numeric(
                 program_number(program.numbers).unsqueeze(-1)
             )
-            packed, _ = self.program_sequence(
-                PackedSequence(
-                    tokens[program.schedule.gather],
-                    torch.tensor(program.schedule.sizes),
-                )
+            packed, _ = packed_gru(
+                self.program_sequence,
+                tokens[program.schedule.gather],
+                list(program.schedule.sizes),
             )
-            sequence = packed.data[program.schedule.unpack]
+            sequence = packed[program.schedule.unpack]
             hidden = hidden.masked_scatter(
                 program.mask.view_as(rows.kinds).unsqueeze(-1),
                 (tokens + sequence).to(hidden.dtype),
