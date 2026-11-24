@@ -5,7 +5,7 @@ use managym::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
     },
-    state::{game_object::PlayerId, zone::ZoneType},
+    state::{game_object::PlayerId, player::DecklistDisclosure, zone::ZoneType},
 };
 
 fn assert_anonymous_manifest(view: &Observation) {
@@ -22,8 +22,15 @@ fn assert_anonymous_manifest(view: &Observation) {
 
 #[test]
 fn manifest_dread_hides_the_printing_at_opponent_priority() {
+    for disclosure in [DecklistDisclosure::Open, DecklistDisclosure::Closed] {
+        manifest_projections_match(disclosure);
+    }
+}
+
+fn manifest_projections_match(disclosure: DecklistDisclosure) {
     let projections = [("Gray Ogre", "Forest"), ("Forest", "Gray Ogre")].map(|(hidden, other)| {
         let mut s = five_color_setup(&["Gray Ogre", "Lightning Bolt"]);
+        s.game_mut().state.disclosure = disclosure;
         s.force_card_in_hand(1, "Lightning Bolt");
         let cards = pin_top(&mut s, &[hidden, "Plains", other]);
         let printing = s.game().state[cards[0]].definition_id;
@@ -51,10 +58,15 @@ fn manifest_dread_hides_the_printing_at_opponent_priority() {
         let opponent = Observation::for_player(s.game(), PlayerId(1));
         let encoded = encode(&opponent, &ObservationEncoderConfig::default()).unwrap();
         assert_anonymous_manifest(&opponent);
+        assert_eq!(
+            opponent.opponent.unseen_counts.is_none(),
+            disclosure == DecklistDisclosure::Closed
+        );
         (
+            opponent.to_json().to_string(),
             opponent.opponent_permanents,
             encoded.opponent_permanents,
-            opponent.opponent.unseen_counts.unwrap(),
+            opponent.opponent.unseen_counts,
             encoded.decklists,
         )
     });
