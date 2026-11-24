@@ -1,0 +1,252 @@
+{
+  "machine": "Apple M4 Max, macOS, CPython 3.13.15, shared host",
+  "recipe": "scratch.bench_tla:frontier_v11",
+  "base_revision": "4127aa973ff720180afc5e0d775d582e8bff7d7e",
+  "training_revision": "583f8d25f786c60dabac85e5042001fcb63776f8",
+  "four_stream_updates": {
+    "base": [
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 1,
+        "rows": 878,
+        "action_digest": "a824b1ef4c0a57efc3c40a6719d832d08b4e44e0d16a03041c4911f00d2a230a",
+        "retained_bytes": 291414619,
+        "peak_rss_bytes_macos": 913702912,
+        "wall_seconds": 43.61819424998248,
+        "cpu_seconds": 20.05837,
+        "learner_thread_seconds": {
+          "admit_rows": 0.0825602080000003,
+          "prepare_rows": 0.6060198729999975
+        },
+        "phases": {
+          "time/collection": 5.2929246250132564,
+          "time/collection/stream_bookkeeping": 0.035897839872632176,
+          "time/collection/observation_retention": 0.03205449803499505,
+          "time/collection/observation_preparation": 1.841595036094077,
+          "time/collection/policy_inference_and_action_selection": 2.539288330968702,
+          "time/collection/rollout_recording": 0.13566096185240895,
+          "time/collection/environment_step_and_encoding": 0.5841363418730907,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.0705243855,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.0075522902499999996,
+          "time/collection/batch_assembly": 0.007283582992386073,
+          "time/collection/batch_assembly/observation_retention": 9.337501251138747e-05,
+          "time/learning": 38.31908579199808,
+          "time/learning/batch_transfer_and_behavior_checks": 0.015118790994165465,
+          "time/learning/targets": 0.08966862497618422,
+          "time/learning/selection_and_health_diagnostics": 0.00326399999903515,
+          "time/learning/minibatches": 38.209078292013146,
+          "time/learning/minibatches/forward_and_loss": 12.510076660837512,
+          "time/learning/minibatches/backward_and_gradient_clipping": 24.136714704160113,
+          "time/learning/minibatches/optimizer_step": 1.1353159589052666,
+          "time/learning/minibatches/minibatch_diagnostics": 0.13440182866179384
+        }
+      },
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 2,
+        "rows": 1336,
+        "action_digest": "189c01454a362924d5bdd860d92f1912478d5c930b7f7f19650f40a412aba766",
+        "retained_bytes": 499323293,
+        "peak_rss_bytes_macos": 1146683392,
+        "wall_seconds": 103.92115658300463,
+        "cpu_seconds": 37.416078,
+        "learner_thread_seconds": {
+          "admit_rows": 0.13555570799999828,
+          "prepare_rows": 1.1810698370000239
+        },
+        "phases": {
+          "time/collection": 18.33721162501024,
+          "time/collection/stream_bookkeeping": 0.1461445949098561,
+          "time/collection/observation_retention": 0.10857462926651351,
+          "time/collection/observation_preparation": 5.599064252746757,
+          "time/collection/policy_inference_and_action_selection": 7.761725283839041,
+          "time/collection/rollout_recording": 0.370642496884102,
+          "time/collection/environment_step_and_encoding": 3.896745258301962,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.0929147345,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.012170624000000001,
+          "time/collection/batch_assembly": 0.007445166993420571,
+          "time/collection/batch_assembly/observation_retention": 9.583402425050735e-05,
+          "time/learning": 85.57785491697723,
+          "time/learning/batch_transfer_and_behavior_checks": 0.028385415993398055,
+          "time/learning/targets": 0.21821887500118464,
+          "time/learning/selection_and_health_diagnostics": 0.0035871670115739107,
+          "time/learning/minibatches": 85.32584049997968,
+          "time/learning/minibatches/forward_and_loss": 24.92166312687914,
+          "time/learning/minibatches/backward_and_gradient_clipping": 56.49609154512291,
+          "time/learning/minibatches/optimizer_step": 2.52316445519682,
+          "time/learning/minibatches/minibatch_diagnostics": 0.1437522898777388
+        }
+      },
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 3,
+        "rows": 879,
+        "action_digest": "1abcb398c0d94c36aecc765673617f67cead4d0758dde24507a5671ea9d3240a",
+        "retained_bytes": 379983356,
+        "peak_rss_bytes_macos": 1146683392,
+        "wall_seconds": 60.19350866699824,
+        "cpu_seconds": 21.754124999999995,
+        "learner_thread_seconds": {
+          "admit_rows": 0.09557241699999963,
+          "prepare_rows": 0.6636977129999195
+        },
+        "phases": {
+          "time/collection": 13.946942499984289,
+          "time/collection/stream_bookkeeping": 0.06199216897948645,
+          "time/collection/observation_retention": 0.05843124774401076,
+          "time/collection/observation_preparation": 3.9807312060147524,
+          "time/collection/policy_inference_and_action_selection": 5.3674679988471325,
+          "time/collection/rollout_recording": 0.29115951058338396,
+          "time/collection/environment_step_and_encoding": 3.880578203650657,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.05756660149999998,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.0081367655,
+          "time/collection/batch_assembly": 0.0051810420118272305,
+          "time/collection/batch_assembly/observation_retention": 0.00010308300261385739,
+          "time/learning": 46.24107200000435,
+          "time/learning/batch_transfer_and_behavior_checks": 0.013231165998149663,
+          "time/learning/targets": 0.17825200001243502,
+          "time/learning/selection_and_health_diagnostics": 0.0024520409933757037,
+          "time/learning/minibatches": 46.04534683399834,
+          "time/learning/minibatches/forward_and_loss": 14.772000501019647,
+          "time/learning/minibatches/backward_and_gradient_clipping": 28.796435168100288,
+          "time/learning/minibatches/optimizer_step": 1.5048485020524822,
+          "time/learning/minibatches/minibatch_diagnostics": 0.10564108018297702
+        }
+      }
+    ],
+    "final": [
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 1,
+        "rows": 878,
+        "action_digest": "a824b1ef4c0a57efc3c40a6719d832d08b4e44e0d16a03041c4911f00d2a230a",
+        "retained_bytes": 6668857,
+        "peak_rss_bytes_macos": 576552960,
+        "wall_seconds": 58.02574058299069,
+        "cpu_seconds": 19.874000000000002,
+        "learner_thread_seconds": {
+          "admit_rows": 0.03339183299999959,
+          "prepare_rows": 0.5477082939999676
+        },
+        "phases": {
+          "time/collection": 14.15415270801168,
+          "time/collection/stream_bookkeeping": 0.16420205050962977,
+          "time/collection/observation_retention": 0.06121249310672283,
+          "time/collection/observation_preparation": 4.28842382208677,
+          "time/collection/policy_inference_and_action_selection": 5.169956625992199,
+          "time/collection/rollout_recording": 0.14082721029990353,
+          "time/collection/environment_step_and_encoding": 3.5643162422056776,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.09820151925000001,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.0168389465,
+          "time/collection/batch_assembly": 0.002202083996962756,
+          "time/collection/batch_assembly/observation_retention": 1.7375015886500478e-05,
+          "time/learning": 43.867067874991335,
+          "time/learning/batch_transfer_and_behavior_checks": 0.007410124992020428,
+          "time/learning/targets": 0.26834229202358983,
+          "time/learning/selection_and_health_diagnostics": 0.14182462499593385,
+          "time/learning/minibatches": 43.44756108400179,
+          "time/learning/minibatches/forward_and_loss": 13.32382516693906,
+          "time/learning/minibatches/backward_and_gradient_clipping": 28.051389538042713,
+          "time/learning/minibatches/optimizer_step": 1.3307877890765667,
+          "time/learning/minibatches/minibatch_diagnostics": 0.0598807091882918
+        }
+      },
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 2,
+        "rows": 1336,
+        "action_digest": "189c01454a362924d5bdd860d92f1912478d5c930b7f7f19650f40a412aba766",
+        "retained_bytes": 10795034,
+        "peak_rss_bytes_macos": 607125504,
+        "wall_seconds": 81.30915220899624,
+        "cpu_seconds": 34.25743,
+        "learner_thread_seconds": {
+          "admit_rows": 0.05015200000000064,
+          "prepare_rows": 1.00991953500003
+        },
+        "phases": {
+          "time/collection": 14.366642709006555,
+          "time/collection/stream_bookkeeping": 0.20226262684445828,
+          "time/collection/observation_retention": 0.13861544337123632,
+          "time/collection/observation_preparation": 3.483558166975854,
+          "time/collection/policy_inference_and_action_selection": 6.285925832344219,
+          "time/collection/rollout_recording": 0.12431866180850193,
+          "time/collection/environment_step_and_encoding": 3.4769466181460302,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.12642712799999997,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.023841399999999992,
+          "time/collection/batch_assembly": 0.006403832987416536,
+          "time/collection/batch_assembly/observation_retention": 2.8542010113596916e-05,
+          "time/learning": 66.93666437498177,
+          "time/learning/batch_transfer_and_behavior_checks": 0.04323595901951194,
+          "time/learning/targets": 0.0948039999930188,
+          "time/learning/selection_and_health_diagnostics": 0.2375856250000652,
+          "time/learning/minibatches": 66.50100291700801,
+          "time/learning/minibatches/forward_and_loss": 19.02602637410746,
+          "time/learning/minibatches/backward_and_gradient_clipping": 44.123011874064105,
+          "time/learning/minibatches/optimizer_step": 2.1740750301687513,
+          "time/learning/minibatches/minibatch_diagnostics": 0.12431591903441586
+        }
+      },
+      {
+        "streams": 4,
+        "seed": 24,
+        "update": 3,
+        "rows": 879,
+        "action_digest": "1abcb398c0d94c36aecc765673617f67cead4d0758dde24507a5671ea9d3240a",
+        "retained_bytes": 6463825,
+        "peak_rss_bytes_macos": 630112256,
+        "wall_seconds": 53.0457221250108,
+        "cpu_seconds": 20.599711999999997,
+        "learner_thread_seconds": {
+          "admit_rows": 0.037779333999999665,
+          "prepare_rows": 0.57461450699995
+        },
+        "phases": {
+          "time/collection": 11.91456304100575,
+          "time/collection/stream_bookkeeping": 0.1288232519873418,
+          "time/collection/observation_retention": 0.028566375811351463,
+          "time/collection/observation_preparation": 2.9066642579855397,
+          "time/collection/policy_inference_and_action_selection": 4.37812949862564,
+          "time/collection/rollout_recording": 0.08357163282926194,
+          "time/collection/environment_step_and_encoding": 3.946698196028592,
+          "time/collection/environment_step_and_encoding/native_stepping": 0.06873725850000001,
+          "time/collection/environment_step_and_encoding/observation_encoding": 0.01478376675000001,
+          "time/collection/batch_assembly": 0.004285166971385479,
+          "time/collection/batch_assembly/observation_retention": 2.950002090074122e-05,
+          "time/learning": 41.124022917007096,
+          "time/learning/batch_transfer_and_behavior_checks": 0.006221540999831632,
+          "time/learning/targets": 0.26317495899274945,
+          "time/learning/selection_and_health_diagnostics": 0.01378945799660869,
+          "time/learning/minibatches": 40.83902016701177,
+          "time/learning/minibatches/forward_and_loss": 12.177752040035557,
+          "time/learning/minibatches/backward_and_gradient_clipping": 26.250137578957947,
+          "time/learning/minibatches/optimizer_step": 1.476400580140762,
+          "time/learning/minibatches/minibatch_diagnostics": 0.1843174578389153
+        }
+      }
+    ]
+  },
+  "full_size": {
+    "streams": 256,
+    "seed": 24,
+    "timeout_seconds": 240,
+    "base_updates": 0,
+    "final_updates": 0,
+    "final_collection": {
+      "stage": "collected",
+      "rows": 59252,
+      "action_digest": "4d1d0cbf46069e295c66db93271c9c22d6711b378b6ef7592ffd5bdf98d26e2d",
+      "retained_bytes": 443982033,
+      "peak_rss_bytes_macos": 1383825408
+    }
+  },
+  "constructed_board_digests": {
+    "duplicate-tokens": "70e4763040b599faadb863513c2638c2f1f1dcc55d0947dbb00ce49e48d1d2f6",
+    "mixed": "523886bd1e4d5533238479b90162e60557b9361f3e57f01f7247df4addfc9189"
+  }
+}

@@ -24,42 +24,23 @@ forced-decision skipping, replay identity and debug cache invariants.
 masked features and referenced empty slots. Native rows use encoder offsets.
 Both paths still bind checkpoint layouts and vocabularies.
 
-## Remaining
+## Training collection
 
-### 4. Use owned spans in training collection, retention and minibatches
+Slice 4. Registered v11 vectors now write owned spans for masked and isolated steps,
+   root changes and fixed-view reads. Shards retain global slot order. The
+   collector stores the live rows selected at each decision, including the
+   legal offers, and the behavior distribution keeps the original slot
+   coordinates. Learners gather the requested spans and decision-memory
+   prefixes within their execution limit. Editable diagnostic exports and
+   legacy dense inputs retain full admission.
 
-- Feed the typed row writer into the native vector write callbacks in
-  `managym/src/agent/vector_env.rs` and `managym/src/python/vector_env_bindings.rs`.
-  `step_observation_batch` encodes after the unmasked step returns. That
-  misses the write boundary where isolated stepping classifies capacity
-  failures. Reuse the callbacks for masked and isolated steps, seeded resets,
-  replacements and viewer reads. `PackedRows::append` currently assumes the
-  caller discards the whole batch on error. Commit each observation atomically so a
-  failed slot cannot affect a sibling's offsets. Keep stream order, outcomes,
-  step events, cutoff diagnostics and typed errors through
-  `managym/recording.py` and `manabot/training/rollout/producers.py`.
-- Snapshot self-play (`82c5d1d1b7`, merged in `dbafc8738f`) now runs on
-  native slots across shards. Preserve both terminal autoreset and parked
-  slots, transactional snapshot loads, seeded root succession, and settlement
-  of records, statistics and exposure for explicitly replaced roots. Freeze
-  each horizon from its contributing viewer before releasing the slot. Keep
-  decision-memory prefixes shared, with capture cursors tied to the native
-  stream, viewer and epoch across snapshot branches and resume.
-- Carry immutable v11 spans through `manabot/training/rollout/collection.py`,
-  `actions.py` and `admission.py`. The collector currently copies dense
-  non-action rows, then rejoins them with dense action projections from
-  `PackedActions` on every learner gather. Keep one owner for the v11 legal
-  action fields in the native spans, and retain behavior probabilities in
-  original action coordinates. Gather arbitrary rows, including repeats and
-  frozen bootstraps, with collection bucket extents and native provenance
-  intact. Keep one sampling call per original row group and materialize
-  prefixes within execution row limits. Mutable or external mappings still
-  receive full admission.
-- Check arbitrary gathers and cutoff/recovery, batch closure, self-play and
-  resume, including sharded snapshot branches and fixed-view horizons. Compare
-  logits, values, sampled actions and replay digests against the dense
-  reference with paired seeds. Check pinned pilots and package boundaries.
-  Measure rollout bytes, peak RSS and update throughput on the workload below.
+The paired test in `tests/training/test_collection.py` uses seed 24, three
+streams, two-row execution chunks and a repeated, out-of-order learner gather.
+It compares observation fields, sampled actions, behavior logs, values,
+outcomes, model outputs, replay action prefixes and native state digests.
+Focused checks also cover failed-slot replacement, transactional snapshot
+loads, both fixed viewers, GRU snapshot resume with two workers, Torch and MLX
+updates, and pinned v9/v11 pilots. The optional u1952 pilot was unavailable.
 
 ## Measurements to carry forward
 
@@ -70,7 +51,7 @@ single-thread CPU Torch. The workload uses `scratch/bench_tla.py:frontier_v11`
 random legal actions from seed 24. Transport shrank from 60.2 MB dense
 to 3,797,400 bytes with float CSR, then 1,858,818 bytes with typed CSR.
 At 16,384 rows the median typed batch projects to 119 MB of transport.
-Actual rollout storage and peak RSS remain open.
+Measured rollout storage and process RSS appear below.
 
 | Stage (median CPU ms per batch) | Dense | Typed CSR |
 | --- | ---: | ---: |
@@ -84,19 +65,49 @@ Step timings include native advancement and freezing. The typed result is
 probes are in `cd7f023e25:scratch/plan.md`. Optional u1952 was unavailable.
 Strict all-feature Clippy reported four existing PyO3 binding lints.
 
-Compare base `4127aa973f` and final TLA self-play on the same idle machine.
-The baseline update probe timed out at 240 seconds with 13% CPU on a busy
-host, leaving throughput and RSS unmeasured. Record rows per update, timings
-for encode, retention, admission and preparation, total rollout bytes and
-training process peak RSS. Keep memory capture under retention.
+### Complete frontier updates
 
-```bash
-/usr/bin/time -l uv run python scripts/bench_training_update.py --recipe scratch.bench_tla:frontier_v11 --streams 256 --updates 3 --json scratch/update-v11.json
-cargo run --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- --layers observe
+`scratch/compare_updates.py` measures a complete two-seat update using the
+same frontier recipe, action cap, 64-transition quota, four workers, seed 24,
+one Torch CPU thread, and release extensions. Each reading starts a new process.
+Retained bytes count distinct NumPy backing allocations, CSR records and offsets,
+including bootstrap and behavior evidence. Process peak RSS also covers the
+model, optimizer, allocator and Python objects. Collection and learner times can
+overlap with prefetch. Memory capture sits inside observation retention.
+
+On four streams, `4127aa973f` and `583f8d25f7` produced 878, 1,336 and
+879 learner rows on successive updates, with identical SHA-256 digests of
+the sampled actions on each update. `scratch/update-v11.json` retains each
+reading. MB and GB use decimal units.
+
+| Three paired updates | Dense | Typed CSR |
+| --- | ---: | ---: |
+| Retained rollout MB by update | 291.4 / 499.3 / 380.0 | 6.67 / 10.80 / 6.46 |
+| Peak training process RSS (GB) | 1.147 | 0.630 |
+| Total wall time (s) | 207.7 | 192.4 |
+| Total process CPU (s) | 79.2 | 74.7 |
+| Learner rows per wall second | 14.89 | 16.08 |
+| Step and encoding (wall s) | 8.36 | 10.99 |
+| Observation retention (wall s) | 0.199 | 0.228 |
+| Collection preparation (wall s) | 11.42 | 10.68 |
+| Learner admission including gather (thread CPU s) | 0.314 | 0.121 |
+| Learner preparation including gather (thread CPU s) | 2.451 | 2.132 |
+
+At 256 streams the typed collector closed a 59,252-row batch using
+443,982,033 retained bytes. Process peak RSS at closure was 1,383,825,408
+bytes. Neither revision completed its first full-size optimizer update
+within 240 seconds. A separate dense collection-only run also reached
+240 seconds. Concurrent host activity varied across the sequential runs.
+The four-stream timings establish observed throughput for these runs.
+Steady-state update throughput and peak learner RSS at 256 streams remain
+open for an idle host. No implementation slice remains.
+
+Both constructed-board probes matched the base at all 15 checkpoints,
+including the output counts and digests. The separate encode-only fixture
+panics on the base and yielded no measurement.
+
+```sh
+cargo run --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-tokens --sizes 8,32,64 --layers observe
+cargo run --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- mixed --sizes 4,8,16 --layers observe
+uv run python -m scratch.compare_updates --streams 4 --updates 3
 ```
-
-Follow the Engine Budget procedure in `docs/development.md` and compare the
-`duplicate-tokens` and `mixed` observe digests (base `70e47630…`,
-`523886bd…`, traces in `scratch/bench-states-observe*.jsonl`). These
-constructed boards approach capacity. The separate encode-only fixture panics
-on the base and yielded no measurement. See `scratch/questions.md`.

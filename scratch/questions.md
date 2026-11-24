@@ -10,3 +10,6 @@
 - Start slice 4 with native spans as the sole owner of v11 legal action fields.
   Store behavior probabilities by their original action coordinates and keep
   the compact dense action path for legacy and external rows.
+- For the update comparison, pair four complete frontier streams when the
+  256-stream run exceeds the 240-second measurement window. Record the
+  full-size attempt separately. Shared-host wall times describe the runs.
