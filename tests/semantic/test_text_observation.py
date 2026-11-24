@@ -450,6 +450,33 @@ def _stack_and_continuation(env: managym.Env) -> tuple[str, list[str]]:
     return stack.split("\n", 1)[0], continuation.splitlines()
 
 
+def test_a_prepared_spell_is_told_apart_from_its_copy() -> None:
+    """Codie copies a spell cast from a prepared copy. The text and Academy's
+    stack entries name the prepared original; the copy is not one."""
+    env = priority_root(
+        ("Konstrari Improviser",),
+        ("Forest",) * 3 + ("Mountain",) * 3 + ("Codie, Ravenous Codex",),
+    )
+    _choose(env, "Cast C1 (Konstrari Improviser)")
+    _choose(env, "Tap for mana P1 (Forest)")
+    _choose(env, "Tap for mana P2 (Forest)")
+    _choose(env, "Pass priority")
+    _choose(env, "Pass priority")
+    _choose(env, "Cast C1 (Soul Tether)")
+    _choose(env, "Tap for mana P3 (Forest)")
+    _choose(env, "Tap for mana P4 (Mountain)")
+    _choose(env, "Tap for mana P5 (Mountain)")
+    _choose(env, "Pass priority")
+    _choose(env, "Pass priority")
+    text = capture_text_decision(env).text
+    stack = text.split("Stack (native order, top to bottom):\n", 1)[1].split("\n\n")[0]
+    tethers = [line for line in stack.splitlines() if "(Soul Tether)" in line]
+    assert len(tethers) == 2
+    assert ["cast from a prepared copy" in line for line in tethers] == [False, True]
+    entries = decision_surface_view(env, 0)["stack_objects"]
+    assert [entry.get("from_prepared", False) for entry in entries] == [False, True]
+
+
 def test_a_taken_optional_cost_is_named_for_what_the_card_offers() -> None:
     """`kicked` records bargain too; the text says which cost was taken."""
     env = priority_root(("Archon's Glory",), ("Gray Ogre", "Prophetic Prism", "Plains"))
@@ -857,6 +884,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "x": "X =",
         "granted_keywords": "granted keywords",
         "kicked": "kicked",
+        "from_prepared": "cast from a prepared copy",
+        "flashback": "cast with flashback",
         "card": "Spell: owner, copy, power/toughness, cost, types, keywords and Rules",
     },
     managym.PlayerTurnHistory: {
