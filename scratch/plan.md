@@ -640,8 +640,10 @@ Remaining for this slice: implement concept-review items 1–3 with Finding 10, 
 
 ### Implemented slice · Closing-slice concept alignment (persistent CR 104.4b watch, draw orientation, grantor-cost authority and state-trigger identity)
 
-Built in `86c6f44a8a` on hash contract **v31**. Items 1–3 and Finding 10 below are implemented as planned, with these choices:
+Built in `86c6f44a8a` on hash contract **v31** from the full-branch concept review at `65cebaf342` (`scratch/concept-review.html`), which found the watch reset whenever `tick_priority` returned a space (so CR 104.4b never fired with any unrelated instant or ability available), Python Academy inverting `won` on draws, and grantor costs checked only for `exile_grantor`. What exists:
 
+- `MandatoryLoopWatch` lives on `PriorityState.loop_watch: Option<Box<_>>` and survives passes; poison counts as progress only for a seat that `can_lose`. Since `89632b774e` `repeats` takes a sample closure and fingerprints only past `UNWATCHED`, so short chains pay nothing.
+- `ActivatedAbilityDefinition::has_grantor_cost` covers both grantor kinds in payment reservation, action focus and `action_description`; `state_trigger_waiting` ignores triggers with `inline_effects`, so a granted trigger never holds a printed state trigger.
 - The watch (`priority.rs::MandatoryLoopWatch`) counts resolutions; after `UNWATCHED` (64) it records `GameState::loop_fingerprint` (`state/hash.rs`): the canonical match state minus life totals, event logs, priority, id/timestamp allocation and waiting-trigger enqueue ids, with turn-history counts saturated at 16. A loop is a repeated fingerprint with no new life low or poison high for a seat that can lose; `CAP` (10,000) still ends unbounded growth. A probe of the Herald loop showed only waiting-trigger ids differing between cycles once those fields were masked.
 - Cleared by: any non-pass priority action (`execute_action`), mana abilities (`on_non_pass_action`), `reset`, `on_step_start`, publishing a non-priority space with more than one action (a real choice), and a resolution leaving the stack, pending triggers and placement empty.
 - Python: `viewer_view(obs, viewer, *, winner)` and `normalize_observation_to_hero(observation, human_seat, *, winner)` (and `person_board`) take the winning seat; the unused `hero_view` is removed.
@@ -651,39 +653,9 @@ Tests: `fdn.rs` `bloodthirsty_conqueror_loop_draws_while_players_pass_with_choic
 
 Checks: debug workspace under nextest (`--profile ci`, 1655 tests) failed only on the v31 pins (14 `frozen_*` semantic-kernel cases, the Clone witness) and a unit-test expectation, all since fixed. Semantic-kernel w17-v6 re-recorded in `3049b48fdb`: 14 cases, 3049 commands, every non-digest field unchanged. Opening authored-match authority (193 decisions, digests only) and live/headless parity (`RUL5_PARITY_OK`, no divergence) plus the Academy demo/choice-navigation fixtures refreshed in `3e7ca196fd`. With the rebuilt cp313 extension: authority/parity tests and the focused Python selection (text observation, effect-execution input, v10, named layout, pinned pilot, Academy boundary, combat preview, Blast, learn setup, decision surface) pass except four Academy tests listed in `scratch/questions.md` that do not touch these paths.
 
-Next: the closing-slice behavior review of this head, then gate (Engine Budget will see moved digests and should adopt the PR's run if within 10%).
+The lazy-sampling refactor (`89632b774e`) and the main merge `7500c5d58f` (MLX learner only, no engine paths) have not been rerun in debug; the behavior review runs the `priority.rs` units and the `fdn.rs`/`m21.rs` loop and state-trigger tests first.
 
-#### Planned form (kept for reference)
-
-The post-closure full-branch concept review at `65cebaf342` (`scratch/concept-review.html`) reviewed the entire MTG-418 surface against base `88ce96bd6b`. The core turn-history, LKI, query, CDA, mana-split, state-trigger and untap models align across rules, v11, text and refreshed conformance evidence. Three conceptual mismatches in the closing slice break real player interactions and must be fixed before behavior review and gate:
-
-1. **Persistent CR 104.4b loop watch on `PriorityState` (hash contract v31).**
-   `MandatoryLoopWatch` currently lives as a local variable inside `Game::tick_priority()` (`managym/src/flow/tick.rs:462`), so it resets whenever `tick_priority` returns `Some(space)`: CR 104.4b never fires under `skip_trivial = false`, and under `skip_trivial = true` it never fires if either player holds *any* unrelated instant (e.g. *Opt*, *Lightning Bolt*) or controls *any* activated ability (e.g. Food, *Mazemind Tome*), even when both players pass priority indefinitely. In addition, `MandatoryLoopWatch::repeats` (`tick.rs:589`) treats rising poison as progress without checking `can_lose(seat)`.
-   - Move `MandatoryLoopWatch` and `LoopProgress` to `managym/src/flow/priority.rs` and store `#[serde(default, skip_serializing_if = "Option::is_none")] pub loop_watch: Option<Box<MandatoryLoopWatch>>` on `PriorityState` (8 bytes inline, preserving `size_of::<GameState>() <= 4096`).
-   - Clear `loop_watch = None` in `PriorityState::on_non_pass_action` and `PriorityState::reset`, at `on_step_start`, whenever a suspended decision or pending choice opens, and immediately after `resolve_top_of_stack()` when `self.stack_is_empty() && self.state.pending_triggers.is_empty()` (zero allocation on finished single resolutions). Keep `loop_watch` across `Action::PassPriority` (both automatic and explicit).
-   - Gate poison progress on `can_lose(seat)` beside life loss in `MandatoryLoopWatch::repeats`.
-   - Replace the no-new-extreme test with a repeated-state fingerprint (Finding 10), so that a finite chain over counters, permanents or cards is never drawn.
-   - Increment `MATCH_STATE_HASH_VERSION` to **31** (`managym/src/state/hash.rs:29`), update the Clone witness in `lea.rs`, and re-record `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` plus the opening authored-match and live/headless parity receipts.
-   - Add two counterexample tests in `managym/cards/tests/cards/fdn.rs`: (a) Conqueror + drain + Herald under `skip_trivial = false` draws via explicit `pass_priority()` calls; (b) the same loop with an unrelated instant in hand draws when both players pass priority, while casting removal on Conqueror resets the watch and breaks the loop cleanly.
-
-2. **Draw orientation parity in Python Academy (`server.py`, `trace.py`, `recording.py`).**
-   `academy/ui/src/lib/recording.ts::orientBoard` was fixed to take `winner: number | null`, and live `decision_surface_view` builds each viewer directly from `observation_for_player`. Two Python orientation helpers still invert `won: bool`, turning a drawn opponent-perspective observation (`game_over: true, won: false`) into `won: true`:
-   - `managym/academy/trace.py:344` (`normalize_observation_to_hero`, called by `prepare_trace_payload` and `managym/academy/recording.py:535::person_board`): accept `winner: int | None` (already present on `prepared["winner"]` and `Recording.winner`), setting `observation["won"] = (winner == human_seat)` when `game_over` is true so `winner is None` preserves `won: False`.
-   - `managym/academy/server.py:530` (`viewer_view` / `hero_view`): accept optional `winner: int | None` (using a sentinel default when omitted so existing non-draw callers keep working while explicit `winner=None` keeps `won: False`; never flip `won: False` to `True` on a draw).
-   - Keep the `experience-v1` `Observation` schema unchanged (avoiding churn across `choice-navigation-*.json`). Add draw-orientation regression tests in `tests/academy/test_play_modes.py` and trace normalization.
-
-3. **Unified grantor-cost authority and state-trigger waiting identity.**
-   `exile_grantor` and `tap_grantor` are one concept (an attached grantor permanent paying part of its granted ability's cost), but three sites still check only `exile_grantor`:
-   - Add `ActivatedAbilityDefinition::has_grantor_cost(&self) -> bool` (`self.exile_grantor || self.tap_grantor`).
-   - `managym/src/flow/mana.rs:1872` (`reserve_announced_payment`): reserve `CostComponent::TapGrantor(object)` (`tap: true, sacrifice: false`) alongside `CostComponent::ExileGrantor(object)` (`sacrifice: true`), matching `announced_model` (`mana.rs:1905`) so a mana/waterbend-capable grantor cannot be tapped mid-payment and fail `complete_announced_payment`.
-   - `managym/src/agent/observation.rs:2208`: include the grantor permanent in `action.focus` for both `exile_grantor` and `tap_grantor`.
-   - `managym/src/flow/action.rs:58` (`action_description`): describe `tap_grantor` activations (naming the grantor and its permanent ID alongside mana/`{T}` cost) as well as `exile_grantor`, so two *Fishing Poles* equipped to one creature produce distinct `focus` and distinct descriptions.
-   - `managym/src/flow/triggers.rs:1516` (`state_trigger_waiting`): require `trigger.inline_effects.is_none()` on both pending/placement and stack checks so a granted or delayed trigger (`ability_index: 0, inline_effects: Some(_)`) on the same source never suppresses a printed state trigger at `ability_index == 0` (*Mazemind Tome*, *Dark Depths*).
-   - Add directed tests in `fdn.rs` (two *Fishing Poles* on one creature: distinct `focus`, distinct `action_description`, and grantor tap reservation during payment) and `m21.rs` (a granted trigger on *Mazemind Tome* does not suppress its 4-page-counter state trigger).
-
-4. **Verification.** Run the debug Rust workspace (`cargo nextest run --profile ci` or `cards`, `lib`, `rules`, `conformance`, `search_state_contract`, `canonical_replay_tests`, `match_state_hash_tests`), rebuild and atomically install the cp313 extension, and rerun the focused Python, pinned-pilot, and Academy checks (`tests/academy/test_play_modes.py` included).
-
-Remaining for gate and later phases: Engine Budget will see moved search/decision digests (untap events in the hashed ledger and hash v31) and the per-resolution loop watch; adopt the PR's run as the reference if it stays within budget. The integrated validation, decomposition and performance phases below are unchanged.
+Next: the closing-slice behavior review at `7500c5d58f`, then gate. Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the four Academy failures in `scratch/questions.md` fail on main.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
