@@ -79,7 +79,7 @@ Behavior review of D7 at `b35dfe9ef0` (2026-11-24): fixed, no new defects. `boun
 
 ## Remaining work
 
-Decomposition and its compress are done (see Later phases; realign at `6f0cd50f70` found plan and code in agreement); next is **gate**. Gate owns:
+Decomposition, the stress-state measurement and their compresses are done (see Later phases); the measurement proposed no engine change. Main was merged at `8d1df716c6` (backend/training files only, no engine change), so the main comparisons below still hold. Next is **gate**. Gate owns:
 
 - Clippy, the full debug workspace, the measured 10% Engine Budget (search/decision digests move: new card, new routes, `play_lands` in state hashes), `conformance/` receipts for the final catalog.
 - Compare against main: `tests/academy/test_play_modes.py::test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture` and four `tests/belief` tests stop at the opening Keep/Mulligan decision (opening procedure from main `d12eb496b3`); `test_player_control.py::test_delegated_search_keeps_viewer_and_resource_ownership[1-*]` fails (16 Islands make Islandcycling ask for a manual tap; Slice 5 does not touch payment).
