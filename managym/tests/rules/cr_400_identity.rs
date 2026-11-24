@@ -206,10 +206,12 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     let template = s.game().state[s.game().state.object_of(card)].clone();
     let mut objects = ObjectVec(vec![
         template.clone(),
-        managym::state::game_object::Object::token_copy(
-            template.clone(),
+        managym::state::game_object::Object::from_definition(
             template.id,
             template.owner,
+            template.definition_id,
+            template.copiable_definition(),
+            true,
         ),
         managym::state::game_object::Object::spell_copy(
             template.clone(),
@@ -340,10 +342,12 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
         s.game().state[s.game().state.object_of(s.game().state.players[0].deck[0])].clone();
     let objects = ObjectVec(vec![
         template.clone(),
-        managym::state::game_object::Object::token_copy(
-            template.clone(),
+        managym::state::game_object::Object::from_definition(
             template.id,
             template.owner,
+            template.definition_id,
+            template.copiable_definition(),
+            true,
         ),
         template.clone(),
         managym::state::game_object::Object::spell_copy(
