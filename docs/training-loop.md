@@ -368,13 +368,13 @@ ending once. `groups_completed`, `groups_discarded` and
 
 Each successful update commits its scores, allocation counters and RNG together.
 A stale or reused receipt is rejected. Etude saves the generation and cold
-recipes in `Counts.snapshot_bank` alongside the learner under
-`out/state/save-*/state.json`. Resume restores them with an empty hot cache;
-parked fresh roots restore from `continuation.json`, and sampling RNG restores
-within the same sampling domain or reseeds deterministically across domains
-(legacy Torch `.pt` saves start fresh games and sampling seeds). Supply runtime predicates and
-scorers again. The Python vector replays the committed prefix and verifies the
-root digest on both hot and cold installs. When a slot returns to fresh play,
+recipes as `Counts.snapshot_bank` in `out/state/save-*/state.json`, beside
+`learner.safetensors`. Resume restores the bank with an empty hot cache and
+reopens parked fresh roots from `continuation.json`. Collector and framework
+sampling RNGs restore within the same sampling domain and reseed when it
+changes. A legacy Torch `.pt` save starts fresh games and sampling streams.
+Supply runtime predicates and scorers again. The Python vector replays the
+committed prefix and verifies the root digest on both hot and cold installs. When a slot returns to fresh play,
 it resumes the parked game and its recording. [Recovery](training.md#recovery)
 
 ## Write your own loop

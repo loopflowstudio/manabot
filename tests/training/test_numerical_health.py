@@ -553,8 +553,8 @@ def run_mlx_updates(
 ) -> None:
     from manabot.backends import resolve
     from manabot.training.loops.self_play import CLOCKS, self_play
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
-    from tests.training.test_mlx_continuation import bounded_self_play
 
     base = bounded_self_play()
     settings = base.model_copy(

@@ -2,7 +2,6 @@
 
 from contextlib import nullcontext
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,23 +22,6 @@ if TYPE_CHECKING:
     from manabot.training.state.backend import SelfPlayBackend, SelfPlayLearner
 
 
-def bounded_self_play() -> "SelfPlay":
-    from manabot.recipes import baseline
-
-    return baseline.settings(
-        baseline.BaselineConfig(backend="mlx", device="mps")
-    ).model_copy(
-        update={
-            "streams": 2,
-            "transitions": 8,
-            "learning_seats": "one",
-            "batch_closure": "exact-quota",
-            "bucketed_shapes": True,
-            "checkpoint_every": 1,
-        }
-    )
-
-
 @pytest.mark.parametrize(
     "width,precision,device",
     [
@@ -56,6 +38,7 @@ def test_mlx_iteration_uses_recipe_precision(
     pytest.importorskip("mlx.core")
     from manabot.backends import resolve
     from manabot.training.loops.self_play import fresh_iteration
+    from tests.fixtures.self_play import bounded_self_play
 
     recipe = bounded_self_play()
     settings = recipe.model_copy(
@@ -76,54 +59,6 @@ def test_mlx_iteration_uses_recipe_precision(
     assert result.checkpoint.is_file()
 
 
-@pytest.mark.parametrize("writer,reader", [("torch", "mlx"), ("mlx", "torch")])
-def test_tracked_state_continues_on_a_different_framework(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    writer: str,
-    reader: str,
-) -> None:
-    pytest.importorskip("mlx.core")
-    from manabot.backends import resolve
-    from manabot.training.loops.self_play import CLOCKS, self_play
-    from tests.fixtures.training_records import recording
-
-    out = tmp_path / "out"
-    monkeypatch.setenv("ETUDE_OUT", str(out))
-    settings = bounded_self_play().model_copy(update={"device": "cpu"})
-    with recording(
-        experiment="test", run="cross", directory=tmp_path / "track", clocks=CLOCKS
-    ) as run:
-        policy = self_play(settings, run, updates=1, backend=resolve(writer))
-    before = policy.read_bytes()
-    with recording(
-        experiment="test",
-        run="cross",
-        directory=tmp_path / "track",
-        clocks=CLOCKS,
-        resume=True,
-    ) as run:
-        final = self_play(settings, run, updates=2, backend=resolve(reader))
-    assert policy.read_bytes() == before
-    assert final.name == "00000002-ema.safetensors" and final.is_file()
-    from etude.train.read import read
-
-    points = read(tmp_path / "track", "test", "cross").points(
-        "run/sampling_reseeded", "updates"
-    )
-    assert list(points.x) == [2] and list(points.y) == [1]
-
-
-def test_tracked_mlx_continuation_without_torch(tmp_path: Path) -> None:
-    if importlib.util.find_spec("mlx") is None:
-        pytest.skip("requires MLX")
-    subprocess.run(
-        [sys.executable, "-m", "tests.training.test_mlx_continuation", str(tmp_path)],
-        check=True,
-        timeout=120,
-    )
-
-
 def exercise_continuation(root: Path) -> None:
     from etude.train.state import read_state
     import mlx.core as mx
@@ -133,6 +68,7 @@ def exercise_continuation(root: Path) -> None:
     from manabot.backends.mlx import state
     from manabot.backends.mlx.rl import NumericalError
     from manabot.training.loops import self_play as loop
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
 
     backend = resolve("mlx")
@@ -463,6 +399,7 @@ def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) ->
     from manabot.training.loops import self_play as loop
     from manabot.training.rollout.collection import capture_collector
     from manabot.training.state.game_errors import GameErrorPolicy
+    from tests.fixtures.self_play import bounded_self_play
     from tests.fixtures.training_records import recording
 
     root.mkdir(exist_ok=True)
@@ -475,6 +412,16 @@ def safe_stop_attempt(root: Path, phase: str, stop_after: int, scenario: str) ->
             "workers": 1 if phase == "resume" else 2,
         }
     )
+    if scenario == "metal":
+        # Compare device repeatability on one small optimizer batch.
+        settings = settings.model_copy(
+            update={
+                "transitions": 4,
+                "model": settings.model.model_copy(
+                    update={"hidden_dim": 32, "attention_layers": 1}
+                ),
+            }
+        )
     if scenario == "random":
         settings = settings.model_copy(
             update={

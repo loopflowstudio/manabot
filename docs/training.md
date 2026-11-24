@@ -366,8 +366,14 @@ def self_play(
                 )
 
             run.save(export=export)
+            first_update = counts.updates + 1
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
+                if update == first_update:
+                    if restored.sampling_reseeded:
+                        row["run/sampling_reseeded"] = 1
+                    if restored.adam_steps_aligned:
+                        row["run/adam_steps_aligned"] = restored.adam_steps_aligned
                 if kind is not None:
                     row["run/kind"] = kind
                 if recipe is not None:
@@ -1148,7 +1154,7 @@ API. Every backend writes the same four files into `out/state/save-NNNNNNNN/`:
 - `sampling.safetensors` — backend sampling RNG arrays keyed by `sampling_domain`
   (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`).
 
-Any backend that supports the saved model can resume it.
+The target backend must support the saved model and precision.
 [Cross-backend continuation](../manabot/backends/README.md#continuing-a-run) ·
 [Tracked MLX training](../manabot/backends/mlx.md#tracked-training-and-recovery)
 
@@ -1188,13 +1194,13 @@ Published policy milestones (`out/policies/NNNNNNNN-{raw,ema}.safetensors`)
 stay separate from `out/state/save-NNNNNNNN/`. Milestones are forward-compatible
 evaluation and warm-start artifacts with `world_binding`, `checkpoint_source`
 and catalog rebinding ([what refuses one](observation-and-model.md#what-a-checkpoint-is-bound-to)).
-Training saves are strict exact-match continuation snapshots: before mutating
-any live object or writing `state/current.json` or milestones, resume validates
+Before installing the learner tensors, resume validates
 model settings, saved column readings, precision, EMA presence, lookup-buffer
 digests, parameter and Adam shapes/dtypes/finiteness, step bounds,
 `HostContinuation`, and the `Counts`, `continuation.json` and
-`sampling.safetensors` digests. Any mismatch fails closed with a `ValueError`
-naming the file and key.
+`sampling.safetensors` digests. The collector then replays and verifies the
+native game roots before the loop can publish a milestone or advance the saved
+update.
 
 Etude compares the config and the seed between attempts and nothing else.
 Keeping the code compatible is the recipe author's: an attempt may run a later
@@ -1215,10 +1221,11 @@ buffers fails when the saved state loads.
 - **Bit-identical trajectories across GPUs or sampling domains.** Stopping at a
   safe update boundary (`--until`, `--seconds`, or `ETUDE_STOP_FILE`) and
   resuming in the same sampling domain replays the same committed streams and
-  RNGs: on CPU float32, both Torch and MLX match an uninterrupted run
-  bit-for-bit; on CUDA, MPS and Metal, stream keys, slots, action traces, state
-  digests and restored arrays match identically while subsequent GPU math
-  follows device float32/bf16 repeatability. Resuming across sampling domains
+  RNGs. On CPU float32, bounded Torch and MLX runs reproduce the uninterrupted
+  learner tensors, optimizer clocks, native decisions and RNG state exactly.
+  Each attempt measures its own training time. On accelerators, the saved
+  arrays and stream state restore exactly, and subsequent arithmetic follows
+  the device's float32/bf16 repeatability. Resuming across sampling domains
   (Torch ↔ MLX, or Torch across CUDA/MPS/CPU) still verifies
   `sampling.safetensors`'s digest, reseeds sampling deterministically from
   `(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1` on the first
@@ -1242,7 +1249,8 @@ the parent and its directory unchanged. Because both backends write the same
 four-file continuation layout, you can also switch `backend` or `device` (for
 example, continuing a CUDA Torch run on Apple Silicon MLX, or moving Torch
 between CUDA, MPS and CPU) as long as the precision matches and the target
-backend supports the model:
+backend supports the model. Etude queues the child in the parent's pool,
+which must have a worker with the requested device and backend.
 
 ```bash
 uv run etude continue --run RUN --until updates=6400 --config '{"backend":"mlx","device":"mps"}'
@@ -1265,8 +1273,8 @@ Legacy Torch saves written by Etude object registration (`learner.pt`,
 `optimizer.pt`, optional `ema.pt`) remain readable on Torch with fresh game and
 sampling streams; their next save writes the canonical four-file layout. MLX
 refuses them with an actionable message to resume once on Torch first.
-Pre-unification MLX `training.safetensors` saves are refused explicitly on both
-backends.
+For a pre-portable MLX run whose save contains `training.safetensors`, resume
+on the revision that wrote it. Both current backends reject that file.
 
 ## Game failures
 

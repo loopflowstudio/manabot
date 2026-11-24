@@ -100,9 +100,9 @@ uv run --extra mlx etude train manabot/recipes/local.py --resume --until updates
 Each attempt writes raw and EMA policy exports under `out/policies/`
 (`00000001-raw.safetensors`, `00000001-ema.safetensors`, and after resume
 `00000002-raw.safetensors`, `00000002-ema.safetensors`) and commits an atomic
-update save under `out/state/current.json` (including after update 0). Every
-tracked self-play save — whether written by MLX or Torch — uses the same four
-files under `out/state/save-NNNNNNNN/`:
+update save selected by `out/state/current.json`. A stop before the first update
+saves update 0. Both backends write the following files under
+`out/state/save-NNNNNNNN/`.
 
 ```text
 out/state/save-00000001/
@@ -127,7 +127,8 @@ out/state/save-00000001/
   optional `rng.torch.cuda` / `rng.torch.mps` for Torch domains).
 
 Because both backends write this layout, a launched Torch run can continue on
-MLX (or the reverse) when the model and precision match:
+MLX when the model and precision match and the parent's worker pool can run
+MLX on the requested device.
 
 ```sh
 uv run --extra mlx etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'
@@ -147,8 +148,9 @@ and durable game records resume with live play.
 Within the same `sampling_domain` (`"mlx"` across CPU/MPS), `sampling.safetensors`
 restores collector and MLX RNGs too: on CPU float32, stopping between updates
 (via `--until` or `ETUDE_STOP_FILE`) and resuming reproduces the next update's
-native decisions, counts, weights, EMA and Adam arrays identically; on Metal,
-stream keys, slots, action traces, state digests and restored arrays match
+native decisions, work counters, weights, EMA and Adam arrays identically. Each
+attempt measures its own elapsed time. On Metal, stream keys, slots, action
+traces, state digests and restored arrays match
 identically, while subsequent GPU arithmetic follows Metal's float32/bf16
 repeatability.
 
@@ -164,10 +166,11 @@ the number of these parameters in `run/adam_steps_aligned`.
 Legacy Torch saves (`learner.pt` / `optimizer.pt` / `ema.pt`) are refused on MLX
 with `"this save was written by Torch object registration; resume once on Torch
 to write a portable save"`. Pre-unification MLX `training.safetensors` saves are
-refused explicitly on both backends. Any missing or tampered file, digest
-mismatch, nonfinite Adam state, corrupt action prefix or incompatible stream
-geometry fails admission without mutating live objects or modifying
-`state/current.json` or milestones. Portable policy exports under `out/policies/`
+refused explicitly on both backends. A missing file, digest mismatch or
+nonfinite Adam state fails admission before the loop installs learner tensors.
+A corrupt action prefix or incompatible stream geometry fails during collector
+reconstruction, before the loop can update `state/current.json` or publish a
+milestone. Portable policy exports under `out/policies/`
 remain separate and can start a fresh learner on either backend.
 
 A numerical failure ends the attempt. Under `numerical-incident/`, the JSON

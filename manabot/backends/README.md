@@ -157,24 +157,19 @@ API, whichever backend runs it:
 | `sampling.safetensors` | Backend sampling RNG arrays keyed by `sampling_domain` (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) |
 
 Any backend that supports the saved model and precision can continue a save.
-For example, a Python caller (or `etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'` for launched runs) can start on Torch and continue on MLX from the same `ETUDE_OUT`:
+For a launched run, supply the new recipe config when continuing from the
+parent's saved output. Etude queues the child in the parent's worker pool, so
+that pool must provide the selected backend and device.
 
-```python
-from etude.train.tracking import track
-from manabot.backends import resolve
-from manabot.training.loops.self_play import CLOCKS, self_play
-
-# Attempt 1 on Torch (2 updates), then attempt 2 on MLX (to update 4) against the same ETUDE_OUT:
-with track(clocks=CLOCKS) as run:
-    self_play(settings, run, updates=2, backend=resolve("torch"))
-
-with track(clocks=CLOCKS) as run:
-    self_play(settings, run, updates=4, backend=resolve("mlx"))
+```sh
+uv run etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'
 ```
 
-Within the same `sampling_domain`, weights, EMA, Adam state, counts, live game
-streams, host RNGs and sampling RNGs all restore intact (on CPU float32,
-safe-stop matches an uninterrupted run bit-for-bit on both Torch and MLX).
+Within the same `sampling_domain`, resume restores the learner, EMA, Adam,
+counts, native games and sampling streams. In bounded CPU float32 self-play,
+the next update reproduces the host and sampling files byte for byte, every
+learner tensor and every work counter. Each attempt measures its own elapsed
+training time, which contributes to the learner header's `counts_sha256`.
 Across sampling domains (Torch ↔ MLX or Torch across CUDA/MPS/CPU), resume
 still verifies `sampling_sha256`, reseeds sampling deterministically from
 `(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1` on the first
@@ -194,7 +189,8 @@ stay separate from `out/state/save-NNNNNNNN/`: milestones carry `world_binding`,
 `checkpoint_source` and forward-compatible catalog rebinding, while training
 saves are strict exact-match continuation snapshots that validate every header,
 buffer digest, parameter, Adam tensor, host state and sampling digest before
-mutating live objects.
+installing weights. The collector then verifies the reconstructed games before
+training or publishing a milestone.
 
 Legacy Torch saves written by Etude object registration (`learner.pt`,
 `optimizer.pt`, optional `ema.pt`) still resume read-only on Torch with fresh

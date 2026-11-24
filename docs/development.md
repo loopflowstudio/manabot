@@ -125,8 +125,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 **Training resume and game errors.**
 `uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
-Resume restores learner state at a saved update and opens fresh native streams;
-it does not restore an unfinished collection.
+Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
+for portable state, sampling-domain changes and historical Torch saves.
+On Apple Silicon, run the Metal subprocess cases serially. Resume restores
+learner state and native streams at the saved update boundary.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require

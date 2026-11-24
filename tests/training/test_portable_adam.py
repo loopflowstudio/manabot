@@ -1,6 +1,5 @@
 """A restored learner takes the same next Adam update, including on younger leaves."""
 
-from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,19 +12,12 @@ from manabot.policy.checkpoint import read_safetensors, write_safetensors
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.state.optimizer import AdamState, admit_adam
 from manabot.training.updates.damped_policy import update_damped_iteration
+from tests.fixtures.self_play import same_arrays
 from tests.training.backend_fixtures import installed_backend, legacy_capture
 
 if TYPE_CHECKING:
     from manabot.backends.mlx.learner import Learner as MLXLearner
     from manabot.backends.torch.learner import Learner as TorchLearner
-
-
-def same_arrays(
-    left: Mapping[str, np.ndarray], right: Mapping[str, np.ndarray]
-) -> None:
-    assert left.keys() == right.keys()
-    for name, array in left.items():
-        np.testing.assert_array_equal(array, right[name], strict=True, err_msg=name)
 
 
 def dense_step(learner: "TorchLearner | MLXLearner", backend: str) -> None:

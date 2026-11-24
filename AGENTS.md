@@ -912,6 +912,8 @@ Etude launched source is an extracted commit without `.git`. Read its revision
 through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
+`etude continue` queues the child in the parent's pool with its rental settings.
+A backend or device config override must be runnable in that pool.
 
 The repository depends on the released Etude SDK from PyPI (0.4.5 or newer
 for Colab on-demand training and fixed behaviour curve ranges). Etude's shared records, storage and
