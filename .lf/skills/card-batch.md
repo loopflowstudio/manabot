@@ -11,7 +11,10 @@ Plan a card batch in `scratch/plan.md`: what each card needs, which shared mecha
    compose from today's types, cards waiting on a small shared primitive, and
    cards waiting on an authority another Task owns. Mark the last group
    pending in the ledger with the missing authority; write no one-off
-   shortcuts for them.
+   shortcuts for them. When a group needs a new primitive, design it as small
+   orthogonal pieces (selectors, conditions, triggers, effects, replacements)
+   that compose—and reshape cramped existing types when needed—instead of
+   adding specialized variants that fuse multiple axes for one card.
 2. Cut the buildable cards into slices by mechanism, not by card. A slice is
    one shared primitive with every card in the batch it unlocks, or 10–30
    cards that already compose. One card is a slice only when it alone

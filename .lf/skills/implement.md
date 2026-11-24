@@ -11,6 +11,10 @@ because it works; every pass cold-starts a fresh session, syncs and realigns.
 **Read the slice, not the history.** Read the plan's next slice and the files
 it names. Finished slices are one line each and their detail is in git.
 
+**Compose orthogonal primitives.** When a slice needs engine support, reshape
+how effects, triggers, replacements, conditions and selectors compose rather
+than adding a specialized type or variant that fuses multiple orthogonal axes.
+
 **Build native code once per pass.** Finish the slice's Rust edits, then run
 its focused filter (`cargo test --manifest-path managym/Cargo.toml -p
 managym-cards --test cards <set>::`). Rebuild the extension, as AGENTS.md

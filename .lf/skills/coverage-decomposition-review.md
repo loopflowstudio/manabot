@@ -9,9 +9,11 @@ Judge whether real cards compose through one rules authority without card-specif
    mechanism. Confirm the planned deletions removed their exclusive
    predecessors, tests and data paths while keeping required behavior on the
    surviving owner.
-2. Flag card-specific dispatch, duplicated rules state, adapters and unused
-   abstractions. A smaller diff or a renamed type doesn't prove cards
-   compose.
+2. Flag card-specific dispatch, duplicated rules state, adapters, unused
+   abstractions, and specialized types or variants that fuse multiple
+   orthogonal axes (selectors, conditions, triggers, effects, transforms)
+   instead of composing them. A smaller diff or a renamed type doesn't prove
+   cards compose.
 3. Reuse the current head's focused test results; leave full suites to CI.
    Write concrete findings into `scratch/plan.md` without editing code.
 
