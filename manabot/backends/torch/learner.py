@@ -163,11 +163,19 @@ def apply_matmul_precision(precision: "Precision") -> None:
     torch.backends.cudnn.allow_tf32 = cudnn
 
 
+def validate_precision(precision: str, device: torch.device) -> None:
+    if precision not in ("float32", "tf32", "bf16"):
+        raise ValueError(f"unsupported Torch precision: {precision!r}")
+    if precision == "bf16" and device.type not in {"cuda", "mps"}:
+        raise ValueError("precision bf16 requires CUDA or MPS")
+
+
 def forward_precision(
     precision: "Precision", device: torch.device
 ) -> AbstractContextManager[object]:
     """The context one policy forward runs in: bf16 autocast on `device`
     (CUDA or MPS), else nothing."""
+    validate_precision(precision, device)
     if precision != "bf16":
         return nullcontext()
     return torch.autocast(device.type, dtype=torch.bfloat16)
@@ -204,6 +212,7 @@ class Learner:
             raise ValueError("execution row limits must be positive")
         self.execution_rows, self.bootstrap_rows = execution_rows, bootstrap_rows
         self.device = torch.device(device)
+        validate_precision(precision, self.device)
         # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
         # a training-mode forward before backward, including on warm starts.
         self.agent = agent.to(self.device).train()
