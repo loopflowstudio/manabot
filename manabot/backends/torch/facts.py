@@ -31,8 +31,8 @@ from typing import Literal
 import torch
 import torch.nn as nn
 
-from manabot.backends.torch._packed_gru import packed_gru
 from manabot.backends.torch.numerics import embedding_rows
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.backends.torch.records import program_number
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.observation import FACT_KINDS

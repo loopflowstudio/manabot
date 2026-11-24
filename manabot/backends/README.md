@@ -431,7 +431,7 @@ unlinked rows to a power of two of at least 64, so MPS compiles few shapes.
 Captured 64-board calls had at most 1.3% of their fact rows live. CPU and
 CUDA keep padded `[B,F]` fact routes.
 Every packed GRU (catalog programs, fact programs, record reducers) goes
-through `packed_gru` (`torch/_packed_gru.py`). On MPS it projects all packed
+through `packed_gru` (`torch/packed_gru.py`). On MPS it projects all packed
 rows once and runs a hand-written backward that carries only the state
 gradient through the reverse step loop, as MLX's `gru_recurrence` does;
 `nn.GRU` over a `PackedSequence` there dispatches about twenty ops per step.

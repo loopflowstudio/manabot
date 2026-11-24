@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from manabot.backends.torch._packed_gru import packed_gru
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.policy.catalog import CatalogTables, catalog_tables
 from manabot.policy.prepare import CatalogPrograms, Prepared
 

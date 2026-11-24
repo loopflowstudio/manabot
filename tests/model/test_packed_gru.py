@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from manabot.backends.torch._packed_gru import hand_packed_gru, packed_gru
+from manabot.backends.torch.packed_gru import hand_packed_gru, packed_gru
 
 # Shrinking live counts, including several sequences finishing at one step.
 SIZES = [5, 5, 4, 2, 2, 1, 1, 1]

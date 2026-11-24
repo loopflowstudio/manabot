@@ -7,7 +7,7 @@ record independently with a GRU; no temporal state survives a forward.
 import torch
 from torch import nn
 
-from manabot.backends.torch._packed_gru import packed_gru
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.policy.prepare import Packed
 
 
