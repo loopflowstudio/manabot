@@ -194,6 +194,10 @@ Erudite Wizard, Homunculus Horde and Mischievous Mystic use the committed draw o
 
 Exact battlefield departure records retain altered copiable values for copied or transformed objects. Token creation reads those values after departure and reads the current object while it remains live. Canonical match-state hash v25 includes the departure record. After the CPython 3.13 rebuild, the Lunar Insight text-decision fixture passed: both choosers saw “drew 3 cards” and 0.3 in the drawer’s v11 player column. Recorded Watch comparisons remain in integrated validation. The three definitions now share `on_second_draw` in `managym/cards/src/fdn.rs`. The draw event already carries the ordinal, so future listeners can reuse the trigger without storing a count on each permanent.
 
+**Behavior review at `de5a9f62`.** All six debug `cards` fixtures selected by `second_draw` passed, including the FDN interaction above and five existing TLA controls. The draw commit in `flow/zones.rs` supplies the ordinal. Trigger matching checks that ordinal and the drawer against the source controller. Placement offers one ChooseTrigger per remaining candidate in the controller’s group. The Lunar Insight text/v11 fixture passed through that ordering decision. The nine `reaches_the_learning_tokens` observability controls passed for the shared expression vocabulary.
+
+The stale-object search fork control and Academy’s original Command import and stale-rejection control passed. These are shared boundary checks. The departed Clone fixture restores an in-memory clone of the pending game. Recorded Watch playback of this interaction remains an integrated check. Payment behavior was outside this diff. The second-draw slice meets its working obligations. Continue the working phase with Linden and Chart a Course before decomposition or performance review.
+
 ## Remaining mechanic batches
 
 Jack Heart, comment a15ea74c-454c-4a55-9b26-fc62e717cac6:
