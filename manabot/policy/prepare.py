@@ -668,6 +668,7 @@ def prepare(
     binding: str = "",
     select_programs: bool = False,
     compact_learner: bool = False,
+    live_facts: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
@@ -677,6 +678,9 @@ def prepare(
     selection, or packs rows by live length when that is smaller, and routes
     only live fact rows. Torch never sets it: it keeps padded shapes for
     gradient reduction order.
+    `live_facts` routes only live fact rows, for inference and learning alike,
+    padded to a power-of-two count so a shape-compiling device (Torch on MPS)
+    sees few distinct shapes; it changes nothing else.
     Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
@@ -853,7 +857,14 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(facts, tables, objects, object_remap, compact=compact),
+        facts=_facts(
+            facts,
+            tables,
+            objects,
+            object_remap,
+            compact=compact or live_facts,
+            bucket_rows=live_facts,
+        ),
         effects=_effects(obs, tables, objects, object_remap),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
@@ -948,6 +959,10 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
+# The smallest live fact route `prepare(live_facts=True)` emits.
+MIN_LIVE_FACT_ROWS = 64
+
+
 def padded_rows(values: Array, valid: Array) -> Array:
     """Restore projected live rows to their batch and slot coordinates."""
     result = np.zeros((*valid.shape, *values.shape[1:]), dtype=values.dtype)
@@ -962,6 +977,7 @@ def _facts(
     object_remap: Array | None = None,
     *,
     compact: bool = False,
+    bucket_rows: bool = False,
 ) -> FactRoutes[Array]:
     """Route fact rows into object slots.
 
@@ -969,10 +985,19 @@ def _facts(
     `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
     `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
     with targets from each row's own observation; a padded row changes no
-    output or gradient, so the encoder skips that work.
+    output or gradient, so the encoder skips that work. `bucket_rows` pads
+    `R` with zero (unlinked) rows to a power of two, at least
+    `MIN_LIVE_FACT_ROWS`.
     """
     valid = facts[..., FACT_VALID_INDEX] == 1
     live = facts[valid]
+    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(facts))[:, None]
+    if compact and bucket_rows:
+        size = max(MIN_LIVE_FACT_ROWS, 1 << max(len(live) - 1, 0).bit_length())
+        live = np.concatenate(
+            [live, np.zeros((size - len(live), *live.shape[1:]), live.dtype)]
+        )
+        owners = np.pad(owners, ((0, 0), (0, size - owners.shape[1])))
     routed = (1, len(live)) if compact else valid.shape
 
     def padded(values: Array) -> Array:
@@ -1038,7 +1063,6 @@ def _facts(
         id_mask = np.ones(routed, np.float32)
         detail_mask = np.ones(routed, np.float32)
     links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
-    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(facts))[:, None]
     all_programs = padded(program)
     return FactRoutes(
         kinds=padded(kinds),

@@ -559,6 +559,7 @@ class ActorCritic(nn.Module):
 
         `inference` selects compaction and catalog coverage independently of
         autograd mode. Bucketed CUDA learners keep a fixed catalog schedule.
+        MPS routes only live fact rows; CPU and CUDA keep padded fact routes.
         """
         bucketed = (
             bucket_observation(
@@ -592,6 +593,7 @@ class ActorCritic(nn.Module):
             memory_roots=memory_roots,
             binding=self._binding(),
             select_programs=not full_catalog,
+            live_facts=device == "mps",
         )
 
     def _evaluate_outputs(
