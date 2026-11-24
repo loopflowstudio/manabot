@@ -139,6 +139,8 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
 struct CanonicalCombat {
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
     blockers_to_declare: Vec<PermanentId>,
 }
@@ -152,6 +154,7 @@ impl From<&CombatState> for CanonicalCombat {
                 .iter()
                 .map(|(&attacker, blockers)| (attacker, blockers.clone()))
                 .collect(),
+            already_attacking: (combat.already_attacking != 0).then_some(combat.already_attacking),
             attackers_to_declare: combat.attackers_to_declare.clone(),
             blockers_to_declare: combat.blockers_to_declare.clone(),
         }

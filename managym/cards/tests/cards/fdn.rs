@@ -1318,3 +1318,132 @@ fn second_draw_listeners_share_the_ordinal_and_resolve_independently() {
     assert_eq!(counters_of(&s, late, PlusOnePlusOne), 1);
     assert_eq!(counters_of(&s, wizard, PlusOnePlusOne), 2);
 }
+
+fn assert_raid(s: &crate::support::game::Scenario, attacker: Option<usize>) {
+    use managym::agent::{
+        observation::Observation,
+        observation_encoder::{encode, ObservationEncoderConfig},
+        observation_layout::player::ATTACKED,
+    };
+    for viewer in 0..2 {
+        let obs = Observation::for_player(s.game(), PlayerId(viewer));
+        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        assert_eq!(
+            encoded.agent_player[ATTACKED],
+            f32::from(attacker == Some(viewer))
+        );
+        assert_eq!(
+            encoded.opponent_player[ATTACKED],
+            f32::from(attacker == Some(1 - viewer))
+        );
+        assert_eq!(obs.agent.turn_history.attacked, attacker == Some(viewer));
+        assert_eq!(
+            obs.opponent.turn_history.attacked,
+            attacker == Some(1 - viewer)
+        );
+    }
+}
+
+#[test]
+fn linden_and_chart_read_the_completed_attack_declaration() {
+    use crate::support::play::cast;
+    use managym::agent::action::ActionSpaceKind;
+    let queen = "Linden, the Steadfast Queen";
+    let mut s = five_color_setup(&[queen, "Savannah Lions", "Chart a Course", "Lightning Bolt"]);
+    let linden = s.force_permanent_on_battlefield(0, queen);
+    let lions = s.force_permanent_on_battlefield(0, "Savannah Lions");
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
+    let partial = s.game().clone();
+    let offer = s.action_space().clone();
+    for finish in [false, true] {
+        *s.game_mut() = partial.clone();
+        assert_eq!(s.action_space(), &offer);
+        let chosen = &s.game().state.combat.as_ref().unwrap().attackers;
+        assert_eq!(chosen.len(), 1);
+        assert_eq!(
+            crate::support::inspect::permanent(&s, chosen[0]).tapped,
+            chosen[0] == lions
+        );
+        assert_raid(&s, None);
+        if finish {
+            s.declare_attack();
+        } else {
+            s.decline_attack();
+        }
+        let expected = if finish { 2 } else { 1 };
+        s.advance_until(
+            |s| {
+                s.action_space().kind == ActionSpaceKind::Priority
+                    && s.game().state.stack_objects.len() == expected
+            },
+            "Linden triggers".into(),
+        );
+        assert_raid(&s, Some(0));
+    }
+    let before = s.game().state.players[0].life;
+    let target = s.game().state.stack_objects[0].id();
+    counter_ability(&mut s, target);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, before + 1);
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.decline_attack(); // Only vigilant Linden can attack again.
+    assert_raid(&s, Some(0));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    for id in [linden, lions] {
+        let object = card_of(&s, id);
+        move_card(&mut s, object, ZoneType::Graveyard);
+    }
+    s.set_player_mana_pool(0, "1U");
+    let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+    cast(&mut s, "Chart a Course");
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand + 2
+    );
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_raid(&s, None);
+}
+
+#[test]
+fn linden_and_chart_ignore_entry_attacking_and_empty_declarations() {
+    use crate::support::{game::force_new_card_in_hand, play::cast_card};
+    let queen = "Linden, the Steadfast Queen";
+    let mut s = five_color_setup(&[queen, "Chart a Course", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(1, queen);
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_to_active_step(1, StepKind::BeginningOfCombat);
+    s.game_mut()
+        .create_token("token.soldier", PlayerId(1), true)
+        .unwrap();
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    let root = s.game().clone();
+    s.declare_attack();
+    s.declare_attack();
+    assert_raid(&s, Some(1));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    *s.game_mut() = root;
+    s.decline_attack();
+    s.decline_attack();
+    assert_raid(&s, None);
+    assert!(s.game().state.stack_objects.is_empty());
+    s.advance_to_active_step(1, StepKind::PostcombatMain);
+    s.set_player_mana_pool(1, "1U");
+    let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(1));
+    let chart = force_new_card_in_hand(&mut s, 1, "Chart a Course");
+    cast_card(&mut s, chart);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(1)),
+        hand + 1
+    );
+}

@@ -267,6 +267,7 @@ impl Game {
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
+                combat.already_attacking = combat.attackers.len();
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
@@ -361,8 +362,10 @@ impl Game {
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
                     // attackers has been declared.
-                    let attackers = combat.attackers.clone();
+                    let first = std::mem::take(&mut combat.already_attacking);
+                    let attackers = combat.attackers[first..].to_vec();
                     if !attackers.is_empty() {
+                        self.state.turn.history[active.0].attacked = true;
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
                             attackers: attackers.clone(),

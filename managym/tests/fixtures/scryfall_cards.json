@@ -639,6 +639,18 @@
       "W"
     ]
   },
+  "Chart a Course": {
+    "name": "Chart a Course",
+    "mana_cost": "{1}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw two cards. Then discard a card unless you attacked this turn.",
+    "colors": [
+      "U"
+    ]
+  },
   "Combustion Man": {
     "name": "Combustion Man",
     "mana_cost": "{3}{R}{R}",
@@ -2284,6 +2296,20 @@
     "oracle_text": "Lightning Strike deals 3 damage to any target.",
     "colors": [
       "R"
+    ]
+  },
+  "Linden, the Steadfast Queen": {
+    "name": "Linden, the Steadfast Queen",
+    "mana_cost": "{W}{W}{W}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever a white creature you control attacks, you gain 1 life.",
+    "colors": [
+      "W"
     ]
   },
   "Llanowar Elves": {

@@ -1,8 +1,8 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
-        PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, AttackSize, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        Per, PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         TurnStep,
     },
     card::{
@@ -10,7 +10,7 @@ use managym_state::{
         Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
     },
     effect::Modification,
-    mana::ManaCost,
+    mana::{Color, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
 };
@@ -20,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         blasphemous_edict(),
         cackling_prowler(),
         cat_collector(),
+        chart_a_course(),
         claws_out(),
         drake_hatcher(),
         erudite_wizard(),
@@ -30,6 +31,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hungry_ghoul(),
         incinerating_blast(),
         kellan_planar_trailblazer(),
+        linden_the_steadfast_queen(),
         luminous_rebuke(),
         lunar_insight(),
         mischievous_mystic(),
@@ -614,6 +616,56 @@ fn mischievous_mystic() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![on_second_draw(Effect::create_tokens("token.faerie", 1))],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn chart_a_course() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.chart_a_course",
+        scryfall_id: "7599d459-fe71-48f4-8c65-0f519bb63a68",
+        printed: PrintedCharacteristics {
+            name: "Chart a Course".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                },
+                Effect::If {
+                    condition: Condition::AttackedThisTurn,
+                    then: vec![],
+                    otherwise: vec![Effect::discard()],
+                },
+            ],
+            text_box: "Draw two cards. Then discard a card unless you attacked this turn.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn linden_the_steadfast_queen() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.linden_the_steadfast_queen",
+        scryfall_id: "e0bb07cd-9b74-4ba7-8089-27a565d74197",
+        printed: PrintedCharacteristics {
+            name: "Linden, the Steadfast Queen".into(),
+            mana_cost: Some(ManaCost::parse("{W}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(3), toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::you_control(CardPredicate {colors_any: vec![Color::White], ..CardPredicate::creature()}),
+                    per: Per::Object, attackers: AttackSize::Any,
+                }, intervening_if: None, effects: vec![Effect::gain_life(1)],
+            }],
+            text_box: "Vigilance (Attacking doesn't cause this creature to tap.)\nWhenever a white creature you control attacks, you gain 1 life.".into(),
             ..Default::default()
         },
         ..Default::default()

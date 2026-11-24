@@ -965,5 +965,9 @@ never asked, a planned answer is not offered (a required block) or the
 finished declaration differs from the plan (a lone block of a creature with
 menace, which the engine removes once every blocker is declared).
 `declared_attackers` and `declared_blocks` are the declaration as the engine
-would finish it. The same address rules as payment previews apply, and the
+would finish it. During attacker selection both viewers can see the attackers
+chosen so far. Raid becomes true for the attacking player when a nonempty
+declaration finishes and lasts through the turn, even if those creatures leave.
+A creature that enters attacking deals combat damage normally but does not
+count toward raid or trigger abilities such as Linden’s. The same address rules as payment previews apply, and the
 call is read-only in the same way.
