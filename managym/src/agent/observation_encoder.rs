@@ -1032,9 +1032,13 @@ pub fn encode_rows(
         // The deprecated v9/v10 rows end before the first-strike step flag.
         out.write(player_table, 0, 0, &row[..config.player_dim()])?;
         if config.turn_state {
-            let width = super::observation_layout::turn_state_columns(config.layout).len();
             let row = turn_state_row(player, config.layout);
-            out.write(Table::PlayerTurnState, 0, seat, &row[..width])?;
+            out.write(
+                Table::PlayerTurnState,
+                0,
+                seat,
+                &row[..config.turn_state_dim()],
+            )?;
         }
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];

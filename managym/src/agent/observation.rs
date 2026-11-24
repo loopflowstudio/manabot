@@ -2009,11 +2009,7 @@ impl Observation {
                 StackObject::ActivatedAbility(_) => None,
             },
             ability_index: stack_object.ability_index().map(|index| index as i32),
-            x: match stack_object {
-                StackObject::Spell(spell) => i32::from(spell.x),
-                StackObject::ActivatedAbility(ability) => i32::from(ability.x),
-                StackObject::TriggeredAbility(ability) => i32::from(ability.x),
-            },
+            x: i32::from(stack_object.x()),
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {
                     let keywords = game.spell_keywords(spell.object, spell.controller);

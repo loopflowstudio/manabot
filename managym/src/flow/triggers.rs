@@ -1764,7 +1764,14 @@ impl Game {
                     once = true;
                     (condition, true)
                 }
-                leaf => return Some((leaf, once)),
+                TriggerCondition::InGraveyard { .. } => return None,
+                leaf => {
+                    debug_assert!(
+                        leaf.inner().is_none(),
+                        "unhandled trigger wrapper: {leaf:?}"
+                    );
+                    return Some((leaf, once));
+                }
             };
             if !enabled {
                 return None;

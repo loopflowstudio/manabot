@@ -32,7 +32,7 @@ const STATES: &[(&str, &str)] = &[
     ("paid-filter", "Forest + Prophetic Prism; nested unpayable payment"),
     ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap scans stop once a single use is funded. Residual rollout replanning spans changing tapped resources and saved callers; sharing answers across steps needs a separate cache/invalidation design"),
     ("waterbend-x", "Forest, Katara, Bender's Waterskin, Herbalist; one payment per X"),
-    ("duplicate-creatures", "Gray Ogre on both sides; the damage pass rebuilds the characteristics board for each damage pair"),
+    ("duplicate-creatures", "Gray Ogre on both sides; attack, block and damage checkpoints"),
     ("herald-healthy", "Same battlefield as herald-statics, with both seats at starting life"),
     ("herald-statics", "One Herald of Eternal Dawn per seat among a growing cycle of static abilities; protection checks during combat"),
     ("duplicate-tokens", "Ally tokens on both sides; observation and combat rows"),
