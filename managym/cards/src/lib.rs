@@ -170,7 +170,6 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
 
 const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
-    akh::cards,
     afr::cards,
     akh::cards,
     ala::cards,

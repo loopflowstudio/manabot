@@ -509,7 +509,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 17] {
+fn selector_witnesses() -> [ObjectSelector; 18] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -2292,7 +2292,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         expected.push(format!("TriggerSubject::{subject:?}"));
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject,
-            to: Actor::AnyPlayer,
+            to: Some(Actor::AnyPlayer),
             per: Per::Object,
         });
     }
