@@ -155,3 +155,10 @@ Four reversible choices recorded in `scratch/concept-review.html` and `scratch/p
 - Add `ActionOption.play_route: Option<u8>` (omitted from JSON when `None`) and append categorical column 29 `action::PLAY_ROUTE` (`Category { size: 10 }`) to `action::COLUMNS`, separating overlapping same-MV routes (`ExileCounter` vs. `Grant` on Tinybones today; `PrintedGraveyard` vs. `Grant` on Quilled Greatwurm in Slice 5; `GrantedFlashback` vs. `Grant`) in the v11 policy tensor while keeping saved prefixes and `test_pinned_pilot` intact.
 - Scope route disambiguation to `(object, profile)` via `permitted_play_routes` (before affordability) and pass `profile` into `selected_play_route` / `resolved_play_route` so lone-route MDFC land plays stay `route: None` under Omniscience, and add `pending_choice.is_none()` / `priority.holder == player` guards to `play_land` matching `cast_spell_action`.
 - Align Slice 5's Quilled Greatwurm design to its verified Oracle text before coding: `CostComponent::RemoveCounters { remaining, kind: Option<CounterKind>, predicate }` with `kind: None` (any counter kind, prompting a mode pick when a chosen creature holds multiple counter kinds) and a per-creature aggregated `YourTurn` combat-damage trigger (CR 510.2: Trample splits and multi-blocks trigger once with the creature's total combat damage).
+
+## 2026-11-24 implement pass (Slice 5 items 1–3)
+
+- The LLM text changed wording for cast-only grants ("may be cast …") without bumping `representation_version` (`manabot-text-10`), as earlier slices changed permission terms. Bump it if retained captures are compared by text.
+- A cast-only grant on a land shows no cost term in LLM text (the land has no casting cost), only "may be cast from exile by …" and its other terms.
+- `play_route` codes number the routes 1..8 in `PlayRoute` declaration order; `Category { size: 10 }` leaves one spare code after `PrintedGraveyard` (9).
+- D5 is tested by refusal in `permits_spell` (no catalog library-top predicate matches a land face) plus the existing Vizier/Kelp Hollow assertion; no fixture with a land-matching library predicate was added.
