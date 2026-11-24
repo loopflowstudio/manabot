@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Ship review: MLX vs Torch on the M1 mini (79309f, PR #586)</title>
+<style>
+:root{color-scheme:light dark;--bg:#faf9f6;--fg:#1d1c1a;--mut:#6b675f;--code:#f1efe9;--bd:#ddd8cc;--acc:#8a5a00}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1a18;--fg:#e9e6df;--mut:#a29d92;--code:#262522;--bd:#3a3833;--acc:#e0b25a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;max-width:64rem;margin:2rem auto;padding:0 1rem}
+pre,code{background:var(--code);font-size:12.5px}pre{padding:.7rem;overflow-x:auto;border-radius:6px}
+table{border-collapse:collapse;margin:.6rem 0}td,th{border:1px solid var(--bd);padding:.25rem .55rem;font-size:13px;text-align:left}
+h2{border-bottom:1px solid var(--bd);padding-bottom:.2rem;margin-top:2rem}.m{color:var(--mut)}b.a{color:var(--acc)}
+</style></head><body>
+<h1>Ship review: baseline self-play throughput by backend on the M1 mini</h1>
+<p class="m">Task 79309f · PR <a href="https://github.com/loopflowstudio/manabot/pull/586">#586</a> · HEAD <code>35721cc920</code> · CI: every check green (Tests Result SUCCESS) · reviewed headless, nobody present. The questions at the end are still yours to answer.</p>
+
+<h2>1. What ships</h2>
+<p>A report, <code>experiments/reports/mini_baseline_backends.md</code>, answering “which backend should run baseline self-play on an Apple M1?” for 3 widths × 2 layouts × 5 arms (30 cells, 2.9 h on mini-heart, no rented compute). It also adds a parity CLI that names its execution target and refuses any silent fallback.</p>
+<table>
+<tr><th>Width</th><th>Best strict active (padded)</th><th>Best strict collection</th><th>Best strict learning</th></tr>
+<tr><td>w64l2</td><td>Torch CPU f32, 90.2</td><td>Torch CPU f32 padded, 274.8</td><td>Torch CPU f32 padded, 134.3</td></tr>
+<tr><td>w256l2</td><td>Torch CPU f32, 39.5</td><td>MLX f32 padded, 202.4</td><td>Torch MPS f32 padded, 53.4</td></tr>
+<tr><td>w384l2</td><td>Torch CPU f32, 25.3</td><td>MLX f32 padded, 147.6</td><td>Torch MPS bf16 padded, 37.1</td></tr>
+</table>
+<p class="m">Learner decisions/s, pooled over updates 2–4.</p>
+<ul>
+<li><b>Padded Torch CPU f32 wins end to end at every width.</b> MPS narrows the gap from 0.48× to 0.81× as width grows.</li>
+<li><b>MLX collects fastest at w256l2 and above, but learns 4–5× slower</b> than padded Torch (10.3 vs 50–53 at w256l2). As a result it ends at about a quarter of Torch CPU.</li>
+<li><b>Bucketed Torch learns 3–12× slower than padded on M1.</b> At w64l2 Torch CPU spent 18.1 s in minibatches when padded and 177.8 s when bucketed, for the same 349 Adam steps. That supports the baseline's CUDA-only bucketing.</li>
+<li>The Rust engine takes 1.0–2.8% of collection time. Python preparation and inference take 84–95%.</li>
+</ul>
+<p>What changes for you: in <code>python -m manabot.backends.parity</code>, <code>--device/--precision/--bucketed/--threads</code> now select an exact target. Torch refuses CPU bf16 and missing CUDA instead of falling back.</p>
+<pre>torch --device cpu --precision bfloat16   exit 2  precision bf16 requires CUDA or MPS
+torch --device cuda                       exit 2  CUDA requested but unavailable; CPU fallback is forbidden
+mlx --device cuda                         exit 2  MLX does not support CUDA</pre>
+
+<h2>2. How to try it</h2>
+<pre>uv run --extra artifacts python -m manabot.data fetch experiments/data/mini_baseline_backends/w{64,256,384}l2/{padded,bucketed,machine.json,source.json,capture-files.json}
+uv run python experiments/mini_baseline_backends.py report --out experiments/data/mini_baseline_backends</pre>
+<p>QA ran this from an empty cache. It fetched 17 MiB and reproduced the published tables line for line. Fourteen tampered copies of the evidence were each refused with a specific reason (<code>scratch/qa.html</code>).</p>
+
+<h2>3. What is likeliest to surprise you</h2>
+<ol>
+<li><b>bf16 cells that fail parity were still timed.</b> All 10 such cells are badged <code>approximate (parity FAIL)</code>, with the loss figure beside the badge (for example, MLX bf16 at w64l2 misses learner loss by 10.02%). They are kept separate from the strict winners. Without this, every bf16 cell would have been empty.</li>
+<li><b><code>threads=4</code> everywhere</b>, not the baseline's inherited <code>threads=1</code>, so CPU is not capped at one core against the GPU arms.</li>
+<li><b>Each cell is one run of three measured updates.</b> Differences under about 10% are not distinguishable. Live games diverge between backends, so workloads (games, decisions, Adam steps) are listed beside each rate.</li>
+<li><b>w384l2 cells 8–10 ran from a resume script.</b> The runner's parent died with an SSH pipe. The resume script imports the same revision's module, and the report says so.</li>
+<li><b>The numbers come from <code>d7113fb78</code>, not HEAD.</b> Compress and the main merge changed code afterwards. QA re-ran one strict and one approximate cell at HEAD on the mini to check the path, and those runs are not new measurements.</li>
+<li>Torch CPU now refuses <code>bf16</code> in <code>Learner</code>/<code>forward_precision</code>. The autocast integration fixture moved to CUDA/MPS and skips on CPU-only CI.</li>
+</ol>
+
+<h2>4. Findings left outside the PR</h2>
+<table>
+<tr><th>#</th><th>Finding</th><th>Proposal</th></tr>
+<tr><td>A</td><td>Precision is spelled <code>bf16</code> in config and <code>bfloat16</code> in the parity CLI and receipts. <code>parity.py</code> keeps an <code>isinstance</code> branch to probe compute dtype (concept review).</td><td><b>Drop for now.</b> It touches serialized names and doesn't change any number. Revisit when a third backend arrives.</td></tr>
+<tr><td>B</td><td>Bucketed Torch and MLX learning are 3–12× and 4–5× slower than padded Torch on M1. The concept review traces this to encoding the full card catalog every minibatch.</td><td><b>No Task filed.</b> Training runs target CUDA (“optimize for GPU, not CPU”), and the baseline already pads on Apple. File one only if Apple training becomes a priority.</td></tr>
+<tr><td>C</td><td>mini-heart's data volume is 96% full. About 7 GiB of per-cell <code>training/</code> checkpoints remain there and the report doesn't read them.</td><td><b>Your call (Q2).</b> I didn't delete them because deletion can't be undone.</td></tr>
+<tr><td>D</td><td>Full MPS parity on the kickoff capture was open at kickoff.</td><td><b>Closed.</b> The matrix parity-checked every MPS cell on fresh captures.</td></tr>
+</table>
+<p>No finding cleared the bar for a Task. Nothing was fixed in this pass except moving <code>scratch/tour.yaml</code> to HEAD.</p>
+
+<h2>5. Questions</h2>
+<ol>
+<li>Should the report count the bf16 approximate cells?<br>1a. Keep them timed and badged, as shipped.<br>1b. Report strict cells only. The receipts allow filtering without re-running.</li>
+<li>What should happen to the ~7 GiB of per-cell checkpoints on mini-heart?<br>2a. Delete them now. The report and evidence don't need them.<br>2b. Keep them for now.</li>
+<li>Should Apple training speed (finding B) become work?<br>3a. No, CUDA is the target.<br>3b. File a Task on catalog encoding during learning minibatches.</li>
+</ol>
+<p class="m">Path: <code>scratch/ship-review.html</code>. Nobody was present at this review, so no reaction is recorded.</p>
+</body></html>
