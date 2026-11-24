@@ -56,3 +56,9 @@ Use blink for the Emeritus source-loss branch. Resolving the original trigger wi
 Group the outstanding rows by preparation, printed spell programs, and zone permissions. Each group shares the native fixtures listed in the plan.
 
 The six history-dependent preparation rows wait on MTG-418 instead of adding turn-history counters here. The brief says to defer such cards. Leech Collector counts as one: "first life gain this turn" differs from a once-each-turn trigger when life was gained before it entered.
+
+Concept review (whole casting/permission area) makes four reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md`:
+- Replace branch-added `action::{ADVENTURE, OMEN}` flags with one `action::SPELL_PROFILE` category (size 4: Front, Adventure, Omen, BackFace); zero pinned-pilot break because columns 25-29 are new on this branch.
+- Model Omniscience as `PlayRoute::FreeFromHand` (deduplicated across copies) rather than overloading `kicked: bool`, so free casts still allow Kicker/Bargain (CR 118.9d) and compose with Harbinger's `AdditionalCost::FlashSurcharge`.
+- Store exiled-card counters (Tinybones stash counters) in sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` instead of adding a `Counters` field to every `Object`, keeping normal object size/clone cost unchanged and preserving CR 400.7 staleness.
+- Reuse `CardDefinition.back_face` with `modal_back: bool` and `SpellProfile::BackFace` (resolving with `ZoneEntry { transformed: true }`) rather than adding a fourth `InsetSpell::ModalBack` variant.

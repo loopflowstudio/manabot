@@ -4,12 +4,30 @@ Task steering, 2026-11-24: “Continue through straightforward cards without ret
 
 The Task brief requires “one shared casting-profile and play-permission model” and says “Preserve complete legal choices, observations, learning tokens, LLM text, replay/forks, and the 10% Engine Budget.” It also says to “Leave scoped event-history and contextual-query extensions to the history/queries task (defer cards strictly requiring new turn-history counters).” That task is MTG-418, which is open and not merged.
 
-## Model as built
+## Target model (aligned across layers)
 
-- **Profiles.** A physical `CardDefinition` (`managym/state/src/card.rs`) carries its front face plus inset Adventure, Omen or prepare programs. `Object::spell_definition` and `CastChoices::spell` resolve the selected profile, which is bound at announcement and carried on `SpellOnStack`. Targeting, payment, restricted mana, alternative costs, cascade (`matches_printed_spell`), copies and resolution read that profile.
-- **Permissions.** Exact-object grants and zone/type allowances live in `managym/src/flow/cast_permission.rs`. Each grant has a caster rule (a fixed player, or whoever controls the source), a duration, and any quota it consumes. Distinct source, quota or cost become distinct native offers. Both viewers see the grants in observations, v11 grant facts, LLM text and Academy inspection.
-- **Preparation.** Entry (`flow/zones.rs`) creates the linked exile copy and an exact-source grant. Cleanup (`flow/sba.rs`) consults that grant. Repeat-prepare and unprepare resolve against the live link without a reverse index.
-- **Resolution-time casts.** Etali and Cascade resume their parent when the child spell commits (`flow/decision.rs`).
+Every legal play is one coherent offer over four orthogonal authorities — **object**, **printed profile**, **play route / permission**, and **optional additional costs**:
+
+- **Profiles (`SpellProfile`: `Front`, `Adventure`, `Omen`, `BackFace`).**
+  - A physical `CardDefinition` (`managym/state/src/card.rs`) carries its front face, optional `InsetSpell` (`Adventure`, `Omen`, `Prepared`), and optional `back_face` with `modal_back: bool` (reusing `ContentPack::back_face` so modal and transforming DFCs share one back-face representation).
+  - One resolver (`Game::spell_definition` / `Object::spell_definition`) serves priority enumeration, `ResolutionCastOffer` (including `Hand` and `Exiled`, not only `Graveyard`/`AmongExiled`/`Cascade`), targeting, payment, restricted mana, alternative costs, cascade, copies, and resolution.
+  - Casting `SpellProfile::BackFace` shows the back face on the stack via `turn_back_face_up`; resolving a back-face permanent spell sets `ZoneEntry { transformed: true }` (CR 712.11a) so it enters back-face up and returns to its front face on any zone departure via `mint_appearance`.
+  - `CastChoices.profile` is projected through the **entire** announcement pipeline: `ContinuationFrame` carries `profile`, `DecisionContextView` reads `cast.spell(...)` for `source.label`, `cast_option()`, and `replicate()`, `structured_offer.rs` carries `profile` on `CastSingleTarget` / `AtomicCommand::CastSpell`, and `action` tensors encode one `action::SPELL_PROFILE` category (`ValueKind::Category { size: 4 }`, replacing the branch-added `ADVENTURE` and `OMEN` flags; zero pinned-pilot break because cols 25–29 are new on this branch).
+- **Play routes and permissions (`managym/src/flow/cast_permission.rs`, `play.rs`).**
+  - `PlayRoute` owns every zone/permission/static-alternative-cost path: `Hand`, `FreeFromHand` (Omniscience, deduplicated across multiple Omnisciences), `LibraryTop` (Vizier), `PrintedFlashback`, `GrantedFlashback` (Iroh), `Grant(usize)` (exact-object grants), `GraveyardType { source, permanent_id, kind }` (Muldrotha), and `ExileCounter(CounterKind)` (Tinybones stash counters).
+  - Keeping `FreeFromHand` on `PlayRoute` leaves `CastChoices.kicked` dedicated to optional additional costs so a free Omniscience cast can still be kicked or bargained (CR 118.9d) while blocking a second alternative cost (CR 118.9a) and fixing printed X to 0 (CR 107.3b).
+  - `PlayGrant` keeps its terms orthogonal: `follows_source_controller: bool` (caster follows current controller of `source`) is distinct from `prepared: bool` (linked exile copy survives CR 704.5e and marks cast spells as prepared); `flashback: bool` gives exact-object grants (Sphinx of Forgotten Lore) CR 702.34a stack-exit to exile.
+  - `AdditionalCost::FlashSurcharge(ManaCost)` + `CastChoices.flash_surcharge: bool` handles Harbinger of the Tides so instant-speed timing requires the surcharge (never offering an illegal decline) while composing cleanly with `FreeFromHand`.
+  - `play_land` authorizes ownership via `selected_play_route` (removing the hardcoded `card_ref.owner != player` check) and passes `ZoneEntry { controller: Some(player), .. }` so foreign-owned lands (Tinybones) enter under the player’s control (CR 110.2, 305.4).
+  - High Fae Trickster plugs into `has_instant_timing` after route eligibility, so it never bypasses `own_turn_only`, `after_turn`, or `HandOnly`.
+- **Preparation and stack provenance.**
+  - Entry (`flow/zones.rs`) creates the linked exile `SpellCopy` and a `PlayGrant { source: Some(source), follows_source_controller: true, prepared: true, .. }`. Cleanup (`flow/sba.rs`) consults `preparation_source`. Repeat-prepare and unprepare resolve against the live link without a reverse index.
+  - Casting from a `prepared` grant sets `from_prepared: true` on `CastChoices` and `SpellOnStack` so triggers like Codie, Ravenous Codex distinguish cast prepared spells from Pyromancer’s Goggles, Replicate, or Codie copies (copies set `from_prepared = false`).
+- **Exiled-card counters and cast-origin mana restrictions.**
+  - Sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` stores counters on non-battlefield objects (CR 122.2; automatic CR 400.7 staleness on zone move, zero bloat on normal `Object`s). Projected into `CardData.counters`, `LegacyCardView.counters`, v11 `FactKind::Counter`, LLM text, and Academy inspect.
+  - `SpendingContext::Cast { spell: SpellSnapshot, from: ZoneType }` + `ManaRestriction::ExceptHandSpells` lets Heartwood Crafter enforce its cast-origin restriction at the single mana-spending authority.
+- **Resolution-time casts.**
+  - Etali, Bilbo, Cascade, and Yue resume their parent via `GameState::cast_caller` when the child spell commits (`flow/decision.rs`), with every `ResolutionCastOffer` evaluating `spell_profiles()`.
 
 ## Delivered (detail in git and the set ledgers)
 
@@ -30,7 +48,13 @@ After `8be13fed`: 47 focused native tests and 95 Python checks passed (cold repl
 
 ## Remaining slices
 
-1. **Preparation rows without new history (SOS/FRA, 12 rows).** Use the existing prepared-source, pending-resolution and source-loss forks:
+1. **Shared model alignment & decisive probes (proves the target model holds before batch authoring).**
+   Land the five concept-review alignments together with their directed probes and cross-consumer checks:
+   - **Unified `SpellProfile` (`BackFace` + announcement observability):** Add `SpellProfile::BackFace` and `CardDefinition.modal_back`; resolve permanent back faces with `ZoneEntry { transformed: true }`; replace `action::{ADVENTURE, OMEN}` + `ActionOption.{adventure, omen}` with one `action::SPELL_PROFILE` category (`size: 4`); project `profile` on `ContinuationFrame` and fix `decision_context.rs` (`source.label`, `cast_option()`, `replicate()`); carry `profile` in `structured_offer.rs`; allow non-`Front` profiles in `ResolutionCastOffer::{Hand, Exiled}`. **Probe:** Monica Rambeau // Photon, Living Light (offer both faces, enter back-face up, return to front face off battlefield) + announcement-stage `DecisionContextView` / `ContinuationFrame` check on Exude Toxin / Spew Flame.
+   - **Orthogonal `PlayRoute` / `PlayGrant` / `kicked`:** Separate `PlayGrant.follows_source_controller` from `prepared`; add `PlayGrant.flashback`; add `PlayRoute::FreeFromHand` and `AdditionalCost::FlashSurcharge`; add `SpellOnStack.from_prepared`; extend `SpendingContext::Cast` with `from: ZoneType` and `ManaRestriction::ExceptHandSpells`. **Probes:** Omniscience (paid vs free hand cast, Kicker/Bargain still offered on free cast, X forced to 0 on free cast, mandatory additional costs still enforced) + Harbinger of the Tides (instant-speed surcharge mandatory, composes with Omniscience) + Sphinx of Forgotten Lore (`PlayGrant.flashback` overlap with printed flashback).
+   - **Exiled-card counters & foreign land play:** Add sparse `GameState.object_counters` + `CounterKind::Stash`, `PlayRoute::ExileCounter(CounterKind)`, `StaticAbility::PlayExiledWithCounter`, `CardData.counters` / v11 `FactKind::Counter` / LLM text / Academy inspect, discard trigger event (`CardDiscarded`), and fix `play_land` to allow route-authorized foreign lands entering under `controller: Some(player)`. **Probe:** Tinybones, Bauble Burglar (Tinybones #1 exiles opposing land & spell with stash counters, #1 dies, #2 enters, current controller plays foreign land under their own control and casts foreign spell with any mana, `HandOnly` blocks spell but not land).
+
+2. **Preparation rows without new history (SOS/FRA, 12 rows).** Author straightforwardly on the aligned model using the existing prepared-source, pending-resolution and source-loss forks:
 
    | Card | Behavior to distinguish |
    |---|---|
@@ -43,13 +67,15 @@ After `8be13fed`: 47 focused native tests and 95 Python checks passed (cold repl
    | Lluwen, Exchange Student | Sorcery-speed graveyard-creature exile as a cost; the Pest token's attack trigger |
    | Variable Chaser | Each player's optional whole-hand discard, collected in order, then draw seven |
    | Pyre Rhymer | Turn-scoped extra red when tapping Mountains, including ones gained later |
-   | Heartwood Crafter | Spend restriction by cast origin: its mana cannot pay for hand spells |
+   | Heartwood Crafter | Uses `SpendingContext::Cast.from` + `ManaRestriction::ExceptHandSpells`: its mana cannot pay for hand spells |
    | Sanar, Unfinished Genius | Treasure activation requires an instant or sorcery cast this turn (`spells_cast` already records the objects) |
-   | Codie, Ravenous Codex | Copy an actually cast prepared spell; mass-prepare acts once per eligible source |
+   | Codie, Ravenous Codex | Uses `SpellOnStack.from_prepared`: copies an actually cast prepared spell (copy has `from_prepared = false`); mass-prepare acts once per eligible source |
 
-2. **Printed programs (HOB/TDM).** Run the other 16 Adventures and 11 Omens through the hand-profile, target/payment and stack-departure fixtures. Check each front and inset program. Group any card that needs a new effect by the effect's owner. Keep the Monica Rambeau // Photon modal casting probe with the profile enumeration checks: chosen-face entry and return to the front face off the battlefield. Battlefield transform belongs to the forms work.
-3. **Zone permissions and alternate costs (FDN, 13 rows).** Tinybones (foreign-owned land execution, with control-transfer and prohibition forks), Sphinx of Forgotten Lore, High Fae Trickster, Harbinger of the Tides, Omniscience (paid versus free hand casts with additional costs), Loot, Think Twice, Reassembling Skeleton, Flamewake Phoenix, Suspicious Shambler, Quilled Greatwurm, Redcap Gutter-Dweller, Gate Colossus. Keep each card's other printed abilities.
-4. **Blocked on MTG-418 event history (6 rows).** Emeritus of Woe and Bloodline Recollector need creature deaths this turn. Leech Collector needs the first life gain of the turn, and Scheming Silvertongue needs total life gained. Whiplash Wordsmith needs noncombat damage dealt to an opponent. Hexhaven Dueling Arena needs to know which creature attacked. `PlayerTurnHistory` (`managym/src/flow/turn.rs`) records only attacked, sacrifices, land entry, draws, bending and life lost. Once MTG-418 merges, run `lf sync main` and read its history API. Then build these rows on the slice 1 fixtures.
+3. **Printed programs (HOB/TDM, 27 rows).** Run the other 16 HOB Adventures and 11 TDM Omens through the hand-profile, target/payment and stack-departure fixtures. Check each front and inset program. Group any card that needs a new effect by the effect's owner. (Monica Rambeau // Photon is already proved in Slice 1; battlefield transform overhaul stays with Task 05.)
+
+4. **Remaining zone permissions and alternate costs (FDN, 9 remaining rows after Slice 1 probes).** High Fae Trickster (controller-wide flash in `has_instant_timing`, respecting route restrictions), Loot, Think Twice, Reassembling Skeleton, Flamewake Phoenix, Suspicious Shambler, Quilled Greatwurm, Redcap Gutter-Dweller, Gate Colossus. Keep each card's other printed abilities.
+
+5. **Blocked on MTG-418 event history (6 rows).** Emeritus of Woe and Bloodline Recollector need creature deaths this turn. Leech Collector needs the first life gain of the turn, and Scheming Silvertongue needs total life gained. Whiplash Wordsmith needs noncombat damage dealt to an opponent. Hexhaven Dueling Arena needs to know which creature attacked. `PlayerTurnHistory` (`managym/src/flow/turn.rs`) records only attacked, sacrifices, land entry, draws, bending and life lost. Once MTG-418 merges, run `lf sync main` and read its history API. Then build these rows on the Slice 2 fixtures.
 
 Advance between slices when the ledger gives each completed row a directed witness. Track each row in its set ledger with definition, test names and result.
 
@@ -57,11 +83,12 @@ Advance between slices when the ledger gives each completed row a directed witne
 
 | Position | Required fork or outcome |
 |---|---|
-| Muldrotha, artifact creature and a Zul-eligible Zombie | Fork the type choice. Check a new Muldrotha that turn, the next-turn reset, land allowance and a prohibition. With Omniscience, compare paid and free hand casts, required additional costs and manual spending. |
-| Tinybones, opposing discarded land and spell with stash counters, second Tinybones | The current controller plays foreign cards that an earlier Tinybones exiled. Check own-turn timing, land plays, ownership versus control, mana spending and a hand-only prohibition. Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
-| Angel and Phytomedic with Seed Suture | Not yet run: remove abilities (stays prepared), copy the permanent (no copied preparation), naming Seed Suture, and Codie's copied spell retargeting. |
+| Muldrotha, artifact creature and a Zul-eligible Zombie | Fork the type choice. Check a new Muldrotha that turn, the next-turn reset, land allowance and a prohibition. With Omniscience, compare paid and free hand casts, required additional costs, Kicker/Bargain on a free cast, and manual spending. |
+| Tinybones, opposing discarded land and spell with stash counters, second Tinybones | The current controller plays foreign cards that an earlier Tinybones exiled. Check own-turn timing, foreign land control (enters under Tinybones’s controller, not owner), ownership versus control, mana spending, High Fae Trickster non-bypass of own-turn timing, and a hand-only prohibition (blocks spell, allows land). Use Vizier's private top card and foretell's hidden exile as opposite-viewer controls. |
+| Angel and Phytomedic with Seed Suture | Not yet run: remove abilities (stays prepared), copy the permanent (no copied preparation), naming Seed Suture, and Codie's copied prepared spell retargeting (non-recursive). |
+| Monica Rambeau // Photon & Exude Toxin announcement | Offer both faces in hand; Photon enters back-face up and returns to Monica off battlefield; mid-announcement `ContinuationFrame` and `DecisionContextView` show the selected profile rather than the front face. |
 
-**Consumer checks per slice.** Compare native observations for both viewers with the Python bindings, semantic capture/LLM text and Academy offers at priority, with a spell on the stack, and at a nested decision. Use v11 rows and learning tokens. Keep hidden information out of the other viewer's data. Fork-and-replay checks need exact preconditions and stale rejection. Existing controls:
+**Consumer checks per slice.** Compare native observations for both viewers with the Python bindings, semantic capture/LLM text and Academy offers at priority, at mid-announcement (`AnnounceX`/`ChooseTargets`/`Pay`), with a spell on the stack, and at a nested decision. Use v11 rows and learning tokens. Keep hidden information out of the other viewer's data. Fork-and-replay checks need exact preconditions and stale rejection. Existing controls:
 
 ```sh
 cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards airbend_permission
@@ -75,7 +102,7 @@ Gate owns the full debug workspace, fmt, Clippy and consumer suites.
 
 ## Later phases
 
-**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, then an Adventure and a linked prepare copy through exile access. One permission owner and one casting owner must explain all four, including airbend, flashback and modal regressions. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
+**Decomposition.** Follow Muldrotha and Zul from the same graveyard object through payment, Omniscience and Harbinger from hand, Tinybones from counter-marked exile, and an Adventure, Modal BackFace, and linked prepare copy through stack and departure. One permission owner (`PlayRoute`) and one profile owner (`SpellProfile`) must explain all of them, including airbend, flashback and modal regressions. Remove any exclusive old paths. Review repeated FRA spell programs for card-specific dispatch.
 
 **Performance.** Use the 10% same-runner Engine Budget and the [stress-state protocol](../docs/development.md#stress-states). Add `bench_states` shapes for:
 - Muldrotha with a graveyard of duplicate artifact creatures, overlapped by a Zul grant.
