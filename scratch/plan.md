@@ -54,7 +54,7 @@ Use first printings and record each delivered definition and directed check in t
 
 ## Batch 4 · Representation, consumers and budget
 
-Next: the rest of slice 3 — representation review, the Python/Academy side of the two-root manifest comparison (needs a rebuilt extension), replay/fork checks and Engine Budget. Slice 3's two native mismatches (consumer identity/LKI and capture completeness; sampling by retained printings) are built with witnesses that fail without their fixes.
+Next: the rest of slice 3 — representation review, the Python/Academy side of the two-root manifest comparison (needs a rebuilt extension), replay/fork checks and Engine Budget. Slice 3's two native mismatches (consumer identity/LKI and capture completeness; sampling by retained printings) are built with witnesses that fail without their fixes. Compressed (2026-11-24): `observed_object_name` derives "face down" from `observed_source_definition`, and `matches_slot` reads retained printings for both allocation and materialization; debug lib sampling/decision/resolution 143/143, cards `fin::|dsk::` green.
 
 Build in three slices (rationale and counterexamples in [the concept review](concept-review.html)):
 

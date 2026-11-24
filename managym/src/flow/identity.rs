@@ -109,19 +109,13 @@ impl Game {
         }
     }
 
-    /// The name a viewer may read for an object in event prose: a face-down
-    /// permanent, live or as it last existed, is named only as one.
+    /// The name a viewer may read for an object in event prose: an object
+    /// showing no definition (face down, live or as it last existed) is named
+    /// only as a face-down permanent.
     pub(crate) fn observed_object_name(&self, object: ObjectId) -> &str {
-        let face_down = if self.state.live(object).is_some() {
-            self.state[object].is_face_down()
-        } else {
-            self.object_lki(object)
-                .is_some_and(|lki| lki.definition_id == CardDefId::ANONYMOUS)
-        };
-        if face_down {
-            "a face-down permanent"
-        } else {
-            &self.state.source_base(object).1.name
+        match self.observed_source_definition(object) {
+            Some(_) => &self.state.source_base(object).1.name,
+            None => "a face-down permanent",
         }
     }
 

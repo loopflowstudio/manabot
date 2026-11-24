@@ -74,6 +74,8 @@ fn hidden_from(game: &Game, source: &ZoneSelection, viewer: PlayerId) -> bool {
         && !game.shares_information(viewer, source.owner)
 }
 
+/// A hidden slot is judged by the printing its card retains, so a face-down
+/// manifest standing for a name in the pool answers as that name.
 fn matches_slot(
     game: &Game,
     source: &ZoneSelection,
@@ -83,7 +85,7 @@ fn matches_slot(
 ) -> bool {
     source.owner == owner
         && source.zone == zone
-        && game.object_matches_predicate(object, &source.predicate)
+        && game.printing_matches_predicate(object, &source.predicate)
 }
 
 impl HiddenCommitments {
@@ -814,11 +816,9 @@ impl Game {
                                         condition, *zone, *object, *position,
                                     )
                                 })
-                            }) && constraints.iter().all(|source| {
-                                source.owner == owner
-                                    && source.zone == *zone
-                                    && self.printing_matches_predicate(*object, &source.predicate)
-                            })
+                            }) && constraints
+                                .iter()
+                                .all(|source| matches_slot(self, source, owner, *zone, *object))
                         })
                         .map(|(index, _)| index)
                         .collect()
