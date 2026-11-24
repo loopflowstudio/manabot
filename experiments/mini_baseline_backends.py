@@ -494,6 +494,18 @@ def render_report(out: Path, widths: Iterable[int]) -> str:
                 f"checkpoint `{digest}`.",
             ]
         )
+        workloads = [
+            "",
+            "### Measured work",
+            "",
+            "Games and learner decisions are listed in update order (2, 3, 4). "
+            "Targets and minibatches are portions of learning time. "
+            "Peak RSS covers the worker's entire lifetime.",
+            "",
+            "| Layout | Arm | Games | Decisions | Collect range | Retained | Adam steps "
+            "| Targets (s) | Minibatches (s) | Peak RSS (MiB) |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
         for order, (layout, arm) in enumerate(cells(width), 1):
             if (order - 1) % len(ARMS) == 0:
                 lines.extend(
@@ -552,6 +564,20 @@ def render_report(out: Path, widths: Iterable[int]) -> str:
                 f"| {r.learner:.1f} | {r.exposures:.1f} | {r.active:.1f} "
                 f"({r.active_range[0]:.1f}–{r.active_range[1]:.1f}) | {r.wall:.1f} | {live['run']} |"
             )
+            steps = live["steps"]
+            games = ", ".join(
+                str(int(after["coordinates/games"] - before["coordinates/games"]))
+                for before, after in zip(steps, steps[1:])
+            )
+            decisions = ", ".join(str(int(s["rows"])) for s in steps[1:])
+            workloads.append(
+                f"| {layout} | {arm.name} | {games} | {decisions} "
+                f"| {r.collection_range[0]:.1f}–{r.collection_range[1]:.1f} "
+                f"| {r.retained_fraction:.1%} | {r.optimizer_steps} "
+                f"| {r.targets_seconds:.2f} | {r.minibatch_seconds:.2f} "
+                f"| {live['peak_rss_bytes'] / (1024**2):.0f} |"
+            )
+        lines.extend(workloads)
     if len(revisions) != 1:
         raise ValueError("matrix widths use different revisions")
     return "\n".join(lines)

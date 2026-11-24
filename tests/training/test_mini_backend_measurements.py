@@ -82,6 +82,9 @@ def test_warmup_counts_only_toward_whole_invocation_wall_rate() -> None:
         )
     result = rates(rows, 200, ARMS[0])
     assert result.collection == 2 and result.active == result.exposures == 1
+    assert result.retained_fraction == 0.25 and result.optimizer_steps == 3
+    assert result.targets_seconds == pytest.approx(0.6)
+    assert result.minibatch_seconds == pytest.approx(0.9)
     assert result.wall == 1012 / 200
     assert result.active_range == (0.75, 2)
     with pytest.raises(ValueError, match="four finite updates"):
