@@ -626,7 +626,36 @@ Checks: the debug workspace under nextest (`--profile ci`, 1649 tests) failed on
 
 Not yet done for this slice: a behavior review (the earlier batches each had one; this slice adds the loop watch, untap events in the hashed ledger and `ContextRead::SourceLki`). Check in it that the loop watch cannot draw a long finite automatic sequence (the finite-drain control covers one shape) and that Fishing Pole's `If` over `SourceCountersAtLeast` matches "remove a bait counter. If you do" when the counter is already gone.
 
-Remaining for gate and later phases: Engine Budget will see moved search/decision digests (untap events in the hashed ledger) and the per-resolution loop watch; adopt the PR's run as the reference if it stays within budget. The integrated validation, decomposition and performance phases below are unchanged.
+### Next slice · Closing-slice concept alignment (persistent CR 104.4b watch, draw orientation, grantor-cost authority and state-trigger identity)
+
+The post-closure full-branch concept review at `65cebaf342` (`scratch/concept-review.html`) reviewed the entire MTG-418 surface against base `88ce96bd6b`. The core turn-history, LKI, query, CDA, mana-split, state-trigger and untap models align across rules, v11, text and refreshed conformance evidence. Three conceptual mismatches in the closing slice break real player interactions and must be fixed before behavior review and gate:
+
+1. **Persistent CR 104.4b loop watch on `PriorityState` (hash contract v31).**
+   `MandatoryLoopWatch` currently lives as a local variable inside `Game::tick_priority()` (`managym/src/flow/tick.rs:462`), so it resets whenever `tick_priority` returns `Some(space)`: CR 104.4b never fires under `skip_trivial = false`, and under `skip_trivial = true` it never fires if either player holds *any* unrelated instant (e.g. *Opt*, *Lightning Bolt*) or controls *any* activated ability (e.g. Food, *Mazemind Tome*), even when both players pass priority indefinitely. In addition, `MandatoryLoopWatch::repeats` (`tick.rs:589`) treats rising poison as progress without checking `can_lose(seat)`.
+   - Move `MandatoryLoopWatch` and `LoopProgress` to `managym/src/flow/priority.rs` and store `#[serde(default, skip_serializing_if = "Option::is_none")] pub loop_watch: Option<Box<MandatoryLoopWatch>>` on `PriorityState` (8 bytes inline, preserving `size_of::<GameState>() <= 4096`).
+   - Clear `loop_watch = None` in `PriorityState::on_non_pass_action` and `PriorityState::reset`, at `on_step_start`, whenever a suspended decision or pending choice opens, and immediately after `resolve_top_of_stack()` when `self.stack_is_empty() && self.state.pending_triggers.is_empty()` (zero allocation on finished single resolutions). Keep `loop_watch` across `Action::PassPriority` (both automatic and explicit).
+   - Gate poison progress on `can_lose(seat)` beside life loss in `MandatoryLoopWatch::repeats`.
+   - Increment `MATCH_STATE_HASH_VERSION` to **31** (`managym/src/state/hash.rs:29`), update the Clone witness in `lea.rs`, and re-record `conformance/semantic-kernel-w17-v6/evidence-opening-v1.json` plus the opening authored-match and live/headless parity receipts.
+   - Add two counterexample tests in `managym/cards/tests/cards/fdn.rs`: (a) Conqueror + drain + Herald under `skip_trivial = false` draws via explicit `pass_priority()` calls; (b) the same loop with an unrelated instant in hand draws when both players pass priority, while casting removal on Conqueror resets the watch and breaks the loop cleanly.
+
+2. **Draw orientation parity in Python Academy (`server.py`, `trace.py`, `recording.py`).**
+   `academy/ui/src/lib/recording.ts::orientBoard` was fixed to take `winner: number | null`, and live `decision_surface_view` builds each viewer directly from `observation_for_player`. Two Python orientation helpers still invert `won: bool`, turning a drawn opponent-perspective observation (`game_over: true, won: false`) into `won: true`:
+   - `managym/academy/trace.py:344` (`normalize_observation_to_hero`, called by `prepare_trace_payload` and `managym/academy/recording.py:535::person_board`): accept `winner: int | None` (already present on `prepared["winner"]` and `Recording.winner`), setting `observation["won"] = (winner == human_seat)` when `game_over` is true so `winner is None` preserves `won: False`.
+   - `managym/academy/server.py:530` (`viewer_view` / `hero_view`): accept optional `winner: int | None` (using a sentinel default when omitted so existing non-draw callers keep working while explicit `winner=None` keeps `won: False`; never flip `won: False` to `True` on a draw).
+   - Keep the `experience-v1` `Observation` schema unchanged (avoiding churn across `choice-navigation-*.json`). Add draw-orientation regression tests in `tests/academy/test_play_modes.py` and trace normalization.
+
+3. **Unified grantor-cost authority and state-trigger waiting identity.**
+   `exile_grantor` and `tap_grantor` are one concept (an attached grantor permanent paying part of its granted ability's cost), but three sites still check only `exile_grantor`:
+   - Add `ActivatedAbilityDefinition::has_grantor_cost(&self) -> bool` (`self.exile_grantor || self.tap_grantor`).
+   - `managym/src/flow/mana.rs:1872` (`reserve_announced_payment`): reserve `CostComponent::TapGrantor(object)` (`tap: true, sacrifice: false`) alongside `CostComponent::ExileGrantor(object)` (`sacrifice: true`), matching `announced_model` (`mana.rs:1905`) so a mana/waterbend-capable grantor cannot be tapped mid-payment and fail `complete_announced_payment`.
+   - `managym/src/agent/observation.rs:2208`: include the grantor permanent in `action.focus` for both `exile_grantor` and `tap_grantor`.
+   - `managym/src/flow/action.rs:58` (`action_description`): describe `tap_grantor` activations (naming the grantor and its permanent ID alongside mana/`{T}` cost) as well as `exile_grantor`, so two *Fishing Poles* equipped to one creature produce distinct `focus` and distinct descriptions.
+   - `managym/src/flow/triggers.rs:1516` (`state_trigger_waiting`): require `trigger.inline_effects.is_none()` on both pending/placement and stack checks so a granted or delayed trigger (`ability_index: 0, inline_effects: Some(_)`) on the same source never suppresses a printed state trigger at `ability_index == 0` (*Mazemind Tome*, *Dark Depths*).
+   - Add directed tests in `fdn.rs` (two *Fishing Poles* on one creature: distinct `focus`, distinct `action_description`, and grantor tap reservation during payment) and `m21.rs` (a granted trigger on *Mazemind Tome* does not suppress its 4-page-counter state trigger).
+
+4. **Verification.** Run the debug Rust workspace (`cargo nextest run --profile ci` or `cards`, `lib`, `rules`, `conformance`, `search_state_contract`, `canonical_replay_tests`, `match_state_hash_tests`), rebuild and atomically install the cp313 extension, and rerun the focused Python, pinned-pilot, and Academy checks (`tests/academy/test_play_modes.py` included).
+
+Remaining for gate and later phases: Engine Budget will see moved search/decision digests (untap events in the hashed ledger and hash v31) and the per-resolution loop watch; adopt the PR's run as the reference if it stays within budget. The integrated validation, decomposition and performance phases below are unchanged.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
@@ -655,10 +684,10 @@ Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel contr
   projections, Python, v11 and text as new queries land. Save prefixes and
   frozen evidence, and keep hidden identities out of both projections.
   The semantic-kernel, authored-match and live/headless parity receipts were
-  refreshed at hash v30 (`00da7aaf31`, `03deb316db`); refresh them again only
-  if a later change moves the catalog or hash. The working review of the
-  closing slice, integrated replay and privacy checks, and Engine Budget
-  remain open.
+  refreshed at hash v30 (`00da7aaf31`, `03deb316db`) and will refresh once more
+  at hash v31 for the persistent `PriorityState.loop_watch` hardening slice
+  above. The closing-slice behavior review, integrated replay and privacy
+  checks, and Engine Budget remain open.
 
 ## Directed interactions for integrated validation
 

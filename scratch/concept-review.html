@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · State Triggers, CR 104.4b Loops, Counter LKI &amp; Final Closure</title>
+<title>MTG-418 Concept Review · Post-Closure Full-Branch Audit (HEAD 65cebaf342)</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -31,7 +31,7 @@
   }
   * { box-sizing: border-box; }
   body {
-    max-width: 74rem;
+    max-width: 76rem;
     margin: 2.5rem auto;
     padding: 0 1.25rem 4rem;
     font: 16px/1.55 system-ui, -apple-system, sans-serif;
@@ -70,7 +70,7 @@
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .94rem; }
   th, td { padding: .6rem .65rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
   th { font-weight: 700; background: var(--card); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 1rem; margin: 1rem 0; }
   .panel {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -95,144 +95,146 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym · MTG-418 · Post-Mana-Split / Pre-Closure Concept Review · HEAD 13017dcdf0</div>
-  <h1>Do MTG-418’s state triggers, mandatory-loop draws, activation costs, and LKI projections line up?</h1>
+  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Post-Closure Full-Branch Concept Review · HEAD 65cebaf342</div>
+  <h1>Do MTG-418’s delivered history, query, state-trigger, grantor-cost, and draw models line up end-to-end?</h1>
   <p>
-    <strong>Area reviewed:</strong> <code>managym</code>’s event-history, state-trigger, activation-cost,
-    departed-source LKI projection, mandatory-loop outcome, and query layers
-    (<code>state/src/{ability,card,permanent,predicate}.rs</code>,
-    <code>src/flow/{decision,event,game,identity,layers,mana,payment,play,resolution,sba,statics,tick,triggers,zones}.rs</code>,
-    <code>src/agent/{ability_description,effect_execution,env,observation}.rs</code>, and
-    <code>academy/ui/src/lib/recording.ts</code>) — reviewed as a whole against base <code>88ce96bd6b</code>
-    after the mana-split / CDA / mill slice landed (<code>f5e7244bf4</code>..<code>13017dcdf0</code>,
-    <strong>80/81 primary FDN rows</strong> + <em>Elvish Archdruid</em>† on hash v29), and widened across the
-    final closure slice: the 81st primary FDN row (<em>Mazemind Tome</em>), the 6 pending cost-primary rows citing
-    <code>event_history</code>/<code>context_queries</code>, CR 104.4b mandatory-loop draws, the two serialized
-    duplications noted at <code>13017dcdf0</code>, Findings 3–5, and final conformance re-recording.
+    <strong>Area reviewed:</strong> The entire MTG-418 surface across <code>managym</code> and
+    <code>managym.academy</code> / <code>academy/ui</code> against branch base <code>88ce96bd6b</code>
+    (208 files changed, <strong>81/81 primary FDN rows</strong>, <strong>15/17 cost-primary rows</strong>
+    with explicit blockers on <em>Quilled Greatwurm</em> and <em>Ovika</em>, and all 5 cross-set query
+    families on hash v30): <code>state/src/{ability,card,game_object,permanent,stack_object}.rs</code>,
+    <code>src/flow/{action,game,mana,payment,play,priority,resolution,sba,statics,tick,triggers,turn,zones}.rs</code>,
+    <code>src/agent/{ability_description,effect_execution,env,observation}.rs</code>,
+    <code>src/state/hash.rs</code>, <code>managym/academy/{server,trace,recording}.py</code>, and
+    <code>academy/ui/src/lib/recording.ts</code>.
   </p>
   <p class="small">
-    The slice just built cleanly aligned mana-ability classification vs. finalized outputs,
-    <code>DealsDamage</code> source binding, all-zone <code>*/*</code> CDAs via <code>Game::object_pt</code>,
-    multi-player mill, and namesake destruction on hash v29. Stepping back before the final closure slice
-    uncovered <strong>one major concept mismatch</strong> (state triggers duplicating <code>Condition</code> and
-    hijacking <code>EventKind::CountersPut</code>), <strong>one fatal design trap in the planned CR 104.4b draw
-    detector</strong> (exact state-hash cycle detection never catches <em>Bloodthirsty Conqueror</em> +
-    <em>Herald of Eternal Dawn</em> because life and history counters change every iteration!), <strong>three
-    unplanned seams hidden in <em>Fishing Pole</em>†</strong> (grantor tap cost, missing
-    <code>PermanentUntapped</code> event across all three untap sites, and mandatory counter-removal results),
-    <strong>missing departed-source LKI projection on stacked activated abilities</strong>, a subtle draw-flip
-    bug in Academy’s <code>orientBoard</code>, and the exact pinned-pilot boundary for the two serialized
-    duplications flagged at <code>13017dcdf0</code>.
+    The core event-history, turn-counter, LKI, query, CDA, mana-split, state-trigger, and untap designs
+    hold together cleanly across rules, v11 tensors, LLM text, and refreshed v30 conformance evidence.
+    However, reviewing the whole built change as someone seeing it for the first time exposed
+    <strong>three real conceptual mismatches in the closing slice</strong> that break ordinary player
+    interactions:
+    (1) <strong>CR 104.4b mandatory-loop watch is trapped on <code>tick_priority()</code>’s stack frame</strong>
+    (so it never fires when <code>skip_trivial = false</code> or when either player holds an unrelated
+    instant or controls a permanent with an activated ability, and misses <code>can_lose</code> on poison),
+    (2) <strong>two Python Academy orientation helpers still invert <code>!won</code> on a Draw</strong>
+    (<code>server.py:543</code> and <code>trace.py:366</code>), turning drawn games into wins when swapped,
+    and (3) <strong>grantor-cost authority is split across <code>exile_grantor</code> and
+    <code>tap_grantor</code></strong> (missing mid-payment reservation in <code>mana.rs:1872</code>,
+    action focus in <code>observation.rs:2208</code>, and action descriptions in <code>action.rs:58</code>,
+    plus a printed-vs-inline <code>ability_index == 0</code> collision in <code>state_trigger_waiting</code>).
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 13017dcdf0 + Planned Closure</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 65cebaf342 vs. Base 88ce96bd6b</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:41%">Code Concept (<code>managym</code> at <code>13017dcdf0</code>)</th>
+        <th style="width:41%">Code Concept (<code>managym</code> &amp; <code>academy</code> at <code>65cebaf342</code>)</th>
         <th style="width:9%">Line up?</th>
         <th style="width:29%">Mismatch</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Turn history, spell/permanent LKI, mana-ability classification, all-zone CDAs, multi-player mill &amp; namesake destruction</strong><br><span class="small">CR 120.2, 201.2a, 400.7, 604.3, 605.1a, 608.2h, 701.13c</span></td>
+        <td><strong>Turn-scoped player &amp; exact-object history</strong><br><span class="small">CR 119.9, 400.7, 508.1, 603.2d: what happened this turn, to whom, how often</span></td>
         <td>
-          <code>PlayerTurnHistory</code>; <code>ObjectLki.renamed</code> + <code>lki_face_printing</code>;
-          <code>SpellLki</code> + <code>spell_info</code>; <code>is_mana_ability</code> /
-          <code>has_dynamic_mana_output</code> vs. <code>mana_choices</code>; <code>Game::object_pt</code> +
-          <code>PrintedCharacteristics::pt_cda</code>; <code>MillUntil</code>, <code>MillCards.player</code>,
-          <code>Objects.in_zone</code>, <code>TargetAndSameName</code>.
+          <code>TurnState</code> owns <code>PlayerTurnHistory</code> (13 per-seat counters projected to v11
+          <code>player_turn_state</code> + LLM text), <code>DamageHistory</code> (exact source→permanent &amp;
+          combat-player pairs), <code>attacks_this_turn</code>, <code>ability_triggers_this_turn</code>,
+          <code>used_trigger_grants</code>, and <code>ability_resolutions_this_turn</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Aligned across 80/81 primary FDN rows and all 5 cross-set query families on hash v29. Two serialized
-          shapes (<code>MillCards.target</code>+<code>player</code>, <code>CharacteristicPower</code>+<code>CharacteristicPt</code>)
-          stay as pinned-pilot compatibility beside unified runtime readers.
+          Single owner, clean turn reset, exact CR 400.7 identity, and viewer-safe projections across all
+          81/81 primary FDN rows and 5 cross-set query families.
         </td>
       </tr>
       <tr>
-        <td><strong>State triggers (CR 603.8)</strong><br><span class="small">“When [condition], …” fires whenever the game state holds and no occurrence is waiting or on the stack</span></td>
+        <td><strong>Instruction results, permanent/spell LKI, all-zone CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
         <td>
-          <code>check_state_triggers</code> (<code>triggers.rs:1448</code>) hardcodes
-          <code>TriggerCondition::NoCounters { kind }</code>, hijacks
-          <code>EventKinds::of(EventKind::CountersPut)</code> as its index bucket (<code>triggers.rs:121, 1450</code>),
-          omits <code>trigger_placement</code> from its <code>waiting</code> check, and skips
-          <code>granted_abilities</code>. Planned closure proposed adding <code>TriggerCondition::CountersAtLeast</code>.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>
-          <strong>Biggest mismatch — one idea under two names + hidden index hack.</strong>
-          <code>Condition::SourceCountersAtLeast</code> (<code>ability.rs:392</code>) ALREADY exists in the shared
-          <code>Condition</code> vocabulary. Adding <code>TriggerCondition::CountersAtLeast</code> duplicates it,
-          and indexing state triggers under <code>CountersPut</code> scans every Saga/counter-trigger permanent on
-          every stabilization loop.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Mandatory infinite loop draw (CR 104.4b) &amp; Draw projection</strong><br><span class="small">Uninterruptible loop with no choice ends in a draw; finite high-life drain still wins; neither player won</span></td>
-        <td>
-          <code>GameOutcome</code> has only <code>Losses</code> and <code>Victory</code> (<code>game.rs:50</code>),
-          though <code>winner_index()</code>, <code>env.rs</code>, <code>manabot</code>, and Academy already map
-          <code>None</code> to Draw. One draw bug in <code>academy/ui/src/lib/recording.ts:87</code>:
-          <code>orientBoard</code> flips <code>!observation.won</code> on game over, turning a draw into a win.
-          Planned closure proposed “zero-choice cycle detection in <code>tick.rs</code>”.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>
-          <strong>Fatal counterexample against exact state-cycle detection.</strong>
-          <em>Bloodthirsty Conqueror</em> + life-gain drain + <em>Herald of Eternal Dawn</em> (already in
-          <code>fdn.rs:975</code>) changes life totals, turn history, and event logs on every iteration — the
-          <code>GameState</code> hash NEVER repeats! Needs progress-aware mandatory-loop detection +
-          <code>GameOutcome::Draw</code> + <code>orientBoard</code> fix.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Departed-source LKI counter reads on the stack</strong><br><span class="small">CR 608.2h: sacrificed source’s counters are public on the pending activation (<em>Ravenous Amulet</em>†)</span></td>
-        <td>
-          <code>ObjectProperty</code> (<code>ability.rs:825</code>) lacks <code>Counters(CounterKind)</code>.
-          <code>effect_execution::project_stack_object</code> (<code>effect_execution.rs:1141</code>) projects
-          <code>trigger_context</code> only for <code>TriggeredAbility</code> and never projects a departed
-          <code>ActivatedAbility</code>’s source LKI; <code>Projection::lki</code> has no counter summary line.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>
-          Both viewers would see no soul-counter count on <em>Ravenous Amulet</em>’s pending
-          <code>{4}, {T}, Sacrifice</code> activation in v11, LLM text, or Academy once the Amulet leaves the
-          battlefield.
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Untap transitions, grantor tap costs &amp; counter-removal results</strong><br><span class="small">CR 302.6, 502.3, 603.3a, 118.12: <em>Fishing Pole</em>† untap trigger, grantor tap cost, “remove a bait counter. If you do…”</span></td>
-        <td>
-          <code>untap_permanent</code>, <code>untap_all_permanents</code>, and
-          <code>untap_during_other_untap_steps</code> (<code>zones.rs:224-317</code>) bypass event emission
-          entirely (no <code>PermanentUntapped</code> event or <code>BecomesUntapped</code> trigger);
-          <code>ActivatedAbilityDefinition</code> has <code>exile_grantor</code> but no <code>tap_grantor</code>;
-          <code>Effect::RemoveCounters</code> is modal “up to N” with no “if you do” result.
-        </td>
-        <td><span class="badge no">No</span></td>
-        <td>
-          Previous plan assumed <em>Fishing Pole</em>† only needed <code>CounterKind::Bait</code>. Its actual
-          Oracle text needs all three small, reusable rules primitives (while <em>Mentor of the Meek</em>† and
-          <em>Immersturm Predator</em>† need zero new engine primitives).
-        </td>
-      </tr>
-      <tr>
-        <td><strong>Pinned-pilot serialized compatibility vs. runtime unification</strong><br><span class="small">Existing TLA cards’ token streams must stay stable for bundled pinned pilots</span></td>
-        <td>
-          <code>Effect::MillCards</code> keeps <code>target</code> + <code>player</code> (9 TLA cards);
-          <code>StaticAbility::CharacteristicPower</code> sits beside <code>CharacteristicPt</code> (3 TLA cards);
-          runtime already unified via <code>pt_cda()</code>, <code>object_pt()</code>, and <code>mill_objects()</code>.
+          <code>EventBinding</code> + <code>EffectFrame</code> results; <code>ObjectLki.renamed</code> +
+          <code>lki_face_printing</code> / <code>lki_mana_printing</code>; <code>SpellLki</code> +
+          <code>spell_info</code>; <code>ObjectProperty::{Power, Toughness, ManaValue, Colors, Counters}</code>;
+          <code>ContextRead::{SourcePower, SourceLki, TriggeringObject, PaidCost}</code>;
+          <code>is_mana_ability</code> vs. <code>mana_choices</code>; <code>Game::object_pt</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Not a conceptual defect: collapsing either variant would alter 12 TLA cards’ token streams and break
-          <code>test_pinned_pilot.py</code> (where <code>token_renames.rs</code> maps names, not structural
-          arities). Document and retain like legacy <code>PutsCounters</code> / <code>DealsCombatDamage</code>.
+          Aligned across rules, hash v30, v11, LLM text, and pinned pilots (<code>MillCards.target+player</code>
+          and <code>CharacteristicPower</code> intentionally kept for TLA pilot stability beside unified runtime readers).
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Untap transitions &amp; CR 603.8 state triggers</strong><br><span class="small">CR 122.1d, 502.3, 603.3a, 603.8</span></td>
+        <td>
+          One <code>Game::untap_permanent</code> emits <code>PermanentUntapped</code> across all untap paths;
+          <code>TriggerCondition::State(Condition)</code> + legacy <code>NoCounters</code> share
+          <code>EventKinds::STATE_TRIGGER</code> (<code>1 &lt;&lt; 31</code>) and
+          <code>check_state_triggers</code>. However, <code>state_trigger_waiting</code>
+          (<code>triggers.rs:1516</code>) compares <code>ability_index</code> without checking
+          <code>inline_effects.is_none()</code>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Minor identity collision:</strong> granted/delayed triggers also carry
+          <code>ability_index: 0</code> with <code>inline_effects: Some(_)</code> (<code>triggers.rs:1046</code>).
+          A granted trigger on <em>Mazemind Tome</em> (whose state trigger is printed index 0) would falsely
+          suppress the state trigger while on the stack.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>CR 104.4b mandatory-loop draw</strong><br><span class="small">Uninterruptible loop with no progress ends in a draw whenever players pass without breaking it</span></td>
+        <td>
+          <code>MandatoryLoopWatch</code> is a local stack variable inside <code>Game::tick_priority()</code>
+          (<code>tick.rs:462</code>). Destroyed whenever <code>tick_priority</code> returns <code>Some(space)</code>.
+          <code>repeats()</code> checks <code>can_lose(seat)</code> on life (<code>tick.rs:595</code>) but
+          not on poison (<code>tick.rs:589</code>).
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Biggest mismatch — loop state has no game-state owner.</strong> Never fires when
+          <code>skip_trivial = false</code>, and never fires under <code>skip_trivial = true</code> if either
+          player holds <em>any</em> instant (e.g. <em>Opt</em>, <em>Lightning Bolt</em>) or controls
+          <em>any</em> activated ability (e.g. Food, <em>Mazemind Tome</em>), even if both players pass
+          priority indefinitely.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Draw outcome projection across consumers</strong><br><span class="small">In a draw (<code>winner = None</code>), neither player won in live play, Watch, or saved traces</span></td>
+        <td>
+          Native <code>GameOutcome::Draw { mandatory_loop }</code>, <code>env.rs</code>,
+          <code>decision_surface_view</code>, and <code>academy/ui/src/lib/recording.ts::orientBoard</code>
+          preserve <code>won: false</code> for both seats. Two Python helpers still invert <code>won</code>:
+          <code>managym/academy/server.py:543</code> (<code>viewer_view</code>) and
+          <code>managym/academy/trace.py:366</code> (<code>normalize_observation_to_hero</code>, also used by
+          <code>recording.py:535::person_board</code>).
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>Binary assumption on a 3-valued outcome:</strong> swapping a drawn opponent-perspective
+          observation computes <code>not False → True</code>, reporting a draw as a win in
+          <code>viewer_view</code> / <code>hero_view</code> and in recorded traces.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Grantor-cost activated abilities</strong><br><span class="small">CR 302.6, 602.2b: paying a cost with the attaching Aura/Equipment (<em>Fishing Pole</em>†)</span></td>
+        <td>
+          Two booleans on <code>ActivatedAbilityDefinition</code> (<code>exile_grantor</code>,
+          <code>tap_grantor</code>) and two <code>CostComponent</code>s. <code>announced_model</code>
+          (<code>mana.rs:1905</code>) reserves both, but <code>reserve_announced_payment</code>
+          (<code>mana.rs:1872</code>), <code>action_focus</code> (<code>observation.rs:2208</code>), and
+          <code>action_description</code> (<code>action.rs:58</code>) check <strong>only
+          <code>exile_grantor</code></strong>.
+        </td>
+        <td><span class="badge no">No</span></td>
+        <td>
+          <strong>One concept split across two flags, half-wired:</strong> a mana/waterbend-capable grantor
+          can be tapped mid-payment and fail <code>complete_announced_payment</code>; two <em>Fishing
+          Poles</em> on one creature produce two <code>ActivateAbility</code> offers with identical focus
+          and indistinguishable generic labels.
         </td>
       </tr>
     </tbody>
@@ -240,184 +242,181 @@
 </section>
 
 <section>
-  <h2>2. Biggest Mismatch: CR 603.8 State Triggers Duplicating <code>Condition</code> and Hijacking <code>CountersPut</code></h2>
+  <h2>2. Biggest Mismatch: CR 104.4b Watch Trapped Inside <code>tick_priority()</code> (Plus Missed Draw Flips &amp; Split Grantor Costs)</h2>
   <div class="callout">
-    <strong>The core problem:</strong> Magic has one concept for a state trigger (CR 603.8): “When [game state
-    condition], [effects]” — checked whenever a player would receive priority, never re-triggered while an
-    occurrence of that ability is waiting or on the stack. Yet <code>check_state_triggers</code>
-    (<code>flow/triggers.rs:1448</code>) hardcodes <code>TriggerCondition::NoCounters { kind }</code>, borrows
-    <code>EventKind::CountersPut</code> as an unrelated index bucket, and the previous plan proposed adding a
-    second bespoke trigger variant <code>TriggerCondition::CountersAtLeast</code> that duplicates the existing
-    <code>Condition::SourceCountersAtLeast</code>.
+    <strong>The core problem:</strong> In Magic (CR 104.4b / MTR 4.4), a mandatory loop is a property of
+    the <em>game’s consecutive pass-only stack resolutions</em>, not of whether the UI happened to auto-skip
+    priority prompts inside one Rust function call. Putting <code>let mut watch = MandatoryLoopWatch::default()</code>
+    on <code>tick_priority()</code>’s call stack ties a rules outcome (<code>GameOutcome::Draw</code>) to a
+    UI/skip setting (<code>skip_trivial</code>) and to whether either player happens to hold an unrelated
+    instant or Food token.
   </div>
 
-  <h3>Concrete interaction walkthrough (<em>Mazemind Tome</em> — 81st primary FDN row)</h3>
+  <h3>Concrete interaction walkthrough (<em>Bloodthirsty Conqueror</em> + life-gain drain + <em>Herald of Eternal Dawn</em>)</h3>
   <p>
-    <strong>Normal path:</strong> Seat 0 controls <em>Mazemind Tome</em> with 3 page counters and activates
-    <code>{T}, Put a page counter on Mazemind Tome: Scry 1</code>. Because
-    <code>ActivatedAbilityDefinition.add_counters: Some((CounterKind::Page, 1))</code> pays the 4th page counter as
-    an <code>EventCause::Cost</code> inside <code>complete_announced_payment</code> <em>before</em>
-    <code>FrameCompletion::Activated</code> puts <code>Scry 1</code> on the stack, the subsequent
-    <code>stabilize_before_priority</code> pass runs <code>check_state_triggers</code> on the dedicated
-    <code>EventKinds::STATE_TRIGGER</code> bucket. <code>TriggerCondition::State(Condition::SourceCountersAtLeast { kind: Page, count: 4 })</code>
-    evaluates <code>true</code> via <code>condition_holds</code> and enqueues Tome’s exile+gain-4 trigger
-    <strong>on top of</strong> <code>Scry 1</code>. Tome exiles itself and Seat 0 gains 4 life first; then
-    <code>Scry 1</code> resolves independently (CR 113.7a).<br>
-    <strong>Failure path 1 (countered state trigger):</strong> Seat 1 counters Tome’s exile trigger on the stack
-    (<code>CounterAbility</code>). Tome is still on the battlefield with 4 page counters and no waiting or stacked
-    occurrence; the very next <code>stabilize_before_priority</code> pass sees <code>!waiting</code> and immediately
-    re-enqueues Tome’s exile trigger (CR 603.8).<br>
-    <strong>Failure path 2 (source removed in response / simultaneous trigger placement):</strong>
-    (a) If Seat 1 exiles Tome before its state trigger resolves, <code>Effect::Move { what: This, to: Exile }</code>
-    moves 0 objects, so <code>Condition::Moved</code> is false and Seat 0 gains 0 life (“If you do, you gain 4 life”).
-    (b) If another trigger fires alongside Tome’s 4th counter and enters <code>trigger_placement</code>, checking
-    <code>pending_triggers</code>, <code>trigger_placement</code>, and <code>stack_objects</code> guarantees Tome
-    never double-triggers while waiting for placement.<br>
-    <strong>Recovery / clean boundary:</strong> One <code>TriggerCondition::State(Condition)</code> variant +
-    <code>EventKinds::STATE_TRIGGER</code> covers <em>Mazemind Tome</em> and every future CR 603.8 card in Standard
-    without inventing counter-specific trigger variants or scanning <code>CountersPut</code> listeners on every
-    priority check.
+    <strong>Normal path (real game in Academy or Env):</strong> Seat 0 controls <em>Bloodthirsty Conqueror</em>,
+    a life-gain drain permanent, and a <em>Food</em> token; Seat 1 controls <em>Herald of Eternal Dawn</em>
+    and holds <em>Opt</em> in hand. Seat 0 casts <em>Lightning Bolt</em> at Seat 1. Both players pass, starting
+    the mandatory drain/gain cycle. Seat 1 is offered <code>PassPriority</code> or <code>Cast Opt</code> on
+    each cycle (and Seat 0 is offered <code>PassPriority</code> or <code>Crack Food</code>). Neither wants to
+    waste an action that cannot stop the loop; both pass priority.<br>
+    <strong>Failure at <code>65cebaf342</code>:</strong> Every time <code>tick_priority()</code> returns
+    <code>Some(space)</code> for Seat 0 or Seat 1, the local <code>MandatoryLoopWatch</code> is dropped.
+    When the player submits <code>Action::PassPriority</code>, the next <code>tick_priority()</code> starts
+    fresh at <code>resolutions = 0</code>. The game never draws — Academy soft-locks and Env hits its step
+    timeout (<code>TIMEOUT</code> instead of <code>DRAW</code>). Even with empty boards, running with
+    <code>skip_trivial = false</code> never fires CR 104.4b at all.<br>
+    <strong>Failure #2 (Draw projection):</strong> Once a draw <em>does</em> occur, if the last acting seat
+    was Seat 1 (<code>agent.player_index == 1, game_over == true, won == false</code>), calling
+    <code>viewer_view(obs, 0)</code> or <code>prepare_trace_payload(trace)</code> executes
+    <code>not False → True</code> and tells Seat 0 they won.<br>
+    <strong>Recovery / interruption path (proposed model):</strong> <code>PriorityState</code> owns
+    <code>loop_watch: Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;</code>. Passing priority preserves it;
+    taking <em>any</em> non-pass action (casting <em>Murder</em> on Conqueror, activating an ability,
+    choosing a target/mode), entering a suspended decision, advancing the step, or emptying the stack
+    (<code>stack_objects.is_empty() &amp;&amp; pending_triggers.is_empty()</code>) clears it immediately to
+    <code>None</code>. So Seat 1 can always interrupt with removal (resetting the watch cleanly), while
+    passing with an unrelated <em>Opt</em> reaches <code>GameOutcome::Draw { mandatory_loop: true }</code>
+    after 64 no-progress resolutions — identically under <code>skip_trivial = true</code> and
+    <code>skip_trivial = false</code>, and deterministically across forks/replays.
   </p>
 
   <div class="grid">
     <div class="panel existing-box">
-      <h3>Before <span class="badge existing">Existing at 13017dcdf0 + Old Plan</span></h3>
-      <pre>// state/src/ability.rs — bespoke per-state trigger variants
-TriggerCondition::NoCounters { kind }
-TriggerCondition::CountersAtLeast { kind, count } // duplicates Condition::SourceCountersAtLeast!
+      <h3>Before <span class="badge existing">Existing at 65cebaf342</span></h3>
+      <pre>// managym/src/flow/tick.rs:462 — lost on every priority return!
+fn tick_priority(&amp;mut self, step: StepKind) -&gt; Option&lt;ActionSpace&gt; {
+    let mut watch = MandatoryLoopWatch::default();
+    ...
+    // poison ignores can_lose(seat)
+    if now.poison[seat] &gt; extremes.poison[seat] {
+        extremes.poison[seat] = now.poison[seat];
+        progressed = true;
+    }
+}
 
-// flow/triggers.rs:121, 1450 — hijacks CountersPut bucket
-TriggerCondition::NoCounters { .. } =&gt; EventKinds::of(EventKind::CountersPut),
-for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
-  // scans every Saga &amp; Exemplar on every stabilization pass!
-  // misses trigger_placement &amp; granted_abilities!
-}</pre>
+# managym/academy/server.py:543 &amp; trace.py:366 — flips Draw to Win!
+data["won"] = bool(obs.game_over) and not bool(obs.won)
+observation["won"] = not bool(observation["won"])
+
+// mana.rs:1872, observation.rs:2208, action.rs:58 — exile_grantor only!
+CostComponent::ExileGrantor(object) =&gt; Some(*object), // misses TapGrantor!
+.filter(|ability| ability.exile_grantor)              // misses tap_grantor!
+if !ability.exile_grantor { return None; }            // misses tap_grantor!</pre>
       <p class="small">
-        Splits one CR 603.8 concept across bespoke trigger variants, duplicates <code>Condition::SourceCountersAtLeast</code>,
-        scans unrelated counter listeners on every priority round, and omits <code>trigger_placement</code>.
+        Loop detection depends on <code>skip_trivial</code> and empty hands; Python Academy turns draws into
+        wins; two <em>Fishing Poles</em> on one creature share focus/labels and skip mid-payment reservation.
       </p>
     </div>
     <div class="panel proposed-box">
-      <h3>After <span class="badge proposed">Proposed · Final Closure Slice</span></h3>
-      <pre>// state/src/ability.rs — reuses the ONE Condition vocabulary
-TriggerCondition::State(Condition), // Mazemind Tome uses Condition::SourceCountersAtLeast { Page, 4 }
-TriggerCondition::NoCounters { kind }, // retained for pinned-pilot Dark Depths
-
-// flow/triggers.rs — dedicated bit in EventKinds(u32), O(0) when absent
-impl EventKinds { const STATE_TRIGGER: Self = Self(1 &lt;&lt; 31); }
-TriggerCondition::State(_) | TriggerCondition::NoCounters { .. } =&gt; EventKinds::STATE_TRIGGER,
-
-fn state_trigger_holds(&amp;self, cond: &amp;TriggerCondition, src: &amp;TriggerSourceSnapshot, perm: &amp;Permanent) -&gt; bool {
-  match cond {
-    TriggerCondition::NoCounters { kind } =&gt; perm.counter_count(*kind) == 0,
-    TriggerCondition::State(c) =&gt; self.condition_holds(c, src.lki.controller, None, Some(src.lki.object), None),
-    _ =&gt; false,
-  }
+      <h3>After <span class="badge proposed">Proposed · Hardening Slice (Hash v31)</span></h3>
+      <pre>// managym/src/flow/priority.rs — deterministic game state, 8 bytes inline
+pub struct PriorityState {
+    pub holder: PlayerId,
+    pub consecutive_passes: usize,
+    pub pass_count: usize,
+    pub sba_done: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loop_watch: Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;,
 }
-// waiting checks pending_triggers, trigger_placement, AND stack_objects</pre>
+// Cleared on: stack_is_empty() &amp;&amp; pending_triggers.is_empty(),
+// on_non_pass_action, on_step_start, suspended/pending choice.
+// repeats(): poison checks `progressed |= can_lose(seat)` like life.
+
+# server.py::viewer_view &amp; trace.py::normalize_observation_to_hero
+# Accept `winner: int | None` (known in prepare_trace_payload &amp; Recording);
+# never flip `won: False` to `True` when `winner is None` (draw).
+
+// Shared grantor-cost authority (exile_grantor || tap_grantor)
+// - mana.rs::reserve_announced_payment reserves TapGrantor { tap: true }
+// - observation.rs::action_focus focuses grantor for both flags
+// - action.rs::action_description names grantor tap/exile for both flags
+// - triggers.rs::state_trigger_waiting requires inline_effects.is_none()</pre>
       <p class="small">
-        Zero duplicate condition variants, zero scans when no state-trigger permanent exists, full CR 603.8
-        waiting check across placement and stack, and zero hash/EventKind churn.
+        CR 104.4b works identically with or without <code>skip_trivial</code> and with unrelated instants in
+        hand; draws stay draws in every consumer; two <em>Fishing Poles</em> are fully distinguishable and
+        safely reserved.
       </p>
     </div>
   </div>
 
-  <h3>Counterexample stress tests across the whole closure slice</h3>
+  <h3>Counterexample stress tests</h3>
   <table>
     <thead>
       <tr>
         <th style="width:27%">Counterexample</th>
-        <th style="width:36%">What could break</th>
-        <th style="width:37%">How the unified model survives</th>
+        <th style="width:36%">What breaks at <code>65cebaf342</code></th>
+        <th style="width:37%">How the repaired model survives</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong><em>Bloodthirsty Conqueror</em> + life-gain drain + <em>Herald of Eternal Dawn</em> (CR 104.4b)</strong></td>
-        <td>Exact <code>GameState</code> hash cycle detection NEVER triggers because opponent life goes <code>0 → -1 → -2…</code>, turn history increments, and events grow every cycle!</td>
-        <td>Track repeated zero-choice (and pass-only) trigger-signature streaks in <code>tick_priority</code>: declare <code>GameOutcome::Draw { mandatory_loop: true }</code> when the same trigger cycle repeats without any unprotected positive life decrease toward <code>&lt;= 0</code> (with a high safety cap). Finite 200-life drain without Herald still drops to 0 and WINS.</td>
+        <td><strong>Conqueror + drain + Herald with <code>skip_trivial = false</code> or with <em>Opt</em> in hand</strong></td>
+        <td><code>tick_priority</code> returns <code>Some(space)</code> every trigger, resetting the local <code>MandatoryLoopWatch</code> to 0; game loops forever / hits step cap.</td>
+        <td><code>PriorityState.loop_watch</code> persists across <code>Action::PassPriority</code> and triggers <code>GameOutcome::Draw { mandatory_loop: true }</code> after 64 pass-only no-progress resolutions; casting removal calls <code>on_non_pass_action</code> and clears it.</td>
       </tr>
       <tr>
-        <td><strong>Academy Watch / replay perspective flip on a Draw</strong></td>
-        <td><code>academy/ui/src/lib/recording.ts:87</code> computes <code>won: observation.game_over ? !observation.won : observation.won</code>, turning a draw (<code>won: false</code>) into <code>won: true</code> for the other seat!</td>
-        <td>Pass <code>index.winner</code> (or optional <code>winner?: number | null</code>) into <code>orientBoard</code> so a draw (<code>winner === null</code>) keeps <code>won: false</code> for both viewers.</td>
+        <td><strong>Infinite poison loop vs. <em>Herald of Eternal Dawn</em></strong></td>
+        <td><code>repeats()</code> treats rising poison as progress even when <code>!can_lose(seat)</code>, burning 10,000 resolutions before hitting <code>CAP</code>.</td>
+        <td><code>progressed |= can_lose(seat)</code> on poison matches life loss and draws cleanly at 64 resolutions.</td>
       </tr>
       <tr>
-        <td><strong><em>Ravenous Amulet</em>† sacrificed with 3 soul counters</strong></td>
-        <td><code>StackObjectData</code> only projects <code>source_power</code> and <code>paid_amount</code>; <code>project_stack_object</code> never projects a departed <code>ActivatedAbility</code>’s source LKI.</td>
-        <td>Add <code>ObjectProperty::Counters(CounterKind)</code> + <code>ContextRead::SourceLki</code>; <code>project_stack_object</code> calls <code>out.retained_object(ability.source_object())</code> when an activation/trigger reads non-power source LKI, and <code>Projection::lki</code> adds a plain-language counter summary line. Zero new v11 columns.</td>
+        <td><strong>Normal single-resolution priority pass &amp; fork determinism</strong></td>
+        <td>(Risk if naively persisted) Storing an active watch after a finished stack would bloat hashes and allocate on every spell.</td>
+        <td>Clearing <code>loop_watch = None</code> whenever <code>stack_is_empty() &amp;&amp; pending_triggers.is_empty()</code> means zero allocation on ordinary finished stacks, while forks mid-loop stay 100% deterministic under hash v31.</td>
       </tr>
       <tr>
-        <td><strong><em>Fishing Pole</em>† equipped to a creature with a stun counter or untapping in untap step</strong></td>
-        <td><code>untap_all_permanents</code> and <code>untap_during_other_untap_steps</code> bypass <code>untap_permanent</code> and emit no event; a stun counter replaces untapping; removing 0 bait counters must NOT make a Fish.</td>
-        <td>Route all three untap sites through one transition-checking <code>untap_permanent</code> emitting <code>GameEvent::PermanentUntapped</code> only when tapped→untapped (stun replacement emits nothing; CR 502.3/603.3a queues untap-step triggers for upkeep). <code>Effect::RemoveCounter { from, kind, count, if_removed }</code> checks actual committed removal without touching <code>frame.moved</code>.</td>
+        <td><strong>Drawn game viewed through <code>viewer_view</code> or <code>prepare_trace_payload</code></strong></td>
+        <td>When the final observation’s acting seat is <code>1 - viewer</code>, <code>not False</code> flips <code>won</code> to <code>True</code>, misreporting a draw as a win.</td>
+        <td>Passing <code>winner: int | None</code> into <code>normalize_observation_to_hero</code> and <code>viewer_view</code> keeps <code>won: False</code> for both seats when <code>winner is None</code>.</td>
       </tr>
       <tr>
-        <td><strong><em>Immersturm Predator</em>† activated while already tapped, or with fizzled graveyard target</strong></td>
-        <td>Tapping an already-tapped permanent must not emit <code>PermanentTapped</code>; choosing 1 graveyard target that leaves before resolution fizzles the entire trigger (CR 608.2b), whereas choosing 0 targets (“up to one”) still adds the +1/+1 counter.</td>
-        <td><code>tap_permanent</code> already returns <code>false</code> without emitting when tapped; <code>TargetRequirement::up_to(1, GraveyardCard)</code> distinguishes 0 targets (resolves) from 1 illegal target (fizzles). Directed test covers both.</td>
+        <td><strong>Two <em>Fishing Poles</em> equipped to one Gray Ogre + mana/improvise-capable grantor</strong></td>
+        <td>Both granted abilities share identical <code>action.focus</code> and generic labels; <code>reserve_announced_payment</code> drops the grantor tap reservation once payment starts.</td>
+        <td><code>reserve_announced_payment</code> reserves <code>tap: true</code> for <code>TapGrantor</code>; <code>observation.rs</code> focuses the specific Pole; <code>action.rs</code> names each Pole’s permanent ID in its description.</td>
       </tr>
       <tr>
-        <td><strong>Collapsing <code>Effect::MillCards</code> or <code>StaticAbility::CharacteristicPower</code></strong></td>
-        <td>9 TLA cards serialize <code>MillCards</code> and 3 serialize <code>CharacteristicPower</code>; changing their arity alters TLA token streams and breaks <code>test_pinned_pilot.py</code>.</td>
-        <td>Retain both legacy serialized shapes for pinned-pilot compatibility (runtime is already unified via <code>pt_cda()</code>, <code>object_pt()</code>, and <code>mill_objects()</code>) and document the decision explicitly.</td>
+        <td><strong>Granted/delayed trigger on <em>Mazemind Tome</em> at 4 page counters</strong></td>
+        <td>A granted trigger has <code>ability_index: 0, inline_effects: Some(_)</code>, which matches Tome’s printed state trigger at index 0 in <code>state_trigger_waiting</code>.</td>
+        <td><code>trigger.inline_effects.is_none()</code> restricts <code>state_trigger_waiting</code> to the printed state trigger itself.</td>
       </tr>
     </tbody>
   </table>
 </section>
 
 <section>
-  <h2>3. Architectural Plan for Final Closure Slice <span class="badge proposed">Written into scratch/plan.md</span></h2>
+  <h2>3. Architectural Plan for Pre-Review Hardening Slice <span class="badge proposed">Written into scratch/plan.md</span></h2>
   <p>
-    With <strong>80 of 81</strong> primary FDN rows and all 5 cross-set query families delivered on hash v29, the
-    final closure slice closes <strong>81/81 primary FDN rows</strong>, <strong>15/17</strong> cost-primary rows
-    citing <code>event_history</code>/<code>context_queries</code> (with exact blockers on the 2 out-of-scope rows),
-    CR 104.4b mandatory-loop draws, Findings 3–5, and final conformance evidence:
+    Before running the closing slice’s behavior review and gate, land one tight concept-alignment slice on
+    hash contract <strong>v31</strong> to close all three mismatches:
   </p>
   <pre>
-Final Closure Slice · State triggers, counter costs/LKI, untap/grantor-tap, CR 104.4b draw, Findings 3–5 &amp; conformance
-  1. State triggers &amp; counter-adding costs (Mazemind Tome, m21 — 81/81 primary FDN):
-     - Add TriggerCondition::State(Condition) (reusing existing Condition::SourceCountersAtLeast; keep legacy
-       NoCounters for pinned-pilot Dark Depths).
-     - Add EventKinds::STATE_TRIGGER = Self(1 &lt;&lt; 31) in TriggerIndex (no EventKind/hash change, O(0) when absent).
-     - Check pending_triggers, trigger_placement, and stack_objects in check_state_triggers; evaluate State(c)
-       via condition_holds(..., Some(source.lki.object), None).
-     - Add CounterKind::{Page, Soul, Bait} and ActivatedAbilityDefinition.add_counters: Option&lt;(CounterKind, u16)&gt;
-       paid with EventCause::Cost before stack placement (mirroring remove_counters in payment, mana side-effects,
-       and descriptions).
-  2. Live/departed counter-count property &amp; departed source LKI projection (Ravenous Amulet†, fdn):
-     - Add ObjectProperty::Counters(CounterKind) (Copy) evaluated in live_property, departed_property, and
-       layers.rs::property.
-     - Add ContextRead::SourceLki for EffectValue::Property { of: This, property: Counters | Toughness | ManaValue
-       | Colors } and project out.retained_object(source) in effect_execution::project_stack_object for stacked
-       activated and triggered abilities (plus concise counter summary line in Projection::lki; zero new v11 columns).
-  3. Untap transitions, grantor tap cost &amp; remaining feasible cost-primary rows:
-     - Author Mentor of the Meek† (isd) and Immersturm Predator† (khm) using existing primitives + directed tests.
-     - Unify all three untap sites (zones.rs:224-317) through transition-checking untap_permanent emitting
-       GameEvent::PermanentUntapped (skipping already-untapped and stun-replaced permanents; CR 502.3/603.3a);
-       add TriggerCondition::BecomesUntapped { subject }.
-     - Add ActivatedAbilityDefinition.tap_grantor: bool (mirroring exile_grantor; CR 302.6 ignores summoning
-       sickness on grantor) and Effect::RemoveCounter { from, kind, count, if_removed } (using change_counters’
-       committed bool without polluting frame.moved) → Fishing Pole† (fdn) + token.fish (1/1 blue Fish).
-     - Record concrete blocker in fdn.jsonl for Ovika, Enigma Goliath† (composite ward cost); keep Quilled
-       Greatwurm†’s recorded blocker.
-  4. CR 104.4b mandatory-loop draw (Bloodthirsty Conqueror pending obligation):
-     - Add GameOutcome::Draw { mandatory_loop: bool } under #[serde(untagged)] (zero hash change for non-draw
-       games; winner_index() already returns None; report draw_reason in env.rs).
-     - Detect non-terminating mandatory trigger loops in tick_priority() via repeated trigger-signature streak
-       without unprotected positive life decrease toward &lt;= 0 (plus safety cap), resetting on any non-pass action
-       or step change. Test Bloodthirsty Conqueror + Herald of Eternal Dawn + constructed life-gain-drain witness
-       (respecting the foundation_composition parallel boundary) AND finite high-life drain control that still wins.
-     - Fix academy/ui/src/lib/recording.ts::orientBoard so a draw never flips won: false to won: true.
-  5. Findings 3–5 &amp; final conformance evidence:
-     - Finding 3: update the 6 Academy fixtures (test_semantic_boundary.py ×2, test_combat_preview.py ×1,
-       test_incinerating_blast.py ×3) to keep opening hands via native offers before advancing/injecting state.
-     - Finding 4: move single-card non-FDN fixtures out of cards/tests/cards/fdn.rs to their first-printing
-       modules (dmu.rs, thb.rs, dtk.rs, gtc.rs, woe.rs) and update fdn.jsonl fixture pointers.
-     - Finding 5: add missing fixture pointers to the 6 early primary rows in fdn.jsonl.
-     - Retain MillCards.target+player and CharacteristicPower+CharacteristicPt for pinned-pilot stability.
-     - Re-record conformance/semantic-kernel-w17-v6/evidence-opening-v1.json at the final head and verify all
-       Rust, Python, pinned-pilot, and Academy checks.
+Pre-Review Hardening Slice · Persistent CR 104.4b watch, draw orientation, grantor-cost authority &amp; state-trigger identity
+  1. Persistent CR 104.4b loop watch on PriorityState (hash v31):
+     - Move MandatoryLoopWatch + LoopProgress into flow/priority.rs as `pub loop_watch: Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;`
+       (#[serde(default, skip_serializing_if = "Option::is_none")], 8 bytes inline; keep size_of::&lt;GameState&gt;() &lt;= 4096).
+     - Reset `loop_watch = None` in `on_non_pass_action`, `on_step_start`, when returning a suspended decision
+       or pending choice, and immediately after `resolve_top_of_stack()` when `stack_is_empty() &amp;&amp; pending_triggers.is_empty()`.
+     - Gate poison progress on `can_lose(seat)` beside life loss in `MandatoryLoopWatch::repeats`.
+     - Add two counterexample tests in cards/tests/cards/fdn.rs:
+       (a) Conqueror + drain + Herald with `skip_trivial = false` draws via explicit `pass_priority()` calls;
+       (b) same loop with an unrelated instant in hand draws when both pass, and breaks cleanly when removal kills Conqueror.
+     - Bump MATCH_STATE_HASH_VERSION to 31 (hash.rs:29) and refresh the Clone witness + semantic-kernel &amp;
+       authored-match opening receipts.
+  2. Draw orientation parity in Python Academy:
+     - Thread `winner: int | None` into `normalize_observation_to_hero` (trace.py:344; callers in
+       `prepare_trace_payload` and `recording.py::person_board` already have `winner`) and `viewer_view`
+       (server.py:530), so `winner is None` never flips `won: False` to `True`.
+     - Add regression tests for drawn observations in `tests/academy/test_play_modes.py` and trace normalization.
+  3. Unified grantor-cost authority &amp; state-trigger waiting guard:
+     - Add `ActivatedAbilityDefinition::has_grantor_cost()` (`exile_grantor || tap_grantor`).
+     - Handle `CostComponent::TapGrantor(object)` in `mana.rs::reserve_announced_payment` (`tap: true, sacrifice: false`).
+     - Include grantor focus for both flags in `observation.rs:2208` and grantor cost labels for both flags in
+       `action.rs::action_description` (`action.rs:58`).
+     - Require `trigger.inline_effects.is_none()` in `triggers.rs::state_trigger_waiting`.
+     - Add directed tests in `fdn.rs` (two Fishing Poles on one creature: distinct focus, distinct descriptions,
+       and mid-payment grantor reservation) and `m21.rs` (granted trigger does not suppress Mazemind Tome's state trigger).
+  4. Verify full Rust debug suites, rebuild cp313 extension, and re-run focused Python, pinned-pilot, and Academy checks.
   </pre>
 </section>
 
@@ -425,65 +424,50 @@ Final Closure Slice · State triggers, counter costs/LKI, untap/grantor-tap, CR 
   <h2>4. Choices Made for Review (Reply with e.g. “1a, 2a”)</h2>
   <p class="small">
     Running headless in a Graph step: bold, reversible choices are recorded below and written into
-    <code>scratch/plan.md</code> and <code>scratch/questions.md</code> so the next step proceeds without waiting.
+    <code>scratch/plan.md</code> and <code>scratch/questions.md</code> so implement proceeds without waiting.
   </p>
   <ol class="questions">
     <li>
-      <strong>How should CR 603.8 state triggers (<em>Mazemind Tome</em> and future cards) be modeled and indexed?</strong>
+      <strong>Where should <code>MandatoryLoopWatch</code> live so CR 104.4b works across explicit priority passes and forks?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Add <code>TriggerCondition::State(Condition)</code> reusing
-        existing <code>Condition::SourceCountersAtLeast</code> (keeping legacy <code>NoCounters</code> for
-        pinned-pilot <em>Dark Depths</em>), and index both under a dedicated <code>EventKinds::STATE_TRIGGER</code>
-        bit in <code>TriggerIndex</code> instead of hijacking <code>EventKind::CountersPut</code>.
+        <span class="selected">1a (Selected):</span> Store <code>Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;</code> on
+        <code>PriorityState</code> (part of <code>GameState</code>, cleared on empty stack / non-pass action /
+        step start / suspended choice, and hashed under contract v31). Guarantees identical CR 104.4b behavior
+        whether <code>skip_trivial</code> is true or false, even with unrelated instants in hand, and keeps
+        forks/replays deterministic.
       </div>
       <div class="choice">
-        1b: Add a second bespoke <code>TriggerCondition::CountersAtLeast { kind, count }</code> variant under
-        <code>EventKind::CountersPut</code>. (Passed over: duplicates <code>Condition::SourceCountersAtLeast</code>
-        and forces every stabilization pass to scan unrelated counter listeners.)
-      </div>
-    </li>
-    <li>
-      <strong>How should CR 104.4b detect mandatory infinite loops like <em>Bloodthirsty Conqueror</em> + <em>Herald of Eternal Dawn</em>?</strong>
-      <div class="choice">
-        <span class="selected">2a (Selected):</span> Track repeated pass-only / zero-choice trigger-signature streaks
-        in <code>tick_priority()</code> and declare <code>GameOutcome::Draw { mandatory_loop: true }</code> when the
-        same trigger cycle repeats without any unprotected positive life decrease toward <code>&lt;= 0</code> (with a
-        high safety cap), testing with <em>Herald of Eternal Dawn</em> + a constructed drain witness plus a finite
-        high-life win control.
-      </div>
-      <div class="choice">
-        2b: Hash <code>GameState</code> in <code>tick.rs</code> looking for an exact repeated state. (Passed over:
-        fails completely on <em>Bloodthirsty Conqueror</em> + <em>Herald of Eternal Dawn</em> where life totals and
-        turn history change on every iteration!)
+        1b: Keep <code>MandatoryLoopWatch</code> local to <code>tick_priority()</code> and document that CR 104.4b
+        only fires when <code>skip_trivial = true</code> and neither player has any legal priority action.
+        (Passed over: fails in real games whenever either player holds an instant or controls a Food token, and
+        fails under <code>skip_trivial = false</code>.)
       </div>
     </li>
     <li>
-      <strong>Should <em>Fishing Pole</em>† ship in the final closure slice or remain deferred?</strong>
+      <strong>How should Python Academy preserve draws when re-orienting an <code>Observation</code> to the other seat?</strong>
       <div class="choice">
-        <span class="selected">3a (Selected):</span> Ship <em>Fishing Pole</em>† by adding the three small, general
-        rules primitives it needs: unified <code>untap_permanent</code> + <code>GameEvent::PermanentUntapped</code> /
-        <code>TriggerCondition::BecomesUntapped</code> (an <code>event_history</code> primitive),
-        <code>ActivatedAbilityDefinition.tap_grantor</code> (mirroring <code>exile_grantor</code>), and
-        <code>Effect::RemoveCounter { from, kind, count, if_removed }</code> (checking committed removal without
-        polluting <code>frame.moved</code>).
+        <span class="selected">2a (Selected):</span> Thread <code>winner: int | None</code> into
+        <code>viewer_view</code> and <code>normalize_observation_to_hero</code> (matching
+        <code>academy/ui/src/lib/recording.ts::orientBoard</code>) without changing the
+        <code>experience-v1</code> <code>Observation</code> wire schema or churning choice-navigation JSON fixtures.
       </div>
       <div class="choice">
-        3b: Leave <em>Fishing Pole</em>† pending with a blocker for untap triggers and grantor tap costs. (Passed
-        over: <code>PermanentUntapped</code> belongs squarely in MTG-418’s event-history vocabulary and unlocks
-        15/17 cost-primary rows alongside 81/81 primary FDN rows.)
+        2b: Add <code>winner: Option&lt;usize&gt;</code> (or <code>draw: bool</code>) directly to native
+        <code>Observation</code> and regenerate all <code>protocol/*.schema.json</code> and
+        <code>choice-navigation-*.json</code> fixtures. (Passed over: broader protocol churn than needed when
+        <code>winner</code> already exists on every trace, recording, and frame.)
       </div>
     </li>
     <li>
-      <strong>What should happen to the two serialized duplications flagged at <code>13017dcdf0</code> (<code>MillCards.target</code>+<code>player</code> and <code>CharacteristicPower</code>+<code>CharacteristicPt</code>)?</strong>
+      <strong>Should grantor-cost authority (<code>reserve_announced_payment</code>, <code>action_focus</code>, <code>action_description</code>) and the <code>state_trigger_waiting</code> guard land now before behavior review?</strong>
       <div class="choice">
-        <span class="selected">4a (Selected):</span> Keep both legacy serialized shapes intact (their runtime paths
-        are already unified via <code>pt_cda()</code>, <code>object_pt()</code>, and <code>mill_objects()</code>) so
-        the 12 existing TLA cards keep exact token compatibility with <code>test_pinned_pilot.py</code> without
-        recording a pilot break.
+        <span class="selected">3a (Selected):</span> Fix all three in the same small hardening slice so
+        behavior review verifies one clean model (two <em>Fishing Poles</em> distinguishable in focus/text and
+        reserved during payment, and <em>Mazemind Tome</em> immune to granted-trigger index-0 collisions).
       </div>
       <div class="choice">
-        4b: Collapse both variants now and run <code>scripts/pinned_pilot.py record --reason</code>. (Passed over:
-        unnecessary pilot-compatibility break for pure serde cleanup that already has zero runtime duplication.)
+        3b: Defer them to a post-MTG-418 follow-up. (Passed over: they are direct defects in the closing
+        slice just built and take ~40 lines total to align.)
       </div>
     </li>
   </ol>
