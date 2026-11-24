@@ -191,8 +191,8 @@ class ObservationSelection(Mapping[str, np.ndarray]):
         return counts
 
     @cached_property
-    def spans(self) -> "NativeRows":
-        return native_rows(self.batch, self.space, bucketed=False, objects=False)
+    def spans(self) -> "ObservationSpans":
+        return observation_spans(self.batch, self.space, bucketed=False, objects=False)
 
     def __iter__(self) -> Iterator[str]:
         return (
@@ -292,7 +292,7 @@ class ObservationSelection(Mapping[str, np.ndarray]):
 
 
 @dataclass(frozen=True)
-class NativeRows:
+class ObservationSpans:
     fact_divisors: np.ndarray
     tables: dict[str, RowSpans]
     capacities: dict[str, int]
@@ -323,14 +323,14 @@ class NativeRows:
         ).astype(np.int32 if key == "action_focus" else np.float32, copy=False)
 
 
-def native_rows(
+def observation_spans(
     batch: managym.ObservationBatch | ObservationSelection,
     space: ObservationSpace,
     *,
     bucketed: bool,
     objects: bool,
     minimum_needs: np.ndarray | None = None,
-) -> NativeRows:
+) -> ObservationSpans:
     """Bind a native batch to the exact model layout before trusting any join."""
     memory = None
     if type(batch) is ObservationSelection:
@@ -379,4 +379,4 @@ def native_rows(
         for axis, fields in space.axis_buffers.items():
             for key, _ in fields:
                 capacities[key] = buckets.sizes[axis]
-    return NativeRows(schema.fact_divisors, tables, capacities, buckets, needs, memory)
+    return ObservationSpans(schema.fact_divisors, tables, capacities, buckets, needs, memory)

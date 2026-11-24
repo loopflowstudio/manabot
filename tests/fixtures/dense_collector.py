@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from manabot.policy.native_rows import ObservationSelection
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.collection import (
     Collector,
     ObservationRows,

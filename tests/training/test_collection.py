@@ -15,8 +15,8 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.profiler import Profiler
-from manabot.policy.native_rows import ObservationSelection
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.collection import (
     Collector,
     ObservationRows,

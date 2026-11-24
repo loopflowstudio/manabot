@@ -68,7 +68,6 @@ from manabot.env.shared_effects import (
 )
 from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
-from manabot.policy.native_rows import NativeRows, full_word
 from manabot.policy.readings import (
     DURATION_FLAGS,
     PROGRAM_KINDS,
@@ -80,6 +79,7 @@ from manabot.policy.readings import (
     read_numeric,
     reading_plan,
 )
+from manabot.policy.spans import ObservationSpans, full_word
 
 Array = np.ndarray
 
@@ -620,7 +620,7 @@ def read_object_numeric(values: Array, readings: Sequence[ColumnReading]) -> Arr
 
 
 def prepare(
-    obs: ObservationBuffers | BucketedObservation | NativeRows,
+    obs: ObservationBuffers | BucketedObservation | ObservationSpans,
     tables: Tables,
     *,
     inference: bool = False,
@@ -643,8 +643,8 @@ def prepare(
     """
     action_capacity = None
     bucket_needs = object_remap = None
-    native = obs if isinstance(obs, NativeRows) else None
-    if isinstance(obs, NativeRows):
+    native = obs if isinstance(obs, ObservationSpans) else None
+    if isinstance(obs, ObservationSpans):
         if obs.buckets is not None:
             bucketed = True
             bucket_needs = obs.needs
@@ -972,7 +972,7 @@ def _referenced_definitions(
     *,
     history: bool,
     memory: MemoryRows[Array] | None,
-    native: NativeRows | None = None,
+    native: ObservationSpans | None = None,
 ) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
     references = [
@@ -1017,7 +1017,7 @@ def _facts(
     objects: int,
     object_remap: Array | None = None,
     *,
-    native: NativeRows | None = None,
+    native: ObservationSpans | None = None,
 ) -> FactRoutes[Array]:
     """Route live fact rows; `valid` places them in their padded slots.
 
@@ -1144,7 +1144,7 @@ def _effects(
     objects: int,
     object_remap: Array | None = None,
     *,
-    native: NativeRows | None = None,
+    native: ObservationSpans | None = None,
 ) -> EffectRoutes[Array] | None:
     if native is None:
         headers = obs["effects"]

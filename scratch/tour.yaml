@@ -18,7 +18,7 @@ first:
     why: Freeze and gather immutable live spans
   - path: managym/src/python/vector_env_bindings.rs
     why: Registered slot observations and step outcomes
-  - path: manabot/policy/native_rows.py
+  - path: manabot/policy/spans.py
     why: Select native coordinates and bind logical readings
   - path: manabot/training/rollout/collection.py
     why: Retain decisions and freeze contributing viewers

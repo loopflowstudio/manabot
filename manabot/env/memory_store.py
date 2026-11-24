@@ -353,7 +353,7 @@ class CompactObservation(PrefixObservation):
 def select_rows(
     rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
 ) -> Mapping[str, np.ndarray]:
-    from manabot.policy.native_rows import ObservationSelection
+    from manabot.policy.spans import ObservationSelection
 
     if type(rows) is ObservationSelection:
         return rows.select(indexes)
@@ -510,7 +510,7 @@ class MemoryStore:
         The seed is checked independently so an identity change within a native
         generation still fails rather than reusing an unrelated issued prefix.
         """
-        from manabot.policy.native_rows import ObservationSelection
+        from manabot.policy.spans import ObservationSelection
 
         native = type(buffers) is ObservationSelection
         count = len(seeds)
@@ -644,7 +644,7 @@ class MemoryStore:
         cursor = tail.cursor if tail else MemoryCursor()
         starts = (cursor.records, cursor.details, cursor.references, cursor.members)
         if native_index is not None:
-            from manabot.policy.native_rows import ObservationSelection
+            from manabot.policy.spans import ObservationSelection
 
             assert isinstance(buffers, ObservationSelection)
             rows = buffers.live_memory(native_index, starts)

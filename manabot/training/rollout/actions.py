@@ -12,7 +12,7 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import NDArray
 
-from manabot.policy.native_rows import ObservationSelection
+from manabot.policy.spans import ObservationSelection
 
 
 class ActionValidator(Protocol):

@@ -53,7 +53,6 @@ from manabot.policy.buckets import (
     object_trimming,
 )
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.native_rows import NativeRows, ObservationSelection, native_rows
 from manabot.policy.prepare import (
     Packed,
     Prepared,
@@ -62,6 +61,11 @@ from manabot.policy.prepare import (
 )
 from manabot.policy.protocol import InferenceResult, Precision
 from manabot.policy.readings import Readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
 import managym
 
 # -- building blocks -----------------------------------------------------------------
@@ -618,7 +622,7 @@ class MLXActorCritic(nn.Module):
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = native_rows(
+            rows = observation_spans(
                 obs,
                 space,
                 bucketed=self.bucketed_shapes,
@@ -635,7 +639,7 @@ class MLXActorCritic(nn.Module):
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | NativeRows,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
         inference: bool,
     ) -> Prepared[np.ndarray]:
         return prepare(
@@ -653,7 +657,7 @@ class MLXActorCritic(nn.Module):
 
     def _admit_observation(
         self, obs: PolicyObservation
-    ) -> BucketedObservation | NativeRows | None:
+    ) -> BucketedObservation | ObservationSpans | None:
         spec = admission.Spec(self.config, self._static.space, self._static.tables, 0)
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
             return admission.admit_native(obs, spec, bucketed=self.bucketed_shapes)

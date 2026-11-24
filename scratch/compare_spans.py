@@ -17,7 +17,7 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
-from manabot.policy.native_rows import native_rows
+from manabot.policy.spans import observation_spans
 from manabot.training.loops.self_play import root_match
 import managym
 from scratch.bench_tla import frontier_v11
@@ -114,7 +114,7 @@ def compare() -> None:
             ("truncated", truncated),
         ):
             np.testing.assert_array_equal(buffers[key], rows)
-        rows = native_rows(batch, space, bucketed=False, objects=False)
+        rows = observation_spans(batch, space, bucketed=False, objects=False)
         for key, expected in observations.items():
             np.testing.assert_array_equal(rows.dense(key), expected, err_msg=key)
         results["bytes"].append(

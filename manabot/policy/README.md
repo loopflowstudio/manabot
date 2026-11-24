@@ -26,7 +26,7 @@ the full action width.
   `admit` on the host and prepare the views it validated.
   Malformed input raises `ValueError` naming the check; nothing is truncated
   or repaired.
-- `native_rows.py` reads immutable packed values and offsets for the native
+- `spans.py` reads immutable packed values and offsets for the native
   batch. Admission binds the batch layout and checks checkpoint vocabularies.
   Preparation uses the offsets for slot coordinates and restores the model's
   padding where its arithmetic depends on shape. A copied or read-only

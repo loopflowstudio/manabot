@@ -623,7 +623,7 @@ def test_mlx_seeded_diagnostics_restore_outer_random_stream(exceptional: bool) -
     assert mx.random.uniform().item() == expected
 
 
-def test_mlx_prepares_native_rows_at_checkpoint_shape() -> None:
+def test_mlx_prepares_observation_spans_at_checkpoint_shape() -> None:
     space = ObservationSpace()
     source = ActorCritic(
         space,

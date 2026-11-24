@@ -58,8 +58,8 @@ from manabot.env.observation import (
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.buckets import AXES
-from manabot.policy.native_rows import BatchRow, ObservationSelection
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import BatchRow, ObservationSelection
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,

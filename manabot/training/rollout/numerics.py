@@ -14,9 +14,9 @@ import numpy as np
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
-from manabot.policy.native_rows import ObservationSelection
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.actions import ActionValidator
 
 

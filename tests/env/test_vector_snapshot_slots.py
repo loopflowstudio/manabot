@@ -17,7 +17,7 @@ from manabot.env.observation import (
     step_buffers,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.policy.native_rows import native_rows
+from manabot.policy.spans import observation_spans
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import SlotInstall, replay_snapshot
@@ -654,7 +654,7 @@ def test_isolated_csr_capacity_failure_preserves_sibling_and_masked_rows() -> No
     assert rows[0] == previous[0] and rows[2] == previous[2]
     selected = [1, 2, 1]
     batch = rows[0][0].gather([rows[i] for i in selected])
-    spans = native_rows(batch, space, bucketed=False, objects=False)
+    spans = observation_spans(batch, space, bucketed=False, objects=False)
     for key in space.shapes:
         np.testing.assert_array_equal(
             spans.dense(key), dense[key][selected], err_msg=key

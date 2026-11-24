@@ -57,10 +57,14 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.native_rows import NativeRows, ObservationSelection, native_rows
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    observation_spans,
+)
 import managym
 
 if TYPE_CHECKING:
@@ -533,7 +537,7 @@ class ActorCritic(nn.Module):
 
     def _admit_observation(
         self, obs: PolicyObservation
-    ) -> tuple[BucketedObservation | NativeRows | None, Tables]:
+    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
         spec = self._admission_spec()
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
             return admission.admit_native(
@@ -570,7 +574,7 @@ class ActorCritic(nn.Module):
         autograd mode; bucketed batches always use the full catalog schedule.
         """
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = native_rows(
+            rows = observation_spans(
                 obs,
                 self.observation_space,
                 bucketed=self.bucketed_shapes,
@@ -593,7 +597,7 @@ class ActorCritic(nn.Module):
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | NativeRows,
+        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
         tables: Tables,
         inference: bool,
         memory_roots: Mapping[str, int] | None,

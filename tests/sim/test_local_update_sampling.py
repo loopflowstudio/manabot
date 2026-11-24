@@ -15,8 +15,8 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
-from manabot.policy.native_rows import native_rows
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import observation_spans
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.local_update import LocalUpdatePlayer, LocalUpdateTeacher
 from manabot.sim.search.local_update_receipt import (
@@ -517,7 +517,7 @@ def test_batch_inputs_match_python_at_selected_capacities(
         actual: managym.ObservationBatch, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
         assert type(actual) is managym.ObservationBatch
-        decoded = native_rows(actual, teacher.space, bucketed=False, objects=False)
+        decoded = observation_spans(actual, teacher.space, bucketed=False, objects=False)
         for key, tensor in tensors.items():
             np.testing.assert_array_equal(
                 decoded.dense(key), tensor.numpy(), err_msg=key

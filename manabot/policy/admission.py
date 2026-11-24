@@ -70,12 +70,6 @@ from manabot.policy.decision_memory import (
     validate_memory_vocabulary,
     validate_retained_memory,
 )
-from manabot.policy.native_rows import (
-    NativeRows,
-    ObservationSelection,
-    full_word,
-    native_rows,
-)
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     OBJECT_KEYS,
@@ -86,6 +80,12 @@ from manabot.policy.prepare import (
     record_word,
 )
 from manabot.policy.readings import PROGRAM_KINDS, Readings
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    full_word,
+    observation_spans,
+)
 import managym
 
 # Native columns these checks read, by name.
@@ -302,9 +302,9 @@ def admit_native(
     spec: Spec,
     *,
     bucketed: bool,
-) -> NativeRows:
+) -> ObservationSpans:
     """The encoder owns row boundaries and native joins. Admit model-dependent lookups."""
-    rows = native_rows(
+    rows = observation_spans(
         batch, spec.space, bucketed=bucketed, objects=object_trimming(spec.model)
     )
     if rows.memory is not None:

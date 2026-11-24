@@ -24,7 +24,7 @@ from manabot.backends.mlx.arrays import all_finite
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
-from manabot.policy.native_rows import ObservationSelection
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.continuation import (

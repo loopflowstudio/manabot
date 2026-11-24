@@ -25,8 +25,8 @@ from managym.decision_memory import (
 if TYPE_CHECKING:
     from manabot.env.memory_store import PrefixObservation, RecordNode, Tail
     from manabot.env.observation import ObservationBuffers
-    from manabot.policy.native_rows import NativeRows
     from manabot.policy.prepare import Packed, Tables
+    from manabot.policy.spans import ObservationSpans
 
 
 def _span(array: str, first: str, last: str) -> slice:
@@ -599,7 +599,7 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
 
 def retained_memory(obs: object) -> "PrefixObservation | None":
     from manabot.env.memory_store import PrefixObservation
-    from manabot.policy.native_rows import ObservationSelection
+    from manabot.policy.spans import ObservationSelection
 
     if type(obs) is ObservationSelection:
         return obs.memory
@@ -1031,7 +1031,7 @@ def prepare_memory(
     *,
     fold: bool = False,
     roots: Mapping[str, int] | None = None,
-    native: "NativeRows | None" = None,
+    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
     retained = retained_memory(obs)
     return (
@@ -1046,10 +1046,10 @@ def prepare_memory(
 
 
 def _prepare_memory_rows(
-    obs: "ObservationBuffers", tables: "Tables", *, native: "NativeRows | None" = None
+    obs: "ObservationBuffers", tables: "Tables", *, native: "ObservationSpans | None" = None
 ) -> MemoryRows[np.ndarray] | None:
-    from manabot.policy.native_rows import full_word
     from manabot.policy.prepare import pack, record_word
+    from manabot.policy.spans import full_word
 
     if native is None:
         if _RECORDS not in obs:
