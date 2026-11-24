@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 from etude.checkpoints import CheckpointRecord
-from etude.eval.records import Aligned, Fraction
+from etude.eval.records import Aligned, CheckpointPlayer, Fraction, checkpoint_player
 from etude.jobs import EvalJob, ExperimentState, TrainingJob, TrainingRunSummary
 from etude.report import Curve, Matches, Report, Score
 from etude.spec import Variable
@@ -40,6 +40,10 @@ HALF_TRAINING = "tla-trophies-colab-half-training-32"
 HALF_TRAINING_SEATINGS = tuple(f"Colab half-training deal {i + 1}" for i in range(32))
 LARGE_VS_SMALL = "tla-trophies-colab-w160l8-vs-w64-32"
 LARGE_VS_SMALL_SEATINGS = tuple(f"Colab w160l8 vs w64 deal {i + 1}" for i in range(32))
+LARGE_VS_SMALL_EQUAL_TIME = "tla-trophies-colab-w160l8-vs-w64-equal-time-32"
+LARGE_VS_SMALL_EQUAL_TIME_SEATINGS = tuple(
+    f"Colab w160l8 vs w64 equal-time deal {i + 1}" for i in range(32)
+)
 
 
 class Config(trophies.Config):
@@ -131,7 +135,32 @@ def training_jobs(
     ]
 
 
-def size_evaluations(runs: Sequence[TrainingRunSummary], size: SizeLabel) -> list[EvalJob]:
+def equal_time_partner(
+    target_seconds: float,
+    small_checkpoints: Sequence[CheckpointRecord],
+    small_ended: bool,
+) -> CheckpointRecord | None:
+    """Nearest trained w64 checkpoint in `training_seconds`, fixed once w64 passes `target_seconds`."""
+    timed = [
+        (c.at["training_seconds"], c)
+        for c in small_checkpoints
+        if "training_seconds" in c.at and c.at.get("updates", 0) > 0
+    ]
+    if not timed:
+        return None
+    if not small_ended and all(seconds < target_seconds for seconds, _ in timed):
+        return None
+    _, partner = min(
+        timed, key=lambda item: (abs(item[0] - target_seconds), item[0])
+    )
+    return partner
+
+
+def size_evaluations(
+    runs: Sequence[TrainingRunSummary],
+    size: SizeLabel,
+    small_runs: Sequence[TrainingRunSummary] = (),
+) -> list[EvalJob]:
     held_out = trophies.held_out_jobs(runs)
     if not held_out:
         return []
@@ -143,7 +172,7 @@ def size_evaluations(runs: Sequence[TrainingRunSummary], size: SizeLabel) -> lis
         name: str,
         checkpoints: Sequence[CheckpointRecord],
         seating_names: tuple[str, ...] | None = None,
-        opponent: Fraction | Aligned | None = None,
+        opponent: Fraction | Aligned | CheckpointPlayer | None = None,
     ) -> EvalJob:
         names = seating_names or tuple(s.name for s in benchmark.seatings)
         seatings = tuple(
@@ -192,15 +221,38 @@ def size_evaluations(runs: Sequence[TrainingRunSummary], size: SizeLabel) -> lis
                     Aligned(clock="updates", job="w64"),
                 )
             )
+            small_checkpoints = [
+                c for run in small_runs for c in run.checkpoints
+            ]
+            small_ended = bool(small_runs) and all(run.ended for run in small_runs)
+            for large_ckpt in trained:
+                seconds = large_ckpt.at.get("training_seconds")
+                if seconds is None:
+                    continue
+                partner = equal_time_partner(seconds, small_checkpoints, small_ended)
+                if partner is None:
+                    continue
+                update = int(large_ckpt.at["updates"])
+                jobs.append(
+                    against(
+                        f"{LARGE_VS_SMALL_EQUAL_TIME}-u{update}",
+                        (large_ckpt,),
+                        LARGE_VS_SMALL_EQUAL_TIME_SEATINGS,
+                        checkpoint_player(partner.ref),
+                    )
+                )
     return jobs
 
 
 def eval_jobs(state: ExperimentState) -> list[EvalJob]:
+    small_runs = [run for run in state.runs if run.launch == "w64"]
     return [
         job
         for size in SIZES
         for job in size_evaluations(
-            [run for run in state.runs if run.launch == size], size
+            [run for run in state.runs if run.launch == size],
+            size,
+            small_runs=small_runs,
         )
     ]
 
@@ -214,7 +266,11 @@ def report() -> Report:
             Curve(title="Score against the heuristic", matches=held_out),
             head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
             head_to_head(
-                "Large (w160l8) against Small (w64) at the same update",
+                "Large (w160l8) against Small (w64) at equal training time",
+                LARGE_VS_SMALL_EQUAL_TIME_SEATINGS,
+            ),
+            head_to_head(
+                "Large (w160l8) against Small (w64) at equal updates",
                 LARGE_VS_SMALL_SEATINGS,
             ),
             *behaviour_curves(matches=held_out),
