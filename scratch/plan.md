@@ -733,6 +733,23 @@ announcement, retarget and resolution. Making the bound a generic
 `EffectValue` on `TargetRequirement` needs a frameless evaluator for target
 legality; see `scratch/questions.md`.
 
+**Paid characteristics on the stack.** The Frigate's station ability and
+Ayli's life-gain ability now use the same receipt lookup for current or last
+known characteristics. Station declares its payment dependency, so the
+pending stack amount reaches both viewers through the same projection as
+Ayli's. Keep the released station value and its nonnegative power rule.
+
+Before the fix, both Frigate fixtures observed `None` on the stack. Four
+focused debug fixtures now pass: the two `lumen_class_frigate_stations_for`
+cases, Ayli's sacrificed toughness, and the station receipt/token check.
+Manual and automatic payment offered the same three creatures. Their pending
+amounts and resolved counter counts were 2, 3 and 0. A Giant boosted from
+3 to 5 after paying and then moved to the graveyard gave 5 to both viewers
+and added five counters. With the rebuilt CPython 3.13 extension,
+`test_pending_station_amount_reaches_policy_text_and_academy` passed: a
+chosen Giant gives 3 in the public label and 0.3 in both packed v11 rows.
+The remaining measurement belongs to the Engine Budget and stress-state pass.
+
 ## Remaining shared work
 
 - **Pinned-pilot serialized compatibility (resolved — keep intact):**
@@ -741,10 +758,7 @@ legality; see `scratch/questions.md`.
   target clause can express its complete bound, including announcement,
   retarget and resolution reads. The special case still sits in
   `flow/resolution.rs::target_meets_requirement`, and the stack projection
-  recognizes it by variant. Source power and power tapped to pay share
-  `permanent_power_or_lki`; `EffectValue::PowerTappedToPay` is now the
-  clamped sum of power over `ObjectSelector::Paid(How::Tapped)` and can
-  become a property query once the clamp has a home. Triggering power and target toughness use the
+  recognizes it by variant. Triggering power and target toughness use the
   battlefield slot and its departure record. Preserve the Combustion Man,
   Panda and Sandbender controls and existing learning-token meanings.
 - Keep occurrence and amount queries with their event, turn, game or

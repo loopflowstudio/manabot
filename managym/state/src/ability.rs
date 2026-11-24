@@ -2230,8 +2230,8 @@ impl Effect {
     }
 
     /// The first amount in this program read from the objects that paid its
-    /// cost ("the sacrificed creature's toughness"), which a pending ability
-    /// publishes because those objects have left (CR 608.2h).
+    /// cost. A pending ability publishes the current value, using last known
+    /// information for a payer that has left the battlefield (CR 608.2h).
     pub fn paid_cost_amount(&self) -> Option<EffectValue> {
         if let Some(amount) = self.amount().filter(|a| a.reads(ContextRead::PaidCost)) {
             return Some(amount.clone());
@@ -2793,6 +2793,7 @@ impl EffectValue {
                 read == ContextRead::SourceLki
             }
             Self::SourcePower => read == ContextRead::SourcePower,
+            Self::PowerTappedToPay => read == ContextRead::PaidCost,
             Self::TriggeringPower | Self::TriggeringManaValue => {
                 read == ContextRead::TriggeringObject
             }

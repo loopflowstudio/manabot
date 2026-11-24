@@ -24,6 +24,7 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.policy.spans import batch_layout
 from manabot.semantic.text_observation import (
     _OBLIGATIONS,
     RepresentationOverflow,
@@ -2171,6 +2172,23 @@ def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
         )
         submit_response(env, decision, action.reference)
     pytest.fail("Drake Hatcher did not deal combat damage")
+
+
+def test_pending_station_amount_reaches_policy_text_and_academy() -> None:
+    env = priority_root((), ("Lumen-Class Frigate", "Hill Giant", "Gray Ogre"))
+    _choose(env, "Activate ability")
+    _choose(env, "Tap Hill Giant to station")
+    views = [env.observation_for_player(viewer) for viewer in (0, 1)]
+    batch = managym.encode_observation_batch(views, ObservationSpace().layout)
+    _, _, data = batch.tables()["stack"]
+    stack = np.frombuffer(data, batch_layout(batch.layout).records["stack"].dtype)
+    np.testing.assert_allclose(stack["paid_amount"], [0.3, 0.3])
+    for viewer, obs in enumerate(views):
+        (ability,) = obs.stack_objects
+        assert ability.paid_amount == 3
+        (entry,) = decision_surface_view(env, viewer)["stack_objects"]
+        assert "paid its cost: 3" in entry["label"]
+    assert "paid its cost: 3" in capture_text_decision(env, history_capacity=0).text
 
 
 def test_bakersbane_duo_spell_spend_is_public_to_both_viewers() -> None:

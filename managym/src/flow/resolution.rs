@@ -107,6 +107,12 @@ impl Game {
     /// Resolve a quantity against the frame's targets, payments and instruction results.
     pub(crate) fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         let controller = frame.controller;
+        let paid_properties = |how, property| {
+            frame
+                .spent
+                .paid_as(how)
+                .filter_map(move |object| self.object_property_or_lki(object, property))
+        };
         match value {
             EffectValue::Property {
                 of,
@@ -121,12 +127,7 @@ impl Game {
                 ObjectSelector::Target(_) => {
                     self.target_property(frame.primary_target(), *property)
                 }
-                ObjectSelector::Paid(how) => aggregate.evaluate(
-                    frame
-                        .spent
-                        .paid_as(*how)
-                        .filter_map(|paid| self.object_property_or_lki(paid, *property)),
-                ),
+                ObjectSelector::Paid(how) => aggregate.evaluate(paid_properties(*how, *property)),
                 _ => aggregate.evaluate(
                     self.selected_permanents(of, frame)
                         .into_iter()
@@ -210,10 +211,7 @@ impl Game {
             EffectValue::TriggeringAmount => frame.triggering_amount,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::LifeLostThisWay => frame.life_lost,
-            EffectValue::PowerTappedToPay => frame
-                .spent
-                .paid_as(How::Tapped)
-                .filter_map(|paid| self.permanent_power_or_lki(paid))
+            EffectValue::PowerTappedToPay => paid_properties(How::Tapped, ObjectProperty::Power)
                 .map(|power| power.max(0))
                 .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),

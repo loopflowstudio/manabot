@@ -492,7 +492,10 @@ cast. Crew and saddle are the same
 (`ActivatedAbilityDefinition.station`) is a one-creature `Tap` component
 toward `Station` that never offers the source; an activated ability's
 resolving frame carries its receipt, and the station effect reads the tapped
-creature's power from it (`EffectValue::PowerTappedToPay`). A Spacecraft's
+creature's power from it (`EffectValue::PowerTappedToPay`). While the ability
+is on the stack, both viewers see the amount used by the counter instruction
+before replacements. It follows the tapped creature's power, down to zero,
+and uses its last known power if it leaves the battlefield. A Spacecraft's
 "N+" lines are static abilities conditioned on its charge counters.
 The automatic payer pays only the mana component, and pays it with mana:
 which creatures crew, saddle or station, every other object a cost takes, and

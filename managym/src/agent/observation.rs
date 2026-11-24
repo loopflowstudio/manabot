@@ -469,7 +469,7 @@ pub struct StackObjectData {
     /// Effective power read by a pending source-power damage instruction.
     pub source_power: Option<i32>,
     /// The amount a pending activation reads from the objects that paid its
-    /// cost, from their last known information (Ayli's sacrificed toughness).
+    /// cost, using live characteristics or their last known information.
     pub paid_amount: Option<i32>,
     pub mana_spent: u16,
     pub ability_resolutions: u32,

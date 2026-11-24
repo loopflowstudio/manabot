@@ -1,15 +1,16 @@
 //! Tests for cards filed in `src/eoe.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_unfunded_setup, move_card, set_counters},
+    game::{five_color_unfunded_setup, move_card, set_counters, until_end_of_turn},
     inspect::{card_of, counters_of, has_action, offered_cards, tapped, top_activation},
     play::{activate, fork_selecting, select_card, settle},
 };
 use managym::{
-    agent::action::Action,
+    agent::{action::Action, observation::Observation},
     flow::turn::StepKind,
     state::{
         card::Keyword,
+        effect::Modification,
         game_object::PlayerId,
         payment::{How, Toward},
         permanent::CounterKind,
@@ -35,6 +36,7 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
         let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
         let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
         let wall = s.force_permanent_on_battlefield(0, "Wall of Stone");
+        until_end_of_turn(&mut s, wall, Modification::pump(-1, 0));
         if auto {
             s.game_mut().mana_payment[0] = ManaPayment::Auto;
         }
@@ -75,6 +77,10 @@ fn lumen_class_frigate_stations_for_the_tapped_creatures_power() {
                     .collect::<Vec<_>>(),
                 [chosen]
             );
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let obs = Observation::for_player(fork.game(), viewer);
+                assert_eq!(obs.stack_objects[0].paid_amount, Some(power));
+            }
             let context = fork.game().decision_context(PlayerId(0)).unwrap();
             assert!(
                 context
@@ -114,9 +120,15 @@ fn lumen_class_frigate_stations_for_a_departed_creatures_last_known_power() {
     if s.game().state.stack_objects.is_empty() {
         select_card(&mut s, giant_object);
     }
+    // The tap identifies the creature. Its power can still change in response.
+    until_end_of_turn(&mut s, giant, Modification::pump(2, 0));
     move_card(&mut s, giant_object, ZoneType::Graveyard);
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        assert_eq!(obs.stack_objects[0].paid_amount, Some(5));
+    }
     settle(&mut s);
-    assert_eq!(counters_of(&s, frigate, CounterKind::Charge), 3);
+    assert_eq!(counters_of(&s, frigate, CounterKind::Charge), 5);
 }
 
 /// The printed levels read the charge counters: other creatures get +1/+1 at

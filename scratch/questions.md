@@ -139,3 +139,8 @@ legality to evaluate values without a resolution frame, and only
 source-relative values would be readable there. I took the simpler option of
 keeping one reader for three cards, and I'd revisit when a second dynamic
 target bound appears.
+
+Lumen-Class Frigate already encodes its station amount as
+`EffectValue::PowerTappedToPay` in released definitions. I kept that token
+and its nonnegative contribution per tapped creature. The existing receipt
+and stack amount field hold everything the pending ability needs.
