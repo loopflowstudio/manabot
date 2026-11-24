@@ -14,8 +14,8 @@ use managym::{
 use crate::support::game::move_card;
 use crate::support::{
     game::*,
-    inspect::{card_of, find_owned_card_off_battlefield, permanent},
-    play::{activate_first, pass_until, select_card},
+    inspect::{card_of, find_owned_card_off_battlefield, offer_labels, permanent},
+    play::{activate_first, command, pass_until, select_card},
 };
 
 /// CR 702.9 — Creatures with flying can't be blocked except by flying/reach creatures.
@@ -295,8 +295,20 @@ fn cr_702_trample_excess_hits_player() {
     s.declare_block();
 
     let life_before = s.life(1);
-    s.advance_to_active_step(0, StepKind::CombatDamage);
+    assign_lethal_then_rest_to_player(&mut s, "1 to Llanowar Elves, 2 to defending player");
     assert_eq!(s.life(1), life_before - 2);
+}
+
+/// Assigns the attacker's lethal 1 to its blocker and the rest to the
+/// defending player. A combat assignment's mode is the blocker's amount.
+fn assign_lethal_then_rest_to_player(s: &mut Scenario, label: &str) {
+    pass_until(s, ActionSpaceKind::Modal);
+    let labels = offer_labels(s);
+    assert!(labels[0].contains(label), "{labels:?}");
+    command(s, |action| {
+        matches!(action, Action::ChooseMode { mode: 1, .. })
+    });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
 }
 
 /// Negative: without trample, excess damage isn't dealt to defending player.
@@ -346,8 +358,9 @@ fn cr_702_trample_with_deathtouch_assigns_one_lethal() {
     s.declare_block();
 
     let life_before = s.life(1);
-    s.advance_to_active_step(0, StepKind::CombatDamage);
+    assign_lethal_then_rest_to_player(&mut s, "1 to Gray Ogre, 2 to defending player");
     assert_eq!(s.life(1), life_before - 2);
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
 }
 
 /// CR 702.2 — Any nonzero deathtouch damage is lethal to a creature.
@@ -613,9 +626,18 @@ fn cr_702_regression_multi_blocker_damage_is_split_not_duplicated() {
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
     s.declare_block();
     s.declare_block();
-    s.advance_to_active_step(0, StepKind::CombatDamage);
-    s.pass_priority();
-    s.pass_priority();
+    // The attacker assigns its 2 damage among the blockers in declaration
+    // order; all 2 to the first leaves nothing for the second.
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let labels = offer_labels(&s);
+    assert!(
+        labels.iter().any(|label| label.contains("2 to Gray Ogre")),
+        "{labels:?}"
+    );
+    command(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 2, .. })
+    });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
 
     let surviving_ogres = s.battlefield_permanents_named(1, "Gray Ogre").len();
     assert_eq!(surviving_ogres, 1);
