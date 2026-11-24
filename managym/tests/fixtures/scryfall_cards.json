@@ -9150,5 +9150,53 @@
     "colors": [
       "G"
     ]
+  },
+  "Sower of Chaos": {
+    "name": "Sower of Chaos",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Devil",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{2}{R}: Target creature can't block this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Vampire Interloper": {
+    "name": "Vampire Interloper",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire Scout",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nThis creature can't block.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Stromkirk Noble": {
+    "name": "Stromkirk Noble",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Vampire Noble",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "This creature can't be blocked by Humans.\nWhenever this creature deals combat damage to a player, put a +1/+1 counter on it.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Juggernaut": {
+    "name": "Juggernaut",
+    "mana_cost": "{4}",
+    "type_line": "Artifact Creature — Juggernaut",
+    "power": "5",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.",
+    "colors": []
   }
 }

@@ -1670,3 +1670,30 @@ fn foundations_5f_sanguine_syphoner() {
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     assert_eq!((s.life(0), s.life(1)), (21, 18));
 }
+
+/// "{2}{R}: Target creature can't block this turn": the targeted creature
+/// is not asked to block this turn and blocks again the next.
+#[test]
+fn foundations_5f_sower_of_chaos() {
+    use crate::support::game::clear_summoning_sickness;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Sower of Chaos", "Gray Ogre"]);
+    let sower = s.force_permanent_on_battlefield(0, "Sower of Chaos");
+    clear_summoning_sickness(&mut s, sower);
+    let stopped = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let mut next_turn = s.clone();
+    s.set_player_mana_pool(0, "2R");
+    activate(&mut s, sower, 0);
+    assert!(s.choose_target(Target::Permanent(stopped)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, sower);
+    let blocks = crate::walk_block_declaration(&mut s);
+    assert_eq!(blocks, [(other, vec![sower])]);
+    next_turn.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut next_turn, sower);
+    let blocks = crate::walk_block_declaration(&mut next_turn);
+    assert_eq!(blocks.len(), 2, "{blocks:?}");
+}

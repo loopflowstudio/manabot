@@ -12,6 +12,7 @@ use crate::{
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
         game_object::{PermanentId, PlayerId},
+        predicate::CardPredicate,
     },
 };
 
@@ -41,6 +42,13 @@ impl Game {
         attack: bool,
     ) -> Result<(), AgentError> {
         if !attack {
+            if self.permanent_can_attack(permanent_id)
+                && self.has_restriction(permanent_id, Restriction::AttacksEachCombat)
+            {
+                return Err(AgentError(
+                    "creature attacks each combat if able".to_string(),
+                ));
+            }
             return Ok(());
         }
 
@@ -341,17 +349,33 @@ impl Game {
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
         let mut out = Vec::new();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                continue;
-            };
-            if !permanent.tapped
-                && self.characteristics(permanent_id).is_creature()
-                && self.combat_condition_met(permanent_id)
-            {
+            if self.can_block(permanent_id) {
                 out.push(permanent_id);
             }
         }
         out
+    }
+
+    /// Whether the permanent may be declared as a blocker at all (CR
+    /// 509.1a-b): an untapped creature that no prohibition keeps from
+    /// blocking every attacker. Pairwise restrictions are
+    /// [`Self::blocker_can_block_attacker`]'s.
+    fn can_block(&self, id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
+            return false;
+        };
+        let view = self.characteristics(id);
+        !permanent.tapped
+            && view.is_creature()
+            && self.combat_condition_met(id)
+            && !self.cant_block(id)
+            && !view.static_abilities.iter().any(|ability| {
+                matches!(
+                    ability,
+                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
+                        if *predicate == CardPredicate::default()
+                )
+            })
     }
 
     pub(crate) fn blocker_can_block_attacker(
@@ -359,22 +383,14 @@ impl Game {
         blocker_id: PermanentId,
         attacker_id: PermanentId,
     ) -> bool {
-        let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
-            return false;
-        };
         let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
             return false;
         };
-        let blocker_view = self.characteristics(blocker_id);
-        let attacker_view = self.characteristics(attacker_id);
-
-        if blocker.tapped
-            || !blocker_view.is_creature()
-            || !self.combat_condition_met(blocker_id)
-            || self.cant_block(blocker_id)
-        {
+        if !self.can_block(blocker_id) {
             return false;
         }
+        let blocker_view = self.characteristics(blocker_id);
+        let attacker_view = self.characteristics(attacker_id);
 
         if blocker_view.static_abilities.iter().any(|ability| {
             matches!(

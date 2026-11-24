@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        sower_of_chaos(),
         ambush_wolf(),
         beast_kin_ranger(),
         bigfin_bouncer(),
@@ -1472,6 +1473,33 @@ fn sanguine_syphoner() -> CardDefinition {
                 effects: vec![Effect::DrainLife {
                     amount: EffectValue::Fixed(1),
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sower_of_chaos() -> CardDefinition {
+    let text_box = "{2}{R}: Target creature can't block this turn.";
+    CardDefinition {
+        key: "fdn.sower_of_chaos",
+        scryfall_id: "7ff50606-491c-4946-8d03-719b01cfad77",
+        printed: PrintedCharacteristics {
+            name: "Sower of Chaos".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Devil".into()],
+            power: Some(4),
+            toughness: Some(3),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}{R}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::CantBlock,
+                )],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

@@ -472,6 +472,9 @@ pub enum Restriction {
     DoesntUntap,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// "Attacks each combat if able" (CR 508.1d): a requirement on the
+    /// attack declaration, obeyed whenever the creature can attack.
+    AttacksEachCombat,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]

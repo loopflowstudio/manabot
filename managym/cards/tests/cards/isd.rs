@@ -44,3 +44,52 @@ fn diregraf_ghoul_enters_tapped() {
         assert!(s.game().state.stack_objects.is_empty());
     }
 }
+
+/// "This creature can't be blocked by Humans", and a combat-damage counter:
+/// a Human blocker is offered no block against it while another creature
+/// is; it grows only when its damage reaches the player.
+#[test]
+fn foundations_5f_stromkirk_noble() {
+    use crate::support::game::clear_summoning_sickness;
+    use crate::support::inspect::counters;
+    use crate::support::play::attack_with;
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Stromkirk Noble", "Gray Ogre", "Glory Seeker"]);
+    let noble = s.force_permanent_on_battlefield(0, "Stromkirk Noble");
+    clear_summoning_sickness(&mut s, noble);
+    let human = s.force_permanent_on_battlefield(1, "Glory Seeker");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, noble);
+    let blocks = crate::walk_block_declaration(&mut s);
+    assert!(blocks.contains(&(human, vec![])), "{blocks:?}");
+    assert!(blocks.contains(&(ogre, vec![noble])), "{blocks:?}");
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 19);
+    assert_eq!(counters(&s, noble), 1);
+    assert_eq!(s.game().characteristics(noble).pt(), (2, 2));
+}
+
+/// "This creature can't block": an untapped Interloper is never asked to
+/// block, while its controller's other creature is.
+#[test]
+fn foundations_5f_vampire_interloper() {
+    use crate::support::game::clear_summoning_sickness;
+    use crate::support::play::attack_with;
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    let mut s = five_color_setup(&["Vampire Interloper", "Gray Ogre"]);
+    let interloper = s.force_permanent_on_battlefield(1, "Vampire Interloper");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, attacker);
+    assert!(s
+        .game()
+        .characteristics(interloper)
+        .keywords
+        .has(Keyword::Flying));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, attacker);
+    let blocks = crate::walk_block_declaration(&mut s);
+    assert_eq!(blocks, [(ogre, vec![attacker])]);
+}

@@ -2,8 +2,9 @@
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        ManaAbility, PrintedCharacteristics, ReplacementEffect,
+        ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, Restriction,
+        StaticAbility, StaticRestriction, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -12,6 +13,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        juggernaut(),
         unsummon(),
         giant_growth(),
         disenchant(),
@@ -537,6 +539,36 @@ fn unsummon() -> CardDefinition {
             spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
                 TargetSpec::Creature,
             ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn juggernaut() -> CardDefinition {
+    let text_box =
+        "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.";
+    CardDefinition {
+        key: "lea.juggernaut",
+        scryfall_id: "dcd6a291-5282-4f49-8203-d9b416083c48",
+        printed: PrintedCharacteristics {
+            name: "Juggernaut".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Juggernaut".into()],
+            power: Some(5),
+            toughness: Some(3),
+            statics: vec![
+                StaticAbility::Restriction(StaticRestriction {
+                    scope: StaticScope::This,
+                    kind: Restriction::AttacksEachCombat,
+                    unless: None,
+                }),
+                StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(
+                    CardPredicate::subtype("Wall"),
+                )),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

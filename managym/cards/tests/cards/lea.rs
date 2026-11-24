@@ -379,3 +379,54 @@ fn foundations_5e_unsummon() {
     settle(&mut s);
     assert!(hand(&s, 1).contains(&now(&s, card)));
 }
+
+/// "This creature attacks each combat if able" (CR 508.1d): a ready
+/// Juggernaut is offered no choice to stay home, while a tapped,
+/// summoning-sick or Pacified one is never asked. Walls are never offered
+/// as its blockers.
+#[test]
+fn foundations_5f_juggernaut() {
+    use crate::support::game::clear_summoning_sickness;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Juggernaut", "Gray Ogre", "Wall of Stone", "Pacifism"]);
+    let juggernaut = s.force_permanent_on_battlefield(0, "Juggernaut");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wall = s.force_permanent_on_battlefield(1, "Wall of Stone");
+    let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let mut sick = s.clone();
+    for id in [juggernaut, ogre] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    let mut tapped = s.clone();
+    tapped.game_mut().state.permanents[juggernaut]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let mut pacified = s.clone();
+    cast(&mut pacified, "Pacifism");
+    assert!(pacified.choose_target(Target::Permanent(juggernaut)));
+    spend_colorless(&mut pacified);
+    settle(&mut pacified);
+    for (name, branch) in [
+        ("sick", &mut sick),
+        ("tapped", &mut tapped),
+        ("pacified", &mut pacified),
+    ] {
+        branch.advance_to_active_step(0, StepKind::DeclareAttackers);
+        let asked = crate::walk_attack_declaration(branch, &[]);
+        assert!(
+            asked.iter().all(|(id, _)| *id != juggernaut),
+            "{name}: {asked:?}"
+        );
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let asked = crate::walk_attack_declaration(&mut s, &[]);
+    assert!(asked.contains(&(juggernaut, vec![true])), "{asked:?}");
+    assert!(asked.contains(&(ogre, vec![true, false])), "{asked:?}");
+    let blocks = crate::walk_block_declaration(&mut s);
+    assert!(blocks.contains(&(wall, vec![])), "{blocks:?}");
+    assert!(blocks.contains(&(blocker, vec![juggernaut])), "{blocks:?}");
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.assert_life(1, 15);
+}

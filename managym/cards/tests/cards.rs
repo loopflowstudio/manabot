@@ -602,6 +602,84 @@ fn attack_pumps_the_team(name: &str, printed: (i32, i32), includes_self: bool) {
     assert_eq!(s.game().characteristics(ally).pt(), (2, 2));
 }
 
+/// Walk the active player's attack declaration, declaring only `attackers`
+/// (or the one offered choice), and return each asked creature with the
+/// attack values it was offered.
+fn walk_attack_declaration(
+    s: &mut support::game::Scenario,
+    attackers: &[managym::state::game_object::PermanentId],
+) -> Vec<(managym::state::game_object::PermanentId, Vec<bool>)> {
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut asked = Vec::new();
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let offered: Vec<_> = s
+            .action_space()
+            .actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::DeclareAttacker {
+                    permanent, attack, ..
+                } => Some((*permanent, *attack)),
+                _ => None,
+            })
+            .collect();
+        let permanent = offered[0].0;
+        let wanted = attackers.contains(&permanent);
+        let index = offered
+            .iter()
+            .position(|(_, attack)| *attack == wanted)
+            .unwrap_or(0);
+        asked.push((
+            permanent,
+            offered.iter().map(|(_, attack)| *attack).collect(),
+        ));
+        s.step_action(index);
+    }
+    asked
+}
+
+/// Walk the defending player's block declaration, declining every block,
+/// and return each asked blocker with the attackers it was offered.
+fn walk_block_declaration(
+    s: &mut support::game::Scenario,
+) -> Vec<(
+    managym::state::game_object::PermanentId,
+    Vec<managym::state::game_object::PermanentId>,
+)> {
+    use managym::agent::action::{Action, ActionSpaceKind};
+    s.advance_until(
+        |s| {
+            s.action_space().kind == ActionSpaceKind::DeclareBlocker
+                || s.current_step() as i32 > managym::flow::turn::StepKind::DeclareBlockers as i32
+        },
+        "blockers".into(),
+    );
+    let mut asked = Vec::new();
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        let actions = s.action_space().actions.clone();
+        let mut blocker = None;
+        let mut offered = Vec::new();
+        let mut decline = 0;
+        for (index, action) in actions.iter().enumerate() {
+            if let Action::DeclareBlocker {
+                blocker: who,
+                attacker,
+                ..
+            } = action
+            {
+                blocker = Some(*who);
+                match attacker {
+                    Some(attacker) => offered.push(*attacker),
+                    None => decline = index,
+                }
+            }
+        }
+        asked.push((blocker.unwrap(), offered));
+        s.step_action(decline);
+    }
+    asked
+}
+
 /// Makes the permanent a planeswalker: the catalog defines none, so target
 /// legality is checked on a constructed one.
 fn make_planeswalker(
