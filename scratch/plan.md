@@ -693,7 +693,11 @@ The v31 semantic-kernel corpus regenerated with 14 games, 3,049 commands and 15 
 
 Focused debug results after refreshing the five traces: priority and fingerprint units 8/8, canonical replay, search, match-state hash and semantic conformance 43/43, directed card fixtures 17/17. With the rebuilt CPython 3.13 extension the checked Academy opening authority and live/headless parity receipts both pass as recorded. Terminal SBA precedence at the 10,000-resolution cap was checked by control-flow order only.
 
-Next comes gate. At gate, Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the pre-existing Academy failures in `scratch/questions.md` fail on main.
+Built in `b5bbe85dca`, compressed in `d3486c59fb`; the code matches: `PriorityState::clear_loop_watch` is the only reset (`priority.rs`, `tick.rs` step start, multi-option publish and empty stack, `action.rs` non-pass action), and the count runs after stabilization in `tick_priority`. Fixtures: `fdn::a_state_trigger_loop_draws_while_its_condition_stays_true`, `an_untap_trigger_loop_draws_when_the_trigger_untaps_its_source`, `a_choice_during_resolution_clears_the_loop_watch`.
+
+**Sync onto main `912f8e622a` (`88fe2ebf6c`).** Main brought 207 more FDN cards with combat damage choices, two skip-if-empty hashed combat fields (`first_strikers`, `regular_damage_step`; hash version stays 31) and a v11 first-strike column at position 52, ahead of the branch's three history columns (`scratch/questions.md`, "Sync onto main"). No check after the merge is recorded: the focused debug selection above, the v31 semantic-kernel and Academy receipts, the pinned pilot and v11 layout tests have not been rerun on the merged head.
+
+Next comes gate, starting with the post-merge checks above; a moved trace digest there is re-recorded like Finding 18's. At gate, Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the pre-existing Academy failures in `scratch/questions.md` fail on main.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
