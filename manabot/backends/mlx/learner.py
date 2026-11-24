@@ -39,6 +39,7 @@ from manabot.training.updates.health import (
     UNRECORDED_STEP,
     StepRecorder,
     StepSample,
+    parameter_movement,
 )
 
 if TYPE_CHECKING:
@@ -196,16 +197,13 @@ class Learner:
             with recorder.track("Backward and gradient clipping"):
                 clipped, norm = optim.clip_grad_norm(gradients, max_grad_norm)
                 finite = mx.isfinite(norm)
+                sampling = recorder.sampling()
                 # Adam replaces immutable arrays, so these references preserve
                 # the pre-step weights without copying a second model.
-                before = (
-                    dict(tree_flatten(self.agent.parameters()))
-                    if recorder.sampling()
-                    else None
-                )
+                before = dict(tree_flatten(self.agent.parameters())) if sampling else {}
                 sample = (
                     gradient_health(gradients, clipped, self.agent, before, finite)
-                    if before is not None
+                    if sampling
                     else None
                 )
                 if not bool(finite):
@@ -221,28 +219,23 @@ class Learner:
                 updated = self.agent.parameters()
                 parameters = tree_flatten(updated)
                 finite = all_finite(p for _, p in parameters)
-                movement = ()
-                if before is not None:
-                    movement = (
+                movement = (
+                    (
                         squared_sums(p - before[name] for name, p in parameters),
                         squared_sums(before.values()),
                     )
+                    if sampling
+                    else ()
+                )
                 mx.eval(finite, updated, self.optimizer.state, movement)
                 if not bool(finite):
                     raise NumericalError(
                         "nonfinite_parameters_after_step",
                         {f"parameter/{name}": p for name, p in parameters},
                     )
-                if movement:
+                if sampling:
                     delta, scale = (l2_norm(np.asarray(v)) for v in movement)
-                    recorder.record_sample(
-                        {
-                            "parameter_delta_l2": delta,
-                            "parameter_relative_delta": delta / scale
-                            if scale
-                            else delta,
-                        }
-                    )
+                    recorder.record_sample(parameter_movement(delta, scale))
                 recorder.record_step()
         return norm
 

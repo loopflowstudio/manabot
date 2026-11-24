@@ -28,6 +28,7 @@ from manabot.training.updates.health import (
     CRITIC_READOUT_PREFIXES,
     UNRECORDED_STEP,
     StepRecorder as _StepRecorder,
+    parameter_movement,
 )
 
 if TYPE_CHECKING:
@@ -355,10 +356,7 @@ def parameter_health(
         .sum()
         .sqrt()
     )
-    return {
-        "parameter_delta_l2": float(delta),
-        "parameter_relative_delta": float(delta / scale) if scale > 0 else float(delta),
-    }
+    return parameter_movement(float(delta), float(scale))
 
 
 def __getattr__(name: str) -> type[_StepRecorder]:

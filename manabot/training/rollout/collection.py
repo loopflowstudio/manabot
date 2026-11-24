@@ -712,8 +712,8 @@ class StreamRootState(BaseModel):
 class CollectorSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal[1]
+    # Native streams advance by a stride of num_envs, so it fixes every next seed.
     num_envs: int = Field(ge=1)
-    seed_stride: int
     learning_seats: Literal["one", "both"]
     batch_closure: BatchClosure
     opponent_mode: str
@@ -725,10 +725,8 @@ class CollectorSnapshot(BaseModel):
 
     @model_validator(mode="after")
     def validate_slots(self) -> "CollectorSnapshot":
-        if (
-            self.seed_stride != self.num_envs
-            or len(self.streams) != self.num_envs
-            or any(root.slot != i for i, root in enumerate(self.streams))
+        if len(self.streams) != self.num_envs or any(
+            root.slot != i for i, root in enumerate(self.streams)
         ):
             raise ValueError("invalid collector stream geometry")
         parked = [r.slot for r in self.parked_fresh or ()]
@@ -772,7 +770,6 @@ def capture_collector(collector: Collector) -> CollectorSnapshot:
     return CollectorSnapshot(
         schema_version=1,
         num_envs=collector.num_envs,
-        seed_stride=collector.num_envs,
         learning_seats=collector.learning_seats,
         batch_closure=collector.batch_closure,
         opponent_mode=collector.opponent_mode,

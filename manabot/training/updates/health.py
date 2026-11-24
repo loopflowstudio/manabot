@@ -88,6 +88,14 @@ class UnrecordedStep:
 UNRECORDED_STEP: StepRecorder = UnrecordedStep()
 
 
+def parameter_movement(delta: float, scale: float) -> StepSample:
+    """A step's L2 displacement, relative to the pre-step weights when they are nonzero."""
+    return {
+        "parameter_delta_l2": delta,
+        "parameter_relative_delta": delta / scale if scale > 0 else delta,
+    }
+
+
 class NumericalHealth(StepSample, total=False):
     legal_logit_gap_max: float
     legal_probability_min: float
