@@ -1949,27 +1949,22 @@ def test_second_draw_triggers_share_public_history_in_text_and_policy_input() ->
     env = priority_root(("Lunar Insight",), listeners + ("Island",) * 3)
     drawer = env.current_agent_index()
     _choose(env, "Cast")
-    viewers = set()
-    for _ in range(16):
-        decision = capture_text_decision(env)
-        viewer = env.current_agent_index()
+    for action in (
+        "Pass priority",
+        "Pass priority",
+        "Erudite Wizard",
+        "Homunculus Horde",
+    ):
+        _choose(env, action)
+
+    space = ObservationSpace()
+    for viewer, side in ((drawer, "agent_player"), (1 - drawer, "opponent_player")):
+        assert env.current_agent_index() == viewer
         obs = env.observation_for_player(viewer)
         player = obs.agent if viewer == drawer else obs.opponent
-        if player.turn_history.cards_drawn == 3:
-            assert "drew 3 cards" in decision.text
-            side = "agent_player" if viewer == drawer else "opponent_player"
-            row = encode_observation(ObservationSpace(), obs)[side]
-            assert row[..., column(side, "cards_drawn")].item() == pytest.approx(0.3)
-            viewers.add(viewer)
-            if len(viewers) == 2:
-                return
-        action = next(
-            (
-                action
-                for action in decision.actions
-                if action.description == "Pass priority"
-            ),
-            decision.actions[0],
-        )
-        submit_response(env, decision, action.reference)
-    pytest.fail("both choosers should see Lunar Insight's three draws")
+        assert player.turn_history.cards_drawn == 3
+        assert "drew 3 cards" in capture_text_decision(env).text
+        row = encode_observation(space, obs)[side]
+        assert row[..., column(side, "cards_drawn")].item() == pytest.approx(0.3)
+        if viewer == drawer:
+            _choose(env, "Pass priority")

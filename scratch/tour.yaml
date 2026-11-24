@@ -1,17 +1,17 @@
-at: 493c20665804d49e08ca57b1c3b64b9b789382a2
+at: 79880a3b39680fe2d9dde9bb5d112fa628ce34b6
 first:
-  - path: scratch/plan.md
-    why: Second-draw outcomes and remaining coverage
   - path: managym/cards/src/fdn.rs
-    why: Three listeners share one committed draw ordinal
+    why: One second-draw condition, three distinct rewards
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Compare live, departed and countered Horde triggers
   - path: managym/state/src/game_object.rs
     why: Copiable values owned by each departed appearance
   - path: managym/src/flow/identity.rs
     why: Capture altered faces and copies before departure
   - path: managym/src/flow/resolution.rs
     why: Resolve token creation against the exact source
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Compare live, departed and countered Horde triggers
   - path: tests/semantic/test_text_observation.py
-    why: Both viewers read Lunar Insight’s draw count
+    why: Both choosers read the same public draw count
+  - path: scratch/plan.md
+    why: Second-draw outcomes and remaining coverage
 hide: []

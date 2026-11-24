@@ -540,6 +540,17 @@ fn incinerating_blast() -> CardDefinition {
     }
 }
 
+fn on_second_draw(effect: Effect) -> Ability {
+    Ability::Triggered {
+        condition: TriggerCondition::Draws {
+            who: Actor::You,
+            nth: Some(2),
+        },
+        intervening_if: None,
+        effects: vec![effect],
+    }
+}
+
 fn erudite_wizard() -> CardDefinition {
     let text_box =
         "Whenever you draw your second card each turn, put a +1/+1 counter on this creature.";
@@ -553,19 +564,11 @@ fn erudite_wizard() -> CardDefinition {
             subtypes: vec!["Human".into(), "Wizard".into()],
             power: Some(2),
             toughness: Some(3),
-
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::Draws {
-                    who: Actor::You,
-                    nth: Some(2),
-                },
-                intervening_if: None,
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            }],
+            abilities: vec![on_second_draw(Effect::put_counters(
+                ObjectSelector::This,
+                CounterKind::PlusOnePlusOne,
+                1,
+            ))],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -585,18 +588,10 @@ fn homunculus_horde() -> CardDefinition {
             subtypes: vec!["Homunculus".into()],
             power: Some(2),
             toughness: Some(2),
-
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::Draws {
-                    who: Actor::You,
-                    nth: Some(2),
-                },
-                intervening_if: None,
-                effects: vec![Effect::CreateTokenCopy {
-                    of: ObjectSelector::This,
-                    exceptions: vec![],
-                }],
-            }],
+            abilities: vec![on_second_draw(Effect::CreateTokenCopy {
+                of: ObjectSelector::This,
+                exceptions: vec![],
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -617,14 +612,7 @@ fn mischievous_mystic() -> CardDefinition {
             power: Some(2),
             toughness: Some(1),
             keywords: Keywords::of(&[Keyword::Flying]),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::Draws {
-                    who: Actor::You,
-                    nth: Some(2),
-                },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("token.faerie", 1)],
-            }],
+            abilities: vec![on_second_draw(Effect::create_tokens("token.faerie", 1))],
             text_box: text_box.into(),
             ..Default::default()
         },
