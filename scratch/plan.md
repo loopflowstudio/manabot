@@ -101,6 +101,8 @@ uv run pytest tests/semantic/test_text_observation.py tests/academy/test_choice_
 
 The 31 ledger rows in `be46a3fc8c` passed their directed checks in a 148-test native card/observation run, plus 10 structured-offer tests, 5 preparation resolution tests, the execution vocabulary test, and the Scryfall check. Clone Legion copied a prepared creature without duplicating its cast; Honest Work removed abilities while its linked spell remained castable; Seed Suture replayed through ordinary naming Commands. The five Academy navigation positions retained all 252 Commands/offers, and the authored match retained 193 Commands across 194 checkpoints and 1,164 viewer projections with stale rejection. After merging `edee24dad5`, 8 focused Python checks and 11 native `offers_` tests passed.
 
+After `bf5e38d587` the validation Python controls passed (86) once `scripts/refresh_academy_fixtures.py` refreshed the catalog digests (`6a1adcccef`; labels unchanged). The conformance receipts have their own writers and were not regenerated here; gate should check `conformance/` for the new catalog.
+
 Gate owns the full debug workspace, Clippy and the measured 10% Engine Budget.
 
 ## Later phases
