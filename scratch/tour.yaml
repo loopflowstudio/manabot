@@ -1,23 +1,33 @@
-at: 473671f8fdb13a334dbf8cc2187c5240ce898f01
+at: 983508c91002ef257a2090b62af84a37360c6e07
 first:
+  - path: scratch/plan.md
+    why: Records delivered batches, evidence and remaining rules work.
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Lists each card’s outcome, fixture or missing capability.
+    why: Links each card to its fixture or missing capability.
   - path: managym/README.md
     why: Explains source identity, attachment resolution and search disclosure.
+  - path: managym/state/src/predicate.rs
+    why: Defines the flying exclusion and minimum toughness predicate.
+  - path: managym/state/src/ability.rs
+    why: Defines target unions, attachment subjects and library placement.
   - path: managym/state/src/card.rs
     why: Defines continuous abilities and equip costs.
-  - path: managym/state/src/effect.rs
-    why: Represents fixed bonuses across static and resolved effects.
-  - path: managym/state/src/ability.rs
-    why: Defines object selectors and restricted and unrestricted searches.
-  - path: managym/cards/src/ala.rs
-    why: Grants overlapping creature types one Death Baron bonus.
+  - path: managym/cards/src/fdn.rs
+    why: Assembles spells and triggers from the shared rules.
   - path: managym/src/flow/resolution.rs
-    why: Resolves exact sources, attachments and move disclosure.
-  - path: managym/cards/tests/cards.rs
-    why: Checks wearer eligibility, search disclosure and discard choices.
-  - path: managym/cards/tests/cards/zen.rs
-    why: Exercises reattachment and departure during landfall.
-  - path: managym/cards/tests/cards/ons.rs
-    why: Forks Arcanis across removal and return.
+    why: Resolves attachment identity, library choices and target legality.
+  - path: managym/src/flow/proposed_event.rs
+    why: Commits replacements and publishes library reveals.
+  - path: managym/src/flow/action.rs
+    why: Exposes mode choices with their native effect descriptions.
+  - path: managym/src/cards/token_renames.rs
+    why: Carries attachment compatibility for stored pilot checkpoints.
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Forks the owner's placement before the caster's surveil.
+  - path: managym/cards/tests/cards/tla.rs
+    why: Exercises reattachment, source departure and retained library choices.
+  - path: managym/cards/tests/cards/observability.rs
+    why: Checks visibility and learning tokens for native rules.
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Records first-printing shells and Oracle text for conformance.
 hide: []
