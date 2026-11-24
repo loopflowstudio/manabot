@@ -164,7 +164,7 @@ def minibatch_loss(
     array, ready for `learner.step` or `learner.gradients`.
 
     The same `minibatch_objective` the update trains, over the backend's own
-    `rl` functions, with the scalar critic every backend supports.
+    `rl` functions, with the checkpoint's configured critic.
     """
     rl, to_device = module.rl, module.arrays.from_numpy
     device = getattr(learner, "device", "cpu")
@@ -192,7 +192,7 @@ def minibatch_loss(
             values,
             valid,
             **constants,
-            categorical=False,
+            categorical=policy.config.value_kind == "categorical_wdl",
             clip=settings.clip,
             collection_kl=settings.collection_kl,
             tau=settings.tau,
@@ -421,7 +421,7 @@ def check(
         reference_batch = reference_policy.prepare(obs)
         valid = reference_batch.legal
         with torch.no_grad():
-            logits, values = reference_policy.forward_distribution(
+            logits, values = reference_policy(
                 torch_backend.arrays.on_device(reference_batch, "cpu")
             )
         loss = minibatch_loss(

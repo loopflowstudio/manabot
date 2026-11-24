@@ -29,8 +29,8 @@ Precision = Literal["float32", "bfloat16"]
 @dataclass(frozen=True)
 class Targets:
     """Constants of one minibatch: sampled actions [B], advantages [B], value
-    targets [B], actor-selected rows [B], behavior log-likelihoods [B,A]
-    (-inf off support) and reference probabilities [B,A]."""
+    targets [B] or loss/draw/win mixtures [B,3], actor-selected rows [B],
+    behavior log-likelihoods [B,A] (-inf off support) and reference probabilities [B,A]."""
 
     actions: np.ndarray
     advantages: np.ndarray

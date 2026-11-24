@@ -37,13 +37,12 @@ from manabot.backends.mlx.checkpoint import (
     assemble,
     canonical_from_mlx,
     mlx_parameters,
-    require_supported,
 )
+from manabot.backends.mlx.collection import CollectionSession as MLXCollectionSession
 from manabot.backends.mlx.learner import Learner as MLXLearner
 from manabot.backends.mlx.policy import (
     ObjectAttention,
     PackedGRU,
-    attend,
     packed_steps,
 )
 from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
@@ -79,7 +78,6 @@ from manabot.infra.config import (
 )
 from manabot.policy.buckets import bucket_sizes, trim_observation
 from manabot.policy.checkpoint import (
-    UnsupportedPolicy,
     canonical_parameters,
     read_safetensors,
     read_saved_container,
@@ -89,6 +87,7 @@ from manabot.policy.prepare import Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
 from manabot.recipes import baseline, elemental
 from manabot.recipes.builders import gray_ogre_self_play
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops.self_play import (
     Counts,
     create,
@@ -97,6 +96,7 @@ from manabot.training.loops.self_play import (
     learn,
 )
 from manabot.training.rollout.matchups import elemental_roster
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.choice_corpus import collect_choices
@@ -163,7 +163,8 @@ def test_split_attention_projections_match_packed_multihead_attention() -> None:
     )
 
     mask = mx.where(mx.array(~padding.numpy()), 0.0, -mx.inf)[:, None, None, :]
-    actual = attend(layer.mha, mx.array(objects.numpy()), mask)
+    inputs = mx.array(objects.numpy())
+    actual = layer.mha(inputs, inputs, inputs, mask)
     np.testing.assert_allclose(np.array(actual), expected.detach().numpy(), atol=1e-5)
 
 
@@ -290,36 +291,46 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "pattern"),
+    ("variant", "bucketed"),
     [
-        ({"value_kind": "categorical_wdl"}, "value_kind"),
-        ({"value_aggregation": "value_token"}, "value_aggregation"),
-        ({"attention_on": False}, "attention_on=False"),
-        ({"recent_events": True}, "recent_events"),
+        pytest.param({}, False, id="masked-mean"),
+        pytest.param({}, True, id="masked-mean-bucketed"),
+        pytest.param({"value_kind": "categorical_wdl"}, True, id="categorical-wdl"),
+        pytest.param({"value_aggregation": "value_token"}, True, id="value-token"),
+        pytest.param(
+            {"value_aggregation": "attention_readout"}, True, id="attention-readout"
+        ),
+        pytest.param(
+            {
+                "value_aggregation": "historical_mean",
+                "world": None,
+                "record_vocabulary": "hashed",
+            },
+            True,
+            id="historical-mean-hashed",
+        ),
+        pytest.param(
+            {
+                "attention_on": False,
+                "stream_norm": False,
+                "attention_layers": 1,
+                "value_aggregation": "historical_mean",
+            },
+            True,
+            id="attention-off",
+        ),
     ],
 )
-def test_unimplemented_layouts_are_refused_by_name(
-    kwargs: dict[str, object], pattern: str
-) -> None:
-    model = ModelConfig.model_validate(
-        {"world": "elemental-world-v2", "value_aggregation": "masked_mean", **kwargs}
-    )
-    with pytest.raises(UnsupportedPolicy, match=pattern):
-        require_supported(model, ObservationConfig())
-
-
-@pytest.mark.parametrize("bucketed", [False, True])
-def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
+def test_policy_architecture_matches_torch_forward_gradients_and_step(
+    variant: dict[str, object],
     bucketed: bool,
     baseline_model: ModelConfig,
 ) -> None:
-    """Latest baseline config (v11 + stream_norm + focus_film + policy_film)
-    agrees with PyTorch on forward, loss, every gradient tensor and clipped Adam."""
-
+    """One real board batch through both policies, objectives and clipped Adam steps."""
     torch.manual_seed(11)
     space = ObservationSpace(ObservationConfig())
-    assert space.one_token
-    agent = ActorCritic(space, baseline_model, bucketed_shapes=bucketed)
+    config = ModelConfig.model_validate(baseline_model.checkpoint_payload() | variant)
+    agent = ActorCritic(space, config, bucketed_shapes=bucketed)
     # Give zero-initialized residual/FiLM layers non-zero weights so every
     # branch (stack_source, policy_film, links, focus_film) actually fires.
     with torch.no_grad():
@@ -354,10 +365,22 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
     assert float(np.abs(mlx_logits - torch_logits)[legal].max()) <= LOGIT_TOLERANCE
     assert float(np.abs(mlx_values - torch_values).max()) <= LOGIT_TOLERANCE
 
+    # Collection can trim globally empty columns. The token remains neutral and
+    # every focus index still addresses its original object after attention.
+    probs, values = policy.evaluate_probabilities(policy.prepare(obs, inference=True))
+    ref_probs, ref_values = agent.evaluate_probabilities(
+        agent.prepare(obs, inference=True)
+    )
+    np.testing.assert_allclose(probs, ref_probs, rtol=0, atol=LOGIT_TOLERANCE)
+    np.testing.assert_allclose(values, ref_values, rtol=0, atol=LOGIT_TOLERANCE)
+    value_targets = np.linspace(-0.5, 0.5, rollout.actions.size, dtype=np.float32)
+    if config.value_kind == "categorical_wdl":
+        # Give each logit its own target, including draws.
+        value_targets = np.eye(3, dtype=np.float32)[np.arange(rollout.actions.size) % 3]
     targets = Targets(
         actions=rollout.actions.reshape(-1),
         advantages=np.linspace(-1.0, 1.0, rollout.actions.size, dtype=np.float32),
-        value_targets=np.linspace(-0.5, 0.5, rollout.actions.size, dtype=np.float32),
+        value_targets=value_targets,
         actor_mask=np.ones(rollout.actions.size, dtype=bool),
         behavior_logs=rows.log_probabilities,
         reference=reference_distribution(obs, "action_type_uniform"),
@@ -431,6 +454,101 @@ def test_hashed_records_match_torch_with_a_live_shared_effect(
         strict=True,
     ):
         np.testing.assert_allclose(actual, expected, rtol=0, atol=LOGIT_TOLERANCE)
+
+
+def test_fresh_attention_readout_preserves_shared_initial_weights(
+    baseline_model: ModelConfig,
+) -> None:
+    backend = resolve("mlx")
+    space = ObservationSpace()
+    with backend.seeded_inference(31, cpu_only=True):
+        masked = backend.runtime.create_policy(space, baseline_model)
+    with backend.seeded_inference(31, cpu_only=True):
+        readout = backend.runtime.create_policy(
+            space,
+            baseline_model.model_copy(
+                update={"value_aggregation": "attention_readout"}
+            ),
+        )
+    expected = flat_numpy(masked.parameters())
+    actual = flat_numpy(readout.parameters())
+    assert set(actual) - set(expected) == {
+        f"value_readout.{key}"
+        for key, _ in tree_flatten(readout.value_readout.parameters())
+    }
+    for name, initial in expected.items():
+        np.testing.assert_array_equal(actual[name], initial, err_msg=name)
+
+
+def test_mlx_wdl_loss_keeps_the_normalizer_for_large_equal_logits() -> None:
+    logits = mx.full((1, 3), 1e8)
+    targets = mx.array([[0.5, 0.25, 0.25]])
+    loss = mlx_backend.rl.categorical_value_loss(logits, targets)
+    np.testing.assert_allclose(to_numpy(loss), [np.log(3)], atol=1e-6)
+
+
+def test_mlx_advantage_selection_preserves_ties_and_row_order() -> None:
+    advantages = mx.array([0.0, -2.0, 3.0, 2.0])
+    rl = mlx_backend.rl
+    assert rl.magnitude_quantile(advantages, 0.5) == 2.0
+    assert rl.selected_rows(advantages, 0.5, 1.0).tolist() == [2, 1]
+    assert rl.selected_rows(advantages, 0.5, 1.0, kind="quantile").tolist() == [1, 2, 3]
+    assert rl.selected_moves(advantages, 0.5, 2.5).tolist() == [
+        False,
+        False,
+        True,
+        False,
+    ]
+
+
+def test_collected_wdl_probabilities_train_one_damped_update(
+    baseline_model: ModelConfig,
+) -> None:
+    config = baseline_model.model_copy(update={"value_kind": "categorical_wdl"})
+    torch.manual_seed(17)
+    reference = ActorCritic(ObservationSpace(), config)
+    policy = assemble(policy_weights(reference))
+    batch = self_play_batch(
+        policy, lesson_match(), MLXCollectionSession(device="mps", seed=17), 4
+    )
+    obs = batch.observations(np.arange(batch.actions.size)).observation
+    prepared = reference.prepare(obs)
+    with torch.no_grad():
+        _, logits = reference.forward_distribution(
+            torch_module.arrays.on_device(prepared, "cpu")
+        )
+    expected = logits.softmax(-1).numpy()
+    assert batch.outcome_probabilities is not None
+    np.testing.assert_allclose(
+        batch.outcome_probabilities.reshape(-1, 3), expected, atol=LOGIT_TOLERANCE
+    )
+    np.testing.assert_allclose(
+        batch.values.ravel(), expected[:, 2] - expected[:, 0], atol=LOGIT_TOLERANCE
+    )
+    assert policy.value_semantic == "signed_outcome"
+    np.testing.assert_allclose(
+        policy.win_probabilities(policy.prepare(obs)),
+        reference.win_probabilities(prepared),
+        atol=LOGIT_TOLERANCE,
+    )
+    learning = DampedPolicyLearning(
+        gradient="damped_policy", min_advantage=0, advantage_quantile=0
+    )
+    size = batch.actions.size
+    mlx_update = update_damped_iteration(
+        mlx_backend, MLXLearner(policy, minibatch_rows=size), batch, learning, 1
+    )
+    torch_update = update_damped_iteration(
+        torch_module,
+        TorchLearner(reference, "cpu", minibatch_rows=size),
+        batch,
+        learning,
+        1,
+    )
+    assert mlx_update["critic_exposures"] == torch_update["critic_exposures"] == size
+    assert mlx_update["value_loss"] == pytest.approx(
+        torch_update["value_loss"], rel=LOSS_TOLERANCE
+    )
 
 
 def test_gray_ogre_ppo_matches_torch_on_one_clipped_step() -> None:

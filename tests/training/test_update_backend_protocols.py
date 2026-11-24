@@ -33,11 +33,9 @@ from manabot.training.state.backend import (
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
-    CategoricalRL,
     Learner,
     LearnerFile,
     UpdateBackend,
-    categorical_rl,
 )
 from tests.training.backend_fixtures import installed_backend, legacy_capture
 
@@ -230,13 +228,6 @@ def test_prefetch_propagates_admission_failure_and_can_stop_early(
     with pytest.raises(ValueError, match="must be positive"):
         with admitted.minibatches(order, 0, device):
             pass
-
-
-def test_a_backend_without_a_categorical_critic_is_refused() -> None:
-    module = installed_backend("mlx")
-    assert not isinstance(module.rl, CategoricalRL)
-    with pytest.raises(TypeError, match="no categorical critic"):
-        categorical_rl(module.rl)
 
 
 def test_the_conformance_check_sees_a_wrong_signature() -> None:

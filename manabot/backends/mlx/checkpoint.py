@@ -66,12 +66,6 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
         reasons.append("decision memory")
     if model.recent_events:
         reasons.append("policy history input (recent_events)")
-    if model.value_aggregation not in ("masked_mean", "historical_mean"):
-        reasons.append(f"value_aggregation={model.value_aggregation!r}")
-    if model.value_kind != "scalar":
-        reasons.append(f"value_kind={model.value_kind!r}")
-    if not model.attention_on:
-        reasons.append("attention_on=False")
     if reasons:
         raise UnsupportedPolicy(
             "the framework backends do not support " + "; ".join(reasons)

@@ -20,7 +20,6 @@ from manabot.training.updates.backend import (
     Learner,
     Policy,
     UpdateBackend,
-    categorical_rl,
 )
 from manabot.training.updates.bootstrap import bootstrap_predictions
 from manabot.training.updates.selection import SourceSelection, select_sources
@@ -205,9 +204,8 @@ def compute_batch_targets(
                 raise ValueError(
                     "saved value differs from collection outcome probabilities"
                 )
-            wdl = categorical_rl(rl)
-            bootstrap = wdl.outcome_probabilities(raw)
-            value_targets = wdl.categorical_lambda_returns(
+            bootstrap = rl.outcome_probabilities(raw)
+            value_targets = rl.categorical_lambda_returns(
                 to_device(outcomes, device),
                 rewards,
                 ends,
@@ -215,7 +213,7 @@ def compute_batch_targets(
                 learning.value_lambda,
                 cuts,
             )
-            next_value = wdl.expected_outcome(bootstrap)
+            next_value = rl.expected_outcome(bootstrap)
         else:
             bootstrap = next_value = raw.squeeze(-1)
             _, value_targets = rl.transition_gae(
@@ -240,11 +238,7 @@ def compute_batch_targets(
             value_targets = to_device(host_targets, device)
         rl.require_finite("nonfinite_advantages", advantages=advantages)
         rl.require_finite("nonfinite_value_targets", targets=value_targets)
-        expected = (
-            categorical_rl(rl).expected_outcome(value_targets)
-            if categorical
-            else value_targets
-        )
+        expected = rl.expected_outcome(value_targets) if categorical else value_targets
         residuals = expected - values
         positive = (
             np.ones(batch.actions.shape, bool)

@@ -7,9 +7,6 @@ module satisfies with plain functions. `Learner` and `Policy` are the objects
 an update steps and runs forward. `manabot.policy.protocol.Backend` also
 provides checkpoint admission. Parity supplies its own learner and layout contract.
 
-Both backends run scalar PPO and the damped update. A categorical critic needs
-`CategoricalRL`, which `categorical_rl` checks before using it.
-
 Nothing here imports a framework. `Array` is a backend's own array
 (`torch.Tensor`, `mlx.core.array`), opaque to the update: it does arithmetic,
 indexing and reductions on it and reads it through `arrays.to_numpy` or
@@ -30,7 +27,7 @@ from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows, ActionValidator
-from manabot.training.updates.objective import Array, CategoricalValueLoss, LossTerms
+from manabot.training.updates.objective import Array, LossTerms
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import RolloutBatch
@@ -83,11 +80,6 @@ class RL(LossTerms, Protocol):
         self, advantages: Array, over: Array | None = None
     ) -> Array: ...
 
-
-@runtime_checkable
-class CategoricalRL(RL, CategoricalValueLoss, Protocol):
-    """`rl` of a backend with a win/draw/loss critic."""
-
     def expected_outcome(self, probabilities: Array) -> Array: ...
 
     def outcome_probabilities(self, value_logits: Array) -> Array: ...
@@ -101,14 +93,6 @@ class CategoricalRL(RL, CategoricalValueLoss, Protocol):
         trace_lambda: float,
         bootstrap_indexes: np.ndarray | None = None,
     ) -> Array: ...
-
-
-def categorical_rl(rl: RL) -> CategoricalRL:
-    """`rl` as a categorical critic's functions; refuses a backend without them."""
-    if not isinstance(rl, CategoricalRL):
-        name = getattr(rl, "__name__", type(rl).__name__)
-        raise TypeError(f"{name} has no categorical critic")
-    return rl
 
 
 # -- arrays, learner and rollout files ------------------------------------------

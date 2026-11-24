@@ -1,7 +1,7 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
 `MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
-module, for the scalar policies admitted by `require_supported`.
+module, for the policies admitted by `require_supported`.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
@@ -39,7 +39,11 @@ from manabot.backends.mlx.arrays import (
     precision_dtype,
     to_numpy,
 )
-from manabot.backends.mlx.rl import NumericalError
+from manabot.backends.mlx.rl import (
+    NumericalError,
+    expected_outcome,
+    outcome_probabilities,
+)
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
@@ -141,26 +145,6 @@ def _take(table: mx.array, rows: mx.array) -> mx.array:
     return mx.take(table, rows, axis=0)
 
 
-def attend(mha: nn.MultiHeadAttention, x: mx.array, mask: mx.array) -> mx.array:
-    """`nn.MultiheadAttention` self-attention over `x` [B,N,D] with the packed
-    in-projection split into `query_proj`/`key_proj`/`value_proj`; `mask`
-    [B,1,1,N] is additive."""
-    batch, count, dims = x.shape
-    heads = mha.num_heads
-
-    def split(y: mx.array) -> mx.array:
-        return y.reshape(batch, count, heads, dims // heads).transpose(0, 2, 1, 3)
-
-    attended = mx.fast.scaled_dot_product_attention(
-        split(mha.query_proj(x)),
-        split(mha.key_proj(x)),
-        split(mha.value_proj(x)),
-        scale=(dims // heads) ** -0.5,
-        mask=mask,
-    )
-    return mha.out_proj(attended.transpose(0, 2, 1, 3).reshape(batch, count, dims))
-
-
 class ObjectAttention(nn.Module):
     """`GameObjectAttention`: perspective, self-attention, two post- or pre-norm blocks."""
 
@@ -192,12 +176,26 @@ class ObjectAttention(nn.Module):
         [B,N,1] zeros padding outputs."""
         owned = objects + sign * self.perspective if "perspective" in self else objects
         attention_input = self.norm1(owned) if self.pre_norm else owned
-        attended = attend(self.mha, attention_input, mask)
+        attended = self.mha(attention_input, attention_input, attention_input, mask)
         residual = owned + attended
         if self.pre_norm:
             return (residual + self.mlp(self.norm2(residual))) * keep
         x = self.norm1(residual)
         return self.norm2(x + self.mlp(x)) * keep
+
+
+class AttentionReadout(nn.Module):
+    """Pool valid final objects with one learned query for the critic alone."""
+
+    def __init__(self, width: int, heads: int) -> None:
+        super().__init__()
+        self.query = mx.random.normal((1, 1, width)) * width**-0.5
+        self.mha = nn.MultiHeadAttention(width, heads, bias=True)
+
+    def __call__(self, objects: mx.array, validity: mx.array) -> mx.array:
+        query = mx.broadcast_to(self.query, (objects.shape[0], 1, objects.shape[-1]))
+        mask = (validity != 0)[:, None, None, :]
+        return self.mha(query, objects, objects, mask)[:, 0]
 
 
 def padding_embedding(rows: int, width: int) -> nn.Embedding:
@@ -327,7 +325,9 @@ class MLXActorCritic(nn.Module):
         self.config = config
         self.bucketed_shapes = bucketed_shapes
         self.stack_tokens = space.one_token
-        self.value_semantic: Literal["signed_outcome", "win_logit"] | None = None
+        self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
+            "signed_outcome" if config.value_kind == "categorical_wdl" else None
+        )
         hidden = dims.hidden
         if tables.definition_rows is None:
             self.semantic_cards = None
@@ -342,13 +342,14 @@ class MLXActorCritic(nn.Module):
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
         self.action_embedding = Projection(dims.action, hidden)
-        self.attention = ObjectAttention(
-            hidden,
-            dims.heads,
-            dims.feedforward,
-            ownership=True,
-            pre_norm=config.stream_norm,
-        )
+        if config.attention_on:
+            self.attention = ObjectAttention(
+                hidden,
+                dims.heads,
+                dims.feedforward,
+                ownership=True,
+                pre_norm=config.stream_norm,
+            )
         self.action_layer = Projection((dims.focus + 1) * hidden, hidden)
         self.policy_head = nn.Sequential(
             nn.Linear(hidden, hidden), nn.ReLU(), nn.Linear(hidden, 1)
@@ -359,7 +360,7 @@ class MLXActorCritic(nn.Module):
             nn.Identity(),  # MeanPoolingLayer's slot; pooling follows the saved mode
             nn.Linear(hidden, hidden),
             nn.ReLU(),
-            nn.Linear(hidden, 1),
+            nn.Linear(hidden, 3 if config.value_kind == "categorical_wdl" else 1),
         )
         self.extra_attention = [
             ObjectAttention(
@@ -371,6 +372,8 @@ class MLXActorCritic(nn.Module):
             )
             for _ in range(dims.layers - 1)
         ]
+        if config.value_aggregation == "value_token":
+            self.value_token = mx.random.normal((1, 1, hidden)) * hidden**-0.5
         if config.policy_film:
             self.policy_film = zero_projection(hidden)
         self.link_from_target = [nn.Linear(hidden, hidden) for _ in range(dims.links)]
@@ -393,6 +396,10 @@ class MLXActorCritic(nn.Module):
             }
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
+        # Draw the critic query last so the actor starts from the same weights
+        # as a masked-mean policy constructed with the same seed.
+        if config.value_aggregation == "attention_readout":
+            self.value_readout = AttentionReadout(hidden, dims.heads)
         programs = tables.full_programs if self.has_programs else None
         named = (
             np.flatnonzero(tables.name_definitions)
@@ -559,7 +566,7 @@ class MLXActorCritic(nn.Module):
     def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
         with mx.stream(self.inference_device):
             _, values = self(batch)
-            probabilities = mx.sigmoid(values[:, 0])
+            probabilities = mx.sigmoid(values)
             mx.eval(probabilities)
         return to_numpy(probabilities)
 
@@ -642,6 +649,7 @@ class MLXActorCritic(nn.Module):
                 space,
                 self._static.tables.layout.readings,
             ),
+            value_token=self.config.value_aggregation == "value_token",
             action_capacity=capacity,
             bucket_needs=needs,
         )
@@ -701,7 +709,7 @@ class MLXActorCritic(nn.Module):
         with mx.stream(self.inference_device):
             logits, values = self(batch)
             mx.eval(logits, values)
-        return to_numpy(logits), to_numpy(values)[:, 0]
+        return to_numpy(logits), to_numpy(values)
 
     def evaluate_probabilities(
         self, batch: Prepared[np.ndarray]
@@ -710,13 +718,14 @@ class MLXActorCritic(nn.Module):
             logits, values = self(batch)
             probabilities = mx.softmax(logits, axis=-1)
             mx.eval(probabilities, values)
-        return to_numpy(probabilities), to_numpy(values)[:, 0]
+        return to_numpy(probabilities), to_numpy(values)
 
     def forward_distribution(
         self, batch: Prepared[np.ndarray]
     ) -> tuple[mx.array, mx.array]:
-        """The training forward the updates differentiate: `__call__`."""
-        return self(batch)
+        """Differentiable policy logits and raw scalar [B,1] or WDL [B,3] critic."""
+        with self.forward_precision():
+            return self._forward(batch)
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: the definition vectors objects
@@ -758,9 +767,11 @@ class MLXActorCritic(nn.Module):
         return mx.array(values).astype(self.compute_dtype)
 
     def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
-        """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
-        with self.forward_precision():
-            return self._forward(batch)
+        """Policy logits [B,A] and one acting-viewer value per decision."""
+        logits, raw = self.forward_distribution(batch)
+        if self.config.value_kind == "categorical_wdl":
+            return logits, expected_outcome(outcome_probabilities(raw))
+        return logits, raw.squeeze(-1)
 
     def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         if not isinstance(batch, Prepared):
@@ -909,46 +920,15 @@ class MLXActorCritic(nn.Module):
             shared = self._stream("context", shared) * (relation_count > 0).astype(
                 shared.dtype
             )
-        objects = objects + shared[:, None]
-
-        # Attention over the object table.
+        # With attention off, historical pooling also sees the padding embeddings.
+        # Only real objects receive continuation context.
         validity = self._floating(batch.validity)
-        sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
-        attended, attended_validity = objects, validity
-        columns = batch.attention_columns
-        if columns is not None:
-            selected = mx.array(columns)
-            attended = mx.take(objects, selected, axis=1)
-            attended_validity = mx.take(validity, selected, axis=1)
-            sign = mx.take(sign, selected, axis=1)
-        keep = attended_validity != 0
-        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
-        keep = keep[..., None].astype(objects.dtype)
-        encoded_objects = self.attention(attended, sign, mask, keep)
-        for layer in self.extra_attention:
-            encoded_objects = layer(encoded_objects, sign, mask, keep)
-        if "final_norm" in self:
-            encoded_objects = self.final_norm(encoded_objects) * keep
-        if columns is not None:
-            # Restore the original coordinates; unused columns are zero.
-            positions = np.zeros(count, dtype=np.int64)
-            positions[columns] = np.arange(len(columns))
-            used = np.zeros(count, dtype=np.float32)
-            used[columns] = 1
-            encoded_objects = (
-                mx.take(encoded_objects, mx.array(positions), axis=1)
-                * self._floating(used)[None, :, None]
-            )
-        keep = (validity != 0)[..., None].astype(objects.dtype)
+        objects = objects + shared[:, None] * validity[..., None]
 
-        # Historical checkpoints average the projected bias of padding slots too.
-        value = self.value_head.layers
-        projected = value[1](value[0](encoded_objects))
-        if self.config.value_aggregation == "historical_mean":
-            pooled_value = projected.mean(1)
-        else:
-            pooled_value = (projected * keep).sum(1) / validity.sum(1, keepdims=True)
-        values = value[5](value[4](value[3](pooled_value))).astype(mx.float32)
+        encoded = self._attend_objects(objects, validity, batch)
+        values = self._value_from_objects(encoded, validity)
+        # The neutral critic token has no object coordinates for focus or FiLM.
+        encoded_objects = encoded[:, :count]
         # A horizon bootstrap can contain only non-acting viewers.
         if not batch.legal_batches.size:
             return mx.full(batch.legal.shape, -1e8, dtype=mx.float32), values
@@ -1010,6 +990,70 @@ class MLXActorCritic(nn.Module):
         )
 
         return logits, values
+
+    def _attend_objects(
+        self, objects: mx.array, validity: mx.array, batch: Prepared[np.ndarray]
+    ) -> mx.array:
+        """Return objects in original focus coordinates plus any trailing critic token."""
+        if not self.config.attention_on:
+            return objects
+        count = objects.shape[1]
+        sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
+        attended, attended_validity = objects, validity
+        columns = batch.attention_columns
+        if columns is not None:
+            selected = mx.array(columns)
+            attended = mx.take(objects, selected, axis=1)
+            attended_validity = mx.take(validity, selected, axis=1)
+            sign = mx.take(sign, selected, axis=1)
+        if "value_token" in self:
+            token = mx.broadcast_to(
+                self.value_token, (objects.shape[0], 1, objects.shape[-1])
+            )
+            attended = mx.concatenate((attended, token), axis=1)
+            sign = mx.concatenate((sign, mx.zeros_like(sign[:, :1])), axis=1)
+            attended_validity = mx.concatenate(
+                (attended_validity, mx.ones_like(attended_validity[:, :1])), axis=1
+            )
+            if columns is not None:
+                columns = np.append(columns, count)
+                count += 1
+        keep = attended_validity != 0
+        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
+        keep = keep[..., None].astype(objects.dtype)
+        encoded_objects = self.attention(attended, sign, mask, keep)
+        for layer in self.extra_attention:
+            encoded_objects = layer(encoded_objects, sign, mask, keep)
+        if "final_norm" in self:
+            encoded_objects = self.final_norm(encoded_objects) * keep
+        if columns is not None:
+            # Restore the original coordinates; unused columns are zero.
+            positions = np.zeros(count, dtype=np.int64)
+            positions[columns] = np.arange(len(columns))
+            used = np.zeros(count, dtype=np.float32)
+            used[columns] = 1
+            encoded_objects = (
+                mx.take(encoded_objects, mx.array(positions), axis=1)
+                * self._floating(used)[None, :, None]
+            )
+        return encoded_objects
+
+    def _value_from_objects(self, encoded: mx.array, validity: mx.array) -> mx.array:
+        aggregation = self.config.value_aggregation
+        if aggregation == "value_token":
+            encoded = encoded[:, -1]
+        elif aggregation == "attention_readout":
+            encoded = self.value_readout(encoded, validity)
+        head = self.value_head.layers
+        projected = head[1](head[0](encoded))
+        if aggregation == "historical_mean":
+            # Historical policies include every projected slot, even padding.
+            projected = projected.mean(1)
+        elif aggregation == "masked_mean":
+            projected = (projected * validity[..., None]).sum(1) / validity.sum(
+                1, keepdims=True
+            )
+        return head[5](head[4](head[3](projected))).astype(mx.float32)
 
     def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
