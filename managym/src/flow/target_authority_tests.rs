@@ -1201,7 +1201,7 @@ fn shared_creature_type_clause_binds_trigger_targets_and_retargeting() {
     let (mut game, source, _, Target::Permanent(ogre), _) = fixture() else {
         unreachable!()
     };
-    let mut force_ogre = |game: &mut Game| {
+    let force_ogre = |game: &mut Game| {
         game.scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
             .unwrap()
     };

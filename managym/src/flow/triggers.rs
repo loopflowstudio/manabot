@@ -230,16 +230,31 @@ impl Game {
         .map(Arc::as_ref)
     }
 
+    /// The effects a pending trigger will run: its inline program, or its
+    /// printed ability narrowed to the chosen modes once they are chosen.
+    pub(crate) fn pending_trigger_effects<'a>(
+        &'a self,
+        trigger: &'a PendingTrigger,
+    ) -> Option<std::borrow::Cow<'a, [Effect]>> {
+        if let Some(effects) = &trigger.inline_effects {
+            return Some(effects.as_slice().into());
+        }
+        let printed = self
+            .pending_trigger_face(trigger)?
+            .abilities
+            .get(trigger.ability_index)?
+            .effects();
+        Some(if trigger.modes_chosen {
+            crate::state::ability::chosen_trigger_effects(printed, &trigger.chosen_modes)
+        } else {
+            printed.into()
+        })
+    }
+
     fn trigger_requirements(&self, trigger: &PendingTrigger) -> Option<Vec<TargetRequirement>> {
-        let effects = match &trigger.inline_effects {
-            Some(effects) => effects.as_slice(),
-            None => self
-                .pending_trigger_face(trigger)?
-                .abilities
-                .get(trigger.ability_index)?
-                .effects(),
-        };
-        Some(crate::state::ability::effect_target_requirements(effects))
+        Some(crate::state::ability::effect_target_requirements(
+            &self.pending_trigger_effects(trigger)?,
+        ))
     }
 
     /// Distinctness and the announced X budget apply within one clause
@@ -376,7 +391,7 @@ impl Game {
                         .unwrap_or(0);
                     legal.is_empty() || trigger.chosen_modes.len() >= limit
                 }) {
-                    trigger.inline_effects = Some(Self::chosen_mode_effects(&trigger, modes));
+                    trigger.modes_chosen = true;
                 } else if legal.is_empty() {
                     continue;
                 } else {
@@ -442,7 +457,7 @@ impl Game {
 
     /// The printed modal rule applies until the chosen effects have been bound.
     pub(crate) fn pending_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
-        if trigger.inline_effects.is_some() {
+        if trigger.modes_chosen || trigger.inline_effects.is_some() {
             return None;
         }
         match self
@@ -519,7 +534,7 @@ impl Game {
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
-        let effects = up_to.is_none().then(|| modes[mode].clone());
+        let single = up_to.is_none();
         let source = trigger.source_ref().filter(|_| *unchosen);
         let placing = self
             .state
@@ -527,8 +542,9 @@ impl Game {
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger");
-        if let Some(effects) = effects {
-            placing.inline_effects = Some(effects);
+        placing.chosen_modes.push(mode);
+        if single {
+            placing.modes_chosen = true;
             if let Some(permanent) =
                 source.and_then(|object| self.lookup_current_permanent(object).ok())
             {
@@ -542,20 +558,8 @@ impl Game {
                     EffectDuration::Indefinite,
                 );
             }
-        } else {
-            placing.chosen_modes.push(mode);
         }
         Ok(())
-    }
-
-    /// The effects of the placing trigger's chosen modes, in printed order.
-    fn chosen_mode_effects(trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
-        modes
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| trigger.chosen_modes.contains(index))
-            .flat_map(|(_, effects)| effects.iter().cloned())
-            .collect()
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
@@ -565,22 +569,16 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
-        if let Some(Effect::TriggerModes {
-            up_to: Some(_),
-            modes,
-            ..
-        }) = self.pending_mode_rule(trigger)
-        {
+        if let Some(Effect::TriggerModes { up_to: Some(_), .. }) = self.pending_mode_rule(trigger) {
             if trigger.controller != player {
                 return Err(AgentError("not the trigger's controller".into()));
             }
-            let effects = Self::chosen_mode_effects(trigger, modes);
             self.state
                 .trigger_placement
                 .as_mut()
                 .and_then(|p| p.placing.as_mut())
                 .expect("validated trigger")
-                .inline_effects = Some(effects);
+                .modes_chosen = true;
             return Ok(());
         }
         let requirements = self
@@ -658,6 +656,7 @@ impl Game {
             kicked: trigger.kicked,
             x: trigger.x,
             spent: trigger.spent,
+            chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {

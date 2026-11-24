@@ -49,20 +49,53 @@ pub(crate) fn stacked_trigger_face(trigger: &TriggeredAbilityOnStack) -> &Printe
     })
 }
 
-/// The program a catalog join cannot recover for a viewer or a suspended frame.
-pub(crate) fn stacked_trigger_program(trigger: &TriggeredAbilityOnStack) -> Option<&[Effect]> {
+/// The effects a stacked trigger runs: its inline program, or its printed
+/// ability narrowed to the chosen modes (CR 700.2b).
+pub(crate) fn stacked_trigger_effects(
+    trigger: &TriggeredAbilityOnStack,
+) -> std::borrow::Cow<'_, [Effect]> {
+    match &trigger.inline_effects {
+        Some(effects) => effects.as_slice().into(),
+        None => crate::state::ability::chosen_trigger_effects(
+            stacked_trigger_face(trigger).abilities[trigger.ability_index].effects(),
+            &trigger.chosen_modes,
+        ),
+    }
+}
+
+/// The program a catalog join and the projected mode cannot recover for a
+/// viewer or a suspended frame: an unrecoverable inline program, a face
+/// snapshot that differs from the catalog, or modal choices other than one
+/// mode.
+pub(crate) fn stacked_trigger_program(
+    trigger: &TriggeredAbilityOnStack,
+) -> Option<std::borrow::Cow<'_, [Effect]>> {
     if let Some(effects) = &trigger.inline_effects {
-        return trigger.program.then_some(effects);
+        return trigger.program.then(|| effects.as_slice().into());
     }
     let ability = trigger
         .source_face
-        .as_ref()?
-        .abilities
-        .get(trigger.ability_index)?;
+        .as_ref()
+        .and_then(|face| face.abilities.get(trigger.ability_index));
     let printed = default_content_pack()
         .definition(trigger.source_definition_id)
         .and_then(|row| row.abilities.get(trigger.ability_index));
-    (printed != Some(ability)).then(|| ability.effects())
+    let modal = matches!(
+        stacked_trigger_face(trigger).abilities[trigger.ability_index].effects(),
+        [Effect::TriggerModes { .. }]
+    );
+    (ability.is_some_and(|ability| printed != Some(ability))
+        || (modal && trigger.chosen_modes.len() != 1))
+        .then(|| stacked_trigger_effects(trigger))
+}
+
+/// The single chosen mode of a modal trigger, which a viewer joins to the
+/// catalog program; `None` for any other trigger.
+pub(crate) fn stacked_trigger_mode(trigger: &TriggeredAbilityOnStack) -> Option<usize> {
+    match trigger.chosen_modes.as_slice() {
+        [mode] if trigger.inline_effects.is_none() => Some(*mode),
+        _ => None,
+    }
 }
 
 impl Game {
@@ -397,8 +430,8 @@ impl Game {
         targets: Vec<ResolutionTarget>,
     ) {
         let program = stacked_trigger_program(&triggered)
-            .unwrap_or_default()
-            .to_vec();
+            .map(std::borrow::Cow::into_owned)
+            .unwrap_or_default();
         let source_object = triggered
             .source_lki
             .as_ref()
@@ -409,20 +442,15 @@ impl Game {
             .as_ref()
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
-        // Inline (delayed or chosen-mode) effects have no printed ability.
-        let (effects, ability, intervening_if) = if let Some(effects) = triggered.inline_effects {
-            (effects, None, None)
+        // Inline (non-printed) effects have no printed ability. A modal
+        // printed ability keeps its index and intervening "if".
+        let effects = stacked_trigger_effects(&triggered).into_owned();
+        let (ability, intervening_if) = if triggered.inline_effects.is_some() {
+            (None, None)
         } else {
-            let Ability::Triggered {
-                intervening_if,
-                effects,
-                ..
-            } = &stacked_trigger_face(&triggered).abilities[triggered.ability_index];
-            (
-                effects.clone(),
-                Some(triggered.ability_index),
-                intervening_if.clone(),
-            )
+            let Ability::Triggered { intervening_if, .. } =
+                &stacked_trigger_face(&triggered).abilities[triggered.ability_index];
+            (Some(triggered.ability_index), intervening_if.clone())
         };
 
         let mut frame = EffectFrame {
@@ -483,10 +511,7 @@ impl Game {
             }
             StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects),
             StackObject::TriggeredAbility(trigger) => {
-                let effects = trigger.inline_effects.as_deref().unwrap_or_else(|| {
-                    stacked_trigger_face(trigger).abilities[trigger.ability_index].effects()
-                });
-                effect_target_requirements(effects)
+                effect_target_requirements(&stacked_trigger_effects(trigger))
             }
         }
     }

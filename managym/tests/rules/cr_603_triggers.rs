@@ -320,3 +320,72 @@ fn trigger_mode_needs_as_many_legal_targets_as_its_clause_minimum() {
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     assert_eq!(modes(&s), [0, 1]);
 }
+
+/// CR 700.2b, 603.4: a printed modal trigger resolves its chosen mode as that
+/// printed ability. It keeps its intervening "if", rechecked on resolution,
+/// and its stack row describes the printed ability, not a delayed one.
+#[test]
+fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
+    use crate::support::{
+        game::move_card,
+        inspect::card_of,
+        play::{cast, choose_mode, resolve_top},
+    };
+    use managym::{
+        agent::observation::Observation,
+        state::{
+            ability::{Ability, Actor, Condition, Effect, TriggerCondition},
+            player::ManaPayment,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Hill Giant", "Gray Ogre", "Llanowar Elves"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let object = card_of(&s, giant);
+    s.game_mut().state[object].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::casts(Actor::You, CardPredicate::creature()),
+        intervening_if: Some(Condition::ControlsAtLeast {
+            distinct_names: false,
+            count: 2,
+            predicate: CardPredicate::creature(),
+        }),
+        effects: vec![Effect::TriggerModes {
+            modes: vec![vec![Effect::gain_life(1)], vec![Effect::gain_life(2)]],
+            up_to: None,
+            unchosen: false,
+        }],
+    }];
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Llanowar Elves");
+    choose_mode(&mut s, 1);
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        2,
+        "Elves and the trigger"
+    );
+    let descriptions: Vec<String> = Observation::for_player(s.game(), PlayerId(0))
+        .stack_objects
+        .iter()
+        .filter_map(|row| row.description.clone())
+        .collect();
+    let [description] = descriptions.as_slice() else {
+        panic!("one described ability: {descriptions:?}");
+    };
+    assert!(description.contains("Hill Giant"), "{description}");
+    assert!(!description.contains("delayed ability"), "{description}");
+    let life = s.life(0);
+
+    let mut kept = s.clone();
+    resolve_top(&mut kept);
+    assert_eq!(kept.life(0), life + 2, "the chosen mode");
+
+    move_card(&mut s, ogre_card, ZoneType::Graveyard);
+    resolve_top(&mut s);
+    assert_eq!(
+        s.life(0),
+        life,
+        "one creature left: the intervening if fails"
+    );
+}

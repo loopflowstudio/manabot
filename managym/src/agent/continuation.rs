@@ -590,6 +590,9 @@ impl Game {
                 if trigger.program {
                     frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
                 }
+                if let ([mode], true) = (trigger.chosen_modes.as_slice(), trigger.modes_chosen) {
+                    frame.mode = Some(*mode);
+                }
                 frames.push(frame);
             }
         }
@@ -654,8 +657,9 @@ impl Game {
                     super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
                 }
                 if let Some(effects) = crate::flow::resolution::stacked_trigger_program(ability) {
-                    frame.program(effects);
+                    frame.program(&effects);
                 }
+                frame.mode = crate::flow::resolution::stacked_trigger_mode(ability);
                 frame.inherited_from = ability
                     .source_lki
                     .as_ref()

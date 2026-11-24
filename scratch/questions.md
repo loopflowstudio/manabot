@@ -47,3 +47,7 @@
 - `can_add_clause_target` now owns "that share a creature type" for spells, trigger placement and retargeting. Only activation offers (`activated_ability_targets`) look ahead for a remaining partner while the minimum is unmet; trigger and spell offers can still offer a first pick with no partner. No printed trigger or spell uses a shared-type clause yet (Secret Tunnel is an activation), so the lookahead stays activation-only until one does.
 - Trigger-mode and activation availability count `min` legal candidates without the shared-type partner rule, matching `legal_spell_modes`.
 - `Condition::AttachedCountersAtLeast` sits beside `SourceCountersAtLeast`. A general `CountersAtLeast { on: ObjectSelector }` would merge them but renames TLA learning tokens; left until a third subject appears.
+
+## Pre-existing lib failure (2026-11-24)
+
+- `agent::observation_json::tests::historical_captures_move_battlefield_and_spell_rows_onto_their_records` fails at its last assertion (`!historical.agent_permanents.is_empty() && !historical.stack_objects.is_empty()`) on the base commit `25ba418a2a` too, before any of this slice's edits. It belongs to the merged observation/legacy-input work; left for gate.

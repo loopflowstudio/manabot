@@ -81,10 +81,15 @@ pub struct PendingTrigger {
     pub spent: crate::state::payment::PaymentReceipt,
     /// The attacking creature whose attack triggered its own ability.
     pub attacker: Option<crate::state::game_object::PermanentId>,
-    /// The modes of a "choose up to" ability chosen so far.
+    /// The modes of a printed modal ability chosen so far (CR 700.2b).
     pub chosen_modes: Vec<usize>,
-    /// Delayed triggers carry their effects inline instead of referencing
-    /// `Object::abilities` (`ability_index` is unused when set).
+    /// Whether the modal choice is complete, so `chosen_modes` is final;
+    /// distinguishes an "up to" ability that chose none from one not yet
+    /// choosing.
+    pub modes_chosen: bool,
+    /// Non-printed triggers (delayed, reflexive, granted, firebending) carry
+    /// their effects inline instead of referencing `Object::abilities`
+    /// (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -175,6 +180,7 @@ impl PendingTrigger {
             target_req_indices: Vec::new(),
             requirement_index: 0,
             chosen_modes: Vec::new(),
+            modes_chosen: false,
             context: None,
             player: None,
             attacker: None,
@@ -263,6 +269,9 @@ impl serde::Serialize for PendingTrigger {
         }
         if !self.chosen_modes.is_empty() {
             map.serialize_entry("chosen_modes", &self.chosen_modes)?;
+        }
+        if self.modes_chosen {
+            map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
         map.end()

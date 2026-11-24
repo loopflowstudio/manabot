@@ -2300,6 +2300,26 @@ impl From<i32> for EffectValue {
     }
 }
 
+/// The effects a printed triggered ability runs once its modes are chosen
+/// (CR 700.2b): a modal rule (`[Effect::TriggerModes]`) runs the chosen
+/// modes in printed order, possibly none under "up to"; any other program
+/// runs as printed.
+pub fn chosen_trigger_effects<'a>(
+    printed: &'a [Effect],
+    chosen_modes: &[usize],
+) -> std::borrow::Cow<'a, [Effect]> {
+    match printed {
+        [Effect::TriggerModes { modes, .. }] => modes
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| chosen_modes.contains(index))
+            .flat_map(|(_, effects)| effects.iter().cloned())
+            .collect::<Vec<_>>()
+            .into(),
+        _ => printed.into(),
+    }
+}
+
 /// Explicit clauses preserve independent targets, including repeated specs.
 /// Unwrapped effects retain the shared "that target" convention.
 pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> {
