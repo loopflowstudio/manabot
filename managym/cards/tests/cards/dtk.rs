@@ -102,3 +102,35 @@ fn dragonlords_servant_reduces_only_dragon_spells() {
     cast_card(&mut s, giant);
     assert_eq!(top_spell(&s).spent.total(), 4);
 }
+
+/// Inspiring Call draws one card for each creature its caster controls with
+/// a +1/+1 counter and makes exactly those creatures indestructible.
+#[test]
+fn inspiring_call_draws_for_and_protects_creatures_with_counters() {
+    use crate::support::{
+        game::{five_color_setup, set_counters},
+        inspect::{hand, keywords},
+        play::{cast, settle},
+    };
+    use managym::state::{card::Keyword, permanent::CounterKind};
+    let mut s = five_color_setup(&["Inspiring Call", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let plain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for id in [first, second, theirs] {
+        set_counters(&mut s, id, CounterKind::PlusOnePlusOne, 1);
+    }
+    let before = hand(&s, 0).len();
+    cast(&mut s, "Inspiring Call");
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 2);
+    for (id, protected) in [
+        (first, true),
+        (second, true),
+        (plain, false),
+        (theirs, false),
+    ] {
+        assert_eq!(keywords(&s, id).has(Keyword::Indestructible), protected);
+    }
+}

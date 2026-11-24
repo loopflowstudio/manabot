@@ -98,10 +98,14 @@ mod lea;
 mod m10;
 #[path = "cards/m12.rs"]
 mod m12;
+#[path = "cards/m13.rs"]
+mod m13;
 #[path = "cards/m14.rs"]
 mod m14;
 #[path = "cards/m15.rs"]
 mod m15;
+#[path = "cards/m19.rs"]
+mod m19;
 #[path = "cards/m20.rs"]
 mod m20;
 #[path = "cards/m21.rs"]
@@ -176,6 +180,8 @@ mod ths;
 mod tla;
 #[path = "cards/tle.rs"]
 mod tle;
+#[path = "cards/tmt.rs"]
+mod tmt;
 #[path = "cards/ulg.rs"]
 mod ulg;
 #[path = "cards/vis.rs"]

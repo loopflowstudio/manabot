@@ -360,3 +360,16 @@ fn countered_pact_mode_stays_used_when_the_permanent_is_stolen() {
         .collect();
     assert_eq!(modes, [0, 1, 3]);
 }
+
+/// Dwynen's Elite makes an Elf Warrior only if its controller controls
+/// another Elf; an opponent's Elf does not count.
+#[test]
+fn dwynens_elite_makes_an_elf_warrior_with_another_elf() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Dwynen's Elite", "Llanowar Elves"]);
+    s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    enter_and_settle(&mut s, "Dwynen's Elite");
+    assert!(s.battlefield_permanents_named(0, "Elf Warrior").is_empty());
+    enter_and_settle(&mut s, "Dwynen's Elite");
+    assert_eq!(s.battlefield_permanents_named(0, "Elf Warrior").len(), 1);
+}

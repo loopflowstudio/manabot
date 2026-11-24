@@ -212,3 +212,28 @@ fn gnarlback_rhino_draws_when_you_cast_a_spell_targeting_it() {
     assert_eq!(hand(&s, 0).len(), 1);
     assert!(hand(&s, 1).is_empty());
 }
+
+/// Cryptic Caves' draw ability is offered only while its controller
+/// controls five or more lands, Caves included, and sacrifices it.
+#[test]
+fn cryptic_caves_draws_only_with_five_lands() {
+    use crate::support::{
+        game::{five_color_setup, force_lands},
+        inspect::hand,
+        play::{activate, offers_ability, settle},
+    };
+    let mut s = five_color_setup(&["Cryptic Caves"]);
+    let caves = s.force_permanent_on_battlefield(0, "Cryptic Caves");
+    let lands = s.zone_size(0, managym::state::zone::ZoneType::Battlefield);
+    force_lands(&mut s, 0, "Island", 4usize.saturating_sub(lands));
+    force_lands(&mut s, 1, "Island", 5);
+    s.set_player_mana_pool(0, "1");
+    assert!(!offers_ability(&mut s, caves, 0), "four lands");
+    s.force_permanent_on_battlefield(0, "Island");
+    assert!(offers_ability(&mut s, caves, 0), "five lands");
+    let before = hand(&s, 0).len();
+    activate(&mut s, caves, 0);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 1);
+    assert!(s.game().state.permanents[caves].is_none(), "sacrificed");
+}

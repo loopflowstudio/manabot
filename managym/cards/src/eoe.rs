@@ -19,6 +19,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        plasma_bolt(),
         lumen_class_frigate(),
         virulent_silencer(),
         the_dominion_bracelet(),
@@ -197,6 +198,36 @@ fn unravel() -> CardDefinition {
                     otherwise: vec![],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn plasma_bolt() -> CardDefinition {
+    let text_box = "Plasma Bolt deals 2 damage to any target.\nVoid — Plasma Bolt deals 3 damage instead if a nonland permanent left the battlefield this turn or a spell was warped this turn.";
+    let target = || ObjectSelector::Target(TargetSpec::AnyTarget);
+    CardDefinition {
+        key: "eoe.plasma_bolt",
+        scryfall_id: "a1a1834b-76c2-4496-b8c5-18b69ab34c4c",
+        printed: PrintedCharacteristics {
+            name: "Plasma Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::If {
+                condition: Condition::AnyOf(vec![
+                    Condition::PermanentLeftThisTurn {
+                        who: Actor::AnyPlayer,
+                        nonland: true,
+                    },
+                    Condition::WarpedThisTurn {
+                        who: Actor::AnyPlayer,
+                    },
+                ]),
+                then: vec![Effect::deal_damage(3, target())],
+                otherwise: vec![Effect::deal_damage(2, target())],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

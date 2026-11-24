@@ -19,6 +19,8 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        hare_apparent(),
+        ingenious_leonin(),
         tragic_banshee(),
         vengeful_bloodwitch(),
         needletooth_pack(),
@@ -1572,6 +1574,87 @@ fn niv_mizzet_visionary() -> CardDefinition {
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::TriggeringAmount,
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn hare_apparent() -> CardDefinition {
+    let text_box = "When this creature enters, create a number of 1/1 white Rabbit creature tokens equal to the number of other creatures you control named Hare Apparent.\nA deck can have any number of cards named Hare Apparent.";
+    // CR 201.5c: the count reads other creatures by name as the trigger
+    // resolves, whatever happened to this one.
+    let namesakes = CardPredicate {
+        card_type: Some(CardType::Creature),
+        named: Some("Hare Apparent".into()),
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "fdn.hare_apparent",
+        scryfall_id: "9fc6f0e9-eb5f-4bc0-b3d7-756644b66d12",
+        printed: PrintedCharacteristics {
+            name: "Hare Apparent".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rabbit".into(), "Noble".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens(
+                    "token.rabbit",
+                    ObjectSelector::each_other_you_control(namesakes).count(),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ingenious_leonin() -> CardDefinition {
+    let text_box = "{3}{W}: Put a +1/+1 counter on another target attacking creature you control. If that creature is a Cat, it gains first strike until end of turn. (It deals combat damage before creatures without first strike.)";
+    let spec = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate {
+            card_type: Some(CardType::Creature),
+            attacking: true,
+            ..Default::default()
+        },
+    };
+    let target = || ObjectSelector::Target(spec.clone());
+    CardDefinition {
+        key: "fdn.ingenious_leonin",
+        scryfall_id: "ea566679-4202-4076-9314-142241485f6e",
+        printed: PrintedCharacteristics {
+            name: "Ingenious Leonin".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Soldier".into()],
+            power: Some(4),
+            toughness: Some(4),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{W}"),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::another(spec.clone()),
+                    effects: vec![
+                        Effect::put_counters(target(), CounterKind::PlusOnePlusOne, 1),
+                        Effect::If {
+                            condition: Condition::TargetMatches(CardPredicate::subtype("Cat")),
+                            then: vec![Effect::until_end_of_turn(
+                                target(),
+                                Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
+                            )],
+                            otherwise: vec![],
+                        },
+                    ],
+                }],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

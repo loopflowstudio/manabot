@@ -15,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        inspiring_call(),
         surrak_the_hunt_caller(),
         clone_legion(),
         dragonlords_servant(),
@@ -122,6 +123,38 @@ fn surrak_the_hunt_caller() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
                 )],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn inspiring_call() -> CardDefinition {
+    let text_box = "Draw a card for each creature you control with a +1/+1 counter on it. Those creatures gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)";
+    let countered = || {
+        ObjectSelector::each_you_control(CardPredicate {
+            card_type: Some(CardType::Creature),
+            with_counter: true,
+            ..Default::default()
+        })
+    };
+    CardDefinition {
+        key: "dtk.inspiring_call",
+        scryfall_id: "c565b991-7021-4b81-b9c0-f7231daae360",
+        printed: PrintedCharacteristics {
+            name: "Inspiring Call".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: countered().count(),
+                },
+                Effect::until_end_of_turn(
+                    countered(),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
-        TriggerSubject, TurnStep,
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        dwynens_elite(),
         boggart_brute(),
         demonic_pact(),
         elemental_bond(),
@@ -127,6 +128,36 @@ fn demonic_pact() -> CardDefinition {
                     ],
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dwynens_elite() -> CardDefinition {
+    let text_box = "When this creature enters, if you control another Elf, create a 1/1 green Elf Warrior creature token.";
+    CardDefinition {
+        key: "ori.dwynens_elite",
+        scryfall_id: "c203722b-3f16-4b6c-9b2e-18169d3f80c9",
+        printed: PrintedCharacteristics {
+            name: "Dwynen's Elite".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Warrior".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::compare(
+                    ObjectSelector::each_other_you_control(CardPredicate::subtype("Elf")).count(),
+                    CompareOp::Ge,
+                    1,
+                )),
+                effects: vec![Effect::create_tokens("token.green_elf_warrior", 1)],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

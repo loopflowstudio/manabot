@@ -25,6 +25,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         cat(),
         clue(),
         dragon(),
+        dragon_5_5(),
         drake(),
         elf_warrior(),
         green_elf_warrior(),
@@ -38,6 +39,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         monk(),
         plain_spirit(),
         powerstone(),
+        rabbit(),
         soldier(),
         spirit(),
         treasure(),
@@ -214,6 +216,20 @@ fn dragon() -> TokenDefinition {
     )
 }
 
+/// The plain 5/5 flying Dragon (Dragonmaster Outcast), beside TLA's
+/// firebending 4/4.
+fn dragon_5_5() -> TokenDefinition {
+    let base = face("Dragon", [CardType::Creature], &["Dragon"], "Flying");
+    token(
+        "token.dragon_5_5",
+        "56c0fa29-fbcb-41fe-94ab-a39b1154c99b",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Flying]),
+            ..creature(base, 5, 5, [Color::Red])
+        },
+    )
+}
+
 fn elf_warrior() -> TokenDefinition {
     let base = face("Elf Warrior", [CardType::Creature], &["Elf", "Warrior"], "");
     token(
@@ -328,6 +344,15 @@ fn monk() -> TokenDefinition {
             }],
             ..creature(base, 1, 1, [Color::Red])
         },
+    )
+}
+
+fn rabbit() -> TokenDefinition {
+    let base = face("Rabbit", [CardType::Creature], &["Rabbit"], "");
+    token(
+        "token.rabbit",
+        "22ca55e0-d269-4178-bc90-920a12066e4f",
+        creature(base, 1, 1, [Color::White]),
     )
 }
 

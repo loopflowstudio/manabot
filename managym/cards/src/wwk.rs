@@ -1,8 +1,8 @@
 //! Worldwake.
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, PaymentCost, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
@@ -10,7 +10,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![kalastria_highborn()]
+    vec![dragonmaster_outcast(), kalastria_highborn()]
 }
 
 fn kalastria_highborn() -> CardDefinition {
@@ -47,6 +47,37 @@ fn kalastria_highborn() -> CardDefinition {
                         if_declined: vec![],
                     }],
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dragonmaster_outcast() -> CardDefinition {
+    let text_box = "At the beginning of your upkeep, if you control six or more lands, create a 5/5 red Dragon creature token with flying.";
+    CardDefinition {
+        key: "wwk.dragonmaster_outcast",
+        scryfall_id: "c2297a4e-3c19-4748-9150-efbd2513066a",
+        printed: PrintedCharacteristics {
+            name: "Dragonmaster Outcast".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Shaman".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                intervening_if: Some(Condition::ControlsAtLeast {
+                    count: 6,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                    distinct_names: false,
+                }),
+                effects: vec![Effect::create_tokens("token.dragon_5_5", 1)],
             }],
             text_box: text_box.into(),
             ..Default::default()

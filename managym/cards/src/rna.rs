@@ -3,14 +3,14 @@ use managym_state::{
     ability::{
         Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![gateway_sneak()]
+    vec![archway_angel(), gateway_sneak()]
 }
 
 fn gateway_sneak() -> CardDefinition {
@@ -48,6 +48,39 @@ fn gateway_sneak() -> CardDefinition {
                     }],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn archway_angel() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, you gain 2 life for each Gate you control.";
+    CardDefinition {
+        key: "rna.archway_angel",
+        scryfall_id: "b209d219-b946-4226-a8b4-65a5f3837fac",
+        printed: PrintedCharacteristics {
+            name: "Archway Angel".into(),
+            mana_cost: Some(ManaCost::parse("{5}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                // One gain of twice the Gates (CR 119.9), not one per Gate.
+                effects: vec![Effect::gain_life(EffectValue::Scaled {
+                    factor: 2,
+                    value: Box::new(
+                        ObjectSelector::each_you_control(CardPredicate::subtype("Gate")).count(),
+                    ),
+                })],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

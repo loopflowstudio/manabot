@@ -7,16 +7,17 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
+        ManaAbility, PrintedCharacteristics,
     },
     effect::EffectDuration,
-    mana::ManaCost,
+    mana::{Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        cryptic_caves(),
         agent_of_treachery(),
         brought_back(),
         spectral_sailor(),
@@ -188,6 +189,41 @@ fn gnarlback_rhino() -> CardDefinition {
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cryptic_caves() -> CardDefinition {
+    let text_box = "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Draw a card. Activate only if you control five or more lands.";
+    CardDefinition {
+        key: "m20.cryptic_caves",
+        scryfall_id: "fde9e9cb-68ab-4856-8ad6-30f66666dd93",
+        printed: PrintedCharacteristics {
+            name: "Cryptic Caves".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                sacrifice_source: true,
+                condition: Some(Condition::ControlsAtLeast {
+                    count: 5,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                    distinct_names: false,
+                }),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
             }],
             text_box: text_box.into(),
             ..Default::default()

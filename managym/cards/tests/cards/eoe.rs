@@ -488,3 +488,41 @@ fn unravel_draws_when_the_countered_spell_cost_less_than_its_mana_value() {
     assert!(!unravel(0, "Tolarian Terror", None, 7));
     assert!(!unravel(0, "Exsanguinate", Some(2), 4));
 }
+
+/// Plasma Bolt deals 3 instead of 2 once a nonland permanent left the
+/// battlefield this turn, whoever controlled it, or once any player warped
+/// a spell; a departing land is not enough.
+#[test]
+fn plasma_bolt_deals_three_after_a_nonland_departure_or_a_warp() {
+    use crate::support::{
+        game::{five_color_setup, force_new_card_in_hand, move_card},
+        play::{cast_card, settle},
+    };
+    use managym::state::{
+        game_object::{PlayerId, Target},
+        zone::ZoneType,
+    };
+    let bolt = |s: &mut crate::support::game::Scenario| {
+        let life = s.life(1);
+        s.set_player_mana_pool(0, "R");
+        let card = force_new_card_in_hand(s, 0, "Plasma Bolt");
+        cast_card(s, card);
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(s);
+        life - s.life(1)
+    };
+    let mut s = five_color_setup(&["Plasma Bolt", "Gray Ogre"]);
+    assert_eq!(bolt(&mut s), 2, "nothing left");
+    let land = s.force_permanent_on_battlefield(0, "Mountain");
+    let land = s.game().state.permanents[land].as_ref().unwrap().object;
+    move_card(&mut s, land, ZoneType::Graveyard);
+    assert_eq!(bolt(&mut s), 2, "a land left");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre = s.game().state.permanents[ogre].as_ref().unwrap().object;
+    move_card(&mut s, ogre, ZoneType::Graveyard);
+    assert_eq!(bolt(&mut s), 3, "the opponent's creature left");
+
+    let mut s = five_color_setup(&["Plasma Bolt"]);
+    s.game_mut().state.turn.history[1].warped_this_turn = true;
+    assert_eq!(bolt(&mut s), 3, "the opponent warped");
+}

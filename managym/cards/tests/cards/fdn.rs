@@ -3283,3 +3283,70 @@ fn niv_mizzet_draws_noncombat_damage_its_controllers_sources_deal_to_an_opponent
         .static_abilities
         .contains(&managym::state::card::StaticAbility::NoMaximumHandSize));
 }
+
+/// Hare Apparent counts the other creatures its controller controls by name
+/// as its trigger resolves: two others make two Rabbits, the opponent's copy
+/// and the Rabbits themselves never count, and a fourth copy sees three.
+#[test]
+fn hare_apparent_makes_a_rabbit_for_each_other_hare_apparent_you_control() {
+    use crate::support::play::enter_and_settle;
+    let mut s = five_color_setup(&["Hare Apparent"]);
+    s.force_permanent_on_battlefield(0, "Hare Apparent");
+    s.force_permanent_on_battlefield(0, "Hare Apparent");
+    s.force_permanent_on_battlefield(1, "Hare Apparent");
+    enter_and_settle(&mut s, "Hare Apparent");
+    assert_eq!(s.battlefield_permanents_named(0, "Rabbit").len(), 2);
+    assert!(s.battlefield_permanents_named(1, "Rabbit").is_empty());
+    enter_and_settle(&mut s, "Hare Apparent");
+    assert_eq!(s.battlefield_permanents_named(0, "Rabbit").len(), 5);
+}
+
+/// Ingenious Leonin targets another attacking creature its controller
+/// controls: itself, a creature that is not attacking and the opponent's
+/// creatures are not offered. Every target gets a counter; only a Cat gains
+/// first strike.
+#[test]
+fn ingenious_leonin_grows_another_attacker_and_gives_a_cat_first_strike() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{counters, keywords, offered_targets},
+        play::{activate, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{card::Keyword, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Ingenious Leonin", "Leonin Vanguard", "Gray Ogre"]);
+    let leonin = s.force_permanent_on_battlefield(0, "Ingenious Leonin");
+    let cat = s.force_permanent_on_battlefield(0, "Leonin Vanguard");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let home = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for id in [leonin, cat, ogre, home] {
+        clear_summoning_sickness(&mut s, id);
+    }
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == [leonin, cat, ogre].contains(permanent))
+        });
+        s.step_action(index.unwrap());
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for target in [cat, ogre] {
+        s.set_player_mana_pool(0, "3W");
+        activate(&mut s, leonin, 0);
+        let offered = offered_targets(&s);
+        assert!(offered.contains(&Target::Permanent(cat)));
+        assert!(offered.contains(&Target::Permanent(ogre)));
+        for absent in [leonin, home, theirs] {
+            assert!(!offered.contains(&Target::Permanent(absent)));
+        }
+        assert!(s.choose_target(Target::Permanent(target)));
+        settle(&mut s);
+    }
+    assert_eq!((counters(&s, cat), counters(&s, ogre)), (1, 1));
+    assert!(keywords(&s, cat).has(Keyword::FirstStrike));
+    assert!(!keywords(&s, ogre).has(Keyword::FirstStrike));
+}

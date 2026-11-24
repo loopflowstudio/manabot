@@ -95,3 +95,27 @@ fn kalastria_highborn_reads_a_dying_creatures_last_known_types() {
         assert_eq!(place_targeting_opponent(&mut s), expected, "{case}");
     }
 }
+
+/// Dragonmaster Outcast makes a 5/5 flying Dragon at its controller's
+/// upkeep only while that player controls six or more lands.
+#[test]
+fn dragonmaster_outcast_makes_a_dragon_with_six_lands() {
+    use crate::support::game::{five_color_setup, force_lands};
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+    for (lands, dragons) in [(5, 0), (6, 1)] {
+        let mut s = five_color_setup(&["Dragonmaster Outcast"]);
+        s.force_permanent_on_battlefield(0, "Dragonmaster Outcast");
+        let have = s.zone_size(0, managym::state::zone::ZoneType::Battlefield) - 1;
+        force_lands(&mut s, 0, "Mountain", lands - have.min(lands));
+        force_lands(&mut s, 1, "Forest", 6);
+        s.advance_to_active_step(1, StepKind::Main);
+        s.advance_to_active_step(0, StepKind::Draw);
+        let made = s.battlefield_permanents_named(0, "Dragon");
+        assert_eq!(made.len(), dragons, "{lands} lands");
+        if let Some(&dragon) = made.first() {
+            let view = s.game().characteristics(dragon);
+            assert_eq!((view.power, view.toughness), (5, 5));
+            assert!(view.keywords.has(Keyword::Flying));
+        }
+    }
+}

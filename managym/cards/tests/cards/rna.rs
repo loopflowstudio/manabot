@@ -69,3 +69,16 @@ fn gateway_sneak_slips_past_blockers_after_a_gate_and_draws_on_combat_damage() {
         );
     }
 }
+
+/// Archway Angel gains two life for each Gate as one life gain (CR 119.9):
+/// three Gates make one gain of six.
+#[test]
+fn archway_angel_gains_two_life_per_gate_in_one_event() {
+    use crate::support::game::force_lands;
+    let mut s = five_color_setup(&["Archway Angel", "Azorius Guildgate"]);
+    force_lands(&mut s, 0, "Azorius Guildgate", 3);
+    force_lands(&mut s, 1, "Azorius Guildgate", 1);
+    enter_and_settle(&mut s, "Archway Angel");
+    s.assert_life(0, 26);
+    assert_eq!(s.game().state.turn.history[0].life_gains, 1);
+}

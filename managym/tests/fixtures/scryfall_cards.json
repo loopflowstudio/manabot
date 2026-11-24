@@ -7849,5 +7849,173 @@
       "B",
       "G"
     ]
+  },
+  "Inspiring Call": {
+    "name": "Inspiring Call",
+    "mana_cost": "{2}{G}",
+    "type_line": "Instant",
+    "keywords": [],
+    "oracle_text": "Draw a card for each creature you control with a +1/+1 counter on it. Those creatures gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Plasma Bolt": {
+    "name": "Plasma Bolt",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Void"
+    ],
+    "oracle_text": "Plasma Bolt deals 2 damage to any target.\nVoid — Plasma Bolt deals 3 damage instead if a nonland permanent left the battlefield this turn or a spell was warped this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Dwynen's Elite": {
+    "name": "Dwynen's Elite",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Elf Warrior",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, if you control another Elf, create a 1/1 green Elf Warrior creature token.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Archway Angel": {
+    "name": "Archway Angel",
+    "mana_cost": "{5}{W}",
+    "type_line": "Creature — Angel",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you gain 2 life for each Gate you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Ingenious Leonin": {
+    "name": "Ingenious Leonin",
+    "mana_cost": "{4}{W}",
+    "type_line": "Creature — Cat Soldier",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{3}{W}: Put a +1/+1 counter on another target attacking creature you control. If that creature is a Cat, it gains first strike until end of turn. (It deals combat damage before creatures without first strike.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Brass's Bounty": {
+    "name": "Brass's Bounty",
+    "mana_cost": "{6}{R}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "For each land you control, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Cryptic Caves": {
+    "name": "Cryptic Caves",
+    "mana_cost": "",
+    "type_line": "Land",
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this land: Draw a card. Activate only if you control five or more lands.",
+    "colors": []
+  },
+  "Krenko, Mob Boss": {
+    "name": "Krenko, Mob Boss",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Legendary Creature — Goblin Warrior",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Michelangelo, Game Master": {
+    "name": "Michelangelo, Game Master",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Creature — Mutant Ninja Turtle",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Disappear"
+    ],
+    "oracle_text": "Disappear — At the beginning of your end step, if a permanent left the battlefield under your control this turn, put a +1/+1 counter on Michelangelo.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dragonmaster Outcast": {
+    "name": "Dragonmaster Outcast",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Human Shaman",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, if you control six or more lands, create a 5/5 red Dragon creature token with flying.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Ghalta, Primal Hunger": {
+    "name": "Ghalta, Primal Hunger",
+    "mana_cost": "{10}{G}{G}",
+    "type_line": "Legendary Creature — Elder Dinosaur",
+    "power": "12",
+    "toughness": "12",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "This spell costs {X} less to cast, where X is the total power of creatures you control.\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Volley Veteran": {
+    "name": "Volley Veteran",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, it deals damage to target creature an opponent controls equal to the number of Goblins you control.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Leonin Vanguard": {
+    "name": "Leonin Vanguard",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Cat Soldier",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "At the beginning of combat on your turn, if you control three or more creatures, this creature gets +1/+1 until end of turn and you gain 1 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Hare Apparent": {
+    "name": "Hare Apparent",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Rabbit Noble",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, create a number of 1/1 white Rabbit creature tokens equal to the number of other creatures you control named Hare Apparent.\nA deck can have any number of cards named Hare Apparent.",
+    "colors": [
+      "W"
+    ]
   }
 }
