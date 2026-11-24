@@ -85,3 +85,7 @@ The compression pass started at `57c18aa9d0`, which already contained Alignment 
 - The phase is limited to two authoring cuts (one enchant statement per Aura; `StaticAbility::continuous` for the five new grants plus a debug assertion for a layerless modification). The task brief asks for engine edits that stay "minimal and local", and every definition present at the base keeps its serialized bytes.
 - Open: static prohibitions (`Restriction`, `BlockRestriction::CantBlock`, `CantBeBlockedIf`) and record prohibitions (`Modification::CantBlock`, `DoesntUntap`, `CantBeBlocked`) are two vocabularies for one fact. One vocabulary would let a status modification in a `Continuous` static answer the same query, but moving the TLA definitions changes their token programs and needs a declared pinned-pilot break. Not started; a candidate Task for the coverage wave.
 - `Ability::Triggered { condition, intervening_if: None, effects }` is written out 286 times across the cards crate (26 on this branch). An `Ability::when(condition, effects)` constructor would be sugar only; left out to avoid a wide `tla.rs` diff beside the parallel engine Tasks.
+
+## Decomposition review (`0c9104703e`)
+
+- "Do not use `KeywordGrant`/`PtBuff`/`TypeGrant` in new definitions" is enforced only by the plan. A cards-crate test listing the 12 base users (`fdn::leyline_axe`, `eoe`, `tle`, `wth`, `zen`, `tla`) would make it durable; left out as outside this Task's authored scope.
