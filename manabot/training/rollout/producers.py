@@ -462,9 +462,9 @@ class ShardedVectorEnv(BufferedStreams):
         games_path: Path | None = None,
         record_fraction: float = 1.0,
     ) -> None:
-        if workers not in (2, 4) or workers > num_envs:
+        if workers < 2 or workers > num_envs:
             raise ValueError(
-                "parallel producers require 2 or 4 workers and at least one stream each"
+                "parallel producers require at least 2 workers and at least one stream each"
             )
         if not 0 <= seed < 2**64:
             raise ValueError("native seed must fit uint64")

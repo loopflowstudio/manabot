@@ -172,7 +172,7 @@ class SelfPlay(BaseModel):
     )
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
-    workers: Literal[1, 2, 4] = 1
+    workers: int = Field(default=1, ge=1)
     threads: int = Field(default=1, ge=1, le=4)
     bucketed_shapes: bool = False
     live_tokens: bool = False

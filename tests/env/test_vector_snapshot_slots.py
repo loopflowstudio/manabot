@@ -499,3 +499,28 @@ def test_branch_record_reproduces_commands_interventions_and_failed_suffix(
         and result["matches_binding"]
         and result["matches_error"]
     )
+
+
+def test_sharded_producers_support_arbitrary_worker_counts() -> None:
+    space = ObservationSpace()
+    with pytest.raises(ValueError, match="at least 2 workers"):
+        ShardedVectorEnv(8, 42, workers=1)
+    with pytest.raises(ValueError, match="at least one stream each"):
+        ShardedVectorEnv(6, 42, workers=7)
+
+    with closing(ShardedVectorEnv(8, 42, workers=6, auto_reset=False)) as vector:
+        buffers = allocate_vector_buffers(space, 8)
+        vector.set_buffers(buffers, layout=space.layout)
+        vector.reset_all_into_buffers(setup())
+        assert vector.next_fresh_seeds() == [50, 51, 52, 53, 54, 55, 56, 57]
+        captured = vector.capture_slots([5, 0])
+        assert [c.slot for c in captured] == [5, 0]
+        installed = vector.install_slots(
+            [
+                SlotInstall(7, root_id(captured[1].recipe), captured[1].recipe, captured[1].hot_handle),
+                SlotInstall(2, -1, None),
+            ]
+        )
+        assert [r.slot for r in installed] == [7, 2]
+        assert installed[0].root_digest == captured[1].root_digest
+        assert vector.current_game_seeds()[7] == 42 and vector.current_game_seeds()[2] == 52

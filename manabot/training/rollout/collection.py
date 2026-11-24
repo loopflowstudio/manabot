@@ -813,8 +813,8 @@ def open_collector(
         raise ValueError(
             "per-game roster sampling requires current-self and ordinary roots"
         )
-    if workers not in (1, 2, 4) or workers > num_envs:
-        raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
+    if workers < 1 or workers > num_envs:
+        raise ValueError("workers must be at least 1 and cannot exceed streams")
     if workers != 1 and root is not None:
         raise ValueError("diagnostic roots require one producer")
     if opponent_mode not in OPPONENT_MODES:

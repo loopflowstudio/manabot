@@ -202,8 +202,8 @@ seats, complete-game closure and a self-play behavior policy. Snapshot collectio
 and adaptive matchup sampling each own the episode schedule.
 
 Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` enables
-deferred reset with 1, 2 or 4 native workers. With one worker you may also
-supply a buffered `SnapshotVector` or a factory accepting
+deferred reset across native workers (`1 <= workers <= streams`). With one worker
+you may also supply a buffered `SnapshotVector` or a factory accepting
 `(observation_space, match, num_envs, seed)`. The deprecated
 `InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
 
@@ -221,7 +221,7 @@ from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
 class SnapshotRecipeConfig(BaselineConfig):
     updates: int = Field(default=8, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
-    workers: Literal[1, 2, 4] = 2
+    workers: int = Field(default=2, ge=1)
     replay_fraction: float = Field(default=0.5, ge=0, le=1)
     fresh_floor: float = Field(default=0.25, ge=0, le=1)
     group_size: int = Field(default=4, ge=1)

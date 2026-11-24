@@ -514,12 +514,13 @@ return the settings our recipes use. A variant is a training function that
 changes a copy's fields (`settings.model_copy(update={...})`) in its body and
 adds a config field only for what its runs vary.
 
-`workers` accepts 1 (default), 2 or 4 CPU observation producers: persistent
+`workers` accepts 1 (default) or any positive count up to `streams` CPU
+observation producers: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
 unchanged across partitions. Sampled rosters (a deck source or
 `elemental-uniform`) draw each game's decks from that game's native seed, so
-draws, exposure and batches agree for 1, 2 and 4 producers. `threads` controls
+draws, exposure and batches agree for any worker count. `threads` controls
 Torch threads independently. `sampled_self_play()` defaults to four producers,
 a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in

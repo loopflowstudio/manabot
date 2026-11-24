@@ -1,7 +1,5 @@
 """Reusable settings for current self-play recipes. No builder executes training."""
 
-from typing import Literal
-
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -60,7 +58,7 @@ def sampled_self_play(
     deck_source: UniformDecks | None = None,
     match: MatchConfig | None = None,
     elemental_uniform: bool = False,
-    workers: Literal[1, 2, 4] = 4,
+    workers: int = 4,
 ) -> SelfPlay:
     """Damped self-play over a sampled roster with a fixed, fitted rate horizon.
 
