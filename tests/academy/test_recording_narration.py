@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from managym.academy import server
-from managym.academy.recording import OwnStep, Recording, narrate_move
+from managym.academy.recording import OwnStep, Recording, narrate_move, own_steps
 
 CONFIG: dict[str, Any] = {
     "hero_deck": {"Island": 20},
@@ -331,4 +331,41 @@ def test_a_reveal_is_the_move_another_seat_made() -> None:
             [own("learn", 0, "Take Kyoshi Warriors")],
         )
         == "Learn: take Kyoshi Warriors"
+    )
+
+
+def assignment(actor: int, chosen: int, *offers: str) -> dict[str, Any]:
+    return {
+        "actor": actor,
+        "action": chosen,
+        "action_description": offers[chosen],
+        "actions": [{"type": "CHOOSE_MODE", "description": o} for o in offers],
+        "observation": {"decision_context": {"stage": "assign_combat_damage"}},
+    }
+
+
+def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
+    elves = (
+        "Hill Giant assigns 1 to Llanowar Elves, 2 left to assign",
+        "Hill Giant assigns 2 to Llanowar Elves, 1 left to assign",
+    )
+    bears = ("Hill Giant assigns 1 to Grizzly Bears, 0 to defending player",)
+    events = [
+        {
+            "actor": 1,
+            "action": 0,
+            "action_description": "Pass priority",
+            "actions": [{"type": "PRIORITY_PASS_PRIORITY"}],
+            "observation": {"decision_context": {"stage": "priority"}},
+        },
+        assignment(0, 1, *elves),
+        assignment(0, 0, *bears),
+    ]
+    steps = own_steps(events, 2)
+    assert [step.chosen for step in steps] == [elves[1], bears[0]]
+    assert narrate_move(
+        board("assign_combat_damage"), board("priority"), [], steps
+    ) == (
+        "Hill Giant assigns 2 to Llanowar Elves, 1 left to assign, "
+        "Hill Giant assigns 1 to Grizzly Bears, 0 to defending player"
     )

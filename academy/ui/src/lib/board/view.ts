@@ -105,6 +105,9 @@ const PRIMARY_VERBS = new Set(['pass_priority', 'pay']);
 /** Declining stays a deliberate button: a click on a card never declines. */
 const DECLINE_TYPES = new Set(['DECLINE_CHOICE', 'NO_ATTACK', 'NO_BLOCK']);
 const COMBAT_VERBS = new Set(['declare_attackers', 'declare_blockers']);
+/** Amounts of combat damage: each names an attacker and a blocker, so none
+ * belongs to one card's menu; they sit beside the prompt as buttons. */
+const BUTTON_STAGES = new Set(['assign_combat_damage']);
 const ROLE_ORDER = ['target', 'source', 'choice'];
 
 /** Ids of every card the board draws, by the zone it is drawn in. */
@@ -116,8 +119,9 @@ function drawnObjects(frame: ExperienceFrame): Set<number> {
   ].map(card => card.id));
 }
 
-function isButton(offer: InteractionOffer): boolean {
+function isButton(offer: InteractionOffer, frame: ExperienceFrame): boolean {
   if (PRIMARY_VERBS.has(offer.verb) || DECLINE_TYPES.has(offer.action_type)) return true;
+  if (BUTTON_STAGES.has(frame.projection.decision_context?.stage ?? '')) return true;
   // A combat prompt asks about one creature. Attacking with it is a click on
   // it (the declaration names it as its source), and blocking is a click on
   // the attacker (the target); every other combat answer, declining
@@ -126,7 +130,7 @@ function isButton(offer: InteractionOffer): boolean {
 }
 
 function anchorOf(offer: InteractionOffer, frame: ExperienceFrame, drawn: Set<number>): Anchor {
-  if (isButton(offer)) return { kind: 'button' };
+  if (isButton(offer, frame)) return { kind: 'button' };
   const players = [frame.projection.agent, frame.projection.opponent];
   const subjects = [...(offer.subjects ?? [])]
     .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
@@ -146,13 +150,16 @@ function anchorOf(offer: InteractionOffer, frame: ExperienceFrame, drawn: Set<nu
   return offer.focus.length ? { kind: 'tray', id: offer.focus[0] } : { kind: 'button' };
 }
 
-/** Objects named by combat buttons: the creature the prompt is about. */
+/** Objects named by combat buttons: the creature the prompt is about, or the
+ * attacker and blocker an amount of combat damage is between. */
 function askedObjects(placed: PlacedOffer[], frame: ExperienceFrame): Set<number> {
   const asked = new Set<number>();
-  const source = frame.projection.decision_context?.source;
+  const context = frame.projection.decision_context;
+  const source = context?.source;
   if (source && source.subject.kind === 'object' && frame.prompt) asked.add(source.display_id);
+  const combatStage = BUTTON_STAGES.has(context?.stage ?? '');
   for (const { offer, anchor } of placed) {
-    if (anchor.kind !== 'button' || !COMBAT_VERBS.has(offer.verb)) continue;
+    if (anchor.kind !== 'button' || !(combatStage || COMBAT_VERBS.has(offer.verb))) continue;
     for (const subject of offer.subjects ?? []) asked.add(subject.object.display_id);
     if (!offer.subjects?.length) offer.focus.forEach(id => asked.add(id));
   }

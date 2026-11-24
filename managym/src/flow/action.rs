@@ -28,7 +28,8 @@ use crate::{
 impl Game {
     /// Whether `action`'s mode index is an announced number rather than an
     /// option: X for a spell (or its replicate count), X for an activation,
-    /// or a resolving optional payment's X.
+    /// a resolving optional payment's X, or the combat damage an attacker
+    /// assigns to one blocker.
     pub(crate) fn announces_x(&self, action: &Action) -> bool {
         use crate::flow::decision::Decision;
         matches!(action, Action::ChooseMode { .. })
@@ -40,7 +41,10 @@ impl Game {
                 .suspended_decision
                 .as_ref()
                 .is_some_and(|suspended| {
-                    matches!(suspended.decision, Decision::ChoosePaymentX { .. })
+                    matches!(
+                        suspended.decision,
+                        Decision::ChoosePaymentX { .. } | Decision::AssignCombatDamage { .. }
+                    )
                 }))
     }
 
@@ -128,7 +132,17 @@ impl Game {
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
-            Action::ChooseMode { mode, .. } if self.announces_x(action) => {
+            // A combat damage amount names its attacker and blocker below.
+            Action::ChooseMode { mode, .. }
+                if self.announces_x(action)
+                    && !self
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .is_some_and(|suspended| {
+                            matches!(suspended.decision, Decision::AssignCombatDamage { .. })
+                        }) =>
+            {
                 Some(format!("X = {mode}"))
             }
             Action::ChooseMode { mode, .. }

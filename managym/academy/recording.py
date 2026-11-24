@@ -33,11 +33,12 @@ from managym.experience_projection import redact_observation
 ANNOUNCING_STAGES = frozenset(
     {"payment", "additional_cost", "targets", "mode", "announcement"}
 )
-# Stages of a choice made while a spell or ability resolves (the suspended
-# decisions of `decision_context.rs`). Mana payment, Learn and casting during
-# resolution are named by their own lines.
+# Stages of a choice made while a spell or ability resolves, or while combat
+# damage is assigned (the suspended decisions of `decision_context.rs`). Mana
+# payment, Learn and casting during resolution are named by their own lines.
 RESOLVING_STAGES = frozenset(
     {
+        "assign_combat_damage",
         "resolution_choice",
         "private_inspection",
         "scry",
@@ -707,6 +708,9 @@ def _resolution(own: Sequence[OwnStep]) -> str:
             cards = [_ORDERED.sub(r"\1", offer) for offer in placed]
             end = "on the bottom" if step.stage == "order_library_bottom" else "on top"
             phrases.append(f"put {_in_order(cards)} {end}")
+        elif step.stage == "assign_combat_damage":
+            # "Serra Angel assigns 2 to Grizzly Bears, ...": a name leads it.
+            phrases.append(step.chosen)
         else:
             kept = _KEPT.fullmatch(step.chosen)
             phrases.append(

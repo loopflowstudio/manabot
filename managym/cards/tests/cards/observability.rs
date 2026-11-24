@@ -5998,3 +5998,98 @@ fn mazes_end_exposes_its_distinct_name_threshold_and_win_instruction() {
     assert!(!passage.contains(&field));
     assert!(maze.contains(&(TokenKind::Variant, name_value("Effect::WinGame"))));
 }
+
+/// A 17/3 trampling War Mammoth blocked by Llanowar Elves, paused on the
+/// first combat damage assignment (1 through 17 to the Elves).
+fn trample_assignment() -> (Scenario, PermanentId, PermanentId) {
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("War Mammoth", 16)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        70213,
+    );
+    let mammoth = s.force_permanent_on_battlefield(0, "War Mammoth");
+    let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    clear_summoning_sickness(&mut s, mammoth);
+    until_end_of_turn(&mut s, mammoth, Modification::pump(14, 0));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    (s, mammoth, elves)
+}
+
+/// Combat damage is an announced amount: each offer writes its number in
+/// `has_x`/`x`, so 15 and 16 stay distinct where the mode index saturates,
+/// keeps its "assigns" wording, and focuses the attacker and the blocker.
+#[test]
+fn combat_damage_amounts_carry_their_value_and_focus_attacker_and_blocker() {
+    let (s, mammoth, elves) = trample_assignment();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let offers = &observation.action_space.actions;
+    assert_eq!(offers.len(), 17);
+    let rows = encoded(&s, 0);
+    let width = rows.actions.len() / rows.actions_valid.len();
+    let public = |id: PermanentId| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32;
+    let focus_rows = [object_index(&s, 0, mammoth), object_index(&s, 0, elves)];
+    let slots = ObservationEncoderConfig::default().max_focus_objects;
+    let mut amounts = Vec::new();
+    for (index, (offer, row)) in offers
+        .iter()
+        .zip(rows.actions.chunks_exact(width))
+        .enumerate()
+    {
+        assert!(offer.announces_x);
+        let mode = offer.mode_index.expect("an amount offer has its value");
+        assert_eq!(
+            offer.description,
+            Some(format!(
+                "War Mammoth assigns {mode} to Llanowar Elves, {} to defending player",
+                17 - mode
+            ))
+        );
+        assert_eq!(row[action::HAS_X], 1.0);
+        assert_eq!(row[action::X], mode as f32 / 10.0);
+        amounts.push(row[action::X]);
+        assert_eq!(offer.focus, [public(mammoth), public(elves)]);
+        let focus = &rows.action_focus[index * slots..index * slots + 2];
+        assert_eq!(
+            focus.iter().map(|v| *v as usize).collect::<Vec<_>>(),
+            focus_rows
+        );
+    }
+    amounts.dedup();
+    assert_eq!(
+        amounts.len(),
+        17,
+        "every amount, 15 and 16 included, is distinct"
+    );
+}
+
+/// The attacker, blocker and assigned damage are public battlefield state, so
+/// a defender's possible world keeps the attacker's pending assignment.
+#[test]
+fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
+    use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
+    let (s, ..) = trample_assignment();
+    let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
+    assert!(!space.worlds().is_empty());
+    for index in 0..space.worlds().len().min(4) {
+        let branch = space
+            .materialize_index(
+                s.game(),
+                index,
+                17,
+                MaterializeMode::RefreshOpponentCommitment,
+            )
+            .expect("an assignment is a supported acting prompt");
+        assert_eq!(
+            branch.action_space().unwrap().actions,
+            s.game().action_space().unwrap().actions
+        );
+        assert_eq!(
+            Observation::for_player(&branch, PlayerId(0)).action_space,
+            Observation::for_player(s.game(), PlayerId(0)).action_space
+        );
+    }
+}

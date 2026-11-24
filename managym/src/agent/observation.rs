@@ -918,7 +918,8 @@ pub struct ActionOption {
     #[serde(default)]
     pub pays_directly: bool,
     /// `mode_index` is an announced number (X for a spell or activation, a
-    /// replicate count, a resolving payment's X) rather than an option index.
+    /// replicate count, a resolving payment's X, an amount of combat damage)
+    /// rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
 }
@@ -2172,18 +2173,36 @@ impl Observation {
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
-                if let (
-                    Action::ChooseMode { mode, .. },
-                    Some(Decision::OrderReplacement { candidates, .. }),
-                ) = (
+                match (
                     action,
                     game.state.suspended_decision.as_ref().map(|s| &s.decision),
                 ) {
-                    return candidates
-                        .get(*mode)
-                        .map(|candidate| game.state[candidate.source()].id)
-                        .into_iter()
-                        .collect();
+                    (
+                        Action::ChooseMode { mode, .. },
+                        Some(Decision::OrderReplacement { candidates, .. }),
+                    ) => {
+                        return candidates
+                            .get(*mode)
+                            .map(|candidate| game.state[candidate.source()].id)
+                            .into_iter()
+                            .collect();
+                    }
+                    // An amount of combat damage is about the attacker
+                    // assigning it and the blocker receiving it.
+                    (
+                        Action::ChooseMode { .. },
+                        Some(Decision::AssignCombatDamage {
+                            attacker, blocker, ..
+                        }),
+                    ) => {
+                        return [attacker, blocker]
+                            .into_iter()
+                            .filter_map(|object| game.state.permanent_of(*object))
+                            .filter_map(|permanent| game.state.permanents[permanent].as_ref())
+                            .map(|permanent| permanent.id)
+                            .collect();
+                    }
+                    _ => {}
                 }
                 // Other decisions focus the resolving or cast object's card.
                 let object_id = game
