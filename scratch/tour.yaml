@@ -29,7 +29,7 @@ first:
   - path: managym/src/flow/retarget.rs
     why: Replace one target within its original clause.
   - path: managym/src/agent/continuation.rs
-    why: Project stack choices and targets for each viewer.
+    why: Project stack choices and targets for each viewer; ProgramProjection is the one tokens-and-text rule, which delayed triggers keep from creation.
   - path: managym/src/agent/ability_description.rs
     why: Trigger text describes the effects it will run.
   - path: managym/src/flow/proposed_event.rs
