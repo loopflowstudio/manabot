@@ -85,6 +85,7 @@ struct ObservationBuffers {
 
 #[cfg(feature = "python")]
 struct StepStateBuffers {
+    shape: Vec<usize>,
     rewards: Py<PyAny>,
     terminated: Py<PyAny>,
     truncated: Py<PyAny>,
@@ -1001,6 +1002,7 @@ fn read_observation_buffers(
 
 fn read_step_state(buffers: &Bound<'_, PyDict>, shape: &[usize]) -> PyResult<StepStateBuffers> {
     Ok(StepStateBuffers {
+        shape: shape.to_vec(),
         rewards: require_numpy_array(buffers, "rewards", shape, "float64")?.unbind(),
         terminated: require_numpy_array(buffers, "terminated", shape, "uint8")?.unbind(),
         truncated: require_numpy_array(buffers, "truncated", shape, "uint8")?.unbind(),
@@ -1902,6 +1904,18 @@ fn with_step_writer<'a, R>(
     let rewards_buffer = typed_numpy_buffer::<f64>(py, &step_state.rewards, "rewards")?;
     let terminated_buffer = typed_numpy_buffer::<u8>(py, &step_state.terminated, "terminated")?;
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &step_state.truncated, "truncated")?;
+    for (key, shape) in [
+        ("rewards", rewards_buffer.shape()),
+        ("terminated", terminated_buffer.shape()),
+        ("truncated", truncated_buffer.shape()),
+    ] {
+        if shape != step_state.shape {
+            return Err(PyValueError::new_err(format!(
+                "{key} shape changed after registration: expected {:?}, got {shape:?}",
+                step_state.shape
+            )));
+        }
+    }
     run(SendWriteBuffers {
         memory_encoding: None,
         fields,

@@ -593,3 +593,18 @@ def test_isolated_csr_capacity_failure_preserves_sibling_and_masked_rows() -> No
         vector.replace_failed_into_buffers([True, False, False])
     assert typed.current_game_seeds() == reference.current_game_seeds()
     assert typed.state_digests() == reference.state_digests()
+
+
+def test_changed_outcome_shape_rejects_step_before_a_sibling_advances() -> None:
+    space = ObservationSpace()
+    state = step_buffers(2)
+    vector = managym.VectorEnv(2, seed=24)
+    vector.set_observation_layout(state, space.layout)
+    vector.reset_all_into_buffers(setup())
+    before = vector.state_digests()
+    retained = vector.observation_rows()
+    state["terminated"].shape = (1, 2)
+    with pytest.raises(ValueError, match="terminated"):
+        vector.step_into_buffers([0, 0])
+    assert vector.state_digests() == before
+    assert vector.observation_rows() == retained
