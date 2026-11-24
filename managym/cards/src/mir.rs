@@ -1,7 +1,7 @@
 //! Mirage.
 
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetSpec},
+    ability::{Effect, TargetSpec},
     card::{
         CardDefinition, CardType, CardTypes, PrintedCharacteristics, Restriction, StaticAbility,
         StaticRestriction, StaticScope,
@@ -23,9 +23,7 @@ fn pacifism() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{1}{W}")),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             statics: vec![StaticAbility::Restriction(StaticRestriction {
                 scope: StaticScope::Attached,
                 kind: Restriction::CantAttackOrBlock,

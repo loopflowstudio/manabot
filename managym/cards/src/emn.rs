@@ -84,9 +84,7 @@ fn imprisoned_in_the_moon() -> CardDefinition {
                     })),
                 ],
             )],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(enchantable.clone()),
-            }],
+            spell_effects: vec![Effect::enchant(enchantable.clone())],
             targeting: vec![TargetRequirement::one(enchantable)],
             text_box: text_box.into(),
             ..Default::default()

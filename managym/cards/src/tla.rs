@@ -1256,9 +1256,7 @@ fn avatar_destiny() -> CardDefinition {
                     },
                 ],
             }],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::CreatureYouControl)],
             targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
             text_box: text_box.into(),
             ..Default::default()
@@ -5090,9 +5088,7 @@ fn honest_work() -> CardDefinition {
                     },
                 ],
             }],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::CreatureOpponentControls)],
             targeting: vec![TargetRequirement::one(TargetSpec::CreatureOpponentControls)],
             text_box: text_box.into(),
             ..Default::default()
@@ -7190,9 +7186,7 @@ fn path_to_redemption() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             statics: vec![StaticAbility::Restriction(StaticRestriction {
                 scope: StaticScope::Attached,
@@ -8941,9 +8935,7 @@ fn swampsnare_trap() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{B}")),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             statics: vec![
                 StaticAbility::CostsLessIfTargets(TargetCostReduction {
@@ -11058,9 +11050,7 @@ fn watery_grasp() -> CardDefinition {
                 effects: vec![Effect::move_to(ObjectSelector::Attached, ZoneType::Library)],
                 ..Default::default()
             }],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             statics: vec![StaticAbility::Restriction(StaticRestriction {
                 scope: StaticScope::Attached,
