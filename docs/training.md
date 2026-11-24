@@ -1426,12 +1426,12 @@ scope before the first collection phase. Each native boundary distinguishes:
 | Phase | Interpretation |
 | --- | --- |
 | `preparing` | Inputs are durable before native decision-frame reads; cached decision context is explicitly last-known. Execution has not started. |
-| `executing` | Intent to call the named native mutation (step, reset, reassignment or failed-row replacement) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
+| `executing` | Intent to call the named native mutation (step, reset or slot load) is durable, with no durable return acknowledgment. For an indexed step, the selected action and its fresh pre-action binding are durable. |
 | `synchronizing` | The native call returned; current seeds, decks or game generations are still being read. |
 | `ready` | Synchronization completed and the retained evidence describes the current known game prefixes. |
 
 A returned batch does not establish success for every row. Unobserved row
-outcomes stay unknown. During sampled reset or auto-reset, the new seed/setup
+outcomes stay unknown. During sampled reset or slot load, the new seed/setup
 may be unknown until synchronization; the previous prefix and decks remain
 last-known evidence, never the claimed new game. The operation marker and
 producer files are written independently, so compare their coordinates and
@@ -1453,9 +1453,10 @@ uv run python -m manabot.training.state.game_errors ~/.etude/track/journal-demo/
 
 Replay uses the [existing source/native and world checks](#automatic-capture-and-replay).
 An indexed-step execution journal can attempt its pending action under the
-retained fresh binding. A reset, reassignment or replacement journal
-reconstructs the last-known prefix and reports its new setup unavailable; it
-never replays proposed seeds or decks as observed native state. Preparation and
+retained fresh binding. A reset or slot-load journal (and historical
+reassignment or replacement journals) reconstructs the last-known prefix and
+reports its new setup unavailable; it never replays proposed seeds or decks as
+observed native state. Preparation and
 synchronization journals reconstruct the last-known prefix where possible and
 report unavailable binding or setup; replay cannot
 reconstruct an unobserved sampled root or settle the original unknown outcome.

@@ -205,9 +205,10 @@ A `SnapshotBank` stores decisions that self-play can revisit. Use both learning
 seats, complete-game closure and a self-play behavior policy. Snapshot collection
 and adaptive matchup sampling each own the episode schedule.
 
-Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` enables
-deferred reset across native workers (`1 <= workers <= streams`). With one worker
-you may also supply a buffered `SnapshotVector` or a factory accepting
+Save this recipe as `snapshot_recipe.py`. Native workers
+(`1 <= workers <= streams`) share one explicit slot-loading lifecycle across
+plain, adaptive and snapshot collection. With one worker you may also supply a
+buffered `SnapshotVector` or a factory accepting
 `(observation_space, match, num_envs, seed)`. The deprecated
 `InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
 
@@ -398,14 +399,15 @@ again. On a cold miss, `SnapshotBank` reconstructs each distinct root once,
 verifies its digest and chooser, and promotes the `GameSnapshot` into the hot
 cache for all siblings and later draws.
 
-Deferred reset (`auto_reset=False`) leaves finished and failed slots idle until
-the next allocation round, avoiding unused replacement games. Fresh slots keep
-their own seed sequence and recording; overwriting an untouched fresh root with
-a branch rewinds its fresh seed without writing an interrupted record or
-partial statistics. When a branch fails, its `GameAttempt` and `RecordedVectorEnv`
-failure record materialize branch `interventions` lazily so
-`manabot.training.state.game_errors` and `managym.replay` reproduce the failure
-cold after hot handles are closed. [Recovery](training.md#recovery)
+Native vectors leave finished and failed slots parked until the collector
+refills active streams via `load_slots_into_buffers`, avoiding unused
+replacement games at batch boundaries. Fresh slots keep their own seed sequence
+and recording; overwriting an untouched fresh root with a branch rewinds its
+fresh seed without writing an interrupted record or partial statistics. When a
+branch fails, its `GameAttempt` and `RecordedVectorEnv` failure record
+materialize branch `interventions` lazily so `manabot.training.state.game_errors`
+and `managym.replay` reproduce the failure cold after hot handles are closed.
+[Recovery](training.md#recovery)
 
 ## Write your own loop
 
