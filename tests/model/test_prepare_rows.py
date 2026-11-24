@@ -636,6 +636,10 @@ def test_torch_learners_and_dense_attention_prepare_no_columns() -> None:
     assert off.prepare(obs, inference=True).attention_columns is None
     live = ActorCritic(space, config, live_tokens=True).prepare(obs, inference=True)
     assert live.attention_columns is None and live.live_index is not None
+    if torch.backends.mps.is_available():
+        columns = agent.to("mps").prepare(obs, inference=True).attention_columns
+        assert columns is not None and len(columns) & (len(columns) - 1) == 0
+        assert agent.prepare(obs).attention_columns is None
 
 
 def _belief_observations() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
