@@ -1383,7 +1383,7 @@ class RecordedVectorEnv(_Capture):
     def set_observation_layout(
         self,
         buffers: dict[str, np.ndarray],
-        action_overflow: str,
+        action_overflow: str = "error",
         *,
         layout: managym.ObservationLayout,
     ) -> None:

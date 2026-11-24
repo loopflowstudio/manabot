@@ -394,6 +394,24 @@ def test_public_history_round_trips_for_both_viewers() -> None:
         assert not restored["events_valid"].any()
 
 
+def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
+    space = ObservationSpace()
+    vector = managym.VectorEnv(1)
+    with pytest.warns(
+        DeprecationWarning, match=r"set_observation_layout.*0\.4\.0"
+    ):
+        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+
+    env = managym.Env(seed=7)
+    env.reset(
+        [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
+    )
+    with pytest.warns(
+        DeprecationWarning, match=r"encode_observation_batch.*0\.4\.0"
+    ):
+        managym.encode_observations_into([env], space.layout, space.allocate(1), 1)
+
+
 def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (
     None
 ):

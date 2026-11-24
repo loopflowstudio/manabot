@@ -407,6 +407,12 @@ impl PyVectorEnv {
         layout: Option<&ObservationLayout>,
     ) -> PyResult<()> {
         let inferred = layout.is_none();
+        if !inferred {
+            super::bindings::warn_deprecated(
+                buffers.py(),
+                "VectorEnv.set_buffers is deprecated; use VectorEnv.set_observation_layout for v11 observations; removal in 0.4.0",
+            )?;
+        }
         let layout = registered_layout(&buffers, layout)?;
         if inferred
             && self.inner.decision_memory_enabled() != (layout.config.max_decision_records > 0)
@@ -1277,6 +1283,10 @@ fn encode_observations_into(
     buffers: Bound<'_, PyDict>,
     capacity: usize,
 ) -> PyResult<Vec<usize>> {
+    super::bindings::warn_deprecated(
+        py,
+        "encode_observations_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.4.0",
+    )?;
     if envs.len() > capacity {
         return Err(PyValueError::new_err(format!(
             "{} envs exceed buffer capacity {capacity}",

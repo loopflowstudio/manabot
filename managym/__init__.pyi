@@ -602,7 +602,9 @@ class VectorEnv:
         action_overflow: str = "error",
         *,
         layout: ObservationLayout | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.4.0."""
+        ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
         self, player_configs: GameSetup | list[PlayerConfig]
@@ -1397,7 +1399,9 @@ def encode_observations_into(
     buffers: Dict[str, np.ndarray],
     capacity: int,
 ) -> list[int]:
-    """Write each env's acting-player view into rows 0..len(envs) of buffers.
+    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.4.0.
+
+    Write each env's acting-player view into rows 0..len(envs) of buffers.
 
     Buffers come from `ObservationSpace.allocate(capacity)`; later rows are
     untouched. Returns each row's legal-action count. Shape, dtype and

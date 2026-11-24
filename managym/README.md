@@ -715,7 +715,11 @@ For element arrays, the single field describes each element. An action-focus
 row contains `layout.shapes["action_focus"][1]` consecutive int32 elements,
 with -1 for unused focus slots. Dense buffer allocation uses `layout.dtypes`.
 
-For dense batched buffers, `layout.axis_extents(buffers)` returns one int64
+For dense batched buffers, `VectorEnv.set_buffers` and
+`encode_observations_into` emit a `DeprecationWarning` targeting removal in
+`0.4.0` (retained alongside the deprecated v9/v10 fork; v11 callers should use
+`VectorEnv.set_observation_layout` and `encode_observation_batch`).
+`layout.axis_extents(buffers)` returns one int64
 vector per variable axis. Each item includes its occupied rows and rows needed
 by joins. Keep the buffers stable until the scan returns. A key or shape
 mismatch returns `None`. For each of those axes, `layout.axis_buffers` lists
