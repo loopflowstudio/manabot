@@ -1346,14 +1346,15 @@ impl Game {
         Some(ability)
     }
 
-    /// Record an activation against its exhaust or once-each-turn limit.
+    /// Record an activation against its once-per-object or once-each-turn
+    /// limit.
     pub(crate) fn record_activation(
         &mut self,
         permanent: PermanentId,
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) {
-        if !ability.exhaust && !ability.power_up && !ability.once_each_turn {
+        if !ability.is_use_limited() {
             return;
         }
         self.state

@@ -154,7 +154,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
         attacking: _,
         spell_entry: _,
         attached_to: _,
-        exhausted: _,
+        spent_abilities: _,
         activated_this_turn: _,
         keyword_counter_timestamps: _,
     } = permanent;
@@ -194,7 +194,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
             Seen::Transient("its own entering trigger captures the spell's choices and payment"),
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
-        ("exhausted", Seen::Fact(FactKind::UsedAbility)),
+        ("spent_abilities", Seen::Fact(FactKind::UsedAbility)),
         ("activated_this_turn", Seen::Fact(FactKind::UsedAbility)),
     ]
 }
@@ -4598,7 +4598,7 @@ fn mai(exhausted: bool) -> (Scenario, PermanentId) {
         s.game_mut().state.permanents[mai]
             .as_mut()
             .unwrap()
-            .exhausted
+            .spent_abilities
             .push(0);
     }
     (s, mai)

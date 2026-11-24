@@ -1816,7 +1816,7 @@ impl Game {
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
                             tap_candidates: self.tap_cost_candidates(player, ability).into(),
-                            limited: ability.once_each_turn || ability.exhaust,
+                            limited: ability.is_use_limited(),
                             sacrifice_source: ability.sacrifice_source,
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
@@ -2949,7 +2949,7 @@ impl Game {
                 let ability = &view.activated_abilities[activation.ability_index];
                 ability.tap_source && !ability.mana_activation_has_side_effects()
                     && ability.mana_cost.mana_value == 0 && ability.mana_cost.x == 0
-                    && !ability.exhaust && !ability.once_each_turn
+                    && !ability.is_use_limited()
                     && self.check_activation_terms(player, ability).is_ok()
                     // A bonus with its own output choice needs the ordinary
                     // activation flow. Here each witness index is a printed mode.
@@ -3127,10 +3127,8 @@ impl Game {
                 if probe.followups.len() == autotapper::FOLLOWUPS {
                     return probe;
                 }
-                let single_use = ability.tap_source
-                    || ability.sacrifice_source
-                    || ability.once_each_turn
-                    || ability.exhaust;
+                let single_use =
+                    ability.tap_source || ability.sacrifice_source || ability.is_use_limited();
                 if ability.zone != ActivationZone::Battlefield
                     || ability.mana_cost.mana_value == 0
                     || ability.mana_choices().is_some()

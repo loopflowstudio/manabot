@@ -1,13 +1,14 @@
-//! Lita's vigilance, scoped untap, and Zeppelin activation.
+//! Lita's vigilance, scoped untap, and Zeppelin activation; Mild-Mannered
+//! Librarian's once-only transformation.
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup, five_color_unfunded_setup},
-    inspect::{card_of, tapped},
-    play::{activate, attack_with, choose, pass_until, settle},
+    inspect::{card_of, observed, tapped},
+    play::{activate, attack_with, choose, offers_ability, pass_until, settle},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     flow::turn::StepKind,
-    state::{card::Keyword, game_object::PlayerId, mana::Mana},
+    state::{card::Keyword, game_object::PlayerId, mana::Mana, zone::ZoneType},
 };
 
 const LITA: &str = "Lita, Mechanical Engineer";
@@ -85,4 +86,28 @@ fn lita_creates_a_zeppelin_that_crews_until_end_of_turn() {
     settle(&mut s);
     s.advance_to_active_step(1, StepKind::Main);
     assert!(!s.game().characteristics(zeppelin).is_creature());
+}
+
+#[test]
+fn mild_mannered_librarian_becomes_a_werewolf_only_once() {
+    let mut s = five_color_unfunded_setup(&["Mild-Mannered Librarian"]);
+    let librarian = s.force_permanent_on_battlefield(0, "Mild-Mannered Librarian");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.set_player_mana_pool(0, "3G");
+    activate(&mut s, librarian, 0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+    let view = s.game().characteristics(librarian);
+    assert_eq!(view.pt(), (3, 3));
+    assert_eq!(view.creature_types.listed(), ["Werewolf".to_string()]);
+    let row = observed(&s, librarian);
+    assert_eq!(row.used_abilities, [0]);
+    assert_eq!(row.exhausted_abilities, 0, "not an exhaust ability");
+    assert_eq!(row.creature_types, Some(vec!["Werewolf".to_string()]));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "3G");
+    assert!(!offers_ability(&mut s, librarian, 0), "activate only once");
+    assert_eq!(s.game().characteristics(librarian).pt(), (3, 3));
 }

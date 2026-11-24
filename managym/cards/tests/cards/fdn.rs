@@ -1,6 +1,6 @@
 //! Foundations behavior through ordinary activation, payment and combat.
 use crate::support::{
-    game::{five_color_setup, move_card, Scenario},
+    game::{five_color_setup, move_card, until_end_of_turn, Scenario},
     inspect::{card_of, keywords, observed, permanent_named, permanent_of},
     play::{activate, attack_with, cast, enter_and_settle, settle, spend_colorless},
 };
@@ -8,6 +8,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         card::Keyword,
+        effect::Modification,
         game_object::{ObjectId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -2042,6 +2043,35 @@ fn soulstone_sanctuary_has_all_creature_types_until_a_later_type_change() {
     assert_eq!(view.creature_types.listed(), ["Citizen".to_string()]);
     assert!(!view.has_subtype("Human") && !view.is_land());
     assert_eq!(view.pt(), (2, 2), "a Citizen with one creature type");
+}
+
+/// A later grant of every creature type overrides an earlier set list, so
+/// the permanent row reports no set list (the shared-effect row carries all
+/// creature types); a noncreature granted every type is no Ally mid-pass
+/// (CR 205.3d), so "Allies you control" skips it.
+#[test]
+fn all_creature_types_overrides_a_set_list_and_needs_a_creature() {
+    let mut s = five_color_setup(&["Gray Ogre", "Allied Teamwork", "Forest"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::SetCreatureTypes(vec!["Citizen".into()]),
+    );
+    assert_eq!(
+        observed(&s, ogre).creature_types,
+        Some(vec!["Citizen".to_string()])
+    );
+    until_end_of_turn(&mut s, ogre, Modification::AllCreatureTypes);
+    assert!(s.game().characteristics(ogre).creature_types.is_all());
+    assert_eq!(observed(&s, ogre).creature_types, None);
+
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    s.force_permanent_on_battlefield(0, "Allied Teamwork");
+    until_end_of_turn(&mut s, forest, Modification::AllCreatureTypes);
+    let view = s.game().characteristics(forest);
+    assert!(!view.is_creature() && !view.has_subtype("Ally"));
+    assert_eq!(view.pt(), (0, 0), "no Allied Teamwork bonus");
 }
 
 /// The granted "When this creature deals combat damage, sacrifice it" fires

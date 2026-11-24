@@ -778,7 +778,9 @@ impl<'a> Context<'a> {
     fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
             let view = &self.objects[&id].view;
-            if view.creature_types.is_all() {
+            // Mid-pass `All` marks the grant; it counts only for a creature
+            // (CR 205.3d).
+            if view.is_creature() && view.creature_types.is_all() {
                 max
             } else {
                 (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
@@ -1072,7 +1074,11 @@ impl<'a> Context<'a> {
                         view.name = name.clone();
                         view.name_set = true;
                     }
-                    Modification::AllCreatureTypes => view.creature_types = CreatureTypes::All,
+                    Modification::AllCreatureTypes => {
+                        // A later grant of every type overrides an earlier set list.
+                        view.creature_types = CreatureTypes::All;
+                        view.creature_types_set = false;
+                    }
                     Modification::SetCreatureTypes(types) => {
                         view.creature_types = CreatureTypes::default();
                         view.creature_types_set = true;
@@ -1260,7 +1266,7 @@ pub(super) fn matches_view(
     CharacteristicView {
         types: &view.types,
         subtypes: &view.subtypes,
-        all_creature_types: view.creature_types.is_all(),
+        all_creature_types: view.is_creature() && view.creature_types.is_all(),
         supertypes: &object.supertypes,
         colors: &view.colors,
         name: &view.name,

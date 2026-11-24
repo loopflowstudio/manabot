@@ -823,7 +823,8 @@ pub struct PermanentData {
     /// Aura sets its characteristics.
     pub abilities_lost: bool,
     /// Activated abilities (indices in its ability list) whose limit is
-    /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
+    /// spent: once per object (exhaust CR 702.177a, power-up, "activate
+    /// only once") or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
     /// It was dealt damage this turn, whether or not that damage is still
     /// marked.
@@ -1542,7 +1543,16 @@ impl Observation {
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
-            exhausted_abilities: permanent.exhausted.len() as i32,
+            exhausted_abilities: permanent
+                .spent_abilities
+                .iter()
+                .filter(|index| {
+                    characteristics
+                        .activated_abilities
+                        .get(**index)
+                        .is_some_and(|ability| ability.exhaust)
+                })
+                .count() as i32,
             once_each_turn_used: (permanent.activated_this_turn.len()
                 + game.permanent_object(perm_id).map_or(0, |object| {
                     game.state
@@ -1579,9 +1589,9 @@ impl Observation {
                 .name_set
                 .then(|| characteristics.name.to_string()),
             // All creature types is projected by its shared-effect row.
-            creature_types: characteristics
-                .creature_types_set
-                .then(|| characteristics.creature_types.listed().to_vec()),
+            creature_types: (characteristics.creature_types_set
+                && !characteristics.creature_types.is_all())
+            .then(|| characteristics.creature_types.listed().to_vec()),
             is_granted_land: characteristics.is_land() && !object.types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat

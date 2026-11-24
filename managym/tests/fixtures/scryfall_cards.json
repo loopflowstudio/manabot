@@ -7378,5 +7378,17 @@
     "keywords": [],
     "oracle_text": "{T}: Add {C}.\n{4}: Put two +1/+1 counters on this land. Then you may have it become a 0/0 Elemental creature until end of turn. It's still a land.",
     "colors": []
+  },
+  "Mild-Mannered Librarian": {
+    "name": "Mild-Mannered Librarian",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Human",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{3}{G}: This creature becomes a Werewolf. Put two +1/+1 counters on it and you draw a card. Activate only once.",
+    "colors": [
+      "G"
+    ]
   }
 }

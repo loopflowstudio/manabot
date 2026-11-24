@@ -450,7 +450,8 @@ fn enchanted_and_equipped_ogre() -> (Scenario, [managym::state::game_object::Per
 /// CR 704.5m, 704.5n, 704.5p and 301.5c read layered characteristics: an
 /// Aura that loses its abilities goes to the graveyard, an Aura that stops
 /// being an Aura detaches and stays, and an Equipment that becomes a
-/// creature detaches and stays. Unchanged, both stay attached.
+/// creature detaches and stays; an Aura that becomes a creature goes to the
+/// graveyard. Unchanged, both stay attached.
 #[test]
 fn cr_704_5m_n_p_attachment_legality_reads_layered_characteristics() {
     use crate::support::inspect::card_of;
@@ -504,4 +505,22 @@ fn cr_704_5m_n_p_attachment_legality_reads_layered_characteristics() {
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert_eq!(attached(&s, axe), None, "an equipment creature (301.5c)");
     assert!(s.game().state.permanents[axe].is_some());
+
+    let (mut s, [_, aura, _]) = enchanted_and_equipped_ogre();
+    let aura_card = card_of(&s, aura);
+    until_end_of_turn(&mut s, aura, Modification::BecomeCreature);
+    until_end_of_turn(
+        &mut s,
+        aura,
+        Modification::SetBasePt {
+            power: Some(2),
+            toughness: Some(2),
+        },
+    );
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(
+        zone_of(&s, aura_card),
+        Some(ZoneType::Graveyard),
+        "an Aura creature can't enchant anything (303.4d, 704.5m)"
+    );
 }

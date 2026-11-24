@@ -570,6 +570,17 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Each object may activate this ability only once (exhaust, power-up
+    /// or "activate only once").
+    pub fn once_per_object(&self) -> bool {
+        self.once_only || self.exhaust || self.power_up
+    }
+
+    /// Whether activating the ability spends one of its uses on the object.
+    pub fn is_use_limited(&self) -> bool {
+        self.once_per_object() || self.once_each_turn
+    }
+
     /// The outputs of a mana ability (CR 605.1a): an untargeted activation
     /// whose leading effect adds one of these mana, optionally followed by
     /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
@@ -776,8 +787,14 @@ pub struct ActivatedAbilityDefinition {
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    /// Power-up: "costs less if this permanent entered this turn"; each
+    /// object may activate it only once.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub power_up: bool,
+    /// "Activate only once": each object may activate this ability only
+    /// once (CR 602.5b, CR 400.7).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub once_only: bool,
     /// "Activate only once each turn" (CR 602.5b); counted per object.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub once_each_turn: bool,

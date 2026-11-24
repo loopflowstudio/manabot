@@ -231,10 +231,11 @@ pub struct Permanent {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
     pub attached_to: Option<ObjectId>,
-    /// Exhaust abilities (indices into the card's activated abilities) this
-    /// object has activated; a new object starts fresh (CR 400.7).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub exhausted: Vec<usize>,
+    /// Once-per-object abilities (indices into the effective activated
+    /// abilities) this object has activated; a new object starts fresh
+    /// (CR 400.7).
+    #[serde(rename = "exhausted", skip_serializing_if = "Vec::is_empty")]
+    pub spent_abilities: Vec<usize>,
     /// "Once each turn" abilities this object has activated this turn,
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -246,17 +247,18 @@ impl Permanent {
         turn != 0 && self.entry_turn == turn
     }
 
-    /// Whether this object has used up the ability: exhaust once ever
-    /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
+    /// Whether this object has used up the ability: a once-per-object
+    /// ability ever (CR 702.177a, 602.5b), "once each turn" already this
+    /// turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        ((ability.exhaust || ability.power_up) && self.exhausted.contains(&index))
+        (ability.once_per_object() && self.spent_abilities.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
-        if ability.exhaust || ability.power_up {
-            self.exhausted.push(index);
+        if ability.once_per_object() {
+            self.spent_abilities.push(index);
         }
         if ability.once_each_turn {
             self.activated_this_turn.push(index);
@@ -285,7 +287,7 @@ impl Permanent {
             attacking: false,
             spell_entry: Default::default(),
             attached_to: None,
-            exhausted: Vec::new(),
+            spent_abilities: Vec::new(),
             activated_this_turn: Vec::new(),
         }
     }

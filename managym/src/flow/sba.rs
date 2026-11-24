@@ -382,10 +382,14 @@ impl Game {
 
     /// Whether something that is an Aura now (its layered `view`) is
     /// unattached, attached to itself or to an object its enchant ability
-    /// doesn't allow, or has lost that ability (CR 303.4d, 704.5m).
+    /// doesn't allow, has lost that ability, or is also a creature
+    /// (CR 303.4d, 704.5m).
     fn aura_attachment_illegal(&self, aura: PermanentId, view: &Characteristics) -> bool {
         if !view.has_subtype("Aura") {
             return false;
+        }
+        if view.is_creature() {
+            return true;
         }
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
