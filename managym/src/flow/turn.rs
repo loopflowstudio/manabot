@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    ability::{GrantClock, PlayerControlDuration},
+    ability::{Actor, GrantClock, PlayerControlDuration},
     game_object::{ObjectId, PlayerId},
     predicate::CardPredicate,
 };
@@ -298,6 +298,20 @@ pub struct TurnState {
 impl TurnState {
     pub fn creature_died_this_turn(&self) -> bool {
         self.history.iter().any(|seat| seat.creatures_died > 0)
+    }
+
+    /// Whether any seat `who` names, relative to `you`, has a turn history
+    /// matching `done`.
+    pub fn any_history(
+        &self,
+        who: Actor,
+        you: PlayerId,
+        done: impl Fn(&PlayerTurnHistory) -> bool,
+    ) -> bool {
+        self.history
+            .iter()
+            .enumerate()
+            .any(|(seat, history)| who.includes(you, PlayerId(seat)) && done(history))
     }
 
     pub fn attack_count(&self, object: ObjectId) -> u32 {

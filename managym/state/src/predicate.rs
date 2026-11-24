@@ -173,6 +173,14 @@ impl CardPredicate {
         })
     }
 
+    /// Whether an object named `name` satisfies `named` (CR 201.2); an empty
+    /// name names nothing (CR 201.2a).
+    pub fn accepts_name(&self, name: &str) -> bool {
+        self.named
+            .as_deref()
+            .is_none_or(|named| !named.is_empty() && named == name)
+    }
+
     /// Match with the card types in effect at the event boundary.
     pub fn matches_with_types(
         &self,
@@ -192,11 +200,7 @@ impl CardPredicate {
         {
             return false;
         }
-        if self
-            .named
-            .as_ref()
-            .is_some_and(|name| name.is_empty() || *name != object.name)
-        {
+        if !self.accepts_name(&object.name) {
             return false;
         }
         if self

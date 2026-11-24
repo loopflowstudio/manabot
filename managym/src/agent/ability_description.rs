@@ -1657,29 +1657,26 @@ mod tests {
 
     #[test]
     fn descriptions_keep_target_clauses_and_conditional_branches() {
-        let description = effects_description_in(
-            "permanent",
-            &[
-                Effect::TargetClause {
-                    requirement: TargetRequirement::up_to(2, TargetSpec::CreatureYouControl),
-                    effects: vec![Effect::ForEachTarget {
-                        effects: vec![Effect::untap(ObjectSelector::Target(
-                            TargetSpec::CreatureYouControl,
-                        ))],
-                    }],
-                },
-                Effect::OptionalPayment {
-                    cost: PaymentCost::Mana(ManaCost::parse("1W")),
-                    if_paid: vec![Effect::DrawCards {
-                        count: EffectValue::Fixed(2),
-                    }],
-                    if_declined: vec![Effect::DealDamageToPlayer {
-                        player: PlayerSelector::You,
-                        amount: EffectValue::Fixed(1),
-                    }],
-                },
-            ],
-        );
+        let description = effects_description(&[
+            Effect::TargetClause {
+                requirement: TargetRequirement::up_to(2, TargetSpec::CreatureYouControl),
+                effects: vec![Effect::ForEachTarget {
+                    effects: vec![Effect::untap(ObjectSelector::Target(
+                        TargetSpec::CreatureYouControl,
+                    ))],
+                }],
+            },
+            Effect::OptionalPayment {
+                cost: PaymentCost::Mana(ManaCost::parse("1W")),
+                if_paid: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                }],
+                if_declined: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::You,
+                    amount: EffectValue::Fixed(1),
+                }],
+            },
+        ]);
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");
     }
     #[test]

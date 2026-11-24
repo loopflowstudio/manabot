@@ -934,29 +934,19 @@ impl Game {
             }
             Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
             Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
-            Condition::PermanentLeftThisTurn { who, nonland } => self
-                .state
-                .turn
-                .history
-                .iter()
-                .enumerate()
-                .any(|(seat, history)| {
-                    who.includes(controller, PlayerId(seat))
-                        && if *nonland {
-                            history.nonland_permanents_left > 0
-                        } else {
-                            history.permanents_left > 0
-                        }
-                }),
+            Condition::PermanentLeftThisTurn { who, nonland } => {
+                self.state.turn.any_history(*who, controller, |history| {
+                    if *nonland {
+                        history.nonland_permanents_left > 0
+                    } else {
+                        history.permanents_left > 0
+                    }
+                })
+            }
             Condition::WarpedThisTurn { who } => {
                 self.state
                     .turn
-                    .history
-                    .iter()
-                    .enumerate()
-                    .any(|(seat, history)| {
-                        who.includes(controller, PlayerId(seat)) && history.warped_this_turn
-                    })
+                    .any_history(*who, controller, |history| history.warped_this_turn)
             }
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {

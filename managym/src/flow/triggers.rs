@@ -2280,14 +2280,12 @@ impl Game {
                         .is_some_and(|controller| {
                             controlled_by.includes(source_controller, controller)
                         })
-                    && match self.state.permanent_of(damage_source) {
-                        Some(permanent) => self.permanent_matches_predicate(permanent, predicate),
-                        None => match self.object_lki(damage_source) {
-                            Some(lki) => self.lki_matches_predicate(lki, predicate),
-                            None => {
-                                self.recorded_object_matches_predicate(damage_source, predicate)
-                            }
-                        },
+                    && if let Some(permanent) = self.state.permanent_of(damage_source) {
+                        self.permanent_matches_predicate(permanent, predicate)
+                    } else if let Some(lki) = self.object_lki(damage_source) {
+                        self.lki_matches_predicate(lki, predicate)
+                    } else {
+                        self.recorded_object_matches_predicate(damage_source, predicate)
                     }
             }
             TriggerSubject::EnchantedCreature | TriggerSubject::CreatureDamagedByThis => self
