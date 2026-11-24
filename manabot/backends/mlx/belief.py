@@ -16,7 +16,7 @@ import mlx.nn as nn
 import numpy as np
 
 from manabot.backends.mlx.arrays import flat_numpy
-from manabot.backends.mlx.policy import PackedGRU
+from manabot.backends.mlx.gru import PackedGRU
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.sim.search.sampling_receipt import HandBatch, HandSample, PreparedHands
 

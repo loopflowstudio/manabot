@@ -33,5 +33,6 @@ def train(config: PolicyConfig) -> None:
     settings = gray_ogre_self_play(horizon=config.updates).model_copy(
         update={"device": config.device, "run_settings": config.run_settings}
     )
+    backend.runtime.admit_execution(settings.device, live_tokens=settings.live_tokens)
     with track(clocks=CLOCKS, config=config) as run:
         self_play(settings, run, updates=config.updates, backend=backend)

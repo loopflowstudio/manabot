@@ -26,6 +26,7 @@ def train(config: LocalConfig) -> None:
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
     # Resolve before opening the run: a missing framework leaves no failed run.
     backend = resolve(config.backend)
+    backend.runtime.admit_execution(inputs.device, live_tokens=inputs.live_tokens)
     with track(clocks=CLOCKS, config=config) as run:
         self_play(
             inputs,

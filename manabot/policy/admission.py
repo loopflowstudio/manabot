@@ -131,6 +131,32 @@ class BindingCache:
         return cached[3]
 
 
+def history_config(config: ModelConfig, observation_space: ObservationSpace) -> None:
+    """Check the optional history encoders against their native observation contract."""
+    if (
+        config.decision_memory != "none"
+        and not observation_space.config.max_decision_records
+    ):
+        raise ValueError(
+            "decision-memory model requires explicit observation capacities"
+        )
+    if config.decision_memory != "none" and not config.catalog_records():
+        raise ValueError("decision memory requires a catalog world")
+    if config.decision_memory != "none" and not observation_space.one_token:
+        raise ValueError("decision memory requires policy input v11")
+    if config.recent_events and (
+        config.world is None or observation_space.config.policy_history_version != 1
+    ):
+        raise ValueError("recent events require world and policy_history_version=1")
+    if (
+        not config.recent_events
+        and observation_space.config.policy_history_version != 0
+    ):
+        raise ValueError(
+            "history observation contract requires recent_events ActorCritic"
+        )
+
+
 @dataclass(frozen=True)
 class Spec:
     """Configuration and immutable vocabularies shared by admission and preparation."""

@@ -93,6 +93,13 @@ class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
 
 
+def memory_parameter(name: str) -> bool:
+    """The new weights in a memory branch, in either backend's parameter layout."""
+    return name.startswith("decision_memory.") or name.endswith(
+        (".memory_gate", ".memory_projection.weight")
+    )
+
+
 def pretrained_memory_branch(
     source: ModelConfig, target: ModelConfig, observation: ObservationConfig
 ) -> bool:

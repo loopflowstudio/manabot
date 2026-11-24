@@ -75,7 +75,8 @@ saved column readings as Torch. Collection and learning support both updates
 `backend="mlx"`.
 
 Run one fresh baseline iteration on Apple Silicon with the recipe’s model,
-learning rule and both-seat routing. Give each run a new output directory.
+learning rule and both-seat routing. Enable packed live tokens for collection and learning.
+Give each run a new output directory.
 
 ```python
 from pathlib import Path
@@ -85,7 +86,7 @@ from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import fresh_iteration
 
 recipe = settings(BaselineConfig(device="mps")).model_copy(
-    update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True}
+    update={"streams": 2, "games_per_stream": 1, "bucketed_shapes": True, "live_tokens": True}
 )
 result = fresh_iteration(
     recipe, backend=resolve("mlx"), seed=19,
@@ -222,7 +223,7 @@ belief samplers (`PK\x03\x04`) naming the Torch backend; Torch keeps a legacy
 ### Architecture mirror and execution
 
 `require_supported` checks only that `policy_input_version` is 9–11; no
-`ModelConfig` architecture is refused. The modules of `policy.py` mirror the
+`ModelConfig` architecture is refused. The modules under `manabot/backends/mlx/` mirror the
 PyTorch model one to one, so a parameter path in MLX names the same component as
 in the torch state dict:
 
@@ -343,9 +344,9 @@ learner = Learner(policy, minibatch_rows=64)  # inherits the policy's precision
 # Alternatively: Learner(policy, minibatch_rows=64, precision="float32")
 ```
 
-`MLXActorCritic`, `assemble` and `build` also accept `precision`:
-`"float32"` or `"bfloat16"`; omitted, each policy takes its width's
-default. The parity command always names its precision (float32 unless
+`MLXActorCritic` and `assemble` accept `precision="float32"` or
+`precision="bfloat16"`. An omitted precision follows the model width.
+`runtime.create_policy` also accepts the training spelling `bf16`. The parity command always names its precision (float32 unless
 `--precision` says otherwise). It is an execution option, not a change
 to the checkpoint's stored float32 weights. `policy.set_precision(...)` changes
 both inference and learning and invalidates cached catalog encodings.

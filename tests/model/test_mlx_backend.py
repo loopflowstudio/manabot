@@ -17,6 +17,7 @@ import torch
 from tests.belief.support import fixture_decision
 from tests.model.checkpoint_fixture import read_checkpoint
 from tests.training.backend_fixtures import policy_weights, self_play_batch
+from tests.training.test_memory_chunk_cache import chunk_input
 
 mx = pytest.importorskip("mlx.core")
 
@@ -40,12 +41,9 @@ from manabot.backends.mlx.checkpoint import (
     mlx_parameters,
 )
 from manabot.backends.mlx.collection import CollectionSession as MLXCollectionSession
+from manabot.backends.mlx.gru import PackedGRU, packed_steps
 from manabot.backends.mlx.learner import Learner as MLXLearner
-from manabot.backends.mlx.policy import (
-    ObjectAttention,
-    PackedGRU,
-    packed_steps,
-)
+from manabot.backends.mlx.policy import ObjectAttention
 from manabot.backends.mlx.rl import NumericalError, action_logs, policy_logs
 from manabot.backends.parity import (
     COSINE_TOLERANCE,
@@ -67,7 +65,9 @@ from manabot.backends.torch.learner import Learner as TorchLearner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import BeliefCheckpointBinding, encode_belief
 from manabot.belief.state import CompatibleDealBeliefModel
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.match import Match
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
 from manabot.env.observation import (
     STACK_SOURCE_INDEX,
     ObservationSpace,
@@ -88,6 +88,7 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.prepare import Tables, pack, reference_distribution
 from manabot.policy.protocol import Precision, Settings, Targets
+from manabot.policy.readings import legacy_readings
 from manabot.recipes import baseline, elemental
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.learning import DampedPolicyLearning
@@ -298,6 +299,20 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     [
         pytest.param({}, False, id="masked-mean"),
         pytest.param({}, True, id="masked-mean-bucketed"),
+        *[
+            pytest.param(
+                {
+                    "decision_memory": encoder,
+                    "decision_memory_summaries": summaries,
+                    "value_aggregation": "value_token",
+                },
+                True,
+                id=f"{encoder}-{summaries}",
+            )
+            for encoder in ("gru", "transformer")
+            for summaries in (1, 4)
+        ],
+        pytest.param({"recent_events": True}, True, id="recent-events"),
         pytest.param(
             {"belief_count_buckets": 3, "belief_card_vocab_size": 3},
             True,
@@ -337,8 +352,17 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
 ) -> None:
     """One real board batch through both policies, objectives and clipped Adam steps."""
     torch.manual_seed(11)
-    space = ObservationSpace(ObservationConfig())
     config = ModelConfig.model_validate(baseline_model.checkpoint_payload() | variant)
+    memory = config.decision_memory != "none"
+    space = ObservationSpace(
+        ObservationConfig(
+            policy_history_version=int(config.recent_events),
+            max_decision_records=128 if memory else 0,
+            max_decision_reference_details=2048 if memory else 0,
+            max_decision_references=256 if memory else 0,
+            max_decision_members=2048 if memory else 0,
+        )
+    )
     agent = ActorCritic(space, config, bucketed_shapes=bucketed)
     # Give zero-initialized residual/FiLM layers non-zero weights so every
     # branch (stack_source, policy_film, links, focus_film) actually fires.
@@ -363,7 +387,7 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     obs["player_turn_state"][0, 0, 0] = 1
     obs["card_turn_state"][0, 0, 0] = 1
 
-    policy = assemble(checkpoint, bucketed_shapes=bucketed)
+    policy = assemble(checkpoint, bucketed_shapes=bucketed, live_tokens=memory)
     if config.belief_count_buckets:
         decision, schema = fixture_decision()
         belief = (
@@ -398,6 +422,23 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     torch_batch = agent.prepare(obs)
     mlx_batch = policy.prepare(obs)
     torch_logits, torch_values = agent.evaluate(torch_batch)
+    if memory:
+        assert mlx_batch.memory is not None and max(mlx_batch.memory.lengths) > 0
+        assert len(set(np.diff(mlx_batch.live_offsets))) > 1
+        padded = assemble(checkpoint, bucketed_shapes=bucketed)
+        live = ActorCritic(space, config, bucketed_shapes=bucketed, live_tokens=True)
+        live.load_state_dict(agent.state_dict())
+        for candidate in (padded, live):
+            for actual, reference in zip(
+                candidate.evaluate(candidate.prepare(obs)),
+                (torch_logits, torch_values),
+                strict=True,
+            ):
+                np.testing.assert_allclose(
+                    actual, reference, atol=LOGIT_TOLERANCE, rtol=0
+                )
+    if config.recent_events:
+        assert mlx_batch.events is not None and mlx_batch.events.validity.any()
     mlx_logits, mlx_values = policy.evaluate(mlx_batch)
     legal = torch_batch.legal
     assert float(np.abs(mlx_logits - torch_logits)[legal].max()) <= LOGIT_TOLERANCE
@@ -464,6 +505,105 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
             float(np.abs(value - expected_after[name]).max())
             <= STEP_PARAMETER_TOLERANCE
         ), name
+
+
+def test_mlx_gru_reuses_only_stable_records_in_the_same_lifetime() -> None:
+    space, raw = chunk_input()
+    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
+    store = MemoryStore(capacities)
+    prefix = store.capture(raw, 0, PrefixIdentity("game", 0, "root"))
+    policy = (
+        resolve("mlx")
+        .runtime.create_policy(
+            space,
+            ModelConfig(
+                hidden_dim=16,
+                world=managym.WORLD_SETUP,
+                decision_memory="gru",
+                decision_memory_summaries=4,
+                policy_film=True,
+            ),
+            live_tokens=True,
+            bucketed_shapes=True,
+        )
+        .to("cpu")
+    )
+    policy.attention.memory_gate = mx.array(0.5)
+    with policy.inference_scope() as scope:
+        for history, expected_records in (
+            (prefix, 65),
+            (prefix, 1),
+            (replace(prefix, native_epoch=2), 65),
+            (replace(prefix, identity=PrefixIdentity("fork", 1, "branch")), 65),
+        ):
+            selected = PrefixObservation(raw, [history], capacities)
+            prepared = scope.prepare(selected)
+            assert prepared.memory is not None
+            assert len(prepared.memory.numbers) == expected_records
+            actual = policy.evaluate(prepared)
+            dense = policy.evaluate(policy.prepare(raw))
+            for value, expected in zip(actual, dense, strict=True):
+                np.testing.assert_allclose(
+                    value, expected, rtol=0, atol=LOGIT_TOLERANCE
+                )
+        assert len(scope.memory.nodes) == 64
+    with pytest.raises(RuntimeError, match="closed"):
+        policy.evaluate(prepared)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_mlx_live_self_play_branches_from_control_and_trains_memory(
+    tmp_path: Path,
+    baseline_model: ModelConfig,
+    device: str,
+) -> None:
+    backend = resolve("mlx", precision="float32")
+    torch.manual_seed(11)
+    observation = ObservationConfig(
+        max_decision_records=128,
+        max_decision_members=2048,
+        max_decision_reference_details=8192,
+        max_decision_references=512,
+    )
+    space = ObservationSpace(observation)
+    trunk = ActorCritic(space, baseline_model, readings=legacy_readings(space))
+    start = tmp_path / "control.safetensors"
+    save_checkpoint(trunk, space, start, player_configs=lesson_match().to_rust())
+    control, _ = backend.load_policy(start, live_tokens=True, bucketed_shapes=True)
+    config = baseline_model.model_copy(update={"decision_memory": "gru"})
+    arm = backend.runtime.create_policy(
+        space, config, pretrained=control, live_tokens=True, bucketed_shapes=True
+    )
+    assert arm.readings == control.readings
+    assert all(v == 0 for v in arm.memory_gates().values())
+    weights = flat_numpy(arm.parameters())
+    for name, value in flat_numpy(control.parameters()).items():
+        np.testing.assert_array_equal(weights[name], value)
+
+    settings = gray_ogre_self_play(horizon=1).model_copy(
+        update={
+            "pretrained": start,
+            "observation": observation,
+            "model": config,
+            "device": device,
+            "match": lesson_match().config,
+            "batch_closure": "exact-quota",
+            "learning_seats": "one",
+            "collection_rows": 1,
+            "bootstrap_rows": 1,
+            "learner_rows": 4,
+            "live_tokens": True,
+            "bucketed_shapes": True,
+            "transitions": 8,
+        }
+    )
+    result = fresh_iteration(
+        settings, backend=backend, seed=11, out=tmp_path / "trained"
+    )
+    assert result.counts.updates == 1 and result.counts.optimizer_updates > 0
+    assert any(v != 0 for v in result.raw.memory_gates().values())
+    restored, _ = backend.load_policy(result.checkpoint, live_tokens=True)
+    assert restored.memory_gates() == result.raw.memory_gates()
 
 
 @pytest.mark.parametrize("world", [None, managym.WORLD_SETUP])

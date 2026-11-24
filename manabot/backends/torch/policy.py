@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 from manabot.backends.torch._continuation import ContinuationEncoder
-from manabot.backends.torch._decision_memory import CollectionMemory, DecisionMemory
+from manabot.backends.torch._decision_memory import DecisionMemory
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
 from manabot.backends.torch._numerics import buffer_on
@@ -55,6 +55,7 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
+from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
@@ -143,28 +144,7 @@ class ActorCritic(nn.Module):
         )
         self.logger = getLogger(__name__)
 
-        if (
-            config.decision_memory != "none"
-            and not observation_space.config.max_decision_records
-        ):
-            raise ValueError(
-                "decision-memory model requires explicit observation capacities"
-            )
-        if config.decision_memory != "none" and not config.catalog_records():
-            raise ValueError("decision memory requires a catalog world")
-        if config.decision_memory != "none" and not observation_space.one_token:
-            raise ValueError("decision memory requires policy input v11")
-        if config.recent_events and (
-            config.world is None or observation_space.config.policy_history_version != 1
-        ):
-            raise ValueError("recent events require world and policy_history_version=1")
-        if (
-            not config.recent_events
-            and observation_space.config.policy_history_version != 0
-        ):
-            raise ValueError(
-                "history observation contract requires recent_events ActorCritic"
-            )
+        admission.history_config(config, observation_space)
         # A model built without a checkpoint reads its inputs by kind.
         self.readings: Readings = (
             fresh_readings(observation_space) if readings is None else readings
@@ -1228,7 +1208,9 @@ class PolicyInference:
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
-        self.memory = CollectionMemory()
+        self.memory = CollectionMemory[torch.Tensor](
+            torch.cat, torch.stack, lambda states, i: states[i].detach().clone()
+        )
         self.transfers = 0
         self.transfer_bytes = 0
         agent.clear_cache()

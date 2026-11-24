@@ -304,7 +304,8 @@ still differs between the two backends:
   float32; torch's are float64.
 - In self-play, `live_tokens=True` is admitted per backend in
   `backend.runtime.admit_execution`: Torch requires CUDA, while MLX accepts
-  both `mps` and `cpu`.
+  both `mps` and `cpu`. The packed MLX layers share the
+  host offsets for all attention heads and layers in a forward.
 
 ## The torch backend
 

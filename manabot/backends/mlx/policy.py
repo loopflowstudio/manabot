@@ -22,11 +22,11 @@ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager, nullcontext
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import TracebackType
-from typing import Literal
+from typing import Literal, cast
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -39,6 +39,9 @@ from manabot.backends.mlx.arrays import (
     precision_dtype,
     to_numpy,
 )
+from manabot.backends.mlx.decision_memory import DecisionMemory
+from manabot.backends.mlx.gru import PackedGRU, packed_steps
+from manabot.backends.mlx.live_tokens import LiveTokens
 from manabot.backends.mlx.rl import (
     NumericalError,
     expected_outcome,
@@ -54,7 +57,9 @@ from manabot.policy.buckets import (
     object_trimming,
 )
 from manabot.policy.checkpoint import Dimensions
+from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
+    EventRows,
     Packed,
     Prepared,
     Tables,
@@ -80,78 +85,52 @@ class Projection(nn.Module):
         return self.projection(x)
 
 
-def _gru_cell(
-    x: mx.array, previous: mx.array, recurrent_weight: mx.array, hidden_bias: mx.array
-) -> mx.array:
-    """One GRU step: `x` [L,3H] (input projection with bias), `previous` [L,H]."""
-    hidden = previous.shape[1]
-    recurrent = previous @ recurrent_weight.T + hidden_bias
-    gates = mx.sigmoid(x[:, : 2 * hidden] + recurrent[:, : 2 * hidden])
-    reset, update = gates[:, :hidden], gates[:, hidden:]
-    new = mx.tanh(x[:, 2 * hidden :] + reset * recurrent[:, 2 * hidden :])
-    return (1 - update) * new + update * previous
-
-
-# `mx.compile` fuses each step's elementwise gate arithmetic; it traces once per
-# live-row count, which the static catalog schedule repeats on every call.
-_compiled_gru_cell = mx.compile(_gru_cell)
-
-
-class PackedGRU(nn.Module):
-    """A one-layer GRU over packed variable-length sequences (`Packed`).
-
-    Gates are reset, update, new, as in PyTorch and `mlx.nn.GRU`:
-    r, z = sigmoid(x Wx[:2H]^T + input_bias[:2H] + h Wh[:2H]^T + hidden_bias[:2H]),
-    n = tanh(x Wx[2H:]^T + input_bias[2H:] + r * (h Wh[2H:]^T + hidden_bias[2H:])),
-    h' = (1 - z) n + z h. Every sequence starts from a zero state.
-    """
-
-    def __init__(self, input_size: int, hidden_size: int) -> None:
-        super().__init__()
-        self.hidden_size = hidden_size
-        bound = hidden_size**-0.5
-        self.Wx = mx.random.uniform(-bound, bound, (3 * hidden_size, input_size))
-        self.Wh = mx.random.uniform(-bound, bound, (3 * hidden_size, hidden_size))
-        self.input_bias = mx.zeros((3 * hidden_size,))
-        self.hidden_bias = mx.zeros((3 * hidden_size,))
-
-    def step(self, inputs: mx.array, state: mx.array) -> mx.array:
-        return _compiled_gru_cell(
-            inputs @ self.Wx.T + self.input_bias, state, self.Wh, self.hidden_bias
-        )
-
-    def run(
-        self, table: mx.array, steps: Sequence[mx.array]
-    ) -> tuple[mx.array, mx.array]:
-        """Step t reads rows `steps[t]` of `table` [T,D] (its live sequences, in
-        sorted order) -> (every step's state [T,H] in packed order, each
-        sequence's final state [S,H] in sorted order).
-
-        Each step gathers its inputs from `table` rather than slicing one
-        projected array: MLX materializes a whole-input zero cotangent for
-        every slice or split output, which makes the backward quadratic in
-        the number of steps (15.5 s against 0.39 s at 713 steps on the M2).
-        """
-        state = mx.zeros((steps[0].shape[0], self.hidden_size), dtype=table.dtype)
-        outputs: list[mx.array] = []
-        finished: list[mx.array] = []
-        for step, index in enumerate(steps):
-            live = index.shape[0]
-            state = self.step(mx.take(table, index, axis=0), state[:live])
-            outputs.append(state)
-            following = steps[step + 1].shape[0] if step + 1 < len(steps) else 0
-            if following < live:
-                finished.append(state[following:])
-        return mx.concatenate(outputs), mx.concatenate(finished[::-1])
-
-
-def packed_steps(rows: np.ndarray, schedule: Packed[np.ndarray]) -> list[mx.array]:
-    """Split packed-order `rows` into the schedule's steps (`PackedGRU.run`)."""
-    return [mx.array(part) for part in np.split(rows, np.cumsum(schedule.sizes)[:-1])]
-
-
 def _take(table: mx.array, rows: mx.array) -> mx.array:
     return mx.take(table, rows, axis=0)
+
+
+class RecentEventEncoder(nn.Module):
+    """Join both public event references to current objects and pool the history."""
+
+    def __init__(self, width: int) -> None:
+        super().__init__()
+        self.projection = nn.Sequential(
+            nn.Linear(8 + 2 * (2 * width + 14), width),
+            nn.Tanh(),
+            nn.Linear(width, width),
+        )
+
+    def __call__(
+        self, rows: EventRows[np.ndarray], objects: mx.array, definitions: mx.array
+    ) -> mx.array:
+        def categories(indices: np.ndarray, size: int) -> mx.array:
+            return (mx.array(indices)[..., None] == mx.arange(size)).astype(
+                objects.dtype
+            )
+
+        features = [
+            categories(rows.kinds, 6),
+            mx.array(rows.amounts),
+            mx.log1p(mx.array(rows.ages))[..., None],
+        ]
+        flat = objects.reshape(-1, objects.shape[-1])
+        for index in range(2):
+            context = _take(flat, mx.array(rows.focus[..., index]))
+            features.extend(
+                (
+                    _take(definitions, mx.array(rows.definitions[..., index])),
+                    context * mx.array(rows.focus_mask[..., index, None]),
+                    categories(rows.owners[..., index], 3),
+                    categories(rows.zones[..., index], 8),
+                    categories(rows.status[..., index], 3),
+                )
+            )
+        encoded = self.projection(
+            mx.concatenate(features, axis=-1).astype(objects.dtype)
+        )
+        return (encoded * mx.array(rows.validity)[..., None]).sum(1) / mx.maximum(
+            mx.array(rows.counts).astype(objects.dtype), 1
+        )
 
 
 class ObjectAttention(nn.Module):
@@ -178,14 +157,33 @@ class ObjectAttention(nn.Module):
         self.norm2 = nn.LayerNorm(dims, eps=1e-5)
 
     def __call__(
-        self, objects: mx.array, sign: mx.array, mask: mx.array, keep: mx.array
+        self,
+        objects: mx.array,
+        sign: mx.array,
+        mask: mx.array,
+        keep: mx.array,
+        live: LiveTokens | None = None,
+        summaries: mx.array | None = None,
     ) -> mx.array:
-        """`objects` [B,N,D]; `sign` [1,N,1] is +1 for the acting viewer's
-        objects; `mask` [B,1,1,N] is additive (-inf on padding keys); `keep`
-        [B,N,1] zeros padding outputs."""
+        """Attend over padded [B,N,D] or packed [L,D] objects. The sign is
+        zero for a neutral critic token, which receives neither ownership nor memory."""
+        if summaries is not None:
+            delta = self.memory_projection(summaries.mean(1)) * mx.tanh(
+                self.memory_gate_scale * self.memory_gate
+            )
+            objects = (
+                objects
+                + (delta[live.batches] if live is not None else delta[:, None])
+                * (sign != 0)
+                * keep
+            )
         owned = objects + sign * self.perspective if "perspective" in self else objects
         attention_input = self.norm1(owned) if self.pre_norm else owned
-        attended = self.mha(attention_input, attention_input, attention_input, mask)
+        attended = (
+            self.mha(attention_input, attention_input, attention_input, mask)
+            if live is None
+            else live.attend(self.mha, attention_input)
+        )
         residual = owned + attended
         if self.pre_norm:
             return (residual + self.mlp(self.norm2(residual))) * keep
@@ -324,8 +322,10 @@ class MLXActorCritic(nn.Module):
         *,
         precision: Precision | None = None,
         bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> None:
         super().__init__()
+        admission.history_config(config, space)
         if precision is None:
             precision = default_precision(dims.hidden)
         precision_dtype(precision)
@@ -336,6 +336,7 @@ class MLXActorCritic(nn.Module):
         # torch policy carries it; the updates read its `value_kind`.
         self.config = config
         self.bucketed_shapes = bucketed_shapes
+        self.live_tokens = live_tokens
         self.stack_tokens = space.one_token
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
             "signed_outcome" if config.value_kind == "categorical_wdl" else None
@@ -394,6 +395,16 @@ class MLXActorCritic(nn.Module):
         self.facts = Facts(dims, hashed_buckets)
         self.shared_effects = SharedEffects(dims, hashed_buckets)
         self.name_candidates = NameCandidates(dims)
+        if config.decision_memory != "none":
+            self.decision_memory = DecisionMemory(
+                config.decision_memory, config.decision_memory_summaries, hidden
+            )
+            for layer in (self.attention, *self.extra_attention):
+                layer.memory_gate = mx.zeros(())
+                layer.memory_gate_scale = config.decision_memory_gate_scale
+                layer.memory_projection = nn.Linear(hidden, hidden, bias=False)
+        if config.recent_events:
+            self.recent_events = RecentEventEncoder(hidden)
         self.continuation = Continuation(dims)
         if space.one_token:
             self.stack_embedding = Projection(dims.stack, hidden)
@@ -646,8 +657,13 @@ class MLXActorCritic(nn.Module):
             object.__setattr__(self, "_cast_state", None)
 
     def memory_gates(self) -> dict[str, float]:
-        """MLX does not implement decision memory."""
-        return {}
+        """Effective memory gates at the update reporting boundary."""
+        if self.config.decision_memory == "none":
+            return {}
+        return {
+            f"gate_{i}": float(mx.tanh(layer.memory_gate_scale * layer.memory_gate))
+            for i, layer in enumerate((self.attention, *self.extra_attention))
+        }
 
     def _binding(self) -> str:
         return self._static.binding_cache.get(
@@ -655,11 +671,15 @@ class MLXActorCritic(nn.Module):
         )
 
     def prepare(
-        self, obs: ObservationBuffers, *, inference: bool = False
+        self,
+        obs: ObservationBuffers,
+        *,
+        inference: bool = False,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
         measured = self._admit_observation(obs)
-        return self._prepare_rows(measured or obs, inference)
+        return self._prepare_rows(measured or obs, inference, memory_roots)
 
     def prepare_admitted(
         self,
@@ -667,6 +687,7 @@ class MLXActorCritic(nn.Module):
         *,
         inference: bool = False,
         needs: np.ndarray | None = None,
+        memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
@@ -675,10 +696,13 @@ class MLXActorCritic(nn.Module):
             if self.bucketed_shapes
             else None
         )
-        return self._prepare_rows(bucketed or obs, inference)
+        return self._prepare_rows(bucketed or obs, inference, memory_roots)
 
     def _prepare_rows(
-        self, obs: ObservationBuffers | BucketedObservation, inference: bool
+        self,
+        obs: ObservationBuffers | BucketedObservation,
+        inference: bool,
+        memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         return prepare(
             obs,
@@ -686,6 +710,12 @@ class MLXActorCritic(nn.Module):
             inference=inference,
             bucketed=self.bucketed_shapes,
             binding=self._binding(),
+            memory_summaries=self.config.decision_memory_summaries
+            if self.config.decision_memory != "none"
+            else 0,
+            memory_fold=self.config.decision_memory == "gru",
+            memory_roots=memory_roots,
+            live_tokens=self.live_tokens and self.config.attention_on,
             value_token=self.config.value_aggregation == "value_token",
         )
 
@@ -813,6 +843,8 @@ class MLXActorCritic(nn.Module):
     def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
+        if batch.guard is not None:
+            batch.guard(self)
         static: _Static = self._static
         if batch.binding != self._binding():
             raise ValueError("prepared batch belongs to another policy configuration")
@@ -831,7 +863,8 @@ class MLXActorCritic(nn.Module):
                 mx.concatenate([mx.stop_gradient(table[:1]), table[1:]])
             )
         else:
-            definitions = self._definition_table(self._public(programs))
+            public_programs = self._public(programs)
+            definitions = self._definition_table(public_programs)
         tokens = cards.token_embedding.weight if self.config.catalog_records() else None
 
         def defs(rows: np.ndarray) -> mx.array:
@@ -962,16 +995,28 @@ class MLXActorCritic(nn.Module):
             mx.zeros((b * rows,), objects.dtype).at[frames].add(valid.reshape(-1))
         )
         frame_context = pooled_frames / mx.maximum(frame_counts, 1)[:, None]
+        present = relation_count > 0
+        if self.config.recent_events:
+            assert batch.events is not None
+            shared = shared + self.recent_events(batch.events, objects, definitions)
+            present = present | mx.array(batch.events.validity.any(-1, keepdims=True))
         if "stream_norms" in self:
-            shared = self._stream("context", shared) * (relation_count > 0).astype(
-                shared.dtype
-            )
+            shared = self._stream("context", shared) * present.astype(shared.dtype)
         # With attention off, historical pooling also sees the padding embeddings.
         # Only real objects receive continuation context.
         validity = self._floating(batch.validity)
         objects = objects + shared[:, None] * validity[..., None]
 
-        encoded = self._attend_objects(objects, validity, batch)
+        summaries = None
+        if self.config.decision_memory != "none":
+            assert batch.memory is not None and programs is not None
+            summaries = self.decision_memory(
+                batch.memory,
+                cards.token_embedding.weight,
+                public_programs,
+                self.name_candidates.embedding.weight,
+            )
+        encoded = self._attend_objects(objects, validity, batch, summaries)
         values = self._value_from_objects(encoded, validity)
         # The neutral critic token has no object coordinates for focus or FiLM.
         encoded_objects = encoded[:, :count]
@@ -1038,7 +1083,11 @@ class MLXActorCritic(nn.Module):
         return logits, values
 
     def _attend_objects(
-        self, objects: mx.array, validity: mx.array, batch: Prepared[np.ndarray]
+        self,
+        objects: mx.array,
+        validity: mx.array,
+        batch: Prepared[np.ndarray],
+        summaries: mx.array | None = None,
     ) -> mx.array:
         """Return objects in original focus coordinates plus any trailing critic token."""
         if not self.config.attention_on:
@@ -1064,14 +1113,29 @@ class MLXActorCritic(nn.Module):
             if columns is not None:
                 columns = np.append(columns, count)
                 count += 1
-        keep = attended_validity != 0
-        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
-        keep = keep[..., None].astype(objects.dtype)
-        encoded_objects = self.attention(attended, sign, mask, keep)
-        for layer in self.extra_attention:
-            encoded_objects = layer(encoded_objects, sign, mask, keep)
-        if "final_norm" in self:
-            encoded_objects = self.final_norm(encoded_objects) * keep
+        shape = attended.shape
+        live = None
+        if batch.live_index is not None:
+            assert batch.live_offsets is not None
+            live = LiveTokens.from_offsets(batch.live_index, batch.live_offsets)
+            attended = attended.reshape(-1, shape[-1])[live.index]
+            sign = sign.reshape(-1, 1)[live.index]
+            keep = mx.array(1, dtype=objects.dtype)
+            mask = live.mask
+        else:
+            keep = attended_validity[..., None].astype(objects.dtype)
+            mask = mx.where(attended_validity != 0, 0.0, -mx.inf).astype(objects.dtype)[
+                :, None, None, :
+            ]
+        for layer in (self.attention, *self.extra_attention):
+            attended = layer(attended, sign, mask, keep, live, summaries)
+        encoded_objects = (
+            self.final_norm(attended) * keep if "final_norm" in self else attended
+        )
+        if live is not None:
+            restored = mx.zeros((shape[0] * shape[1], shape[-1]), objects.dtype)
+            restored[live.index] = encoded_objects
+            return restored.reshape(shape)
         if columns is not None:
             # Restore the original coordinates; unused columns are zero.
             positions = np.zeros(count, dtype=np.int64)
@@ -1283,6 +1347,11 @@ def _program_number(value: mx.array) -> mx.array:
     return mx.sign(value) * mx.log1p(mx.abs(value)) / 10
 
 
+def frozen_state(states: mx.array, index: int) -> mx.array:
+    """Gather an independent state so the cache releases the full fold storage."""
+    return mx.stop_gradient(mx.take(states, mx.array(index), axis=0))
+
+
 class PolicyInference:
     """An unchanged inference policy and its optional weight-only program cache."""
 
@@ -1293,6 +1362,10 @@ class PolicyInference:
         self.cache_catalog = cache_catalog
         self._closed = False
         self._weights = parameter_ids(agent.parameters())
+        self._device = agent.inference_device
+        self.memory = CollectionMemory[mx.array](
+            mx.concatenate, mx.stack, frozen_state, mx.async_eval
+        )
         self._precision = agent.precision
         self._binding = agent._binding()
         agent.clear_cache()
@@ -1310,8 +1383,10 @@ class PolicyInference:
         if (
             self._binding != self.agent._binding()
             or self._precision != self.agent.precision
+            or self._device != self.agent.inference_device
             or not same_weights
         ):
+            self.memory.clear()
             raise RuntimeError("inference policy changed within its scope")
 
     def cache_programs(self) -> None:
@@ -1330,11 +1405,25 @@ class PolicyInference:
         traceback: TracebackType | None,
     ) -> None:
         self._closed = True
+        self.memory.clear()
         self.agent.clear_cache()
 
     def prepare(self, obs: ObservationBuffers) -> Prepared[np.ndarray]:
         self._check()
-        return self.agent.prepare(obs, inference=True)
+        if self.agent.config.decision_memory != "gru":
+            return self.agent.prepare(obs, inference=True)
+        batch = self.agent.prepare(
+            obs, inference=True, memory_roots=self.memory.roots(obs)
+        )
+        # Routes stay NumPy. Only the optional serving states, references and
+        # result sink on the fold use the backend array type.
+        bound = self.memory.bind(cast(Prepared[mx.array], batch), obs)
+        return replace(cast(Prepared[np.ndarray], bound), guard=self.check_forward)
+
+    def check_forward(self, agent: object) -> None:
+        if agent is not self.agent:
+            raise RuntimeError("prepared memory belongs to another inference policy")
+        self._check()
 
     def infer(
         self,

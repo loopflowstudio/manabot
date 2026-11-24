@@ -1134,7 +1134,10 @@ ordinal and span features. The GRU reads their chronological order; the
 transformer adds a learned projection of prefix-relative recency (rank / 128)
 as a sequence position signal, outside the shared record embedding. Both the
 Torch and MLX backends support both decision-memory encoders (`gru` and
-`transformer`, 1 or 4 summaries) and control-trunk branching.
+`transformer`, 1 or 4 summaries) and control-trunk branching. During
+collection, both GRU encoders can reuse stable records for the same viewer
+prefix and native epoch. A restored branch can share record content while
+requiring a fresh recurrent state. The latest record is recomputed on every draw.
 
 ### What a record means
 

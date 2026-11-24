@@ -565,9 +565,9 @@ A collector opened directly with `open_collector` must be closed with `close_col
 selects [bucketed padding](observation-and-model.md#bucketed-padding)
 and `live_tokens` selects
 [live-token attention](observation-and-model.md#live-token-attention)
-for the collection and learner policies; both are off by default. `live_tokens`
-is admitted per backend when a run starts (CUDA-only on Torch; `mps` and `cpu`
-on MLX).
+for collection and learning. Both default to off in `SelfPlay`. The recipes
+check the device before opening an Etude run. Torch admits live tokens on
+CUDA, and MLX admits them on `mps` and `cpu`.
 
 The policy reads only the acting viewer's tensors; private labels are never
 model inputs. Learner and behavior weights are raw; EMA is a separately named
