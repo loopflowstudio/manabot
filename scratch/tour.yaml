@@ -1,19 +1,17 @@
-at: 10d14ac7a0d86a760cb4ab44908285ec94af6b06
+at: 493c20665804d49e08ca57b1c3b64b9b789382a2
 first:
   - path: scratch/plan.md
-    why: Implemented interactions and remaining Unravel comparison
-  - path: managym/cards/src/blb.rs
-    why: Bakersbane Duo's entry and expend abilities
-  - path: managym/src/flow/event.rs
-    why: SpellCast records the payer and turn totals
-  - path: managym/src/flow/play.rs
-    why: Receipt and caster establish the spend crossing
-  - path: managym/src/flow/triggers.rs
-    why: Match each present listener against that crossing
-  - path: managym/cards/tests/cards/blb.rs
-    why: Countered and resolved casts share the same triggers
+    why: Second-draw outcomes and remaining coverage
+  - path: managym/cards/src/fdn.rs
+    why: Three listeners share one committed draw ordinal
+  - path: managym/state/src/game_object.rs
+    why: Copiable values owned by each departed appearance
+  - path: managym/src/flow/identity.rs
+    why: Capture altered faces and copies before departure
+  - path: managym/src/flow/resolution.rs
+    why: Resolve token creation against the exact source
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Compare live, departed and countered Horde triggers
   - path: tests/semantic/test_text_observation.py
-    why: Both seats read the same caster's spend
-hide:
-  - path: protocol/
-    why: Schema copies reflect the optional turn field
+    why: Both viewers read Lunar Insight’s draw count
+hide: []
