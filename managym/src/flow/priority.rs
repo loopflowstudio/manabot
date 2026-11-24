@@ -56,13 +56,12 @@ impl PriorityState {
     }
 }
 
-/// What one resolution in a watched chain left behind. `fingerprint` is the
+/// What one watched resolution left behind. `fingerprint` is the
 /// rules-relevant state with life totals masked
-/// ([`crate::flow::game::GameState::loop_fingerprint`]); it is `None` while
-/// the chain is too short to be worth fingerprinting.
+/// ([`crate::flow::game::GameState::loop_fingerprint`]).
 #[derive(Clone, Copy, Debug)]
 pub struct LoopSample {
-    pub fingerprint: Option<u64>,
+    pub fingerprint: u64,
     pub life: [i32; 2],
     pub poison: [i32; 2],
     /// Whether each seat can lose the game (no Herald of Eternal Dawn).
@@ -105,17 +104,18 @@ impl MandatoryLoopWatch {
     /// Resolutions without any other action that make a loop regardless.
     pub const CAP: u32 = 10_000;
 
-    /// Whether the next resolution is fingerprinted.
-    pub fn watching_next(watch: Option<&Self>) -> bool {
-        watch.map_or(0, |watch| watch.resolutions) + 1 > Self::UNWATCHED
-    }
-
-    /// Record one resolution; true once the loop is established.
-    pub fn repeats(&mut self, now: LoopSample) -> bool {
+    /// Record one resolution; true once the loop is established. `sample`
+    /// runs only once the chain has outlasted [`Self::UNWATCHED`].
+    pub fn repeats(&mut self, sample: impl FnOnce() -> LoopSample) -> bool {
         self.resolutions += 1;
-        let Some(fingerprint) = now.fingerprint else {
-            return self.resolutions >= Self::CAP;
-        };
+        if self.resolutions >= Self::CAP {
+            return true;
+        }
+        if self.resolutions <= Self::UNWATCHED {
+            return false;
+        }
+        let now = sample();
+        let fingerprint = now.fingerprint;
         if self.seen.is_empty() {
             self.life_low = now.life;
             self.poison_high = now.poison;
@@ -135,7 +135,7 @@ impl MandatoryLoopWatch {
                         && before.poison_high[seat] == mark.poison_high[seat])
             })
         });
-        repeated || self.resolutions >= Self::CAP
+        repeated
     }
 }
 
@@ -145,50 +145,65 @@ mod tests {
 
     fn sample(fingerprint: u64, life: i32, poison: i32) -> LoopSample {
         LoopSample {
-            fingerprint: Some(fingerprint),
+            fingerprint,
             life: [20, life],
             poison: [0, poison],
             can_lose: [true, true],
         }
     }
 
+    /// A watch whose chain has outlasted the unwatched prefix.
+    fn watched() -> MandatoryLoopWatch {
+        MandatoryLoopWatch {
+            resolutions: MandatoryLoopWatch::UNWATCHED,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_short_chain_is_never_fingerprinted() {
+        let mut watch = MandatoryLoopWatch::default();
+        assert!((0..MandatoryLoopWatch::UNWATCHED)
+            .all(|_| !watch.repeats(|| unreachable!("sampled an unwatched resolution"))));
+    }
+
     #[test]
     fn states_that_never_repeat_are_no_loop() {
-        let mut watch = MandatoryLoopWatch::default();
-        assert!((0..1000).all(|n| !watch.repeats(sample(n, 20, 0))));
+        let mut watch = watched();
+        assert!((0..1000).all(|n| !watch.repeats(|| sample(n, 20, 0))));
     }
 
     #[test]
     fn a_repeated_state_is_a_loop_unless_a_player_who_can_lose_is_losing() {
-        let mut steady = MandatoryLoopWatch::default();
+        let mut steady = watched();
         // The first cycle reaches a new low of 19; the next one, at no new
         // low, repeats.
-        assert!(!steady.repeats(sample(1, 20, 0)));
-        assert!(!steady.repeats(sample(2, 19, 0)));
-        assert!(!steady.repeats(sample(1, 20, 0)));
-        assert!(steady.repeats(sample(2, 19, 0)));
+        assert!(!steady.repeats(|| sample(1, 20, 0)));
+        assert!(!steady.repeats(|| sample(2, 19, 0)));
+        assert!(!steady.repeats(|| sample(1, 20, 0)));
+        assert!(steady.repeats(|| sample(2, 19, 0)));
 
-        let mut draining = MandatoryLoopWatch::default();
-        assert!((0..1000).all(|n| !draining.repeats(sample(n % 2, 2000 - n as i32, 0))));
+        let mut draining = watched();
+        assert!((0..1000).all(|n| !draining.repeats(|| sample(n % 2, 2000 - n as i32, 0))));
 
-        let mut poisoning = MandatoryLoopWatch::default();
-        assert!((0..1000).all(|n| !poisoning.repeats(sample(n % 2, 20, n as i32))));
+        let mut poisoning = watched();
+        assert!((0..1000).all(|n| !poisoning.repeats(|| sample(n % 2, 20, n as i32))));
 
-        let mut protected = MandatoryLoopWatch::default();
+        let mut protected = watched();
         let protected_sample = |n: u64| LoopSample {
             can_lose: [true, false],
             ..sample(n % 2, 2000 - n as i32, n as i32)
         };
-        assert!(!protected.repeats(protected_sample(0)));
-        assert!(!protected.repeats(protected_sample(1)));
-        assert!(protected.repeats(protected_sample(2)));
+        assert!(!protected.repeats(|| protected_sample(0)));
+        assert!(!protected.repeats(|| protected_sample(1)));
+        assert!(protected.repeats(|| protected_sample(2)));
     }
 
     #[test]
     fn an_unbounded_chain_ends_at_the_cap() {
         let mut watch = MandatoryLoopWatch::default();
-        let ended =
-            (0..u64::from(MandatoryLoopWatch::CAP)).position(|n| watch.repeats(sample(n, 20, 0)));
+        let ended = (0..u64::from(MandatoryLoopWatch::CAP))
+            .position(|n| watch.repeats(|| sample(n, 20, 0)));
         assert_eq!(ended, Some(MandatoryLoopWatch::CAP as usize - 1));
     }
 }

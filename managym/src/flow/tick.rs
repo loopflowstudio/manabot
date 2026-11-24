@@ -7,7 +7,7 @@ use crate::{
         combat::CombatState,
         event::GameEvent,
         game::{Game, GameOutcome, GameProcedure},
-        priority::{LoopSample, MandatoryLoopWatch},
+        priority::LoopSample,
         proposed_event::EventBinding,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
@@ -535,18 +535,24 @@ impl Game {
             self.state.priority_mut().loop_watch = None;
             return false;
         }
-        let seats = [PlayerId(0), PlayerId(1)];
-        let watching = MandatoryLoopWatch::watching_next(self.state.priority.loop_watch.as_deref());
-        let sample = LoopSample {
-            fingerprint: watching.then(|| self.state.loop_fingerprint()),
-            life: seats.map(|seat| self.state.players[seat.0].life),
-            poison: seats.map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
-            can_lose: seats.map(|seat| !watching || !self.protected_from_loss(seat)),
-        };
-        self.state
+        // Taken out of the state so the sample can read the whole state.
+        let mut watch = self
+            .state
             .priority_mut()
             .loop_watch
-            .get_or_insert_with(Default::default)
-            .repeats(sample)
+            .take()
+            .unwrap_or_default();
+        let looped = watch.repeats(|| {
+            let seats = [PlayerId(0), PlayerId(1)];
+            LoopSample {
+                fingerprint: self.state.loop_fingerprint(),
+                life: seats.map(|seat| self.state.players[seat.0].life),
+                poison: seats
+                    .map(|seat| self.state.players[seat.0].counters.get(CounterKind::Poison)),
+                can_lose: seats.map(|seat| !self.protected_from_loss(seat)),
+            }
+        });
+        self.state.priority_mut().loop_watch = Some(watch);
+        looped
     }
 }
