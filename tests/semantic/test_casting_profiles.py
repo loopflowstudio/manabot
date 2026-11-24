@@ -44,11 +44,12 @@ def test_spew_flame_resolution_grants_only_the_smaug_profile() -> None:
         f"Cast {adventure}",
     }
     for action in projected:
-        assert rows[action["index"], column("actions", "adventure")] == (
-            adventure in action["description"]
+        assert rows[action["index"], column("actions", "spell_profile")] == (
+            1 if adventure in action["description"] else 0
         )
     submit_response(env, hand, inset.reference)
     targets = capture_text_decision(env)
+    assert "casting its Adventure" in targets.text
     [ogre] = [action for action in targets.actions if target in action.description]
     submit_response(env, targets, ogre.reference)
     choose(env, "Pay the offered cost")
@@ -109,9 +110,12 @@ def test_charring_bite_has_a_distinct_command_and_policy_row() -> None:
     ]
     rows = encode_observation(ObservationSpace(), observation)["actions"]
     assert {
-        (action["description"], rows[action["index"], column("actions", "omen")])
+        (
+            action["description"],
+            rows[action["index"], column("actions", "spell_profile")],
+        )
         for action in actions
-    } == {("Cast Twinmaw Stormbrood", 0), ("Cast Charring Bite", 1)}
+    } == {("Cast Twinmaw Stormbrood", 0), ("Cast Charring Bite", 2)}
     for name, mana_value, creature in (
         ("Twinmaw Stormbrood", 6, True),
         ("Charring Bite", 2, False),

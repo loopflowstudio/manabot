@@ -295,6 +295,10 @@ def _yes(value: bool) -> str:
     return "yes" if value else "no"
 
 
+# Native `spell_profile_code`: the printed spell an offer or announcement casts.
+_SPELL_PROFILES = {1: "Adventure", 2: "Omen"}
+
+
 def _selectors(mode: int | None, ability: int | None) -> list[str]:
     return [
         f"{label} {value + 1}"
@@ -717,6 +721,8 @@ class _Renderer:
             )
         else:
             details += _selectors(relation.mode, relation.ability)
+        if relation.spell_profile:
+            details.append(f"casting its {_SPELL_PROFILES[relation.spell_profile]}")
         if relation.x:
             details.append(f"X = {relation.x}")
         if relation.kicked:

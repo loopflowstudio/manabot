@@ -41,8 +41,7 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         continuation_index: None,
         pays_directly: false,
         announces_x: false,
-        adventure: false,
-        omen: false,
+        spell_profile: 0,
         route_mana_value: None,
         quota_type: None,
     }

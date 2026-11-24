@@ -11,6 +11,7 @@ use crate::{
     agent::{
         continuation::ContinuationFrame,
         effect_execution::{contribution_phrase, spent_mana_phrase},
+        observation::spell_profile_code,
     },
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
@@ -328,17 +329,38 @@ impl Game {
             .or_else(|| frames.iter().find(|frame| frame.kind == 4))
             .or_else(|| frames.iter().find(|frame| frame.kind == 5))
         {
-            let object = |reference: crate::agent::continuation::VisibleReference| {
-                if let Some(player) = reference.player {
-                    return self.decision_target(&Target::Player(PlayerId(player)));
-                }
+            let live = |reference: crate::agent::continuation::VisibleReference| {
                 let display_id = reference.object? as u32;
                 self.state.latest_objects().find_map(|(object, _)| {
                     self.decision_object(object)
                         .filter(|view| view.display_id == display_id)
+                        .map(|view| (object, view))
                 })
             };
-            view.source = RequiredNullable(object(frame.source));
+            let object = |reference: crate::agent::continuation::VisibleReference| {
+                if let Some(player) = reference.player {
+                    return self.decision_target(&Target::Player(PlayerId(player)));
+                }
+                live(reference).map(|(_, view)| view)
+            };
+            view.source = RequiredNullable(
+                live(frame.source)
+                    .map(|(source, mut view)| {
+                        // An announced inset spell is named for itself, not its card.
+                        if let Some(spell) = self.state[source]
+                            .spell_profiles()
+                            .find(|profile| {
+                                !profile.is_front()
+                                    && spell_profile_code(*profile) == frame.spell_profile
+                            })
+                            .and_then(|profile| self.state[source].spell_definition(profile))
+                        {
+                            view.label = spell.name.clone();
+                        }
+                        view
+                    })
+                    .or_else(|| object(frame.source)),
+            );
             view.targets = frame
                 .targets
                 .iter()
@@ -408,7 +430,7 @@ impl Game {
         // The one yes-or-no cost choice of a cast, named for what the card
         // offers: `KickerChoice` asks bargain and alternative costs too.
         let cast_option = match &self.pending_choice {
-            Some(PendingChoice::KickerChoice { object, .. }) => match self.state[*object].cast_option() {
+            Some(PendingChoice::KickerChoice { object, cast, .. }) => match cast.spell(&self.state[*object]).cast_option() {
                 Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
                 Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
                 Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),
@@ -450,7 +472,7 @@ impl Game {
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
-            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
+            Some(PendingChoice::AnnounceX { object: object_id, cast, .. }) if cast.spell(&self.state[*object_id]).replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),

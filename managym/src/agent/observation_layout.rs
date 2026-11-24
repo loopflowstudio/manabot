@@ -482,8 +482,7 @@ columns! { action {
     25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
     26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
-    28: ADVENTURE => ("adventure", ValueLayout::FLAG),
-    29: OMEN => ("omen", ValueLayout::FLAG),
+    28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:3}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen", "0 front face or no spell; 1..3")),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -748,6 +747,7 @@ columns! { relation {
     46: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
+    49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:3}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen", "0 front face or no spell; 1..3")),
 } }
 
 #[derive(Clone, Debug)]
@@ -1125,14 +1125,14 @@ mod tests {
                 (
                     "actions",
                     config.action_dim(),
-                    if one_token { 25 } else { 22 },
+                    if one_token { 29 } else { 22 },
                 ),
                 (
                     "events",
                     config.event_dim(),
                     if policy_history { 12 } else { 7 },
                 ),
-                ("relations", relation::WIDTH, 49),
+                ("relations", relation::WIDTH, 50),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),

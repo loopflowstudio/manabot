@@ -2208,11 +2208,8 @@ fn encode_actions(
             *value = f32::from(action.route_mana_value.unwrap_or_default()) / 10.;
             *quota = f32::from(action.quota_type.unwrap_or_default());
         }
-        if let Some(omen) = row.get_mut(action::OMEN) {
-            *omen = bool_to_f32(action.omen);
-        }
-        if let Some(inset) = row.get_mut(action::ADVENTURE) {
-            *inset = bool_to_f32(action.adventure);
+        if let Some(profile) = row.get_mut(action::SPELL_PROFILE) {
+            *profile = f32::from(action.spell_profile);
         }
         out_valid[action_index] = 1.0;
 
@@ -2400,8 +2397,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
-                        adventure: false,
-                        omen: false,
+                        spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2418,8 +2414,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
-                        adventure: false,
-                        omen: false,
+                        spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2436,8 +2431,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
-                        adventure: false,
-                        omen: false,
+                        spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
                     },
@@ -2587,8 +2581,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
-                adventure: false,
-                omen: false,
+                spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
             })
@@ -2893,8 +2886,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
-                adventure: false,
-                omen: false,
+                spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
             })

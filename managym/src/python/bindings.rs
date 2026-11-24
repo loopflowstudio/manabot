@@ -2576,10 +2576,9 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
     #[pyo3(get)]
-    pub adventure: bool,
-    #[pyo3(get)]
-    pub omen: bool,
+    pub spell_profile: u8,
     #[pyo3(get)]
     pub route_mana_value: Option<u8>,
     #[pyo3(get)]
@@ -2699,8 +2698,7 @@ impl From<ActionOption> for PyAction {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
-            adventure: value.adventure,
-            omen: value.omen,
+            spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }
@@ -2723,8 +2721,7 @@ impl From<PyAction> for ActionOption {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
-            adventure: value.adventure,
-            omen: value.omen,
+            spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
         }

@@ -287,7 +287,15 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
         .filter(|(id, definition)| {
             !definition.is_token && (!definition.key.is_empty() || pack.front_face(*id).is_some())
         })
-        .map(|(_, definition)| definition.name.as_str())
+        // An Adventure or Omen is a nameable card name with no definition.
+        .flat_map(|(_, definition)| {
+            std::iter::once(definition.name.as_str()).chain(
+                definition
+                    .inset
+                    .as_ref()
+                    .map(|inset| inset.characteristics().name.as_str()),
+            )
+        })
         .collect();
     let names = pack.name_candidates();
     assert_eq!(

@@ -492,6 +492,17 @@ pub struct StackObjectData {
     pub spell: Option<SpellData>,
 }
 
+/// The observed code of a printed spell profile: 0 the front face, 1 an
+/// Adventure, 2 an Omen. Offers and announcement frames share it, and its
+/// category columns read it, so a new profile appends a code.
+pub fn spell_profile_code(profile: SpellProfile) -> u8 {
+    match profile {
+        SpellProfile::Front => 0,
+        SpellProfile::Adventure => 1,
+        SpellProfile::Omen => 2,
+    }
+}
+
 impl StackObjectData {
     pub fn effective_mana_value(&self) -> Option<u8> {
         self.spell.as_ref().map(|spell| {
@@ -929,11 +940,9 @@ pub struct ActionOption {
     /// replicate count, a resolving payment's X) rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
-    /// The offer selects the printed Adventure on its physical card.
+    /// The printed spell this offer casts, as [`spell_profile_code`].
     #[serde(default)]
-    pub adventure: bool,
-    #[serde(default)]
-    pub omen: bool,
+    pub spell_profile: u8,
     /// Base mana value of the selected permission, before reductions or additional costs.
     #[serde(default)]
     pub route_mana_value: Option<u8>,
@@ -1085,8 +1094,7 @@ impl Observation {
                                 _ => (None, None),
                             };
                             ActionOption {
-                                adventure: profile == SpellProfile::Adventure,
-                                omen: profile == SpellProfile::Omen,
+                                spell_profile: spell_profile_code(profile),
                                 route_mana_value,
                                 quota_type,
                                 description: game.action_description(action),
@@ -2636,8 +2644,7 @@ mod characteristics_tests {
             continuation_index: None,
             pays_directly: false,
             announces_x: false,
-            adventure: false,
-            omen: false,
+            spell_profile: 0,
             route_mana_value: None,
             quota_type: None,
         };

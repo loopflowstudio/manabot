@@ -1112,8 +1112,8 @@ class Action:
     pays_directly: bool
     # mode_index is an announced number (X, a replicate count, a payment's X)
     # rather than an option index.
-    adventure: bool
-    omen: bool
+    # The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
+    spell_profile: int
     route_mana_value: int | None
     quota_type: int | None
     announces_x: bool
@@ -1238,6 +1238,8 @@ class ContinuationFrame:
     mode: int | None
     ability: int | None
     kicked: bool
+    # The printed spell an announcement casts: 0 front face, 1 Adventure, 2 Omen.
+    spell_profile: int
     active_clause: int | None
     targets: list[ClauseTarget]
     context: VisibleReference | None

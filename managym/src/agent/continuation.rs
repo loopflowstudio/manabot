@@ -8,7 +8,7 @@ use crate::state::ability::LibraryEnd;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agent::observation::{KeywordData, KEYWORD_COUNT},
+    agent::observation::{spell_profile_code, KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
@@ -121,6 +121,9 @@ pub struct ContinuationFrame {
     pub mode: Option<usize>,
     pub ability: Option<usize>,
     pub kicked: bool,
+    /// The printed spell an announcement casts, as `spell_profile_code`.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spell_profile: u8,
     pub active_clause: Option<usize>,
     pub targets: Vec<ClauseTarget>,
     pub context: Option<VisibleReference>,
@@ -746,6 +749,7 @@ impl Game {
             } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
@@ -754,11 +758,13 @@ impl Game {
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
             }
-            PendingChoice::KickerChoice { object, .. }
-            | PendingChoice::AnnounceX { object, .. } => {
-                frame.source = self.object_reference(*object, viewer)
+            PendingChoice::KickerChoice { object, cast, .. }
+            | PendingChoice::AnnounceX { object, cast, .. } => {
+                frame.source = self.object_reference(*object, viewer);
+                frame.spell_profile = spell_profile_code(cast.profile);
             }
             PendingChoice::ActivatedTarget {
                 source,
@@ -1031,6 +1037,7 @@ impl Game {
             } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
@@ -1173,6 +1180,7 @@ pub fn encode_into(
             header[relation::FLYING + index] = f32::from(*granted);
         }
         header[relation::THIS_TURN] = f32::from(frame.this_turn);
+        header[relation::SPELL_PROFILE] = f32::from(frame.spell_profile);
         rows.next().unwrap().copy_from_slice(&header);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,

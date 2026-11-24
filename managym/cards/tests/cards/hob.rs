@@ -245,8 +245,50 @@ fn overlapping_grants_price_each_smaug_profile() {
         .action_space
         .actions
         .iter()
-        .filter_map(|offer| Some((offer.adventure, offer.route_mana_value?)))
+        .filter_map(|offer| Some((offer.spell_profile, offer.route_mana_value?)))
         .collect();
     prices.sort_unstable();
-    assert_eq!(prices, [(false, 0), (false, 7), (true, 0), (true, 5)]);
+    assert_eq!(prices, [(0, 0), (0, 7), (1, 0), (1, 5)]);
+}
+
+/// Mid-announcement projections name the selected Adventure, not its card,
+/// and keep the private announcement from the opponent.
+#[test]
+fn spew_flame_announcement_names_the_adventure() {
+    use crate::support::{game::move_from_library, play::choose};
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Smaug, the Great Calamity", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Hand);
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == smaug),
+    );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "targets");
+    assert_eq!(context.announcing.as_deref(), Some("spell"));
+    assert_eq!(context.source.0.unwrap().label, "Spew Flame");
+    let frames = s.game().continuation_frames(PlayerId(0));
+    let announcement = frames.iter().find(|frame| frame.kind == 4).unwrap();
+    assert_eq!(announcement.spell_profile, 1);
+    assert!(s
+        .game()
+        .decision_context(PlayerId(1))
+        .unwrap()
+        .source
+        .0
+        .is_none());
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(1))
+        .iter()
+        .all(|frame| frame.spell_profile == 0));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(
+        obs.stack_objects[0].spell.as_ref().unwrap().name,
+        "Spew Flame"
+    );
 }
