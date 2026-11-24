@@ -290,6 +290,22 @@ pub struct CopiableValues {
     pub copy: Option<crate::effect::CopyEffect>,
 }
 
+/// Effective characteristics and permanent status used by battlefield predicates.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct BattlefieldFacts {
+    pub types: crate::card::CardTypes,
+    pub subtypes: Vec<String>,
+    pub supertypes: Vec<String>,
+    pub colors: crate::mana::Colors,
+    pub name: String,
+    pub mana_value: u8,
+    pub is_legendary: bool,
+    pub token: bool,
+    pub attacking: bool,
+    pub in_combat: bool,
+    pub tapped: bool,
+}
+
 /// Battlefield facts retained for a departed exact object.
 ///
 /// Ordinary copiable values resolve through the immutable catalog. A departure
@@ -314,8 +330,12 @@ pub struct ObjectLki {
     /// The battlefield slot it occupied, so a departed `Target::Permanent`
     /// finds its last known information.
     pub permanent: PermanentId,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub animated_creature: bool,
+    pub battlefield: Arc<BattlefieldFacts>,
+    #[serde(serialize_with = "exact")]
+    pub attached_to: Option<ObjectId>,
+    /// Second component's slot appearance immediately before the meld separates.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
+    pub meld_partner: Option<ObjectId>,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,

@@ -1223,50 +1223,113 @@ pub(super) fn matches_view(
         return false;
     };
     let object = &game.state[permanent.object];
-    let mana_value = game.object_mana_value(permanent.object);
-    // A permanent is on the battlefield, never a graveyard card.
-    !p.from_battlefield_this_turn
-        && (!p.namesake || source_name == Some(view.name.as_str()))
-        && (!p.deathtouch || view.keywords.has(Keyword::Deathtouch))
-        && (!p.flying || view.keywords.has(Keyword::Flying))
-        && (!p.no_counters || !permanent.has_counters())
-        && (!p.in_combat || game.permanent_in_combat(id))
-        && (!p.with_counter || permanent.counter_count(CounterKind::PlusOnePlusOne) > 0)
-        && (!p.attacking || permanent.attacking)
-        && (!p.tapped || permanent.tapped)
-        && p.token
-            .is_none_or(|token| token == (object.kind() == ObjectKind::Token))
-        && (p.any_of.is_empty()
-            || p.any_of
+    CharacteristicView {
+        types: &view.types,
+        subtypes: &view.subtypes,
+        supertypes: &object.supertypes,
+        colors: &view.colors,
+        name: &view.name,
+        keywords: view.keywords,
+        power: view.power,
+        mana_value: game.object_mana_value(permanent.object),
+        is_legendary: view.is_legendary,
+        token: object.kind() == ObjectKind::Token,
+        attacking: permanent.attacking,
+        tapped: permanent.tapped,
+        in_combat: game.permanent_in_combat(id),
+        counters: &permanent.counters,
+    }
+    .matches(p, source_name)
+}
+
+struct CharacteristicView<'a> {
+    types: &'a crate::state::card::CardTypes,
+    subtypes: &'a [String],
+    supertypes: &'a [String],
+    colors: &'a crate::state::mana::Colors,
+    name: &'a str,
+    keywords: Keywords,
+    power: i32,
+    mana_value: u8,
+    is_legendary: bool,
+    token: bool,
+    attacking: bool,
+    tapped: bool,
+    in_combat: bool,
+    counters: &'a crate::state::permanent::Counters,
+}
+
+pub(super) fn matches_departure(
+    lki: &crate::state::game_object::ObjectLki,
+    p: &CardPredicate,
+    source_name: Option<&str>,
+) -> bool {
+    let facts = &lki.battlefield;
+    CharacteristicView {
+        types: &facts.types,
+        subtypes: &facts.subtypes,
+        supertypes: &facts.supertypes,
+        colors: &facts.colors,
+        name: &facts.name,
+        keywords: lki.keywords,
+        power: lki.power,
+        mana_value: facts.mana_value,
+        is_legendary: facts.is_legendary,
+        token: facts.token,
+        attacking: facts.attacking,
+        tapped: facts.tapped,
+        in_combat: facts.in_combat,
+        counters: &lki.counters,
+    }
+    .matches(p, source_name)
+}
+
+impl CharacteristicView<'_> {
+    fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
+        // A permanent is on the battlefield, never a graveyard card.
+        !p.from_battlefield_this_turn
+            && (!p.namesake || source_name == Some(self.name))
+            && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
+            && (!p.flying || self.keywords.has(Keyword::Flying))
+            && (!p.no_counters || self.counters.is_empty())
+            && (!p.in_combat || self.in_combat)
+            && (!p.with_counter || self.counters.get(CounterKind::PlusOnePlusOne) > 0)
+            && (!p.attacking || self.attacking)
+            && (!p.tapped || self.tapped)
+            && p.token.is_none_or(|token| token == self.token)
+            && (p.any_of.is_empty()
+                || p.any_of
+                    .iter()
+                    .any(|alternative| self.matches(alternative, source_name)))
+            && p.supertype.as_ref().is_none_or(|s| {
+                if s.eq_ignore_ascii_case("legendary") {
+                    self.is_legendary
+                } else {
+                    self.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
+                }
+            })
+            && (!p.nonlegendary || !self.is_legendary)
+            && (!p.nonbasic
+                || !self
+                    .supertypes
+                    .iter()
+                    .any(|s| s.eq_ignore_ascii_case("basic")))
+            && p.card_type.is_none_or(|t| self.types.types.contains(&t))
+            && (p.card_types_any.is_empty()
+                || p.card_types_any
+                    .iter()
+                    .any(|t| self.types.types.contains(t)))
+            && p.not_card_types
                 .iter()
-                .any(|alternative| matches_view(game, id, alternative, view, source_name)))
-        && p.supertype.as_ref().is_none_or(|s| {
-            if s.eq_ignore_ascii_case("legendary") {
-                view.is_legendary
-            } else {
-                object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
-            }
-        })
-        && (!p.nonlegendary || !view.is_legendary)
-        && (!p.nonbasic
-            || !object
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("basic")))
-        && p.card_type.is_none_or(|t| view.types.types.contains(&t))
-        && (p.card_types_any.is_empty()
-            || p.card_types_any
-                .iter()
-                .any(|t| view.types.types.contains(t)))
-        && p.not_card_types
-            .iter()
-            .all(|t| !view.types.types.contains(t))
-        && p.subtype.as_ref().is_none_or(|s| view.subtypes.contains(s))
-        && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| view.subtypes.contains(s)))
-        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
-        && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
-        && p.min_power.is_none_or(|min| view.power >= min)
-        && p.max_power.is_none_or(|max| view.power <= max)
-        && p.min_mana_value.is_none_or(|min| mana_value >= min)
-        && p.max_mana_value.is_none_or(|max| mana_value <= max)
+                .all(|t| !self.types.types.contains(t))
+            && p.subtype.as_ref().is_none_or(|s| self.subtypes.contains(s))
+            && (p.subtypes_any.is_empty()
+                || p.subtypes_any.iter().any(|s| self.subtypes.contains(s)))
+            && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| self.colors.contains(c)))
+            && p.not_subtypes.iter().all(|s| !self.subtypes.contains(s))
+            && p.min_power.is_none_or(|min| self.power >= min)
+            && p.max_power.is_none_or(|max| self.power <= max)
+            && p.min_mana_value.is_none_or(|min| self.mana_value >= min)
+            && p.max_mana_value.is_none_or(|max| self.mana_value <= max)
+    }
 }

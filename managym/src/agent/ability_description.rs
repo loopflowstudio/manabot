@@ -689,6 +689,7 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::Triggering => "that permanent".into(),
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),
+        ObjectSelector::ExiledWithSource => "the cards exiled with this permanent".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
         ObjectSelector::Grantor => "the permanent granting this ability".into(),
         ObjectSelector::Moved => "it".into(),
@@ -749,7 +750,7 @@ fn move_description(
     tapped: bool,
     transformed: bool,
     under: Option<&PlayerSelector>,
-    with_counter: Option<CounterKind>,
+    with_counter: Option<&crate::state::ability::EntryCounters>,
     linked: Option<LinkedExile>,
 ) -> String {
     // A card returning itself (Earthbend, flicker) reads as a return; its
@@ -770,11 +771,16 @@ fn move_description(
             if transformed {
                 text.push_str(" transformed");
             }
-            if let Some(kind) = with_counter {
-                text.push_str(&format!(
-                    " with a {} counter on it",
-                    counter_description(kind)
-                ));
+            if let Some(entry) = with_counter {
+                let kind = counter_description(entry.kind);
+                if entry.count == EffectValue::Fixed(1) {
+                    text.push_str(&format!(" with a {kind} counter on it"));
+                } else {
+                    text.push_str(&format!(
+                        " with {} {kind} counters on it",
+                        value_description(&entry.count)
+                    ));
+                }
             }
             match under {
                 None => {}
@@ -853,6 +859,10 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::TriggerDamage => "the damage dealt".into(),
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
+        EffectValue::DeathCountersMinus { kind, subtract } => format!(
+            "the number of {} counters it had as it died minus {subtract}",
+            counter_description(*kind)
+        ),
         EffectValue::SourcePower => "this permanent's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
@@ -973,7 +983,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
         Move { what, to, tapped, transformed, under, with_counter, linked, library_end } => {
             if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(what), format!("{end:?}").to_lowercase()) }
-            else { move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
+            else { move_description(what, *to, *tapped, *transformed, under.as_ref(), with_counter.as_ref(), *linked) }
         },
         Tap { what } => format!("Tap {}", selector_description(what)),
         Untap { what } => format!("Untap {}", selector_description(what)),

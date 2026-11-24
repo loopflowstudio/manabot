@@ -182,6 +182,17 @@ impl GameState {
         self.zones.latest().zip(self.objects.iter())
     }
 
+    /// Cards still in the exile appearances produced by this source's moves.
+    pub(crate) fn exiled_with(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        self.exile_links
+            .iter()
+            .filter(move |link| {
+                link.source == source
+                    && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+            })
+            .map(|link| link.exiled_object)
+    }
+
     /// `object` while it still names an object in a zone (CR 400.7).
     pub fn live(&self, object: ObjectId) -> Option<ObjectId> {
         self.zones.zone_of(object).map(|_| object)
@@ -533,7 +544,7 @@ impl TrackedState {
     pub(crate) fn release_resolved_forms(&mut self) {
         if self.state.stack_objects.is_empty() {
             let delayed = &self.state.delayed_triggers;
-            self.state.object_lki.retain_forms(|object| {
+            let still_watched = |object| {
                 delayed.iter().any(|trigger| {
                     trigger.source_identity.object() == object
                         || trigger
@@ -541,6 +552,13 @@ impl TrackedState {
                             .iter()
                             .any(|binding| binding.object == object)
                 })
+            };
+            self.state.object_lki.retain_forms(still_watched);
+            let zones = &self.state.zones;
+            self.state.exile_links.retain(|link| {
+                zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+                    && (zones.zone_of(link.source) == Some(ZoneType::Battlefield)
+                        || still_watched(link.source))
             });
         }
     }

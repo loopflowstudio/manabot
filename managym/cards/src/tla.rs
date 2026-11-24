@@ -2983,8 +2983,8 @@ fn earth_kingdom_jailer() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::exile_linked(
-                    ObjectSelector::Target(TargetSpec::PermanentOpponentControls {
+                effects: vec![Effect::exile_until_source_leaves(
+                    TargetSpec::PermanentOpponentControls {
                         predicate: CardPredicate {
                             card_types_any: vec![
                                 CardType::Artifact,
@@ -2994,8 +2994,8 @@ fn earth_kingdom_jailer() -> CardDefinition {
                             min_mana_value: Some(3),
                             ..Default::default()
                         },
-                    }),
-                    LinkedExile::UntilSourceLeaves,
+                    },
+                    0,
                 )],
             }],
             text_box: text_box.into(),
@@ -11334,7 +11334,7 @@ fn wolfbat() -> CardDefinition {
                         tapped: false,
                         transformed: false,
                         under: None,
-                        with_counter: Some(CounterKind::Finality),
+                        with_counter: Some(CounterKind::Finality.into()),
                         linked: None,
                     }],
                     if_declined: vec![],

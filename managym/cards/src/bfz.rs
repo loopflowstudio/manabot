@@ -1,5 +1,9 @@
 //! Battle for Zendikar.
 use managym_state::{
+    ability::Ability,
+    card::{Keyword, Keywords},
+};
+use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
@@ -10,7 +14,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![felidar_cub(), hedron_archive(), vampiric_rites()]
+    vec![
+        stasis_snare(),
+        felidar_cub(),
+        hedron_archive(),
+        vampiric_rites(),
+    ]
 }
 
 fn felidar_cub() -> CardDefinition {
@@ -96,6 +105,27 @@ fn vampiric_rites() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn stasis_snare() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this enchantment enters, exile target creature an opponent controls until this enchantment leaves the battlefield.";
+    CardDefinition {
+        key: "bfz.stasis_snare",
+        scryfall_id: "ff820544-f4a3-40c4-a48e-84b5e2d06caa",
+        printed: PrintedCharacteristics {
+            name: "Stasis Snare".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::enters(vec![Effect::exile_until_source_leaves(
+                TargetSpec::CreatureOpponentControls,
+                1,
+            )])],
             text_box: text_box.into(),
             ..Default::default()
         },

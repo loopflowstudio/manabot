@@ -496,7 +496,7 @@ impl Game {
             | DelayedTriggerEvent::YouCastSpell(_)
             | DelayedTriggerEvent::Upkeep => None,
         };
-        ContinuationFrame {
+        let mut frame = ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),
             kind: 10,
             decision: delayed_event_code(&trigger.event),
@@ -509,7 +509,9 @@ impl Game {
             }),
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
-        }
+        };
+        frame.program(&trigger.effects);
+        frame
     }
 
     fn remembered_references(

@@ -521,6 +521,9 @@ impl Game {
         if self.state.live(object).is_some() {
             return self.object_matches_predicate(object, predicate);
         }
+        if let Some(lki) = self.object_lki(object) {
+            return super::layers::matches_departure(lki, predicate, None);
+        }
         let (_, printing) = self.state.source_base(object);
         let (_, owner, kind) = self
             .state
@@ -528,14 +531,9 @@ impl Game {
             .provenance(object)
             .expect("recorded provenance");
         let power = if predicate.reads_power() {
-            self.object_lki(object).map_or_else(
-                || {
-                    printing.power_cda().map_or_else(
-                        || printing.power.unwrap_or(0),
-                        |cda| self.cda_power(cda, owner),
-                    )
-                },
-                |lki| lki.power,
+            printing.power_cda().map_or_else(
+                || printing.power.unwrap_or(0),
+                |cda| self.cda_power(cda, owner),
             )
         } else {
             0
@@ -899,11 +897,15 @@ impl Game {
                         if self.permanent_matches_predicate(id, predicate))
                 }),
             Condition::SourceCountersAtLeast { kind, count } => {
-                source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
+                source_permanent().map(|permanent| permanent.counter_count(*kind))
+                    .or_else(|| Some(self.object_lki(source?)?.counters.get(*kind)))
+                    .is_some_and(|n| n >= *count)
             }
-            Condition::SourceMatches(predicate) => source
-                .and_then(|r| self.lookup_current_permanent(r).ok())
-                .is_some_and(|id| self.permanent_matches_predicate(id, predicate)),
+            Condition::SourceMatches(predicate) => source.is_some_and(|object| {
+                self.lookup_current_permanent(object).map_or_else(
+                    |_| self.object_lki(object).is_some_and(|lki| super::layers::matches_departure(lki, predicate, None)),
+                    |id| self.permanent_matches_predicate(id, predicate))
+            }),
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::SourceSaddled => source
                 .and_then(|source| self.lookup_current_permanent(source).ok())

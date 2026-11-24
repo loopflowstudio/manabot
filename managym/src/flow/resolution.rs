@@ -95,6 +95,12 @@ impl Game {
                 })
                 .count() as i32,
             EffectValue::X => i32::from(frame.x),
+            EffectValue::DeathCountersMinus { kind, subtract } => frame
+                .source_ref()
+                .and_then(|object| self.object_lki(object))
+                .map_or(0, |lki| {
+                    lki.counters.get(*kind).saturating_sub(*subtract).max(0)
+                }),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TriggeringManaValue => match frame.context_target {
                 // A spell that has left the stack is read as the card it became.
@@ -160,6 +166,7 @@ impl Game {
             | EffectValue::ExcessDamage
             | EffectValue::ManaSpentToCast
             | EffectValue::ColorsSpentToCast
+            | EffectValue::DeathCountersMinus { .. }
             | EffectValue::SourcePower
             | EffectValue::PowerTappedToPay
             | EffectValue::TriggeringPower
@@ -835,14 +842,14 @@ impl Game {
                 // the previous instruction moved (flicker's return).
                 let selected = self.select(what, frame);
                 frame.moved.clear();
-                let source = frame
-                    .source_ref()
-                    .filter(|source| self.lookup_current_permanent(*source).is_ok());
+                let source = frame.source_ref();
                 // "Until this leaves the battlefield" (CR 603.6e pragmatics,
                 // Banisher Priest ruling): the exact source must still be on
                 // the battlefield; a later incarnation of the same card does
                 // not keep the old link alive.
-                if *linked == Some(LinkedExile::UntilSourceLeaves) && source.is_none() {
+                if *linked == Some(LinkedExile::UntilSourceLeaves)
+                    && source.is_none_or(|source| self.lookup_current_permanent(source).is_err())
+                {
                     return None;
                 }
                 let controller = match under {
@@ -854,8 +861,8 @@ impl Game {
                     },
                 };
                 let mut counters = Counters::default();
-                if let Some(kind) = with_counter {
-                    counters.change(*kind, 1);
+                if let Some(entry) = with_counter {
+                    counters.change(entry.kind, self.effect_value(&entry.count, frame).max(0));
                 }
                 let mut events = Vec::new();
                 for object in selected {
@@ -1818,28 +1825,21 @@ impl Game {
                 // CR 400.7e: the card the dying creature became, while it is
                 // still that graveyard object; `Move` exiles it as the frame's
                 // target and retains the link.
-                let Some(Target::Permanent(id)) = frame.context_target else {
-                    return None;
-                };
-                let died = self.departed_permanent_lki(id)?.object;
-                let became = self.state.zones.successor(died)?;
-                if self.state.card_of(became).is_none()
-                    || self.state.zones.zone_of(became) != Some(ZoneType::Graveyard)
+                if !self
+                    .select(&ObjectSelector::Triggering, frame)
+                    .into_iter()
+                    .any(|object| {
+                        self.state.card_of(object).is_some()
+                            && self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
+                    })
                 {
                     return None;
                 }
-                frame.targets = vec![crate::flow::decision::ResolutionTarget {
-                    target: Target::GraveyardCard(became),
-                    requirement: 0,
-                    legal: true,
-                }];
                 Some(Decision::Modal {
                     player: frame.controller,
                     modes: vec![
                         vec![Effect::exile_linked(
-                            ObjectSelector::Target(TargetSpec::GraveyardCard {
-                                predicate: CardPredicate::default(),
-                            }),
+                            ObjectSelector::Triggering,
                             LinkedExile::WithSource,
                         )],
                         vec![],
@@ -1850,15 +1850,8 @@ impl Game {
                 let source = frame.source_ref()?;
                 let modes: Vec<Vec<Effect>> = self
                     .state
-                    .exile_links
-                    .iter()
-                    .filter(|link| link.source == source)
-                    .filter(|link| self.state.object(link.exiled_object).is_ok())
-                    .map(|link| link.exiled_object)
-                    .filter(|object_id| {
-                        self.state.zones.zone_of(*object_id) == Some(ZoneType::Exile)
-                            && predicate.matches_object(&self.state[*object_id])
-                    })
+                    .exiled_with(source)
+                    .filter(|object| predicate.matches_object(&self.state[*object]))
                     .map(|object_id| {
                         vec![Effect::HaveAbilitiesOf {
                             definition: self.state[object_id].definition_id,
@@ -1964,6 +1957,22 @@ impl Game {
                     }
                     DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
                 };
+                // A death count is already fixed by the departed appearance.
+                // Store its literal in the scheduled return so every viewer and
+                // fork sees the number even before the end-step trigger fires.
+                let mut effects = effects.clone();
+                for instruction in &mut effects {
+                    if let Effect::Move {
+                        with_counter: Some(entry),
+                        ..
+                    } = instruction
+                    {
+                        if matches!(entry.count, EffectValue::DeathCountersMinus { .. }) {
+                            entry.count =
+                                EffectValue::Fixed(self.effect_value(&entry.count, frame));
+                        }
+                    }
+                }
                 for event in events {
                     self.add_delayed_trigger(DelayedTrigger {
                         remembered: remembered.clone(),
@@ -2266,15 +2275,14 @@ impl Game {
     /// exact current object, else a departed triggering permanent through its
     /// last known information (CR 608.2h).
     fn damage_source(&self, by: &ObjectSelector, frame: &EffectFrame) -> Option<ObjectId> {
-        self.select(by, frame)
-            .into_iter()
-            .next()
-            .or_else(|| match (by, frame.context_target) {
-                (ObjectSelector::Triggering, Some(Target::Permanent(id))) => {
-                    self.departed_permanent_lki(id).map(|lki| lki.object)
-                }
-                _ => None,
-            })
+        if let (ObjectSelector::Triggering, Some(Target::Permanent(id))) =
+            (by, frame.context_target)
+        {
+            return self
+                .permanent_object(id)
+                .or_else(|| self.departed_permanent_lki(id).map(|lki| lki.object));
+        }
+        self.select(by, frame).into_iter().next()
     }
 
     /// The objects a selector names as the instruction resolves. A `Chosen`
@@ -2287,7 +2295,7 @@ impl Game {
                 .collect()
         };
         match what {
-            ObjectSelector::This => self.source_object(frame).into_iter().collect(),
+            ObjectSelector::This => self.source_objects(frame),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)
                 .and_then(|target| self.target_object(target))
@@ -2298,10 +2306,19 @@ impl Game {
                 .filter(|slot| self.target_is_present(slot.target))
                 .filter_map(|slot| self.target_object(slot.target))
                 .collect(),
-            ObjectSelector::Triggering => permanent(match frame.context_target {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            }),
+            ObjectSelector::Triggering => match frame.context_target {
+                Some(Target::Permanent(id)) => self.permanent_object(id).map_or_else(
+                    || {
+                        self.departed_permanent_lki(id)
+                            .map_or_else(Vec::new, |lki| self.departure_arrivals(lki.object))
+                    },
+                    |object| vec![object],
+                ),
+                _ => Vec::new(),
+            },
+            ObjectSelector::ExiledWithSource => frame
+                .source_ref()
+                .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame
                 .created
@@ -2449,24 +2466,32 @@ impl Game {
         .unwrap_or_default()
     }
 
-    /// [`ObjectSelector::This`]: the exact source object in any zone, or
-    /// once it has left the battlefield the card it became in the graveyard
-    /// or exile it went to (CR 400.7, 603.10a); a spell while on the stack.
-    fn source_object(&self, frame: &EffectFrame) -> Option<ObjectId> {
-        let object = frame.source()?;
+    /// CR 400.7, 713. A departed permanent can become two cards. Each
+    /// arrival remains identifiable only until its own next zone change.
+    fn departure_arrivals(&self, departed: ObjectId) -> Vec<ObjectId> {
+        std::iter::once(departed)
+            .chain(self.object_lki(departed).and_then(|lki| lki.meld_partner))
+            .filter_map(|previous| self.state.zones.successor(previous))
+            .filter(|arrival| {
+                matches!(
+                    self.state.zones.zone_of(*arrival),
+                    Some(ZoneType::Graveyard | ZoneType::Exile)
+                )
+            })
+            .collect()
+    }
+
+    fn source_objects(&self, frame: &EffectFrame) -> Vec<ObjectId> {
         match frame.source_ref() {
-            Some(source) => self.state.live(source).or_else(|| {
-                self.state.zones.successor(source).filter(|successor| {
-                    matches!(
-                        self.state.zones.zone_of(*successor),
-                        Some(ZoneType::Graveyard | ZoneType::Exile)
-                    )
-                })
-            }),
-            None => self
-                .find_spell_on_stack_index(object)
-                .is_some()
-                .then_some(object),
+            Some(source) => self
+                .state
+                .live(source)
+                .map_or_else(|| self.departure_arrivals(source), |object| vec![object]),
+            None => frame
+                .source()
+                .filter(|source| self.find_spell_on_stack_index(*source).is_some())
+                .into_iter()
+                .collect(),
         }
     }
 

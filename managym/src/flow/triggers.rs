@@ -20,7 +20,7 @@ use crate::{
             Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
-        card::{CardDefId, CardType, PrintedCharacteristics},
+        card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
@@ -1178,8 +1178,6 @@ impl Game {
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
-        let current = self.lookup_current_permanent(source.lki.object).ok();
-        let (_, object) = self.state.source_base(source.lki.object);
         self.static_sources()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
@@ -1192,19 +1190,8 @@ impl Game {
                         }
                         _ => None,
                     })
-                    .filter(|predicate| match current {
-                        Some(id) => self.permanent_matches_predicate(id, predicate),
-                        None => predicate.matches_printing(
-                            object,
-                            self.state
-                                .objects
-                                .provenance(source.lki.object)
-                                .expect("source provenance")
-                                .2,
-                            object.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-                            source.lki.power,
-                            &[],
-                        ),
+                    .filter(|predicate| {
+                        super::layers::matches_departure(&source.lki, predicate, None)
                     })
                     .count()
             })
@@ -1253,17 +1240,13 @@ impl Game {
     fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
         let creature_died = match event {
             GameEvent::CardMoved {
-                object_id: object,
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
-            } => {
-                self.state[*object].types.is_creature()
-                    || event
-                        .departed_object()
-                        .and_then(|object| self.object_lki(object))
-                        .is_some_and(|lki| lki.animated_creature)
-            }
+            } => event
+                .departed_object()
+                .and_then(|object| self.object_lki(object))
+                .is_some_and(|lki| lki.battlefield.types.is_creature()),
             _ => false,
         };
         let mut fired = Vec::new();
@@ -1321,14 +1304,15 @@ impl Game {
         trigger: &DelayedTrigger,
         context: Option<Target>,
     ) {
-        self.enqueue_inline_trigger(
+        let pending = self.enqueue_inline_trigger(
             trigger.source_object(),
             trigger.source_ref(),
             trigger.controller,
             trigger.effects.clone(),
             context,
-        )
-        .remembered = trigger.remembered.clone();
+        );
+        pending.remembered = trigger.remembered.clone();
+        pending.program = true;
     }
 
     /// A fresh identity for the trigger occurrence about to be enqueued.
@@ -2130,22 +2114,7 @@ impl Game {
             _ => return false,
         };
         let departed = event.departed_object();
-        let animated = departed
-            .and_then(|object| self.object_lki(object))
-            .map(|lki| lki.animated_creature)
-            .unwrap_or_else(|| {
-                self.state
-                    .permanent_of(moved_object)
-                    .filter(|id| self.state.permanents[*id].is_some())
-                    .is_some_and(|id| self.characteristics(id).is_animated)
-            });
-        let matches = |predicate: &crate::state::predicate::CardPredicate| {
-            predicate.matches(
-                &self.state[moved_object],
-                self.object_power(moved_object),
-                if animated { &[CardType::Creature] } else { &[] },
-            )
-        };
+        let lki = departed.and_then(|object| self.object_lki(object));
         // The source is the moved object as it entered, or as it was before
         // it left (CR 603.10a looks back to the departed object).
         let is_source = moved_object == source_object || departed == Some(source_object);
@@ -2159,7 +2128,10 @@ impl Game {
                 source_was_on_battlefield
                     && controlled_by.includes(source_controller, moved_controller)
                     && !(*another && is_source)
-                    && matches(predicate)
+                    && lki.map_or_else(
+                        || self.object_matches_predicate(moved_object, predicate),
+                        |lki| super::layers::matches_departure(lki, predicate, None),
+                    )
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
@@ -2168,6 +2140,7 @@ impl Game {
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
                 .and_then(|aura| aura.attached_to)
+                .or_else(|| self.object_lki(source_object)?.attached_to)
                 .is_some_and(|attached| {
                     Some(attached) == departed && self.state.object_lki.contains(attached)
                 }),

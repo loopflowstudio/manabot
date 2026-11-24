@@ -513,7 +513,13 @@ pub enum ReplacementEffect {
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
     EntersWithXCounters { kind: CounterKind },
     /// This object enters with `count` counters of `kind` (CR 614.1c).
-    EntersWithCounters { kind: CounterKind, count: i32 },
+    EntersWithCounters {
+        kind: CounterKind,
+        count: i32,
+        /// "If you cast it": check the entering controller against the cast spell.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        if_cast: bool,
+    },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).

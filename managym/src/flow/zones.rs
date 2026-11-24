@@ -812,6 +812,7 @@ impl Game {
 
         if let Some(mut lki) = departing_lki {
             let object = self.state.entry_object(object_id);
+            lki.meld_partner = second;
             lki.copiable = default_content_pack().retain_copiable_values(object);
             self.record_object_lki(lki);
         }
@@ -1075,9 +1076,9 @@ impl Game {
         // linked exiled cards return under their owners' control.
         let (ended, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.state.exile_links)
             .into_iter()
-            .partition(|link| link.source == departing_object);
+            .partition(|link| link.source == departing_object && link.returns);
         self.state.exile_links = kept;
-        for link in ended.into_iter().filter(|link| link.returns) {
+        for link in ended {
             let Ok(exiled_object) = self.state.object(link.exiled_object) else {
                 continue;
             };

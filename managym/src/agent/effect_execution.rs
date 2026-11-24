@@ -113,6 +113,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
+    "last attached to",
     "last known characteristics",
     "last known definition",
     "legend group",
@@ -633,7 +634,9 @@ impl<'a> Projection<'a> {
             keywords,
             creature_types,
             permanent: _,
-            animated_creature,
+            battlefield,
+            attached_to,
+            meld_partner: _, // Physical components have their own viewer references on arrival.
             abilities_lost,
             dealt_damage_this_turn,
             power,
@@ -646,6 +649,12 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if let Some(attached) = attached_to {
+            self.reference(
+                "last attached to",
+                game.visible_reference(*attached, viewer),
+            );
+        }
         self.field("last known definition", definition_id);
         if let Some(values) = copiable {
             self.tokens
@@ -666,7 +675,19 @@ impl<'a> Projection<'a> {
                     creature_types,
                 ),
                 (
-                    animated_creature,
+                    (
+                        &battlefield.types,
+                        &battlefield.subtypes,
+                        &battlefield.supertypes,
+                        &battlefield.colors,
+                        &battlefield.name,
+                        battlefield.mana_value,
+                        battlefield.is_legendary,
+                        battlefield.token,
+                        battlefield.attacking,
+                        battlefield.in_combat,
+                        battlefield.tapped,
+                    ),
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,

@@ -295,7 +295,7 @@ impl ReplacementCandidate {
             ReplacementEffect::EntersWithXCounters { kind } => {
                 format!("Enter with X {kind:?} counters")
             }
-            ReplacementEffect::EntersWithCounters { kind, count } => {
+            ReplacementEffect::EntersWithCounters { kind, count, .. } => {
                 format!("Enter with {count} {kind:?} counters")
             }
             ReplacementEffect::OpponentDamagePlusCounters { kind } => {
@@ -1149,8 +1149,19 @@ impl Game {
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
                             ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. }
-                            | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
+                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersWithCounters { if_cast, .. }
+                                if !if_cast
+                                    || (self.state.entry_object(*object_id).is_card()
+                                        && self
+                                            .find_spell_on_stack_index(*object_id)
+                                            .is_some_and(|i| {
+                                                self.state.stack_objects[i].controller()
+                                                    == entering_controller
+                                            })) =>
+                            {
+                                effect.clone()
+                            }
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
                                     self.check_static_condition(condition, entering_controller)
@@ -1402,7 +1413,7 @@ impl Game {
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithCounters { kind, count },
+                ReplacementEffect::EntersWithCounters { kind, count, .. },
             ) => {
                 entry.counters.change(*kind, (*count).max(0));
             }

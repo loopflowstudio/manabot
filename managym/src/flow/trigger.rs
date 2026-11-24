@@ -131,7 +131,7 @@ pub enum DelayedTriggerEvent {
 /// leaves the battlefield" (Earth Kingdom Jailer): when it leaves, the
 /// exiled card returns immediately — no trigger, no stack (CR 603.6e).
 /// Otherwise ("exiled with this creature", Boiling Rock Rioter) the card
-/// stays exiled and the link ends. A later incarnation of the same physical
+/// stays linked for abilities of the departed source. A later incarnation of the same physical
 /// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {

@@ -294,6 +294,7 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     s.game_mut().state[source].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithCounters {
+            if_cast: false,
             kind: CounterKind::PlusOnePlusOne,
             count: 2,
         },

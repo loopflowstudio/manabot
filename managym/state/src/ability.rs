@@ -19,6 +19,16 @@ pub enum Ability {
 }
 
 impl Ability {
+    pub fn enters(effects: Vec<Effect>) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects,
+        }
+    }
+
     /// A Saga's chapter ability (CR 714.2).
     pub fn chapter(chapter: u8, effects: Vec<Effect>) -> Self {
         Self::Triggered {
@@ -585,6 +595,11 @@ pub enum EffectValue {
     /// The source permanent's current power ("where X is this creature's
     /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
+    /// The counters on the source as it died, less a stated amount.
+    DeathCountersMinus {
+        kind: CounterKind,
+        subtract: i32,
+    },
     /// Attacking creatures `controller` controls matching `predicate`, as
     /// the effect resolves ("search for up to that many").
     AttackingMatching {
@@ -672,6 +687,33 @@ pub enum DistinctSearchEnd {
     Hand,
 }
 
+/// Counters a zone move puts on the entering permanent. A single counter
+/// retains its original bare-kind representation in card learning programs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntryCounters {
+    pub kind: CounterKind,
+    pub count: EffectValue,
+}
+
+impl From<CounterKind> for EntryCounters {
+    fn from(kind: CounterKind) -> Self {
+        Self {
+            kind,
+            count: EffectValue::Fixed(1),
+        }
+    }
+}
+
+impl serde::Serialize for EntryCounters {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.count == EffectValue::Fixed(1) {
+            self.kind.serialize(serializer)
+        } else {
+            (&self.kind, &self.count).serialize(serializer)
+        }
+    }
+}
+
 /// Which end of a library receives a moved or ordered card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LibraryEnd {
@@ -703,6 +745,8 @@ pub enum ObjectSelector {
     /// Objects captured when a delayed trigger was created, still in the same
     /// incarnation; separate from the object supplied by its triggering event.
     Remembered,
+    /// Cards in exile linked to the exact ability source (CR 607.2a).
+    ExiledWithSource,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -833,6 +877,7 @@ impl ObjectSelector {
             | Self::Attached
             | Self::CreatedThisWay
             | Self::Remembered
+            | Self::ExiledWithSource
             | Self::Grantor
             | Self::Moved
             | Self::CardsThisWay
@@ -946,7 +991,7 @@ pub enum Effect {
         #[serde(skip_serializing_if = "Option::is_none")]
         under: Option<PlayerSelector>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        with_counter: Option<CounterKind>,
+        with_counter: Option<EntryCounters>,
         #[serde(skip_serializing_if = "Option::is_none")]
         linked: Option<LinkedExile>,
     },
@@ -2121,10 +2166,39 @@ impl Effect {
                 tapped: false,
                 transformed: true,
                 under,
-                with_counter,
+                with_counter: with_counter.map(Into::into),
                 linked: None,
             },
         ]
+    }
+
+    /// Return the named cards under their owners' control, with the stated entry terms.
+    pub fn return_to_owner(
+        what: ObjectSelector,
+        tapped: bool,
+        with_counter: Option<EntryCounters>,
+    ) -> Self {
+        Self::Move {
+            what,
+            to: ZoneType::Battlefield,
+            tapped,
+            with_counter,
+            under: Some(PlayerSelector::Owner),
+            transformed: false,
+            linked: None,
+            library_end: None,
+        }
+    }
+
+    /// Capture exact objects for one occurrence at the next end step.
+    pub fn at_next_end_step(remember: ObjectSelector, effects: Vec<Effect>) -> Self {
+        Self::CreateDelayedTrigger {
+            event: DelayedEvent::EndStep { your_turn: false },
+            remember: Some(remember),
+            effects,
+            frequency: DelayedFrequency::Once,
+            expiry: DelayedExpiry::Never,
+        }
     }
 
     /// "Return [what] to the battlefield [tapped]" under the resolving
@@ -2139,6 +2213,20 @@ impl Effect {
             under: None,
             with_counter: None,
             linked: None,
+        }
+    }
+
+    /// Exile a stated number of opposing permanents until the source leaves.
+    pub fn exile_until_source_leaves(spec: TargetSpec, min: usize) -> Self {
+        Self::TargetClause {
+            requirement: TargetRequirement {
+                min,
+                ..TargetRequirement::one(spec.clone())
+            },
+            effects: vec![Self::exile_linked(
+                ObjectSelector::Target(spec),
+                LinkedExile::UntilSourceLeaves,
+            )],
         }
     }
 
@@ -2195,22 +2283,7 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
         effects
             .iter()
             .find_map(Effect::target_spec)
-            .map(|spec| {
-                // The implicit exile-link clause is "up to one target".
-                let optional = effects.iter().any(|effect| {
-                    matches!(
-                        effect,
-                        Effect::Move {
-                            linked: Some(LinkedExile::UntilSourceLeaves),
-                            ..
-                        }
-                    )
-                });
-                vec![TargetRequirement {
-                    min: usize::from(!optional),
-                    ..TargetRequirement::one(spec.clone())
-                }]
-            })
+            .map(|spec| vec![TargetRequirement::one(spec.clone())])
             .unwrap_or_default()
     } else {
         clauses

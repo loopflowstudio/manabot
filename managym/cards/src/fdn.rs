@@ -13,9 +13,18 @@ use managym_state::{
     permanent::CounterKind,
     predicate::CardPredicate,
 };
+use managym_state::{
+    ability::{EffectValue, EntryCounters},
+    card::ReplacementEffect,
+    zone::ZoneType,
+};
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        kykar_zephyr_awakener(),
+        infernal_vessel(),
+        nine_lives_familiar(),
+        valkyrie_s_call(),
         electroduplicate(),
         blasphemous_edict(),
         claws_out(),
@@ -356,6 +365,199 @@ fn herald_of_eternal_dawn() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
             statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
             text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn valkyrie_s_call() -> CardDefinition {
+    let text_box = "Whenever a nontoken, non-Angel creature you control dies, return that card to the battlefield under its owner's control with a +1/+1 counter on it. It has flying and is an Angel in addition to its other types.";
+    CardDefinition {
+        key: "fdn.valkyrie_s_call",
+        scryfall_id: "0e1f1ff2-fa8f-4d38-b631-2d6e08e614c8",
+        printed: PrintedCharacteristics {
+            name: "Valkyrie's Call".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        token: Some(false),
+                        not_subtypes: vec!["Angel".into()],
+                        ..CardPredicate::creature()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::return_to_owner(
+                        ObjectSelector::Triggering,
+                        false,
+                        Some(CounterKind::PlusOnePlusOne.into()),
+                    ),
+                    Effect::indefinitely(
+                        ObjectSelector::Moved,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                    ),
+                    Effect::indefinitely(
+                        ObjectSelector::Moved,
+                        Modification::AddSubtypes(vec!["Angel".into()]),
+                    ),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn nine_lives_familiar() -> CardDefinition {
+    let text_box = "This creature enters with eight revival counters on it if you cast it.\nWhen this creature dies, if it had a revival counter on it, return it to the battlefield with one fewer revival counter on it at the beginning of the next end step.";
+    CardDefinition {
+        key: "fdn.nine_lives_familiar",
+        scryfall_id: "988c23f6-59fe-49f9-a9ce-9881dccb7033",
+        printed: PrintedCharacteristics {
+            name: "Nine-Lives Familiar".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into()],
+            power: Some(1),
+            toughness: Some(1),
+            replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                kind: CounterKind::Revival,
+                count: 8,
+                if_cast: true,
+            }],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Revival,
+                    count: 1,
+                }),
+                effects: vec![Effect::at_next_end_step(
+                    ObjectSelector::This,
+                    vec![Effect::Move {
+                        what: ObjectSelector::Remembered,
+                        to: ZoneType::Battlefield,
+                        tapped: false,
+                        transformed: false,
+                        under: None,
+                        with_counter: Some(EntryCounters {
+                            kind: CounterKind::Revival,
+                            count: EffectValue::DeathCountersMinus {
+                                kind: CounterKind::Revival,
+                                subtract: 1,
+                            },
+                        }),
+                        linked: None,
+                        library_end: None,
+                    }],
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn infernal_vessel() -> CardDefinition {
+    let text_box = "When this creature dies, if it wasn't a Demon, return it to the battlefield under its owner's control with two +1/+1 counters on it. It's a Demon in addition to its other types.";
+    CardDefinition {
+        key: "fdn.infernal_vessel",
+        scryfall_id: "877b6330-2d0b-4f2f-a848-f10b06fb4ef5",
+        printed: PrintedCharacteristics {
+            name: "Infernal Vessel".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::SourceMatches(CardPredicate {
+                    not_subtypes: vec!["Demon".into()],
+                    ..Default::default()
+                })),
+                effects: vec![
+                    Effect::return_to_owner(
+                        ObjectSelector::This,
+                        false,
+                        Some(EntryCounters {
+                            kind: CounterKind::PlusOnePlusOne,
+                            count: 2.into(),
+                        }),
+                    ),
+                    Effect::indefinitely(
+                        ObjectSelector::Moved,
+                        Modification::AddSubtypes(vec!["Demon".into()]),
+                    ),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn kykar_zephyr_awakener() -> CardDefinition {
+    let text_box = "Flying\nWhenever you cast a noncreature spell, choose one —\n• Exile another target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.\n• Create a 1/1 white Spirit creature token with flying.";
+    CardDefinition {
+        key: "fdn.kykar_zephyr_awakener",
+        scryfall_id: "6c980998-7124-4ec6-a0b6-e8d9a2364925",
+        printed: PrintedCharacteristics {
+            name: "Kykar, Zephyr Awakener".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bird".into(), "Wizard".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                    nth: None,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    unchosen: false,
+                    up_to: None,
+                    modes: vec![
+                        vec![Effect::TargetClause {
+                            requirement: TargetRequirement {
+                                another: true,
+                                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                            },
+                            effects: vec![
+                                Effect::exile(ObjectSelector::Target(
+                                    TargetSpec::CreatureYouControl,
+                                )),
+                                Effect::at_next_end_step(
+                                    ObjectSelector::Moved,
+                                    vec![Effect::return_to_owner(
+                                        ObjectSelector::Remembered,
+                                        false,
+                                        None,
+                                    )],
+                                ),
+                            ],
+                        }],
+                        vec![Effect::create_tokens("token.flying_spirit", 1)],
+                    ],
+                }],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

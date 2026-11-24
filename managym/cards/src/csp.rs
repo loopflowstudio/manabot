@@ -23,6 +23,7 @@ fn dark_depths() -> CardDefinition {
             types: CardTypes::new([CardType::Land]),
             supertypes: vec!["Legendary".into(), "Snow".into()],
             replacement_effects: vec![ReplacementEffect::EntersWithCounters {
+                if_cast: false,
                 kind: CounterKind::Ice,
                 count: 10,
             }],

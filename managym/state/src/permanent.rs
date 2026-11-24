@@ -41,6 +41,7 @@ pub enum CounterKind {
     Charge,
     Poison,
     Plan,
+    Revival,
 }
 
 impl CounterKind {
@@ -63,6 +64,7 @@ impl CounterKind {
             CounterKind::Ice => "ice",
             CounterKind::Poison => "poison",
             CounterKind::Plan => "plan",
+            CounterKind::Revival => "revival",
             CounterKind::Charge => "charge",
         }
     }
@@ -75,7 +77,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 17] = [
+    pub const ALL: [CounterKind; 18] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -93,6 +95,7 @@ impl CounterKind {
         CounterKind::Charge,
         CounterKind::Poison,
         CounterKind::Plan,
+        CounterKind::Revival,
     ];
 }
 

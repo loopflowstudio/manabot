@@ -3276,10 +3276,8 @@ impl Game {
                 .collect(),
             ResolutionCastOffer::ExiledWith { source, predicate } => self
                 .state
-                .exile_links
-                .iter()
-                .filter(|link| link.source == *source)
-                .filter_map(|link| self.state.card_of(link.exiled_object))
+                .exiled_with(*source)
+                .filter_map(|object| self.state.card_of(object))
                 .filter(|card| {
                     let definition = &self.state[self.state.object_of(*card)];
                     self.state

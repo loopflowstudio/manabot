@@ -1,5 +1,10 @@
 //! Magic 2012.
 use managym_state::{
+    ability::TargetRequirement,
+    card::{Keyword, Keywords, LayerValue, StaticAbility, StaticContinuous, StaticScope},
+    effect::Modification,
+};
+use managym_state::{
     ability::{
         Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
         TriggerSubject,
@@ -13,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        angelic_destiny(),
         sundial_of_the_infinite(),
         visions_of_beyond(),
         warstorm_surge(),
@@ -89,6 +95,50 @@ fn warstorm_surge() -> CardDefinition {
                     what: ObjectSelector::Target(TargetSpec::AnyTarget),
                     by: Some(ObjectSelector::Triggering),
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn angelic_destiny() -> CardDefinition {
+    let text_box = "Enchant creature\nEnchanted creature gets +4/+4, has flying and first strike, and is an Angel in addition to its other types.\nWhen enchanted creature dies, return this card to its owner's hand.";
+    CardDefinition {
+        key: "m12.angelic_destiny",
+        scryfall_id: "a0cd7438-fde2-4e26-9c34-52c476a971e9",
+        printed: PrintedCharacteristics {
+            name: "Angelic Destiny".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(4),
+                        toughness: LayerValue::Fixed(4),
+                    },
+                    Modification::AddKeywords(Keywords::of(&[
+                        Keyword::Flying,
+                        Keyword::FirstStrike,
+                    ])),
+                    Modification::AddSubtypes(vec!["Angel".into()]),
+                ],
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::EnchantedCreature,
+                },
+                intervening_if: None,
+                effects: vec![Effect::return_to_hand(ObjectSelector::This)],
             }],
             text_box: text_box.into(),
             ..Default::default()
