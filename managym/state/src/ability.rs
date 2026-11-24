@@ -428,8 +428,6 @@ pub enum Condition {
     /// `YourTurn`).
     Not(Box<Condition>),
     CreatureDiedThisTurn,
-    GainedLifeThisTurn,
-    LostLifeThisTurn,
     /// Resolution only: the resolving spell was kicked (CR 702.33).
     Kicked,
     /// Resolution only: the frame's primary target is still a permanent and
@@ -674,8 +672,6 @@ impl Condition {
             | Condition::LifeAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::CreatureDiedThisTurn
-            | Condition::GainedLifeThisTurn
-            | Condition::LostLifeThisTurn
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
             | Condition::PermanentLeftThisTurn { .. }

@@ -514,14 +514,12 @@ fn condition_text(triggering: &'static str, condition: &Condition) -> String {
             format!("an opponent lost {amount} or more life this turn")
         }
         Condition::CreatureDiedThisTurn => "a creature died this turn".into(),
-        Condition::GainedLifeThisTurn => "you gained life this turn".into(),
         Condition::Compare { left, op, right } => format!(
             "{} {} {}",
             value_description(triggering, left),
             op.symbol(),
             value_description(triggering, right)
         ),
-        Condition::LostLifeThisTurn => "you lost life this turn".into(),
         Condition::AllOf(conditions) => conditions
             .iter()
             .map(|condition| condition_text(triggering, condition))

@@ -1245,7 +1245,9 @@ impl TurnStateReads {
                 serde_json::Value::Object(map) => {
                     for (key, value) in map {
                         match key.as_str() {
-                            "OpponentLostLifeThisTurnAtLeast" => reads.life_lost = true,
+                            "OpponentLostLifeThisTurnAtLeast" | "LifeLostThisTurn" => {
+                                reads.life_lost = true
+                            }
                             "from_battlefield_this_turn" if *value == true => {
                                 reads.from_battlefield = true
                             }
@@ -1253,9 +1255,6 @@ impl TurnStateReads {
                         }
                         walk(value, reads);
                     }
-                }
-                serde_json::Value::String(term) if term == "LostLifeThisTurn" => {
-                    reads.life_lost = true
                 }
                 serde_json::Value::Array(values) => {
                     values.iter().for_each(|value| walk(value, reads))

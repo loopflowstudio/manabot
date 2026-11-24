@@ -2,8 +2,8 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
-        TriggerCondition, TurnStep,
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TargetSpec, TriggerCondition, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
@@ -54,6 +54,12 @@ fn bakersbane_duo() -> CardDefinition {
 }
 
 fn lunar_convocation() -> CardDefinition {
+    let you_did = |amount: fn(PlayerSelector) -> EffectValue| Condition::Compare {
+        left: Box::new(amount(PlayerSelector::You)),
+        op: CompareOp::Gt,
+        right: Box::new(EffectValue::Fixed(0)),
+    };
+    let gained = || you_did(EffectValue::LifeGainedThisTurn);
     let end_step = |condition, effect| Ability::Triggered {
         condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
         intervening_if: Some(condition),
@@ -67,11 +73,11 @@ fn lunar_convocation() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{W}{B}")),
             types: CardTypes::new([CardType::Enchantment]),
             abilities: vec![
-                end_step(Condition::GainedLifeThisTurn, Effect::LoseLife {
+                end_step(gained(), Effect::LoseLife {
                     player: PlayerSelector::EachOpponent,
                     amount: EffectValue::Fixed(1),
                 }),
-                end_step(Condition::AllOf(vec![Condition::GainedLifeThisTurn, Condition::LostLifeThisTurn]), Effect::create_tokens("token.bat", 1)),
+                end_step(Condition::AllOf(vec![gained(), you_did(EffectValue::LifeLostThisTurn)]), Effect::create_tokens("token.bat", 1)),
             ],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{1}{B}"),

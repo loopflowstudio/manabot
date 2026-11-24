@@ -707,6 +707,32 @@ Next comes gate; a moved trace digest there is re-recorded like Finding 18's. At
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
+## Decomposition review
+
+Criterion: the history cohort composes from shared queries (`EffectValue`
+amounts read by `Condition::Compare`, `TriggerCondition` events with `nth`,
+`PlayerTurnHistory` counters, resolution-frame results) with no per-card
+engine path and one owner per fact. Representative compositions: Cat
+Collector and Exemplar of Light (`GainsLife` with ordinal), Bakersbane Duo
+(`Expend`), Lunar Convocation (`Compare` over `LifeGainedThisTurn` and
+`LifeLostThisTurn`), Fumigate and Exsanguinate (frame results), Predator Ooze
+and Steel Hellkite (damage relations), Fiendish Panda, Alesha and Sandbender
+(source-power target bound).
+
+Deleted the branch's `Condition::GainedLifeThisTurn` and
+`Condition::LostLifeThisTurn`. They repeated `EffectValue::LifeGainedThisTurn`
+and `LifeLostThisTurn` through a second reader. Convocation, their only
+consumer, now uses `Compare … > 0` (gain count > 0 and amount > 0 are
+equivalent: a gain event exists only when life rises). The v9/v10 turn-state
+refusal now detects the `LifeLostThisTurn` value key in place of the deleted
+condition string. Debug checks: `cards` `blb::` and `observability::` (94 passed, including both Convocation fixtures) and `managym --lib` (372 passed).
+
+Kept `TargetSpec::GraveyardCardYouOwnWithinSourcePower`: three cards in two
+sets use it through the single `target_meets_requirement` reader at
+announcement, retarget and resolution. Making the bound a generic
+`EffectValue` on `TargetRequirement` needs a frameless evaluator for target
+legality; see `scratch/questions.md`.
+
 ## Remaining shared work
 
 - **Pinned-pilot serialized compatibility (resolved — keep intact):**

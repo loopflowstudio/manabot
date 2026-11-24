@@ -130,3 +130,12 @@ printings and updates the branch's card definitions to use them. Main's
 attachment subject also covers the Fishing Pole untap trigger. Life-gain
 listeners share the branch's ordinal-bearing trigger, with no ordinal
 restriction for listeners that run on every gain.
+
+## Decomposition
+
+`TargetSpec::GraveyardCardYouOwnWithinSourcePower` stays a spec variant. A
+`TargetRequirement.max_mana_value: Option<EffectValue>` would need target
+legality to evaluate values without a resolution frame, and only
+source-relative values would be readable there. I took the simpler option of
+keeping one reader for three cards, and I'd revisit when a second dynamic
+target bound appears.
