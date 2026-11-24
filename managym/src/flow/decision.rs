@@ -2906,6 +2906,7 @@ impl Game {
                 Action::CastSpell {
                     object: object_id,
                     profile: SpellProfile::Adventure | SpellProfile::Omen | SpellProfile::BackFace,
+                    route: None,
                     ..
                 }
                 | Action::SelectCard {

@@ -2333,6 +2333,17 @@ fn quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters() {
     // The Greatwurm's own route: one counter at a time, the kind asked of
     // the creature holding two kinds.
     let mut own = cast_by(|r| *r == PlayRoute::PrintedGraveyard);
+    // Progress is the count still owed, never a chosen mode.
+    let owed = |s: &crate::support::game::Scenario, n: &str| {
+        let context = s.game().decision_context(PlayerId(0)).unwrap();
+        assert_eq!(context.chosen_mode.0, None);
+        assert!(
+            context.pending.iter().any(|line| line == n),
+            "{:?}",
+            context.pending
+        );
+    };
+    owed(&own, "6 counters left to remove.");
     let ogre_object = own.game().state.permanents[ogre].as_ref().unwrap().object;
     let muldrotha_object = own.game().state.permanents[muldrotha]
         .as_ref()
@@ -2343,6 +2354,7 @@ fn quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters() {
         |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre_object),
     );
     assert!(counters(&own, ogre).is_empty());
+    owed(&own, "5 counters left to remove.");
     choose(
         &mut own,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == muldrotha_object),

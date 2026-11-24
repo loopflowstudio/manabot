@@ -1674,6 +1674,15 @@ mod identity_tests {
         assert_eq!(option.play_route, None);
         assert_eq!(option.route_mana_value, None);
         assert_eq!(option.quota_type, None);
+        let forged = Action::CastSpell {
+            player,
+            object: exiled,
+            route: Some(crate::flow::cast_permission::PlayRoute::Grant(0)),
+            profile: SpellProfile::Adventure,
+        };
+        assert_eq!(game.resolved_play_route(&forged), None);
+        assert!(game.execute_decision_action(&forged).is_err());
+        assert!(game.state.suspended_decision.is_some());
         let index = |game: &Game, action: &Action| {
             game.current_action_space
                 .as_ref()

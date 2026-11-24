@@ -721,25 +721,15 @@ impl Game {
                     {
                         frame.mode = Some(cost.count);
                     }
-                    // A counter-removal cost shows how many are still owed.
-                    CostComponent::RemoveCounters { remaining, .. } => {
-                        frame.mode = Some(usize::from(*remaining));
-                    }
                     _ => {}
                 }
-                // What this payment has already committed: mana as it was
-                // produced, and the objects that paid, as references. The
-                // source's own printed cost is paid as the payment completes.
-                if !payment.receipt.is_empty() {
-                    super::effect_execution::project_receipt(
-                        self,
-                        &payment.receipt,
-                        None,
-                        viewer,
-                        &mut frame,
-                        false,
-                    );
-                }
+                // What this payment still owes beyond its mana and has already
+                // committed: mana as it was produced, and the objects that
+                // paid, as references. The source's own printed cost is paid
+                // as the payment completes.
+                super::effect_execution::project_pending_payment(
+                    self, payment, viewer, &mut frame, false,
+                );
             }
             PendingChoice::ChooseTargets {
                 object,
@@ -888,20 +878,11 @@ impl Game {
             return;
         }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
-            if !payment.receipt.is_empty() {
-                let frame = frames
-                    .iter_mut()
-                    .find(|frame| frame.kind == 4)
-                    .expect("the pending payment's announcement frame");
-                super::effect_execution::project_receipt(
-                    self,
-                    &payment.receipt,
-                    None,
-                    viewer,
-                    frame,
-                    true,
-                );
-            }
+            let frame = frames
+                .iter_mut()
+                .find(|frame| frame.kind == 4)
+                .expect("the pending payment's announcement frame");
+            super::effect_execution::project_pending_payment(self, payment, viewer, frame, true);
         }
         let mut parts = self
             .state

@@ -21,7 +21,7 @@ use crate::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game},
-        payment::{Operation, Payment},
+        payment::{CostComponent, Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -1042,6 +1042,35 @@ pub(crate) fn project_receipt(
 ) {
     let mut out = Projection::new(game, viewer, text);
     out.receipt(spent, source);
+    out.finish(frame);
+}
+
+/// Project the payment in progress onto its announcement frame: how many
+/// counters a removal cost still owes (Quilled Greatwurm), then what the
+/// payment has already committed. Writes nothing when neither applies.
+pub(crate) fn project_pending_payment(
+    game: &Game,
+    payment: &Payment,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let remaining = match payment.owed.first() {
+        Some(CostComponent::RemoveCounters { remaining, .. }) => Some(*remaining),
+        _ => None,
+    };
+    if remaining.is_none() && payment.receipt.is_empty() {
+        return;
+    }
+    let mut out = Projection::new(game, viewer, text);
+    if let Some(remaining) = remaining {
+        out.field("counters remaining", &remaining);
+        out.summary(|| match remaining {
+            1 => "1 counter left to remove.".into(),
+            n => format!("{n} counters left to remove."),
+        });
+    }
+    out.receipt(&payment.receipt, None);
     out.finish(frame);
 }
 
