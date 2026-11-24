@@ -33,7 +33,7 @@ from manabot.backends.torch.rl import (
 )
 import manabot.backends.torch.rollout as torch_rollout
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import PackedActions
@@ -49,6 +49,7 @@ from manabot.training.updates.health import (
 )
 from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.selection import value_scale
+from manabot.verify.text_observation import priority_root
 from tests.model.prepared_routes import device_input
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -336,21 +337,11 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
     agent = ActorCritic(
         ObservationSpace(), ModelConfig(value_aggregation=aggregation)
     ).to(DEVICE)
-    collector = open_collector(
-        agent.observation_space,
-        Match(MatchConfig()),
-        Reward(RewardConfig()),
-        num_envs=1,
-        seed=29,
-        numerics=TorchCollectionSession(device=DEVICE, seed=29, precision="float32"),
-    )
-    batch = collect(collector, agent, 1)
+    env = priority_root(("Lightning Bolt",), ("Mountain",))
+    observation = encode_observation(agent.observation_space, env.scenario_refresh())
     obs = device_input(
         agent,
-        {
-            key: torch.from_numpy(value)
-            for key, value in batch.observations(np.array([0])).observation.items()
-        },
+        {key: torch.from_numpy(value[None]) for key, value in observation.items()},
     )
     optimizer = torch.optim.Adam(agent.parameters())
 
@@ -358,7 +349,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         logits, values = agent.forward_distribution(obs)
         valid = obs.legal > 0
         objective = (
-            -policy_logs(logits, valid)[valid].mean()
+            -policy_logs(logits, valid)[:, 0].mean()
             if loss == "policy"
             else values.square().sum()
         )

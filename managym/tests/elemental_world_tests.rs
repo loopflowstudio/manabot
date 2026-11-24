@@ -18,6 +18,9 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     let mut setup = GameSetup::from(configs);
     setup.mana_floats = [ManaFloats::Usable; 2];
     env.reset(setup).unwrap();
+    for _ in 0..2 {
+        env.step(0).unwrap(); // Both seats keep.
+    }
     // Includes the retained deliberate green Prism float and manual source decisions.
     let prefix = [
         2, 2, 0, 0, 4, 3, 3, 5, 2, 0, 2, 2, 2, 6, 2, 3, 3, 0, 1, 0, 1, 0, 4, 0, 0, 8, 0, 0, 0, 0,

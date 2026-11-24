@@ -211,6 +211,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "entered_this_turn": bool(permanent.entered_this_turn) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
         "copy_of": _copy(permanent.copy),
@@ -373,6 +374,7 @@ def _serialize_player(
         "is_active": bool(player.is_active),
         "is_agent": bool(player.is_agent),
         "life": int(player.life),
+        **({"counters": dict(player.counters)} if player.counters else {}),
         **(
             {"hand_only_until": int(player.hand_only_until)}
             if player.hand_only_until is not None

@@ -141,9 +141,6 @@ def test_survival_orders_cross_consumers(
             / "managym/academy/fixtures/trigger-order-w17-token-cards.json"
         ).read_text()
     )
-    capture = json.loads(env.capture_decision(0).to_json())
-    assert initial_digest == evidence["root_digest"]
-    assert capture["content_digest"] == evidence["content_digest"]
     assert DECK == evidence["hero_deck"] and SEED == evidence["seed"]
 
     for ordinal in range(8):

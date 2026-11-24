@@ -188,3 +188,175 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         assert!(s.game().state.stack_objects.is_empty());
     }
 }
+
+#[test]
+fn demonic_pact_loss_can_be_answered_with_herald() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, command, settle},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Demonic Pact", "Herald of Eternal Dawn"]);
+    s.force_permanent_on_battlefield(0, "Demonic Pact");
+    let herald = force_new_card_in_hand(&mut s, 0, "Herald of Eternal Dawn");
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "4WWW");
+    assert_eq!(s.action_space().actions.len(), 4);
+    let root = s.game().clone();
+    for protected in [false, true] {
+        *s.game_mut() = root.clone();
+        command(&mut s, |action| {
+            matches!(action, Action::ChooseMode { mode: 3, .. })
+        });
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+        if protected {
+            cast_card(&mut s, herald);
+            settle(&mut s);
+            let permanent = s.battlefield_permanents_named(0, "Herald of Eternal Dawn")[0];
+            let object = s.game().state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .object;
+            s.game_mut().move_object(object, ZoneType::Exile);
+            s.pass_priority();
+            assert!(!s.game().is_game_over());
+            s.advance_to_active_step(1, StepKind::Upkeep);
+            s.advance_to_active_step(0, StepKind::Upkeep);
+            assert_eq!(s.action_space().actions.len(), 3);
+            assert!(!s
+                .action_space()
+                .actions
+                .iter()
+                .any(|action| matches!(action, Action::ChooseMode { mode: 3, .. })));
+        } else {
+            s.pass_priority();
+            s.pass_priority();
+            s.assert_winner(1);
+            assert!(s.game().state.loss(0).unwrap().instructed);
+        }
+    }
+}
+
+#[test]
+fn demonic_pact_resolves_each_resource_mode() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{command, settle, target_opponent},
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind};
+
+    for mode in 0..3 {
+        let mut s = five_color_setup(&["Demonic Pact"]);
+        s.force_permanent_on_battlefield(0, "Demonic Pact");
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        for name in ["Forest", "Swamp", "Island"] {
+            force_new_card_in_hand(&mut s, 1, name);
+        }
+        let hands = [0, 1].map(|seat| s.zone_size(seat, ZoneType::Hand));
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseMode {mode: choice, ..} if *choice == mode),
+        );
+        if mode != 2 {
+            target_opponent(&mut s);
+        }
+        settle(&mut s);
+        s.assert_life(0, if mode == 0 { 24 } else { 20 });
+        s.assert_life(1, if mode == 0 { 16 } else { 20 });
+        s.assert_zone_size(0, ZoneType::Hand, hands[0] + if mode == 2 { 2 } else { 0 });
+        s.assert_zone_size(1, ZoneType::Hand, hands[1] - if mode == 1 { 2 } else { 0 });
+    }
+}
+
+#[test]
+fn exhausted_pact_keeps_its_history_until_it_leaves() {
+    use crate::support::{
+        inspect::card_of,
+        play::{choose_mode, settle, target_opponent},
+    };
+    use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
+
+    let mut s = five_color_setup(&["Demonic Pact", "Herald of Eternal Dawn"]);
+    let original = s.force_permanent_on_battlefield(0, "Demonic Pact");
+    let object = card_of(&s, original);
+    s.force_permanent_on_battlefield(0, "Herald of Eternal Dawn");
+    for mode in 0..4 {
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        assert_eq!(s.action_space().actions.len(), 4 - mode);
+        choose_mode(&mut s, mode);
+        if mode < 2 {
+            target_opponent(&mut s);
+        }
+        settle(&mut s);
+        s.advance_to_active_step(1, StepKind::Upkeep);
+    }
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(s.game().state.stack_objects.is_empty());
+
+    let exhausted = s.game().clone();
+    for blink in [false, true] {
+        *s.game_mut() = exhausted.clone();
+        if blink {
+            let exiled = s.game_mut().move_object(object, ZoneType::Exile);
+            s.game_mut().move_object(exiled, ZoneType::Battlefield);
+        } else {
+            let second = s.force_permanent_on_battlefield(0, "Demonic Pact");
+            assert_ne!(original, second);
+        }
+        s.advance_to_active_step(1, StepKind::Upkeep);
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        s.advance_until(
+            |s| s.action_space().kind == ActionSpaceKind::Modal,
+            "fresh Pact has no modes".into(),
+        );
+        assert_eq!(s.action_space().actions.len(), 4);
+    }
+}
+
+#[test]
+fn countered_pact_mode_stays_used_when_the_permanent_is_stolen() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, choose_mode, counter_stacked_ability, resolve_top, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{
+            game_object::{PlayerId, Target},
+            player::ManaPayment,
+        },
+    };
+
+    let mut s = five_color_setup(&["Demonic Pact", "Gray Ogre", "Agent of Treachery"]);
+    let pact = s.force_permanent_on_battlefield(0, "Demonic Pact");
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    choose_mode(&mut s, 2);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.pass_priority();
+    counter_stacked_ability(&mut s);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    let agent = force_new_card_in_hand(&mut s, 1, "Agent of Treachery");
+    s.game_mut().mana_payment[1] = ManaPayment::Auto;
+    s.set_player_mana_pool(1, "5UU");
+    cast_card(&mut s, agent);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(pact)));
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let modes: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(modes, [0, 1, 3]);
+}

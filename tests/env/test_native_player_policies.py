@@ -100,3 +100,76 @@ def test_builtins_match_separate_native_selectors_with_live_combat_events() -> N
         obs = expected[0]
         if expected[2] or expected[3]:
             break
+
+
+def test_scalar_and_vector_reset_offer_both_seats_the_same_opening_choices() -> None:
+    scalar = managym.Env(seed=213)
+    batch = managym.VectorEnv(1, seed=213)
+    observation, _ = scalar.reset(players())
+    batch_observation, _ = batch.reset_all(players())[0]
+    for seat, labels, choice in (
+        (0, ["Keep hand", "Mulligan"], 1),
+        (1, ["Keep hand", "Mulligan"], 0),
+        (0, None, 3),
+        (0, ["Keep hand", "Mulligan"], 0),
+    ):
+        assert observation.toJSON() == batch_observation.toJSON()
+        assert scalar.current_agent_index() == seat
+        assert observation.turn.turn_number == 0
+        offers = [action.description for action in observation.action_space.actions]
+        if labels is None:
+            assert len(offers) == 7
+            assert all(label and "deepest first" in label for label in offers)
+        else:
+            assert offers == labels
+        assert not scalar.observation_for_player(1 - seat).action_space.actions
+        observation = scalar.step(choice)[0]
+        batch_observation = batch.step([choice])[0][0]
+    assert observation.toJSON() == batch_observation.toJSON()
+    assert observation.turn.turn_number == 1
+
+
+@pytest.mark.parametrize("second_bottom", [False, True])
+def test_other_seat_cannot_distinguish_private_bottom_choices(
+    second_bottom: bool,
+) -> None:
+    env = managym.Env(seed=213)
+    env.reset(players())
+    env.step(1)
+    env.step(0)
+    if second_bottom:
+        env.step(0)  # Finish the first round's bottom selection.
+        env.step(1)  # Mulligan again, then commit the deepest card.
+        env.step(0)
+    choices = env.observation_for_player(0).action_space.actions
+    assert len(choices) == (6 if second_bottom else 7)
+    other_index = next(
+        i for i, a in enumerate(choices) if a.description != choices[0].description
+    )
+    snapshot = env.snapshot()
+    branch = snapshot.restore()
+    assert branch.search_witness_json() == env.search_witness_json()
+    for seat in (0, 1):
+        assert (
+            branch.observation_for_player(seat).toJSON()
+            == env.observation_for_player(seat).toJSON()
+        )
+    env.step(0)
+    branch.step(other_index)
+    restored = managym.GameSnapshot.from_replay_json(
+        snapshot.to_replay_json()
+    ).restore()
+    restored.step(0)
+    assert restored.search_witness_json() == env.search_witness_json()
+    assert (
+        env.observation_for_player(1).toJSON()
+        == branch.observation_for_player(1).toJSON()
+    )
+    assert (
+        env.observation_for_player(0).agent.known_library
+        != branch.observation_for_player(0).agent.known_library
+    )
+    owner_view = env.observation_for_player(0).toJSON()
+    sampled = env.clone_env()
+    sampled.determinize(seed=704, perspective=0)
+    assert sampled.observation_for_player(0).toJSON() == owner_view

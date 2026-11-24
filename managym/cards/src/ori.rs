@@ -2,7 +2,10 @@
 use std::sync::Arc;
 
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        TriggerSubject, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
@@ -12,7 +15,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![boggart_brute(), elemental_bond(), pyromancers_goggles()]
+    vec![
+        boggart_brute(),
+        demonic_pact(),
+        elemental_bond(),
+        pyromancers_goggles(),
+    ]
 }
 
 fn boggart_brute() -> CardDefinition {
@@ -90,6 +98,35 @@ fn pyromancers_goggles() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn demonic_pact() -> CardDefinition {
+    CardDefinition {
+        key: "ori.demonic_pact",
+        scryfall_id: "82c04014-91f9-4197-b4b4-f62c4739a5c2",
+        printed: PrintedCharacteristics {
+            name: "Demonic Pact".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            text_box: "At the beginning of your upkeep, choose one that hasn't been chosen —\n• This enchantment deals 4 damage to any target and you gain 4 life.\n• Target opponent discards two cards.\n• Draw two cards.\n• You lose the game.".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    up_to: None,
+                    unchosen: true,
+                    modes: vec![
+                        vec![Effect::deal_damage(4, ObjectSelector::Target(TargetSpec::AnyTarget)), Effect::gain_life(4)],
+                        vec![Effect::Discard { what: ObjectSelector::Target(TargetSpec::Opponent), count: 2 }],
+                        vec![Effect::DrawCards { count: EffectValue::Fixed(2) }],
+                        vec![Effect::LoseGame],
+                    ],
+                }],
+            }],
             ..Default::default()
         },
         ..Default::default()

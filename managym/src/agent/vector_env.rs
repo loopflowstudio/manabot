@@ -1118,6 +1118,9 @@ mod tests {
                 PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
             ])
             .unwrap();
+        for _ in 0..2 {
+            vector.envs[0].step(0).unwrap(); // Both seats keep.
+        }
         for players in [vec![], vec![0], vec![0, 2]] {
             assert!(vector
                 .write_observations_for_players(&players, |_, _| {
@@ -1174,6 +1177,9 @@ mod tests {
             ])
             .unwrap();
         let env = &mut vector.envs[0];
+        for _ in 0..2 {
+            env.step(0).unwrap(); // Both seats keep.
+        }
         let before = [env.hand_snapshot(0).unwrap(), env.hand_snapshot(1).unwrap()];
         env.scenario_control_player(0, 1);
         assert_eq!(env.current_agent_index(), Some(1));
@@ -1295,6 +1301,9 @@ mod tests {
             .collect();
         let mut vector = VectorEnv::new(1, 213, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(players).unwrap();
+        for _ in 0..2 {
+            vector.envs[0].step(0).unwrap(); // Both seats keep.
+        }
         vector.envs[0].scenario_clear_hand(0).unwrap();
         for _ in 0..70 {
             vector.envs[0]

@@ -146,7 +146,7 @@ def replay_root(
         seed=42, decision_memory=memory, decision_memory_include_own=own
     )
     scalar.reset(setup)
-    actions = [0] * (30 if terminal else 4)
+    actions = [0, 0] + [0] * (30 if terminal else 4)
     for action in actions:
         scalar.step(action)
     recipe = SnapshotRecipe.from_inputs(
