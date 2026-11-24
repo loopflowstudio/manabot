@@ -39,7 +39,9 @@ def resolve(
     if name not in {"torch", "mlx"}:
         raise ValueError(f"unknown backend {name!r}; available backends: torch, mlx")
     if name == "torch" and precision not in (None, "float32"):
-        raise ValueError("half-precision parity is supported only for the MLX backend")
+        raise ValueError(
+            "resolver precision is configurable only for the MLX backend; pass Torch precision to load or the learner"
+        )
     try:
         importlib.import_module("torch" if name == "torch" else "mlx.core")
     except ImportError as error:

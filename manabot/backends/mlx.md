@@ -307,15 +307,21 @@ reuses its encoded catalog. Leaving collection restores the master weights
 and clears the catalog before learning. Custom inference loops can use the
 same context manager while their weights are fixed.
 
-Check a checkpoint and real capture with the selected dtype:
+Check a checkpoint and real capture with the selected dtype (add `--bucketed`,
+`--device` or `--threads` as needed; `--backend torch --device mps --precision bfloat16`
+uses the same half-precision gates, see [parity check](README.md#parity-check)):
 
 ```sh
-uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16 --bucketed
 ```
 
 | Precision | Legal logits, max absolute | Values, max absolute | Loss, relative | Full-gradient cosine |
 |---|---:|---:|---:|---:|
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
+
+`MLXBackend.load` accepts optional `device`, `precision` and `bucketed_shapes`
+(defaulting to `mps`, the backend's configured precision and padded) and places
+the policy on that device with no silent fallback.
 
 The bound was calibrated on the retained real-input w384/w768 checks in
 the [MPS retest](../../experiments/reports/mps_retest.md), source `140eec28d`. It
