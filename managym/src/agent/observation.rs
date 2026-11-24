@@ -1058,12 +1058,16 @@ impl Observation {
                                 },
                                 _ => (None, None, None),
                             };
+                            let mode_index = match action {
+                                Action::ChooseMode { mode, .. } => Some(*mode),
+                                _ => None,
+                            };
                             ActionOption {
                                 description: game.action_description(action),
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
-                                announces_x: game.announces_x(action),
+                                announces_x: mode_index.is_some() && game.announces_x(),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -1078,10 +1082,7 @@ impl Observation {
                                 name_index,
                                 name_definition,
                                 name_group,
-                                mode_index: match action {
-                                    Action::ChooseMode { mode, .. } => Some(*mode),
-                                    _ => None,
-                                },
+                                mode_index,
                                 ability_index: match action {
                                     Action::ActivateAbility { ability_index, .. }
                                     | Action::ActivateCardAbility { ability_index, .. } => {

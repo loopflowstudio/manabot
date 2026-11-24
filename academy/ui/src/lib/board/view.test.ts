@@ -153,18 +153,16 @@ describe('where decisions land', () => {
 
   it('keeps combat damage amounts as buttons and asks about the attacker and blocker', () => {
     const frame = structuredClone(navigation.DECLARE_BLOCKER.frame);
-    const blocker = frame.offers[0].focus[0];
-    const attacker = frame.projection.opponent.battlefield.find(permanent => permanent.id !== blocker)!.id;
-    const subject = (id: number, label: string) => ({ entity_id: id, subject: { kind: 'object' as const, id: { entity: id, incarnation: 0 } }, display_id: id, label });
+    const [blocker, attacker] = frame.offers[0].subjects!.map(subject => subject.object);
     frame.action_space = 'MODAL';
     frame.projection.decision_context = { ...frame.projection.decision_context!, stage: 'assign_combat_damage', source: null };
-    frame.offers = [1, 2].map(amount => ({ ...frame.offers[0], verb: 'choose' as const, action_type: 'MODAL_CHOOSE_MODE',
-      label: `Attacker assigns ${amount} to Blocker`, focus: [attacker, blocker],
-      subjects: [{ role: 'source', object: subject(attacker, 'Attacker') }, { role: 'target', object: subject(blocker, 'Blocker') }] }));
+    frame.offers = [1, 2].map((amount, id) => ({ ...frame.offers[0], id, verb: 'choose', action_type: 'MODAL_CHOOSE_MODE',
+      label: `Attacker assigns ${amount} to Blocker`, focus: [attacker.display_id, blocker.display_id],
+      subjects: [attacker, blocker].map(object => ({ role: 'choice', object })) }));
     const view = boardView(frame, PLAYERS);
     expect(view.buttons.map(placed => placed.offer.label)).toEqual(['Attacker assigns 1 to Blocker', 'Attacker assigns 2 to Blocker']);
     expect(permanents(view).flatMap(item => item.offers)).toEqual([]);
-    expect(view.asked).toEqual(new Set([attacker, blocker]));
+    expect(view.asked).toEqual(new Set([attacker.display_id, blocker.display_id]));
   });
 
   it('takes each land the payer would tap out of its pile', () => {

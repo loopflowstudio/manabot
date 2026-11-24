@@ -345,11 +345,14 @@ def assignment(actor: int, chosen: int, *offers: str) -> dict[str, Any]:
 
 
 def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
-    elves = (
-        "Hill Giant assigns 1 to Llanowar Elves, 2 left to assign",
-        "Hill Giant assigns 2 to Llanowar Elves, 1 left to assign",
+    elves = tuple(
+        f"Colossal Dreadmaw assigns {n} to Llanowar Elves, {6 - n} left to assign"
+        for n in range(7)
     )
-    bears = ("Hill Giant assigns 1 to Grizzly Bears, 0 to defending player",)
+    bears = tuple(
+        f"Colossal Dreadmaw assigns {n} to Grizzly Bears, {4 - n} to defending player"
+        for n in range(2, 5)
+    )
     events = [
         {
             "actor": 1,
@@ -358,14 +361,14 @@ def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
             "actions": [{"type": "PRIORITY_PASS_PRIORITY"}],
             "observation": {"decision_context": {"stage": "priority"}},
         },
-        assignment(0, 1, *elves),
+        assignment(0, 2, *elves),
         assignment(0, 0, *bears),
     ]
+    assigning = board("assign_combat_damage")
+    assert narrate_move(assigning, assigning, [], own_steps(events, 1)) is None
     steps = own_steps(events, 2)
-    assert [step.chosen for step in steps] == [elves[1], bears[0]]
-    assert narrate_move(
-        board("assign_combat_damage"), board("priority"), [], steps
-    ) == (
-        "Hill Giant assigns 2 to Llanowar Elves, 1 left to assign, "
-        "Hill Giant assigns 1 to Grizzly Bears, 0 to defending player"
+    assert [step.chosen for step in steps] == [elves[2], bears[0]]
+    assert narrate_move(assigning, board("priority"), [], steps) == (
+        "Colossal Dreadmaw assigns 2 to Llanowar Elves, 4 left to assign, "
+        "Colossal Dreadmaw assigns 2 to Grizzly Bears, 2 to defending player"
     )

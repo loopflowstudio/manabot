@@ -19,7 +19,9 @@ first:
   - path: managym/src/flow/triggers.rs
     why: Binds choices to the face that supplied the trigger.
   - path: managym/src/flow/action.rs
-    why: Labels choices using their spell or trigger effects.
+    why: Labels choices and gives combat damage amounts their numeric value.
+  - path: managym/src/agent/observation.rs
+    why: Focuses a damage assignment on its attacker and blocker.
   - path: managym/src/flow/resolution.rs
     why: Resolves attachments, library choices and target legality.
   - path: managym/src/flow/proposed_event.rs
@@ -28,6 +30,10 @@ first:
     why: Keeps declarations the engine made without asking.
   - path: academy/ui/src/lib/board/combat.ts
     why: Names committed attackers and blockers on the button.
+  - path: academy/ui/src/lib/board/view.ts
+    why: Keeps damage assignments as buttons and highlights their subjects.
+  - path: managym/academy/recording.py
+    why: Groups an attacker's damage assignments into one move.
   - path: managym/src/state/knowledge.rs
     why: Keeps known library positions when a card goes to the bottom.
   - path: managym/src/flow/combat_actions.rs

@@ -11,6 +11,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     cards::content_pack::default_content_pack,
     flow::{
+        decision::Decision,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{CostComponent, Operation, Payment, TapPayment},
     },
@@ -26,33 +27,24 @@ use crate::{
 };
 
 impl Game {
-    /// Whether `action`'s mode index is an announced number rather than an
-    /// option: X for a spell (or its replicate count), X for an activation,
-    /// a resolving optional payment's X, or the combat damage an attacker
-    /// assigns to one blocker.
-    pub(crate) fn announces_x(&self, action: &Action) -> bool {
-        use crate::flow::decision::Decision;
-        matches!(action, Action::ChooseMode { .. })
-            && (matches!(
-                self.pending_choice,
-                Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
-            ) || self
-                .state
-                .suspended_decision
-                .as_ref()
-                .is_some_and(|suspended| {
-                    matches!(
-                        suspended.decision,
-                        Decision::ChoosePaymentX { .. } | Decision::AssignCombatDamage { .. }
-                    )
-                }))
+    /// Whether a ChooseMode index at this decision is a quantity (X, a
+    /// replicate count, or assigned damage).
+    pub(crate) fn announces_x(&self) -> bool {
+        matches!(
+            self.pending_choice,
+            Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
+        ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
+            matches!(
+                s.decision,
+                Decision::ChoosePaymentX { .. } | Decision::AssignCombatDamage { .. }
+            )
+        })
     }
 
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         if let Some(opening) = self.state.opening() {
             return opening.action_description(self, action);
         }
-        use crate::flow::decision::Decision;
         match action {
             Action::ActivateAbility {
                 permanent,
@@ -132,141 +124,7 @@ impl Game {
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
-            // A combat damage amount names its attacker and blocker below.
-            Action::ChooseMode { mode, .. }
-                if self.announces_x(action)
-                    && !self
-                        .state
-                        .suspended_decision
-                        .as_ref()
-                        .is_some_and(|suspended| {
-                            matches!(suspended.decision, Decision::AssignCombatDamage { .. })
-                        }) =>
-            {
-                Some(format!("X = {mode}"))
-            }
-            Action::ChooseMode { mode, .. }
-                if self.state.suspended_decision.is_none()
-                    && matches!(self.paying(), Some((_, _, CostComponent::TapPays { .. }))) =>
-            {
-                let (_, _, CostComponent::TapPays { tapped, options }) = self.paying()? else {
-                    unreachable!()
-                };
-                Some(format!(
-                    "{} pays {}",
-                    self.state[*tapped].name,
-                    tap_payments_text(std::slice::from_ref(
-                        options.iter().find(|paid| paid.mode() == *mode)?
-                    ))
-                ))
-            }
-            Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
-                let modes =
-                    if let Some(PendingChoice::SpellMode { object, .. }) = &self.pending_choice {
-                        self.state[*object].spell_modes()?
-                    } else {
-                        let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                        let Effect::TriggerModes { modes, .. } =
-                            self.pending_trigger_mode_rule(trigger)?
-                        else {
-                            return None;
-                        };
-                        modes
-                    };
-                Some(effects_description(modes.get(*mode)?))
-            }
-            Action::ChooseMode { mode, .. } => {
-                match &self.state.suspended_decision.as_ref()?.decision {
-                    Decision::AssignCombatDamage {
-                        attacker,
-                        blocker,
-                        remaining,
-                        last,
-                        ..
-                    } => {
-                        let rest = remaining - *mode as i32;
-                        let recipient = if *last {
-                            "to defending player"
-                        } else {
-                            "left to assign"
-                        };
-                        Some(format!(
-                            "{} assigns {mode} to {}, {rest} {recipient}",
-                            self.characteristics(self.state.permanent_of(*attacker)?)
-                                .name,
-                            self.characteristics(self.state.permanent_of(*blocker)?)
-                                .name
-                        ))
-                    }
-                    Decision::OrderReplacement { candidates, .. } => {
-                        let candidate = candidates.get(*mode)?;
-                        let name = match candidate.source_definition {
-                            Some(definition) => default_content_pack()
-                                .definition(definition)?
-                                .printed
-                                .name
-                                .clone(),
-                            None => self.state[candidate.source()].name.clone(),
-                        };
-                        Some(format!("{name}: {}", candidate.description()))
-                    }
-                    Decision::NameCard { names, scope, .. } => match scope.option(*mode)? {
-                        NameOption::Group(group) => Some(format!(
-                            "Names {} through {}",
-                            names.get(group.start)?.name,
-                            names.get(group.end - 1)?.name
-                        )),
-                        NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
-                    },
-                    Decision::ManaSpend { player, cost, .. } => {
-                        let choices = self.mana_spend_choices(*player, cost);
-                        let unit = &choices.get(*mode)?.unit;
-                        let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
-                            ""
-                        } else {
-                            " (expires at step end)"
-                        };
-                        Some(format!("Spend {}{expiry}", mana_description(unit)))
-                    }
-                    Decision::ManaChoice { choices, .. } => {
-                        Some(format!("Add {}", mana_description(choices.get(*mode)?)))
-                    }
-                    Decision::Modal { modes, .. } => match modes.get(*mode)?.as_slice() {
-                        [] => Some("Decline".into()),
-                        [Effect::AddMana { mana, .. }] => {
-                            Some(format!("Add {}", mana_description(mana)))
-                        }
-                        [Effect::CreateToken { token, .. }] => Some(format!(
-                            "Create a {} token",
-                            default_content_pack().token_name(token)
-                        )),
-                        [Effect::PlaceTargetInLibrary { second_from_top }] => {
-                            Some(if *second_from_top {
-                                "Second from the top".into()
-                            } else {
-                                "On the bottom".into()
-                            })
-                        }
-                        [Effect::Move {
-                            to: ZoneType::Library,
-                            library_end: Some(end),
-                            ..
-                        }] => Some(match end {
-                            LibraryEnd::Top => "On top".into(),
-                            LibraryEnd::Bottom => "On the bottom".into(),
-                        }),
-                        [Effect::SelectCards {
-                            from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
-                            ..
-                        }] => Some("Search your library".into()),
-                        [Effect::RemoveCounters {
-                            chosen: Some(kind), ..
-                        }] => Some(format!("Remove a {} counter", counter_description(*kind))),
-                        effects => Some(effects_description(effects)),
-                    },
-                    _ => None,
-                }
-            }
+            Action::ChooseMode { mode, .. } => self.mode_description(*mode),
             Action::PayCost { .. } => match &self.pending_choice {
                 Some(PendingChoice::KickerChoice {
                     object: object_id, ..
@@ -394,6 +252,118 @@ impl Game {
                 _ => None,
             },
             _ => None,
+        }
+    }
+
+    fn mode_description(&self, mode: usize) -> Option<String> {
+        match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
+            Some(Decision::AssignCombatDamage {
+                attacker,
+                blocker,
+                remaining,
+                last,
+                ..
+            }) => {
+                let rest = remaining - mode as i32;
+                let recipient = if *last {
+                    "to defending player"
+                } else {
+                    "left to assign"
+                };
+                Some(format!(
+                    "{} assigns {mode} to {}, {rest} {recipient}",
+                    self.characteristics(self.state.permanent_of(*attacker)?)
+                        .name,
+                    self.characteristics(self.state.permanent_of(*blocker)?)
+                        .name
+                ))
+            }
+            _ if self.announces_x() => Some(format!("X = {mode}")),
+            Some(Decision::OrderReplacement { candidates, .. }) => {
+                let candidate = candidates.get(mode)?;
+                let name = match candidate.source_definition {
+                    Some(definition) => {
+                        &default_content_pack().definition(definition)?.printed.name
+                    }
+                    None => &self.state[candidate.source()].name,
+                };
+                Some(format!("{name}: {}", candidate.description()))
+            }
+            Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
+                NameOption::Group(group) => Some(format!(
+                    "Names {} through {}",
+                    names.get(group.start)?.name,
+                    names.get(group.end - 1)?.name
+                )),
+                NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
+            },
+            Some(Decision::ManaSpend { player, cost, .. }) => {
+                let choices = self.mana_spend_choices(*player, cost);
+                let unit = &choices.get(mode)?.unit;
+                let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                    ""
+                } else {
+                    " (expires at step end)"
+                };
+                Some(format!("Spend {}{expiry}", mana_description(unit)))
+            }
+            Some(Decision::ManaChoice { choices, .. }) => {
+                Some(format!("Add {}", mana_description(choices.get(mode)?)))
+            }
+            Some(Decision::Modal { modes, .. }) => match modes.get(mode)?.as_slice() {
+                [] => Some("Decline".into()),
+                [Effect::AddMana { mana, .. }] => Some(format!("Add {}", mana_description(mana))),
+                [Effect::CreateToken { token, .. }] => Some(format!(
+                    "Create a {} token",
+                    default_content_pack().token_name(token)
+                )),
+                [Effect::PlaceTargetInLibrary { second_from_top }] => Some(if *second_from_top {
+                    "Second from the top".into()
+                } else {
+                    "On the bottom".into()
+                }),
+                [Effect::Move {
+                    to: ZoneType::Library,
+                    library_end: Some(end),
+                    ..
+                }] => Some(match end {
+                    LibraryEnd::Top => "On top".into(),
+                    LibraryEnd::Bottom => "On the bottom".into(),
+                }),
+                [Effect::SelectCards {
+                    from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
+                    ..
+                }] => Some("Search your library".into()),
+                [Effect::RemoveCounters {
+                    chosen: Some(kind), ..
+                }] => Some(format!("Remove a {} counter", counter_description(*kind))),
+                effects => Some(effects_description(effects)),
+            },
+            Some(_) => None,
+            None => {
+                if let Some((_, _, CostComponent::TapPays { tapped, options })) = self.paying() {
+                    return Some(format!(
+                        "{} pays {}",
+                        self.state[*tapped].name,
+                        tap_payments_text(std::slice::from_ref(
+                            options.iter().find(|paid| paid.mode() == mode)?
+                        ))
+                    ));
+                }
+                let modes =
+                    if let Some(PendingChoice::SpellMode { object, .. }) = &self.pending_choice {
+                        self.state[*object].spell_modes()?
+                    } else {
+                        let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
+                        let Effect::TriggerModes { modes, .. } =
+                            self.pending_trigger_mode_rule(trigger)?
+                        else {
+                            return None;
+                        };
+                        modes
+                    };
+                Some(effects_description(modes.get(mode)?))
+            }
         }
     }
 

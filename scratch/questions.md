@@ -78,3 +78,5 @@ Concept-review (`49cc87c7`) choices folded into Batch 5g:
 
 - Combat damage assignment numeric encoding: reuse existing `announces_x` → `action::HAS_X` / `action::X` (no v11 layout change) so amounts ≥ 15 stay distinct instead of collapsing into `one_hot:15`'s `"above 15"` bucket, while keeping `AssignCombatDamage`'s custom description ahead of `"X = {mode}"`.
 - Academy placement of `assign_combat_damage` offers once `Observation::action_focus` carries `[attacker, blocker]`: keep them as rail buttons via `view.ts:isButton` and highlight `[attacker, blocker]` via `askedObjects` rather than anchoring 2..N damage choices inside a popup menu on the attacker card.
+
+The compression pass started at `57c18aa9d0`, which already contained Alignment 5 and its rebuild evidence. The semantic corpus refresh remains with gate.

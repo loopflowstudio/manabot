@@ -76,6 +76,16 @@ class OwnStep:
     # What the choice is for: the resolving spell or ability, by its label.
     source: str | None = None
 
+    def groups_with(self, stage: str | None, source: str | None) -> bool:
+        """Whether another consecutive choice by this actor belongs to the same move."""
+        if self.stage == "order_triggers":
+            return stage == self.stage
+        return (
+            self.stage in RESOLVING_STAGES
+            and stage in RESOLVING_STAGES
+            and source == self.source
+        )
+
 
 def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
     """The person's own steps of the move that `events[index]` (theirs) ends.
@@ -99,27 +109,25 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
             source=(context.get("source") or {}).get("label"),
         )
 
-    def same_move(earlier: OwnStep, last: OwnStep) -> bool:
-        if last.stage == "order_triggers":
-            return earlier.stage == last.stage
-        return (
-            last.stage in RESOLVING_STAGES
-            and earlier.stage in RESOLVING_STAGES
-            and earlier.source == last.source
-        )
-
     # A legacy trace event retains neither the offered actions nor the choice.
-    if "actions" not in events[index] or "action" not in events[index]:
+    current = events[index]
+    if "actions" not in current or "action" not in current:
         return []
-    last = step(events[index])
+    last = step(current)
     run = [last]
-    for event in reversed(events[:index]):
-        if "actions" not in event or "action" not in event:
+    for previous in reversed(range(len(events))[:index]):
+        event = events[previous]
+        if (
+            "actions" not in event
+            or "action" not in event
+            or event["actor"] != current["actor"]
+        ):
             break
         earlier = step(event)
-        if event["actor"] != events[index]["actor"] or not same_move(earlier, last):
+        if not last.groups_with(earlier.stage, earlier.source):
             break
-        run.insert(0, earlier)
+        run.append(earlier)
+    run.reverse()
     return run
 
 
@@ -633,12 +641,11 @@ def narrate_move(
     following = after.get("decision_context") or {}
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
-        or (own and following.get("stage") == own[-1].stage == "order_triggers")
         or (
             own
-            and own[-1].stage in RESOLVING_STAGES
-            and following.get("stage") in RESOLVING_STAGES
-            and (following.get("source") or {}).get("label") == own[-1].source
+            and own[-1].groups_with(
+                following.get("stage"), (following.get("source") or {}).get("label")
+            )
         )
     )
     if continues:

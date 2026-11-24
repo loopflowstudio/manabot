@@ -6029,41 +6029,31 @@ fn combat_damage_amounts_carry_their_value_and_focus_attacker_and_blocker() {
     let offers = &observation.action_space.actions;
     assert_eq!(offers.len(), 17);
     let rows = encoded(&s, 0);
-    let width = rows.actions.len() / rows.actions_valid.len();
-    let public = |id: PermanentId| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32;
-    let focus_rows = [object_index(&s, 0, mammoth), object_index(&s, 0, elves)];
+    let combatants = [mammoth, elves];
+    let public_ids =
+        combatants.map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32);
+    let focus_rows = combatants.map(|id| object_index(&s, 0, id) as i32);
     let slots = ObservationEncoderConfig::default().max_focus_objects;
-    let mut amounts = Vec::new();
-    for (index, (offer, row)) in offers
-        .iter()
-        .zip(rows.actions.chunks_exact(width))
-        .enumerate()
-    {
+    for (index, offer) in offers.iter().enumerate() {
+        let amount = index + 1;
         assert!(offer.announces_x);
-        let mode = offer.mode_index.expect("an amount offer has its value");
+        assert_eq!(offer.mode_index, Some(amount));
         assert_eq!(
             offer.description,
             Some(format!(
-                "War Mammoth assigns {mode} to Llanowar Elves, {} to defending player",
-                17 - mode
+                "War Mammoth assigns {amount} to Llanowar Elves, {} to defending player",
+                17 - amount
             ))
         );
-        assert_eq!(row[action::HAS_X], 1.0);
-        assert_eq!(row[action::X], mode as f32 / 10.0);
-        amounts.push(row[action::X]);
-        assert_eq!(offer.focus, [public(mammoth), public(elves)]);
-        let focus = &rows.action_focus[index * slots..index * slots + 2];
+        let start = index * action::WIDTH;
+        assert_eq!(rows.actions[start + action::HAS_X], 1.0);
+        assert_eq!(rows.actions[start + action::X], amount as f32 / 10.0);
+        assert_eq!(offer.focus, public_ids);
         assert_eq!(
-            focus.iter().map(|v| *v as usize).collect::<Vec<_>>(),
+            rows.action_focus[index * slots..index * slots + 2],
             focus_rows
         );
     }
-    amounts.dedup();
-    assert_eq!(
-        amounts.len(),
-        17,
-        "every amount, 15 and 16 included, is distinct"
-    );
 }
 
 /// The attacker, blocker and assigned damage are public battlefield state, so
@@ -6074,6 +6064,7 @@ fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
     let (s, ..) = trample_assignment();
     let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
     assert!(!space.worlds().is_empty());
+    let expected = Observation::for_player(s.game(), PlayerId(0)).action_space;
     for index in 0..space.worlds().len().min(4) {
         let branch = space
             .materialize_index(
@@ -6089,7 +6080,7 @@ fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
         );
         assert_eq!(
             Observation::for_player(&branch, PlayerId(0)).action_space,
-            Observation::for_player(s.game(), PlayerId(0)).action_space
+            expected
         );
     }
 }
