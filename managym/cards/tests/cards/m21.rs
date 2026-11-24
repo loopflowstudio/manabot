@@ -108,9 +108,7 @@ fn sanguine_indulgence_costs_three_less_after_three_life_gained_this_turn() {
 
 #[test]
 fn mazemind_tome_exiles_itself_once_its_fourth_page_counter_is_paid() {
-    use crate::support::{
-        game::set_counters, inspect::counters_of, play::counter_stacked_ability,
-    };
+    use crate::support::{game::set_counters, inspect::counters_of, play::counter_stacked_ability};
     use managym::state::{permanent::CounterKind::Page, stack_object::StackObject};
 
     let mut s = five_color_setup(&["Mazemind Tome", "Gray Ogre"]);
@@ -129,7 +127,10 @@ fn mazemind_tome_exiles_itself_once_its_fourth_page_counter_is_paid() {
     let stack = &s.game().state.stack_objects;
     assert!(matches!(
         stack.as_slice(),
-        [StackObject::ActivatedAbility(_), StackObject::TriggeredAbility(_)]
+        [
+            StackObject::ActivatedAbility(_),
+            StackObject::TriggeredAbility(_)
+        ]
     ));
     assert_eq!(counters_of(&s, tome, Page), 4);
     let life = s.life(0);
@@ -137,7 +138,11 @@ fn mazemind_tome_exiles_itself_once_its_fourth_page_counter_is_paid() {
     crate::support::play::resolve_top(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
     assert_eq!(s.life(0), life + 4);
-    assert_eq!(s.game().state.stack_objects.len(), 1, "the Scry still waits");
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        1,
+        "the Scry still waits"
+    );
 
     // Countered while four counters remain, it triggers again.
     *s.game_mut() = pending.clone();
@@ -152,6 +157,9 @@ fn mazemind_tome_exiles_itself_once_its_fourth_page_counter_is_paid() {
     assert_eq!(s.life(0), life);
 }
 
-fn permanent_untap(s: &mut crate::support::game::Scenario, id: managym::state::game_object::PermanentId) {
+fn permanent_untap(
+    s: &mut crate::support::game::Scenario,
+    id: managym::state::game_object::PermanentId,
+) {
     s.game_mut().state.permanents[id].as_mut().unwrap().tapped = false;
 }

@@ -107,11 +107,7 @@ fn immersturm_predator() -> CardDefinition {
                     requirement: TargetRequirement::up_to(1, card.clone()),
                     effects: vec![
                         Effect::exile(ObjectSelector::Target(card)),
-                        Effect::put_counters(
-                            ObjectSelector::This,
-                            CounterKind::PlusOnePlusOne,
-                            1,
-                        ),
+                        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                     ],
                 }],
             }],

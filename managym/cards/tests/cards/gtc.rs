@@ -62,3 +62,139 @@ fn consuming_aberration_mills_opponents_until_a_land_and_grows() {
     let in_hand = force_new_card_in_hand(&mut s, 1, "Consuming Aberration");
     assert_eq!(s.game().object_pt(in_hand), (side, side));
 }
+
+#[test]
+fn aurelia_first_declaration_tracks_each_appearance() {
+    use crate::fdn::assert_raid;
+    use crate::support::game::five_color_setup;
+    use crate::support::game::move_card;
+    use crate::support::inspect::card_of;
+    use crate::support::inspect::permanent_of;
+    use crate::support::play::attack_with;
+    use crate::support::play::settle;
+    use crate::support::{game::clear_summoning_sickness, inspect::tapped};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        flow::turn::AdditionalCombat,
+    };
+    let name = "Aurelia, the Warleader";
+    let mut s = five_color_setup(&[name, "Gray Ogre", "Honest Work"]);
+    let aurelia = s.force_permanent_on_battlefield(0, name);
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let original = card_of(&s, aurelia);
+    clear_summoning_sickness(&mut s, other);
+    let main = s.game().clone();
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
+    let partial = s.game().clone();
+    for viewer in 0..2 {
+        let obs = Observation::for_player(s.game(), PlayerId(viewer));
+        assert!(!obs
+            .agent_permanents
+            .iter()
+            .chain(&obs.opponent_permanents)
+            .any(|p| p.attacked_this_turn));
+    }
+    s.decline_attack();
+    *s.game_mut() = partial;
+    s.declare_attack();
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert!(tapped(&s, other));
+    settle(&mut s);
+    assert!(!tapped(&s, other));
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    let first = s.game().clone();
+    for blink in [false, true] {
+        *s.game_mut() = first.clone();
+        let attacker = if blink {
+            let away = move_card(&mut s, original, ZoneType::Exile);
+            let back = move_card(&mut s, away, ZoneType::Battlefield);
+            assert_eq!(s.game().state.turn.attack_count(back), 0);
+            permanent_of(&s, back).unwrap()
+        } else {
+            aurelia
+        };
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, attacker);
+        assert_eq!(s.game().state.stack_objects.len(), usize::from(blink));
+        assert_raid(&s, Some(0));
+    }
+    *s.game_mut() = main;
+    clear_summoning_sickness(&mut s, aurelia);
+    let aura = s.force_permanent_on_battlefield(1, "Honest Work");
+    s.game_mut().state.permanents[aura]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(original);
+    assert!(s.game().characteristics(aurelia).abilities_lost);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, aurelia);
+    assert!(s.game().state.stack_objects.is_empty());
+    let aura_object = card_of(&s, aura);
+    move_card(&mut s, aura_object, ZoneType::Graveyard);
+    assert!(!s.game().characteristics(aurelia).abilities_lost);
+    s.game_mut().state.permanents[aurelia]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(AdditionalCombat { attackers: None });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, aurelia);
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(s.game().state.turn.attack_count(original), 2);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().state.turn.attack_count(original), 0);
+    assert_raid(&s, None);
+}
+
+#[test]
+fn aurelia_that_entered_attacking_still_gets_a_first_declaration() {
+    use crate::fdn::assert_raid;
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::card_of;
+    use crate::support::inspect::library_card;
+    use crate::support::play::attack_with;
+    use managym::flow::turn::AdditionalCombat;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::PlayerId;
+    let name = "Aurelia, the Warleader";
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    crate::support::game::clear_summoning_sickness(&mut s, ogre);
+    let printed = s.game().state[library_card(&s, 0, name)].clone();
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    let token = s
+        .game_mut()
+        .create_token("token.soldier", PlayerId(0), true)
+        .unwrap();
+    let object = card_of(&s, token);
+    s.game_mut().state[object].become_copy_of(&printed, &[]);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.decline_attack();
+    assert_raid(&s, None);
+    assert_eq!(s.game().state.turn.attack_count(object), 0);
+    assert!(s.game().state.stack_objects.is_empty());
+    s.game_mut()
+        .state
+        .turn
+        .additional_combats
+        .push(AdditionalCombat { attackers: None });
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    s.game_mut().state.permanents[token]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, token);
+    assert_eq!(s.game().state.turn.attack_count(object), 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+}

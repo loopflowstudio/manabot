@@ -134,3 +134,51 @@ fn inspiring_call_draws_for_and_protects_creatures_with_counters() {
         assert_eq!(keywords(&s, id).has(Keyword::Indestructible), protected);
     }
 }
+
+#[test]
+fn surrak_sums_signed_power_and_rechecks_after_targeting() {
+    use crate::support::{
+        game::{set_counters, until_end_of_turn},
+        inspect::offered_targets,
+    };
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::{effect::Modification, game_object::Target, permanent::CounterKind};
+    let name = "Surrak, the Hunt Caller";
+    let mut s = five_color_setup(&[name, "Hill Giant", "Gray Ogre"]);
+    let surrak = s.force_permanent_on_battlefield(0, name);
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: -3,
+            toughness: 0,
+        },
+    );
+    let root = s.game().clone(); // 5 + 3 - 1
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(s.game().state.stack_objects.is_empty());
+    *s.game_mut() = root;
+    set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 1);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    let offered = offered_targets(&s);
+    assert_eq!(offered.len(), 3);
+    assert!([surrak, giant, ogre]
+        .iter()
+        .all(|&id| offered.contains(&Target::Permanent(id))));
+    s.choose_target_named("Gray Ogre");
+    let pending = s.game().clone();
+    for meets in [false, true] {
+        *s.game_mut() = pending.clone();
+        if !meets {
+            set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 0);
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.game().characteristics(ogre).keywords.has(Keyword::Haste),
+            meets
+        );
+    }
+}

@@ -253,3 +253,25 @@ fn stroke_of_midnight_gives_the_targets_controller_a_human() {
             .is_empty());
     }
 }
+
+#[test]
+fn ruby_daring_tracker_taps_for_either_color() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::activate;
+    use crate::support::play::choose_mode;
+    use managym::state::mana::Mana;
+    let mut s = five_color_setup(&["Ruby, Daring Tracker"]);
+    let ruby = s.force_permanent_on_battlefield(0, "Ruby, Daring Tracker");
+    s.set_player_mana_pool(0, "");
+    s.allow_priority_floats();
+    activate(&mut s, ruby, 0);
+    let choice = s.game().clone();
+    assert_eq!(s.action_space().actions.len(), 2);
+    for (mode, color) in ["R", "G"].into_iter().enumerate() {
+        *s.game_mut() = choice.clone();
+        choose_mode(&mut s, mode);
+        assert!(crate::support::inspect::tapped(&s, ruby));
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(color));
+    }
+}

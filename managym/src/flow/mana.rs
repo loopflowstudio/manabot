@@ -2708,8 +2708,12 @@ impl Game {
             tapped = Some(self.tapped_for_mana(permanent));
         }
         let counter_costs = [
-            ability.remove_counters.map(|(kind, count)| (kind, -i32::from(count))),
-            ability.add_counters.map(|(kind, count)| (kind, i32::from(count))),
+            ability
+                .remove_counters
+                .map(|(kind, count)| (kind, -i32::from(count))),
+            ability
+                .add_counters
+                .map(|(kind, count)| (kind, i32::from(count))),
         ];
         for (kind, delta) in counter_costs.into_iter().flatten() {
             let Some(target) = self.permanent_object(permanent) else {

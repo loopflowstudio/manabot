@@ -600,7 +600,11 @@ impl MandatoryLoopWatch {
         if self.extremes.is_none() {
             self.extremes = Some(now);
         }
-        self.without_progress = if progressed { 0 } else { self.without_progress + 1 };
+        self.without_progress = if progressed {
+            0
+        } else {
+            self.without_progress + 1
+        };
         self.without_progress >= Self::REPEATS || self.resolutions >= Self::CAP
     }
 }
@@ -621,7 +625,9 @@ mod mandatory_loop_tests {
     #[test]
     fn a_finite_stack_unwinding_without_other_change_is_no_loop() {
         let mut watch = MandatoryLoopWatch::default();
-        assert!((0..200).rev().all(|depth| !watch.repeats(at(depth, 20), |_| true)));
+        assert!((0..200)
+            .rev()
+            .all(|depth| !watch.repeats(at(depth, 20), |_| true)));
     }
 
     #[test]

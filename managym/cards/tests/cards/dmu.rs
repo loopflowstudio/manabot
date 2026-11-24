@@ -174,3 +174,54 @@ fn garna_draws_for_a_dying_attacker_and_pings_otherwise() {
     s.assert_life(1, 19);
     s.assert_life(0, 22);
 }
+
+#[test]
+fn bite_down_binds_both_targets_and_damages_loyalty() {
+    use crate::support::game::five_color_setup;
+    use crate::support::game::move_card;
+    use crate::support::inspect::card_of;
+    use crate::support::inspect::permanent_of;
+    use crate::support::play::settle;
+    use crate::support::{
+        game::{force_new_card_in_hand, set_counters},
+        inspect::counters_of,
+        play::cast_card,
+    };
+    use managym::state::zone::ZoneType;
+    use managym::state::{
+        card::{CardType, CardTypes},
+        permanent::CounterKind,
+        player::ManaPayment,
+    };
+    let mut s = five_color_setup(&["Bite Down", "Gray Ogre", "Hill Giant"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let walker = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let card = card_of(&s, walker);
+    s.game_mut().state[card].types = CardTypes::new([CardType::Planeswalker]);
+    set_counters(&mut s, walker, CounterKind::Loyalty, 5);
+    let spell = force_new_card_in_hand(&mut s, 0, "Bite Down");
+    cast_card(&mut s, spell);
+    s.choose_target_named("Gray Ogre");
+    s.choose_target_named("Hill Giant");
+    let pending = s.game().clone();
+    for blink in [None, Some(source), Some(walker)] {
+        *s.game_mut() = pending.clone();
+        set_counters(&mut s, source, CounterKind::PlusOnePlusOne, 1);
+        let mut victim = walker;
+        if let Some(id) = blink {
+            let card = card_of(&s, id);
+            let moved = move_card(&mut s, card, ZoneType::Exile);
+            let returned = move_card(&mut s, moved, ZoneType::Battlefield);
+            if id == walker {
+                victim = permanent_of(&s, returned).unwrap();
+                set_counters(&mut s, victim, CounterKind::Loyalty, 5);
+            }
+        }
+        settle(&mut s);
+        assert_eq!(
+            counters_of(&s, victim, CounterKind::Loyalty),
+            if blink.is_some() { 5 } else { 2 }
+        );
+    }
+}

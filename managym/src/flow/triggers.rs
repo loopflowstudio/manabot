@@ -1471,13 +1471,9 @@ impl Game {
                 let Ability::Triggered { condition, .. } = ability;
                 let holds = match condition {
                     TriggerCondition::NoCounters { kind } => permanent.counter_count(*kind) == 0,
-                    TriggerCondition::State(condition) => self.condition_holds(
-                        condition,
-                        source.lki.controller,
-                        None,
-                        object,
-                        None,
-                    ),
+                    TriggerCondition::State(condition) => {
+                        self.condition_holds(condition, source.lki.controller, None, object, None)
+                    }
                     _ => continue,
                 };
                 if holds && !self.state_trigger_waiting(object, ability_index) {
@@ -1521,9 +1517,12 @@ impl Game {
         let same = |trigger: &PendingTrigger| {
             trigger.source_ref() == source && trigger.ability_index == ability_index
         };
-        let placing = self.state.trigger_placement.as_deref().into_iter().flat_map(|placement| {
-            placement.remaining.iter().chain(placement.placing.as_ref())
-        });
+        let placing = self
+            .state
+            .trigger_placement
+            .as_deref()
+            .into_iter()
+            .flat_map(|placement| placement.remaining.iter().chain(placement.placing.as_ref()));
         self.state.pending_triggers.iter().chain(placing).any(same)
             || self.state.stack_objects.iter().any(|item| {
                 matches!(item, StackObject::TriggeredAbility(trigger)

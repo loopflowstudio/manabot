@@ -151,12 +151,12 @@ fn axe_equipped_fynn_poisons_in_both_damage_steps() {
 
 #[test]
 fn immersturm_predator_grows_when_it_becomes_tapped_unless_its_one_target_is_gone() {
-    use managym::state::zone::ZoneType;
     use crate::support::{
         game::{move_card, plant_in_graveyard},
         inspect::{card_of, counters_of, offered_targets, tapped, zone_of},
         play::{choose, select_card},
     };
+    use managym::state::zone::ZoneType;
     use managym::{agent::action::Action, state::permanent::CounterKind::PlusOnePlusOne};
 
     let mut s = five_color_setup(&["Immersturm Predator", "Gray Ogre", "Craw Wurm"]);

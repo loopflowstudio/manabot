@@ -6280,13 +6280,19 @@ fn counter_costs_state_and_untap_triggers_and_counter_counts_reach_the_tokens() 
         "TriggerCondition::BecomesUntapped",
         "TriggerSubject::EquippedCreature",
     ] {
-        assert!(pole.contains(&(TokenKind::Variant, name_value(variant))), "{variant}");
+        assert!(
+            pole.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
     }
     for (tokens, kind) in [
         (&tome, "CounterKind::page"),
         (&amulet, "CounterKind::soul"),
         (&pole, "CounterKind::bait"),
     ] {
-        assert!(tokens.contains(&(TokenKind::Variant, name_value(kind))), "{kind}");
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(kind))),
+            "{kind}"
+        );
     }
 }

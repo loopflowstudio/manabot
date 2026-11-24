@@ -14,7 +14,11 @@ use managym_state::{
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![heartfire_immolator(), mazemind_tome(), sanguine_indulgence()]
+    vec![
+        heartfire_immolator(),
+        mazemind_tome(),
+        sanguine_indulgence(),
+    ]
 }
 
 fn mazemind_tome() -> CardDefinition {

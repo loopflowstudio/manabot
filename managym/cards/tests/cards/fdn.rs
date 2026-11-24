@@ -1350,7 +1350,7 @@ fn second_draw_listeners_share_the_ordinal_and_resolve_independently() {
     assert_eq!(counters_of(&s, wizard, PlusOnePlusOne), 2);
 }
 
-fn assert_raid(s: &crate::support::game::Scenario, attacker: Option<usize>) {
+pub(crate) fn assert_raid(s: &crate::support::game::Scenario, attacker: Option<usize>) {
     use managym::agent::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
@@ -1784,126 +1784,6 @@ fn attack_batch_each_doubled_occurrence_keeps_its_attacker() {
 }
 
 #[test]
-fn attack_batch_aurelia_first_declaration_tracks_each_appearance() {
-    use crate::support::{game::clear_summoning_sickness, inspect::tapped};
-    use managym::{
-        agent::{action::ActionSpaceKind, observation::Observation},
-        flow::turn::AdditionalCombat,
-    };
-    let name = "Aurelia, the Warleader";
-    let mut s = five_color_setup(&[name, "Gray Ogre", "Honest Work"]);
-    let aurelia = s.force_permanent_on_battlefield(0, name);
-    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let original = card_of(&s, aurelia);
-    clear_summoning_sickness(&mut s, other);
-    let main = s.game().clone();
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    s.declare_attack();
-    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
-    let partial = s.game().clone();
-    for viewer in 0..2 {
-        let obs = Observation::for_player(s.game(), PlayerId(viewer));
-        assert!(!obs
-            .agent_permanents
-            .iter()
-            .chain(&obs.opponent_permanents)
-            .any(|p| p.attacked_this_turn));
-    }
-    s.decline_attack();
-    *s.game_mut() = partial;
-    s.declare_attack();
-    assert_eq!(s.game().state.stack_objects.len(), 1);
-    assert!(tapped(&s, other));
-    settle(&mut s);
-    assert!(!tapped(&s, other));
-    s.advance_to_active_step(0, StepKind::EndOfCombat);
-    let first = s.game().clone();
-    for blink in [false, true] {
-        *s.game_mut() = first.clone();
-        let attacker = if blink {
-            let away = move_card(&mut s, original, ZoneType::Exile);
-            let back = move_card(&mut s, away, ZoneType::Battlefield);
-            assert_eq!(s.game().state.turn.attack_count(back), 0);
-            permanent_of(&s, back).unwrap()
-        } else {
-            aurelia
-        };
-        s.advance_to_active_step(0, StepKind::DeclareAttackers);
-        attack_with(&mut s, attacker);
-        assert_eq!(s.game().state.stack_objects.len(), usize::from(blink));
-        assert_raid(&s, Some(0));
-    }
-    *s.game_mut() = main;
-    clear_summoning_sickness(&mut s, aurelia);
-    let aura = s.force_permanent_on_battlefield(1, "Honest Work");
-    s.game_mut().state.permanents[aura]
-        .as_mut()
-        .unwrap()
-        .attached_to = Some(original);
-    assert!(s.game().characteristics(aurelia).abilities_lost);
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(&mut s, aurelia);
-    assert!(s.game().state.stack_objects.is_empty());
-    let aura_object = card_of(&s, aura);
-    move_card(&mut s, aura_object, ZoneType::Graveyard);
-    assert!(!s.game().characteristics(aurelia).abilities_lost);
-    s.game_mut().state.permanents[aurelia]
-        .as_mut()
-        .unwrap()
-        .tapped = false;
-    s.game_mut()
-        .state
-        .turn
-        .additional_combats
-        .push(AdditionalCombat { attackers: None });
-    s.advance_to_active_step(0, StepKind::EndOfCombat);
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(&mut s, aurelia);
-    assert!(s.game().state.stack_objects.is_empty());
-    assert_eq!(s.game().state.turn.attack_count(original), 2);
-    s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().state.turn.attack_count(original), 0);
-    assert_raid(&s, None);
-}
-
-#[test]
-fn attack_batch_aurelia_that_entered_attacking_still_gets_a_first_declaration() {
-    use crate::support::inspect::library_card;
-    use managym::flow::turn::AdditionalCombat;
-    let name = "Aurelia, the Warleader";
-    let mut s = five_color_setup(&[name, "Gray Ogre"]);
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    crate::support::game::clear_summoning_sickness(&mut s, ogre);
-    let printed = s.game().state[library_card(&s, 0, name)].clone();
-    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    let token = s
-        .game_mut()
-        .create_token("token.soldier", PlayerId(0), true)
-        .unwrap();
-    let object = card_of(&s, token);
-    s.game_mut().state[object].become_copy_of(&printed, &[]);
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    s.decline_attack();
-    assert_raid(&s, None);
-    assert_eq!(s.game().state.turn.attack_count(object), 0);
-    assert!(s.game().state.stack_objects.is_empty());
-    s.game_mut()
-        .state
-        .turn
-        .additional_combats
-        .push(AdditionalCombat { attackers: None });
-    s.advance_to_active_step(0, StepKind::EndOfCombat);
-    s.game_mut().state.permanents[token]
-        .as_mut()
-        .unwrap()
-        .tapped = false;
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(&mut s, token);
-    assert_eq!(s.game().state.turn.attack_count(object), 1);
-    assert_eq!(s.game().state.stack_objects.len(), 1);
-}
-
-#[test]
 fn attack_batch_mana_ability_counts_live_board_objects() {
     use crate::support::game::until_end_of_turn;
     use managym::agent::action::ActionSpaceKind;
@@ -2052,99 +1932,6 @@ fn power_batch_goblin_and_ruby_qualify_at_declaration() {
                 before && name == "Courageous Goblin"
             );
         }
-    }
-}
-
-#[test]
-fn power_batch_ruby_taps_for_either_color() {
-    use crate::support::play::choose_mode;
-    use managym::state::mana::Mana;
-    let mut s = five_color_setup(&["Ruby, Daring Tracker"]);
-    let ruby = s.force_permanent_on_battlefield(0, "Ruby, Daring Tracker");
-    s.set_player_mana_pool(0, "");
-    s.allow_priority_floats();
-    activate(&mut s, ruby, 0);
-    let choice = s.game().clone();
-    assert_eq!(s.action_space().actions.len(), 2);
-    for (mode, color) in ["R", "G"].into_iter().enumerate() {
-        *s.game_mut() = choice.clone();
-        choose_mode(&mut s, mode);
-        assert!(crate::support::inspect::tapped(&s, ruby));
-        assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
-        assert_eq!(s.game().state.players[0].mana_pool, Mana::parse(color));
-    }
-}
-
-#[test]
-fn power_batch_hornbeetle_excludes_itself_and_rechecks_other_power() {
-    use crate::support::{game::set_counters, inspect::counters};
-    use managym::state::permanent::CounterKind;
-    let mut s = five_color_setup(&["Nessian Hornbeetle", "Gray Ogre"]);
-    let beetle = s.force_permanent_on_battlefield(0, "Nessian Hornbeetle");
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    set_counters(&mut s, beetle, CounterKind::PlusOnePlusOne, 2);
-    let root = s.game().clone();
-    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    assert!(s.game().state.stack_objects.is_empty());
-    *s.game_mut() = root;
-    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 2);
-    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    assert_eq!(s.game().state.stack_objects.len(), 1);
-    let pending = s.game().clone();
-    for stays in [true, false] {
-        *s.game_mut() = pending.clone();
-        if !stays {
-            let obj = card_of(&s, ogre);
-            move_card(&mut s, obj, ZoneType::Hand);
-        }
-        settle(&mut s);
-        assert_eq!(counters(&s, beetle), 2 + i32::from(stays));
-    }
-}
-
-#[test]
-fn power_batch_surrak_sums_signed_power_and_rechecks_after_targeting() {
-    use crate::support::{
-        game::{set_counters, until_end_of_turn},
-        inspect::offered_targets,
-    };
-    use managym::state::{effect::Modification, game_object::Target, permanent::CounterKind};
-    let name = "Surrak, the Hunt Caller";
-    let mut s = five_color_setup(&[name, "Hill Giant", "Gray Ogre"]);
-    let surrak = s.force_permanent_on_battlefield(0, name);
-    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
-    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    until_end_of_turn(
-        &mut s,
-        ogre,
-        Modification::ModifyPt {
-            power: -3,
-            toughness: 0,
-        },
-    );
-    let root = s.game().clone(); // 5 + 3 - 1
-    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    assert!(s.game().state.stack_objects.is_empty());
-    *s.game_mut() = root;
-    set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 1);
-    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
-    let offered = offered_targets(&s);
-    assert_eq!(offered.len(), 3);
-    assert!([surrak, giant, ogre]
-        .iter()
-        .all(|&id| offered.contains(&Target::Permanent(id))));
-    s.choose_target_named("Gray Ogre");
-    let pending = s.game().clone();
-    for meets in [false, true] {
-        *s.game_mut() = pending.clone();
-        if !meets {
-            set_counters(&mut s, giant, CounterKind::PlusOnePlusOne, 0);
-        }
-        settle(&mut s);
-        assert_eq!(
-            s.game().characteristics(ogre).keywords.has(Keyword::Haste),
-            meets
-        );
     }
 }
 
@@ -2301,51 +2088,6 @@ fn power_batch_bulk_up_doubles_signed_resolution_power_and_flashes_back() {
         assert_eq!(
             s.game().state.zones.zone_of(now(&s, spell)),
             Some(ZoneType::Exile)
-        );
-    }
-}
-
-#[test]
-fn power_batch_bite_down_binds_both_targets_and_damages_loyalty() {
-    use crate::support::{
-        game::{force_new_card_in_hand, set_counters},
-        inspect::counters_of,
-        play::cast_card,
-    };
-    use managym::state::{
-        card::{CardType, CardTypes},
-        permanent::CounterKind,
-        player::ManaPayment,
-    };
-    let mut s = five_color_setup(&["Bite Down", "Gray Ogre", "Hill Giant"]);
-    s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let walker = s.force_permanent_on_battlefield(1, "Hill Giant");
-    let card = card_of(&s, walker);
-    s.game_mut().state[card].types = CardTypes::new([CardType::Planeswalker]);
-    set_counters(&mut s, walker, CounterKind::Loyalty, 5);
-    let spell = force_new_card_in_hand(&mut s, 0, "Bite Down");
-    cast_card(&mut s, spell);
-    s.choose_target_named("Gray Ogre");
-    s.choose_target_named("Hill Giant");
-    let pending = s.game().clone();
-    for blink in [None, Some(source), Some(walker)] {
-        *s.game_mut() = pending.clone();
-        set_counters(&mut s, source, CounterKind::PlusOnePlusOne, 1);
-        let mut victim = walker;
-        if let Some(id) = blink {
-            let card = card_of(&s, id);
-            let moved = move_card(&mut s, card, ZoneType::Exile);
-            let returned = move_card(&mut s, moved, ZoneType::Battlefield);
-            if id == walker {
-                victim = permanent_of(&s, returned).unwrap();
-                set_counters(&mut s, victim, CounterKind::Loyalty, 5);
-            }
-        }
-        settle(&mut s);
-        assert_eq!(
-            counters_of(&s, victim, CounterKind::Loyalty),
-            if blink.is_some() { 5 } else { 2 }
         );
     }
 }
@@ -3483,7 +3225,10 @@ fn ravenous_amulet_drains_by_the_soul_counters_it_had_when_sacrificed() {
     assert_eq!(counters_of(&s, amulet, Soul), 1);
 
     set_counters(&mut s, amulet, Soul, 3);
-    s.game_mut().state.permanents[amulet].as_mut().unwrap().tapped = false;
+    s.game_mut().state.permanents[amulet]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
     let card = card_of(&s, amulet);
     let life = s.life(1);
     s.set_player_mana_pool(0, "4");
@@ -3497,14 +3242,16 @@ fn ravenous_amulet_drains_by_the_soul_counters_it_had_when_sacrificed() {
             .iter()
             .find(|frame| frame.kind == 2)
             .expect("stacked drain");
-        assert!(!frame.effect_execution.is_empty(), "the stack keeps its source's counters");
+        assert!(
+            !frame.effect_execution.is_empty(),
+            "the stack keeps its source's counters"
+        );
     }
     let capture = s.game().capture_decision(PlayerId(0), 0).unwrap();
     assert!(capture.frames.iter().any(|frame| frame
         .effect_execution_summary
         .iter()
-        .any(|line| line.starts_with("Last known Ravenous Amulet")
-            && line.contains("(Soul, 3)"))));
+        .any(|line| line.starts_with("Last known Ravenous Amulet") && line.contains("(Soul, 3)"))));
     settle(&mut s);
     assert_eq!(s.life(1), life - 3);
 }
@@ -3535,7 +3282,10 @@ fn fishing_pole_baits_by_tapping_itself_and_fishes_when_its_creature_untaps() {
 
     // The granted ability taps the Pole as well as the creature.
     s.game_mut().state.permanents[pole].as_mut().unwrap().tapped = true;
-    assert!(!offers_ability(&mut s, ogre, 0), "the Pole must be untapped");
+    assert!(
+        !offers_ability(&mut s, ogre, 0),
+        "the Pole must be untapped"
+    );
     s.game_mut().state.permanents[pole].as_mut().unwrap().tapped = false;
     s.set_player_mana_pool(0, "1");
     activate(&mut s, ogre, 0);

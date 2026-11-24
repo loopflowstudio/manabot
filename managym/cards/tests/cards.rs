@@ -182,6 +182,8 @@ mod sth;
 mod stx;
 #[path = "cards/tdm.rs"]
 mod tdm;
+#[path = "cards/thb.rs"]
+mod thb;
 #[path = "cards/ths.rs"]
 mod ths;
 #[path = "cards/tla.rs"]

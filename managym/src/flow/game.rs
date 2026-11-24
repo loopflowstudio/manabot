@@ -48,11 +48,17 @@ pub enum GameProcedure {
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum GameOutcome {
-    Losses { losses: [LossCauses; 2] },
-    Victory { winner: PlayerId },
+    Losses {
+        losses: [LossCauses; 2],
+    },
+    Victory {
+        winner: PlayerId,
+    },
     /// Neither player won. `mandatory_loop`: the game repeated mandatory
     /// actions with no way to stop (CR 104.4b).
-    Draw { mandatory_loop: bool },
+    Draw {
+        mandatory_loop: bool,
+    },
 }
 
 /// Loss conditions committed for one seat.
