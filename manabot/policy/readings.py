@@ -29,6 +29,7 @@ constants only.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -410,50 +411,80 @@ def duration_flags(duration: Array, reading: Reading) -> Array:
     return (np.asarray(duration)[..., None] == codes).astype(np.float32)
 
 
+@dataclass(frozen=True)
+class ReadingPlan:
+    """Saved numeric projection order, grouped by the operation on each column."""
+
+    width: int
+    copies: tuple[tuple[slice, slice], ...]
+    groups: tuple[tuple[ColumnReading, Array, Array], ...]
+
+    def read(self, values: Array, fact_kinds: Array | None = None) -> Array:
+        out = np.empty((*values.shape[:-1], self.width), dtype=np.float32)
+        for source, target in self.copies:
+            out[..., target] = values[..., source]
+        for reading, sources, targets in self.groups:
+            stored = values[..., sources]
+            if isinstance(reading, Sized):
+                if reading.reading is Reading.STEPS:
+                    flags = np.arange(1, reading.size + 1)
+                    out[..., targets] = stored
+                    counts = np.rint(stored.astype(np.float64) * 10)
+                    out[..., targets[:, None] + flags] = counts[..., None] >= flags
+                else:
+                    # Codes below one (including NaN) set no flag.
+                    codes = np.trunc(np.clip(stored, 0, reading.size + 1))
+                    flags = np.arange(1, reading.size + 2)
+                    out[..., targets[:, None] + flags - 1] = codes[..., None] == flags
+                continue
+            columns = stored.astype(np.float32, copy=False)
+            if reading is Reading.LOG:
+                columns = signed_log(columns)
+            elif reading is Reading.RANK:
+                columns = columns / np.float32(RANK_SCALE)
+            elif reading is Reading.FACT_VALUE:
+                if fact_kinds is None:
+                    raise ValueError("fact_value needs each row's fact kind")
+                kinds = np.asarray(fact_kinds).reshape(values.shape[:-1])
+                counts = np.isin(kinds, FACT_COUNT_KINDS)
+                columns[counts] = signed_log(columns[counts])
+                columns[np.isin(kinds, PROGRAM_KINDS)] = 0
+            out[..., targets] = columns
+        return out
+
+
+@lru_cache(maxsize=256)
+def reading_plan(readings: tuple[ColumnReading, ...]) -> ReadingPlan:
+    copies: list[tuple[slice, slice]] = []
+    groups: dict[ColumnReading, list[tuple[int, int]]] = {}
+    at = 0
+    for index, reading in enumerate(readings):
+        width = input_width(reading)
+        if not width:
+            continue
+        if reading in (Reading.AS_IS, Reading.FACT_VALUE_RAW):
+            if copies and copies[-1][0].stop == index:
+                source, target = copies.pop()
+                copies.append(
+                    (slice(source.start, index + 1), slice(target.start, at + 1))
+                )
+            else:
+                copies.append((slice(index, index + 1), slice(at, at + 1)))
+        else:
+            groups.setdefault(reading, []).append((index, at))
+        at += width
+    return ReadingPlan(
+        at,
+        tuple(copies),
+        tuple(
+            (reading, *np.asarray(pairs, dtype=np.intp).T)
+            for reading, pairs in groups.items()
+        ),
+    )
+
+
 def read_numeric(
     values: Array, readings: Sequence[ColumnReading], fact_kinds: Array | None = None
 ) -> Array:
-    """The numeric columns of `values` [..., C] read by their readings, float32
-    [..., W] with W the sum of their input widths.
-
-    `fact_kinds` [...] holds each row's fact kind, which `fact_value` needs.
-    Columns read `as_is` or `fact_value_raw` are copied exactly, so a model
-    whose readings are all `as_is` computes what it did before readings existed.
-    """
-    widths = [input_width(reading) for reading in readings]
-    width = sum(widths)
-    rows = values.reshape(-1, values.shape[-1])
-    out = np.zeros((len(rows), width), dtype=np.float32)
-    kinds = None if fact_kinds is None else np.asarray(fact_kinds).reshape(-1)
-    at = 0
-    for index, (reading, count) in enumerate(zip(readings, widths, strict=True)):
-        if not count:
-            continue
-        stored = rows[:, index]
-        target = out[:, at : at + count]
-        at += count
-        if isinstance(reading, Sized):
-            if reading.reading is Reading.ONE_HOT:
-                # Code k at flag k - 1, any code above the size at the last.
-                present = np.nonzero(stored >= 1)[0]
-                codes = np.clip(stored[present], 1, reading.size + 1).astype(np.int64)
-                target[present, codes - 1] = 1
-            else:
-                # Stored in tenths: the true value is an integer.
-                true = np.rint(stored.astype(np.float64) * 10)
-                target[:, 0] = stored
-                target[:, 1:] = true[:, None] >= np.arange(1, reading.size + 1)
-        else:
-            column = target[:, 0]
-            column[:] = stored
-            if reading is Reading.LOG:
-                column[:] = signed_log(column)
-            elif reading is Reading.RANK:
-                column /= np.float32(RANK_SCALE)
-            elif reading is Reading.FACT_VALUE:
-                if kinds is None:
-                    raise ValueError("fact_value needs each row's fact kind")
-                counts = np.isin(kinds, FACT_COUNT_KINDS)
-                column[counts] = signed_log(column[counts])
-                column[np.isin(kinds, PROGRAM_KINDS)] = 0
-    return out.reshape(*values.shape[:-1], width)
+    """Read [..., columns] in saved projection order. Fact payloads use each row's kind."""
+    return reading_plan(tuple(readings)).read(values, fact_kinds)
