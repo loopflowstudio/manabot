@@ -61,16 +61,6 @@ fn shattering_spree_unreplicated_destroys_one_artifact() {
 
 #[test]
 fn foundations_spell_mortify() {
-    use crate::support::game::five_color_setup;
-    use crate::support::inspect::{card_of, zone_of};
-    use crate::support::play::{cast, settle};
-    use managym::state::game_object::Target;
     use managym::state::zone::ZoneType;
-    let mut s = five_color_setup(&["Mortify", "Gray Ogre"]);
-    let subject = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let object = card_of(&s, subject);
-    cast(&mut s, "Mortify");
-    assert!(s.choose_target(Target::Permanent(subject)));
-    settle(&mut s);
-    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+    crate::check_targeted_removal("Mortify", "Gray Ogre", "Sol Ring", ZoneType::Graveyard);
 }

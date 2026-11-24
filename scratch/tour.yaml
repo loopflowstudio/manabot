@@ -1,9 +1,11 @@
-at: 76d1b0f99f457a23ba1059bbc29d2e5a3ff0a2ce
+at: a9577ac25638f35f953fc5441addfb53875dbee9
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Find each outcome and Slagstorm’s missing damage instruction.
   - path: managym/cards/src/hou.rs
     why: Read how Abrade’s mode binds its target.
+  - path: managym/cards/tests/cards.rs
+    why: See how counterspells and removal check target eligibility.
   - path: managym/cards/tests/cards/hou.rs
     why: Follow both modes through casting and resolution.
   - path: managym/cards/tests/cards/zen.rs

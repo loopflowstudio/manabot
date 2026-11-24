@@ -24,18 +24,8 @@ fn guildgates_enter_tapped_and_supply_either_color() {
 
 #[test]
 fn foundations_spell_angelic_edict() {
-    use crate::support::game::five_color_setup;
-    use crate::support::inspect::{card_of, zone_of};
-    use crate::support::play::{cast, settle};
-    use managym::state::game_object::Target;
     use managym::state::zone::ZoneType;
-    let mut s = five_color_setup(&["Angelic Edict", "Gray Ogre"]);
-    let subject = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let object = card_of(&s, subject);
-    cast(&mut s, "Angelic Edict");
-    assert!(s.choose_target(Target::Permanent(subject)));
-    settle(&mut s);
-    assert_eq!(zone_of(&s, object), Some(ZoneType::Exile));
+    crate::check_targeted_removal("Angelic Edict", "Gray Ogre", "Sol Ring", ZoneType::Exile);
 }
 
 #[test]

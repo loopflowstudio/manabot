@@ -60,18 +60,11 @@ fn printed_creature_highborn_vampire() {
 
 #[test]
 fn foundations_spell_broken_wings() {
-    use crate::support::game::five_color_setup;
-    use crate::support::inspect::{card_of, zone_of};
-    use crate::support::play::{cast, settle};
-    use managym::state::game_object::Target;
     use managym::state::zone::ZoneType;
-    let mut s = five_color_setup(&["Broken Wings", "Serra Angel", "Gray Ogre"]);
-    let subject = s.force_permanent_on_battlefield(1, "Serra Angel");
-    let object = card_of(&s, subject);
-    let ineligible = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    cast(&mut s, "Broken Wings");
-    assert!(!s.choose_target(Target::Permanent(ineligible)));
-    assert!(s.choose_target(Target::Permanent(subject)));
-    settle(&mut s);
-    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+    crate::check_targeted_removal(
+        "Broken Wings",
+        "Serra Angel",
+        "Gray Ogre",
+        ZoneType::Graveyard,
+    );
 }

@@ -272,3 +272,47 @@ fn assert_creature_tokens(
         assert_eq!(face.keywords, Keywords::of(keywords));
     }
 }
+
+fn check_counterspell(counter: &str, eligible: &str, ineligible: &str) {
+    use managym::state::{game_object::Target, zone::ZoneType};
+    use support::{
+        game::{five_color_setup, move_to_hand},
+        inspect::{now, zone_of},
+        play::{cast, cast_card, castable, settle, spend_colorless},
+    };
+    let mut s = five_color_setup(&[counter, eligible, ineligible]);
+    let counter = move_to_hand(&mut s, counter);
+    cast(&mut s, ineligible);
+    spend_colorless(&mut s);
+    assert!(!castable(&mut s, counter));
+    settle(&mut s);
+    let spell = cast(&mut s, eligible);
+    spend_colorless(&mut s);
+    cast_card(&mut s, counter);
+    assert!(s.choose_target(Target::StackSpell(now(&s, spell))));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
+}
+
+fn check_targeted_removal(
+    spell: &str,
+    eligible: &str,
+    ineligible: &str,
+    destination: managym::state::zone::ZoneType,
+) {
+    use managym::state::game_object::Target;
+    use support::{
+        game::five_color_setup,
+        inspect::{card_of, zone_of},
+        play::{cast, settle},
+    };
+    let mut s = five_color_setup(&[spell, eligible, ineligible]);
+    let target = s.force_permanent_on_battlefield(1, eligible);
+    let card = card_of(&s, target);
+    let excluded = s.force_permanent_on_battlefield(1, ineligible);
+    cast(&mut s, spell);
+    assert!(!s.choose_target(Target::Permanent(excluded)));
+    assert!(s.choose_target(Target::Permanent(target)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(destination));
+}
