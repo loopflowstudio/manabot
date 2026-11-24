@@ -24,3 +24,5 @@
 - For the local measurement slice, pair duplicate-creatures with one Herald per seat on diverse static boards. This isolates a common SBA consumer and the combat workspace at bounded sizes.
 
 - Count a rules draw separately from simulation timeout. Credit a committed win or draw on the last allowed step and keep all games in the win-rate denominator.
+
+- For CI fixtures constructed at priority, take explicit keeps. Give live demo and conformance recordings new filenames and preserve the original receipts at their original revisions.

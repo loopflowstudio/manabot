@@ -1295,6 +1295,7 @@ mod tests {
             23,
             false,
         );
+        game.keep_opening_hands();
         let actor = game.agent_player();
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,

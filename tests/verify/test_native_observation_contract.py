@@ -76,7 +76,9 @@ def assert_buffer_observation_equal(
 
 def test_focus_indices_name_hand_rows_and_pad_unused_slots() -> None:
     env = managym.Env(seed=7)
-    obs, _ = env.reset(make_player_configs())
+    env.reset(make_player_configs())
+    env.step(0)
+    obs, *_ = env.step(0)
     space = ObservationSpace()
     focus = encode_observation(space, obs)["action_focus"]
 
@@ -328,6 +330,8 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
 ):
     env = managym.Env(seed=161, skip_trivial=False)
     env.reset(make_player_configs())
+    env.step(0)
+    env.step(0)
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()
     cards = obs.agent_cards
@@ -443,6 +447,8 @@ def test_fact_capacity_fills_exactly_and_rejects_overflow(capacity: int) -> None
     """A full fact block keeps every row; one more is an error, never a prefix."""
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
+    env.step(0)
+    env.step(0)
     env.scenario_force_battlefield(0, "Mountain")
     obs = env.scenario_refresh()
     mine = obs.agent_permanents[0]

@@ -576,6 +576,7 @@ mod tests {
             Some(CaptureMode::Exposure),
             false,
         );
+        game.keep_opening_hands();
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
         game.create_token("token.treasure", payer, false).unwrap();
@@ -622,6 +623,7 @@ mod tests {
             Some(CaptureMode::Exposure),
             false,
         );
+        game.keep_opening_hands();
         game.state.turn.current_phase = PhaseKind::Combat as usize;
         game.state.turn.current_step = 3; // combat damage
         game.state.turn.step_initialized = false;
@@ -734,6 +736,7 @@ mod tests {
                 17,
                 false,
             );
+            game.keep_opening_hands();
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
             let object_id = *game

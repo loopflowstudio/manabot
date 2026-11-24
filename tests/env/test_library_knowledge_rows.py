@@ -10,6 +10,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.possible_worlds import PossibleWorldSpace
 from tests.model.prepared_routes import device_input
@@ -18,7 +19,10 @@ from tests.model.prepared_routes import device_input
 def _root(owner: int) -> managym.Env:
     env = managym.Env(seed=19)
     deck = {"Hakoda, Selfless Commander": 4, "Plains": 20, "Gray Ogre": 16}
-    env.reset([managym.PlayerConfig(f"seat {seat}", deck) for seat in range(2)])
+    raw, _ = env.reset(
+        [managym.PlayerConfig(f"seat {seat}", deck) for seat in range(2)]
+    )
+    keep_opening_hands(env, raw)
     env.scenario_force_battlefield(owner, "Hakoda, Selfless Commander", True)
     env.scenario_refresh()
     return env

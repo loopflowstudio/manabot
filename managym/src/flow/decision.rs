@@ -3502,7 +3502,7 @@ mod learn_tests {
     }
 
     fn game(sideboard: &[(&str, usize)]) -> Game {
-        Game::new(
+        let mut game = Game::new(
             vec![
                 PlayerConfig::new("learner", counts(&[("Island", 40)]))
                     .with_sideboard(counts(sideboard)),
@@ -3511,7 +3511,9 @@ mod learn_tests {
             ],
             17,
             false,
-        )
+        );
+        game.keep_opening_hands();
+        game
     }
 
     #[test]
@@ -3996,6 +3998,7 @@ mod learn_tests {
             17,
             false,
         );
+        game.keep_opening_hands();
         // One unknown hand slot, a residual pool of two Lessons and two Islands.
         let deck = game.state.players[0].deck.clone();
         for card in deck {
@@ -4277,6 +4280,7 @@ mod payment_tests {
             165,
             false,
         );
+        game.keep_opening_hands();
         game.run_frame(EffectFrame::new(
             PlayerId(0),
             vec![

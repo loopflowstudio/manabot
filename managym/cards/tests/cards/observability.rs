@@ -779,7 +779,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 84;
+const EFFECT_VARIANTS: usize = 86;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -3019,7 +3019,9 @@ impl Buffer {
             Buffer::Relation => Some(relation::VALID),
             Buffer::Facts => Some(fact::VALID),
             Buffer::Action => Some(action::VALID),
-            _ => Some(self.width() - 1),
+            Buffer::Card => Some(card::VALID),
+            Buffer::Permanent => Some(permanent::VALID),
+            Buffer::Stack => Some(stack::VALID),
         }
     }
 }
@@ -3136,7 +3138,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_agent => [Side],
         is_active => [column(Player, player::IS_ACTIVE)],
         life => [column(Player, player::LIFE)],
-        counters => [Fact(FactKind::Counter)],
+        counters => [FactOccurrence(FactKind::Counter)],
         zone_counts => [Columns(Player, player::LIBRARY_COUNT, 7)],
         graveyard_lessons => [column(Player, player::GRAVEYARD_LESSONS)],
         combat_mana => [column(Player, player::COMBAT_MANA)],

@@ -17,7 +17,7 @@ use managym::{
 
 #[test]
 fn witness_preserves_acting_events_and_fixed_viewer_bytes() {
-    let root = build_fixture("interactive-midgame-48-w4-v1").expect("witness fixture");
+    let root = build_fixture("interactive-midgame-48-opening-v1").expect("witness fixture");
     for with_events in [false, true] {
         for with_chooser in [false, true] {
             let mut game = root.clone();
@@ -53,7 +53,7 @@ fn witness_preserves_acting_events_and_fixed_viewer_bytes() {
 
 #[test]
 fn semantic_direct_hash_preserves_viewer_bytes_and_event_exclusion() {
-    let root = build_fixture("interactive-midgame-48-w4-v1").expect("hash fixture");
+    let root = build_fixture("interactive-midgame-48-opening-v1").expect("hash fixture");
     for with_events in [false, true] {
         for (with_chooser, terminal) in [(true, false), (false, false), (false, true)] {
             let mut game = root.clone();
@@ -105,8 +105,9 @@ fn semantic_direct_hash_preserves_viewer_bytes_and_event_exclusion() {
 
 #[test]
 fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
-    let mut first = build_fixture("interactive-heavy-80-w4-v1").expect("first heavy fixture");
-    let mut second = build_fixture("interactive-heavy-80-w4-v1").expect("second heavy fixture");
+    let mut first = build_fixture("interactive-heavy-80-opening-v1").expect("first heavy fixture");
+    let mut second =
+        build_fixture("interactive-heavy-80-opening-v1").expect("second heavy fixture");
     assert_eq!(witness(&first), witness(&second));
     first.reseed(0x197c0de);
     second.reseed(0x197c0de);
@@ -124,7 +125,8 @@ fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
 
 #[test]
 fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
-    let root = build_fixture("interactive-midgame-48-w4-v1").expect("midgame visibility fixture");
+    let root =
+        build_fixture("interactive-midgame-48-opening-v1").expect("midgame visibility fixture");
     let actor = root.agent_player();
     let other = PlayerId((actor.0 + 1) % 2);
 
@@ -155,7 +157,8 @@ fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
 
 #[test]
 fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
-    let root = build_fixture("interactive-midgame-48-w4-v1").expect("midgame hidden-world fixture");
+    let root =
+        build_fixture("interactive-midgame-48-opening-v1").expect("midgame hidden-world fixture");
     let viewer = PlayerId(0);
     let opponent = PlayerId(1);
     let mut first = root.clone();
@@ -192,7 +195,7 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
 
 #[test]
 fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
-    let root = build_fixture("interactive-heavy-80-w4-v1").expect("heavy identity fixture");
+    let root = build_fixture("interactive-heavy-80-opening-v1").expect("heavy identity fixture");
     let root_witness = witness(&root);
     let permanent = PermanentId(
         root.state

@@ -6815,5 +6815,29 @@
     ],
     "oracle_text": "Reach, first strike\nVigilance, menace\nTrample, lifelink\nWard—Pay 7 life.",
     "colors": []
+  },
+  "Construct a Cosmic Cube": {
+    "name": "Construct a Cosmic Cube",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment — Plan",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, create a 2/1 black Villain creature token with menace and put a plan counter on this enchantment.\nWhen the seventh plan counter is put on this enchantment, sacrifice it. When you do, you control target opponent during their next turn. (You see all cards that player could see and make all decisions for them.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "The Dominion Bracelet": {
+    "name": "The Dominion Bracelet",
+    "mana_cost": "{2}",
+    "type_line": "Legendary Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature gets +1/+1 and has \"{15}, Exile The Dominion Bracelet: You control target opponent during their next turn. This ability costs {X} less to activate, where X is this creature's power. Activate only as a sorcery.\" (You see all cards that player could see and make all decisions for them.)\nEquip {1}",
+    "colors": []
   }
 }

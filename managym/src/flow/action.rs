@@ -1250,6 +1250,7 @@ mod identity_tests {
             400_715,
             false,
         );
+        game.keep_opening_hands();
         let player = game.active_player();
         game.state.turn.current_phase = 1;
         game.state.turn.current_step = 0;

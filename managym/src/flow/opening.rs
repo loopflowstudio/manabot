@@ -79,6 +79,25 @@ impl OpeningHands {
 }
 
 impl Game {
+    #[cfg(test)]
+    pub(crate) fn keep_opening_hands(&mut self) {
+        while self.state.opening().is_some() {
+            let action = self
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| {
+                    matches!(
+                        action,
+                        Action::ChooseMode { mode: 0, .. } | Action::Decline { .. }
+                    )
+                })
+                .expect("fixture needs a keep or finish opening offer");
+            self.step(action).unwrap();
+        }
+    }
+
     fn redraw_opening_hand(&mut self, player: PlayerId) {
         for object in self
             .state

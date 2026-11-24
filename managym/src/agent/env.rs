@@ -1854,7 +1854,8 @@ mod terminal_tests {
 
     #[test]
     fn instructed_outcomes_pay_both_seats() {
-        let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
+        let root =
+            crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1").unwrap();
         for winner in [0, 1] {
             for explicit_win in [false, true] {
                 let mut game = root.clone();
@@ -1884,7 +1885,8 @@ mod terminal_tests {
 
     #[test]
     fn terminal_rewards_and_reasons_read_the_committed_batch() {
-        let root = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1").unwrap();
+        let root =
+            crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1").unwrap();
         for simultaneous in [false, true] {
             let mut game = root.clone();
             game.state.players[1]

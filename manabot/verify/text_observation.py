@@ -23,21 +23,39 @@ from managym.decision import SemanticContractError, apply_semantic_command
 from managym.decision_capture import CardReference, DecisionInput
 
 
+def keep_opening_index(obs: managym.Observation) -> int:
+    """Select the fixture's explicit keep or finish opening offer."""
+    return next(
+        i
+        for i, action in enumerate(obs.action_space.actions)
+        if (
+            action.action_type == managym.ActionEnum.CHOOSE_MODE
+            and action.mode_index == 0
+        )
+        or action.action_type == managym.ActionEnum.DECLINE_CHOICE
+    )
+
+
+def keep_opening_hands(
+    env: managym.Env, obs: managym.Observation
+) -> managym.Observation:
+    """Keep the dealt hands and decline optional entries for a constructed fixture."""
+    while obs.turn.turn_number == 0:
+        obs = env.step(keep_opening_index(obs))[0]
+    return obs
+
+
 def reset_to_first_main(env: managym.Env, setup: managym.GameSetup) -> int:
     """Reset a fixture and advance it to first-main priority and return its acting seat."""
     obs, _ = env.reset(setup)
+    obs = keep_opening_hands(env, obs)
     for _ in range(22):
-        if obs.turn.turn_number and obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
+        if obs.turn.phase == managym.PhaseEnum.PRECOMBAT_MAIN:
             return obs.agent.player_index
-        # Keep the dealt hand, decline pregame entries, then pass priority.
         index = next(
             i
             for i, action in enumerate(obs.action_space.actions)
-            if (action.action_type == managym.ActionEnum.CHOOSE_MODE and action.mode_index == 0)
-            or action.action_type in (
-                managym.ActionEnum.DECLINE_CHOICE,
-                managym.ActionEnum.PRIORITY_PASS_PRIORITY,
-            )
+            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
         )
         obs = env.step(index)[0]
     raise AssertionError("main phase not reached")

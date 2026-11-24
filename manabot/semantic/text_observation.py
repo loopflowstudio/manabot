@@ -89,6 +89,9 @@ _VERBS = (
 )
 _STAGES = frozenset(
     (
+        "opening_hand",
+        "opening_bottom",
+        "opening_entry",
         "priority",
         "targets",
         "additional_cost",
@@ -689,7 +692,9 @@ class _Renderer:
             )
             details.append(f"{stage}, {relation.mode or 0} mulligans")
             if relation.active_clause is not None:
-                details.append(f"{relation.active_clause} cards left to bottom")
+                remaining = relation.active_clause
+                noun = "card" if remaining == 1 else "cards"
+                details.append(f"{remaining} {noun} left to bottom")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -718,9 +723,9 @@ class _Renderer:
             details.append(
                 f"{self.taken_cost(relation.source.definition).cost} included"
             )
-        if relation.active_clause is not None:
+        if relation.kind != 15 and relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision and relation.kind != 13:
+        if relation.decision and relation.kind not in (13, 15):
             details.append(_frame_decision(relation.kind, relation.decision))
         if relation.kind == 10:
             if relation.delayed_frequency is not None:

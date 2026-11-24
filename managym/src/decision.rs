@@ -545,7 +545,9 @@ mod tests {
     }
 
     fn first_game() -> Game {
-        Game::new(configs(), 11, true)
+        let mut game = Game::new(configs(), 11, true);
+        game.keep_opening_hands();
+        game
     }
 
     fn pass_command(frame: &DecisionFrame, id: &str) -> Command {

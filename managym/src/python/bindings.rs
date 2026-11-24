@@ -5320,7 +5320,15 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=14).contains(&frame.kind)
+        !(1..=15).contains(&frame.kind)
+            || (frame.kind == 15
+                && (!(1..=5).contains(&frame.decision)
+                    || frame.parent.is_some()
+                    || !frame.mode.is_some_and(|mulligans| mulligans <= 7)
+                    || (frame.decision == 4) != frame.active_clause.is_some()
+                    || frame.active_clause.is_some_and(|remaining| {
+                        remaining == 0 || remaining > frame.mode.unwrap()
+                    })))
             || (frame.kind == 10
                 && (!(1..=crate::agent::continuation::MAX_DELAYED_EVENT_CODE)
                     .contains(&frame.decision)

@@ -48,6 +48,7 @@ fn fixture(controller: PlayerId) -> (Game, PermanentId, PermanentId) {
         608_2026,
         false,
     );
+    game.keep_opening_hands();
     let opponent = PlayerId(1 - controller.0);
     let first = game
         .scenario_force_battlefield(opponent, "Gray Ogre", true)
@@ -3328,6 +3329,7 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
         241,
         false,
     );
+    game.keep_opening_hands();
     let merchant = game
         .scenario_force_battlefield(player, "Unlucky Cabbage Merchant", true)
         .unwrap();

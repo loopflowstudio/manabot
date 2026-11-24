@@ -35,4 +35,7 @@ def capacity_position(
     name: Literal["land", "wan", "drill140", "drill270"],
 ) -> CapacityPosition:
     path = Path(__file__).parent / "fixtures/current-capacity-w17-smart-payment.json"
-    return CapacityWitnesses.model_validate_json(path.read_bytes()).positions[name]
+    position = CapacityWitnesses.model_validate_json(path.read_bytes()).positions[name]
+    # The construction tape starts at priority. Both dealt hands are kept
+    # before the recorded position is built.
+    return position.model_copy(update={"actions": [0, 0, *position.actions]})
