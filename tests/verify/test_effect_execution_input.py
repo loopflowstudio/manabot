@@ -120,10 +120,11 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
                 ("facts", 12, record.facts),
                 ("relations", 49, record.relations),
             ):
+                # Recorded rows predate appended columns, which read zero here.
                 native = np.zeros_like(tensors[name])
-                native[: len(expected) // width] = np.asarray(expected).reshape(
-                    -1, width
-                )
+                native[: len(expected) // width, :width] = np.asarray(
+                    expected
+                ).reshape(-1, width)
                 np.testing.assert_array_equal(
                     tensors[name], native, err_msg=f"{record.case}: {name}"
                 )
