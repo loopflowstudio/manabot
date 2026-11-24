@@ -724,7 +724,55 @@ fn granted_triggers_of_a_dead_manifest_stack_and_counter_without_its_printing() 
             .expect("stack captures");
         assert_eq!(opponent.stack_objects.len(), 1);
         assert_eq!(opponent.stack_objects[0].source_card_registry_key, -1);
+        let description = opponent.stack_objects[0].description.as_deref().unwrap();
+        assert!(
+            description.starts_with("a face-down permanent — "),
+            "{description}"
+        );
         opponent.stack_objects
     });
     assert_eq!(views[0], views[1]);
+}
+
+/// Human labels read what a viewer may see: a face-down manifest is "a
+/// face-down permanent" (CR 708.2), and a creature under Witness Protection
+/// is named by its effective name (CR 613.1c), in attacker offers and in
+/// the target a spell announces.
+#[test]
+fn labels_name_a_face_down_manifest_and_a_witness_protected_creature() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{cast, settle},
+    };
+    use managym::{flow::turn::StepKind, state::game_object::Target};
+    let mut s = five_color_setup(&["Gray Ogre", "Witness Protection", "Lightning Bolt"]);
+    let protected = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    cast(&mut s, "Witness Protection");
+    assert!(s.choose_target(Target::Permanent(protected)));
+    settle(&mut s);
+    let card = pin_top(&mut s, &["Forest"])[0];
+    let object = s.game_mut().manifest(card, PlayerId(0));
+    let face_down = s.game().lookup_current_permanent(object).unwrap();
+    for permanent in [protected, face_down] {
+        clear_summoning_sickness(&mut s, permanent);
+    }
+    let before_bolt = s.snapshot();
+    cast(&mut s, "Lightning Bolt");
+    let subjects = serde_json::to_string(&s.game().decision_offer_subjects(PlayerId(0))).unwrap();
+    for label in ["a face-down permanent", "Legitimate Businessperson"] {
+        assert!(
+            subjects.contains(&format!("\"label\":\"{label}\"")),
+            "{subjects}"
+        );
+    }
+    s.restore(&before_bolt);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let offers =
+        serde_json::to_string(s.game().structured_attacker_offers().unwrap().projection()).unwrap();
+    for label in ["a face-down permanent", "Legitimate Businessperson"] {
+        assert!(
+            offers.contains(&format!("\"label\":\"{label}\"")),
+            "{offers}"
+        );
+    }
 }

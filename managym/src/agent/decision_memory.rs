@@ -1390,6 +1390,42 @@ mod tests {
         assert_eq!(game.decision_memory[0].len(), 1);
         assert!(game.decision_memory[1].is_empty());
     }
+    /// A manifest turned face up is named by its permanent alias (CR 708.2),
+    /// and its actor's own record keeps the definition it now shows.
+    #[test]
+    fn decision_memory_own_record_keeps_a_turned_up_manifest() {
+        use crate::flow::zones::FormTransition;
+        let mut game = game();
+        game.decision_memory_include_own = true;
+        let card = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))
+            .iter()
+            .copied()
+            .find(|&object| game.state[object].name == "Mountain")
+            .unwrap();
+        let manifest = game.manifest(card, PlayerId(0));
+        assert!(game.turn_over(manifest, FormTransition::TurnFaceUp));
+        let alias = game.observed_object_id(manifest).0;
+        assert_ne!(
+            alias, game.state[manifest].id.0,
+            "the alias is not the card"
+        );
+        let pending = pending_pass(&game).unwrap();
+        let shown = |record: &DecisionRecord| {
+            record
+                .context
+                .mana_sources
+                .iter()
+                .find(|reference| reference.appearance == Some(alias))
+                .map(|reference| reference.definition)
+        };
+        let mountain = Some(game.state[manifest].definition_id.0);
+        assert_eq!(shown(&pending.record), Some(mountain));
+        assert_eq!(shown(pending.own.as_ref().unwrap()), Some(mountain));
+    }
+
     #[test]
     fn decision_memory_own_option_rebases_only_the_opposing_public_projection() {
         let mut game = game();

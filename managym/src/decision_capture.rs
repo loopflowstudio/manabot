@@ -464,6 +464,71 @@ mod tests {
         }
     }
 
+    /// A manifest turned face up keeps the permanent alias its references
+    /// used once it deals damage and is bounced: the event rows read after it
+    /// left still name the alias, never its physical card (CR 708.2).
+    #[test]
+    fn a_turned_up_manifest_keeps_its_alias_after_it_leaves() {
+        use crate::{
+            agent::observation::{EventEntityKind, EventType, Observation},
+            flow::{event::DamageTarget, zones::FormTransition},
+            state::zone::ZoneType,
+        };
+        let deck = BTreeMap::from([("Gray Ogre".into(), 4), ("Mountain".into(), 36)]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            708_2,
+            false,
+        );
+        game.keep_opening_hands();
+        let owner = PlayerId(0);
+        let card = *game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, owner)
+            .iter()
+            .find(|object| game.state[**object].name == "Gray Ogre")
+            .unwrap();
+        let card_id = game.state[card].id.0 as i32;
+        let manifest = game.manifest(card, owner);
+        let alias = game.observed_object_id(manifest).0 as i32;
+        assert_ne!(alias, card_id);
+        assert!(game.turn_over(manifest, FormTransition::TurnFaceUp));
+        game.take_observation_events();
+        game.emit(GameEvent::DamageDealt {
+            source: Some(manifest),
+            target: DamageTarget::Player(PlayerId(1)),
+            amount: 2,
+            combat: false,
+        });
+        game.move_object(manifest, ZoneType::Hand);
+        let rows: Vec<_> = game
+            .take_observation_events()
+            .iter()
+            .flat_map(|event| Observation::event_data(&game, event))
+            .collect();
+        let damage = rows
+            .iter()
+            .find(|row| row.event_type == EventType::DamageDealt as i32)
+            .expect("damage");
+        assert_eq!(
+            (
+                damage.source_kind,
+                damage.source_id,
+                damage.source_incarnation
+            ),
+            (EventEntityKind::Object as i32, alias, 0)
+        );
+        assert!(
+            rows.iter()
+                .all(|row| row.source_id != card_id && row.target_id != card_id),
+            "{rows:?}"
+        );
+    }
+
     /// A sacrificed transformed Cecil is named in event prose by its last
     /// effective battlefield name, not its retained front printing (CR 608.2h).
     #[test]
