@@ -1,6 +1,9 @@
 //! Scars of Mirrodin.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, Scope},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, Scope,
+        TriggerCondition,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
@@ -8,10 +11,11 @@ use managym_state::{
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![exsanguinate(), steel_hellkite()]
+    vec![exsanguinate(), steel_hellkite(), painful_quandary()]
 }
 
 fn exsanguinate() -> CardDefinition {
@@ -79,6 +83,45 @@ fn steel_hellkite() -> CardDefinition {
                     ..Default::default()
                 },
             ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn painful_quandary() -> CardDefinition {
+    let text_box =
+        "Whenever an opponent casts a spell, that player loses 5 life unless they discard a card.";
+    CardDefinition {
+        key: "som.painful_quandary",
+        scryfall_id: "fecf3dae-1a0c-4cf3-b9bd-ec2ad6acaa1b",
+        printed: PrintedCharacteristics {
+            name: "Painful Quandary".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::Opponent, CardPredicate::default()),
+                intervening_if: None,
+                // That player chooses: discard a card, or lose 5 life.
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::TriggeringPlayer,
+                    effects: vec![Effect::SelectCards {
+                        from: ObjectSelector::Zone(ZoneType::Hand),
+                        predicate: CardPredicate::default(),
+                        min: 0,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::move_to(
+                            ObjectSelector::Selected,
+                            ZoneType::Graveyard,
+                        )],
+                        if_declined: vec![Effect::LoseLife {
+                            player: PlayerSelector::You,
+                            amount: EffectValue::Fixed(5),
+                        }],
+                    }],
+                }],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

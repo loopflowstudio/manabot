@@ -560,6 +560,7 @@ fn player_selector_token(player: &PlayerSelector) -> &'static str {
     match player {
         PlayerSelector::You => "PlayerSelector::You",
         PlayerSelector::EachOpponent => "PlayerSelector::EachOpponent",
+        PlayerSelector::EachPlayer => "PlayerSelector::EachPlayer",
         PlayerSelector::TriggeringPlayer => "PlayerSelector::TriggeringPlayer",
         PlayerSelector::TriggeringPlayersOpponents => "PlayerSelector::TriggeringPlayersOpponents",
         PlayerSelector::Target(_) => "PlayerSelector::Target",
@@ -568,10 +569,11 @@ fn player_selector_token(player: &PlayerSelector) -> &'static str {
     }
 }
 
-fn player_selector_witnesses() -> [PlayerSelector; 7] {
+fn player_selector_witnesses() -> [PlayerSelector; 8] {
     [
         PlayerSelector::You,
         PlayerSelector::EachOpponent,
+        PlayerSelector::EachPlayer,
         PlayerSelector::TriggeringPlayer,
         PlayerSelector::TriggeringPlayersOpponents,
         PlayerSelector::Target(Box::new(TargetSpec::Player)),
@@ -1286,6 +1288,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::CreatureDiedThisTurn => "Condition::CreatureDiedThisTurn",
         Condition::GainedLifeThisTurn => "Condition::GainedLifeThisTurn",
         Condition::AnyOf(_) => "Condition::AnyOf",
+        Condition::Not(_) => "Condition::Not",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
@@ -1341,6 +1344,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::CreatureDiedThisTurn,
         Condition::GainedLifeThisTurn,
         Condition::AnyOf(vec![Condition::YourTurn]),
+        Condition::not(Condition::YourTurn),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
         Condition::TargetDealtDamageThisTurn,

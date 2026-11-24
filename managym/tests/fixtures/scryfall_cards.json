@@ -7626,5 +7626,159 @@
       "B",
       "G"
     ]
+  },
+  "Scrawling Crawler": {
+    "name": "Scrawling Crawler",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Phyrexian Construct",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "At the beginning of your upkeep, each player draws a card.\nWhenever an opponent draws a card, that player loses 1 life.",
+    "colors": []
+  },
+  "Dictate of Kruphix": {
+    "name": "Dictate of Kruphix",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nAt the beginning of each player's draw step, that player draws an additional card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Brineborn Cutthroat": {
+    "name": "Brineborn Cutthroat",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Merfolk Pirate",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhenever you cast a spell during an opponent's turn, put a +1/+1 counter on this creature.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Mindsparker": {
+    "name": "Mindsparker",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Elemental",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)\nWhenever an opponent casts a white or blue instant or sorcery spell, this creature deals 2 damage to that player.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Gnarlback Rhino": {
+    "name": "Gnarlback Rhino",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Creature — Rhino",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever you cast a spell that targets this creature, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Mold Adder": {
+    "name": "Mold Adder",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Fungus Snake",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever an opponent casts a blue or black spell, you may put a +1/+1 counter on this creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Firespitter Whelp": {
+    "name": "Firespitter Whelp",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a noncreature or Dragon spell, this creature deals 1 damage to each opponent.",
+    "colors": [
+      "R"
+    ]
+  },
+  "An Offer You Can't Refuse": {
+    "name": "An Offer You Can't Refuse",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "Counter target noncreature spell. Its controller creates two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Unravel": {
+    "name": "Unravel",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target spell. If the amount of mana spent to cast that spell was less than its mana value, you draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Archmage of Runes": {
+    "name": "Archmage of Runes",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Creature — Giant Wizard",
+    "power": "3",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "Instant and sorcery spells you cast cost {1} less to cast.\nWhenever you cast an instant or sorcery spell, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Painful Quandary": {
+    "name": "Painful Quandary",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever an opponent casts a spell, that player loses 5 life unless they discard a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Ramos, Dragon Engine": {
+    "name": "Ramos, Dragon Engine",
+    "mana_cost": "{6}",
+    "type_line": "Legendary Artifact Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a spell, put a +1/+1 counter on Ramos for each of that spell's colors.\nRemove five +1/+1 counters from Ramos: Add {W}{W}{U}{U}{B}{B}{R}{R}{G}{G}. Activate only once each turn.",
+    "colors": []
   }
 }

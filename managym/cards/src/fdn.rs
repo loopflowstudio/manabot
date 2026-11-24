@@ -8,7 +8,7 @@ use managym_state::{
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, PrintedCharacteristics, ReplacementEffect, Restriction, SacrificeCost,
-        StaticAbility, StaticRestriction, StaticScope, TargetCostReduction,
+        SpellCostReduction, StaticAbility, StaticRestriction, StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::{Color, ManaCost},
@@ -58,6 +58,9 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         vanguard_seraph(),
         bloodthirsty_conqueror(),
         exemplar_of_light(),
+        scrawling_crawler(),
+        firespitter_whelp(),
+        archmage_of_runes(),
     ]
 }
 
@@ -1389,6 +1392,126 @@ fn wardens_of_the_cycle() -> CardDefinition {
                     ],
                     up_to: None,
                     unchosen: false,
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn scrawling_crawler() -> CardDefinition {
+    let text_box = "At the beginning of your upkeep, each player draws a card.\nWhenever an opponent draws a card, that player loses 1 life.";
+    CardDefinition {
+        key: "fdn.scrawling_crawler",
+        scryfall_id: "a1176dcf-40ee-4342-aa74-791b8352e99a",
+        printed: PrintedCharacteristics {
+            name: "Scrawling Crawler".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Phyrexian".into(), "Construct".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                    intervening_if: None,
+                    // Each player draws in APNAP order (CR 101.4).
+                    effects: vec![Effect::ForPlayer {
+                        player: PlayerSelector::EachPlayer,
+                        effects: vec![Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }],
+                    }],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::Draws {
+                        who: Actor::Opponent,
+                        nth: None,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::LoseLife {
+                        player: PlayerSelector::TriggeringPlayer,
+                        amount: EffectValue::Fixed(1),
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn firespitter_whelp() -> CardDefinition {
+    let text_box = "Flying\nWhenever you cast a noncreature or Dragon spell, this creature deals 1 damage to each opponent.";
+    CardDefinition {
+        key: "fdn.firespitter_whelp",
+        scryfall_id: "4b3a4c7d-3126-4bde-9dca-cb6a1e2f37c9",
+        printed: PrintedCharacteristics {
+            name: "Firespitter Whelp".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                // One predicate: a noncreature Dragon spell triggers it once.
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        any_of: vec![
+                            CardPredicate {
+                                not_card_types: vec![CardType::Creature],
+                                ..Default::default()
+                            },
+                            CardPredicate::subtype("Dragon"),
+                        ],
+                        ..Default::default()
+                    },
+                ),
+                intervening_if: None,
+                effects: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: EffectValue::Fixed(1),
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn archmage_of_runes() -> CardDefinition {
+    let text_box = "Instant and sorcery spells you cast cost {1} less to cast.\nWhenever you cast an instant or sorcery spell, draw a card.";
+    let instant_or_sorcery = || CardPredicate {
+        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "fdn.archmage_of_runes",
+        scryfall_id: "334b5018-2da9-49f1-9d09-83d312ecfb02",
+        printed: PrintedCharacteristics {
+            name: "Archmage of Runes".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into(), "Wizard".into()],
+            power: Some(3),
+            toughness: Some(6),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: false,
+                predicate: instant_or_sorcery(),
+                condition: Condition::Always,
+                generic: 1,
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::You, instant_or_sorcery()),
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
                 }],
             }],
             text_box: text_box.into(),

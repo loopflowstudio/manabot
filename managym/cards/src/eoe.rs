@@ -4,8 +4,8 @@
 //! conditioned on its charge counters.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, Per,
+        PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -22,6 +22,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         lumen_class_frigate(),
         virulent_silencer(),
         the_dominion_bracelet(),
+        unravel(),
     ]
 }
 
@@ -159,6 +160,42 @@ Equip {1}"#;
                     }],
                     ..Default::default()
                 }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn unravel() -> CardDefinition {
+    let text_box = "Counter target spell. If the amount of mana spent to cast that spell was less than its mana value, you draw a card.";
+    let that_spell = || Box::new(ObjectSelector::Target(TargetSpec::Spell));
+    CardDefinition {
+        key: "eoe.unravel",
+        scryfall_id: "e8978214-c853-453d-872d-af56bdaaa3d7",
+        printed: PrintedCharacteristics {
+            name: "Unravel".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            // Both amounts are the countered spell's as it last existed on
+            // the stack (CR 608.2h).
+            spell_effects: vec![
+                Effect::CounterSpell {
+                    what: ObjectSelector::Target(TargetSpec::Spell),
+                    exile: false,
+                },
+                Effect::If {
+                    condition: Condition::compare(
+                        EffectValue::SpellManaSpent(that_spell()),
+                        CompareOp::Lt,
+                        EffectValue::SpellManaValue(that_spell()),
+                    ),
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                },
             ],
             text_box: text_box.into(),
             ..Default::default()

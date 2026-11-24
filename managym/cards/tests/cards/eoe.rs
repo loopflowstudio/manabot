@@ -449,3 +449,42 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
         );
     }
 }
+
+/// Unravel counters a spell and draws when less mana was spent to cast it
+/// than its mana value on the stack (CR 608.2h): a discounted Tolarian
+/// Terror draws; a full-price one and an X spell paid in full do not.
+#[test]
+fn unravel_draws_when_the_countered_spell_cost_less_than_its_mana_value() {
+    use crate::support::{
+        game::{five_color_setup, force_new_card_in_hand, plant_in_graveyard, Scenario},
+        inspect::{top_spell, zone_of},
+        play::{cast_card, choose_mode},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment, zone::ZoneType};
+    let unravel = |discount: usize, name: &str, x: Option<usize>, spent: u16| -> bool {
+        let mut s: Scenario =
+            five_color_setup(&["Unravel", "Tolarian Terror", "Consider", "Exsanguinate"]);
+        s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+        for _ in 0..discount {
+            plant_in_graveyard(&mut s, 0, "Consider");
+        }
+        let card = force_new_card_in_hand(&mut s, 0, name);
+        cast_card(&mut s, card);
+        if let Some(x) = x {
+            choose_mode(&mut s, x);
+        }
+        let spell = top_spell(&s).object;
+        assert_eq!(top_spell(&s).spent.total(), spent);
+        s.pass_priority();
+        let unravel = force_new_card_in_hand(&mut s, 1, "Unravel");
+        let hand = s.zone_size(1, ZoneType::Hand);
+        cast_card(&mut s, unravel);
+        assert!(s.choose_target(Target::StackSpell(spell)));
+        settle(&mut s);
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard), "countered");
+        s.zone_size(1, ZoneType::Hand) == hand
+    };
+    assert!(unravel(4, "Tolarian Terror", None, 3));
+    assert!(!unravel(0, "Tolarian Terror", None, 7));
+    assert!(!unravel(0, "Exsanguinate", Some(2), 4));
+}

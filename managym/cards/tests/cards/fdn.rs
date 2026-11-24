@@ -3068,3 +3068,102 @@ fn modal_trigger_rechecks_its_intervening_if_on_resolution() {
     settle(&mut s);
     s.assert_life(0, 20);
 }
+
+/// Scrawling Crawler's upkeep trigger has each player draw in APNAP order
+/// (CR 101.4), and every opponent draw, including those inside that trigger
+/// and the opponent's own draw step, costs them 1 life per Crawler. Two
+/// Crawlers each queue a drain for each opponent draw.
+#[test]
+fn scrawling_crawler_draws_for_each_player_in_order_and_drains_opponent_draws() {
+    use crate::support::play::settle;
+    use managym::flow::event::GameEvent;
+    for crawlers in [1_usize, 2] {
+        let mut s = five_color_setup(&["Scrawling Crawler"]);
+        for _ in 0..crawlers {
+            s.force_permanent_on_battlefield(0, "Scrawling Crawler");
+        }
+        s.advance_to_active_step(1, StepKind::Main);
+        s.assert_life(1, 20 - crawlers as i32);
+        s.advance_to_active_step(0, StepKind::Upkeep);
+        let hands = [
+            s.zone_size(0, ZoneType::Hand),
+            s.zone_size(1, ZoneType::Hand),
+        ];
+        let life = s.life(1);
+        s.drain_events();
+        settle(&mut s);
+        let drawers: Vec<_> = s
+            .drain_events()
+            .into_iter()
+            .filter_map(|event| match event {
+                GameEvent::CardDrawn { player, .. } => Some(player),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(drawers, [PlayerId(0), PlayerId(1)].repeat(crawlers));
+        assert_eq!(s.zone_size(0, ZoneType::Hand), hands[0] + crawlers);
+        assert_eq!(s.zone_size(1, ZoneType::Hand), hands[1] + crawlers);
+        s.assert_life(1, life - (crawlers * crawlers) as i32);
+        s.assert_life(0, 20);
+    }
+}
+
+/// Firespitter Whelp pings each opponent once for each noncreature or Dragon
+/// spell its controller casts: an instant and a Dragon creature, but not
+/// another creature.
+#[test]
+fn firespitter_whelp_pings_once_per_noncreature_or_dragon_spell() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        play::{cast_card, settle},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+    let mut s = five_color_setup(&[
+        "Firespitter Whelp",
+        "Lightning Bolt",
+        "Gray Ogre",
+        "Sol Ring",
+    ]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    s.force_permanent_on_battlefield(0, "Firespitter Whelp");
+    let bolt = force_new_card_in_hand(&mut s, 0, "Lightning Bolt");
+    cast_card(&mut s, bolt);
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut s);
+    s.assert_life(1, 19);
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    s.assert_life(1, 19);
+    // A Dragon creature spell matches one of the two alternatives once.
+    let whelp = force_new_card_in_hand(&mut s, 0, "Firespitter Whelp");
+    cast_card(&mut s, whelp);
+    assert_eq!(s.game().state.stack_objects.len(), 2, "one trigger");
+    settle(&mut s);
+    s.assert_life(1, 18);
+}
+
+/// Archmage of Runes takes {1} from instants and sorceries and draws for
+/// each one cast; a creature spell pays full price and draws nothing.
+#[test]
+fn archmage_of_runes_discounts_and_draws_for_instants_and_sorceries() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{hand, top_spell},
+        play::{cast_card, settle},
+    };
+    use managym::state::player::ManaPayment;
+    let mut s = five_color_setup(&["Archmage of Runes", "Fumigate", "Gray Ogre"]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    s.force_permanent_on_battlefield(0, "Archmage of Runes");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    cast_card(&mut s, ogre);
+    assert_eq!(top_spell(&s).spent.total(), 3);
+    settle(&mut s);
+    assert!(hand(&s, 0).is_empty());
+    let fumigate = force_new_card_in_hand(&mut s, 0, "Fumigate");
+    cast_card(&mut s, fumigate);
+    assert_eq!(top_spell(&s).spent.total(), 4);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 1);
+}

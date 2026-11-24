@@ -1,13 +1,16 @@
 //! Streets of New Capenna.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![venom_connoisseur()]
+    vec![venom_connoisseur(), an_offer_you_cant_refuse()]
 }
 
 fn venom_connoisseur() -> CardDefinition {
@@ -43,6 +46,39 @@ fn venom_connoisseur() -> CardDefinition {
                     },
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn an_offer_you_cant_refuse() -> CardDefinition {
+    let text_box = "Counter target noncreature spell. Its controller creates two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "snc.an_offer_you_cant_refuse",
+        scryfall_id: "b9d349f3-5be2-4b1f-a4c3-ba94822cf0cf",
+        printed: PrintedCharacteristics {
+            name: "An Offer You Can't Refuse".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::CounterSpell {
+                    what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Creature],
+                            ..Default::default()
+                        },
+                    }),
+                    exile: false,
+                },
+                // Its controller as it is or last existed, whether or not
+                // the spell could be countered.
+                Effect::ForPlayer {
+                    player: PlayerSelector::TargetController,
+                    effects: vec![Effect::create_tokens("token.treasure", 2)],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

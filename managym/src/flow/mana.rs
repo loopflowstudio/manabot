@@ -33,6 +33,7 @@ use crate::{
         },
         game::{ActivationSource, Game, PendingChoice},
         payment::{CostComponent, Help, Operation, Payment},
+        proposed_event::{CounterProvenance, EventCause, ProposedEvent},
         statics::Characteristics,
     },
     state::{
@@ -1816,6 +1817,9 @@ impl Game {
                             && (!ability.tap_source || can_tap)
                             && self.check_activation_terms(player, ability).is_ok()
                             && !source.activation_used(*index, ability)
+                            && ability.remove_counters.is_none_or(|(kind, count)| {
+                                source.counter_count(kind) >= i32::from(count)
+                            })
                     })
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
@@ -1827,7 +1831,10 @@ impl Game {
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
                             tap_candidates: self.tap_cost_candidates(player, ability).into(),
-                            limited: ability.once_each_turn || ability.exhaust,
+                            // A counter cost is planned as one activation.
+                            limited: ability.once_each_turn
+                                || ability.exhaust
+                                || ability.remove_counters.is_some(),
                             sacrifice_source: ability.sacrifice_source,
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
@@ -2696,6 +2703,17 @@ impl Game {
         if ability.tap_source {
             self.tap_permanent(permanent, true);
             tapped = Some(self.tapped_for_mana(permanent));
+        }
+        if let (Some((kind, count)), Some(target)) =
+            (ability.remove_counters, self.permanent_object(permanent))
+        {
+            self.apply_immediate_event(ProposedEvent::CounterChange {
+                provenance: CounterProvenance::new(EventCause::Cost),
+                target,
+                kind,
+                delta: -i32::from(count),
+                by: Some(player),
+            });
         }
         if ability.life_cost > 0 {
             self.change_life(player, -(ability.life_cost as i32));

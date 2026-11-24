@@ -58,3 +58,59 @@ fn venom_connoisseur_commands_replay_old_and_new_resolutions() {
         assert_eq!(keywords(&s, ally).has(Keyword::Deathtouch), remaining == 0);
     }
 }
+
+/// An Offer You Can't Refuse counters a noncreature spell, and that spell's
+/// controller, not the Offer's caster, creates two Treasures; the Treasures
+/// come even when the spell can't be countered. A creature spell is no
+/// legal target.
+#[test]
+fn an_offer_you_cant_refuse_pays_the_targeted_spells_controller_two_treasures() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::{top_spell, zone_of},
+        play::{cast_card, castable, settle},
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+    let mut s = five_color_setup(&[
+        "An Offer You Can't Refuse",
+        "Lightning Bolt",
+        "Rending Volley",
+        "Spectral Sailor",
+        "Gray Ogre",
+    ]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let sailor = s.force_permanent_on_battlefield(1, "Spectral Sailor");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    cast_card(&mut s, ogre);
+    s.pass_priority();
+    let offer = force_new_card_in_hand(&mut s, 1, "An Offer You Can't Refuse");
+    assert!(!castable(&mut s, offer));
+    settle(&mut s);
+    for (name, target, countered, treasures) in [
+        ("Lightning Bolt", Target::Player(PlayerId(1)), true, 2),
+        ("Rending Volley", Target::Permanent(sailor), false, 4),
+    ] {
+        let card = force_new_card_in_hand(&mut s, 0, name);
+        cast_card(&mut s, card);
+        assert!(s.choose_target(target));
+        let spell = top_spell(&s).object;
+        s.pass_priority();
+        let offer = force_new_card_in_hand(&mut s, 1, "An Offer You Can't Refuse");
+        cast_card(&mut s, offer);
+        assert!(s.choose_target(Target::StackSpell(spell)));
+        settle(&mut s);
+        assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Treasure").len(),
+            treasures
+        );
+        assert!(s.battlefield_permanents_named(1, "Treasure").is_empty());
+        if countered {
+            s.assert_life(1, 20);
+        }
+    }
+    assert!(
+        s.game().state.permanents[sailor].is_none(),
+        "Volley resolved"
+    );
+}

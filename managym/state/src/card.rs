@@ -622,6 +622,7 @@ impl ActivatedAbilityDefinition {
     /// paying mana, tapping its own source and producing its output?
     pub fn mana_activation_has_side_effects(&self) -> bool {
         self.life_cost > 0
+            || self.remove_counters.is_some()
             || self.source_leaves()
             || self.sacrifice.is_some()
             || self.discard_source
