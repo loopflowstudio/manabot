@@ -18,7 +18,7 @@ validates ids or partitions.
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import cached_property
 from hashlib import sha256
@@ -64,8 +64,9 @@ from manabot.env.shared_effects import (
     MEMBER_OBJECT,
     NUMBER_TOKEN_KINDS,
     PROGRAM_TOKEN_KIND,
+    effect_span_rows,
 )
-from manabot.policy.buckets import has_history_events
+from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
     DURATION_FLAGS,
@@ -75,8 +76,8 @@ from manabot.policy.readings import (
     Reading,
     Readings,
     duration_flags,
-    input_width,
     read_numeric,
+    reading_plan,
 )
 
 Array = np.ndarray
@@ -127,15 +128,15 @@ _EVENT_STATUS = columns("events", "source_status", "target_status")
 SEATS = ("agent", "opponent")
 
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
-# Validity of the visible object table, in its concatenation order.
-OBJECT_VALIDITY_KEYS = (
-    "agent_player_valid",
-    "opponent_player_valid",
-    "agent_cards_valid",
-    "opponent_cards_valid",
-    "agent_permanents_valid",
-    "opponent_permanents_valid",
+# The two seats' object rows in gather order. V11 appends the stack.
+OBJECT_KEYS = (
+    "agent_player",
+    "opponent_player",
+    "agent_cards",
+    "opponent_cards",
+    *_PERMANENT_KEYS,
 )
+OBJECT_VALIDITY_KEYS = tuple(f"{key}_valid" for key in OBJECT_KEYS)
 
 
 # -- checkpoint lookup tables ----------------------------------------------------
@@ -161,7 +162,7 @@ class Layout:
     def numeric_width(self, key: str) -> int:
         """How many inputs a buffer's projection receives: the sum of its
         columns' input widths."""
-        return sum(input_width(reading) for reading in self.readings[key])
+        return reading_plan(self.readings[key]).width
 
     def fact_width(self, *, catalog_ids: bool) -> int:
         """Inputs of the fact projection: the numeric payloads and timestamp,
@@ -375,10 +376,10 @@ class Packed[A]:
     """
 
     gather: A
-    sizes: tuple[int, ...]
+    sizes: tuple[int, ...] = field(metadata={"host_only": True})
     unpack: A
     restore: A
-    lengths: tuple[int, ...]
+    lengths: tuple[int, ...] = field(metadata={"host_only": True})
 
 
 def pack(
@@ -579,12 +580,18 @@ class Prepared[A]:
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
-    bucket_needs: tuple[tuple[int, ...], ...] | None = None
+    bucket_needs: np.ndarray | None = field(default=None, metadata={"host_only": True})
     # Input v11 appends one shared stack segment before optional belief rows.
     stack: A | None = None
     stack_rows: A | None = None
     stack_targets: A | None = None
     stack_mask: A | None = None
+
+
+def object_slots(values: Array, remap: Array | None, *, base: int = 1) -> Array:
+    """Zero-based gather slots. An absent join gathers player zero under its mask."""
+    slots = (values.astype(np.int64, copy=False) - base).clip(min=0)
+    return slots if remap is None else remap[slots]
 
 
 def object_ownership(cards: int, permanents: int) -> np.ndarray:
@@ -609,7 +616,7 @@ def read_object_numeric(values: Array, readings: Sequence[ColumnReading]) -> Arr
 
 
 def prepare(
-    obs: ObservationBuffers,
+    obs: ObservationBuffers | BucketedObservation,
     tables: Tables,
     *,
     inference: bool = False,
@@ -620,18 +627,24 @@ def prepare(
     memory_fold: bool = False,
     memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
-    action_capacity: int | None = None,
-    bucket_needs: np.ndarray | None = None,
     select_programs: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. `action_capacity` retains full logit coordinates after trimming.
+    are packed. Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    action_capacity = None
+    bucket_needs = object_remap = None
+    if isinstance(obs, BucketedObservation):
+        bucketed = True
+        bucket_needs = obs.needs
+        object_remap = object_map(obs.buckets)
+        action_capacity = obs.buckets.capacities["actions"]
+        obs = obs.rows
     memory = (
         prepare_memory(obs, tables, fold=memory_fold, roots=memory_roots)
         if memory_summaries
@@ -645,15 +658,16 @@ def prepare(
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
-    validity = np.concatenate([obs[key] for key in OBJECT_VALIDITY_KEYS], 1)
     stack = obs.get("stack")
+    validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
-        validity = np.concatenate((validity, obs["stack_valid"]), 1)
+        validity_rows.append(obs["stack_valid"])
     belief = _belief(obs)
     if belief is not None:
-        validity = np.concatenate(
-            (validity, belief.validity, np.ones((len(validity), 1), np.float32)), 1
+        validity_rows.extend(
+            (belief.validity, np.ones((len(belief.validity), 1), np.float32))
         )
+    validity = np.concatenate(validity_rows, 1)
     columns = None
     if inference and not live_tokens:
         used = np.nonzero((validity != 0).any(0))[0]
@@ -681,33 +695,33 @@ def prepare(
         links = np.concatenate(
             [obs[key][..., link_column] for key in _PERMANENT_KEYS], 1
         )
-        link_targets.append(
-            (base + (links.astype(np.int64) - 1).clip(min=0)).reshape(-1)
-        )
+        link_targets.append((base + object_slots(links, object_remap)).reshape(-1))
         link_masks.append((links > 0).astype(f32))
 
     relations = obs["relations"]
     relation_valid = relations[..., RELATION_VALID_INDEX]
-    live = relation_valid == 1
-    features = relations[live]
-    pending = np.isin(features[:, _RELATION_FRAME_KIND], (7, 8, 10))
-    features[pending, _RELATION_FRAME_IDS] = 0
+    valid = relation_valid == 1
+    live = relations[valid]
+    pending = np.isin(live[:, _RELATION_FRAME_KIND], (7, 8, 10))
+    live[pending, _RELATION_FRAME_IDS] = 0
     relation_features = padded_rows(
-        read_numeric(features, layout.readings["relations"]), live
+        read_numeric(live, layout.readings["relations"]), valid
     )
     relation_count = relations.shape[1]
     relation_objects: list[Array] = []
     relation_masks: list[Array] = []
     for link_column in _RELATION_OBJECT_COLUMNS:
-        indexes = np.where(live, relations[..., link_column], 0).astype(np.int64)
-        relation_objects.append((base + (indexes - 1).clip(min=0)).reshape(-1))
+        indexes = np.where(valid, relations[..., link_column], 0)
+        relation_objects.append(
+            (base + object_slots(indexes, object_remap)).reshape(-1)
+        )
         relation_masks.append((indexes > 0).astype(f32))
-    frame_ids = np.where(live, relations[..., _RELATION_FRAME], 1).astype(np.int64)
+    frame_ids = np.where(valid, relations[..., _RELATION_FRAME], 1).astype(np.int64)
     frame_base = np.arange(batch)[:, None] * relation_count
     frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
 
     legal = obs["actions_valid"] > 0
-    if action_capacity is not None:
+    if action_capacity is not None and action_capacity != legal.shape[1]:
         legal = np.pad(legal, ((0, 0), (0, action_capacity - legal.shape[1])))
     legal_batches, legal_slots = np.nonzero(legal)
     positions = np.zeros(legal.shape, dtype=np.int64)
@@ -743,25 +757,18 @@ def prepare(
             for seat, row in enumerate(cards)
         ]
     c, p = cards[0].shape[1], permanents.shape[2]
-    ownership = np.broadcast_to(
-        object_ownership(c, p),
-        (batch, 2 + 2 * c + 2 * p),
-    )
+    seat_ownership = object_ownership(c, p)
+    ownership = [np.broadcast_to(seat_ownership, (batch, len(seat_ownership)))]
     if stack is not None:
-        ownership = np.concatenate((ownership, stack[..., STACK_IS_MINE_INDEX] > 0), 1)
+        ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)
     if belief is not None:
-        ownership = np.concatenate(
-            (ownership, belief.owners == 0, np.zeros((batch, 1), bool)), 1
-        )
+        ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
-        bucket_needs=tuple(tuple(map(int, row)) for row in bucket_needs)
-        if bucket_needs is not None
-        else None,
         agent_player=players[0],
         opponent_player=players[1],
         agent_cards=cards[0],
@@ -788,7 +795,7 @@ def prepare(
         if stack is not None
         else None,
         stack_targets=(
-            base + (stack[..., STACK_SOURCE_INDEX].astype(np.int64) - 1).clip(min=0)
+            base + object_slots(stack[..., STACK_SOURCE_INDEX], object_remap)
         ).reshape(-1)
         if stack is not None
         else None,
@@ -797,8 +804,8 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(facts, tables, objects),
-        effects=_effects(obs, tables, objects),
+        facts=_facts(facts, tables, objects, object_remap),
+        effects=_effects(obs, tables, objects, object_remap),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
         relation_rows=tables.rows(relations[..., _RELATION_DEFINITIONS]),
@@ -819,11 +826,13 @@ def prepare(
         group_mask=(first > 0).astype(f32),
         group_counts=(last - first + 1).clip(min=1).astype(f32),
         candidate_rows=tables.rows(candidates[:, _NAME_DEFINITION]),
-        focus=legal_batches[:, None] * objects + focus.clip(min=0),
+        focus=legal_batches[:, None] * objects
+        + object_slots(focus, object_remap, base=0),
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
         binding=binding,
-        is_agent=ownership,
+        bucket_needs=bucket_needs,
+        is_agent=np.concatenate(ownership, axis=1),
         # Full-catalog preparation skips the scan for referenced definitions.
         programs=tables.programs(
             _referenced_definitions(
@@ -835,7 +844,7 @@ def prepare(
         if tables.definition_rows is not None
         else None,
         belief=belief,
-        events=_events(obs, tables, objects) if history else None,
+        events=_events(obs, tables, objects, object_remap) if history else None,
         memory=memory,
         live_index=np.flatnonzero(present) if live_tokens else None,
         live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
@@ -889,7 +898,9 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
-def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
+def _facts(
+    facts: Array, tables: Tables, objects: int, object_remap: Array | None = None
+) -> FactRoutes[Array]:
     batch = len(facts)
     valid = facts[..., FACT_VALID_INDEX] == 1
     # Index only live facts on the host. Restore padding before the forward:
@@ -968,7 +979,7 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         token_rows=padded_rows(token_rows, valid),
         token_mask=all_programs.astype(np.float32),
         source_rows=padded_rows(sources, valid),
-        targets=(base + (links - 1).clip(min=0)).reshape(-1),
+        targets=(base + object_slots(links, object_remap)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
         programs=_fact_programs(facts, all_programs, tables.order_lengths),
     )
@@ -1001,12 +1012,14 @@ def _fact_programs(
 
 
 def _effects(
-    obs: ObservationBuffers, tables: Tables, objects: int
+    obs: ObservationBuffers,
+    tables: Tables,
+    objects: int,
+    object_remap: Array | None = None,
 ) -> EffectRoutes[Array] | None:
     headers = obs["effects"]
     details = obs["effect_details"]
     members = obs["effect_members"]
-    detail_rows, member_rows = details.shape[1], members.shape[1]
     live_batches, live_slots = np.nonzero(headers[..., EFFECT_VALID] == 1)
     if len(live_batches) == 0:
         return None
@@ -1016,30 +1029,21 @@ def _effects(
     halves = live[:, EFFECT_MODIFICATION]
     source = live[:, EFFECT_SOURCE_DEFINITION]
     links = live[:, EFFECT_LINKS]
-    detail_indexes: list[int] = []
-    member_indexes: list[int] = []
-    member_records: list[int] = []
+    detail_offsets, counts, member_offsets, member_counts = live[:, EFFECT_SPANS].T
+    detail_records, detail_rows = effect_span_rows(detail_offsets, counts)
+    detail_host = details[live_batches[detail_records], detail_rows].astype(np.int64)
+    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
+    records, member_rows = effect_span_rows(member_offsets, member_counts)
+    member_batches = live_batches[records]
+    targets = members[member_batches, member_rows, MEMBER_OBJECT].astype(np.int64)
+
+    # Each sequence reads its three header tokens followed by its detail tokens.
     token_indexes: list[int] = []
-    lengths: list[int] = []
-    header_tokens = 3 * len(live)
-    for i, (b, (d, count, m, targets)) in enumerate(
-        zip(live_batches.tolist(), live[:, EFFECT_SPANS].tolist(), strict=True)
-    ):
-        detail_start = header_tokens + len(detail_indexes)
+    detail_start = 3 * len(live)
+    for i, count in enumerate(counts.tolist()):
         token_indexes.extend(range(3 * i, 3 * i + 3))
         token_indexes.extend(range(detail_start, detail_start + count))
-        lengths.append(3 + count)
-        detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d + count))
-        member_indexes.extend(range(b * member_rows + m, b * member_rows + m + targets))
-        member_records.extend([i] * targets)
-    detail_host = details.reshape(-1, details.shape[-1])[detail_indexes].astype(
-        np.int64
-    )
-    kinds, ids = detail_host[:, DETAIL_KIND], detail_host[:, DETAIL_VALUE]
-    targets = members.reshape(-1, members.shape[-1])[
-        member_indexes, MEMBER_OBJECT
-    ].astype(np.int64)
-    records = np.asarray(member_records, dtype=np.int64)
+        detail_start += count
     numeric = read_numeric(selected, tables.layout.readings["effects"])
     base = live_batches * objects
     unsigned = (ids[:, 0] << 16) | ids[:, 1]
@@ -1057,9 +1061,9 @@ def _effects(
     signed = np.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
     return EffectRoutes(
         numeric=numeric,
-        controller=base + (links[:, 0] - 1).clip(min=0),
+        controller=base + object_slots(links[:, 0], object_remap),
         controller_mask=(links[:, 0] > 0).astype(np.float32),
-        source_object=base + (links[:, 1] - 1).clip(min=0),
+        source_object=base + object_slots(links[:, 1], object_remap),
         source_object_mask=(links[:, 1] > 0).astype(np.float32),
         modification_rows=tables.names(
             RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
@@ -1072,8 +1076,8 @@ def _effects(
         detail_numbers=signed.astype(np.float32),
         detail_is_number=np.isin(token_kinds, NUMBER_TOKEN_KINDS).astype(np.float32),
         token_indexes=np.asarray(token_indexes, dtype=np.int64),
-        schedule=pack(lengths),
-        routes=live_batches[records] * objects + targets - 1,
+        schedule=pack(3 + counts),
+        routes=member_batches * objects + object_slots(targets, object_remap),
         member_records=records,
     )
 
@@ -1091,7 +1095,12 @@ def _belief(obs: ObservationBuffers) -> BeliefRows[Array] | None:
     )
 
 
-def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[Array]:
+def _events(
+    obs: ObservationBuffers,
+    tables: Tables,
+    objects: int,
+    object_remap: Array | None = None,
+) -> EventRows[Array]:
     valid = obs["events_valid"]
     rows = np.where((valid != 0)[..., None], obs["events"], 0)
     counts = valid.sum(1, keepdims=True)
@@ -1105,7 +1114,8 @@ def _events(obs: ObservationBuffers, tables: Tables, objects: int) -> EventRows[
         definitions=tables.rows(rows[..., _EVENT_DEFINITIONS]),
         owners=rows[..., _EVENT_OWNERS].astype(np.int64),
         zones=rows[..., _EVENT_ZONES].astype(np.int64),
-        focus=np.arange(len(rows))[:, None, None] * objects + focus.clip(min=0),
+        focus=np.arange(len(rows))[:, None, None] * objects
+        + object_slots(focus, object_remap, base=0),
         focus_mask=(focus >= 0) & (valid != 0)[..., None],
         status=rows[..., _EVENT_STATUS].astype(np.int64),
     )

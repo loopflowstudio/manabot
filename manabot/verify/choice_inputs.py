@@ -9,14 +9,7 @@ from manabot.env.observation import (
     ObservationSpace,
     encode_observation,
 )
-from manabot.policy.buckets import (
-    ONE_BASED_REFERENCES,
-    ROW_KEYS,
-    SEAT_KEYS,
-    ZERO_BASED_REFERENCES,
-    has_history_events,
-    object_segments,
-)
+from manabot.policy.buckets import object_segments
 import managym
 
 
@@ -29,16 +22,21 @@ def encode(
 
 
 def reorder_offers(
-    obs: ObservationBuffers, order: Sequence[int] | np.ndarray
+    obs: ObservationBuffers,
+    order: Sequence[int] | np.ndarray,
+    layout: managym.ObservationLayout,
 ) -> dict[str, np.ndarray]:
     """Move each legal action with its mask, focus and naming candidates."""
     result = {key: value.copy() for key, value in obs.items()}
-    for key in ROW_KEYS["actions"]:
-        result[key][:, : len(order)] = obs[key][:, order]
+    for key, dimension in layout.axis_buffers["actions"]:
+        offers = np.moveaxis(result[key], dimension + 1, 1)
+        offers[:, : len(order)] = offers[:, order]
     return result
 
 
-def reorder_objects(obs: ObservationBuffers) -> dict[str, np.ndarray]:
+def reorder_objects(
+    obs: ObservationBuffers, layout: managym.ObservationLayout
+) -> dict[str, np.ndarray]:
     """Reverse each seat's card and permanent slots. Players and stack keep their order."""
     result = {key: value.copy() for key, value in obs.items()}
     capacities = {
@@ -55,21 +53,14 @@ def reorder_objects(obs: ObservationBuffers) -> dict[str, np.ndarray]:
             break
         segment = slice(start + 1, start + rows + 1)
         references[segment] = references[segment][::-1]
-    for axis in ("cards", "permanents"):
-        for key in ROW_KEYS[axis]:
-            result[key][:] = obs[key][:, ::-1]
-    for key in SEAT_KEYS["cards"]:
-        if key in obs:
-            result[key][:] = obs[key][:, :, ::-1]
+    for axis, buffers in layout.axis_buffers.items():
+        if axis in ("cards", "permanents"):
+            for key, dimension in buffers:
+                result[key][:] = np.flip(obs[key], axis=dimension + 1)
 
-    focus = result["action_focus"]
-    focus[:] = references[focus.astype(np.intp) + 1] - 1
-    for key, col in ONE_BASED_REFERENCES:
-        if key in result:
-            values = result[key][..., col]
-            values[:] = references[values.astype(np.intp)]
-    if has_history_events(result):
-        for key, col in ZERO_BASED_REFERENCES:
-            values = result[key][..., col]
-            values[:] = references[values.astype(np.intp) + 1] - 1
+    for key, fields in layout.object_references.items():
+        for column, base in fields:
+            values = result[key] if column is None else result[key][..., column]
+            offset = 1 - base
+            values[:] = references[values.astype(np.intp) + offset] - offset
     return result

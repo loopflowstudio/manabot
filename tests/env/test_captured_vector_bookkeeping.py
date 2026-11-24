@@ -73,6 +73,29 @@ def test_native_reads_are_delegated() -> None:
         vector.close()
 
 
+def test_seeded_reset_rejects_bad_seeds_before_replacing_any_stream() -> None:
+    vector = CapturedVector(num_envs=2, seed=12)
+    space = ObservationSpace()
+    vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
+    setups = [managym.GameSetup(_players()), managym.GameSetup(_players()[::-1])]
+    try:
+        vector.reset_each_into_buffers(setups, seeds=[71, 41])
+        vector.step_into_buffers([0, 0])
+        prefixes = [game.model_copy(deep=True) for game in vector.games]
+        digests = vector.state_digests()
+        for invalid in ([99], [99, -1]):
+            with pytest.raises((ValueError, OverflowError)):
+                vector.reset_each_into_buffers(setups, seeds=invalid)
+            assert vector.state_digests() == digests
+            assert vector.games == prefixes
+
+        vector.reset_each_into_buffers(setups)
+        assert vector.current_game_seeds() == [73, 43]
+        assert [game.seed for game in vector.games] == [73, 43]
+    finally:
+        vector.close()
+
+
 @pytest.mark.parametrize("policy", ["none", "random", "heuristic"])
 def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
     policy: str,

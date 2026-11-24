@@ -37,7 +37,7 @@ from manabot.backends.torch._semantic_cards import (
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 
 # Local imports
-from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy, transfer
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.belief.range import BeliefError
@@ -49,16 +49,14 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
-from manabot.policy.buckets import trim_to_needs
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket_observation,
+    object_trimming,
+)
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.prepare import (
-    BeliefRows,
-    Layout,
-    Prepared,
-    Tables,
-    prepare,
-)
+from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
 import managym
@@ -448,6 +446,7 @@ class ActorCritic(nn.Module):
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
+        self._binding_cache = admission.BindingCache()
         self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
@@ -479,10 +478,14 @@ class ActorCritic(nn.Module):
             )
 
     def _binding(self) -> str:
-        return admission.binding(self.config, self.observation_space, self.readings)
+        return self._binding_cache.get(
+            self.config, self.observation_space, self.readings
+        )
 
     def _admission_spec(self) -> admission.Spec:
         key = (
+            id(self.config),
+            id(self.observation_space),
             self._binding(),
             tuple(
                 (name, id(value), value._version)
@@ -518,12 +521,17 @@ class ActorCritic(nn.Module):
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        self.check_observation(obs)
-        return self.prepare_admitted(
-            obs, inference=inference, memory_roots=memory_roots
-        )
+        bucketed, tables = self._admit_observation(obs)
+        return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
 
-    def check_observation(self, obs: ObservationBuffers) -> None:
+    def check_observation(self, obs: ObservationBuffers) -> np.ndarray | None:
+        """Validate the current rows and return their measured extents when bucketed."""
+        bucketed, _ = self._admit_observation(obs)
+        return None if bucketed is None else bucketed.needs
+
+    def _admit_observation(
+        self, obs: ObservationBuffers
+    ) -> tuple[BucketedObservation | None, Tables]:
         mask = np.asarray(obs["actions_valid"])
         try:
             legal = admission.legal_mask(mask)
@@ -534,7 +542,10 @@ class ActorCritic(nn.Module):
                 "invalid_action_mask",
                 {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
             ) from error
-        admission.check(obs, self._admission_spec(), legal)
+        spec = self._admission_spec()
+        return admission.admit(
+            obs, spec, legal, bucketed=self.bucketed_shapes
+        ), spec.tables
 
     def prepare_admitted(
         self,
@@ -549,15 +560,27 @@ class ActorCritic(nn.Module):
         `inference` selects compaction and catalog coverage independently of
         autograd mode; bucketed batches always use the full catalog schedule.
         """
-        spec = self._admission_spec()
-        capacity = obs["actions_valid"].shape[1]
-        if self.bucketed_shapes:
-            obs, needs = trim_to_needs(
+        bucketed = (
+            bucket_observation(
                 obs, self.observation_space, needs, objects=self.object_trimming()
             )
+            if self.bucketed_shapes
+            else None
+        )
+        return self._prepare_rows(
+            bucketed or obs, self._admission_spec().tables, inference, memory_roots
+        )
+
+    def _prepare_rows(
+        self,
+        obs: ObservationBuffers | BucketedObservation,
+        tables: Tables,
+        inference: bool,
+        memory_roots: Mapping[str, int] | None,
+    ) -> Prepared[np.ndarray]:
         return prepare(
             obs,
-            spec.tables,
+            tables,
             inference=inference and device_of(self).type == "cpu",
             bucketed=self.bucketed_shapes,
             live_tokens=self.live_tokens and self.config.attention_on,
@@ -565,9 +588,7 @@ class ActorCritic(nn.Module):
             memory_summaries=self.memory_summaries,
             memory_fold=self.config.decision_memory == "gru",
             memory_roots=memory_roots,
-            binding=spec.binding,
-            action_capacity=capacity,
-            bucket_needs=needs,
+            binding=self._binding(),
             select_programs=not inference and not self.bucketed_shapes,
         )
 
@@ -842,10 +863,7 @@ class ActorCritic(nn.Module):
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
-        return (
-            self.config.value_aggregation != "historical_mean"
-            and self.belief_count_buckets == 0
-        )
+        return object_trimming(self.config)
 
     def _attend_objects(
         self,
@@ -1257,11 +1275,14 @@ class PolicyInference:
         self.check(agent)
         if torch.is_grad_enabled():
             raise RuntimeError("prepared inference observations cannot enter autograd")
-        self.cache_programs()
+        self._cache_programs()
 
     def cache_programs(self) -> None:
         """Prepare the fixed policy catalog, checking the serving lifetime first."""
         self.check(self.agent)
+        self._cache_programs()
+
+    def _cache_programs(self) -> None:
         if self.cache_catalog and not self.agent._cache_versions:
             self.agent.cache_programs()
 
@@ -1310,15 +1331,9 @@ class PolicyInference:
         )
         if self.cache_catalog:
             batch = replace(batch, programs=None)
-        arrays = (
-            []
-            if self.device.type == "cpu"
-            else array_fields(batch, np.ndarray).values()
-        )
-        self.transfer_bytes = sum(array.nbytes for array in arrays)
-        self.transfers = len({array.dtype for array in arrays})
+        moved, self.transfer_bytes, self.transfers = transfer(batch, self.device)
         return replace(
-            self.memory.bind(on_device(batch, self.device), obs),
+            self.memory.bind(moved, obs),
             guard=self._forward_check,
         )
 

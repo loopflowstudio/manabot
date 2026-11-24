@@ -1,16 +1,16 @@
 """MLX continuation and numerical evidence for tracked self-play.
 
-Etude commits the callback's safetensors and its own state.json together. The
-latter owns the counts, model settings and column readings. Restore checks the
+Etude commits the host continuation, backend tensors and state.json together.
+Its state.json owns the counts, model settings and column readings. Restore checks the
 complete array layout before changing either policy or Adam.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 import hashlib
 import json
+import math
 from pathlib import Path
 import random
 from typing import TYPE_CHECKING, BinaryIO
@@ -24,7 +24,15 @@ from manabot.backends.mlx.arrays import all_finite
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.infra.identity import canonical_sha256
+from manabot.training.rollout.numerics import CollectionSession
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
+from manabot.training.state.continuation import (
+    HOST_FILE,
+    HostContinuation,
+    StagedContinuation,
+    host_sha256,
+    read_host,
+)
 
 if TYPE_CHECKING:
     from etude.train.tracking import TrainingRun
@@ -48,7 +56,7 @@ def training_arrays(
 
 def restore(
     run: TrainingRun, learner: Learner, ema: MLXActorCritic | None, counts: Counts
-) -> Callable[[Path], None]:
+) -> StagedContinuation:
     """Admit the committed snapshot and supply the writer for Etude's staged folder."""
     filename = "training.safetensors"
     agent = learner.agent
@@ -72,11 +80,12 @@ def restore(
     def metadata() -> dict[str, str]:
         return {
             "backend": "mlx",
-            "schema": "1",
             "binding": binding,
             "counts": canonical_sha256(counts.model_dump(mode="json")),
         }
 
+    host = None
+    sampling: dict[str, mx.array] = {}
     found = read_state(run.out / "state")
     if found is not None:
         path = found.path / filename
@@ -89,10 +98,31 @@ def restore(
         ):
             raise ValueError("incompatible MLX saved counts or input contract")
         arrays, saved = mx.load(path, return_metadata=True)
-        if saved != metadata():
-            raise ValueError(
-                "incompatible MLX snapshot backend, schema, input binding or counts"
-            )
+        header = metadata() | {"schema": "1"}
+        payload = None
+        if saved.get("schema") == "2":
+            payload = read_host(found.path)
+            if payload is None:
+                raise ValueError(f"missing MLX {HOST_FILE}")
+            for key in ("rng.collector", "rng.mlx"):
+                value = arrays.pop(key, None)
+                if value is None or value.shape != (2,) or value.dtype != mx.uint32:
+                    raise ValueError(
+                        f"incompatible MLX snapshot RNG shape or dtype for {key}"
+                    )
+                sampling[key] = value
+            header |= {
+                "schema": "2",
+                "continuation_sha256": host_sha256(payload),
+                "rng_sha256": sampling_digest(sampling),
+            }
+        elif (found.path / HOST_FILE).exists():
+            raise ValueError("incompatible MLX snapshot schema with host continuation")
+        # The header binds the host bytes, so a damaged file fails here by name
+        # rather than as a JSON decoding error.
+        verify_header(saved, header)
+        if payload is not None:
+            host = HostContinuation.model_validate_json(payload)
         expected = training_arrays(learner, ema)
         # Adam creates its two moments lazily on the first accepted step.
         if counts.optimizer_updates:
@@ -119,12 +149,46 @@ def restore(
             ema.clear_cache()
         learner.optimizer.state = trees["adam"]
 
-    def export(folder: Path) -> None:
+    def restore_sampling(session: CollectionSession) -> None:
+        if sampling:
+            session.restore_rng(sampling["rng.collector"])
+            high, low = sampling["rng.mlx"].tolist()
+            mx.random.seed((high << 32) | low)
+
+    def export(folder: Path, host_sha256: str, session: CollectionSession) -> None:
+        keys = {
+            "rng.collector": mx.array(session.snapshot_rng()),
+            "rng.mlx": mx.random.state[0],
+        }
+        header = metadata() | {
+            "schema": "2",
+            "continuation_sha256": host_sha256,
+            "rng_sha256": sampling_digest(keys),
+        }
         mx.save_safetensors(
-            folder / filename, training_arrays(learner, ema), metadata()
+            folder / filename, training_arrays(learner, ema) | keys, header
         )
 
-    return export
+    return StagedContinuation(host, restore_sampling, export)
+
+
+def verify_header(saved: dict[str, str], expected: dict[str, str]) -> None:
+    if saved != expected:
+        differing = sorted(
+            key
+            for key in saved.keys() | expected.keys()
+            if saved.get(key) != expected.get(key)
+        )
+        raise ValueError(
+            "incompatible MLX snapshot: saved header differs in " + ", ".join(differing)
+        )
+
+
+def sampling_digest(keys: dict[str, mx.array]) -> str:
+    """Bind the two small RNG payloads, including same-shape bit corruption."""
+    return hashlib.sha256(
+        b"".join(np.asarray(keys[k]).tobytes() for k in sorted(keys))
+    ).hexdigest()
 
 
 @dataclass
@@ -171,6 +235,7 @@ def capture_incident(
     # prefix of each gradient. Action masks instead locate the offending rows.
     failed = error.tensors.get("failed")
     valid = error.tensors.get("valid")
+    indexes = error.tensors.get("minibatch_indexes")
     positions = None
     row_shape: tuple[int, ...] = ()
     if failed is not None:
@@ -179,17 +244,29 @@ def capture_incident(
         row_shape = failed.shape
         if row_shape:
             positions = np.flatnonzero(np.asarray(failed))[:max_rows]
+    # An optimizer refusal has no failed-row mask. Its minibatch indexes
+    # still identify the rows of the logits, actions and observation.
+    if positions is None and indexes is not None:
+        row_shape = indexes.shape
     for name, value in error.tensors.items():
-        if positions is not None and value.shape[: len(row_shape)] == row_shape:
-            sample = value.reshape(-1, *value.shape[len(row_shape) :])[
-                mx.array(positions)
-            ]
+        if (
+            row_shape
+            and value.shape[: len(row_shape)] == row_shape
+            and not name.startswith(("parameter/", "gradient/"))
+        ):
+            row_values = value.reshape(
+                math.prod(row_shape), *value.shape[len(row_shape) :]
+            )
+            sample = (
+                row_values[:max_rows]
+                if positions is None
+                else row_values[mx.array(positions)]
+            )
         else:
             sample = value.reshape(-1)[:2048]
         retain(name, value, sample)
 
     if batch is not None:
-        indexes = error.tensors.get("minibatch_indexes")
         rows = np.arange(min(batch.actions.size, max_rows))
         if indexes is not None:
             mapped = np.asarray(indexes).reshape(-1)

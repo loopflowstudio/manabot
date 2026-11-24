@@ -612,6 +612,7 @@ class _Capture:
         self._outputs: dict[Path, BinaryIO] = {}
         self._statistics_generations: dict[int, int] = {}
         self.started = time.perf_counter()
+        self._reconstructing = False
         self._failed = False
         self._raised: GameRecord | None = None
         self.identities = runtime_identities().copy()
@@ -689,6 +690,8 @@ class _Capture:
             )
 
     def _append_row(self, path: Path, row: object) -> None:
+        if self._reconstructing:
+            return
         output = self._outputs.get(path)
         if output is None:
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -764,7 +767,8 @@ class _Capture:
                 len(game.actions) - 1 if game.frame is not None else None
                 for game in evidence.games
             ]
-        self._game_journal.publish(evidence, self._boundary, counts)
+        if not self._reconstructing:
+            self._game_journal.publish(evidence, self._boundary, counts)
 
     def _begin_boundary(
         self,
@@ -886,6 +890,8 @@ class _Capture:
     def _failure(
         self, error: BaseException, evidence: Callable[[], GameRecord]
     ) -> None:
+        if self._reconstructing:
+            return
         self._failed = True
         # Capture failures must never disguise the original native failure.
         try:
@@ -1192,6 +1198,7 @@ _VECTOR_READS = frozenset(
         "get_last_info",
         "semantic_decision_frames_json",
         "skip_trivial_counts",
+        "state_digests",
     }
 )
 
@@ -1301,6 +1308,21 @@ class CapturedVector(_Capture):
         self._sampled_roots = False
         self._action_cutoff: int | None = None
         self._start_cursor(f"vector-{stream_offset}")
+
+    @contextmanager
+    def reconstructing(self) -> Iterator[None]:
+        """Replay installed roots with native counters but without durable emissions."""
+        self._reconstructing = True
+        cutoff, self._action_cutoff = self._action_cutoff, None
+        try:
+            yield
+        except BaseException:
+            # Closing a rejected prefix must not emit a partial game.
+            self.close()
+            raise
+        finally:
+            self._action_cutoff = cutoff
+            self._reconstructing = False
 
     def __getattr__(self, name: str) -> Any:
         # Only reads delegate: an undelegated mutation would leave the retained
@@ -1471,32 +1493,46 @@ class CapturedVector(_Capture):
     def reset_all_into_buffers(self, players: managym.GameSetup) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
-    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
-        self._reset_each(players, lambda: self.native.reset_each_into_buffers(players))
+    def reset_each_into_buffers(
+        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+    ) -> None:
+        self._reset_each(
+            players,
+            self.next_seeds if seeds is None else seeds,
+            lambda: self.native.reset_each_into_buffers(players, seeds=seeds),
+        )
 
     def reset_all(self, players: managym.GameSetup) -> Any:
         return self._reset_each(
-            [players for _ in self.games], lambda: self.native.reset_all(players)
+            [players for _ in self.games],
+            self.next_seeds,
+            lambda: self.native.reset_all(players),
         )
 
     def _reset_each(
-        self, players: list[managym.GameSetup], call: Callable[[], Any]
+        self,
+        players: list[managym.GameSetup],
+        seeds: list[int],
+        call: Callable[[], Any],
     ) -> Any:
+        if len(players) != len(self.games) or len(seeds) != len(self.games):
+            raise ValueError("expected one setup and seed per stream")
+        retained = [
+            _retain_players(setup, seed)
+            for setup, seed in zip(players, seeds, strict=True)
+        ]
         self._activate_journal(self.native)
         if self._game_journal is not None:
             self._begin_boundary(
                 self._evidence_for(self.games, "reset"),
                 "reset_each",
                 setup_known=not self._sampled_roots,
-                seeds=self.next_seeds,
-                players=[
-                    _retain_players(setup, seed)
-                    for setup, seed in zip(players, self.next_seeds, strict=True)
-                ],
+                seeds=seeds,
+                players=retained,
             )
-        for game, setup, seed in zip(self.games, players, self.next_seeds, strict=True):
+        for game, seats, seed in zip(self.games, retained, seeds, strict=True):
             self._write_game(game, GameEnd(status="interrupted", reason="reset"))
-            game.players = _retain_players(setup, seed)
+            game.players = seats
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self._executing()
