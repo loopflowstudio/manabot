@@ -48,40 +48,5 @@ fn fog_bank_blocks_a_lifelinker_in_both_replacement_orders() {
 
 #[test]
 fn foundations_discard_duress() {
-    use crate::support::game::five_color_setup;
-    use crate::support::play::{cast, settle};
-    use managym::state::game_object::Target;
-    use managym::state::zone::ZoneType;
-    let mut s = five_color_setup(&["Duress", "Gray Ogre", "Lightning Bolt", "Giant Growth"]);
-    use crate::support::{
-        game::move_from_library,
-        inspect::{offered_cards, zone_of},
-        play::{fork_selecting, pass_until, spend_colorless},
-    };
-    use managym::{agent::action::ActionSpaceKind, state::game_object::PlayerId};
-    let hand = ["Gray Ogre", "Forest", "Lightning Bolt", "Giant Growth"]
-        .map(|name| move_from_library(&mut s, 1, name, ZoneType::Hand));
-    cast(&mut s, "Duress");
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
-    spend_colorless(&mut s);
-    pass_until(&mut s, ActionSpaceKind::Discard);
-    assert_eq!(s.action_space().player, Some(PlayerId(0)));
-    let offered = offered_cards(&s);
-    for (index, object) in hand.iter().enumerate() {
-        assert_eq!(offered.contains(object), index >= 2);
-    }
-    for chosen in offered {
-        let mut branch = fork_selecting(&s, chosen);
-        settle(&mut branch);
-        for object in hand {
-            assert_eq!(
-                zone_of(&branch, object),
-                Some(if object == chosen {
-                    ZoneType::Graveyard
-                } else {
-                    ZoneType::Hand
-                })
-            );
-        }
-    }
+    crate::assert_revealed_discard("Duress", &["Lightning Bolt", "Giant Growth"]);
 }

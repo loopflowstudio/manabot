@@ -435,3 +435,39 @@ fn foundations_spell_day_of_judgment() {
         assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
     }
 }
+
+#[test]
+fn foundations_5d_adventuring_gear() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::card_of;
+    use crate::support::play::{activate, play_land, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Adventuring Gear", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let gear = s.force_permanent_on_battlefield(0, "Adventuring Gear");
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, gear, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    play_land(&mut s, "Forest");
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let mut moved = s.clone();
+    let new_wearer = card_of(&moved, giant);
+    moved.game_mut().state.permanents[gear]
+        .as_mut()
+        .unwrap()
+        .attached_to = Some(new_wearer);
+    let mut gone = moved.clone();
+    let source = card_of(&gone, gear);
+    move_card(&mut gone, source, ZoneType::Graveyard);
+    for (branch, old, new) in [(&mut s, 4, 3), (&mut moved, 2, 5), (&mut gone, 2, 5)] {
+        settle(branch);
+        assert_eq!(branch.game().characteristics(ogre).power, old);
+        assert_eq!(branch.game().characteristics(giant).power, new);
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(branch.game().characteristics(giant).power, 3);
+    }
+}

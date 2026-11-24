@@ -2206,7 +2206,7 @@ impl Game {
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature => self
+            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
@@ -2238,7 +2238,12 @@ impl Game {
                     )
             }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
+            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => {
+                self.state
+                    .permanent_of(source_object)
+                    .and_then(|source| self.attached_permanent(source))
+                    == Some(permanent_id)
+            }
             TriggerSubject::Matching {
                 controlled_by,
                 predicate,
@@ -2249,15 +2254,6 @@ impl Game {
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
-    }
-
-    /// Whether the Aura card `aura` is on the battlefield attached to the
-    /// permanent.
-    fn is_enchanted_by(&self, permanent_id: PermanentId, aura: ObjectId) -> bool {
-        self.state
-            .permanent_of(aura)
-            .and_then(|aura| self.attached_permanent(aura))
-            == Some(permanent_id)
     }
 }
 

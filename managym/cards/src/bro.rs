@@ -1,9 +1,9 @@
 //! The Brothers' War.
 use managym_state::{
     ability::{
-        Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd, Effect,
+        EffectValue, ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes, Keyword,
@@ -16,7 +16,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![cityscape_leveler(), giant_cindermaw(), goblin_firebomb()]
+    vec![
+        bushwhack(),
+        cityscape_leveler(),
+        giant_cindermaw(),
+        goblin_firebomb(),
+    ]
 }
 
 /// Unearth `cost` (CR 702.84a): "Return this card from your graveyard to the
@@ -151,6 +156,43 @@ fn goblin_firebomb() -> CardDefinition {
                     },
                 ))],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bushwhack() -> CardDefinition {
+    let text_box = "Choose one —\n• Search your library for a basic land card, reveal it, put it into your hand, then shuffle.\n• Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "bro.bushwhack",
+        scryfall_id: "712a0640-d9c8-46fc-b38b-bf20a40fa902",
+        printed: PrintedCharacteristics {
+            name: "Bushwhack".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::SearchDistinctNames {
+                        predicate: CardPredicate::basic_land(),
+                        count: 1,
+                        end: DistinctSearchEnd::Hand,
+                    }],
+                    vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                            effects: vec![],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(
+                                TargetSpec::CreatureOpponentControls,
+                            ),
+                            effects: vec![Effect::FightLastTarget],
+                        },
+                    ],
+                ],
             }],
             text_box: text_box.into(),
             ..Default::default()

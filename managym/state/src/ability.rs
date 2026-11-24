@@ -488,6 +488,8 @@ pub enum TriggerSubject {
     This,
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// The creature this Equipment is attached to.
+    EquippedCreature,
     /// "a/another [predicate] [controlled_by controls]": an object whose
     /// controller is `controlled_by`, relative to the ability's controller.
     /// `another` excludes the source itself (CR 109.4).
@@ -943,6 +945,9 @@ pub enum Effect {
     /// objects become [`ObjectSelector::Moved`] and answer
     /// [`Condition::Moved`].
     Move {
+        /// Move a hidden card into hand without revealing its identity.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        unrevealed: bool,
         /// A stated end replaces the usual shuffle-into-library movement.
         #[serde(skip_serializing_if = "Option::is_none")]
         library_end: Option<LibraryEnd>,
@@ -1982,13 +1987,36 @@ impl Effect {
     pub fn search_library(
         predicate: CardPredicate,
         max: EffectValue,
+        effects: Vec<Effect>,
+    ) -> Self {
+        Self::library_search(predicate, 0, max, effects)
+    }
+
+    /// A search for an unrestricted card must find one in a nonempty library.
+    pub fn search_for_card(destination: ZoneType) -> Self {
+        Self::library_search(
+            CardPredicate::default(),
+            1,
+            1.into(),
+            vec![Self::zone_move(
+                ObjectSelector::Selected,
+                destination,
+                destination == ZoneType::Hand,
+            )],
+        )
+    }
+
+    fn library_search(
+        predicate: CardPredicate,
+        min: usize,
+        max: EffectValue,
         mut effects: Vec<Effect>,
     ) -> Self {
         effects.push(Effect::ShuffleLibrary);
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate,
-            min: 0,
+            min,
             max,
             effects,
             if_declined: vec![Effect::ShuffleLibrary],
@@ -2055,7 +2083,12 @@ impl Effect {
 
     /// "Put [what] into [zone]" with no further terms.
     pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
+        Self::zone_move(what, to, false)
+    }
+
+    fn zone_move(what: ObjectSelector, to: ZoneType, unrevealed: bool) -> Self {
         Effect::Move {
+            unrevealed,
             library_end: None,
             what,
             to,
@@ -2071,6 +2104,7 @@ impl Effect {
     /// with the move, before linked returns can ask a subsequent question.
     pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: Some(end),
             what,
             to: ZoneType::Library,
@@ -2096,6 +2130,7 @@ impl Effect {
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: None,
             what,
             to: ZoneType::Battlefield,
@@ -2110,6 +2145,7 @@ impl Effect {
     /// "Exile [what] with this" or "until this leaves the battlefield".
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: None,
             what,
             to: ZoneType::Exile,

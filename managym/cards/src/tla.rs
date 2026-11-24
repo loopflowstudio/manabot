@@ -1,6 +1,5 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
-use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
@@ -16,6 +15,7 @@ use managym_state::{
         StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost,
         TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
     },
+    effect::{EffectDuration, Modification},
     mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -834,6 +834,7 @@ fn airbender_ascension() -> CardDefinition {
                         effects: vec![
                             Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                             Effect::Move {
+                                unrevealed: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -1241,6 +1242,7 @@ fn avatar_destiny() -> CardDefinition {
                         min: 0,
                         max: EffectValue::Fixed(1),
                         effects: vec![Effect::Move {
+                            unrevealed: false,
                             library_end: None,
                             what: ObjectSelector::Selected,
                             to: ZoneType::Battlefield,
@@ -4576,14 +4578,7 @@ fn glider_staff() -> CardDefinition {
                     }],
                 }],
             }],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             statics: vec![
                 StaticAbility::PtBuff(StaticPtBuff {
                     scope: StaticScope::Attached,
@@ -5964,14 +5959,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
                     },
                 ],
             }],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             statics: vec![StaticAbility::PtBuff(StaticPtBuff {
                 scope: StaticScope::Attached,
                 condition: None,
@@ -6553,14 +6541,7 @@ fn meteor_sword() -> CardDefinition {
                     },
                 ))],
             }],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
             statics: vec![StaticAbility::PtBuff(StaticPtBuff {
                 scope: StaticScope::Attached,
                 condition: None,
@@ -10243,14 +10224,7 @@ fn trusty_boomerang() -> CardDefinition {
                 ],
                 ..Default::default()
             })],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -10371,14 +10345,7 @@ fn twin_blades() -> CardDefinition {
                     ),
                 ],
             }],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             statics: vec![StaticAbility::PtBuff(StaticPtBuff {
                 scope: StaticScope::Attached,
                 condition: None,
@@ -11215,6 +11182,7 @@ fn wolfbat() -> CardDefinition {
                 effects: vec![Effect::OptionalPayment {
                     cost: PaymentCost::Mana(ManaCost::parse("{B}")),
                     if_paid: vec![Effect::Move {
+                        unrevealed: false,
                         library_end: None,
                         what: ObjectSelector::This,
                         to: ZoneType::Battlefield,
@@ -11463,6 +11431,7 @@ fn zuko_conflicted() -> CardDefinition {
                         mode(vec![
                             Effect::exile(ObjectSelector::This),
                             Effect::Move {
+                                unrevealed: false,
                                 library_end: None,
                                 what: ObjectSelector::Moved,
                                 to: ZoneType::Battlefield,
@@ -11614,6 +11583,7 @@ fn return_transformed() -> Vec<Effect> {
     vec![
         Effect::exile(ObjectSelector::This),
         Effect::Move {
+            unrevealed: false,
             library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,

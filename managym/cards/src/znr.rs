@@ -1,13 +1,19 @@
 //! Zendikar Rising.
 use managym_state::{
     ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
-    mana::ManaCost,
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
+        PrintedCharacteristics,
+    },
+    effect::Modification,
+    mana::{Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        crawling_barrens(),
         broken_wings(),
         highborn_vampire(),
         CardDefinition {
@@ -75,6 +81,54 @@ fn broken_wings() -> CardDefinition {
                 },
             ))],
             text_box: "Destroy target artifact, enchantment, or creature with flying.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crawling_barrens() -> CardDefinition {
+    let text_box = "{T}: Add {C}.\n{4}: Put two +1/+1 counters on this land. Then you may have it become a 0/0 Elemental creature until end of turn. It's still a land.";
+    CardDefinition {
+        key: "znr.crawling_barrens",
+        scryfall_id: "7bd0e025-7a75-4641-a51a-27df9dcde05f",
+        printed: PrintedCharacteristics {
+            name: "Crawling Barrens".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("C"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}"),
+                effects: vec![
+                    Effect::put_counters(
+                        ObjectSelector::ExactSource,
+                        CounterKind::PlusOnePlusOne,
+                        2,
+                    ),
+                    Effect::Modal {
+                        modes: vec![
+                            vec![
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::BecomeCreature,
+                                ),
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::AddSubtypes(vec!["Elemental".into()]),
+                                ),
+                                Effect::until_end_of_turn(
+                                    ObjectSelector::ExactSource,
+                                    Modification::base_pt(Some(0), Some(0)),
+                                ),
+                            ],
+                            vec![],
+                        ],
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

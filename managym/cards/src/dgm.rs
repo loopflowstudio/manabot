@@ -12,7 +12,11 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![unflinching_courage(),CardDefinition {
+    vec![unflinching_courage(), mazes_end()]
+}
+
+fn mazes_end() -> CardDefinition {
+    CardDefinition {
         key: "dgm.mazes_end",
         scryfall_id: "401f7042-24fd-42a0-ae7c-e6b7de1aa446",
         printed: PrintedCharacteristics {
@@ -52,7 +56,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
             ..Default::default()
         },
         ..Default::default()
-    }]
+    }
 }
 
 fn unflinching_courage() -> CardDefinition {

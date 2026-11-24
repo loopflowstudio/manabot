@@ -10,6 +10,7 @@ use managym_state::{
         Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
         StaticPtBuff, StaticScope,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -17,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        adventuring_gear(),
         day_of_judgment(),
         vampire_nighthawk(),
         rampaging_baloths(),
@@ -349,6 +351,34 @@ fn day_of_judgment() -> CardDefinition {
                 CardPredicate::creature(),
             ))],
             text_box: "Destroy all creatures.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn adventuring_gear() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, equipped creature gets +2/+2 until end of turn.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "zen.adventuring_gear",
+        scryfall_id: "3aa395f2-656e-4bf3-bd9b-6240bd3e2774",
+        printed: PrintedCharacteristics {
+            name: "Adventuring Gear".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::Attached,
+                    Modification::pump(2, 2),
+                )],
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

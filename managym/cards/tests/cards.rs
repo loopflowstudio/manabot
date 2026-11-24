@@ -14,6 +14,8 @@ mod aer;
 mod afr;
 #[path = "cards/akh.rs"]
 mod akh;
+#[path = "cards/ala.rs"]
+mod ala;
 #[path = "cards/apc.rs"]
 mod apc;
 #[path = "cards/atq.rs"]
@@ -48,6 +50,8 @@ mod definitions;
 mod dft;
 #[path = "cards/dgm.rs"]
 mod dgm;
+#[path = "cards/dis.rs"]
+mod dis;
 #[path = "cards/dka.rs"]
 mod dka;
 #[path = "cards/dmu.rs"]
@@ -122,12 +126,18 @@ mod m21;
 mod mbs;
 #[path = "cards/mh1.rs"]
 mod mh1;
+#[path = "cards/mh2.rs"]
+mod mh2;
 #[path = "cards/mid.rs"]
 mod mid;
+#[path = "cards/mir.rs"]
+mod mir;
 #[path = "cards/mkm.rs"]
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/mom.rs"]
+mod mom;
 #[path = "cards/mor.rs"]
 mod mor;
 #[path = "cards/mrd.rs"]
@@ -150,6 +160,8 @@ mod ori;
 mod p02;
 #[path = "cards/pls.rs"]
 mod pls;
+#[path = "cards/pm15.rs"]
+mod pm15;
 #[path = "cards/por.rs"]
 mod por;
 #[path = "cards/psal.rs"]
@@ -164,10 +176,14 @@ mod rix;
 mod roe;
 #[path = "cards/rtr.rs"]
 mod rtr;
+#[path = "cards/scg.rs"]
+mod scg;
 #[path = "cards/scryfall.rs"]
 mod scryfall;
 #[path = "cards/shm.rs"]
 mod shm;
+#[path = "cards/snc.rs"]
+mod snc;
 #[path = "cards/soi.rs"]
 mod soi;
 #[path = "cards/spm.rs"]
@@ -327,4 +343,177 @@ fn check_targeted_removal(
     assert!(s.choose_target(Target::Permanent(target)));
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(destination));
+}
+
+fn assert_surveil_one(s: &mut support::game::Scenario) {
+    use crate::support::inspect::{library_top, offered_cards, zone_of};
+    use crate::support::play::{choose, pass_until, select_card, settle};
+    use managym::agent::action::{Action, ActionSpaceKind};
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    pass_until(s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let top = library_top(s, 0);
+    assert_eq!(offered_cards(s), [top]);
+    let mut keep = s.clone();
+    choose(&mut keep, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut keep);
+    assert_eq!(library_top(&keep, 0), top);
+    select_card(s, top);
+    settle(s);
+    assert_eq!(zone_of(s, top), Some(ZoneType::Graveyard));
+}
+
+fn assert_draw_then_discard(
+    s: &mut support::game::Scenario,
+    before: managym::state::game_object::ObjectId,
+    drawn: managym::state::game_object::ObjectId,
+) {
+    use crate::support::inspect::{offered_cards, zone_of};
+    use crate::support::play::{fork_selecting, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    pass_until(s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let choices = offered_cards(s);
+    assert_eq!(choices.len(), 2);
+    for (discard, keep) in [(before, drawn), (drawn, before)] {
+        let discard = support::inspect::now(s, discard);
+        assert!(choices.contains(&discard));
+        let mut fork = fork_selecting(s, discard);
+        settle(&mut fork);
+        assert_eq!(zone_of(&fork, discard), Some(ZoneType::Graveyard));
+        assert_eq!(zone_of(&fork, keep), Some(ZoneType::Hand));
+    }
+}
+
+fn assert_optional_revealed_search(name: &str, eligible: &[&str], excluded: &[&str]) {
+    use crate::support::game::{five_color_setup, put_onto_battlefield};
+    use crate::support::inspect::{library, offered_cards, zone_of};
+    use crate::support::play::{choose_mode, fork_selecting, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    let mut deck = vec![name];
+    deck.extend_from_slice(eligible);
+    deck.extend_from_slice(excluded);
+    let mut s = five_color_setup(&deck);
+    put_onto_battlefield(&mut s, 0, name);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let order = library(&s, 0);
+    let mut decline = s.clone();
+    choose_mode(&mut decline, 1);
+    settle(&mut decline);
+    assert_eq!(library(&decline, 0), order);
+    choose_mode(&mut s, 0);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let offered = offered_cards(&s);
+    assert!(offered
+        .iter()
+        .all(|id| eligible.contains(&s.game().state[*id].name.as_str())));
+    for name in eligible {
+        let chosen = *offered
+            .iter()
+            .find(|id| s.game().state[**id].name == *name)
+            .unwrap();
+        let definition = s.game().state[chosen].definition_id;
+        let mut fork = fork_selecting(&s, chosen);
+        settle(&mut fork);
+        assert_eq!(zone_of(&fork, chosen), Some(ZoneType::Hand));
+        assert_eq!(
+            fork.game().state.players[0].known_hand.get(&definition),
+            Some(&1)
+        );
+    }
+}
+
+fn assert_required_library_search(name: &str, destination: managym::state::zone::ZoneType) {
+    use crate::support::game::{five_color_setup, put_onto_battlefield};
+    use crate::support::inspect::{has_action, library, library_card, offered_cards, zone_of};
+    use crate::support::play::{fork_selecting, pass_until, settle};
+    use managym::agent::action::{Action, ActionSpaceKind};
+    use managym::flow::event::GameEvent;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    put_onto_battlefield(&mut s, 0, name);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(!has_action(&s, |a| matches!(a, Action::Decline { .. })));
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), library(&s, 0).len());
+    for name in ["Gray Ogre", "Forest"] {
+        let chosen = library_card(&s, 0, name);
+        let definition = s.game().state[chosen].definition_id;
+        let event_cursor = s.game().state.events.len();
+        let mut fork = fork_selecting(&s, chosen);
+        settle(&mut fork);
+        assert_eq!(zone_of(&fork, chosen), Some(destination));
+        if destination == ZoneType::Hand {
+            assert!(!fork.game().state.events.iter().skip(event_cursor).any(|event|
+                matches!(event,GameEvent::CardRevealed {definition:shown,..} if *shown==definition)
+            ));
+            assert!(!fork.game().state.players[0]
+                .known_hand
+                .contains_key(&definition));
+        }
+    }
+}
+
+fn assert_revealed_discard(spell: &str, eligible: &[&str]) {
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            game_object::{PlayerId, Target},
+            zone::ZoneType,
+        },
+    };
+    use support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{offered_cards, zone_of},
+        play::{cast, fork_selecting, pass_until, settle, spend_colorless},
+    };
+
+    let mut s = five_color_setup(&[spell, "Gray Ogre", "Lightning Bolt", "Giant Growth"]);
+    let hand = ["Gray Ogre", "Forest", "Lightning Bolt", "Giant Growth"]
+        .map(|name| move_from_library(&mut s, 1, name, ZoneType::Hand));
+    cast(&mut s, spell);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), eligible.len());
+    for id in hand {
+        let face = &s.game().state[id];
+        assert_eq!(
+            s.game().state.players[1]
+                .known_hand
+                .get(&face.definition_id),
+            Some(&1)
+        );
+        assert_eq!(
+            offered.contains(&id),
+            eligible.contains(&face.name.as_str())
+        );
+    }
+    for selected in offered {
+        let mut branch = fork_selecting(&s, selected);
+        settle(&mut branch);
+        for id in hand {
+            assert_eq!(
+                zone_of(&branch, id),
+                Some(if id == selected {
+                    ZoneType::Graveyard
+                } else {
+                    ZoneType::Hand
+                })
+            );
+        }
+    }
 }

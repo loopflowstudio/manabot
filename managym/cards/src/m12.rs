@@ -11,10 +11,12 @@ use managym_state::{
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        rune_scarred_demon(),
         swiftfoot_boots(),
         sundial_of_the_infinite(),
         visions_of_beyond(),
@@ -115,18 +117,35 @@ fn swiftfoot_boots() -> CardDefinition {
                     Keyword::Haste,
                 ]))],
             })],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
             name: "Swiftfoot Boots".into(),
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             mana_cost: Some(ManaCost::parse("{2}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rune_scarred_demon() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, search your library for a card, put it into your hand, then shuffle.";
+    CardDefinition {
+        key: "m12.rune_scarred_demon",
+        scryfall_id: "509e0f81-0591-4b28-978e-a2f1c46b7427",
+        printed: PrintedCharacteristics {
+            name: "Rune-Scarred Demon".into(),
+            mana_cost: Some(ManaCost::parse("{5}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Demon".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::search_for_card(ZoneType::Hand)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

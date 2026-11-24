@@ -47,6 +47,7 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            attached_to: permanent.attached_to,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics

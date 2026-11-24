@@ -1,12 +1,13 @@
 //! Kaldheim.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
         TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility,
+        Keywords, LayerValue, PrintedCharacteristics, SacrificeCost, StaticAbility,
+        StaticContinuous, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -16,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        goldvein_pick(),
         youthful_valkyrie(),
         snakeskin_veil(),
         fynn_the_fangbearer(),
@@ -187,6 +189,42 @@ fn youthful_valkyrie() -> CardDefinition {
                     1,
                 )],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goldvein_pick() -> CardDefinition {
+    let text_box = "Equipped creature gets +1/+1.\nWhenever equipped creature deals combat damage to a player, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "khm.goldvein_pick",
+        scryfall_id: "9bf5e4ad-a6e9-4b7c-a1ec-8246d3a3b6ca",
+        printed: PrintedCharacteristics {
+            name: "Goldvein Pick".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{1}"))],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(1),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::EquippedCreature,
+                    to: Actor::AnyPlayer,
+                    per: Per::Object,
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.treasure", 1)],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

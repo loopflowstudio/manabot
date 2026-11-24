@@ -1,6 +1,8 @@
 //! Dominaria.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject},
+    ability::{
+        Ability, Condition, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject,
+    },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
         StaticAbility, StaticContinuous, StaticScope,
@@ -11,7 +13,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![lyra_dawnbringer(), tatyova_benthic_druid(), run_amok()]
+    vec![
+        ghitu_lavarunner(),
+        lyra_dawnbringer(),
+        tatyova_benthic_druid(),
+        run_amok(),
+    ]
 }
 
 fn run_amok() -> CardDefinition {
@@ -76,5 +83,68 @@ fn tatyova_benthic_druid() -> CardDefinition {
 }
 
 fn lyra_dawnbringer() -> CardDefinition {
-    CardDefinition {key:"dom.lyra_dawnbringer",scryfall_id:"93be6799-7b9d-44d4-84dc-2961692b5a85",printed:PrintedCharacteristics {statics:vec![StaticAbility::Continuous(StaticContinuous {scope:StaticScope::OtherYouControl(CardPredicate::subtype("Angel")),condition:None,characteristic_defining:false,modifications:vec![Modification::ModifyPt {power:LayerValue::Fixed(1),toughness:LayerValue::Fixed(1)},Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink]))]})],name:"Lyra Dawnbringer".into(),types:CardTypes::new([CardType::Creature]),supertypes:vec!["Legendary".into()],subtypes:vec!["Angel".into()],mana_cost:Some(ManaCost::parse("{3}{W}{W}")),power:Some(5),toughness:Some(5),keywords:Keywords::of(&[Keyword::Flying,Keyword::Lifelink,Keyword::FirstStrike]),text_box:"Flying\nFirst strike (This creature deals combat damage before creatures without first strike.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nOther Angels you control get +1/+1 and have lifelink.".into(),..Default::default()},..Default::default()}
+    let text_box = "Flying\nFirst strike (This creature deals combat damage before creatures without first strike.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)\nOther Angels you control get +1/+1 and have lifelink.";
+    CardDefinition {
+        key: "dom.lyra_dawnbringer",
+        scryfall_id: "93be6799-7b9d-44d4-84dc-2961692b5a85",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Angel")),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(1),
+                        toughness: LayerValue::Fixed(1),
+                    },
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
+                ],
+            })],
+            name: "Lyra Dawnbringer".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Angel".into()],
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Lifelink, Keyword::FirstStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ghitu_lavarunner() -> CardDefinition {
+    let text_box = "As long as there are two or more instant and/or sorcery cards in your graveyard, this creature gets +1/+0 and has haste. (It can attack and {T} as soon as it comes under your control.)";
+    CardDefinition {
+        key: "dom.ghitu_lavarunner",
+        scryfall_id: "c448ba82-a502-459f-9ebc-fc9e85674e6c",
+        printed: PrintedCharacteristics {
+            name: "Ghitu Lavarunner".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(2),
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::GraveyardAtLeast {
+                    count: 2,
+                    predicate: CardPredicate::instant_or_sorcery(),
+                }),
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(1),
+                        toughness: LayerValue::Fixed(0),
+                    },
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                ],
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

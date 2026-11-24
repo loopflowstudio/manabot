@@ -709,6 +709,9 @@ Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
 that activated its ability. A zone change ends that identity. Avatar Destiny
 uses `ObjectSelector::This` to return the Aura from the graveyard after the
 enchanted creature dies.
+An effect on the enchanted or equipped permanent uses `ObjectSelector::Attached`.
+It reads the attachment at resolution. If the source left in response, its last
+known attachment identifies the exact permanent it last enchanted or equipped.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
@@ -716,6 +719,9 @@ cardinality across choices, and runs the chosen effects in a child scope with
 result independently of a later `Move`; the caller keeps those results while
 selection effects run. Mill, optional discard/draw and basic/tutor searches use
 ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+An unrestricted `Effect::search_for_card` requires a choice while the library
+contains cards. Rune-Scarred Demon uses an unrevealed move into hand. Micromancer
+reveals the chosen card, which gives both viewers knowledge of it in hand.
 `ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
 materializers refresh unknown selected subsets throughout saved callers and child
 scopes, preserving cardinality and exact viewer-known choices. Restricted partial

@@ -1,8 +1,8 @@
 //! Dominaria United.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, ObjectSelector, PaymentCost, Scope, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Actor, DistinctSearchEnd, Effect, ObjectSelector, PaymentCost, Scope, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -15,6 +15,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        micromancer(),
         pilfer(),
         balmor_battlemage_captain(),
         magnigoth_sentry(),
@@ -126,5 +127,60 @@ fn balmor_battlemage_captain() -> CardDefinition {
 }
 
 fn pilfer() -> CardDefinition {
-    CardDefinition {key:"dmu.pilfer",scryfall_id:"6d872c10-4126-4130-a74a-1331ed418ca8",printed:PrintedCharacteristics {spell_effects:vec![Effect::RevealHandDiscardChosen {target:TargetSpec::Opponent,predicate:CardPredicate {not_card_types:vec![CardType::Land],..Default::default()}}],name:"Pilfer".into(),types:CardTypes::new([CardType::Sorcery]),mana_cost:Some(ManaCost::parse("{1}{B}")),text_box:"Target opponent reveals their hand. You choose a nonland card from it. That player discards that card.".into(),..Default::default()},..Default::default()}
+    let text_box = "Target opponent reveals their hand. You choose a nonland card from it. That player discards that card.";
+    CardDefinition {
+        key: "dmu.pilfer",
+        scryfall_id: "6d872c10-4126-4130-a74a-1331ed418ca8",
+        printed: PrintedCharacteristics {
+            spell_effects: vec![Effect::RevealHandDiscardChosen {
+                target: TargetSpec::Opponent,
+                predicate: CardPredicate {
+                    not_card_types: vec![CardType::Land],
+                    ..Default::default()
+                },
+            }],
+            name: "Pilfer".into(),
+            types: CardTypes::new([CardType::Sorcery]),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn micromancer() -> CardDefinition {
+    let text_box = "When this creature enters, you may search your library for an instant or sorcery card with mana value 1, reveal it, put it into your hand, then shuffle.";
+    CardDefinition {
+        key: "dmu.micromancer",
+        scryfall_id: "b21203c8-a935-4ce0-a742-148587e32145",
+        printed: PrintedCharacteristics {
+            name: "Micromancer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::Modal {
+                    modes: vec![
+                        vec![Effect::SearchDistinctNames {
+                            predicate: CardPredicate {
+                                min_mana_value: Some(1),
+                                max_mana_value: Some(1),
+                                ..CardPredicate::instant_or_sorcery()
+                            },
+                            count: 1,
+                            end: DistinctSearchEnd::Hand,
+                        }],
+                        vec![],
+                    ],
+                }],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

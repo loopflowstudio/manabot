@@ -68,3 +68,31 @@ fn foundations_spell_broken_wings() {
         ZoneType::Graveyard,
     );
 }
+
+#[test]
+fn foundations_5d_crawling_barrens() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::counters;
+    use crate::support::play::{activate, choose_mode, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+
+    let mut s = five_color_setup(&["Crawling Barrens"]);
+    let id = s.force_permanent_on_battlefield(0, "Crawling Barrens");
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, id, 0);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(counters(&s, id), 2);
+    let mut decline = s.clone();
+    choose_mode(&mut decline, 1);
+    settle(&mut decline);
+    assert!(!decline.game().characteristics(id).is_creature());
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    let face = s.game().characteristics(id);
+    assert!(face.is_creature() && face.has_subtype("Elemental"));
+    assert_eq!(face.pt(), (2, 2));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!s.game().characteristics(id).is_creature());
+    assert_eq!(counters(&s, id), 2);
+}

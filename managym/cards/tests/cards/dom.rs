@@ -71,10 +71,30 @@ fn foundations_grant_lyra_dawnbringer() {
     assert_eq!(s.game().characteristics(other).pt(), (2, 2));
     assert!(keywords(&s, ally).has(Keyword::Lifelink));
     assert!(!keywords(&s, enemy).has(Keyword::Lifelink));
-    assert_eq!(keywords(&s, other).has(Keyword::Lifelink), false);
+    assert!(!keywords(&s, other).has(Keyword::Lifelink));
     assert_eq!(s.game().characteristics(enemy).pt(), base);
     let card = card_of(&s, source);
     move_card(&mut s, card, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(ally).pt(), base);
     assert!(!keywords(&s, ally).has(Keyword::Lifelink));
+}
+
+#[test]
+fn foundations_5d_ghitu_lavarunner() {
+    use crate::support::game::{five_color_setup, move_card, move_from_library};
+    use crate::support::inspect::keywords;
+    use managym::state::card::Keyword;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Ghitu Lavarunner", "Lightning Bolt", "Day of Judgment"]);
+    let id = s.force_permanent_on_battlefield(0, "Ghitu Lavarunner");
+    move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Graveyard);
+    move_from_library(&mut s, 1, "Day of Judgment", ZoneType::Graveyard);
+    assert!(!keywords(&s, id).has(Keyword::Haste));
+    let second = move_from_library(&mut s, 0, "Day of Judgment", ZoneType::Graveyard);
+    assert!(keywords(&s, id).has(Keyword::Haste));
+    assert_eq!(s.game().characteristics(id).pt(), (2, 2));
+    move_card(&mut s, second, ZoneType::Exile);
+    assert_eq!(s.game().characteristics(id).pt(), (1, 2));
+    assert!(!keywords(&s, id).has(Keyword::Haste));
 }

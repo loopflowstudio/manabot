@@ -646,12 +646,12 @@ its dev-dependency). Both test targets mount the engine's `tests/support/` (`gam
 primitive defined once. `five_color_setup` decks hold four copies of each listed
 name; a fifth `force_permanent_on_battlefield` of that name returns an existing
 copy, so list another card when a test needs more. `inspect::keywords` reads
-printed and until-end-of-turn keywords only; assert static grants through the
-observation. `force_permanent_on_battlefield` places a permanent without an
-entry event (no triggers or turn history); `enter_and_settle` and
+the layered characteristics, including static grants. `force_permanent_on_battlefield` places
+a permanent without an entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A forced permanent is not summoning-sick. With exactly enough untapped lands a
+A forced creature starts summoning-sick. Use `clear_summoning_sickness` when
+a constructed position needs it to attack or pay a tap cost immediately. With exactly enough untapped lands a
 manual payment finishes itself after its last object choice; calling `pay_rest`
 then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds

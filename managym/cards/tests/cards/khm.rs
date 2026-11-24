@@ -191,3 +191,33 @@ fn foundations_permanent_youthful_valkyrie() {
     enter_and_settle(&mut s, "Serra Angel");
     assert_eq!(counters(&s, source), 1);
 }
+
+#[test]
+fn foundations_5d_goldvein_pick() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{activate, attack_with, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Goldvein Pick", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    for id in [ogre, giant] {
+        crate::support::game::clear_summoning_sickness(&mut s, id);
+    }
+    let gear = s.force_permanent_on_battlefield(0, "Goldvein Pick");
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, gear, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
+    let mut other = s.clone();
+    for (branch, attacker, count) in [(&mut s, ogre, 1), (&mut other, giant, 0)] {
+        branch.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(branch, attacker);
+        branch.advance_to_active_step(0, StepKind::PostcombatMain);
+        assert_eq!(
+            branch.battlefield_permanents_named(0, "Treasure").len(),
+            count
+        );
+    }
+}

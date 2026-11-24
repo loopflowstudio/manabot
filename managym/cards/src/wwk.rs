@@ -1,6 +1,5 @@
 //! Worldwake.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, StaticAbility, StaticContinuous, StaticScope,
@@ -8,6 +7,7 @@ use managym_state::{
     effect::Modification,
     mana::ManaCost,
 };
+
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![basilisk_collar()]
 }
@@ -27,14 +27,7 @@ fn basilisk_collar() -> CardDefinition {
                     Keyword::Lifelink,
                 ]))],
             })],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             name: "Basilisk Collar".into(),
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],

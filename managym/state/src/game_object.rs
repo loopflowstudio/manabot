@@ -283,6 +283,9 @@ pub enum ObjectLookupError {
 /// `ContentPack` and does not clone card semantics into mutable state.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    /// The exact object this permanent was attached to immediately before departure.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
+    pub attached_to: Option<ObjectId>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]

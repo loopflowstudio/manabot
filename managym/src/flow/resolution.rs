@@ -556,14 +556,12 @@ impl Game {
     /// the one captured as an activated ability was activated, or else the
     /// source's current attachment (a triggered ability).
     fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
-        match frame.context_target {
-            Some(Target::Permanent(id)) => Some(id),
-            Some(_) => None,
-            None => frame
-                .source_ref()
-                .and_then(|source| self.lookup_current_permanent(source).ok())
-                .and_then(|source| self.attached_permanent(source)),
-        }
+        let source = frame.source_ref()?;
+        let attached = match self.lookup_current_permanent(source) {
+            Ok(permanent) => self.state.permanents[permanent].as_ref()?.attached_to,
+            Err(_) => self.object_lki(source)?.attached_to,
+        }?;
+        self.lookup_current_permanent(attached).ok()
     }
 
     /// The players a selector names as the effect resolves; a target player
@@ -787,6 +785,7 @@ impl Game {
                 None
             }
             Effect::Move {
+                unrevealed,
                 library_end,
                 what,
                 to,
@@ -864,7 +863,7 @@ impl Game {
                     }),
                     shuffle: *to == ZoneType::Library && library_end.is_none(),
                     library_end: *library_end,
-                    reveal: *to == ZoneType::Hand,
+                    reveal: *to == ZoneType::Hand && !unrevealed,
                 };
                 frame.batch = Some(batch);
                 None
@@ -2077,6 +2076,7 @@ impl Game {
                             Some(watched),
                         ),
                         effects: vec![Effect::Move {
+                            unrevealed: false,
                             library_end: None,
                             what: ObjectSelector::This,
                             to: ZoneType::Battlefield,

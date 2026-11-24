@@ -9,6 +9,7 @@ use managym_state::{
     mana::ManaCost,
     predicate::CardPredicate,
 };
+
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         aggressive_mammoth(),
@@ -131,5 +132,27 @@ fn meteor_golem() -> CardDefinition {
 }
 
 fn aggressive_mammoth() -> CardDefinition {
-    CardDefinition {key:"m19.aggressive_mammoth",scryfall_id:"323f3c76-5e79-43e6-ae78-f555810edbc3",printed:PrintedCharacteristics {statics:vec![StaticAbility::Continuous(StaticContinuous {scope:StaticScope::OtherYouControl(CardPredicate::creature()),condition:None,characteristic_defining:false,modifications:vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))]})],name:"Aggressive Mammoth".into(),types:CardTypes::new([CardType::Creature]),subtypes:vec!["Elephant".into()],mana_cost:Some(ManaCost::parse("{3}{G}{G}{G}")),power:Some(8),toughness:Some(8),keywords:Keywords::of(&[Keyword::Trample]),text_box:"Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nOther creatures you control have trample.".into(),..Default::default()},..Default::default()}
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nOther creatures you control have trample.";
+    CardDefinition {
+        key: "m19.aggressive_mammoth",
+        scryfall_id: "323f3c76-5e79-43e6-ae78-f555810edbc3",
+        printed: PrintedCharacteristics {
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::OtherYouControl(CardPredicate::creature()),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::AddKeywords(Keywords::of(&[Keyword::Trample]))],
+            })],
+            name: "Aggressive Mammoth".into(),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elephant".into()],
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}{G}")),
+            power: Some(8),
+            toughness: Some(8),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }

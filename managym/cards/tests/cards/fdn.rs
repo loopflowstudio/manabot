@@ -1166,3 +1166,186 @@ fn foundations_grant_twinblade_blessing() {
     move_card(&mut s, card, ZoneType::Graveyard);
     assert!(!keywords(&s, ogre).has(Keyword::DoubleStrike));
 }
+
+#[test]
+fn foundations_5d_rune_sealed_wall() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::tapped;
+    use crate::support::play::activate;
+    let mut s = five_color_setup(&["Rune-Sealed Wall"]);
+    let id = s.force_permanent_on_battlefield(0, "Rune-Sealed Wall");
+    crate::support::game::clear_summoning_sickness(&mut s, id);
+    activate(&mut s, id, 0);
+    assert!(tapped(&s, id));
+    crate::assert_surveil_one(&mut s);
+}
+
+#[test]
+fn foundations_5d_strix_lookout() {
+    use crate::support::game::{five_color_setup, move_from_library};
+    use crate::support::inspect::{library_top, tapped};
+    use crate::support::play::activate;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Strix Lookout", "Gray Ogre"]);
+    let before = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Hand);
+    let id = s.force_permanent_on_battlefield(0, "Strix Lookout");
+    crate::support::game::clear_summoning_sickness(&mut s, id);
+    let top = library_top(&s, 0);
+    s.set_player_mana_pool(0, "1U");
+    activate(&mut s, id, 0);
+    assert!(tapped(&s, id));
+    crate::assert_draw_then_discard(&mut s, before, top);
+}
+
+#[test]
+fn foundations_5d_icewind_elemental() {
+    use crate::support::game::{five_color_setup, move_from_library, put_onto_battlefield};
+    use crate::support::inspect::library_top;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Icewind Elemental", "Gray Ogre"]);
+    let before = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Hand);
+    put_onto_battlefield(&mut s, 0, "Icewind Elemental");
+    let top = library_top(&s, 0);
+    crate::assert_draw_then_discard(&mut s, before, top);
+}
+
+#[test]
+fn foundations_5d_billowing_shriekmass() {
+    use crate::support::game::{five_color_setup, move_card, move_from_library};
+    use crate::support::inspect::permanent_of;
+    use crate::support::play::enter_and_settle;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Billowing Shriekmass"]);
+    for _ in 0..4 {
+        move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    }
+    let before = s.zone_size(0, ZoneType::Library);
+    let card = enter_and_settle(&mut s, "Billowing Shriekmass");
+    let id = permanent_of(&s, card).unwrap();
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 7);
+    assert_eq!(s.zone_size(0, ZoneType::Library), before - 4);
+    assert_eq!(s.game().characteristics(id).pt(), (4, 4));
+    let milled = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Graveyard, PlayerId(0))[0];
+    move_card(&mut s, milled, ZoneType::Exile);
+    assert_eq!(s.game().characteristics(id).pt(), (2, 3));
+}
+
+#[test]
+fn foundations_5d_skyknight_squire() {
+    use crate::support::game::{five_color_setup, set_counters};
+    use crate::support::inspect::{counters, keywords};
+    use crate::support::play::enter_and_settle;
+    use managym::state::card::Keyword;
+    use managym::state::permanent::CounterKind;
+
+    let mut s = five_color_setup(&["Skyknight Squire", "Gray Ogre"]);
+    let id = s.force_permanent_on_battlefield(0, "Skyknight Squire");
+    for n in 1..=3 {
+        enter_and_settle(&mut s, "Gray Ogre");
+        assert_eq!(counters(&s, id), n);
+        let face = s.game().characteristics(id);
+        assert_eq!(face.keywords.has(Keyword::Flying), n == 3);
+        assert_eq!(face.has_subtype("Knight"), n == 3);
+        assert!(face.has_subtype("Cat") && face.has_subtype("Scout"));
+    }
+    set_counters(&mut s, id, CounterKind::PlusOnePlusOne, 2);
+    assert!(!keywords(&s, id).has(Keyword::Flying));
+    assert!(!s.game().characteristics(id).has_subtype("Knight"));
+}
+
+#[test]
+fn foundations_5d_inspiring_paladin() {
+    use crate::support::game::{five_color_setup, move_card, set_counters};
+    use crate::support::inspect::{card_of, keywords};
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::permanent::CounterKind;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Inspiring Paladin", "Gray Ogre"]);
+    let id = s.force_permanent_on_battlefield(0, "Inspiring Paladin");
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert!(!keywords(&s, ally).has(Keyword::FirstStrike));
+    for target in [ally, enemy] {
+        set_counters(&mut s, target, CounterKind::PlusOnePlusOne, 1);
+    }
+    for (turn, first) in [(0, true), (1, false), (0, true)] {
+        s.advance_to_active_step(turn, StepKind::Main);
+        assert_eq!(keywords(&s, id).has(Keyword::FirstStrike), first);
+        assert_eq!(keywords(&s, ally).has(Keyword::FirstStrike), first);
+        assert!(!keywords(&s, enemy).has(Keyword::FirstStrike));
+    }
+    let source = card_of(&s, id);
+    move_card(&mut s, source, ZoneType::Graveyard);
+    assert!(!keywords(&s, ally).has(Keyword::FirstStrike));
+}
+
+#[test]
+fn foundations_5d_quick_draw_katana() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::keywords;
+    use crate::support::play::{activate, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Quick-Draw Katana", "Gray Ogre", "Hill Giant"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let gear = s.force_permanent_on_battlefield(0, "Quick-Draw Katana");
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, gear, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 2));
+    assert!(keywords(&s, ogre).has(Keyword::FirstStrike));
+    assert_eq!(s.game().characteristics(giant).pt(), (3, 3));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert!(!keywords(&s, ogre).has(Keyword::FirstStrike));
+}
+
+#[test]
+fn foundations_5d_starlight_snare() {
+    use crate::support::game::{five_color_setup, move_card};
+    use crate::support::inspect::{card_of, permanent_named, tapped};
+    use crate::support::play::{cast, resolve_top, settle, spend_colorless};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Starlight Snare", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Starlight Snare");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let aura = permanent_named(&s, "Starlight Snare");
+    let source = card_of(&s, aura);
+    assert!(!tapped(&s, ogre));
+    let mut removed = s.clone();
+    move_card(&mut removed, source, ZoneType::Graveyard);
+    let mut reentered = removed.clone();
+    let wearer = card_of(&reentered, ogre);
+    move_card(&mut reentered, wearer, ZoneType::Exile);
+    let new_wearer = move_card(&mut reentered, wearer, ZoneType::Battlefield);
+    let new_ogre = reentered
+        .game()
+        .lookup_current_permanent(new_wearer)
+        .unwrap();
+    settle(&mut reentered);
+    assert!(!tapped(&reentered, new_ogre));
+
+    for (branch, held) in [(&mut s, true), (&mut removed, false)] {
+        settle(branch);
+        assert!(tapped(branch, ogre));
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(tapped(branch, ogre), held);
+    }
+}

@@ -7,7 +7,8 @@ use managym_state::{
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
         DamageTransform, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
-        SacrificeCost, StaticAbility, StaticContinuous, StaticScope, TargetCostReduction,
+        Restriction, SacrificeCost, StaticAbility, StaticContinuous, StaticRestriction,
+        StaticScope, TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -17,6 +18,14 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        strix_lookout(),
+        icewind_elemental(),
+        rune_sealed_wall(),
+        starlight_snare(),
+        skyknight_squire(),
+        inspiring_paladin(),
+        billowing_shriekmass(),
+        quick_draw_katana(),
         twinblade_blessing(),
         elvish_regrower(),
         clinquant_skymage(),
@@ -529,14 +538,7 @@ fn leyline_axe() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{4}")),
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
-            activated_abilities: vec![ActivatedAbilityDefinition {
-                sorcery_timing: true,
-                mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-                ..Default::default()
-            }],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
             statics: vec![StaticAbility::BeginOnBattlefield,
                 StaticAbility::PtBuff(StaticPtBuff {
                     scope: StaticScope::Attached,
@@ -808,6 +810,258 @@ fn twinblade_blessing() -> CardDefinition {
             subtypes: vec!["Aura".into()],
             mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
             keywords: Keywords::of(&[Keyword::Flash]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn quick_draw_katana() -> CardDefinition {
+    let text_box = "During your turn, equipped creature gets +2/+0 and has first strike. (It deals combat damage before creatures without first strike.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "fdn.quick_draw_katana",
+        scryfall_id: "69beec98-c89c-4673-953c-8b3ef3d81560",
+        printed: PrintedCharacteristics {
+            name: "Quick-Draw Katana".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::Attached,
+                condition: Some(Condition::YourTurn),
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::ModifyPt {
+                        power: LayerValue::Fixed(2),
+                        toughness: LayerValue::Fixed(0),
+                    },
+                    Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
+                ],
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn billowing_shriekmass() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, mill three cards. (Put the top three cards of your library into your graveyard.)\nThreshold — This creature gets +2/+1 as long as there are seven or more cards in your graveyard.";
+    CardDefinition {
+        key: "fdn.billowing_shriekmass",
+        scryfall_id: "7b3587a9-0667-4d53-807b-c437bcb1d7b3",
+        printed: PrintedCharacteristics {
+            name: "Billowing Shriekmass".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spirit".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::MillCards {
+                    count: 3.into(),
+                    target: None,
+                }],
+            )],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::GraveyardAtLeast {
+                    count: 7,
+                    predicate: CardPredicate::default(),
+                }),
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: LayerValue::Fixed(2),
+                    toughness: LayerValue::Fixed(1),
+                }],
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn inspiring_paladin() -> CardDefinition {
+    let text_box = "During your turn, this creature has first strike. (It deals combat damage before creatures without first strike.)\nDuring your turn, creatures you control with +1/+1 counters on them have first strike.";
+    CardDefinition {
+        key: "fdn.inspiring_paladin",
+        scryfall_id: "0763be06-25b2-4d6b-ab33-a1af85aeb443",
+        printed: PrintedCharacteristics {
+            name: "Inspiring Paladin".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(3),
+            toughness: Some(3),
+            statics: vec![
+                StaticAbility::Continuous(StaticContinuous {
+                    scope: StaticScope::This,
+                    condition: Some(Condition::YourTurn),
+                    characteristic_defining: false,
+                    modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                        Keyword::FirstStrike,
+                    ]))],
+                }),
+                StaticAbility::Continuous(StaticContinuous {
+                    scope: StaticScope::YouControl(CardPredicate {
+                        with_counter: true,
+                        ..CardPredicate::creature()
+                    }),
+                    condition: Some(Condition::YourTurn),
+                    characteristic_defining: false,
+                    modifications: vec![Modification::AddKeywords(Keywords::of(&[
+                        Keyword::FirstStrike,
+                    ]))],
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skyknight_squire() -> CardDefinition {
+    let text_box = "Whenever another creature you control enters, put a +1/+1 counter on this creature.\nAs long as this creature has three or more +1/+1 counters on it, it has flying and is a Knight in addition to its other types.";
+    CardDefinition {
+        key: "fdn.skyknight_squire",
+        scryfall_id: "fcfe4e62-c153-47b8-8e09-cedaf91f53d8",
+        printed: PrintedCharacteristics {
+            name: "Skyknight Squire".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Scout".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::another_you_control(CardPredicate::creature()),
+                vec![Effect::put_counters(
+                    ObjectSelector::ExactSource,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            )],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::This,
+                condition: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::PlusOnePlusOne,
+                    count: 3,
+                }),
+                characteristic_defining: false,
+                modifications: vec![
+                    Modification::AddSubtypes(vec!["Knight".into()]),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                ],
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn starlight_snare() -> CardDefinition {
+    let text_box = "Enchant creature\nWhen this Aura enters, tap enchanted creature.\nEnchanted creature doesn't untap during its controller's untap step.";
+    CardDefinition {
+        key: "fdn.starlight_snare",
+        scryfall_id: "74fb19b2-4f6c-4cbd-8756-a7eb5c7c9ef6",
+        printed: PrintedCharacteristics {
+            name: "Starlight Snare".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::Attached,
+                kind: Restriction::DoesntUntap,
+                unless: None,
+            })],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::tap(ObjectSelector::Attached)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rune_sealed_wall() -> CardDefinition {
+    let text_box = "Defender\n{T}: Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)";
+    CardDefinition {
+        key: "fdn.rune_sealed_wall",
+        scryfall_id: "da0f147b-95ed-4f32-9b46-6a633ae31976",
+        printed: PrintedCharacteristics {
+            name: "Rune-Sealed Wall".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::Surveil { count: 1 }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn icewind_elemental() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, draw a card, then discard a card.";
+    CardDefinition {
+        key: "fdn.icewind_elemental",
+        scryfall_id: "fd0eba76-3829-408b-828f-0b223c884728",
+        printed: PrintedCharacteristics {
+            name: "Icewind Elemental".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::DrawCards { count: 1.into() }, Effect::discard()],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn strix_lookout() -> CardDefinition {
+    let text_box = "Flying, vigilance (Attacking doesn't cause this creature to tap.)\n{1}{U}, {T}: Draw a card, then discard a card.";
+    CardDefinition {
+        key: "fdn.strix_lookout",
+        scryfall_id: "fbd2422e-8e84-4c39-af29-3b4d38baee63",
+        printed: PrintedCharacteristics {
+            name: "Strix Lookout".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}{U}"),
+                tap_source: true,
+                effects: vec![Effect::DrawCards { count: 1.into() }, Effect::discard()],
+                ..Default::default()
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

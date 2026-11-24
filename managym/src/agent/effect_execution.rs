@@ -113,6 +113,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "kept creature",
     "kept on top",
     "last known characteristics",
+    "last known attachment",
     "last known definition",
     "legend group",
     "legends kept",
@@ -624,6 +625,7 @@ impl<'a> Projection<'a> {
             )
         });
         let ObjectLki {
+            attached_to,
             transforms,
             inherited_from,
             granted_abilities,
@@ -644,6 +646,12 @@ impl<'a> Projection<'a> {
             definition_id,
             presentation_id: _,
         } = lki;
+        if let Some(attached) = attached_to {
+            self.reference(
+                "last known attachment",
+                game.visible_reference(*attached, viewer),
+            );
+        }
         self.field("last known definition", definition_id);
         let counter_values: Vec<_> = counters.iter().collect();
         self.field(

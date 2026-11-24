@@ -145,3 +145,38 @@ fn goblin_firebomb_sacrifices_itself_to_destroy_any_permanent_and_has_flash() {
 
     crate::support::play::casts_at_instant_speed("Goblin Firebomb");
 }
+
+#[test]
+fn foundations_5d_bushwhack() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{
+        card_of, library_card, offered_cards, offered_targets, permanent, zone_of,
+    };
+    use crate::support::play::{cast, choose_mode, pass_until, select_card, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::{PlayerId, Target};
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Bushwhack", "Gray Ogre", "Hill Giant"]);
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Hill Giant");
+    cast(&mut s, "Bushwhack");
+    let mut search = s.clone();
+    choose_mode(&mut search, 0);
+    pass_until(&mut search, ActionSpaceKind::LookAndSelect);
+    assert_eq!(search.action_space().player, Some(PlayerId(0)));
+    let forest = library_card(&search, 0, "Forest");
+    assert!(!offered_cards(&search).contains(&library_card(&search, 0, "Gray Ogre")));
+    select_card(&mut search, forest);
+    settle(&mut search);
+    assert_eq!(zone_of(&search, forest), Some(ZoneType::Hand));
+    choose_mode(&mut s, 1);
+    assert!(!offered_targets(&s).contains(&Target::Permanent(enemy)));
+    assert!(s.choose_target(Target::Permanent(ally)));
+    assert!(!offered_targets(&s).contains(&Target::Permanent(ally)));
+    assert!(s.choose_target(Target::Permanent(enemy)));
+    let ogre = card_of(&s, ally);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Graveyard));
+    assert_eq!(permanent(&s, enemy).damage, 2);
+}

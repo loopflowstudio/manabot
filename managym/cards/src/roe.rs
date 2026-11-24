@@ -1,15 +1,24 @@
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
+    },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
         StaticAbility,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![evolving_wilds(), prophetic_prism(), training_grounds()]
+    vec![
+        battle_rattle_shaman(),
+        evolving_wilds(),
+        prophetic_prism(),
+        training_grounds(),
+    ]
 }
 
 fn prophetic_prism() -> CardDefinition {
@@ -89,6 +98,41 @@ fn evolving_wilds() -> CardDefinition {
                     )],
                 )],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn battle_rattle_shaman() -> CardDefinition {
+    let text_box = "At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.";
+    CardDefinition {
+        key: "roe.battle_rattle_shaman",
+        scryfall_id: "aa1df08a-ccef-44cf-936a-838e238c27c1",
+        printed: PrintedCharacteristics {
+            name: "Battle-Rattle Shaman".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Shaman".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Creature),
+                    effects: vec![Effect::Modal {
+                        modes: vec![
+                            vec![Effect::until_end_of_turn(
+                                ObjectSelector::Target(TargetSpec::Creature),
+                                Modification::pump(2, 0),
+                            )],
+                            vec![],
+                        ],
+                    }],
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

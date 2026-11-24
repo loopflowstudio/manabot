@@ -56,3 +56,44 @@ fn foundations_grant_fireshrieker() {
     move_card(&mut s, card, ZoneType::Graveyard);
     assert!(!keywords(&s, ogre).has(Keyword::DoubleStrike));
 }
+
+#[test]
+fn foundations_5d_solemn_simulacrum() {
+    use crate::support::game::{five_color_setup, move_card, put_onto_battlefield};
+    use crate::support::inspect::{
+        card_of, library, library_card, library_top, offered_cards, permanent_of, tapped, zone_of,
+    };
+    use crate::support::play::{choose_mode, pass_until, select_card, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::state::game_object::PlayerId;
+    use managym::state::zone::ZoneType;
+
+    let mut s = five_color_setup(&["Solemn Simulacrum", "Gray Ogre"]);
+    let golem = put_onto_battlefield(&mut s, 0, "Solemn Simulacrum");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let order = library(&s, 0);
+    let mut decline = s.clone();
+    choose_mode(&mut decline, 1);
+    settle(&mut decline);
+    assert_eq!(library(&decline, 0), order);
+    choose_mode(&mut s, 0);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let forest = library_card(&s, 0, "Forest");
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    assert!(!offered_cards(&s).contains(&ogre));
+    select_card(&mut s, forest);
+    settle(&mut s);
+    assert!(tapped(&s, permanent_of(&s, forest).unwrap()));
+    let card = card_of(&s, golem);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let top = library_top(&s, 0);
+    let mut keep = s.clone();
+    choose_mode(&mut keep, 1);
+    settle(&mut keep);
+    assert_eq!(library_top(&keep, 0), top);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top), Some(ZoneType::Hand));
+}

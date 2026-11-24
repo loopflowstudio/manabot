@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, EffectValue, ObjectSelector,
+        PaymentCost, TargetRequirement, TargetSpec,
     },
     game_object::ObjectId,
     mana::{Color, Colors, Mana, ManaCost},
@@ -574,6 +574,18 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
+    pub fn equip(mana_cost: ManaCost) -> Self {
+        Self {
+            sorcery_timing: true,
+            mana_cost,
+            effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            }],
+            ..Default::default()
+        }
+    }
+
     /// The outputs of a mana ability (CR 605.1a): an untargeted activation
     /// whose leading effect adds one of these mana, optionally followed by
     /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`

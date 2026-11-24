@@ -238,6 +238,7 @@ fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) 
         }
         TriggerSubject::This => "this".into(),
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
+        TriggerSubject::EquippedCreature => "equipped creature".into(),
         TriggerSubject::Matching {
             controlled_by,
             predicate,
@@ -941,8 +942,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
-        Move { what, to, tapped, transformed, under, with_counter, linked, library_end } => {
+        Move { what, to, tapped, transformed, under, with_counter, linked, library_end, unrevealed } => {
             if let Some(end) = library_end { format!("Put {} on the {} of its owner's library", selector_description(what), format!("{end:?}").to_lowercase()) }
+            else if *unrevealed { format!("Put {} into its owner's hand without revealing it", selector_description(what)) }
             else { move_description(what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
         },
         Tap { what } => format!("Tap {}", selector_description(what)),
@@ -1485,6 +1487,7 @@ mod tests {
             effects_description(&[
                 Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
                 Effect::Move {
+ unrevealed: false,
                     what: ObjectSelector::Moved,
                     to: ZoneType::Battlefield,
                     tapped: false,

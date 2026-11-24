@@ -638,3 +638,31 @@ fn evolving_wilds_sacrifices_itself_for_a_tapped_basic_land() {
     };
     assert!(tapped(&s, entered));
 }
+
+#[test]
+fn foundations_5d_battle_rattle_shaman() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{choose_mode, pass_until, settle};
+    use managym::agent::action::ActionSpaceKind;
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::{PlayerId, Target};
+
+    let mut s = five_color_setup(&["Battle-Rattle Shaman", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Battle-Rattle Shaman");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::ChooseTarget,
+        "beginning of combat trigger".into(),
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    for (mode, power) in [(0, 4), (1, 2)] {
+        let mut branch = s.clone();
+        choose_mode(&mut branch, mode);
+        settle(&mut branch);
+        assert_eq!(branch.game().characteristics(ogre).power, power);
+        branch.advance_to_active_step(1, StepKind::Main);
+        assert_eq!(branch.game().characteristics(ogre).power, 2);
+    }
+}

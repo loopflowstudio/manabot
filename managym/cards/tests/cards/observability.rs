@@ -2170,6 +2170,17 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             .iter()
             .map(|action| format!("KeywordAction::{action:?}")),
     );
+    for subject in [
+        TriggerSubject::EnchantedCreature,
+        TriggerSubject::EquippedCreature,
+    ] {
+        expected.push(format!("TriggerSubject::{subject:?}"));
+        conditions.push(TriggerCondition::DealsCombatDamage {
+            subject,
+            to: Actor::AnyPlayer,
+            per: Per::Object,
+        });
+    }
     for per in [Per::Object, Per::Batch] {
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::This,
@@ -2404,6 +2415,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     for player in player_selector_witnesses() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
+            unrevealed: false,
             library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,

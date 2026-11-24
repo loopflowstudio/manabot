@@ -99,3 +99,9 @@ fn foundations_grant_swiftfoot_boots() {
     assert!(!keywords(&s, ogre).has(Keyword::Hexproof));
     assert!(!keywords(&s, ogre).has(Keyword::Haste));
 }
+
+#[test]
+fn foundations_5d_rune_scarred_demon() {
+    use managym::state::zone::ZoneType;
+    crate::assert_required_library_search("Rune-Scarred Demon", ZoneType::Hand);
+}

@@ -99,7 +99,7 @@ fn foundations_grant_aggressive_mammoth() {
     let source = s.force_permanent_on_battlefield(0, "Aggressive Mammoth");
     assert!(keywords(&s, ally).has(Keyword::Trample));
     assert!(!keywords(&s, enemy).has(Keyword::Trample));
-    assert_eq!(keywords(&s, other).has(Keyword::Trample), true);
+    assert!(keywords(&s, other).has(Keyword::Trample));
     assert_eq!(s.game().characteristics(enemy).pt(), base);
     let card = card_of(&s, source);
     move_card(&mut s, card, ZoneType::Graveyard);
