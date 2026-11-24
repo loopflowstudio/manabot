@@ -153,7 +153,6 @@ impl Game {
         }
 
         self.on_step_end(step);
-        self.remember_controlled_hands();
         // Read before writing: a mutable borrow of `state` advances every
         // derived-cache revision, and most damage steps have no second pass.
         if step == StepKind::CombatDamage

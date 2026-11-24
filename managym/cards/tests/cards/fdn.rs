@@ -1069,18 +1069,43 @@ fn foundations_spell_goblin_surprise() {
 #[test]
 fn foundations_spell_seekers_folly() {
     use crate::support::game::five_color_setup;
-    use crate::support::play::{cast, choose_mode, settle};
-    use managym::state::game_object::{PlayerId, Target};
+    use crate::support::inspect::{offered_cards, owned_card, zone_of};
+    use crate::support::play::{cast, choose_mode, pass_until, select_card, settle};
+    use managym::agent::{action::ActionSpaceKind, observation::Observation};
+    use managym::state::game_object::Target;
     use managym::state::zone::ZoneType;
     let mut s = five_color_setup(&["Seeker's Folly", "Gray Ogre"]);
-    s.force_card_in_hand(1, "Forest");
-    s.force_card_in_hand(1, "Island");
+    let cards = ["Forest", "Island", "Mountain"].map(|name| {
+        s.force_card_in_hand(1, name);
+        owned_card(&s, 1, name)
+    });
     let creature = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Seeker's Folly");
     choose_mode(&mut s, 0);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let offers = offered_cards(&s);
+    assert_eq!(offers.len(), cards.len());
+    assert!(cards.iter().all(|card| offers.contains(card)));
+    let caster = Observation::for_player(s.game(), PlayerId(0));
+    assert!(caster.action_space.actions.is_empty());
+    assert!(!caster
+        .opponent_cards
+        .iter()
+        .any(|card| card.zone == ZoneType::Hand));
+    for kept in cards {
+        let mut branch = s.clone();
+        for discarded in cards.into_iter().filter(|card| *card != kept) {
+            assert_eq!(branch.action_space().player, Some(PlayerId(1)));
+            select_card(&mut branch, discarded);
+        }
+        settle(&mut branch);
+        assert_eq!(branch.zone_size(1, ZoneType::Hand), 1);
+        assert_eq!(zone_of(&branch, kept), Some(ZoneType::Hand));
+    }
     settle(&mut s);
-    assert_eq!(s.zone_size(1, ZoneType::Hand), 0);
     cast(&mut s, "Seeker's Folly");
     choose_mode(&mut s, 1);
     settle(&mut s);
@@ -1344,12 +1369,13 @@ fn foundations_5e_boltwave() {
 
 #[test]
 fn foundations_5e_faebloom_trick() {
-    use crate::support::inspect::{offered_targets, tapped};
-    use crate::support::play::{cast, pass_until};
+    use crate::support::inspect::{offered_targets, owned_card, tapped};
+    use crate::support::play::{cast, cast_card, pass_until};
     use managym::agent::action::ActionSpaceKind;
     use managym::state::game_object::Target;
     use managym::state::mana::Color;
-    let mut s = five_color_setup(&["Faebloom Trick", "Gray Ogre"]);
+    let mut s = five_color_setup(&["Faebloom Trick", "Gray Ogre", "Unsummon"]);
+    s.force_card_in_hand(1, "Unsummon");
     let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Faebloom Trick");
@@ -1361,6 +1387,28 @@ fn foundations_5e_faebloom_trick() {
     let offers = offered_targets(&s);
     assert_eq!(offers, [Target::Permanent(theirs)]);
     assert!(s.choose_target(Target::Permanent(theirs)));
+
+    let mut response = s.clone();
+    assert_eq!(response.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(response.game().state.stack_objects.len(), 1);
+    response.pass_priority();
+    assert_eq!(response.action_space().player, Some(PlayerId(1)));
+    let unsummon = owned_card(&response, 1, "Unsummon");
+    cast_card(&mut response, unsummon);
+    assert!(response.choose_target(Target::Permanent(theirs)));
+    settle(&mut response);
+    assert!(response.game().state.permanents[theirs].is_none());
+    assert_eq!(response.zone_size(1, ZoneType::Hand), 1);
+    crate::assert_creature_tokens(
+        &response,
+        "Faerie",
+        2,
+        (1, 1),
+        &[Color::Blue],
+        &[Keyword::Flying],
+    );
+    assert!(!tapped(&response, ours));
+
     settle(&mut s);
     assert!(tapped(&s, theirs));
     assert!(!tapped(&s, ours));
