@@ -42,7 +42,7 @@ class CardMove(StrictModel):
     from_: Zone | None = Field(alias="from")
     controller: Seat
     cause: Literal["draw", "selection", "return", "outside", "generated", "move"]
-    turn: int = Field(ge=1)
+    turn: int = Field(ge=0)
 
 
 class ExposureOption(StrictModel):
@@ -126,7 +126,7 @@ class NativeCapture(StrictModel):
 class CapturedCards(StrictModel):
     capture: NativeCapture
     final_cards: tuple[CardSnapshot, ...]
-    turn: int = Field(ge=1)
+    turn: int = Field(ge=0)
 
     @model_validator(mode="after")
     def complete(self) -> CapturedCards:
@@ -142,7 +142,7 @@ class CapturedCards(StrictModel):
             }
             if len(opening) != len(set(opening)) or set(opening) != expected:
                 raise ValueError("opening hand differs from setup")
-        turn = 1
+        turn = 0
         for sequence, move in enumerate(self.capture.moves):
             card = move.card
             old = cards.get(card.copy_id)

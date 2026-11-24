@@ -256,8 +256,7 @@ impl TurnState {
         !matches!(step, StepKind::Untap | StepKind::Cleanup)
     }
 
-    pub fn advance_step(&mut self) {
-        let ended = self.current_step_kind();
+    fn end_control_interval(&mut self, ended: StepKind) {
         self.player_controls.retain(|control| {
             !control.active
                 || ended
@@ -266,6 +265,23 @@ impl TurnState {
                         PlayerControlDuration::NextTurn => StepKind::Cleanup,
                     }
         });
+    }
+
+    /// CR 725.1d and 514.3a both start a new cleanup step of this turn.
+    /// A turn-long control interval ends only when the turn actually advances.
+    pub(crate) fn start_cleanup(&mut self) {
+        if self.current_phase_kind() == PhaseKind::Combat {
+            self.end_control_interval(StepKind::EndOfCombat);
+        }
+        self.additional_combats.clear();
+        self.combat_attackers = None;
+        self.current_phase = PhaseKind::Ending as usize;
+        self.current_step = PHASE_STEPS[self.current_phase].len() - 1;
+        self.reset_step();
+    }
+
+    pub fn advance_step(&mut self) {
+        self.end_control_interval(self.current_step_kind());
         self.advance_step_position();
         // This runs before the new interval's turn-based actions or triggers.
         let started = self.current_step_kind();
@@ -280,10 +296,14 @@ impl TurnState {
         }
     }
 
-    fn advance_step_position(&mut self) {
+    fn reset_step(&mut self) {
         self.cleanup_priority = false;
         self.step_initialized = false;
         self.turn_based_actions_complete = false;
+    }
+
+    fn advance_step_position(&mut self) {
+        self.reset_step();
 
         if self.current_step + 1 < PHASE_STEPS[self.current_phase].len() {
             self.current_step += 1;

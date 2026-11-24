@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import prefix from '../../../managym/academy/fixtures/learn-demo-w17-token-cards.json' with { type: 'json' };
+import prefix from '../../../managym/academy/fixtures/learn-demo-opening-v1.json' with { type: 'json' };
 
 for (const outcome of ['LEARN_TAKE_LESSON', 'LEARN_DISCARD', 'DECLINE_CHOICE']) test(`Learn on the board: every answer a row, lessons in the tray, reconnect, ${outcome}`, async ({ page }) => {
   await page.addInitScript((config) => {

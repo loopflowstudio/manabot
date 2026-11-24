@@ -1133,7 +1133,7 @@ class ActorCritic(nn.Module):
             shared_context = self._stream(
                 "context", shared_context
             ) * present.unsqueeze(-1).to(shared_context.dtype)
-        objects = objects + shared_context.unsqueeze(1)
+        objects = objects + shared_context.unsqueeze(1) * obs.validity.unsqueeze(-1)
         return EmbeddedObservation(
             objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
         )

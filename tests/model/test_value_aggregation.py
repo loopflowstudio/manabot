@@ -14,9 +14,12 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     ObservationSpace,
+    encode_observation,
 )
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import collect, open_collector
+from manabot.verify.text_observation import keep_opening_hands
+import managym
 from tests.model.prepared_routes import dense_action_features, device_input
 
 Aggregation = Literal[
@@ -130,18 +133,12 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ObservationSpace(),
         ModelConfig(value_aggregation="value_token", attention_layers=depth),
     )
-    collector = open_collector(
-        agent.observation_space,
-        Match(),
-        Reward(RewardConfig()),
-        num_envs=1,
-        seed=29,
-        numerics=TorchCollectionSession(device="cpu", seed=29, precision="float32"),
-    )
-    batch = collect(collector, agent, 1)
+    env = managym.Env(seed=29)
+    raw, _ = env.reset(Match().to_rust())
+    raw = keep_opening_hands(env, raw)
     obs = {
-        key: torch.from_numpy(value[0])
-        for key, value in batch.observations().observation.items()
+        key: torch.from_numpy(value[None])
+        for key, value in encode_observation(agent.observation_space, raw).items()
     }
     state = agent._gather_object_embeddings(device_input(agent, obs))
     objects, owners, valid = state.objects, state.is_agent, state.validity

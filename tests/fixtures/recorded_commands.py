@@ -5,6 +5,15 @@ from managym.decision import DecisionFrame
 from managym.recording import ScalarCapture
 
 
+def preferred_action(actions: list[managym.Action], *kinds: managym.ActionEnum) -> int:
+    """Choose the first offered action of the earliest preferred kind, defaulting to slot zero."""
+    for kind in kinds:
+        for index, action in enumerate(actions):
+            if action.action_type == kind:
+                return index
+    return 0
+
+
 def record_until_object_candidate(
     env: managym.Env, capture: ScalarCapture
 ) -> tuple[DecisionFrame, int]:
@@ -17,17 +26,8 @@ def record_until_object_candidate(
         actions = env.observation_for_player(
             env.current_agent_index() or 0
         ).action_space.actions
-        chosen = next(
-            (
-                index
-                for kind in (
-                    managym.ActionEnum.PRIORITY_PLAY_LAND,
-                    managym.ActionEnum.PRIORITY_CAST_SPELL,
-                )
-                for index, action in enumerate(actions)
-                if action.action_type == kind
-            ),
-            0,
+        chosen = preferred_action(
+            actions, managym.ActionEnum.PRIORITY_PLAY_LAND, managym.ActionEnum.PRIORITY_CAST_SPELL
         )
         capture.step(env, chosen)
     raise AssertionError("fixture did not reach a decision with an object candidate")

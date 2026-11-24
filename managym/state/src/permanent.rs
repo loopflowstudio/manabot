@@ -39,6 +39,8 @@ pub enum CounterKind {
     /// No rules meaning of its own; station puts them on and a Spacecraft's
     /// or Planet's "N+" abilities count them (CR 702.184).
     Charge,
+    Poison,
+    Plan,
 }
 
 impl CounterKind {
@@ -59,6 +61,8 @@ impl CounterKind {
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
             CounterKind::Age => "age",
             CounterKind::Ice => "ice",
+            CounterKind::Poison => "poison",
+            CounterKind::Plan => "plan",
             CounterKind::Charge => "charge",
         }
     }
@@ -71,7 +75,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 15] = [
+    pub const ALL: [CounterKind; 17] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -87,6 +91,8 @@ impl CounterKind {
         CounterKind::Age,
         CounterKind::Ice,
         CounterKind::Charge,
+        CounterKind::Poison,
+        CounterKind::Plan,
     ];
 }
 
@@ -161,6 +167,9 @@ pub struct Permanent {
     /// or not that damage is still marked; cleared during cleanup.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// Turn of this battlefield entry. Zero denotes pregame entry.
+    #[serde(default, skip_serializing_if = "crate::is_zero")]
+    pub entry_turn: u32,
     /// Counters of every kind (CR 122.1). Any permanent can carry them,
     /// including lands; +1/+1 counters change P/T only through
     /// `Game::characteristics`.
@@ -200,16 +209,20 @@ pub struct Permanent {
 }
 
 impl Permanent {
+    pub fn entered_this_turn(&self, turn: u32) -> bool {
+        turn != 0 && self.entry_turn == turn
+    }
+
     /// Whether this object has used up the ability: exhaust once ever
     /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        (ability.exhaust && self.exhausted.contains(&index))
+        ((ability.exhaust || ability.power_up) && self.exhausted.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
-        if ability.exhaust {
+        if ability.exhaust || ability.power_up {
             self.exhausted.push(index);
         }
         if ability.once_each_turn {
@@ -231,6 +244,7 @@ impl Permanent {
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,
+            entry_turn: 0,
             timestamp: id,
             counters: Counters::default(),
             keyword_counter_timestamps: Default::default(),

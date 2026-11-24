@@ -4,6 +4,7 @@ Setup precedes the recorded root. Every subsequent choice uses ordinary native
 actions or Commands; no waiting trigger or card definition is injected.
 """
 
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 DECK: dict[str, int] = {
@@ -17,6 +18,9 @@ SEED = 7
 
 def configure_root(env: managym.Env) -> managym.Observation:
     """Apply the retained root recipe to a newly reset, hero-priority environment."""
+    actor = env.current_agent_index()
+    assert actor is not None
+    keep_opening_hands(env, env.observation_for_player(actor))
     for seat in range(2):
         env.scenario_clear_hand(seat)
     env.scenario_set_life(0, 1)
