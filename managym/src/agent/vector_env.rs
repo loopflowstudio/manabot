@@ -573,7 +573,7 @@ impl VectorEnv {
         self.read_observations_for_players(players, write)
     }
 
-    pub fn read_observations_for_players<E: From<AgentError>>(
+    pub(crate) fn read_observations_for_players<E: From<AgentError>>(
         &self,
         players: &[Option<usize>],
         mut write: impl FnMut(usize, &Observation) -> Result<(), E>,
@@ -647,8 +647,10 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        self.validate_ready_for_step()?;
-        self.reset_each_into_at(self.player_configs.clone(), Some(seeds), write)
+        self.reset_seeds_with_writer(seeds, |index, obs, reward, done, cut| {
+            write(index, obs, reward, done, cut).map_err(Into::into)
+        })
+        .map_err(Into::into)
     }
 
     pub(crate) fn reset_seeds_with_writer(
