@@ -1,5 +1,7 @@
-at: bc5133e076adeb30819682e53abe8e97c69530b0
+at: 6c230ba7e545a3e58e037d64635878573cf9770c
 first:
+  - path: tests/academy/test_incinerating_blast.py
+    why: Exact restores, public resolution and pending viewer privacy
   - path: scratch/plan.md
     why: Card obligations, fixture results and remaining replay work
   - path: managym/src/flow/turn.rs
