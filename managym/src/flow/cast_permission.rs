@@ -204,7 +204,7 @@ impl Game {
     /// Airbend a permanent or spell. Only a card that reaches exile gets the grant.
     pub(crate) fn airbend(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, |object| PlayGrant {
+        self.exile_with_play_grant(object_id, false, |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..PlayGrant::new(object, owner)
         });
@@ -226,15 +226,7 @@ impl Game {
             let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
                 return;
             };
-            let exiled = self.move_object_with_entry(
-                object_id,
-                ZoneType::Exile,
-                ZoneEntry {
-                    face_down,
-                    ..ZoneEntry::default()
-                },
-            );
-            self.grant_if_exiled(exiled, |object| PlayGrant {
+            self.exile_with_play_grant(object_id, face_down, |object| PlayGrant {
                 this_turn: until == PlayWindow::ThisTurn,
                 through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
                 face_down,
@@ -275,15 +267,7 @@ impl Game {
 
     pub(crate) fn complete_foretell(&mut self, player: PlayerId, card: CardId) {
         let turn = self.state.turn.turn_number;
-        let exiled = self.move_object_with_entry(
-            self.state.object_of(card),
-            ZoneType::Exile,
-            ZoneEntry {
-                face_down: true,
-                ..ZoneEntry::default()
-            },
-        );
-        self.grant_if_exiled(exiled, |object| PlayGrant {
+        self.exile_with_play_grant(self.state.object_of(card), true, |object| PlayGrant {
             after_turn: Some(turn),
             foretold: true,
             ..PlayGrant::new(object, player)
@@ -380,9 +364,6 @@ impl Game {
             .hidden_face_down_exile(owner, viewer)
             .into_iter()
             .partition(|object| self.is_foretold(*object));
-        if foretold_slots.is_empty() && face_down_slots.is_empty() {
-            return true;
-        }
         let bearers = pool
             .iter()
             .filter(|object| self.state[**object].foretell().is_some())
@@ -429,7 +410,7 @@ impl Game {
             return;
         };
         let mana_value = self.object_mana_value(object_id);
-        self.exile_with_play_grant(object_id, |object| {
+        self.exile_with_play_grant(object_id, false, |object| {
             let base = PlayGrant {
                 source: Some(source),
                 own_turn_only: true,
@@ -450,26 +431,29 @@ impl Game {
         });
     }
 
-    /// Exile `card` and add the play grant `grant` builds for the exiled
-    /// object.
+    /// Exile `object` (face up, or face down per CR 406.3) and add the play
+    /// grant `grant` builds for the exiled object. A token, or a card a
+    /// replacement kept out of exile, receives no grant.
     fn exile_with_play_grant(
         &mut self,
         object: ObjectId,
+        face_down: bool,
         grant: impl FnOnce(ObjectId) -> PlayGrant,
     ) {
-        let exiled = self.move_object(object, ZoneType::Exile);
-        self.grant_if_exiled(exiled, grant);
-    }
-
-    /// Add the grant `grant` builds for `card`'s exiled object. A token, or a
-    /// card a replacement kept out of exile, receives no grant.
-    fn grant_if_exiled(&mut self, object_id: ObjectId, grant: impl FnOnce(ObjectId) -> PlayGrant) {
-        if self.state.zones.zone_of(object_id) != Some(ZoneType::Exile)
-            || !self.state[object_id].is_card()
+        let exiled = self.move_object_with_entry(
+            object,
+            ZoneType::Exile,
+            ZoneEntry {
+                face_down,
+                ..ZoneEntry::default()
+            },
+        );
+        if self.state.zones.zone_of(exiled) != Some(ZoneType::Exile)
+            || !self.state[exiled].is_card()
         {
             return;
         }
-        self.state.cast_permissions.grant(grant(object_id));
+        self.state.cast_permissions.grant(grant(exiled));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2), and "until the

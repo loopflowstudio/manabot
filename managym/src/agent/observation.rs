@@ -1740,7 +1740,7 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_token: !object.is_card(),
             characteristics: Self::printed_characteristics_data(game, object_id),
-            face_down: zone == ZoneType::Exile && game.is_face_down_in_exile(object_id),
+            face_down: game.is_face_down_in_exile(object_id),
             cast_permissions: game
                 .play_grants_on(object_id)
                 .map(|(grant, caster)| CastPermissionData {
