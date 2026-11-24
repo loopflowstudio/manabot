@@ -1,97 +1,123 @@
-# Exploratory TLA frontier w64 learnability trial: PLR + Vine-RLOO snapshots vs baseline
+# Exploratory TLA trophy w64 learnability trial: PLR + Vine-RLOO snapshots vs stored `tau-x2`
 
 ## Exploratory
 
-**No training or evaluation runs executed; USD 0.00 was spent.** A zero-cost local pre-rental check of the planned four-worker snapshot arm failed before the first game because native multi-worker snapshot-vector wiring is not yet connected from the rules engine into the self-play collector. Catching that integration gap locally avoided spending L4 rental budget on an unrunnable setup or falling back to slow single-worker prefix replay. Next, hold all GPU and CPU rentals until parent Task `6b4a1a` completes collector integration, then run a two-update timing smoke on the four-worker native path before launching the full trial.
+**Four 400-update snapshot self-play runs completed cleanly on Colab L4 (`~$3.62` training; `~$7.13` total including CPU32 evals and one cancelled RunPod trial, well inside the USD 25 exploratory cap), and none of the three tested configurations beat pure `tau-x2` self-play head-to-head.** From scratch, `H=20` (80/20 snapshot/fresh starts) learned reliably (`0.055 -> 0.684` mean vs the first-64 heuristic across 2 seeds; `+5.5` to `+10.5 pts` vs itself at half updates) but consistently trailed retained `tla_trophies_floor/tau-x2` (`0.727` vs heuristic at u400; `0.455` H2H at u200 across 512 games; `0.419` H2H at u400 across 124 games). Warm-starting from `tau-x2@40902` update 400 eliminated the early bootstrap deficit and flipped the horizon tradeoff — `warm-h20` (`H=20`, 80/20) reached `0.813` vs heuristic at effective u800 vs `warm-full` (`H=None` terminal, 65/35) at `0.734` — yet both warm-start arms still lost head-to-head to retained `tau-x2@40902` at matched effective updates (`warm-h20`: `0.492` at u600, `0.461` at u800; `warm-full`: `0.461` at u600, `0.461` at u700, `0.484` at u800; 128 games per matchup).
 
-This is an exploratory report. Its observations are operational only and are not cited as findings.
+This is an exploratory report. Its observations are operational and directional only and are not cited as findings.
 
 ## Question
 
-On the 134-deck TLA frontier `w64` setup, how does adding prioritized level replay (PLR) and 4-branch Vine-RLOO snapshot self-play compare with ordinary fresh self-play at matched updates? Specifically, the trial was designed to observe:
-
-1. **Sample efficiency at matched updates:** whether snapshot self-play climbs faster against the first-64 heuristic and beats fresh self-play head-to-head across updates 25–400.
-2. **Early-training bootstrap behavior:** whether 20-decision horizon rollouts bootstrapping from an early uncalibrated critic lag baseline initially or help throughout.
-3. **Snapshot bank dynamics:** whether root critic-residual prioritization keeps healthy turnover and decay on tactical forks or gets stuck on high-variance topdeck outliers.
-4. **Stability and accounting:** whether per-source advantage retention rates, KL and value losses, snapshot counters, and fresh-only `decisions_per_game` isolation stay well-behaved across hundreds of updates.
+On the complete 7,859-pool TLA trophy `w64` stack (`tla_trophies` + `tau_scale=0.1`, policy input v11, `focus_film=True`, `stream_norm=True`), can PLR + 4-branch Vine-RLOO snapshot self-play beat ordinary fresh self-play (`tla_trophies_floor/tau-x2` retained in R2) at matched updates — either from scratch or warm-started from a calibrated u400 critic — and how does truncation horizon (`H=20` bootstrapped vs `H=None` full terminal rollouts) affect critic calibration and playing strength?
 
 Because this is an exploratory trial, it makes no committed prediction.
 
 ## Method
 
-Both arms are declared in [`experiments/tla_frontier_snapshots.py`](../tla_frontier_snapshots.py) and share one training seed (`21501`), the 134-deck TLA trophy corpus (`tla_frontier`), policy input v11 (`max_actions=64`, first-legal action overflow), the `w64` object-attention architecture (width 64, 2 attention layers, 4 heads, scalar masked-mean critic), damped policy learning (`tla_frontier.learning("w64")`), both learning seats, complete-game batch closure, 256 streams, 64 transitions per update, 4 CPU producer workers, and float32 CUDA execution with bucketed shapes and live-token attention. Both arms evaluate raw checkpoints while writing EMA siblings beside them, because per-update `ema=0.999` barely leaves initialization within 400 updates ([`tla_trophies.md`](tla_trophies.md), [`mana_taps.md`](mana_taps.md)).
+All arms are declared in [`experiments/tla_frontier_snapshots.py`](../tla_frontier_snapshots.py) and share the `tla_trophies` + `tau_scale=0.1` recipe (7,859 train / 873 held-out TLA trophy pools from `pools-v2`, closed decklists, policy input v11, `max_actions=64`, `action_overflow="first-legal"`, `focus_film=True`, `stream_norm=True`, `streams=256`, `transitions=64`, `rows=512`, `workers=4`, `threads=2`, float32 CUDA, bucketed shapes, live tokens, `checkpoint_every=50`, raw checkpoint evaluation, `root_actor_weight=2.0`, 512-slot PLR bank prioritized by root `critic_residual` with `score_half_life=8`, fresh-only capture at `min_legal_actions=3`, `probability=0.05`, `max_captures_per_batch=64`, `group_size=4`). No fresh baseline was trained; all comparisons reuse retained `tla_trophies_floor/tau-x2` checkpoints (`40901` u100–u400, `40902` u100–u1000) stored in R2.
 
-| Arm | Episode mix and horizon | Priority and capture | Root actor weight |
-| --- | --- | --- | ---: |
-| Baseline (fresh self-play) | 100% fresh complete games | None | 1.0 |
-| PLR + Vine-RLOO snapshots (4 branches, horizon 20) | 80% snapshot replay, 20% fresh floor (~50/50 row mix); 4 sibling branches per root, capped at 20 decisions | 512-slot bank; root critic-residual priority (half-life 8); fresh-only capture (`min_legal_actions=3`, probability 0.05, up to 64/batch); equal fresh and snapshot weights | 2.0 |
+| Arm | Start | Seeds | Horizon (`H`) | Start mix (snapshot / fresh) | Updates |
+| --- | --- | --- | --- | --- | ---: |
+| `plr-vine-rloo` | From scratch | `40901`, `40902` | `20` decisions | `80% / 20%` | 400 |
+| `warm-h20` | `tau-x2@40902` u400 | `40902` | `20` decisions | `80% / 20%` | +400 (eff. u400–u800) |
+| `warm-full` | `tau-x2@40902` u400 | `40902` | `None` (terminal) | `65% / 35%` | +400 (eff. u400–u800) |
+| `warm-h60` *(cancelled)* | `tau-x2@40902` u400 | `40902` | `60` decisions | `75% / 25%` | 16 / 400 (stopped on RunPod per Colab-only GPU rule) |
 
-Evaluation scores policy-only play (no search) on `tla_frontier`'s 16 paired trophy deals crossed across all 4 seat/deck legs (64 replay-verified games per comparison) at updates 25, 50, 100, 150, 200, 300, and 400, plus update 0 against the first-64 heuristic. Paired crossed deals separate learned skill from deck and seat strength. The planned budget sits under the USD 25 exploratory cap: 400 updates per L4 arm (11.0 hours, USD 9.50 cap each including startup allowance) plus CPU32 evaluation (1.5 hours, USD 2.00 combined), totaling USD 21.00 before retries or a two-update timing smoke.
+Evaluation scores policy-only play on `tla_trophies`'s 32 held-out deals crossed across all 4 seat/deck legs (128 games per seed per checkpoint):
+- Against the first-64 heuristic (`tla-snapshots-held-out-32`, `-warm-h20`, `-warm-full`, `-warm-h60`)
+- Against each from-scratch line at half its updates (`tla-snapshots-half-training-32`)
+- Head-to-head at matched effective updates against retained `tla_trophies_floor/tau-x2` checkpoints (`tla-snapshots-vs-tau-x2-32-v2` at u100–u400; `tla-snapshots-warm-vs-tau-x2-32` at effective u500–u800).
 
-Library-shuffle common random numbers across siblings (not yet exposed on `SnapshotConfig`) and a fresh-only warmup were deferred from the initial two-arm run.
+Library-shuffle common random numbers across sibling branches were not enabled in this pass.
 
 ## Results
 
-**All four learnability questions remain unanswered because zero training updates and zero evaluation games ran.** Before renting any machine, a local four-stream, four-worker CPU check opened the snapshot arm's collector after syncing parent Task `6b4a1a` and failed before the first game with `ValueError: snapshot bank requires a snapshot vector`. No machine was rented, no checkpoint was written, and no evaluation match was played.
+### 1. From-scratch `H=20` (`plr-vine-rloo`, 80/20 starts) vs retained `tau-x2` (`u0 -> u400`)
 
-| Stage | Planned work | Completed work | Paid cost (USD) | Status |
-| --- | --- | --- | ---: | --- |
-| Baseline (fresh self-play), L4 training | 400 updates (1 seed) | 0 updates (0/400) | 0.00 | Not launched (held with snapshot arm) |
-| PLR + Vine-RLOO snapshots (4 branches, horizon 20), L4 training | 400 updates (1 seed) | 0 updates (0/400) | 0.00 | Blocked before rental in pre-flight collector check |
-| Heuristic milestone evaluation (16 paired deals, 4 legs), CPU32 | 16 checkpoints × 64 games | 0 games | 0.00 | Pending checkpoints |
-| Matched-update head-to-head evaluation (16 paired deals, 4 legs), CPU32 | 7 milestones × 64 games | 0 games | 0.00 | Pending checkpoints |
+All 128-game heuristic and half-training points completed for both seeds (`40901`, `40902`). From-scratch `H=20` climbed steadily (`0.055 -> 0.684` mean vs heuristic; `+5.5` to `+10.5 pts` vs itself at half updates) with zero failed or discarded snapshot branches, but trailed `tau-x2` at every milestone by 4–7 pts on heuristic and 4.5–8 pts head-to-head.
 
-Inspecting the synced codebase explains why the pre-rental check failed:
+| Update | `tau-x2` heur mean (`40901` / `40902`) | `plr-vine-rloo` heur mean (`40901` / `40902`) | Delta (heur) | H2H vs `tau-x2` | Half-training self |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| u0 | `0.055` | `0.055` (`0.055` / `0.055`) | `0.0 pts` | — | — |
+| u50 | — | `0.457` (`0.461` / `0.453`) | — | — | — |
+| u100 | `0.586` (`0.570` / `0.602`) | `0.516` (`0.500` / `0.531`) | `-7.0 pts` | *(not uploaded before stop)* | `0.559` (`0.547` / `0.570`) |
+| u150 | — | `0.566` (`0.609` / `0.523`) | — | — | — |
+| u200 | `0.648` (`0.641` / `0.656`) | `0.609` (`0.633` / `0.586`) | `-3.9 pts` | **`0.455`** (512g: `40901` `0.453`/`0.477`; `40902` `0.438`/`0.453`) | `0.559` (`0.555` / `0.563`) |
+| u250 | — | `0.637` (`0.656` / `0.617`) | — | — | — |
+| u300 | `0.695` (`0.719` / `0.672`) | `0.645` (`0.641` / `0.648`) | `-5.0 pts` | *(not uploaded before stop)* | `0.605` (`0.633` / `0.578`) |
+| u350 | — | `0.680` (`0.664` / `0.695`) | — | — | — |
+| **u400** | **`0.727`** (`0.734` / `0.719`) | **`0.684`** (`0.672` / `0.695`) | **`-4.3 pts`** | **`0.419`** (124g: `40902` vs `tau-x2@40901`) | `0.574` (`0.555` / `0.594`) |
 
-1. **Native engine layer is present, collector adapter is not.** Parent Task `6b4a1a` (still active in implementation) added native deferred auto-reset (`VectorEnv(..., auto_reset=False)`), batched slot loading (`SlotLoad` and `load_slots_into_buffers`), and `ShardedVectorEnv` capture reads (`snapshot_slots`, `slot_metadata`). However, `ShardedVectorEnv` does not yet implement the `SnapshotVector` protocol (`capture_slots`, `install_slots`, `release_handles`) or forward `auto_reset=False` and `load_slots_into_buffers`.
-2. **Collector rejects four-worker snapshot execution.** `open_collector` requires an explicit `snapshot_vector` whenever a `snapshot_bank` is present (`ValueError: snapshot bank requires a snapshot vector`) and rejects any `snapshot_vector` when `workers != 1` (`ValueError: snapshot collection requires workers=1`).
-3. **Self-play loop constructs no default snapshot vector.** `self_play_collector` passes `snapshot_vector=None` through unless a caller supplies one explicitly. The only existing `SnapshotVector` implementation (`InMemorySnapshotVector`) is a serial, single-worker prefix-replaying reference vector rather than a four-worker native `GameSnapshot` vector.
+### 2. Warm-start from `tau-x2@40902` u400 (`eff. u400 -> u800`, 128g/pt)
+
+Starting from a calibrated u400 critic (`explained_variance ~ 0.93`, `0.719` vs heuristic) revealed a sharp horizon split: `warm-h20` tracked `tau-x2@40902` closely against the heuristic (`0.813` vs `0.824` at u800) and beat `warm-full` by `+7.8 pts` on heuristic (`0.813` vs `0.734`), yet every completed 128-game H2H matchup against retained `tau-x2@40902` was still below `0.500`.
+
+| Effective update | `tau-x2@40902` (heur) | `warm-h20` (heur) | `warm-full` (heur) | `warm-h20` H2H vs `tau-x2@40902` | `warm-full` H2H vs `tau-x2@40902` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| u400 (`+0`) | `0.719` | `0.719` | `0.719` | — | — |
+| u450 (`+50`) | — | `0.750` | `0.664` | — | — |
+| u500 (`+100`) | `0.776` | `0.758` | `0.719` | *(not uploaded)* | *(not uploaded)* |
+| u550 (`+150`) | — | `0.729` (48g) | `0.766` | — | — |
+| **u600 (`+200`)** | `0.771` | `0.750` | `0.758` | **`0.492`** (128g) | **`0.461`** (128g) |
+| u650 (`+250`) | — | `0.781` | `0.719` | — | — |
+| **u700 (`+300`)** | `0.735` | `0.695` | `0.719` | *(8g partial)* | **`0.461`** (128g) |
+| u750 (`+350`) | — | *(not uploaded)* | `0.727` | — | — |
+| **u800 (`+400`)** | **`0.824`** | **`0.813`** | `0.734` | **`0.461`** (128g) | **`0.484`** (128g) |
+
+### 3. Training dynamics and the `H=20` vs `H=None` mechanistic split
+
+All four completed runs had **0 failed branches and 0 discarded groups** across 400 updates on the native 4-worker `SnapshotVector` path.
+
+| Run (at u400) | Fresh `decisions/game` | Critic `explained_var` | Critic `pred_std` | `their_9_9` shift | `my_9_9` shift | `block_gap` | Terminal branches / update | Completed groups / update |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| `plr-vine-rloo@40901` | `183.2` | `0.927` | `0.622` | `-2.88` | `+2.96` | `0.36` | `0–1 / 608` | `~152` |
+| `plr-vine-rloo@40902` | `193.1` | `0.920` | `0.598` | `-2.55` | `+5.37` | `0.28` | `0–1 / 608` | `~152` |
+| `warm-h20@40902` | `184.2` | `0.924` | `0.560` | `-4.27` | `+5.63` | `1.18` | `0–1 / 608` | `~152` |
+| `warm-full@40902` | `166.8` | `0.932` | `0.645` | `-3.98` | `+6.03` | `-0.50` | `184 / 184` (100%) | `~45` |
+
+Two structural mechanisms stand out:
+1. **Horizon `H=20` is 100% critic-bootstrapped (`0–1 / 608` terminals) because 20 surfaced decisions across both seats is ~1.5–2 turns in a ~170-decision TLA game.** From scratch, bootstrapping off an uncalibrated early critic plus losing ~45% of fresh full-game rows explains the `-7.0 pt` u100 deficit. Once warm-started from a calibrated u400 critic, `H=20` actually outperformed `H=None` (`0.813` vs `0.734` vs heuristic at u800; `0.477` vs `0.469` H2H) because it yielded **~3.3x more Vine-RLOO groups/update (`152` vs `45`)** with much lower return variance than uncoupled 100-decision terminal tails.
+2. **Even warm-started, 65–80% snapshot replay starved fresh full-game diversity without enough variance reduction on siblings.** Without library-shuffle common random numbers across sibling branches, 4-branch rollouts diverge via random draws as well as root actions, so paying ~45–60% of the stream budget for snapshot continuations did not outperform 100% fresh `tau-x2` self-play at matched updates.
 
 ## What this supports
 
-- **Operational readiness:** The synced snapshot stack cannot yet run the planned four-worker native `GameSnapshot` training loop without the remaining collector integration from `6b4a1a`. Running a zero-cost local collector check before launching Etude rentals prevented wasted GPU spend.
-- **Learnability claims:** None. Because 0 updates and 0 games ran, this report provides zero evidence for or against PLR + Vine-RLOO sample efficiency, early horizon-20 bootstrapping, critic-residual bank dynamics, or multi-hundred-update training stability.
+- **Operational readiness:** The native 4-worker `GameSnapshot` vector path (`6b4a1a`) is stable and fast on Colab L4 across 1,600 total training updates (`0` failed branches, `0` discarded groups, ~5s/update step overhead vs ~4.3s on `H=20`, ~$0.76–$1.22 per 400-update run).
+- **Learnability direction (exploratory):** At high `replay_fraction` (`0.65–0.80`) without sibling CRN, PLR + Vine-RLOO does not beat `tau-x2` from scratch (`-4` to `-7 pts`) or warm-started from u400 (`0.461–0.492` H2H). Between the two warm-start horizons, short bootstrapped branches (`H=20`) beat full uncoupled terminal branches (`H=None`) once the critic is calibrated.
 
 ## Recommendation
 
-1. **Keep rentals paused** until parent Task `6b4a1a` (or a follow-up change) delivers three pieces: a native `GameSnapshot`-backed `SnapshotVector` adapter over `VectorEnv` and `ShardedVectorEnv` (with `auto_reset=False`, `load_slots_into_buffers`, and `MemoryStore` lineage safety), multi-worker snapshot admission (`workers=4`) in `open_collector`, and default native snapshot-vector construction in `self_play_collector` when `settings.snapshot` is configured.
-2. **Do not substitute `InMemorySnapshotVector` (`workers=1`)** for the GPU trial. Serial CPU prefix replay does not test the intended native restore path and would burn L4 budget waiting on single-threaded replay.
-3. **Run a two-update timing smoke first** once synced onto the completed integration, measuring wall seconds per update and decisions per second on four workers so the 400-update two-arm budget and CPU32 evaluations are confirmed under USD 25 before full launch.
+Before investing in a full multi-seed finding trial, test three targeted changes on the warm-start u400 setup (where a 400-update Colab L4 run costs `~$1`):
+1. **Lower `replay_fraction` sharply (`0.15–0.30`, keeping `70–85%` fresh full-game rows)** so snapshot self-play supplements rather than starves fresh self-play and critic calibration.
+2. **Add Common Random Numbers (`ShuffleLibraries` / shared RNG seed across sibling branches)** so 4-branch Vine-RLOO isolates root action quality from library-draw noise.
+3. **Test intermediate horizon (`H=40–60`) or root-only snapshot actor loss (`snapshot_weight=0` on non-root continuation rows)** so the policy only learns from RLOO-advantaged root forks while fresh games own full-trajectory GAE and critic calibration.
 
 ## Caveats
 
-- **Missing runs stay missing:** All 400 planned updates per arm and all planned 64-game evaluations are unexecuted; nothing is estimated or filled with zeros.
-- **Exploratory single-seed design:** Even after the blocker is cleared, one shared training seed (`21501`) can reveal failure modes, bank behavior, and rough curve shape, but cannot establish a replicated method claim (training seeds are the unit of evidence).
-- **Hidden-draw variance across siblings:** Until library-shuffle common random numbers (`ShuffleLibraries`) are exposed on `SnapshotConfig`, sibling rollouts can diverge on hidden library draws rather than solely on policy choices.
-- **Raw checkpoint noise:** Evaluating raw weights avoids EMA lag under `ema=0.999` over 400 updates, at the cost of higher checkpoint-to-checkpoint variance than a faster-decaying EMA.
+- **Exploratory single-seed warm-start arms:** `warm-h20` and `warm-full` ran on one seed (`40902`) to match retained `tau-x2@40902` u500–u800; replicated method claims require multiple training seeds.
+- **Partial H2H upload on `evals-6f4fbf2aa69a`:** `evals-6f4fbf2aa69a` was stopped at 1,557 uploaded / 1,014 sealed of 1,888 matches because `etude`'s `courier._track()` uploaded ~15k small files sequentially on one thread (~0.7s/PUT to R2). All reported cells above are exact 128-game readouts from the delivered `plays.parquet` files (with smaller partial counts explicitly labeled); missing cells (`u100`/`u300` fresh H2H, `+100` warm H2H, `warm-h20` `+300` H2H) remain missing and are not interpolated.
+- **Engine panic observed once in training:** `warm-h20@40902` logged one Rust panic around update 113 (`managym/src/flow/resolution.rs:1066:44: internal error: entered unreachable code: clauses are bound before resolution`, `Effect::TargetClause`). `GameErrorPolicy` isolated and recovered the stream cleanly and the run finished all 400 updates.
 
 ## Appendix: runs, changes, and admission state
 
 ### Run ledger
 
-Etude (`etude runs`) lists zero runs for `tla_frontier_snapshots`.
+Launcher costs recorded once from `etude status --experiment tla_frontier_snapshots`:
 
-| Job | Commit | Etude run ID | Updates / matches | Launcher cost (USD) | State |
+| Run | Commit | Machine | Updates / matches | Launcher cost (USD) | State |
 | --- | --- | --- | --- | ---: | --- |
-| `baseline` | `c21ade43ac` / `e91265b012` | None | 0 / 400 updates | 0.00 | Not launched |
-| `plr-vine-rloo` | `c21ade43ac` / `e91265b012` | None | 0 / 400 updates | 0.00 | Blocked in pre-rental CPU check |
-| `tla-frontier-snapshots-heuristic-16` | `c21ade43ac` / `e91265b012` | None | 0 matches | 0.00 | Not launched |
-| `tla-frontier-snapshots-vs-baseline-16` | `c21ade43ac` / `e91265b012` | None | 0 matches | 0.00 | Not launched |
+| `tla_frontier_snapshots/plr-vine-rloo@40901` | `c320c1ed9a6e` | `colab-l4-bench-ca123a39d363` (L4) | 400 / 400 updates | ~0.76 (~7.60 CU) | Succeeded |
+| `tla_frontier_snapshots/plr-vine-rloo@40902` | `c320c1ed9a6e` | `colab-l4-bench-ca123a39d363` (L4) | 400 / 400 updates | ~0.76 (~7.60 CU) | Succeeded |
+| `tla_frontier_snapshots/evals-c384ca093b89` | `c320c1ed9a6e` | `mtg344-cpu32-611f1e9b0dd6` (32 vCPU) | 320 / 448 matches (10 failed) | 0.03 | Failed (`games=1` pairing bug on fixed H2H) |
+| `tla_frontier_snapshots/warm-h20@40902` | `96b53172c098` | `colab-l4-warm-073bd866e78b` (L4) | 400 / 400 updates | ~1.22 (~12.25 CU) | Succeeded |
+| `tla_frontier_snapshots/warm-h60@40902` | `96b53172c098` | `mtg344-3090-e355dfc86b3b` (RTX 3090) | 16 / 400 updates | 0.11 | Cancelled (switched GPU training to Colab only) |
+| `tla_frontier_snapshots/warm-full@40902` | `a554e2ea9275` | `colab-l4-warm-073bd866e78b` (L4) | 400 / 400 updates | ~0.88 (~8.81 CU) | Succeeded |
+| `tla_frontier_snapshots/evals-6f4fbf2aa69a` | `a554e2ea9275` | `mtg344-cpu32-d4b93f31940b` (32 vCPU) | 1,014 sealed / 1,557 uploaded of 1,888 | ~3.37 | Cancelled after verdict settled (sequential R2 upload bottleneck) |
+| **Total** | | | | **~7.13** | Well inside USD 25.00 cap |
 
 ### Dated change log
 
-- 2026-11-23 (`c61219fba3577301ddd1a7377bdca4af70ba280f`) — Added [`experiments/tla_frontier_snapshots.py`](../tla_frontier_snapshots.py), initial report notes, and discovery registration in `tests/eval/test_experiment_files.py`.
-- 2026-11-23 (`c21ade43acc106ece8b3110a75acbdf1eddc84fe`) — Merged parent Task `6b4a1a` through `a4af50f3f8e12d223c0b17ac998f4914fa5c83e3`.
-- 2026-11-23 (`e91265b012acd6309b5a83288848ba014d34fd42`) — The two-update timing smoke is blocked before rental. At `c21ade43acc106ece8b3110a75acbdf1eddc84fe`, after syncing parent Task `6b4a1a` through `a4af50f3f8`, a four-stream CPU check opened the snapshot arm's collector with the planned four workers and failed before the first game with `ValueError: snapshot bank requires a snapshot vector`. The parent supplies native slot restoration, but `self_play_collector` still passes no vector by default, and `open_collector` accepts an explicit snapshot vector only with one worker. Etude listed no runs for `tla_frontier_snapshots`. Neither arm rented a machine or produced a checkpoint. The four-worker timing smoke and all milestone evaluations remain pending the parent's collector integration.
-- 2026-11-23 — Completed exploratory report from the blocked pre-rental state; no new run started.
-
-### Admission checks and verified references
-
-- **Experiment declaration tests:** `uv run pytest tests/eval/test_experiment_files.py` passed (30/30).
-- **Parent task state at report time:** Task `6b4a1a` (`Wire GameSnapshot into VectorEnv/ShardedVectorEnv with deferred auto-reset and MemoryEncoding/MemoryStore lineage safety`) was still active at `implement · loop 1 pass 2`.
-- **Verified blocking code paths:**
-  - `managym/__init__.pyi` (`SlotLoad`, `SlotLoadResult`, `VectorEnv.load_slots_into_buffers`, `VectorEnv.snapshot_slots`)
-  - `manabot/training/rollout/producers.py` (`ShardedVectorEnv` exposes `snapshot_slots` and `slot_metadata`, but not `SnapshotVector` methods or `load_slots_into_buffers`)
-  - `manabot/training/rollout/collection.py:756-759` (`open_collector` raises `ValueError: snapshot bank requires a snapshot vector` and `ValueError: snapshot collection requires workers=1`)
-  - `manabot/training/loops/self_play.py:333-407` (`self_play_collector` forwards `snapshot_vector=None` by default)
-- **Artifacts and manifest:** No run files were produced or uploaded; `experiments/data.manifest.json` is unchanged.
+- 2026-11-23 (`c61219fba3`) — Added [`experiments/tla_frontier_snapshots.py`](../tla_frontier_snapshots.py), initial report notes, and discovery registration in `tests/eval/test_experiment_files.py`.
+- 2026-11-23 (`e91265b012`) — Initial pre-rental check blocked on `6b4a1a` native `SnapshotVector` wiring (`ValueError: snapshot bank requires a snapshot vector`); USD 0.00 spent.
+- 2026-11-23 (`c320c1ed9a`) — Synced `6b4a1a` (`4dba133cd9`), rebased `experiments/tla_frontier_snapshots.py` onto `tla_trophies` + `tau_scale=0.1` comparing against retained R2 `tla_trophies_floor/tau-x2` checkpoints (no fresh baseline), passed 4-worker `etude smoke`, and launched `plr-vine-rloo` (`40901`, `40902`) on Colab L4.
+- 2026-11-24 (`9e83e3fd29`, `96b53172c0`, `a554e2ea92`) — Fixed fixed-pair H2H `games=4` (`tla-snapshots-vs-tau-x2-32-v2`), added warm-start u400 horizon arms (`warm-h20`, `warm-h60`, `warm-full`) with matched `tau-x2@40902` u500–u800 H2H, completed all 4 Colab L4 runs (400/400 updates each), and scored on `mtg344-cpu32`.
+- 2026-11-24 — Added optional cross-experiment `tau-x2` baseline overlay and `start`-checkpoint clock displacement in `report()` (guarded for stock `etude-sdk`) and finalized this exploratory report.

@@ -38,6 +38,11 @@ from etude.jobs import EvalJob, ExperimentState, TrainingJob
 from etude.records import ArtifactRef
 from etude.report import Curve, Matches, Report, Score, Series
 from etude.spec import Variable
+
+try:
+    from etude.report import Include as _ReportInclude
+except ImportError:  # pragma: no cover - stock etude-sdk 0.4.x before upstream merge
+    _ReportInclude = None
 from etude.train.tracking import track
 from pydantic import Field
 
@@ -622,15 +627,41 @@ SNAPSHOT_PANELS: tuple[Series, ...] = (
 )
 
 
+BASELINE_EXPERIMENT = "tla_trophies_floor"
+BASELINE_JOB = "tau-x2"
+BASELINE_HEURISTIC_TOURNAMENTS: tuple[str, ...] = (
+    "tla-trophies-floor-held-out-32-tau-x2",
+    "tla-trophies-floor-seed-held-out-32-tau-x2",
+)
+
+
 def report() -> Report:
-    heuristic = (
+    heuristic: tuple[Matches, ...] = (
         Matches(tournament=HELD_OUT),
         *(Matches(tournament=f"{HELD_OUT}-{arm.name}") for arm in WARM_ARMS),
     )
+    baseline_kwargs: dict[str, object] = {}
+    if _ReportInclude is not None:
+        heuristic = (
+            *heuristic,
+            *(Matches(tournament=t) for t in BASELINE_HEURISTIC_TOURNAMENTS),
+        )
+        baseline_kwargs = {
+            "baseline": BASELINE_JOB,
+            "displace_starts": True,
+            "include": (
+                _ReportInclude(
+                    experiment=BASELINE_EXPERIMENT,
+                    jobs=(BASELINE_JOB,),
+                    tournaments=BASELINE_HEURISTIC_TOURNAMENTS,
+                ),
+            ),
+        }
     return Report(
         clock="updates",
         score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
         labels={
+            BASELINE_JOB: "Baseline: tau-x2 (tla_trophies_floor)",
             JOB: "From scratch: PLR + Vine-RLOO (H=20)",
             **{arm.name: arm.label for arm in WARM_ARMS},
         },
@@ -649,4 +680,5 @@ def report() -> Report:
         ),
         perf=PERF,
         ml=(*ML, *SNAPSHOT_PANELS),
+        **baseline_kwargs,  # type: ignore[arg-type]
     )
