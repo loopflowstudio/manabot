@@ -123,6 +123,8 @@ mod m14;
 mod m15;
 #[path = "cards/m20.rs"]
 mod m20;
+#[path = "cards/m21.rs"]
+mod m21;
 #[path = "cards/mbs.rs"]
 mod mbs;
 #[path = "cards/mh1.rs"]
