@@ -5,10 +5,10 @@ module, for the scalar catalog policies admitted by `require_supported`.
 Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
-The catalog GRU always encodes every definition. PyTorch learning encodes
-only the rows a batch references; the others never reach the loss, so their
-outputs receive no gradient either way. GRU input and recurrent biases remain
-separate parameters, preserving Adam state and global gradient-norm clipping.
+Learner batches select the catalog programs their observations reference.
+Inference and bucketed batches use the full catalog schedule. GRU input and
+recurrent biases remain separate parameters, preserving Adam state and global
+gradient-norm clipping.
 
 Compute precision is policy-owned. Unless given, it follows the model's width
 (`manabot.backends.mlx.arrays.default_precision`): bfloat16 from
@@ -46,6 +46,7 @@ from manabot.policy import admission
 from manabot.policy.buckets import trim_to_needs
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
+    CatalogPrograms,
     Packed,
     Prepared,
     Tables,
@@ -83,7 +84,7 @@ def _gru_cell(
 
 
 # `mx.compile` fuses each step's elementwise gate arithmetic; it traces once per
-# live-row count, which the static catalog schedule repeats on every call.
+# live-row count and reuses it across schedules.
 _compiled_gru_cell = mx.compile(_gru_cell)
 
 
@@ -281,7 +282,6 @@ class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
     catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed[np.ndarray]
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     tables: Tables
@@ -378,15 +378,13 @@ class MLXActorCritic(nn.Module):
         if config.focus_film:
             self.focus_film = nn.Linear(dims.focus * hidden, hidden, bias=False)
         programs = tables.full_programs
-        tokens, schedule = programs.tokens, programs.schedule
         named = np.nonzero(tables.name_definitions != 0)[0]
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
             "_static",
             _Static(
-                packed_steps(tokens, schedule),
-                schedule,
+                packed_steps(programs.tokens, programs.schedule),
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
                 tables,
@@ -611,6 +609,7 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             inference=inference,
+            select_programs=not inference and not self.bucketed_shapes,
             bucketed=self.bucketed_shapes,
             binding=admission.binding(
                 self.config,
@@ -640,18 +639,27 @@ class MLXActorCritic(nn.Module):
 
     # Programs ----------------------------------------------------------------------
 
-    def programs(self) -> mx.array:
-        """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
+    def programs(self, programs: CatalogPrograms[np.ndarray] | None = None) -> mx.array:
+        """Encode selected definitions at their one-based catalog rows. Others stay zero."""
         with self.forward_precision():
             static: _Static = self._static
-            cards = self.semantic_cards
-            _, finished = cards.encoder.run(
-                cards.token_embedding.weight, static.catalog_steps
+            full = static.tables.full_programs
+            if programs is None:
+                programs = full
+            weights = self.semantic_cards.token_embedding.weight
+            table = mx.zeros(
+                (len(full.rows) + 1, self.dims.hidden), dtype=weights.dtype
             )
-            encoded = _take(finished, mx.array(static.catalog.restore))
-            return mx.concatenate(
-                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
+            if not len(programs.rows):
+                return table
+            steps = (
+                static.catalog_steps
+                if programs is full
+                else packed_steps(programs.tokens, programs.schedule)
             )
+            _, finished = self.semantic_cards.encoder.run(weights, steps)
+            encoded = _take(finished, mx.array(programs.schedule.restore))
+            return table.at[mx.array(programs.rows)].add(encoded)
 
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
@@ -740,7 +748,7 @@ class MLXActorCritic(nn.Module):
         b = batch.batch
         programs = static.cache.get("programs")
         if programs is None:
-            programs = self.programs()
+            programs = self.programs(batch.programs)
         # Every object reader sees the normalized table; raw `programs` keep
         # scoring naming candidates.
         definitions = self._definition_table(self._public(programs))

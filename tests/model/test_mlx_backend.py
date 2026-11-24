@@ -4,7 +4,7 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 import json
 from pathlib import Path
@@ -400,6 +400,42 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
             float(np.abs(value - expected_after[name]).max())
             <= STEP_PARAMETER_TOLERANCE
         ), name
+
+
+def test_mlx_learner_encodes_only_referenced_catalog_programs(
+    baseline_model: ModelConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    space = ObservationSpace()
+    policy = resolve("mlx").runtime.create_policy(space, baseline_model)
+    env = managym.Env(seed=7)
+    env.reset(lesson_match().to_rust())
+    obs = encode_observation(
+        space, env.observation_for_player(env.current_agent_index())
+    )
+    inputs = {key: row[None] for key, row in obs.items()}
+    batch = policy.prepare(inputs)
+    inference = policy.prepare(inputs, inference=True)
+    assert batch.programs is not None and inference.programs is not None
+    assert 0 < len(batch.programs.rows) < len(inference.programs.rows)
+
+    # Count actual GRU sequences so ignoring the prepared subset fails even
+    # when the unused full-catalog outputs produce the same logits.
+    sequences: list[int] = []
+    run = PackedGRU.run
+
+    def counted(
+        gru: PackedGRU, table: mx.array, steps: Sequence[mx.array]
+    ) -> tuple[mx.array, mx.array]:
+        if gru is policy.semantic_cards.encoder:
+            sequences.append(steps[0].size)
+        return run(gru, table, steps)
+
+    monkeypatch.setattr(PackedGRU, "run", counted)
+    actual = policy.evaluate(batch)
+    expected = policy.evaluate(replace(batch, programs=inference.programs))
+    assert sequences == [len(batch.programs.rows), len(inference.programs.rows)]
+    for selected, full in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(selected, full, rtol=1e-5, atol=1e-6)
 
 
 def test_bfloat16_host_arrays_widen_to_float32() -> None:

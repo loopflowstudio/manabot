@@ -120,12 +120,13 @@ path in MLX names the same component as in the torch state dict:
 - the attention stack;
 - action heads, name candidates and the critic.
 
-Two departures from the PyTorch forward are exact up to float rounding. The
-catalog GRU always encodes every definition, where PyTorch learning encodes
-only the rows a batch references; the others never reach the loss either way.
-And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
-float64 (the GPU has none). Ordinary values can differ by rounding; a
-float32 ratio can also overflow sooner, which the numerical checks refuse.
+As in PyTorch, the catalog GRU encodes only the definitions referenced by an
+unbucketed learner batch. Bucketed batches use the full schedule. Inference
+can cache the full catalog while the weights are fixed.
+
+The clipped surrogate computes its likelihood ratio in float32 on MLX and
+float64 on PyTorch. The Apple GPU lacks float64. Ordinary ratios can differ
+by rounding, and the numerical checks reject a float32 ratio that overflows.
 
 ## Layout mapping
 
