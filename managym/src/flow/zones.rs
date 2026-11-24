@@ -127,6 +127,8 @@ impl Game {
             .collect()
     }
 
+    /// Whether `object` is the top card of its owner's library, so moving it
+    /// shifts every remembered library position up by one.
     pub(super) fn is_library_top(&self, object: ObjectId) -> bool {
         self.state
             .zones
@@ -584,8 +586,7 @@ impl Game {
             ZoneType::Stack,
             ZoneEntry {
                 profile: cast.profile,
-                library_top_departure: cast_from == ZoneType::Library
-                    && self.is_library_top(object),
+                library_top_departure: self.is_library_top(object),
                 ..Default::default()
             },
         );
