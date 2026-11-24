@@ -1,17 +1,15 @@
-at: bf18e7431b5b3d247b67aade5d4aade7cf5f007a
+at: 76d1b0f99f457a23ba1059bbc29d2e5a3ff0a2ce
 first:
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Links each card to its definition and outcome.
-  - path: managym/cards/tests/cards/tla.rs
-    why: Fork a permanent spell copy above its original.
-  - path: managym/cards/tests/cards/m19.rs
-    why: Check which creatures receive Heroic Reinforcements’ temporary bonus.
-  - path: managym/cards/src/m14.rs
-    why: Read the three Primeval Bounty triggers.
-  - path: managym/cards/src/tokens.rs
-    why: Compare the printed token faces.
-  - path: managym/cards/tests/cards.rs
-    why: Check shared combat and token expectations.
-  - path: managym/tests/support/play.rs
-    why: Follow zone changes through trigger resolution.
+    why: Find each outcome and Slagstorm’s missing damage instruction.
+  - path: managym/cards/src/hou.rs
+    why: Read how Abrade’s mode binds its target.
+  - path: managym/cards/tests/cards/hou.rs
+    why: Follow both modes through casting and resolution.
+  - path: managym/cards/tests/cards/zen.rs
+    why: See simultaneous deaths through Bounty Hunters’ triggers.
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Compare lethal toughness loss with cleanup recovery.
+  - path: managym/cards/tests/cards/j22.rs
+    why: Check Deadly Plot’s tapped Zombie return.
 hide: []
