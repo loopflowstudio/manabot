@@ -64,16 +64,30 @@ impl Game {
         }
     }
 
+    /// Whether `object` stands for a manifested or face-down permanent, live
+    /// or as it last existed, rather than for its physical card (CR 708.2).
+    /// A manifest turned face up keeps the alias its earlier references used.
+    pub(crate) fn hides_physical_card(&self, object: ObjectId) -> bool {
+        match self.lookup_current_permanent(object) {
+            Ok(id) => {
+                self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.manifested)
+                    || self.state[object].is_face_down()
+            }
+            Err(_) => self
+                .object_lki(object)
+                .is_some_and(|lki| lki.definition_id == CardDefId::ANONYMOUS),
+        }
+    }
+
     /// Face-down battlefield references must not identify the physical card,
     /// whose public id can depend on its position in the submitted deck.
     pub(crate) fn observed_object_id(&self, object: ObjectId) -> PublicId {
-        if let Some(permanent) = self
-            .state
-            .permanent_of(object)
-            .and_then(|id| self.state.permanents[id].as_ref())
-            .filter(|permanent| permanent.manifested)
-        {
-            return permanent.id;
+        if self.hides_physical_card(object) {
+            if let Some(alias) = self.object_event_ref(object) {
+                return alias.entity;
+            }
         }
         self.state
             .objects

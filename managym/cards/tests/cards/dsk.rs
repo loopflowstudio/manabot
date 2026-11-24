@@ -573,3 +573,66 @@ fn a_face_down_attacker_deals_damage_without_naming_its_card() {
     });
     assert_eq!(rows[0], rows[1]);
 }
+
+#[test]
+fn a_face_down_creature_trading_in_combat_names_only_its_permanent() {
+    use crate::support::{game::clear_summoning_sickness, play::attack_with};
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::EventType},
+        flow::turn::StepKind,
+    };
+    let rows = [("Gray Ogre", "Forest"), ("Forest", "Gray Ogre")].map(|(hidden, other)| {
+        let mut s = five_color_setup(&["Gray Ogre"]);
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let cards = pin_top(&mut s, &[hidden, "Plains", other]);
+        let object = s.game_mut().manifest(cards[0], PlayerId(0));
+        let permanent = s.game().lookup_current_permanent(object).unwrap();
+        clear_summoning_sickness(&mut s, permanent);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        attack_with(&mut s, permanent);
+        while s.action_space().kind != ActionSpaceKind::DeclareBlocker {
+            s.advance_default_action();
+        }
+        s.declare_block();
+        s.game_mut().take_observation_events();
+        s.advance_to_active_step(0, StepKind::CombatDamage);
+        assert!(s.game().state.permanents[permanent].is_none(), "traded");
+        let events = s.game_mut().take_observation_events();
+        let rows: Vec<_> = Observation::new(s.game(), &events)
+            .recent_events
+            .into_iter()
+            // The card is revealed as it reaches the graveyard (CR 708.9).
+            .filter(|row| row.event_type != EventType::CardMoved as i32)
+            .collect();
+        assert!(rows
+            .iter()
+            .any(|row| row.event_type == EventType::DamageDealt as i32));
+        rows
+    });
+    assert_eq!(rows[0], rows[1]);
+}
+
+#[test]
+fn a_face_down_permanent_bounced_to_hand_names_no_card() {
+    use crate::support::game::move_card;
+    use managym::agent::observation::{EventEntityKind, EventType};
+    let rows = [("Gray Ogre", "Forest"), ("Forest", "Gray Ogre")].map(|(hidden, other)| {
+        let mut s = five_color_setup(&["Gray Ogre"]);
+        let cards = pin_top(&mut s, &[hidden, "Plains", other]);
+        let object = s.game_mut().manifest(cards[0], PlayerId(0));
+        s.game_mut().take_observation_events();
+        move_card(&mut s, object, ZoneType::Hand);
+        let events = s.game_mut().take_observation_events();
+        let rows = Observation::new(s.game(), &events).recent_events;
+        let moved = rows
+            .iter()
+            .find(|row| row.event_type == EventType::CardMoved as i32)
+            .expect("bounce");
+        assert_eq!(
+            (moved.source_kind, moved.source_id),
+            (EventEntityKind::None as i32, -1)
+        );
+        rows
+    });
+    assert_eq!(rows[0], rows[1]);
+}

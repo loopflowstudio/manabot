@@ -1828,9 +1828,10 @@ impl Observation {
         }
     }
 
-    /// Viewer-safe event rows. A source that is face down on the battlefield
-    /// is named by its permanent, never by the storage slot of the physical
-    /// card it hides (CR 708.2).
+    /// Viewer-safe event rows. A source that is or was face down on the
+    /// battlefield is named by its permanent, never by the storage slot of
+    /// the physical card it hides (CR 708.2), and a face-down permanent that
+    /// moves to a hidden zone names no object.
     pub(crate) fn event_data(game: &Game, event: &GameEvent) -> Vec<EventData> {
         let mut rows = Self::event_rows(event);
         let source = match event {
@@ -1839,18 +1840,27 @@ impl Observation {
             | GameEvent::AbilityTriggered { source_object, .. } => Some(*source_object),
             _ => None,
         };
-        if let Some(face_down) = source
-            .filter(|object| {
-                game.state
-                    .object(*object)
-                    .is_ok_and(|row| row.is_face_down())
-            })
+        if let Some(alias) = source
+            .filter(|object| game.hides_physical_card(*object))
             .and_then(|object| game.object_event_ref(object))
         {
             for row in &mut rows {
                 row.source_kind = EventEntityKind::Object as i32;
-                row.source_id = face_down.entity.0 as i32;
-                row.source_incarnation = face_down.incarnation as i32;
+                row.source_id = alias.entity.0 as i32;
+                row.source_incarnation = alias.incarnation as i32;
+            }
+        }
+        if let GameEvent::CardMoved {
+            departed: Some(departed),
+            to: ZoneType::Hand | ZoneType::Library,
+            ..
+        } = event
+        {
+            if game.hides_physical_card(*departed) {
+                for row in &mut rows {
+                    row.source_kind = EventEntityKind::None as i32;
+                    row.source_id = -1;
+                }
             }
         }
         rows
