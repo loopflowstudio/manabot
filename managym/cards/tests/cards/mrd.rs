@@ -26,3 +26,14 @@ fn gilded_lotus_adds_three_mana_of_one_color() {
     assert_eq!(s.battlefield_permanents_named(0, "Wall of Stone").len(), 1);
     assert_eq!(s.untapped_permanents_named(0, "Plains"), 1);
 }
+
+#[test]
+fn printed_creature_leonin_skyhunter() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Leonin Skyhunter",
+        2,
+        2,
+        managym::state::card::Keywords::of(&[Keyword::Flying]),
+    );
+}

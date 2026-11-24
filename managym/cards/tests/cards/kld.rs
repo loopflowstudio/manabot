@@ -338,3 +338,14 @@ fn authority_checks_entering_control() {
         assert_eq!(gains, [(PlayerId(0), 20, 21)]);
     }
 }
+
+#[test]
+fn printed_creature_brazen_scourge() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Brazen Scourge",
+        3,
+        3,
+        managym::state::card::Keywords::of(&[Keyword::Haste]),
+    );
+}

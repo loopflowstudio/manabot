@@ -242,3 +242,14 @@ fn thrill_of_possibility_discards_a_chosen_card_as_it_is_cast() {
         assert_eq!(s.zone_size(0, ZoneType::Hand), 3);
     }
 }
+
+#[test]
+fn printed_creature_raging_redcap() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Raging Redcap",
+        1,
+        2,
+        managym::state::card::Keywords::of(&[Keyword::DoubleStrike]),
+    );
+}

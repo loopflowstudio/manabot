@@ -138,3 +138,11 @@ fn brought_back_returns_only_cards_put_into_the_graveyard_from_the_battlefield_t
         assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
     }
 }
+
+#[test]
+fn token_producer_rapacious_dragon() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Rapacious Dragon"]);
+    enter_and_settle(&mut s, "Rapacious Dragon");
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 2);
+}

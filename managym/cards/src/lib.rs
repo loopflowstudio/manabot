@@ -17,6 +17,7 @@ mod afr;
 mod akh;
 mod ala;
 mod atq;
+mod avr;
 mod bfz;
 mod blb;
 mod bng;
@@ -49,14 +50,18 @@ mod iko;
 mod inv;
 mod isd;
 mod j22;
+mod jmp;
 mod jou;
 mod khm;
 mod kld;
 mod ktk;
 mod lea;
+mod lrw;
 mod m11;
 mod m12;
+mod m14;
 mod m15;
+mod m19;
 mod m20;
 mod mbs;
 mod mh1;
@@ -68,8 +73,10 @@ mod mrd;
 mod msh;
 mod nec;
 mod ody;
+mod ogw;
 mod ons;
 mod ori;
+mod p02;
 mod pls;
 mod por;
 mod psal;
@@ -94,6 +101,7 @@ mod vis;
 mod war;
 mod woe;
 mod wth;
+mod xln;
 mod zen;
 mod znr;
 
@@ -131,13 +139,14 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     akh::cards,
     ala::cards,
     atq::cards,
-    blb::cards,
+    avr::cards,
     bfz::cards,
+    blb::cards,
     bng::cards,
     bro::cards,
     c17::cards,
-    chk::cards,
     c19::cards,
+    chk::cards,
     clb::cards,
     cmr::cards,
     csp::cards,
@@ -163,14 +172,18 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     inv::cards,
     isd::cards,
     j22::cards,
+    jmp::cards,
     jou::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
     lea::cards,
+    lrw::cards,
     m11::cards,
     m12::cards,
+    m14::cards,
     m15::cards,
+    m19::cards,
     m20::cards,
     mbs::cards,
     mh1::cards,
@@ -182,15 +195,17 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     msh::cards,
     nec::cards,
     ody::cards,
+    ogw::cards,
     ons::cards,
     ori::cards,
+    p02::cards,
     pls::cards,
     por::cards,
     psal::cards,
     ptk::cards,
     rav::cards,
-    roe::cards,
     rix::cards,
+    roe::cards,
     rtr::cards,
     shm::cards,
     soi::cards,
@@ -207,6 +222,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     war::cards,
     woe::cards,
     wth::cards,
+    xln::cards,
     zen::cards,
     znr::cards,
 ];

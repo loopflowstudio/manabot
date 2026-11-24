@@ -13,6 +13,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        aegis_turtle(),
         bastion_of_remembrance(),
         drannith_magistrate(),
         weaponize_the_monsters(),
@@ -104,6 +105,23 @@ fn drannith_magistrate() -> CardDefinition {
             toughness: Some(3),
             statics: vec![StaticAbility::OpponentsCastOnlyFromHand],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn aegis_turtle() -> CardDefinition {
+    CardDefinition {
+        key: "iko.aegis_turtle",
+        scryfall_id: "e433e7f0-7417-4dfe-a7a4-3f222b0a835f",
+        printed: PrintedCharacteristics {
+            name: "Aegis Turtle".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Turtle".into()],
+            power: Some(0),
+            toughness: Some(5),
             ..Default::default()
         },
         ..Default::default()

@@ -33,3 +33,38 @@ fn fanatical_firebrand_taps_and_sacrifices_itself_for_one_damage() {
 fn thrashing_brontodon_sacrifices_itself_to_destroy_an_artifact() {
     crate::support::play::sacrifices_itself_to_destroy_an_artifact("Thrashing Brontodon", "Forest");
 }
+
+#[test]
+fn token_producer_gleaming_barrier() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Gleaming Barrier"]);
+    let barrier = enter_and_settle(&mut s, "Gleaming Barrier");
+    assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
+    crate::support::game::move_card(&mut s, barrier, managym::state::zone::ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.pass_priority();
+    crate::support::play::settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+}
+
+#[test]
+fn printed_creature_swab_goblin() {
+    crate::printed_creature_combat("Swab Goblin", 2, 2, managym::state::card::Keywords::of(&[]));
+}
+
+#[test]
+fn printed_creature_zetalpa_primal_dawn() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Zetalpa, Primal Dawn",
+        4,
+        8,
+        managym::state::card::Keywords::of(&[
+            Keyword::Flying,
+            Keyword::Indestructible,
+            Keyword::Vigilance,
+            Keyword::Trample,
+            Keyword::DoubleStrike,
+        ]),
+    );
+}

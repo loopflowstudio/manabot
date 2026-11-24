@@ -17,6 +17,13 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        quakestrider_ceratops(),
+        eager_trufflesnout(),
+        infestation_sage(),
+        elfsworn_giant(),
+        rite_of_the_dragoncaller(),
+        dragon_trainer(),
+        guarded_heir(),
         anthem_of_champions(),
         arahbo_the_first_fang(),
         blasphemous_edict(),
@@ -403,6 +410,180 @@ fn anthem_of_champions() -> CardDefinition {
                 }],
             })],
             text_box: "Creatures you control get +1/+1.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn guarded_heir() -> CardDefinition {
+    let text_box = "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, create two 3/3 white Knight creature tokens.";
+    CardDefinition {
+        key: "fdn.guarded_heir",
+        scryfall_id: "525ba5c7-3ce5-4e52-b8b5-96c9040a6738",
+        printed: PrintedCharacteristics {
+            name: "Guarded Heir".into(),
+            mana_cost: Some(ManaCost::parse("{5}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.knight_3_3_w", 2)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dragon_trainer() -> CardDefinition {
+    let text_box = "When this creature enters, create a 4/4 red Dragon creature token with flying.";
+    CardDefinition {
+        key: "fdn.dragon_trainer",
+        scryfall_id: "91bd75a1-cb54-4e38-9ce1-e8f32a73c6eb",
+        printed: PrintedCharacteristics {
+            name: "Dragon Trainer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.dragon_4_4_r_flying", 1)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rite_of_the_dragoncaller() -> CardDefinition {
+    let text_box = "Whenever you cast an instant or sorcery spell, create a 5/5 red Dragon creature token with flying.";
+    CardDefinition {
+        key: "fdn.rite_of_the_dragoncaller",
+        scryfall_id: "673e4561-8dfd-46db-b492-878009666ac7",
+        printed: PrintedCharacteristics {
+            name: "Rite of the Dragoncaller".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                        ..Default::default()
+                    },
+                ),
+                effects: vec![Effect::create_tokens("token.dragon_5_5_r_flying", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elfsworn_giant() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)\nLandfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.";
+    CardDefinition {
+        key: "fdn.elfsworn_giant",
+        scryfall_id: "5128a5be-ffa6-4998-8488-872d80b24cb2",
+        printed: PrintedCharacteristics {
+            name: "Elfsworn Giant".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into()],
+            power: Some(5),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::create_tokens("token.elf_warrior_1_1_g", 1)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn infestation_sage() -> CardDefinition {
+    let text_box =
+        "When this creature dies, create a 1/1 black and green Insect creature token with flying.";
+    CardDefinition {
+        key: "fdn.infestation_sage",
+        scryfall_id: "d40c73de-7a5f-46f2-a70b-449bc8ecfe24",
+        printed: PrintedCharacteristics {
+            name: "Infestation Sage".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Warlock".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.insect_1_1_bg_flying", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn eager_trufflesnout() -> CardDefinition {
+    let text_box = "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever this creature deals combat damage to a player, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")";
+    CardDefinition {
+        key: "fdn.eager_trufflesnout",
+        scryfall_id: "a6e8433d-eb2a-43d1-b59b-7d70ff97c8e7",
+        printed: PrintedCharacteristics {
+            name: "Eager Trufflesnout".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Boar".into()],
+            power: Some(4),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::This,
+                    to: Actor::AnyPlayer,
+                    per: Per::Object,
+                },
+                effects: vec![Effect::create_tokens("token.food", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn quakestrider_ceratops() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.quakestrider_ceratops",
+        scryfall_id: "067f72c2-ead6-4879-bc9d-696c9f87c0b2",
+        printed: PrintedCharacteristics {
+            name: "Quakestrider Ceratops".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dinosaur".into()],
+            power: Some(12),
+            toughness: Some(8),
             ..Default::default()
         },
         ..Default::default()

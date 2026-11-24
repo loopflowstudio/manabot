@@ -381,3 +381,34 @@ fn expedition_map_sacrifices_itself_for_any_land_into_hand() {
     settle(&mut s);
     assert_eq!(zone_of(&s, arena), Some(ZoneType::Hand));
 }
+
+#[test]
+fn token_producer_rampaging_baloths() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Rampaging Baloths"]);
+    enter_and_settle(&mut s, "Rampaging Baloths");
+    enter_and_settle(&mut s, "Forest");
+    crate::assert_creature_tokens(
+        &s,
+        "Beast",
+        1,
+        (4, 4),
+        &[managym::state::mana::Color::Green],
+        &[],
+    );
+}
+
+#[test]
+fn printed_creature_vampire_nighthawk() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Vampire Nighthawk",
+        2,
+        3,
+        managym::state::card::Keywords::of(&[
+            Keyword::Deathtouch,
+            Keyword::Flying,
+            Keyword::Lifelink,
+        ]),
+    );
+}

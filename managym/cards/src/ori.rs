@@ -12,7 +12,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![boggart_brute(), elemental_bond(), pyromancers_goggles()]
+    vec![
+        skyraker_giant(),
+        boggart_brute(),
+        elemental_bond(),
+        pyromancers_goggles(),
+    ]
 }
 
 fn boggart_brute() -> CardDefinition {
@@ -89,6 +94,26 @@ fn pyromancers_goggles() -> CardDefinition {
                 ))],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skyraker_giant() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)";
+    CardDefinition {
+        key: "ori.skyraker_giant",
+        scryfall_id: "c5f0d87a-8f37-4598-9106-c3545dadf6fd",
+        printed: PrintedCharacteristics {
+            name: "Skyraker Giant".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach]),
             text_box: text_box.into(),
             ..Default::default()
         },

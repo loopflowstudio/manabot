@@ -67,3 +67,29 @@ fn tolarian_terror_ward_counters_a_spell_unless_two_is_paid() {
         assert_eq!(permanent(&s, terror).damage, if pay { 3 } else { 0 });
     }
 }
+
+#[test]
+fn token_producer_resolute_reinforcements() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Resolute Reinforcements"]);
+    enter_and_settle(&mut s, "Resolute Reinforcements");
+    crate::assert_creature_tokens(
+        &s,
+        "Soldier",
+        1,
+        (1, 1),
+        &[managym::state::mana::Color::White],
+        &[],
+    );
+}
+
+#[test]
+fn printed_creature_magnigoth_sentry() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Magnigoth Sentry",
+        4,
+        4,
+        managym::state::card::Keywords::of(&[Keyword::Reach]),
+    );
+}

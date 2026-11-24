@@ -340,3 +340,13 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
     assert_eq!(s.game().state[clone].toughness, Some(3));
     assert!(s.game().state[clone].copy.is_none());
 }
+
+#[test]
+fn printed_creature_fire_elemental() {
+    crate::printed_creature_combat(
+        "Fire Elemental",
+        5,
+        4,
+        managym::state::card::Keywords::of(&[]),
+    );
+}

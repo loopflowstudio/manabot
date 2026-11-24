@@ -17,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        raging_redcap(),
         epic_downfall(),
         fabled_passage(),
         return_of_the_wildspeaker(),
@@ -228,6 +229,27 @@ fn thrill_of_possibility() -> CardDefinition {
             spell_effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(2),
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn raging_redcap() -> CardDefinition {
+    let text_box =
+        "Double strike (This creature deals both first-strike and regular combat damage.)";
+    CardDefinition {
+        key: "eld.raging_redcap",
+        scryfall_id: "d9325398-41c3-4177-a64d-ea38cb7a8737",
+        printed: PrintedCharacteristics {
+            name: "Raging Redcap".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Knight".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::DoubleStrike]),
             text_box: text_box.into(),
             ..Default::default()
         },

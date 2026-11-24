@@ -5,9 +5,9 @@ use managym_state::{
         PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
-        ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticPtBuff,
-        StaticScope,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
+        StaticPtBuff, StaticScope,
     },
     mana::{Mana, ManaCost},
     permanent::CounterKind,
@@ -16,6 +16,8 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        vampire_nighthawk(),
+        rampaging_baloths(),
         beastmaster_ascension(),
         bloodchief_ascension(),
         burst_lightning(),
@@ -277,6 +279,53 @@ fn into_the_roil() -> CardDefinition {
                     otherwise: vec![],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rampaging_baloths() -> CardDefinition {
+    let text_box = "Trample\nLandfall — Whenever a land you control enters, create a 4/4 green Beast creature token.";
+    CardDefinition {
+        key: "zen.rampaging_baloths",
+        scryfall_id: "66ae703d-b133-4749-9d38-216abe6c6647",
+        printed: PrintedCharacteristics {
+            name: "Rampaging Baloths".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Beast".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                vec![Effect::create_tokens("token.beast_4_4_g", 1)],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vampire_nighthawk() -> CardDefinition {
+    let text_box = "Flying\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)";
+    CardDefinition {
+        key: "zen.vampire_nighthawk",
+        scryfall_id: "44f19fe3-7a17-4c45-adfa-590f73dfebfa",
+        printed: PrintedCharacteristics {
+            name: "Vampire Nighthawk".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Shaman".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Deathtouch, Keyword::Flying, Keyword::Lifelink]),
             text_box: text_box.into(),
             ..Default::default()
         },

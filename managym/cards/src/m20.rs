@@ -14,7 +14,12 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![agent_of_treachery(), brought_back(), spectral_sailor()]
+    vec![
+        rapacious_dragon(),
+        agent_of_treachery(),
+        brought_back(),
+        spectral_sailor(),
+    ]
 }
 
 fn spectral_sailor() -> CardDefinition {
@@ -114,6 +119,30 @@ fn brought_back() -> CardDefinition {
                 true,
             )],
             targeting: vec![TargetRequirement::up_to(2, spec)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rapacious_dragon() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "m20.rapacious_dragon",
+        scryfall_id: "2c9bf6d8-ebf6-40ff-858a-3483d19bb584",
+        printed: PrintedCharacteristics {
+            name: "Rapacious Dragon".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::create_tokens("token.treasure", 2)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

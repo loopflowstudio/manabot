@@ -28,3 +28,5 @@ Authority uses an opponent-scoped entry ability so Zhao keeps its existing seria
 Use Typhoid Rats as the untapped control. Both Innistrad creatures cost {B}, so the fixture needs no generic mana choice.
 
 Use the first printed red 1/1 Goblin token face (Unglued) and file the cross-set fixture with Impact Tremors, whose triggers supply the response windows.
+
+Fill the Batch 5a cohort with the ledger’s vanilla and keyword-only creatures. Include Primeval Bounty and the three Treasure producers. Keep modal and targeted removal spells in their planned Batch 5b.

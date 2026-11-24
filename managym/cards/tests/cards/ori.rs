@@ -188,3 +188,14 @@ fn pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana() {
         assert!(s.game().state.stack_objects.is_empty());
     }
 }
+
+#[test]
+fn printed_creature_skyraker_giant() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Skyraker Giant",
+        4,
+        3,
+        managym::state::card::Keywords::of(&[Keyword::Reach]),
+    );
+}

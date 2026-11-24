@@ -884,3 +884,120 @@ fn twinflame_tyrant_doubles_only_friendly_damage_to_opposing_recipients() {
         }
     }
 }
+
+#[test]
+fn token_producer_guarded_heir() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Guarded Heir"]);
+    enter_and_settle(&mut s, "Guarded Heir");
+    crate::assert_creature_tokens(
+        &s,
+        "Knight",
+        2,
+        (3, 3),
+        &[managym::state::mana::Color::White],
+        &[],
+    );
+}
+
+#[test]
+fn token_producer_dragon_trainer() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Dragon Trainer"]);
+    enter_and_settle(&mut s, "Dragon Trainer");
+    crate::assert_creature_tokens(
+        &s,
+        "Dragon",
+        1,
+        (4, 4),
+        &[managym::state::mana::Color::Red],
+        &[managym::state::card::Keyword::Flying],
+    );
+}
+
+#[test]
+fn token_producer_rite_of_the_dragoncaller() {
+    use crate::support::{
+        game::five_color_setup,
+        play::{enter_and_settle, play_and_settle},
+    };
+    let mut s = five_color_setup(&["Rite of the Dragoncaller", "Dragon Fodder"]);
+    enter_and_settle(&mut s, "Rite of the Dragoncaller");
+    play_and_settle(&mut s, "Dragon Fodder");
+    crate::assert_creature_tokens(
+        &s,
+        "Dragon",
+        1,
+        (5, 5),
+        &[managym::state::mana::Color::Red],
+        &[managym::state::card::Keyword::Flying],
+    );
+}
+
+#[test]
+fn token_producer_elfsworn_giant() {
+    use crate::support::{game::five_color_setup, play::enter_and_settle};
+    let mut s = five_color_setup(&["Elfsworn Giant"]);
+    enter_and_settle(&mut s, "Elfsworn Giant");
+    enter_and_settle(&mut s, "Forest");
+    crate::assert_creature_tokens(
+        &s,
+        "Elf Warrior",
+        1,
+        (1, 1),
+        &[managym::state::mana::Color::Green],
+        &[],
+    );
+}
+
+#[test]
+fn token_producer_infestation_sage() {
+    use crate::support::{
+        game::five_color_setup,
+        play::{enter_and_settle, settle},
+    };
+    let mut s = five_color_setup(&["Infestation Sage"]);
+    let source = enter_and_settle(&mut s, "Infestation Sage");
+    crate::support::game::move_card(&mut s, source, managym::state::zone::ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.pass_priority();
+    settle(&mut s);
+    crate::assert_creature_tokens(
+        &s,
+        "Insect",
+        1,
+        (1, 1),
+        &[
+            managym::state::mana::Color::Black,
+            managym::state::mana::Color::Green,
+        ],
+        &[managym::state::card::Keyword::Flying],
+    );
+}
+
+#[test]
+fn token_producer_eager_trufflesnout() {
+    use crate::support::{
+        game::five_color_setup,
+        play::{attack_with, enter_and_settle},
+    };
+    let mut s = five_color_setup(&["Eager Trufflesnout"]);
+    enter_and_settle(&mut s, "Eager Trufflesnout");
+    let source = crate::support::inspect::permanent_named(&s, "Eager Trufflesnout");
+    crate::support::game::clear_summoning_sickness(&mut s, source);
+    s.advance_to_active_step(0, managym::flow::turn::StepKind::DeclareAttackers);
+    attack_with(&mut s, source);
+    s.advance_to_active_step(0, managym::flow::turn::StepKind::PostcombatMain);
+    let tokens = s.battlefield_permanents_named(0, "Food");
+    assert_eq!(tokens.len(), 1);
+}
+
+#[test]
+fn printed_creature_quakestrider_ceratops() {
+    crate::printed_creature_combat(
+        "Quakestrider Ceratops",
+        12,
+        8,
+        managym::state::card::Keywords::of(&[]),
+    );
+}

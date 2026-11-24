@@ -1,6 +1,6 @@
 //! Rivals of Ixalan.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetSpec},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics,
@@ -10,7 +10,13 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fanatical_firebrand(), thrashing_brontodon()]
+    vec![
+        zetalpa_primal_dawn(),
+        swab_goblin(),
+        gleaming_barrier(),
+        fanatical_firebrand(),
+        thrashing_brontodon(),
+    ]
 }
 
 fn fanatical_firebrand() -> CardDefinition {
@@ -68,6 +74,77 @@ fn thrashing_brontodon() -> CardDefinition {
                 ))],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn gleaming_barrier() -> CardDefinition {
+    let text_box = "Defender\nWhen this creature dies, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+    CardDefinition {
+        key: "rix.gleaming_barrier",
+        scryfall_id: "62447a76-4aa7-4823-941e-84bc18eb672a",
+        printed: PrintedCharacteristics {
+            name: "Gleaming Barrier".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.treasure", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn swab_goblin() -> CardDefinition {
+    CardDefinition {
+        key: "rix.swab_goblin",
+        scryfall_id: "0403b8e5-29c5-4a4a-b9e7-1e79a7452f14",
+        printed: PrintedCharacteristics {
+            name: "Swab Goblin".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn zetalpa_primal_dawn() -> CardDefinition {
+    let text_box = "Flying, double strike, vigilance, trample, indestructible";
+    CardDefinition {
+        key: "rix.zetalpa_primal_dawn",
+        scryfall_id: "3d10560f-199d-4d04-b573-90024f8aecc4",
+        printed: PrintedCharacteristics {
+            name: "Zetalpa, Primal Dawn".into(),
+            mana_cost: Some(ManaCost::parse("{6}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elder".into(), "Dinosaur".into()],
+            power: Some(4),
+            toughness: Some(8),
+            supertypes: vec!["Legendary".into()],
+            keywords: Keywords::of(&[
+                Keyword::Flying,
+                Keyword::Indestructible,
+                Keyword::Vigilance,
+                Keyword::Trample,
+                Keyword::DoubleStrike,
+            ]),
             text_box: text_box.into(),
             ..Default::default()
         },

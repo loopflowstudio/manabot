@@ -110,3 +110,13 @@ fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, dance));
 }
+
+#[test]
+fn printed_creature_aegis_turtle() {
+    crate::printed_creature_combat(
+        "Aegis Turtle",
+        0,
+        5,
+        managym::state::card::Keywords::of(&[]),
+    );
+}

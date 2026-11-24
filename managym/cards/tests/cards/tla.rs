@@ -15088,23 +15088,54 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
 /// A copy of a permanent spell resolves into a token (CR 707.10f).
 #[test]
 fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
-    let mut s = five_color_setup(&["Fire Lord Azula", "Invasion Reinforcements"]);
+    let mut s = five_color_setup(&[
+        "Fire Lord Azula",
+        "Invasion Reinforcements",
+        "Doubling Season",
+    ]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
     let azula = s.force_permanent_on_battlefield(0, "Fire Lord Azula");
     clear_summoning_sickness(&mut s, azula);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, azula);
     settle(&mut s);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
-    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.set_player_mana_pool(0, "1W");
     cast(&mut s, "Invasion Reinforcements");
+    spend_colorless(&mut s);
+    resolve_top(&mut s); // Azula's trigger puts the copy above the original.
+    let pending = s.game().state.stack_objects.clone();
+    assert_eq!(pending.len(), 2);
+    let before = witness(s.game());
+    let mut fork = s.clone();
+    for branch in [&mut fork, &mut s] {
+        assert_eq!(witness(branch.game()), before);
+        resolve_top(branch);
+        let copies = branch.battlefield_permanents_named(0, "Invasion Reinforcements");
+        assert_eq!(copies.len(), 1);
+        let id = copies[0];
+        assert_eq!(
+            branch.game().state[card_of(branch, id)].kind(),
+            ObjectKind::Token
+        );
+        let face = branch.game().characteristics(id);
+        assert_eq!(face.pt(), (1, 1));
+        assert!(face.keywords.has(Keyword::Flash));
+        assert_eq!(face.creature_types, ["Ally", "Human", "Warrior"]);
+        assert_eq!(branch.game().state.stack_objects[0], pending[0]);
+        assert!(matches!(
+            &branch.game().state.stack_objects[..],
+            [StackObject::Spell(_), StackObject::TriggeredAbility(_)]
+        ));
+    }
+    assert_eq!(witness(s.game()), witness(fork.game()));
     resolve_everything(&mut s);
-    let reinforcements = s.battlefield_permanents_named(0, "Invasion Reinforcements");
-    assert_eq!(reinforcements.len(), 2);
-    let tokens = reinforcements
-        .iter()
-        .filter(|id| s.game().state[card_of(&s, **id)].kind() == ObjectKind::Token)
-        .count();
-    assert_eq!(tokens, 1);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Invasion Reinforcements")
+            .len(),
+        2
+    );
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 4);
 }
 
 /// Earthbend 0 with an empty hand: the 0/0 land dies and still returns

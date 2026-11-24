@@ -2,13 +2,14 @@
 use managym_state::{
     ability::Effect,
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics,
     },
     mana::{Mana, ManaCost},
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![gilded_lotus()]
+    vec![leonin_skyhunter(), gilded_lotus()]
 }
 
 fn gilded_lotus() -> CardDefinition {
@@ -27,6 +28,26 @@ fn gilded_lotus() -> CardDefinition {
                 )],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn leonin_skyhunter() -> CardDefinition {
+    let text_box = "Flying";
+    CardDefinition {
+        key: "mrd.leonin_skyhunter",
+        scryfall_id: "275a47e1-816c-44f9-bd05-b8b56410436f",
+        printed: PrintedCharacteristics {
+            name: "Leonin Skyhunter".into(),
+            mana_cost: Some(ManaCost::parse("{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Knight".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
             text_box: text_box.into(),
             ..Default::default()
         },

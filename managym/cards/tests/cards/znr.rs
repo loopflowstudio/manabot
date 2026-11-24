@@ -52,3 +52,13 @@ fn blight_priest_drains_once_per_reaver_hit() {
         assert_eq!(hand(&s, 0).len(), opening + hit);
     }
 }
+
+#[test]
+fn printed_creature_highborn_vampire() {
+    crate::printed_creature_combat(
+        "Highborn Vampire",
+        4,
+        3,
+        managym::state::card::Keywords::of(&[]),
+    );
+}

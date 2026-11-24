@@ -6926,5 +6926,482 @@
     "colors": [
       "U"
     ]
+  },
+  "Guarded Heir": {
+    "name": "Guarded Heir",
+    "mana_cost": "{5}{W}",
+    "type_line": "Creature — Human Noble",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen this creature enters, create two 3/3 white Knight creature tokens.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Dragon Trainer": {
+    "name": "Dragon Trainer",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Human",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, create a 4/4 red Dragon creature token with flying.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rite of the Dragoncaller": {
+    "name": "Rite of the Dragoncaller",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever you cast an instant or sorcery spell, create a 5/5 red Dragon creature token with flying.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Resolute Reinforcements": {
+    "name": "Resolute Reinforcements",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, create a 1/1 white Soldier creature token.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Elfsworn Giant": {
+    "name": "Elfsworn Giant",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Giant",
+    "power": "5",
+    "toughness": "3",
+    "keywords": [
+      "Reach",
+      "Landfall"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nLandfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Infestation Sage": {
+    "name": "Infestation Sage",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Elf Warlock",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature dies, create a 1/1 black and green Insect creature token with flying.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Maalfeld Twins": {
+    "name": "Maalfeld Twins",
+    "mana_cost": "{5}{B}",
+    "type_line": "Creature — Zombie",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "When this creature dies, create two 2/2 black Zombie creature tokens.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Release the Dogs": {
+    "name": "Release the Dogs",
+    "mana_cost": "{3}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create four 1/1 white Dog creature tokens.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Rampaging Baloths": {
+    "name": "Rampaging Baloths",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Beast",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Trample",
+      "Landfall"
+    ],
+    "oracle_text": "Trample\nLandfall — Whenever a land you control enters, create a 4/4 green Beast creature token.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Eager Trufflesnout": {
+    "name": "Eager Trufflesnout",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Boar",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Food",
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever this creature deals combat damage to a player, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+    "colors": [
+      "G"
+    ]
+  },
+  "Heroic Reinforcements": {
+    "name": "Heroic Reinforcements",
+    "mana_cost": "{2}{R}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create two 1/1 white Soldier creature tokens. Until end of turn, creatures you control get +1/+1 and gain haste. (They can attack and {T} this turn.)",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Lathliss, Dragon Queen": {
+    "name": "Lathliss, Dragon Queen",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Legendary Creature — Dragon",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever another nontoken Dragon you control enters, create a 5/5 red Dragon creature token with flying.\n{1}{R}: Dragons you control get +1/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Imperious Perfect": {
+    "name": "Imperious Perfect",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Warrior",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Other Elves you control get +1/+1.\n{G}, {T}: Create a 1/1 green Elf Warrior creature token.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Gleaming Barrier": {
+    "name": "Gleaming Barrier",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Wall",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Treasure",
+      "Defender"
+    ],
+    "oracle_text": "Defender\nWhen this creature dies, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": []
+  },
+  "Rapacious Dragon": {
+    "name": "Rapacious Dragon",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Treasure"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Corsair Captain": {
+    "name": "Corsair Captain",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Pirate",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "When this creature enters, create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")\nOther Pirates you control get +1/+1.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Quakestrider Ceratops": {
+    "name": "Quakestrider Ceratops",
+    "mana_cost": "{3}{G}{G}{G}",
+    "type_line": "Creature — Dinosaur",
+    "power": "12",
+    "toughness": "8",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "G"
+    ]
+  },
+  "Aegis Turtle": {
+    "name": "Aegis Turtle",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Turtle",
+    "power": "0",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "U"
+    ]
+  },
+  "Highborn Vampire": {
+    "name": "Highborn Vampire",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Vampire Warrior",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Elemental": {
+    "name": "Fire Elemental",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Elemental",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Swab Goblin": {
+    "name": "Swab Goblin",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Pirate",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Bear Cub": {
+    "name": "Bear Cub",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Bear",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "G"
+    ]
+  },
+  "Gigantosaurus": {
+    "name": "Gigantosaurus",
+    "mana_cost": "{G}{G}{G}{G}{G}",
+    "type_line": "Creature — Dinosaur",
+    "power": "10",
+    "toughness": "10",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "G"
+    ]
+  },
+  "Brazen Scourge": {
+    "name": "Brazen Scourge",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Gremlin",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Swiftblade Vindicator": {
+    "name": "Swiftblade Vindicator",
+    "mana_cost": "{R}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Vigilance",
+      "Trample",
+      "Double strike"
+    ],
+    "oracle_text": "Double strike (This creature deals both first-strike and regular combat damage.)\nVigilance (Attacking doesn't cause this creature to tap.)\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Bishop's Soldier": {
+    "name": "Bishop's Soldier",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Vampire Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Leonin Skyhunter": {
+    "name": "Leonin Skyhunter",
+    "mana_cost": "{W}{W}",
+    "type_line": "Creature — Cat Knight",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying",
+    "colors": [
+      "W"
+    ]
+  },
+  "Raging Redcap": {
+    "name": "Raging Redcap",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Knight",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Double strike"
+    ],
+    "oracle_text": "Double strike (This creature deals both first-strike and regular combat damage.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Skyraker Giant": {
+    "name": "Skyraker Giant",
+    "mana_cost": "{2}{R}{R}",
+    "type_line": "Creature — Giant",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Magnigoth Sentry": {
+    "name": "Magnigoth Sentry",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Treefolk",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Tajuru Pathwarden": {
+    "name": "Tajuru Pathwarden",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Elf Warrior Ally",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance",
+      "Trample"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Thornweald Archer": {
+    "name": "Thornweald Archer",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Elf Archer",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Reach",
+      "Deathtouch"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Zetalpa, Primal Dawn": {
+    "name": "Zetalpa, Primal Dawn",
+    "mana_cost": "{6}{W}{W}",
+    "type_line": "Legendary Creature — Elder Dinosaur",
+    "power": "4",
+    "toughness": "8",
+    "keywords": [
+      "Flying",
+      "Indestructible",
+      "Vigilance",
+      "Trample",
+      "Double strike"
+    ],
+    "oracle_text": "Flying, double strike, vigilance, trample, indestructible",
+    "colors": [
+      "W"
+    ]
+  },
+  "Vampire Nighthawk": {
+    "name": "Vampire Nighthawk",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Creature — Vampire Shaman",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Deathtouch",
+      "Flying",
+      "Lifelink"
+    ],
+    "oracle_text": "Flying\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Primeval Bounty": {
+    "name": "Primeval Bounty",
+    "mana_cost": "{5}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Landfall"
+    ],
+    "oracle_text": "Whenever you cast a creature spell, create a 3/3 green Beast creature token.\nWhenever you cast a noncreature spell, put three +1/+1 counters on target creature you control.\nLandfall — Whenever a land you control enters, you gain 3 life.",
+    "colors": [
+      "G"
+    ]
   }
 }

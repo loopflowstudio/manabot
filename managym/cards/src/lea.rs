@@ -1,17 +1,18 @@
 //! Limited Edition Alpha.
-use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         ManaAbility, PrintedCharacteristics, ReplacementEffect,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fire_elemental(),
         ancestral_recall(),
         clone(),
         counterspell(),
@@ -456,6 +457,23 @@ fn clone() -> CardDefinition {
                 exceptions: vec![],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fire_elemental() -> CardDefinition {
+    CardDefinition {
+        key: "lea.fire_elemental",
+        scryfall_id: "da237992-2919-4e37-8f56-2164095f59b5",
+        printed: PrintedCharacteristics {
+            name: "Fire Elemental".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into()],
+            power: Some(5),
+            toughness: Some(4),
             ..Default::default()
         },
         ..Default::default()

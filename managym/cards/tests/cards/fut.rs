@@ -98,3 +98,14 @@ fn rites_of_flourishing_draws_for_each_player_and_grants_a_land_play() {
     resolve_everything(&mut s);
     s.assert_zone_size(1, ZoneType::Hand, hand + 1);
 }
+
+#[test]
+fn printed_creature_thornweald_archer() {
+    use managym::state::card::Keyword;
+    crate::printed_creature_combat(
+        "Thornweald Archer",
+        2,
+        1,
+        managym::state::card::Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
+    );
+}

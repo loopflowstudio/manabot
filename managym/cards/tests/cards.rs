@@ -16,6 +16,8 @@ mod afr;
 mod akh;
 #[path = "cards/atq.rs"]
 mod atq;
+#[path = "cards/avr.rs"]
+mod avr;
 #[path = "cards/bfz.rs"]
 mod bfz;
 #[path = "cards/blb.rs"]
@@ -64,6 +66,8 @@ mod frf;
 mod fut;
 #[path = "cards/gpt.rs"]
 mod gpt;
+#[path = "cards/grn.rs"]
+mod grn;
 #[path = "cards/gtc.rs"]
 mod gtc;
 #[path = "cards/hob.rs"]
@@ -78,6 +82,8 @@ mod inv;
 mod isd;
 #[path = "cards/j22.rs"]
 mod j22;
+#[path = "cards/jmp.rs"]
+mod jmp;
 #[path = "cards/jou.rs"]
 mod jou;
 #[path = "cards/khm.rs"]
@@ -88,10 +94,16 @@ mod kld;
 mod ktk;
 #[path = "cards/lea.rs"]
 mod lea;
+#[path = "cards/lrw.rs"]
+mod lrw;
 #[path = "cards/m12.rs"]
 mod m12;
+#[path = "cards/m14.rs"]
+mod m14;
 #[path = "cards/m15.rs"]
 mod m15;
+#[path = "cards/m19.rs"]
+mod m19;
 #[path = "cards/m20.rs"]
 mod m20;
 #[path = "cards/mbs.rs"]
@@ -114,10 +126,14 @@ mod nec;
 mod observability;
 #[path = "cards/ody.rs"]
 mod ody;
+#[path = "cards/ogw.rs"]
+mod ogw;
 #[path = "cards/ons.rs"]
 mod ons;
 #[path = "cards/ori.rs"]
 mod ori;
+#[path = "cards/p02.rs"]
+mod p02;
 #[path = "cards/pls.rs"]
 mod pls;
 #[path = "cards/por.rs"]
@@ -166,7 +182,82 @@ mod war;
 mod woe;
 #[path = "cards/wth.rs"]
 mod wth;
+#[path = "cards/xln.rs"]
+mod xln;
 #[path = "cards/zen.rs"]
 mod zen;
 #[path = "cards/znr.rs"]
 mod znr;
+
+/// Play an unblocked combat with just the printed creature on the battlefield.
+fn printed_creature_combat(
+    name: &str,
+    power: i32,
+    toughness: i32,
+    keywords: managym::state::card::Keywords,
+) {
+    use managym::{flow::turn::StepKind, state::card::Keyword};
+    use support::{
+        game::five_color_setup,
+        inspect::permanent_named,
+        play::{attack_with, play_and_settle},
+    };
+    let mut s = five_color_setup(&[name]);
+    s.set_player_mana_pool(0, "20WWWWWWUUUUUUBBBBBBRRRRRRGGGGGG");
+    play_and_settle(&mut s, name);
+    let id = permanent_named(&s, name);
+    let face = s.game().characteristics(id);
+    assert_eq!(face.pt(), (power, toughness));
+    assert_eq!(face.keywords, keywords);
+    if !keywords.has(Keyword::Haste) {
+        s.advance_to_active_step(1, StepKind::Main);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, id);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    let damage = power
+        * if keywords.has(Keyword::DoubleStrike) {
+            2
+        } else {
+            1
+        };
+    s.assert_life(1, 20 - damage);
+    s.assert_life(
+        0,
+        20 + if keywords.has(Keyword::Lifelink) {
+            damage
+        } else {
+            0
+        },
+    );
+    assert_eq!(
+        support::inspect::tapped(&s, id),
+        !keywords.has(Keyword::Vigilance)
+    );
+}
+
+/// Check the controller's tokens in the resolved position, including any active team bonus.
+fn assert_creature_tokens(
+    s: &support::game::Scenario,
+    name: &str,
+    count: usize,
+    pt: (i32, i32),
+    colors: &[managym::state::mana::Color],
+    keywords: &[managym::state::card::Keyword],
+) {
+    use managym::state::{card::Keywords, game_object::ObjectKind, mana::Colors};
+    let tokens = s.battlefield_permanents_named(0, name);
+    assert_eq!(tokens.len(), count);
+    let subtypes: Vec<_> = name.split_whitespace().collect();
+    for id in tokens {
+        assert_eq!(
+            s.game().state[support::inspect::card_of(s, id)].kind(),
+            ObjectKind::Token
+        );
+        let face = s.game().characteristics(id);
+        assert_eq!(face.pt(), pt);
+        assert_eq!(face.creature_types, subtypes);
+        assert_eq!(face.colors, Colors::from_iter(colors.iter().copied()));
+        assert_eq!(face.keywords, Keywords::of(keywords));
+    }
+}
