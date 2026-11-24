@@ -74,9 +74,9 @@ Every backend writes the exact same four filenames:
   Torch) keeps one backend-independent 4-file save layout, prevents Torch
   CUDA→CPU crashes, and verifies `sampling_sha256` uniformly on every resume.
   Passed over: backend-suffixed filenames.
-- **No fallback for unmerged dba0f2 MLX `training.safetensors` saves.** Fails
+- **Pre-portable dba0f2 MLX `training.safetensors` saves.** Fails
   explicitly naming `training.safetensors`. Passed over: a second read-only
-  loader for unmerged MLX schema 1/2.
+  loader for MLX schema 1/2. Parent PR #585 has since merged.
 
 ## Adam representation and parameter mapping
 
@@ -226,7 +226,7 @@ Etude `af71c109` via a temporary uv source; Slice 4 swaps to the PyPI pin once
 
 ## Acceptance check
 
-`uv run --extra dev pytest tests/training/test_cross_backend_continuation.py -q`:
+`uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q` on Apple Silicon, serially:
 
 1. Torch tracked run, 2 updates, safe stop → MLX resume: MLX learner/EMA
    canonical parameters, Adam `step`/moments, counts and readings match the
@@ -268,10 +268,19 @@ files (`state.json`, `continuation.json`, `learner.safetensors`,
 1. **Built (`fa2c52e493`) — portable learner, EMA and Adam hooks** (`policy_arrays`, `policy_buffers`, `load_policy_arrays`, `adam_state`, `load_adam`, `AdamState`/`admit_adam` in `training/state/optimizer.py`; MLX custom `Adam` with per-leaf `lag`). `tests/training/test_portable_adam.py` passed on CPU: Torch→Torch exact, Torch↔MLX next update within float32 tolerance. Torch `load_adam` returns 0 (native per-parameter steps); MLX returns the number of lagged parameters.
 2. **Built (`bb0c7267b6`, Etude pin `5c91b7ff7d`) — unified continuation and loop wiring.** Both backends write the four-file layout, validate before tensor installation, recover native streams and restore or reseed sampling. The bounded tracked fixture continued Torch → MLX and MLX → Torch at update 2. The SDK's versioned storage listing is also required for reading those runs in the training-time report.
    Realign 2026-11-23: `test_mlx_continuation`, `test_portable_adam`, `test_numerical_health`, `test_package_boundaries` passed (55) except `test_safe_stop_matches_uninterrupted[1-metal]`, whose MPS subprocess hit its 120 s timeout under `-n 4`; alone, all five safe-stop cases passed in 292 s. Slice 3 should keep Metal subprocess cases off parallel workers or bound them so they cannot contend.
-3. **Next — cross-backend, cross-device, Torch safe-stop, and legacy acceptance tests + docs.**
-   Add `tests/training/test_cross_backend_continuation.py` (acceptance 1–6) and
-   verify docs against the implementation. Verify `tests/test_package_boundaries.py`.
-4. **Etude 0.4.6 pin** once released; drop the temporary uv source.
+3. **Built (`30db47c5c1`) — tracked continuation acceptance and docs.**
+   At the first resumed decision, both Torch → MLX and MLX → Torch preserved
+   the live games and RNGs in `continuation.json`, every raw and EMA parameter,
+   Adam moment and per-parameter clock, and all counts and readings. Both
+   published update 4 and recorded the reseed only at update 3. The simulated
+   CUDA save checked digest refusal and both CPU generator seeds. The registered
+   Torch fixture checked the old state dictionaries before migration. The CPU
+   safe-stop matched the uninterrupted learner, work counts, host and sampling.
+   All seven acceptance cases passed serially in 194 s. The bounded Metal
+   repeatability case passed in 57 s, and all 42 package-boundary tests passed. The four training guides now match the save
+   contract and Etude's placement of continued jobs in the parent's pool.
+4. **Next — Etude 0.4.6 pin** once released. PyPI still listed 0.4.5 during
+   slice 3. Replace the temporary Git source and refresh the lock at release.
 
 ## Docs written ahead of implementation
 
@@ -282,4 +291,5 @@ Updated in place:
 - `docs/training-loop.md` (snapshot-bank recovery with canonical continuation)
 - `manabot/README.md` (Etude SDK 0.4.6 minimum)
 
-Open doc questions (CLI backend switching, `precision` spelling) are in `scratch/questions.md`.
+The docs describe launched backend switches in the parent worker pool. The header
+uses the recipe spelling of `precision`. See `scratch/questions.md`.

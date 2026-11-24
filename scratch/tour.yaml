@@ -1,5 +1,7 @@
-at: bb0c7267b67a008362ba982f3d4b2dcb33a47ac1
+at: 30db47c5c18760569c95f15b3c2d49aca69d9ec1
 first:
+  - path: docs/training.md
+    why: Continue a saved run on another backend
   - path: manabot/backends/README.md
     why: Four-file save contract and sampling domains
   - path: manabot/training/state/optimizer.py
@@ -18,8 +20,10 @@ first:
     why: Restore MLX moments, parameter ages and sampling keys
   - path: manabot/backends/mlx/learner.py
     why: Apply bias correction at each parameter's age
+  - path: tests/training/test_cross_backend_continuation.py
+    why: Inspect restored games, parameters and clocks before collection
   - path: tests/training/test_mlx_continuation.py
-    why: Tracked backend switches, corruption refusal and safe stops
+    why: MLX corruption refusal and safe stops
   - path: tests/training/test_portable_adam.py
     why: Compare the next optimizer update after transfer
 hide:

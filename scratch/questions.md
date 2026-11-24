@@ -27,10 +27,10 @@
   resume verifies `sampling_sha256`, reseeds deterministically from
   `(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1`. Passed over:
   `sampling.<backend>.safetensors`.
-- **No fallback for unmerged dba0f2 MLX `training.safetensors` saves.** Chosen
-  because that format exists only on unmerged dba0f2 (PR #585); fails
-  explicitly naming `training.safetensors`. Passed over: a second read-only
-  loader for MLX schema 1/2.
+- **Pre-portable MLX saves.** The original decision to refuse
+  `training.safetensors` preceded the merge of parent PR #585. Runs written
+  with that revision can have MLX schema 1/2 saves. The current error names
+  the file, and the recovery guide directs those runs to their writer revision.
 
 ## Surfaced while writing docs
 
@@ -40,8 +40,8 @@
   Switching backend or device therefore goes through
   `etude continue --run RUN --until updates=N --config '{"backend":"mlx","device":"mps"}'`
   (launched runs) or direct Python `self_play(..., backend=...)` against the same
-  `ETUDE_OUT`. Confirm whether that is the intended CLI surface, or whether
-  local runs also need a way to switch `backend`/`device` without `etude continue`.
+  `ETUDE_OUT`. At the pinned Etude revision, the CLI queues a continued job in
+  the parent's pool with its rental settings. The docs now name that constraint.
 - **Canonical `precision` spelling in `learner.safetensors`:**
   `SelfPlay.precision` uses `"float32" | "tf32" | "bf16"` while
   `MLXActorCritic.precision` uses `"float32" | "bfloat16"`. Record the
@@ -55,3 +55,10 @@
   timed CPU runs. Each learner header binds its own `Counts.training_seconds`
   through `counts_sha256`, so the whole learner files can differ even when
   every tensor is identical. The host and sampling files can be compared as bytes.
+
+## Slice 3 validation
+
+- Use a recorded Torch CPU learner and host state with a simulated CUDA sampling
+  file. The CPU reader must reject changed bytes and, with the digest intact,
+  start both CPU generators at their expected resumed seeds. This exercises
+  the domain transition on a host without CUDA.
