@@ -102,3 +102,13 @@ Four reversible choices recorded in `scratch/concept-review.html` and `scratch/p
 - Resample hidden face-down exile (`is_face_down_in_exile && !can_view_face_down_exile(obj, viewer)`) for **both** seats (including own seat in `shuffle_known_library` and `shares_information` opponent), add `face_down_exile: u32` (omitted when 0) to `HiddenHandConstraints` / `PossibleWorldSpace` / `selection_sampling`, distinguish foretold vs. generic face-down exile in `text_observation.py:941`, and carry `prepared` + `condition` on `CastPermissionData` / `permission_facts` / `inspect.ts` — closes the turn-3 Flameshape owner-search leak and possible-world slot mismatch.
 - Render concise `prepared` / `flashback` badges on `StackEntryView` in Academy's `Rail.svelte`, and drop redundant `"only "` before `"anything but ..."` exclusions in `text_observation.py:865`, `mana.ts:11`, and `Plate.svelte:41` (`"for anything but spells from hand"`).
 - Retain `(source_id, view)` in `effective_spell_cost` and add `EffectValue::AttachedCreaturePower` reading `self.attached_creature(source_id)` -> `layer_view(c).power.max(0)` for Glamdring; explicitly allow all profiles in `permits_spell` for `PlayRoute::ExileCounter(_)` and keep spell//land MDFC back-face land plays open under `HandOnly`.
+
+## 2026-11-24 implement pass (Slice 2 items 1–3, 5–8; Slice 3 item 2)
+
+Reversible choices taken:
+- A discard is the engine's existing hand → graveyard move (`KeywordAction::Discard` reads that `CardMoved`, as `EventBinding::Moved` already did). A discard a replacement redirects out of the graveyard would not trigger "whenever an opponent discards"; no current card does that.
+- Tinybones's permission is one variant, `StaticAbility::PlayUnownedExiledWithCounter(CounterKind)`, with "during your turn", "cards you don't own" and "mana of any type" fixed to its text rather than three fields no second card uses yet.
+- Counters off the battlefield are carried into exile only (`ZoneEntry::for_zone`). Graveyard or library counters would be the same map when a card needs them.
+- `SpellCostReduction.generic` became an `EffectValue` with a serializer that writes a fixed amount as the bare number, so the five existing reductions keep their learning tokens and the pinned pilot is unaffected.
+- Claim Territory with only one Forest found puts it onto the battlefield tapped (the inner selection requires one). Check the Oracle ruling if this matters.
+- `lea::clone_copy_survives_suspended_entry_and_keeps_its_printed_base` pins a state hash that moves whenever a definition sorting before "Wolf Cove Villager" is added (four refreshes in this pass alone). Pinning a hash that excludes catalog ordinals, or asserting the copied values directly, would stop that churn.
