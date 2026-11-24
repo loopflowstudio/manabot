@@ -1,4 +1,4 @@
-at: 56b5ac6c2d4950235609bc16fc3ae046d88115bc
+at: 77a073e5bfe684724e42a64a5611072d809411c3
 first:
   - path: docs/engine.md
     why: Play the graveyard returns and battlefield form examples.
@@ -11,17 +11,17 @@ first:
   - path: managym/state/src/stack_object.rs
     why: Stack objects retain sources, target clauses and announced X.
   - path: managym/state/src/permanent.rs
-    why: Spell choices and payment survive battlefield entry.
+    why: Spell choices, payment and spent activation limits on the permanent.
   - path: managym/state/src/effect.rs
     why: Layer 3 SetName names a permanent.
   - path: managym/state/src/subtype.rs
     why: Which subtypes survive a SetTypes change.
   - path: managym/state/src/card.rs
-    why: Statics that can change another permanent's mana.
+    why: once_per_object and is_use_limited own every activation limit.
   - path: managym/src/flow/layers.rs
-    why: Apply SetName and subtype-preserving SetTypes.
+    why: Apply SetName, AllCreatureTypes and subtype-preserving SetTypes.
   - path: managym/src/flow/statics.rs
-    why: One summoning-sickness reading of layered characteristics.
+    why: One reading each for summoning sickness and all creature types.
   - path: managym/src/flow/resolution.rs
     why: Check each target against its clause and exact source.
   - path: managym/src/flow/triggers.rs
