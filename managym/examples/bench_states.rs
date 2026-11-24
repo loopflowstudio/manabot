@@ -32,7 +32,7 @@ const STATES: &[(&str, &str)] = &[
     ("paid-filter", "Forest + Prophetic Prism; nested unpayable payment"),
     ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap scans stop once a single use is funded. Residual rollout replanning spans changing tapped resources and saved callers; sharing answers across steps needs a separate cache/invalidation design"),
     ("waterbend-x", "Forest, Katara, Bender's Waterskin, Herbalist; one payment per X"),
-    ("duplicate-creatures", "Gray Ogre on both sides; attack, block and damage checkpoints"),
+    ("duplicate-creatures", "Gray Ogre on both sides; the damage pass rebuilds the characteristics board for each damage pair"),
     ("herald-healthy", "Same battlefield as herald-statics, with both seats at starting life"),
     ("herald-statics", "One Herald of Eternal Dawn per seat among a growing cycle of static abilities; protection checks during combat"),
     ("duplicate-tokens", "Ally tokens on both sides; observation and combat rows"),
@@ -42,6 +42,12 @@ const STATES: &[(&str, &str)] = &[
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
+    ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
+    ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
+    ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
+    ("venom-team", "Venom Connoisseur with N Gray Ogres and two entering Allies; resolve the second ability and grant the whole team deathtouch"),
+    ("blast-discard", "Incinerating Blast damages an Ogre; N individually selectable cards remain in hand beside decline"),
+    ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
     ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
@@ -66,6 +72,7 @@ const LAYERS: &[&str] = &[
     "step:attack",
     "step:block",
     "step:damage",
+    "step:resolve",
     "step:choice",
     "characteristics",
     "triggers",
@@ -200,6 +207,68 @@ fn recipe(name: &str, size: usize) -> Recipe {
                     }
                 }
             }
+        }
+        "collector-food" | "mixed-life-gain" => {
+            let seat = &mut seats[0];
+            seat.add("Plains", 2);
+            if name == "collector-food" {
+                seat.add("Cat Collector", size);
+            } else {
+                seat.cycle(
+                    &[
+                        "Cat Collector",
+                        "Fiendish Panda",
+                        "Vanguard Seraph",
+                        "Exemplar of Light",
+                    ],
+                    size,
+                );
+            }
+            seat.cycle(&["token.food"], size);
+        }
+        "fumigate-panda" => {
+            seats[0].add("Fiendish Panda", 1);
+            seats[0].add("Plains", 5);
+            seats[0].hand.push("Fumigate".into());
+            let creatures = [
+                "Felidar Cub",
+                "Hill Giant",
+                "Fog Bank",
+                "Steel Hellkite",
+                "Helpful Hunter",
+                "Vanguard Seraph",
+                "Heartfire Immolator",
+                "High-Society Hunter",
+                "Hinterland Sanctifier",
+                "Felidar Savior",
+                "Spectral Sailor",
+                "Exemplar of Light",
+                "Ajani's Pridemate",
+                "Cat Collector",
+                "Venom Connoisseur",
+                "Cackling Prowler",
+            ];
+            seats[0]
+                .graveyard
+                .extend(creatures.iter().cycle().take(size).map(|s| s.to_string()));
+            seats[1].add("Gray Ogre", size);
+            seats[1].add("Predator Ooze", size);
+        }
+        "venom-team" => {
+            seats[0].add("Venom Connoisseur", 1);
+            seats[0].add("Gray Ogre", size);
+        }
+        "blast-discard" => {
+            seats[0].add("Mountain", 5);
+            seats[0].hand.push("Incinerating Blast".into());
+            seats[0]
+                .hand
+                .extend(GRAVEYARD.iter().cycle().take(size).map(|s| s.to_string()));
+            seats[1].add("Gray Ogre", 1);
+        }
+        "lathril-elves" => {
+            seats[0].add("Lathril, Blade of the Elves", 1);
+            seats[0].cycle(&["token.elf_warrior_1_1_g"], size);
         }
         "convoke-duplicates" | "convoke-diverse" => {
             let seat = &mut seats[0];
@@ -423,6 +492,14 @@ fn recipe(name: &str, size: usize) -> Recipe {
         }
         _ => panic!("unknown state {name}; use --list"),
     }
+    // A real response keeps the opponent's final priority pass visible.
+    if matches!(
+        name,
+        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+    ) {
+        seats[1].add("Mountain", 1);
+        seats[1].hand.push("Lightning Bolt".into());
+    }
     Recipe {
         state: name.into(),
         size,
@@ -600,7 +677,7 @@ fn nth_action(env: &mut Env, kind: &str, nth: usize) -> Option<usize> {
                 ..
             }
         ),
-        "damage" => matches!(a, Action::PassPriority { .. }),
+        "damage" | "resolve" => matches!(a, Action::PassPriority { .. }),
         "choice" => !matches!(
             a,
             Action::PassPriority { .. }
@@ -798,8 +875,77 @@ fn reach(root: &Env, label: &str) -> Env {
     panic!("fixture never reached {label} in 256 decisions")
 }
 
+/// Stop at the real response to a single stack object. In the Connoisseur
+/// position its first resolution must already have recorded the ordinal.
+fn before_resolution(mut env: Env, after_first: bool) -> Env {
+    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    for _ in 0..32 {
+        let game = env.benchmark_game_mut();
+        assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
+        let ready = game.state.stack_objects.len() == 1
+            && game.state.priority.consecutive_passes == 1
+            && (!after_first
+                || game
+                    .state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .values()
+                    .any(|&n| n == 1));
+        if ready && env.action_space_kind() == Some(ActionSpaceKind::Priority) {
+            return env;
+        }
+        let next = first_action(&mut env, "resolve").unwrap_or(0);
+        env.step(next as i64).unwrap();
+    }
+    panic!("never reached the final resolution pass");
+}
+
 fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
+    match recipe.state.as_str() {
+        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
+        | "blast-discard" => {
+            let env = match recipe.state.as_str() {
+                "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
+                "venom-team" => {
+                    let mut env = root.fork().unwrap();
+                    for _ in 0..2 {
+                        env.benchmark_game_mut()
+                            .create_token("token.ally", PlayerId(0), false)
+                            .unwrap();
+                    }
+                    // Injection left a pass-only priority. Start measurement
+                    // where the two actual Connoisseur triggers need ordering.
+                    let order = reach(&env, "order");
+                    result = vec![("order".into(), order.fork().unwrap())];
+                    order
+                }
+                _ => follow(root, &[("cast", 0)]),
+            };
+            let resolution = before_resolution(env, recipe.state == "venom-team");
+            let resolved = follow(&resolution, &[("resolve", 0)]);
+            result.push(("resolution".into(), resolution));
+            result.push(("after-resolution".into(), resolved));
+            return result;
+        }
+        "lathril-elves" => {
+            if recipe.size >= 10 {
+                let mut payment = follow(root, &[("activate", 0)]);
+                for tapped in 0..10 {
+                    if !actions(&mut payment)
+                        .iter()
+                        .any(|a| matches!(a, Action::SelectCard { .. }))
+                    {
+                        break; // Native skipping can pay the last forced tap.
+                    }
+                    result.push((format!("tapped-{tapped}"), payment.fork().unwrap()));
+                    payment = follow(&payment, &[("choice", 0)]);
+                }
+            }
+            return result;
+        }
+        _ => {}
+    }
     if recipe.state == "names" {
         return vec![("name".into(), reach(root, "name"))];
     }
@@ -941,7 +1087,9 @@ fn run(
         if layer == "actions" && root.action_space_kind() != Some(ActionSpaceKind::Priority) {
             continue;
         }
-        if layer == "step:damage" && checkpoint != "damage" {
+        if (layer == "step:damage" && checkpoint != "damage")
+            || (layer == "step:resolve" && checkpoint != "resolution")
+        {
             continue;
         }
         let mut probe = root.fork().unwrap();
@@ -1190,6 +1338,7 @@ fn main() {
         }
         let sizes = match (name, &sizes) {
             (_, Some(given)) => given.clone(),
+            ("lathril-elves", None) => vec![10, 11, 12],
             ("restricted-filter" | "distinct-restrictions", None) => vec![2, 3, 4],
             (_, None) => vec![4, 8, 16],
         };
@@ -1233,6 +1382,55 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn history_positions_reach_the_measured_choices() {
+        for (name, kind, count) in [
+            ("collector-food", ActionSpaceKind::OrderTriggers, 4),
+            ("mixed-life-gain", ActionSpaceKind::OrderTriggers, 4),
+            ("fumigate-panda", ActionSpaceKind::ChooseTarget, 2),
+            ("blast-discard", ActionSpaceKind::LookAndSelect, 5),
+            ("venom-team", ActionSpaceKind::Priority, 2),
+        ] {
+            let recipe = recipe(name, 4);
+            let points = checkpoints(&build(&recipe), &recipe);
+            assert!(
+                points
+                    .iter()
+                    .all(|(_, env)| env.action_count().unwrap() > 1),
+                "{name}"
+            );
+            let (_, env) = points
+                .iter()
+                .find(|(label, _)| label == "after-resolution")
+                .unwrap();
+            assert_eq!(env.action_space_kind(), Some(kind), "{name}");
+            assert_eq!(env.action_count().unwrap(), count, "{name}");
+            if name == "venom-team" {
+                let view = env.observation_for_player(0).unwrap();
+                assert_eq!(view.agent_permanents.len(), 7);
+                assert!(view
+                    .agent_permanents
+                    .iter()
+                    .all(|p| p.characteristics.keywords.deathtouch));
+            }
+        }
+        for size in [10, 12] {
+            let recipe = recipe("lathril-elves", size);
+            let points = checkpoints(&build(&recipe), &recipe);
+            let counts: Vec<_> = points
+                .iter()
+                .skip(1)
+                .map(|(_, env)| env.action_count().unwrap())
+                .collect();
+            assert_eq!(
+                counts,
+                (0..10)
+                    .map(|n| size - n)
+                    .take_while(|&n| n > 1)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
     #[test]
     fn recipes_reach_large_boards_and_real_combat_choices() {
         for &(name, _) in STATES {

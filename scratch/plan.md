@@ -690,10 +690,10 @@ casting-only conformance receipts retain their original revisions.
 1. Integrated replay and privacy checks (below), including recorded Watch
    playback of a partial attack declaration and of the departed-Clone
    interaction.
-2. Engine Budget: digests moved (untap events in the hashed ledger, hash v31,
-   per-resolution loop watch). Adopt the PR's own run as the reference if it
-   stays within 10%; the `bench_states` stress layers are listed under
-   Performance below.
+2. Search-64 exceeded the local 10% budget at `369696da5f`. The step and
+   search digests reproduced the reference exactly. Start with the measured
+   damage-history invalidations, then repeat the paired comparison. See the
+   [engine measurement](#engine-measurement--2026-11-24).
 3. The four Academy failures in `scratch/questions.md`: gate confirms whether
    they also fail on main.
 
@@ -763,3 +763,78 @@ uv run --extra dev pytest -q tests/semantic/test_text_observation.py tests/verif
 - **Decomposition** demonstrates that several first-printing modules author these cases with the same subjects, comparisons and result readers. Delete replaced handlers with their caller migrations and keep the directed tests. A failed semantic counterexample returns to the working phase.
 - **Performance** compares reference and candidate on one runner for ordinary steps and Search-64, within the existing 10% Engine Budget with digest checks. Also measure bounded constructed boards through the documented `bench_states` layers. Use 4/8/16 Cat Collectors and Foods to vary identical listeners on one gain. Compare a mixed board of Collector, Panda, Vanguard Seraph and Exemplar of Light to exercise different listeners. Use Panda with many distinct graveyard creatures on both sides of the power bound to measure complete target enumeration. Vary creatures surviving Fumigate and creatures receiving Venom's team grant to measure batching, characteristic reads and fork cost. For payment, vary Lathril’s board from ten to twelve other untapped Elves and compare complete next choices after each tap. For Blast, vary distinct legal discards in hand. Keep input size, checkpoint, offer counts, work counters and timings together. [Stress states](../docs/development.md#stress-states)
 - **Integrated validation** receives the delivered revision plus committed ledger, source and fixture paths and their observed outcomes. The separate validation work owns experimental decks and training. See the implemented slice above for the current evidence.
+
+## Engine measurement — 2026-11-24
+
+Measure engine revision `369696da5f` against budget reference `f299750a45` on one 16-core Apple M4 Max, 128 GiB, Darwin 25.6 arm64, Homebrew Rust 1.98.1. Use locked release builds with default mimalloc. Finish builds before paired timing. Use the unmodified budget binaries, identical curated sources, seeds, skip defaults and caps. Run the sampler once in candidate/reference/reference/candidate order (20-minute cap per binary). Compare with the committed 10% gate. Retain both sets of digests.
+
+Run four-worker buffered training collection (16 streams, 128 batches, seed 24), the ordinary execution probe (32 games, 500 steps/game, fork and projection at step 40) and one 3-second stack sample on a separate candidate search. Run the two established board controls (duplicate-creatures and entry-cascade) at 4/8/16 on both engines. For new card interactions, use the board harness on one Food gain with duplicate and mixed listeners, Fumigate with indestructible survivors and Panda's graveyard targets, Connoisseur's second resolution, Blast's discard and Lathril's ten-Elf payment. Sizes 4/8/16, or 10/11/12 other Elves for Lathril. Time real checkpoints, observe, fork, vector step, choices and their resolution. Count allocations separately. Use the harness's three timing samples and single allocation sample.
+
+The Academy seed-0 casting-history tape verified in 13.56 s end to end (five-minute cap) and used 1,295,482,880 B peak process RSS. Live Play, headless and persisted replay agreed over 174 Commands, 175 checkpoints per surface and 1,050 viewer projections. The verifier confirmed terminal witness `836ff97372390ff12bb33879a8cbfdb874b5a6afca81c77a5cda286992d7b401` and both stale-object and stale-revision rejections. Reproduce with `uv run --no-sync python -m conformance.authored_match_parity verify`.
+
+### Paired Engine Budget
+
+**Search-64 failed both timing checks.** All four benchmark invocations reproduced 512 completed games, 118,559 decisions, the decision digest `10601622128491155944` and search-score digests `13638875039089371439`, `5466143068363283977` and `9998925852575961750` (seeds 1–3). The searches made 7,680 / 8,064 / 7,424 simulations across 40 decisions per seed, with zero cap hits. Keep the existing reference and measure the first implementation slice before publishing.
+
+| Budget measure | Reference | Candidate | Result |
+|---|---:|---:|---|
+| Search-64 total | 58.847 s | 68.132 s | 15.8% longer, fails |
+| Worst reply | 1.442 s | 1.759 s | 22.0% longer, fails |
+| Headless steps/s | 42,519.9 | 39,002.9 | 8.3% lower throughput, passes |
+
+In execution order, the search processes took 74.27 / 61.03 / 57.20 / 62.24 s wall and 72.90 / 60.12 / 56.83 / 61.78 s user CPU. The first candidate sample had 13,228 involuntary switches and the final candidate had 3,805. The harness includes both. This shared Mac establishes the local budget result. The layer counters below support the proposed change without assuming the whole Search-64 delta comes from combat.
+
+### Ordinary consumers and search profile
+
+The release CPython 3.13 extension ran 2,048 seeded decisions through the four-worker training producer. Dense registration (`scripts/bench_sharded_collection.py`) measured 0.0520 s in steps/refills, 39,391 steps/s, and 102,449,152 B peak process RSS. The v11 packed producer on the same deck, worker, stream and RNG settings measured 0.0584 s, 35,058 steps/s and 97,910,784 B peak RSS. Both timings cover producer steps and slot refills. Action selection and digesting happen outside the timer. The dense digest includes action tensors. The packed probe uses live action counts. Each also folds choices and outcomes. The archive includes both digest recipes and readings. These are engine collection measurements, without a learner update.
+
+The 32-game execution probe had 7,259 steps, two games capped at 500 and 32 decision-40 forks on each engine. Both produced `c532b0ff704373e858b992e55257e16f0b04087b580cf49c722a5bb6fbc0f977`. Its two small search probes also reproduced their scores, with 44 and 46 simulations. Peak process RSS was 14,598,144 B on the reference and 17,760,256 B on the candidate.
+
+| Decision-40 operation, totals over 32 boundaries | Reference allocations / bytes | Candidate allocations / bytes |
+|---|---:|---:|
+| Exact fork | 1,035 / 516,283 | 1,410 / 571,753 |
+| Acting-viewer projection | 3,257 / 757,484 | 2,926 / 781,424 |
+
+The separate three-second Search-64 sample caught 1,863 main-thread samples inside `random_playout`. Among the executing thread's leaf samples, 90 landed in `layer_board`, 65 in layer evaluation, 35 in `characteristics` and 53 in priority action enumeration. The loader accounted for another 275 samples. This short profile locates work. The constructed damage step isolates how much board rebuilding changes with size.
+
+### Measured game states
+
+Each row below measures the last priority pass before resolution. Sizes are 4 / 8 / 16. Milliseconds are the median of three operations. Allocation bytes come from a separate pass. The timing and allocation passes reproduced the same digest over the initial 587 cells, including the ordered actions, payment witnesses, search scores and step state hashes. In that pass Connoisseur's setup exposed a synthetic pass-only priority. The final fixture starts with its two actual trigger-order offers. Remeasuring only that fixture gave 72 cells with identical timing/allocation behavior digest `d897fd32548941ff7ed0e194f54634287a94b807ecc1bc68144b01e70cc1b322`. The Connoisseur row below uses the corrected fixture. The archive keeps both readings. The two debug example tests passed, including the checkpoint types, choice counts and team grant.
+
+| Position | Resolution ms | Allocated bytes at 16 | What the next decision showed |
+|---|---|---:|---|
+| Cat Collectors and Foods | .013 / .018 / .032 | 167,357 | 4 / 8 / 16 trigger-order offers |
+| Mixed first-gain listeners and Foods | .012 / .017 / .031 | 164,905 | 4 / 8 / 16 trigger-order offers |
+| Fumigate, Panda and surviving Oozes | .016 / .025 / .042 | 175,266 | 2 / 4 / 9 legal graveyard targets |
+| Connoisseur's second resolution | .015 / .017 / .024 | 138,932 | The team gains deathtouch. The next response has two offers |
+| Blast against an Ogre | .013 / .014 / .017 | 48,012 | 5 / 9 / 17 offers including decline |
+
+The 216 paired control cells agree on reported outputs (including simulated counts and caps), payment witness digests, plan counts and trigger-source counts. Each engine reproduces its own full state digest in the timing and allocation passes. The cross-engine digests differ. They include serialized game state and card definition IDs, so matching row counts alone cannot establish identical control traces across these revisions. The candidate's new-card positions have no corresponding reference definitions.
+
+| Matched control at size 16 | Reference → candidate ms | Board evaluations | Allocation traffic in bytes |
+|---|---:|---:|---:|
+| 16 Ogres per side, resolve combat damage | .057 → .233 | 5 → 38 | 156,105 → 247,857 |
+| Same decision, bounded search (8 simulations) | .724 → 2.699 | 155 → 434 | 1,615,936 → 2,831,498 |
+| Diverse entry-cascade board, damage checkpoint search (8 simulations) | 1.510 → 6.622 | 28 → 143 | 3,126,961 → 11,297,699 |
+| Same diverse board, cast-choice search (136 simulations) | 29.641 → 43.785 | 960 → 1,096 | 71,791,556 → 80,185,036 |
+
+### Implementation order and deletion targets
+
+1. **Stop damage-history writes from rebuilding the characteristics board.** On the duplicate-creature damage step the reference rebuilt five boards at all three sizes. The candidate rebuilt 14 / 22 / 38, with zero payment plans and zero trigger sources. In `flow/damage.rs`, both damage-pair writers mutate `TrackedState` through `DerefMut`, which invalidates characteristics, triggers, mana and taps. Replace just those broad mutations with narrow damage-history writes beside `TrackedState::mark_damage`. Keep the existing sorted `DamageHistory`, life/counter mutations, exact appearance IDs and event ordering. Audit the reads in `flow/triggers.rs`, `resolution.rs`, observation and hashing before assigning revision dependencies. Keep real changes to characteristic-dependent state on their own invalidation paths. Accept the slice when the extra two boards per pair disappear across 4/8/16, timing and allocation traffic fall, and the paired candidate runs preserve the ordered decisions, search scores, payment witnesses and state digests on the final fixtures. Run debug cache recomputation, Predator Ooze, Steel Hellkite, trample/Greatwurm, prevention and fork/replay tests. Recheck both ordinary budgets on one runner.
+
+2. **Build the chosen-tap payment inputs once per pending decision.** Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
+
+Fumigate examined 29 / 89 / 305 trigger sources for one match. At 16 the measured resolution still took .042 ms. Keep that observation for a workload where simultaneous departures dominate before changing pre-batch LKI matching. First-gain matching examined exactly one source per offer on both listener boards. Neither result justifies another history store. Keep all choices, overflow errors and configured capacity behavior, native trivial skipping and debug cache assertions through both planned slices.
+
+Reproduce the constructed comparison from the repository root. Run each command once for timing and once with `--allocations` appended. The second command runs on the candidate only. Each invocation has a 90-second execution cap after building.
+
+```sh
+cargo run --locked --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- duplicate-creatures entry-cascade --sizes 4,8,16 --layers actions,step,characteristics,observe,vector,clone,search
+cargo run --locked --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml -- collector-food mixed-life-gain fumigate-panda venom-team blast-discard lathril-elves
+```
+
+The [measurement archive](engine-measurements.zip) retains the JSONL timing/allocation rows, budgets and raw samples in execution order, scheduling telemetry, execution-probe digests, training producer inputs and RSS, the search profile's collapsed leaf counts and Academy verifier output. The four budget binaries were built before timing with `cargo build --release --locked --manifest-path managym/Cargo.toml --example bench_search --example bench_steps` in the two source trees. Their benchmark sources and curated inputs are byte-identical across the two revisions. The [CI workflow](../.github/workflows/engine-budget.yml) owns the hosted result. For an already published branch run the hosted comparison with the following command.
+
+```sh
+gh workflow run engine-budget.yml --ref jack/mtg-418-unify-event-history-and-contextual-queries-for
+```

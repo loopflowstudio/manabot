@@ -177,3 +177,5 @@ The directed Hatcher check reached the right LLM label but Academy rejected
 seat 1's frame: “decision context is not oriented to its acting viewer”.
 The public stack entry already carries the exact amount. Keep the pending
 decision narration with the acting seat, as the wire validators require.
+
+The local measurement uses Fumigate and Panda in one position: the same resolution produces the destruction count, leaves indestructible survivors and opens Panda's target decision. The new-card positions have no equivalent playable reference on the budget revision. Use existing board controls for paired comparisons.
