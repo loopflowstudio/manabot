@@ -331,9 +331,6 @@ fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
     // Once the payment completes the Ogre has left, and the ability's frame
     // says so in the past tense.
     crate::support::play::choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
-    if s.action_space().kind == managym::agent::action::ActionSpaceKind::PayOrNot {
-        crate::finish_spending(&mut s);
-    }
     let context = s.game().decision_context(PlayerId(0)).unwrap();
     assert!(context.paid.is_empty(), "{:?}", context.paid);
     assert!(
@@ -1347,25 +1344,19 @@ fn foundations_5e_boltwave() {
 
 #[test]
 fn foundations_5e_faebloom_trick() {
-    use crate::support::game::five_color_setup;
-    use crate::support::inspect::{keywords, offered_targets, tapped};
-    use crate::support::play::{cast, pass_until, settle};
+    use crate::support::inspect::{offered_targets, tapped};
+    use crate::support::play::{cast, pass_until};
     use managym::agent::action::ActionSpaceKind;
-    use managym::state::card::Keyword;
-    use managym::state::game_object::{PlayerId, Target};
+    use managym::state::game_object::Target;
+    use managym::state::mana::Color;
     let mut s = five_color_setup(&["Faebloom Trick", "Gray Ogre"]);
     let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Faebloom Trick");
-    crate::finish_spending(&mut s);
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     // The reflexive trigger's target is chosen after both Faeries entered.
-    let faeries = s.battlefield_permanents_named(0, "Faerie");
-    assert_eq!(faeries.len(), 2);
-    for faerie in &faeries {
-        assert_eq!(s.game().characteristics(*faerie).pt(), (1, 1));
-        assert!(keywords(&s, *faerie).has(Keyword::Flying));
-    }
+    crate::assert_creature_tokens(&s, "Faerie", 2, (1, 1), &[Color::Blue], &[Keyword::Flying]);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     let offers = offered_targets(&s);
     assert_eq!(offers, [Target::Permanent(theirs)]);
@@ -1446,50 +1437,37 @@ fn foundations_5e_preposterous_proportions() {
 
 #[test]
 fn foundations_5e_refute() {
-    use crate::support::game::five_color_setup;
-    use crate::support::inspect::{hand, offered_cards, zone_of};
-    use crate::support::play::{cast, pass_until, select_card, settle};
-    use managym::agent::action::ActionSpaceKind;
-    use managym::state::game_object::{PlayerId, Target};
-    use managym::state::zone::ZoneType;
+    use crate::support::game::move_to_hand;
+    use crate::support::inspect::{library_top, now, zone_of};
+    use crate::support::play::cast;
+    use managym::state::game_object::Target;
+
     let mut s = five_color_setup(&["Refute", "Lightning Bolt"]);
-    s.force_card_in_hand(0, "Island");
+    let island = move_to_hand(&mut s, "Island");
     let bolt = cast(&mut s, "Lightning Bolt");
     assert!(s.choose_target(Target::Player(PlayerId(1))));
-    crate::finish_spending(&mut s);
-    let bolt = crate::support::inspect::now(&s, bolt);
-    let before = hand(&s, 0);
+    let bolt = now(&s, bolt);
     cast(&mut s, "Refute");
     assert!(s.choose_target(Target::StackSpell(bolt)));
-    crate::finish_spending(&mut s);
-    pass_until(&mut s, ActionSpaceKind::Discard);
-    assert_eq!(s.action_space().player, Some(PlayerId(0)));
-    // The caster discards after drawing; the drawn card is among the choices.
-    let choices = offered_cards(&s);
-    assert_eq!(choices.len(), before.len() + 1);
-    let discard = before[0];
-    select_card(&mut s, discard);
-    settle(&mut s);
+    spend_colorless(&mut s);
+    let drawn = library_top(&s, 0);
+    crate::assert_draw_then_discard(&mut s, island, drawn);
     assert_eq!(zone_of(&s, bolt), Some(ZoneType::Graveyard));
-    assert_eq!(zone_of(&s, discard), Some(ZoneType::Graveyard));
-    assert_eq!(hand(&s, 0).len(), before.len());
-    assert_eq!(s.life(1), 20);
+    s.assert_life(1, 20);
 }
 
 #[test]
 fn foundations_5e_uncharted_voyage() {
-    use crate::support::game::five_color_setup;
     use crate::support::inspect::{card_of, library, library_top, mode_labels, now, zone_of};
-    use crate::support::play::{cast, choose_mode, pass_until, settle};
+    use crate::support::play::{cast, choose_mode, pass_until};
     use managym::agent::action::ActionSpaceKind;
-    use managym::state::game_object::{PlayerId, Target};
-    use managym::state::zone::ZoneType;
+    use managym::state::game_object::Target;
     let mut s = five_color_setup(&["Uncharted Voyage", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let card = card_of(&s, ogre);
     cast(&mut s, "Uncharted Voyage");
     assert!(s.choose_target(Target::Permanent(ogre)));
-    crate::finish_spending(&mut s);
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Modal);
     // The owner chooses the end; then the caster surveils.
     assert_eq!(s.action_space().player, Some(PlayerId(1)));
@@ -1508,8 +1486,6 @@ fn foundations_5e_uncharted_voyage() {
         } else {
             assert_eq!(library(&fork, 1)[0], placed);
         }
-        assert_eq!(fork.action_space().player, Some(PlayerId(0)));
-        assert_ne!(fork.action_space().kind, ActionSpaceKind::Priority);
-        settle(&mut fork);
+        crate::assert_surveil_one(&mut fork);
     }
 }

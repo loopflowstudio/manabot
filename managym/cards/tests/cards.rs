@@ -439,13 +439,11 @@ fn assert_draw_then_discard(
         settle(&mut fork);
         assert_eq!(zone_of(&fork, discard), Some(ZoneType::Graveyard));
         assert_eq!(zone_of(&fork, keep), Some(ZoneType::Hand));
+        fork.assert_zone_size(0, ZoneType::Hand, 1);
     }
 }
 
-/// Casts `spell` at `creature` (controlled by `controller`) and checks the
-/// until-end-of-turn result: power and toughness `pt`, the `granted`
-/// keywords, `life` gained and `drawn` cards. The creature is its printed self
-/// again on the next turn.
+/// Check the target's characteristics, the caster's gains and expiry at cleanup.
 fn assert_targeted_pump(
     spell: &str,
     creature: &str,
@@ -463,41 +461,27 @@ fn assert_targeted_pump(
 
     let mut s = five_color_setup(&[spell, creature]);
     let subject = s.force_permanent_on_battlefield(controller, creature);
-    let printed = s.game().characteristics(subject).pt();
+    let printed_pt = s.game().characteristics(subject).pt();
+    let printed_keywords = keywords(&s, subject);
     let (life_before, hand_before) = (s.life(0), hand(&s, 0).len());
     cast(&mut s, spell);
     assert!(s.choose_target(Target::Permanent(subject)));
     settle(&mut s);
     assert_eq!(s.game().characteristics(subject).pt(), pt, "{spell}");
-    assert!(
-        granted.iter().all(|k| keywords(&s, subject).has(*k)),
+    assert_eq!(
+        keywords(&s, subject),
+        printed_keywords.union(managym::state::card::Keywords::of(granted)),
         "{spell}"
     );
     assert_eq!(s.life(0), life_before + life, "{spell}");
     assert_eq!(hand(&s, 0).len(), hand_before + drawn, "{spell}");
-    if s.game().state.permanents[subject].is_some() {
-        s.advance_to_active_step(1, StepKind::Main);
-        assert_eq!(s.game().characteristics(subject).pt(), printed, "{spell}");
-        assert!(
-            granted.iter().all(|k| !keywords(&s, subject).has(*k)),
-            "{spell}"
-        );
-    }
-}
-
-/// Completes a pending native spending decision with its first offers.
-fn finish_spending(s: &mut support::game::Scenario) {
-    use managym::flow::decision::Decision;
-    while matches!(
-        s.game()
-            .state
-            .suspended_decision
-            .as_ref()
-            .map(|pending| &pending.decision),
-        Some(Decision::ManaSpend { .. })
-    ) {
-        s.step_action(0);
-    }
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(
+        s.game().characteristics(subject).pt(),
+        printed_pt,
+        "{spell}"
+    );
+    assert_eq!(keywords(&s, subject), printed_keywords, "{spell}");
 }
 
 /// Makes the permanent a planeswalker: the catalog defines none, so target

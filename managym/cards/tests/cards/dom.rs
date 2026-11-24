@@ -101,28 +101,23 @@ fn foundations_5d_ghitu_lavarunner() {
 
 #[test]
 fn foundations_5e_adamant_will() {
-    use managym::state::card::Keyword;
-    crate::assert_targeted_pump(
-        "Adamant Will",
-        "Gray Ogre",
-        0,
-        (4, 4),
-        &[Keyword::Indestructible],
-        0,
-        0,
-    );
-    // Indestructible: Day of Judgment leaves the Ogre on the battlefield.
-    use crate::support::game::five_color_setup;
     use crate::support::play::{cast, settle};
-    use managym::state::game_object::Target;
+    use managym::state::card::Keywords;
     let mut s = five_color_setup(&["Adamant Will", "Day of Judgment", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let other = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Adamant Will");
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert_eq!(keywords(&s, ogre), Keywords::of(&[Keyword::Indestructible]));
+    s.assert_life(0, 20);
+    s.assert_zone_size(0, managym::state::zone::ZoneType::Hand, 0);
+
     cast(&mut s, "Day of Judgment");
     settle(&mut s);
-    assert!(s.game().state.permanents[ogre].is_some());
     assert!(s.game().state.permanents[other].is_none());
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert_eq!(keywords(&s, ogre), Keywords::default());
 }

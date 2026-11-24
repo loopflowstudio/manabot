@@ -1,3 +1,4 @@
+use super::card::{Keyword, Keywords};
 use super::effect::{EffectDuration, Modification};
 use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
@@ -1788,6 +1789,22 @@ impl Effect {
             modification,
             duration: EffectDuration::EndOfTurn,
         }
+    }
+
+    /// "[Affected] gets +P/+T and gains [keyword] until end of turn."
+    pub fn pump_and_grant_until_end_of_turn(
+        affected: ObjectSelector,
+        power: i32,
+        toughness: i32,
+        keyword: Keyword,
+    ) -> Vec<Self> {
+        vec![
+            Self::until_end_of_turn(affected.clone(), Modification::pump(power, toughness)),
+            Self::until_end_of_turn(
+                affected,
+                Modification::AddKeywords(Keywords::of(&[keyword])),
+            ),
+        ]
     }
 
     /// A continuous effect with no stated duration.

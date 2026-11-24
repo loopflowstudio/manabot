@@ -194,7 +194,7 @@ fn foundations_5e_devout_decree() {
     assert!(offers.contains(&Target::Permanent(ogre)));
     assert!(!offers.contains(&Target::Permanent(lions)));
     assert!(s.choose_target(Target::Permanent(rats)));
-    crate::finish_spending(&mut s);
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Scry);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));

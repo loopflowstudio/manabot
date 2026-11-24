@@ -1,6 +1,6 @@
 //! Oath of the Gatewatch.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope, TargetRequirement, TargetSpec},
+    ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
         StaticAbility, StaticScope,
@@ -42,16 +42,12 @@ fn make_a_stand() -> CardDefinition {
             name: "Make a Stand".into(),
             mana_cost: Some(ManaCost::parse("{2}{W}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
-                    Modification::pump(1, 0),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::creature()),
+                1,
+                0,
+                Keyword::Indestructible,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

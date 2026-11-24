@@ -37,16 +37,12 @@ fn run_amok() -> CardDefinition {
             name: "Run Amok".into(),
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(attacking()),
-                    Modification::pump(3, 3),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(attacking()),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(attacking()),
+                3,
+                3,
+                Keyword::Trample,
+            ),
             targeting: vec![TargetRequirement::one(attacking())],
             text_box: text_box.into(),
             ..Default::default()
@@ -151,16 +147,12 @@ fn adamant_will() -> CardDefinition {
             name: "Adamant Will".into(),
             mana_cost: Some(ManaCost::parse("{1}{W}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(2, 2),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                2,
+                2,
+                Keyword::Indestructible,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

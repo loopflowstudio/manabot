@@ -2616,9 +2616,9 @@ mod tests {
         // object is its permanent row only.
         assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
         assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[super::permanent::VALID], 1.0);
+        assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
         assert_eq!(
-            encoded.agent_permanents[super::permanent::VALID + PERMANENT_DIM],
+            encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
             0.0
         );
 
@@ -2648,11 +2648,11 @@ mod tests {
         assert_eq!(encoded.events[EVENT_DIM], 2.0);
         // The battlefield card's characteristics are its permanent row's.
         assert_eq!(
-            encoded.agent_permanents[super::permanent::MANA_VALUE],
+            encoded.agent_permanents[permanent::MANA_VALUE],
             0.2,
             "mana value / 10"
         );
-        assert_eq!(encoded.agent_permanents[super::permanent::IS_CREATURE], 1.0);
+        assert_eq!(encoded.agent_permanents[permanent::IS_CREATURE], 1.0);
     }
 
     #[test]

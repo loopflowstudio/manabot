@@ -2,10 +2,9 @@
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        ManaAbility, PrintedCharacteristics, SacrificeCost,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, ManaAbility,
+        PrintedCharacteristics, SacrificeCost,
     },
-    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
@@ -118,16 +117,12 @@ fn sure_strike() -> CardDefinition {
             name: "Sure Strike".into(),
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(3, 0),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                3,
+                0,
+                Keyword::FirstStrike,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

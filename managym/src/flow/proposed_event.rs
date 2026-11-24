@@ -690,35 +690,34 @@ impl Game {
             } else {
                 None
             };
-            let reveal = if matches!(batch.binding, EventBinding::Moved { reveal: true, .. }) {
-                match &event {
+            let known_hand_entry = match (&batch.binding, &event) {
+                (
+                    EventBinding::Moved { reveal: true, .. },
                     ProposedEvent::ZoneMove {
                         object_id,
-                        from: Some(from @ (ZoneType::Graveyard | ZoneType::Library)),
+                        from: Some(from @ (ZoneType::Library | ZoneType::Graveyard)),
                         to: ZoneType::Hand,
                         ..
-                    } => Some((
-                        self.state.entry_object(*object_id).owner,
-                        self.state.entry_object(*object_id).definition_id,
-                        *from == ZoneType::Library,
-                    )),
-                    _ => None,
+                    },
+                ) => {
+                    let card = self.state.entry_object(*object_id);
+                    let (owner, definition) = (card.owner, card.definition_id);
+                    // The graveyard card is already public. A library card
+                    // must be revealed before its move into the hand.
+                    if *from == ZoneType::Library {
+                        self.emit(GameEvent::CardRevealed { owner, definition });
+                    }
+                    // A known library top can also update this count during the move.
+                    let count = self.state.players[owner.0]
+                        .known_hand
+                        .get(&definition)
+                        .copied()
+                        .unwrap_or(0)
+                        + 1;
+                    Some((owner, definition, count))
                 }
-            } else {
-                None
+                _ => None,
             };
-            let known_before = reveal.map(|(owner, definition, _)| {
-                self.state.players[owner.0]
-                    .known_hand
-                    .get(&definition)
-                    .copied()
-                    .unwrap_or(0)
-            });
-            // A card from a hidden zone is revealed; a public graveyard card
-            // is already known and only enters the owner's known hand.
-            if let Some((owner, definition, true)) = reveal {
-                self.emit(GameEvent::CardRevealed { owner, definition });
-            }
             let committed =
                 self.commit_proposed_event(event, departing_lki, &mut followups, &mut lifelink);
             // CR 400.7: the object this move made, or the same object when
@@ -743,12 +742,8 @@ impl Game {
                         self.put_on_bottom_of_library(object_id);
                     }
                 }
-                if let Some((owner, definition, _)) = reveal {
-                    self.set_known_hand_count(
-                        owner,
-                        definition,
-                        known_before.expect("revealed entrant") + 1,
-                    );
+                if let Some((owner, definition, count)) = known_hand_entry {
+                    self.set_known_hand_count(owner, definition, count);
                 }
                 died.extend(death);
                 hits.extend(hit);

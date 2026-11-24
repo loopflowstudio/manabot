@@ -1,8 +1,7 @@
 //! Tempest.
 use managym_state::{
-    ability::{Effect, ObjectSelector, Scope},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    effect::Modification,
+    ability::{Effect, ObjectSelector},
+    card::{CardDefinition, CardType, CardTypes, Keyword, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -19,16 +18,12 @@ fn overrun() -> CardDefinition {
             name: "Overrun".into(),
             mana_cost: Some(ManaCost::parse("{2}{G}{G}{G}")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
-                    Modification::pump(3, 3),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::creature()),
+                3,
+                3,
+                Keyword::Trample,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

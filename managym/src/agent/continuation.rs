@@ -539,10 +539,7 @@ impl Game {
                     .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(trigger.source_lki.as_ref().map_or(
-                    self.state.source_base(trigger.source_object()).0 .0,
-                    |lki| lki.definition_id.0,
-                ));
+                source.definition = Some(self.trigger_source_definition(trigger).0);
                 let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing

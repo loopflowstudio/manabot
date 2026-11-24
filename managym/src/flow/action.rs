@@ -2,7 +2,7 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, mana_description, trigger_description,
+    counter_description, effects_description, mana_description, trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -67,7 +67,7 @@ impl Game {
                     crate::agent::ability_description::cost_description(&ability.mana_cost),
                     self.characteristics(grantor).name,
                     self.state.permanents[grantor].as_ref()?.id.0,
-                    crate::agent::ability_description::effects_description(&ability.effects)
+                    effects_description(&ability.effects)
                 ))
             }
             Action::ChooseTrigger { trigger_id, player } => {
@@ -78,11 +78,7 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let face = trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                );
-                let record = self.source_face(trigger.source_object(), face)?;
+                let record = self.trigger_source_face(trigger)?;
                 let mut label = format!(
                     "Put on stack next — {}",
                     trigger_description(
@@ -150,22 +146,20 @@ impl Game {
                     ))
                 ))
             }
-            Action::ChooseMode { mode, .. }
-                if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
-            {
-                let Some(PendingChoice::SpellMode { object, .. }) = &self.pending_choice else {
-                    unreachable!()
-                };
-                Some(crate::agent::ability_description::effects_description(
-                    self.state[*object].spell_modes()?.get(*mode)?,
-                ))
-            }
             Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
-                let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                let modes = self.unchosen_trigger_modes(trigger)?;
-                Some(crate::agent::ability_description::effects_description(
-                    modes.get(*mode)?,
-                ))
+                let modes =
+                    if let Some(PendingChoice::SpellMode { object, .. }) = &self.pending_choice {
+                        self.state[*object].spell_modes()?
+                    } else {
+                        let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
+                        let Effect::TriggerModes { modes, .. } =
+                            self.pending_trigger_mode_rule(trigger)?
+                        else {
+                            return None;
+                        };
+                        modes
+                    };
+                Some(effects_description(modes.get(*mode)?))
             }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
@@ -243,9 +237,7 @@ impl Game {
                         [Effect::RemoveCounters {
                             chosen: Some(kind), ..
                         }] => Some(format!("Remove a {} counter", counter_description(*kind))),
-                        effects => Some(crate::agent::ability_description::effects_description(
-                            effects,
-                        )),
+                        effects => Some(effects_description(effects)),
                     },
                     _ => None,
                 }

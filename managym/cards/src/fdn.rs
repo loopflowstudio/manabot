@@ -1137,16 +1137,12 @@ fn preposterous_proportions() -> CardDefinition {
             name: "Preposterous Proportions".into(),
             mana_cost: Some(ManaCost::parse("{5}{G}{G}")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    Modification::pump(10, 10),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Vigilance])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::creature()),
+                10,
+                10,
+                Keyword::Vigilance,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

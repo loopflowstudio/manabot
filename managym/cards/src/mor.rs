@@ -1,8 +1,7 @@
 //! Morningtide.
 use managym_state::{
     ability::{Effect, ObjectSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    effect::Modification,
+    card::{CardDefinition, CardType, CardTypes, Keyword, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -40,16 +39,12 @@ fn kindled_fury() -> CardDefinition {
             name: "Kindled Fury".into(),
             mana_cost: Some(ManaCost::parse("{R}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(1, 0),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::FirstStrike])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                1,
+                0,
+                Keyword::FirstStrike,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -2,7 +2,6 @@
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope, TargetSpec},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -63,16 +62,12 @@ fn dive_down() -> CardDefinition {
             name: "Dive Down".into(),
             mana_cost: Some(ManaCost::parse("{U}")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::pump(0, 3),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
-                ),
-            ],
+            spell_effects: Effect::pump_and_grant_until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                0,
+                3,
+                Keyword::Hexproof,
+            ),
             text_box: text_box.into(),
             ..Default::default()
         },
