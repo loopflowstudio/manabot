@@ -37,13 +37,12 @@ addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
 Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
 Name a thing for what it is where it is produced (`catalog_tokens`,
-`record_vocabulary` in `managym`; consumer-specific names in `manabot`), and
-qualify generic role names with the domain unit they act on (`decision_weights`
-over `weights` or `loss_weights`, `SnapshotScorer` / `snapshot_scorer` over
-`ScorerFn` / `scorer`). Do not reuse established repository terms (`recipe` for
-training recipes, `manifest` for content packs, `replay` for seed-and-action
-replays) for unrelated concepts, even in internal types or when a brief uses
-them informally. Rename published names via a deprecated alias stating the
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`), keep
+the wrapped interface's noun on wrappers (`RecordedVectorEnv`), and qualify
+generic roles with their domain unit (`decision_weights`, `SnapshotScorer`). Do
+not reuse established terms (`recipe` for training recipes, `manifest` for
+content packs, `replay` for seed-and-action replays) for unrelated concepts,
+even internally. Rename published names via a deprecated alias stating the
 removal release; serialized keys, checkpoint fields and frozen evidence keep
 their spelling.
 
@@ -209,14 +208,13 @@ Etude saves those same objects through `run.resume`.
 Where classes are valuable here, with the examples to copy:
 
 - **Configurations and records** (`ObservationConfig`, `ModelConfig`,
-  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
-  records). A config is the model object: it refuses a bad value when it is
-  built, compares and hashes by content, serializes with stable keys into
-  checkpoints and frozen evidence, and is copied rather than edited
-  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
-  and pure derivations of its own fields (a digest, a derived size). It does
-  not open files, build runtime objects or run anything; a function that
-  takes the config does.
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, `llm/schema.py`). A config
+  enforces real domain and structural invariants when built (never arbitrary
+  upper caps or tested-grid `Literal` sets on resource counts), compares and
+  hashes by content, serializes with stable keys, and is copied rather than
+  edited (`model_copy(update=...)`, `dataclasses.replace`). It may own
+  validators and pure derivations, never I/O, runtime construction, or
+  execution.
 - **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
   construction and `forward` there; training logic is functions over the
   module.
