@@ -20,6 +20,15 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardDefId(pub u32);
 
+impl CardDefId {
+    /// Absent definition join in the runtime object's fixed-width identity slot.
+    pub const ANONYMOUS: Self = Self(u32::MAX);
+
+    pub fn catalog_id(self) -> Option<Self> {
+        (self != Self::ANONYMOUS).then_some(self)
+    }
+}
+
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]

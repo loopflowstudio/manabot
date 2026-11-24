@@ -6,7 +6,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
-        card::ObjectDefinition,
+        card::{CardDefId, ObjectDefinition},
         game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId, PublicId},
         zone::ZoneType,
     },
@@ -40,12 +40,18 @@ impl Game {
             .ok_or(ObjectLookupError::WrongZone)
     }
 
-    pub(crate) fn can_inspect_permanent(
+    pub(crate) fn observed_permanent_definition(
         &self,
         viewer: PlayerId,
         permanent: &crate::state::permanent::Permanent,
-    ) -> bool {
-        !permanent.manifested || self.shares_information(viewer, permanent.controller)
+    ) -> Option<CardDefId> {
+        let object = &self.state[permanent.object];
+        if permanent.manifested {
+            self.shares_information(viewer, permanent.controller)
+                .then(|| object.retained_base().0)
+        } else {
+            object.definition_id.catalog_id()
+        }
     }
 
     /// Face-down battlefield references must not identify the physical card,

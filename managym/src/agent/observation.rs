@@ -569,7 +569,7 @@ impl CopyData {
                     ContinuousEffectData::of_modification(
                         exception,
                         "Indefinite".into(),
-                        Some(copy.of),
+                        copy.of.catalog_id(),
                         timestamp,
                     )
                 })
@@ -1191,6 +1191,12 @@ impl Observation {
         // Preserve that viewer projection separately from immutable Card identity.
         let (main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts) =
             if game.decklist_known(player, viewer) {
+                let roster_definition = |card| {
+                    let (face, _) = game.state.source_base(game.state.object_of(card));
+                    face.catalog_id()
+                        .unwrap_or(game.state.cards[card].definition)
+                        .0
+                };
                 let outside = p.sideboard.iter().copied().filter(|card| {
                     game.state
                         .zones
@@ -1198,16 +1204,14 @@ impl Observation {
                         .is_none()
                 });
                 (
-                    Some(Self::definition_counts(p.deck.iter().map(|card| {
-                        game.state.source_base(game.state.object_of(*card)).0 .0
-                    }))),
+                    Some(Self::definition_counts(
+                        p.deck.iter().copied().map(roster_definition),
+                    )),
                     Some(Self::unseen_counts(game, player, viewer)),
-                    Some(Self::definition_counts(p.sideboard.iter().map(|card| {
-                        game.state.source_base(game.state.object_of(*card)).0 .0
-                    }))),
-                    Some(Self::definition_counts(outside.map(|card| {
-                        game.state.source_base(game.state.object_of(card)).0 .0
-                    }))),
+                    Some(Self::definition_counts(
+                        p.sideboard.iter().copied().map(roster_definition),
+                    )),
+                    Some(Self::definition_counts(outside.map(roster_definition))),
                 )
             } else {
                 (None, None, None, None)
@@ -1514,13 +1518,12 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: if game
-                .can_inspect_permanent(PlayerId(self.agent.player_index as usize), permanent)
-            {
-                object.registry_key.0 as i32
-            } else {
-                -1 // Encodes as the absent definition join.
-            },
+            registry_key: game
+                .observed_permanent_definition(
+                    PlayerId(self.agent.player_index as usize),
+                    permanent,
+                )
+                .map_or(-1, |id| id.0 as i32),
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,

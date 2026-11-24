@@ -1036,7 +1036,9 @@ When Manifest Dread resolves, its controller privately inspects the top two libr
 cards and chooses one to put onto the battlefield face down. The opponent sees a
 nameless 2/2 creature and can see the other card in the graveyard. With one card
 left, that card enters face down automatically. With an empty library, the spell
-finishes resolving. Turning a manifested creature face up is still pending.
+finishes resolving. Copying the face-down creature creates a face-up, nameless
+2/2. It has no back face, even if the manifested card can transform. Copying
+that token again preserves those characteristics. Turning a manifested creature face up is still pending.
 
 Esper Origins illustrates a zone change with a different face up. Cast it from hand
 to surveil two and gain two life. Cast it from your graveyard for its flashback

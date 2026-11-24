@@ -366,7 +366,7 @@ impl ContentPack {
         object: &Object,
     ) -> crate::state::game_object::CopiableValues {
         crate::state::game_object::CopiableValues {
-            definition_id: object.definition_id,
+            definition_id: object.definition_id.catalog_id(),
             definition: self.object_row(object),
             front: object.front_face().cloned(),
             copy: object.copy.clone(),

@@ -445,7 +445,7 @@ impl Game {
         let mut copy = Object::from_definition(
             id,
             controller,
-            values.definition_id,
+            values.definition_id.unwrap_or(CardDefId::ANONYMOUS),
             std::sync::Arc::clone(&values.definition.printed),
             true,
         );
@@ -868,7 +868,8 @@ impl Game {
                 self.state[object_id].show_battlefield_form(result, row.printed.clone());
             }
             if entry.manifested {
-                self.state[object_id].show_battlefield_form(entered_definition, MANIFESTED.clone());
+                self.state[object_id]
+                    .show_battlefield_form(CardDefId::ANONYMOUS, MANIFESTED.clone());
             }
             if entry.transformed {
                 self.show_back_face(object_id);

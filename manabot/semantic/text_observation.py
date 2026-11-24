@@ -495,7 +495,7 @@ class _Renderer:
             if object_id is None:
                 object_id = historical_cards[historical_index].id
                 historical_index += 1
-            label = f"P{index + 1} ({card.name})"
+            label = f"P{index + 1} ({card.name or 'nameless permanent'})"
             self.names[permanent.id] = label
             self._alias(label, object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
@@ -556,7 +556,11 @@ class _Renderer:
         if isinstance(value, PlayerReference):
             return self.seats[value.seat]
         assert isinstance(value, CardReference)
-        definition = self.definition(value.definition)
+        definition = (
+            self.definition(value.definition)
+            if value.definition is not None
+            else "nameless permanent"
+        )
         zone = "unavailable zone" if value.zone is None else _enum(_ZONES, value.zone)
         link = (
             "no current object link (expired or unavailable)"
@@ -571,8 +575,6 @@ class _Renderer:
                 raise TextEncodingError("player reference carries object fields")
             return self.seats[reference.player]
         if reference.object is not None:
-            if reference.definition is None:
-                raise TextEncodingError("current object reference lacks its definition")
             return self.name(reference.object)
         if reference.definition is not None:
             return self.definition(reference.definition) + " (no current object link)"
@@ -982,8 +984,13 @@ class _Renderer:
             optional += self._characteristics(permanent)
             if state.shared_effects is not None:
                 optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
+            printing = (
+                f" [{self.definition(permanent.registry_key)}]"
+                if permanent.registry_key >= 0
+                else ""
+            )
             lines.append(
-                f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {permanent.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}. Rules: {characteristics.text_box or '(empty)'}"
+                f"{self.name(permanent.id)}{printing}: owner {self.name(permanent.owner_id)}; controller {self.name(permanent.controller_id)}; power/toughness {characteristics.power}/{characteristics.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false; cost {_mana(characteristics.mana_cost)}; mana value {permanent.mana_value}{_type_flags(characteristics.card_types)}; unlisted type flags false; token {_yes(permanent.is_token)}; legendary {_yes(characteristics.is_legendary)}; Ally {_yes(characteristics.is_ally)}; Lesson {_yes(characteristics.is_lesson)}; ward mana value {characteristics.ward_cost}{_ward_life(characteristics)}. Rules: {characteristics.text_box or '(empty)'}"
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
@@ -1027,9 +1034,12 @@ class _Renderer:
     def _copy(self, copy: managym.CopyEffect) -> str:
         """A copy effect: what it copies, and the exceptions in its copiable values."""
         exceptions = " and ".join(effect_phrase(effect) for effect in copy.exceptions)
-        return f"copy of {self.definition(copy.registry_key)}" + (
-            f", except {exceptions}" if exceptions else ""
+        source = (
+            self.definition(copy.registry_key)
+            if copy.registry_key >= 0
+            else "a nameless permanent"
         )
+        return f"copy of {source}" + (f", except {exceptions}" if exceptions else "")
 
     def _effect_object(self, reference: managym.EffectObject) -> str:
         if reference.object_id is None:

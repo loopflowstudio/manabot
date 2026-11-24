@@ -158,3 +158,65 @@ fn manifest_dread_resolves_with_one_or_zero_library_cards() {
             .any(|c| c.zone == ZoneType::Graveyard && c.characteristics.name == "Manifest Dread"));
     }
 }
+
+#[test]
+fn two_generations_copy_only_the_manifested_face() {
+    use crate::support::{
+        inspect::card_of,
+        play::{cast, resolve_top, spend_colorless},
+    };
+    use managym::state::game_object::Target;
+
+    let mut s = five_color_setup(&["Clone Legion", "Aang, Swift Savior"]);
+    let card = pin_top(&mut s, &["Aang, Swift Savior"])[0];
+    let original = s.game_mut().manifest(card, PlayerId(0));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    *s.game_mut() = s
+        .snapshot()
+        .restore(Default::default())
+        .unwrap()
+        .benchmark_game_mut()
+        .clone();
+    for generation in 1..=2 {
+        cast(&mut s, "Clone Legion");
+        assert!(s.choose_target(Target::Player(PlayerId(0))));
+        spend_colorless(&mut s);
+        resolve_top(&mut s);
+        let copies = s.battlefield_permanents_named(0, "");
+        let target = *copies.last().unwrap();
+        let object = &s.game().state[card_of(&s, target)];
+        assert!(!object.is_card());
+        assert!(
+            !s.game().state.permanents[target]
+                .as_ref()
+                .unwrap()
+                .manifested
+        );
+        assert!(managym::cards::content_pack::default_content_pack()
+            .object_row(object)
+            .back_face
+            .is_none());
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let view = Observation::for_player(s.game(), viewer);
+            encode(&view, &ObservationEncoderConfig::default()).unwrap();
+            let rows = view
+                .agent_permanents
+                .iter()
+                .chain(&view.opponent_permanents);
+            let tokens: Vec<_> = rows.filter(|p| p.is_token).collect();
+            assert_eq!(tokens.len(), generation);
+            for token in tokens {
+                assert!(token.characteristics.name.is_empty());
+                assert_eq!(token.registry_key, -1);
+                assert_eq!(
+                    (token.characteristics.power, token.characteristics.toughness),
+                    (2, 2)
+                );
+            }
+        }
+        if generation == 1 {
+            s.game_mut().move_object(original, ZoneType::Graveyard);
+            s.game_mut().scenario_refresh_priority().unwrap();
+        }
+    }
+}

@@ -279,7 +279,7 @@ pub enum ObjectLookupError {
 /// The values copied from one exact appearance, before new exceptions apply.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CopiableValues {
-    pub definition_id: CardDefId,
+    pub definition_id: Option<CardDefId>,
     pub definition: crate::card::ObjectDefinition,
     pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
     pub copy: Option<crate::effect::CopyEffect>,

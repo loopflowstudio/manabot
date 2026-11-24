@@ -248,7 +248,10 @@ impl Game {
     pub(crate) fn visible_reference(&self, object: ObjectId, viewer: PlayerId) -> VisibleReference {
         if self.state.live(object).is_none() {
             return VisibleReference {
-                definition: self.object_lki(object).map(|lki| lki.definition_id.0),
+                definition: self
+                    .object_lki(object)
+                    .and_then(|lki| lki.definition_id.catalog_id())
+                    .map(|id| id.0),
                 ..VisibleReference::default()
             };
         }
@@ -282,8 +285,11 @@ impl Game {
         VisibleReference {
             object: Some(permanent.map_or(record.id, |p| p.id).0 as i32),
             definition: permanent
-                .is_none_or(|p| self.can_inspect_permanent(viewer, p))
-                .then_some(record.definition_id.0),
+                .map_or_else(
+                    || record.definition_id.catalog_id(),
+                    |p| self.observed_permanent_definition(viewer, p),
+                )
+                .map(|id| id.0),
             player: None,
         }
     }

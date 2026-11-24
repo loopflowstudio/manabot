@@ -29,7 +29,7 @@ pub enum HistoryReference {
     Unavailable,
     Player(PlayerId),
     Card {
-        definition: u32,
+        definition: Option<u32>,
         owner: PlayerId,
         zone: Option<ZoneType>,
         context_id: Option<i32>,
@@ -80,10 +80,10 @@ fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     }
     let data = &game.state[object];
     HistoryReference::Card {
-        definition: data.definition_id.0,
+        definition: data.definition_id.catalog_id().map(|id| id.0),
         owner: data.owner,
         zone: Some(zone),
-        context_id: Some(data.id.0 as i32),
+        context_id: Some(game.observed_object_id(object).0 as i32),
     }
 }
 
@@ -128,15 +128,20 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
     if let GameEvent::CardMoved {
-        object_id: object, ..
+        object_id: object,
+        departed,
+        ..
     } = event
     {
         let id = game.state[*object].id.0 as i32;
+        let battlefield_alias = departed
+            .and_then(|id| game.object_lki(id))
+            .map(|lki| lki.presentation_id.0 as i32);
         // Every real zone move creates a new incarnation. The old reference
         // keeps its public definition/zone but cannot follow the physical card.
         let matches = |reference: &HistoryReference| {
             matches!(reference,
-            HistoryReference::Card { context_id: Some(context), .. } if *context == id)
+            HistoryReference::Card { context_id: Some(context), .. } if *context == id || Some(*context) == battlefield_alias)
         };
         if game
             .policy_history
@@ -285,7 +290,7 @@ pub(crate) fn encode_rows(
             } => {
                 let context = context_id.and_then(&context);
                 [
-                    (u64::from(*definition) + 1) as f32,
+                    definition.map_or(0., |id| (id + 1) as f32),
                     role(*owner),
                     zone.map(|zone| (zone as usize + 1) as f32).unwrap_or(0.0),
                     context.map(|v| v as f32).unwrap_or(-1.0),

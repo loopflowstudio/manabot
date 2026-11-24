@@ -65,14 +65,18 @@ impl Game {
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
+        let live_by_alias: BTreeMap<_, _> = self
+            .state
+            .latest_objects()
+            .filter_map(|(id, _)| {
+                self.state
+                    .live(id)
+                    .map(|_| (self.observed_object_id(id).0 as i32, id))
+            })
+            .collect();
         for visible in agent.object_records() {
-            let (reference, object) = self
-                .state
-                .latest_objects()
-                .find(|(_, object)| object.id.0 as i32 == visible.id)
-                .ok_or(SemanticError::ViewerSafetyViolation)?;
-            self.state
-                .live(reference)
+            let reference = *live_by_alias
+                .get(&visible.id)
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
             let permanent = self
                 .state
@@ -80,13 +84,15 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
                 .map(|permanent| permanent.id.0);
             objects.insert(
-                object.id.0 as i32,
+                visible.id,
                 json!({"permanent_id": permanent, "incarnation": reference.generation()}),
             );
         }
         let mut ids = BTreeSet::new();
         for object in agent.object_records() {
-            ids.insert(object.registry_key as u32);
+            if let Ok(id) = u32::try_from(object.registry_key) {
+                ids.insert(id);
+            }
         }
         for object in &agent.agent_sideboard {
             ids.insert(object.registry_key as u32);
@@ -119,7 +125,7 @@ impl Game {
                     zone,
                     context_id,
                 } => {
-                    ids.insert(*definition);
+                    ids.extend(*definition);
                     // Same visibility/link admission as the native tensor encoder.
                     let visible = context_id
                         .filter(|id| agent.object_records().any(|object| object.id == *id));

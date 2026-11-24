@@ -814,7 +814,7 @@ impl<'a> Projection<'a> {
                             self.reference(
                                 "copy definition",
                                 VisibleReference {
-                                    definition: Some(definition_id.0),
+                                    definition: definition_id.map(|id| id.0),
                                     ..Default::default()
                                 },
                             );

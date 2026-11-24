@@ -132,9 +132,17 @@ The three Manifest Dread fixtures, exhaustive effect-token guard and Scryfall co
 
 Behavior review at `99411044` reran `cargo test --manifest-path managym/Cargo.toml -p managym-cards --test cards dsk::` (three passed) and the same command with `every_effect_variant_reaches_the_learning_tokens` (one passed). The native spell-resolution criterion is satisfied. The full working phase still requires anonymous copies, text rendering, turn-up payment and the integrated viewer and recorded replay checks above. The fork evidence comes from restoring an in-memory snapshot. Full suites remain with gate.
 
-### Next slice · Copy a manifested creature
+### Anonymous copies of a manifested creature
 
-Pair the spell with a copy of the manifested 2/2 in each controlled root before implementing turn-up payment. Manifest entry currently pairs the anonymous characteristics with the entered definition ID, and CopiableValues requires a CardDefId. Represent an anonymous copiable face with no catalog identity. Reuse its immutable characteristics for token creation and departed-source resolution. Reserve the backing printing and turn-up eligibility for the original appearance. Verify both seats’ token rows and a second-generation copy. Preserve the compact catalog path for ordinary faces. Start with a transforming front so a hidden reverse face is observable as a defect. Restore before copying, remove the original before copying the token again, and keep the face-up transforming-token fixture as the positive control. Both generations should be face up and nameless. Render the same native rows through the text reader in this slice, checking the public target alias and controller-only inspection of the original. Follow with payable creature, noncreature and transforming-front cases, preserving object identity and counters through turn-up. Check stale Commands and copy behavior before the integrated consumer checks.
+The DSK fixture restores a manifested Aang, Swift Savior from a native snapshot. Clone Legion copies it, the original goes to the graveyard, then a second Clone Legion copies the surviving token. Both generations are face-up, nameless 2/2 tokens without a back face or catalog join. Ordinary faces still use their existing catalog rows. The physical printing remains available for decklist counts and for the controller inspecting the original.
+
+The text fixture casts Manifest Dread, chooses one of the two library cards, then forks Lightning Bolt target selection from each seat. Each seat can name the permanent by its public alias. Only the controller's battlefield row links that alias to the selected printing.
+
+All four native DSK fixtures passed, including v11 encoding of both generations for both seats. The existing transforming Aang token control passed. The rebuilt CPython 3.13 extension passed `tests/semantic/test_manifest_text.py`. Full suites and recorded replay remain with their planned later checks.
+
+### Next slice · Turning a manifested creature face up
+
+Follow with payable creature, noncreature and transforming-front cases, preserving object identity and counters through turn-up. Check stale Commands and copy behavior before the integrated consumer checks.
 
 Keep the remaining immediate movement callers under review, including linked entry follow-ups. Trace each caller’s legal source zones before migrating it. Airbend needed a retained batch because one selected permanent produced two arrivals. A top-of-library move in `flow/cast_permission.rs` takes one card. Lost Days still needs owner-only library-order visibility and recorded replay checks.
 

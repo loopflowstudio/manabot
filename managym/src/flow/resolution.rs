@@ -2444,7 +2444,7 @@ impl Game {
                     .expect("catalog copy source")
                     .clone();
                 crate::state::game_object::CopiableValues {
-                    definition_id: lki.definition_id,
+                    definition_id: Some(lki.definition_id),
                     definition,
                     front: None,
                     copy: None,

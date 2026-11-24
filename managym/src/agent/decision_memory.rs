@@ -337,7 +337,7 @@ fn snapshot(
     committed_public: bool,
 ) -> DecisionReference {
     let visible = game.state.live(object).is_some()
-        && (committed_public || game.visible_reference(object, viewer).definition.is_some());
+        && (committed_public || game.visible_reference(object, viewer).object.is_some());
     if !visible {
         return DecisionReference {
             role: 0,
@@ -437,8 +437,8 @@ fn snapshot(
         .unwrap_or((0, 0));
     DecisionReference {
         role,
-        definition: Some(data.definition_id.0),
-        appearance: Some(data.id.0),
+        definition: data.definition_id.catalog_id().map(|id| id.0),
+        appearance: Some(game.observed_object_id(object).0),
         name: Some(printed.name.clone()),
         description,
         power,
