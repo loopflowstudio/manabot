@@ -24,23 +24,24 @@ forced-decision skipping, replay identity and debug cache invariants.
 masked features and referenced empty slots. Native rows use encoder offsets.
 Both paths still bind checkpoint layouts and vocabularies.
 
-## Training collection
+4. `f19935ecd7`, `19a52eb37c`, `583f8d25f7`, `3b641ff19e` retain typed v11
+   spans from masked and isolated vector steps, root changes and fixed-view
+   reads through sharded collection, bootstrap and learner gathers; native
+   spans own v11 legal action fields and behavior logs keep original slot
+   coordinates. Editable exports and legacy dense inputs keep full admission.
+   The paired test in `tests/training/test_collection.py` (seed 24, three
+   streams, two-row chunks, repeated out-of-order gather) compares
+   observations, actions, behavior logs, values, outcomes, model outputs,
+   replay prefixes and native state digests. `aa6cf95de3` records the
+   measurements below.
 
-Slice 4. Registered v11 vectors now write owned spans for masked and isolated steps,
-   root changes and fixed-view reads. Shards retain global slot order. The
-   collector stores the live rows selected at each decision, including the
-   legal offers, and the behavior distribution keeps the original slot
-   coordinates. Learners gather the requested spans and decision-memory
-   prefixes within their execution limit. Editable diagnostic exports and
-   legacy dense inputs retain full admission.
+## Remaining
 
-The paired test in `tests/training/test_collection.py` uses seed 24, three
-streams, two-row execution chunks and a repeated, out-of-order learner gather.
-It compares observation fields, sampled actions, behavior logs, values,
-outcomes, model outputs, replay action prefixes and native state digests.
-Focused checks also cover failed-slot replacement, transactional snapshot
-loads, both fixed viewers, GRU snapshot resume with two workers, Torch and MLX
-updates, and pinned v9/v11 pilots. The optional u1952 pilot was unavailable.
+No implementation slice remains. Open, for gate or a person on an idle host:
+steady-state update throughput and peak learner RSS at 256 streams. Contrary
+finding to keep visible: step and encoding is slower with typed CSR
+(+1.25 CPU ms per 256-row batch; 8.36 → 10.99 wall s over three four-stream
+updates), outweighed end to end by admission, preparation and memory savings.
 
 ## Measurements to carry forward
 
@@ -99,8 +100,6 @@ bytes. Neither revision completed its first full-size optimizer update
 within 240 seconds. A separate dense collection-only run also reached
 240 seconds. Concurrent host activity varied across the sequential runs.
 The four-stream timings establish observed throughput for these runs.
-Steady-state update throughput and peak learner RSS at 256 streams remain
-open for an idle host. No implementation slice remains.
 
 Both constructed-board probes matched the base at all 15 checkpoints,
 including the output counts and digests. The separate encode-only fixture
