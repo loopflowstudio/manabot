@@ -18,8 +18,10 @@ Current-world (w17) corpora with executable consumers:
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
 
-The opening-hand rules use `evidence-opening-v1.json` and the authored-match
-authority and parity files ending in `-opening.json`. The authored trace
+The opening-hand rules use `evidence-opening-v1.json`. The shared casting
+catalog has authored-match authority and parity receipts ending in
+`-casting.json`. The first opening-hand receipts are retained as
+`-opening.json`. The authored trace
 takes two explicit keep Commands, then follows the seeded priority line.
 Generate its authority with `scripts/generate_authored_match_receipt.py`
 and its parity with `uv run --extra dev python -m conformance.authored_match_parity write`.
