@@ -179,6 +179,19 @@ git grep -nE "auto_reset|with_auto_reset|replace_failed_into|reassign_roots_into
 
 Expected: all tests green; grep returns nothing outside `release/`.
 
+### Local results
+
+The acceptance run passed 401 Python cases, skipped five and failed ten.
+Three failures exercised the historical replay above, six expected turn one
+at the opening-hand choice, and one stepped a completed statistics game.
+All eleven cases covering those fixes passed on focused reruns. The six
+rollout, benchmark and failure-capture checks passed. The native filter
+passed all 26 tests and the removed-name grep found no matches.
+
+The documented mimalloc benchmark completed 2,048 decisions with digest
+`abd73687fa664633fec80c624d75723e8669ad9fec85a41bd30c95243d2934b9`.
+Gate and CI remain.
+
 ## Docs
 
 User docs were updated before implementation (d498d114ae).

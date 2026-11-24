@@ -1,4 +1,4 @@
-at: 6d3cf02810e197ea2ee4d48bfb84cccb61bb7db9
+at: fc86c0536efc5b3dd03881f5b29aaf593cd80cf2
 first:
   - path: docs/engine-python.md
     why: Working example of mixed snapshot and fresh loads
@@ -22,10 +22,18 @@ first:
     why: Diagnostic target roots follow the collector lifecycle
   - path: manabot/env/vector_env.py
     why: Gym returns terminal outcomes with fresh observations
+  - path: manabot/sim/rollout.py
+    why: Evaluation retires streams when their seat quota fills
+  - path: scripts/bench_sharded_collection.py
+    why: Hash terminal outcomes before refilling a batch
   - path: tests/env/test_vector_snapshot_slots.py
     why: Seed progression, rollback and retry across shards
   - path: tests/training/test_adaptive_two_seat.py
     why: Completed game records, seed progression and action limits
   - path: tests/training/test_memory_prefix_storage.py
     why: Live and parked bootstrap rows share a batch
+  - path: tests/training/test_game_errors.py
+    why: Historical divergence and replay of current capacity failures
+  - path: tests/training/test_training_game_journals.py
+    why: Compare journals and statistics across explicit game boundaries
 hide: []
