@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Foundations · post-build concept review</title>
+<title>MTG-421 · Post-build concept review</title>
 <style>
 :root{color-scheme:light dark}
 body{font:1.02rem/1.55 system-ui,-apple-system,sans-serif;margin:2.5rem auto;padding:0 1.1rem;max-width:58rem}
@@ -15,7 +15,7 @@ code{font-size:.91em;overflow-wrap:anywhere}
 .proposed{border:1px solid LinkText;color:LinkText}
 .no{font-weight:700;color:color-mix(in srgb,crimson 82%,CanvasText)}
 .yes{font-weight:700;color:color-mix(in srgb,seagreen 82%,CanvasText)}
-.callout{border-left:4px solid LinkText;padding:.75rem 1rem;margin:1.1rem 0;background:color-mix(in srgb,LinkText 8%,transparent)}
+.callout{border-left:4px solid seagreen;padding:.75rem 1rem;margin:1.1rem 0;background:color-mix(in srgb,seagreen 8%,transparent)}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
 @media (max-width:46rem){.compare{grid-template-columns:1fr}}
 .panel{border:1px solid color-mix(in srgb,GrayText 45%,transparent);border-radius:.45rem;padding:.85rem 1rem}
@@ -26,153 +26,106 @@ pre{overflow-x:auto;padding:.65rem .8rem;border-radius:.35rem;background:color-m
 </style>
 <main>
 <h1>Do the product’s concepts and the code’s concepts line up?</h1>
-<p><strong>Area reviewed:</strong> The full MTG-421 branch against its base (<code>88ce96bd..6a572f60</code>) — all 222 cohort rows (207 defined, 15 explicitly deferred) and every shared engine, v11 policy-input, possible-world search, and Academy authority touched on the branch, reviewed as a whole after Batch 5g and compression <code>8068a268</code>. <strong>Why:</strong> Every Foundations row is now defined or explicitly deferred and Alignments 1–4 / 1b / 2b have landed; walking each newly introduced decision end-to-end across native rules, v11 tensors, possible-world search, LLM text, and Academy before gate catches one remaining multi-layer concept mismatch in <code>Decision::AssignCombatDamage</code> (and <code>OrderReplacement</code>’s Academy prompt header).</p>
+<p><strong>Area reviewed:</strong> The complete MTG-421 branch against <code>main</code> (<code>main..e539326b</code>) — all 222 cohort rows (207 defined, 15 explicitly deferred, 0 awaiting audit) and every shared native rules, v11 observation/encoder, possible-world search, LLM text, structured-offer, combat-preview, recording, and Academy UI authority touched on the branch, reviewed as a whole after Alignment 5 (<code>57c18aa9</code>) and compression (<code>c791c157</code>). <strong>Why:</strong> Every planned cohort batch and all five concept alignments have now landed; walking the whole branch end-to-end as a fresh reader checks whether any multi-layer concept mismatch remains before gate.</p>
+
+<div class="callout">
+<strong>Verdict · Aligned (nothing to change in <code>scratch/plan.md</code>).</strong><br>
+Every product concept introduced or changed on MTG-421 now lines up with its native state, v11 tensor encoding, possible-world search, LLM text, recording narration, and Academy UI across normal, failure, and recovery paths. No remaining conceptual mismatch blocks gate.
+</div>
 
 <h2>Whole-area concept alignment <span class="tag existing">Existing</span></h2>
 <table>
-<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>6a572f60</code></caption>
+<caption>Product concepts a player, trainer, or card author knows vs. code concepts at <code>e539326b</code></caption>
 <tr><th>Product concept</th><th>Code concept</th><th>Aligned?</th></tr>
 <tr>
-  <td><strong>Combat damage assignment &amp; replacement ordering across consumers</strong> (CR 510.1c / 702.19b, CR 616.1). Assigning combat damage is a <strong>numeric quantity choice</strong> (<code>minimum..=remaining</code>) for a <strong>specific attacker → blocker pair</strong>; ordering replacements picks which replacement applies next. Both depend only on public battlefield state, stay playable under possible-world search, and show honest prompt headers in Academy.</td>
-  <td><code>Decision::AssignCombatDamage</code> (introduced on this branch) reuses <code>ActionSpaceKind::Modal</code> + <code>Action::ChooseMode { mode: amount }</code>, leaving four downstream consumers treating it as an opaque, unanchored spell mode:<br>
-  (1) <code>Game::announces_x</code> (<code>flow/action.rs:32</code>) omits <code>AssignCombatDamage</code>, so amounts ride only on <code>action::MODE</code> (<code>ValueLayout::SELECTOR</code> → <code>one_hot:15</code>): amounts <code>0..14</code> have no numeric magnitude on <code>action::X</code>, and every amount <strong>≥ 15</strong> (e.g. <code>Preposterous Proportions</code> +10/+10 on <code>Quakestrider Ceratops</code> or <code>Pelakka Wurm</code>) collapses into the single <code>"above 15"</code> bucket with <code>has_x = 0, x = 0</code>.<br>
-  (2) <code>decision.rs:1612</code> sets <code>ActionSpace.focus = [attacker, blocker]</code>, which neither v11 (<code>observation_encoder.rs</code>) nor Academy (<code>experience_projection.py</code>) reads; both read <code>Observation::action_focus</code> (<code>observation.rs:2174</code>), which returns <code>[]</code> because <code>combat_actions.rs:133</code> uses a sourceless <code>EffectFrame</code>.<br>
-  (3) <code>possible_worlds.rs:660-689</code> accepts <code>ActionSpaceKind::Modal</code> for <code>OrderReplacement</code>, but rejects <code>AssignCombatDamage</code> with <code>Err(UnsupportedActingPrompt)</code>.<br>
-  (4) Academy’s <code>promptLine</code> (<code>prompt.ts:63-67</code>) renders both <code>assign_combat_damage</code> and <code>order_replacement</code> as <code>"Choose a mode"</code> (with no source), and <code>recording.py:39-62</code> (<code>RESOLVING_STAGES</code>) includes <code>"order_replacement"</code> while omitting <code>"assign_combat_damage"</code>, splitting multi-blocker assignments into separate moves.</td>
-  <td><span class="no">No</span> · numeric collapse above 14 in v11, missing per-action focus, search rejection, and <code>"Choose a mode"</code> in Academy.</td>
+  <td><strong>Combat damage assignment</strong> (CR 510.1c / 702.19b). Assigning combat damage is a numeric quantity choice (<code>minimum..=remaining</code>) for a specific attacker → blocker pair on public battlefield state; single-option assignments auto-assign; multi-blocker assignments for one attacker are one move.</td>
+  <td><code>Decision::AssignCombatDamage</code> in <code>combat_actions.rs</code> and <code>decision.rs</code>. <code>Game::announces_x</code> includes it, writing <code>action::HAS_X = 1</code> and <code>action::X = amount / 10</code> in v11 (amounts 15 vs. 16+ stay numerically distinct without a layout change), while <code>mode_description</code> keeps <code>"{attacker} assigns {n} to {blocker}, {rest} ..."</code> ahead of <code>"X = {mode}"</code>. <code>Observation::action_focus</code> returns <code>[attacker_perm_id, blocker_perm_id]</code> (matching <code>DeclareBlocker</code>), joining to both permanent rows in v11 and both subjects in Academy. <code>possible_worlds.rs</code> admits it in the Modal refresh arm. Academy’s <code>view.ts:anchorOf</code> keeps offers as prompt rail buttons with both combatants in <code>view.asked</code>; <code>prompt.ts</code> reads <code>"Assign combat damage"</code>; <code>recording.py</code> groups multi-blocker steps in <code>RESOLVING_STAGES</code> and preserves card-name capitalization.</td>
+  <td><span class="yes">Yes</span> · Alignment 5 landed and compressed (<code>57c18aa9</code>, <code>c791c157</code>).</td>
 </tr>
 <tr>
-  <td><strong>Pre-declared mandatory combat previews &amp; Academy wording</strong> (<code>Juggernaut</code>, <code>MustBeBlockedByAllAble</code>, CR 508.1d / 509.1c under <code>skip_trivial: true</code>).</td>
-  <td><code>combat_preview.rs</code> handles pre-declared attackers and blockers symmetrically via <code>declared_attackers()</code> and <code>declared_blocks()</code>, refusing conflicting pre-declared blocks with <code>"{B} already blocks {X}."</code>. Academy’s <code>committedOf(frame)</code> merges live committed attackers and blockers into <code>draftWords()</code> (<code>"Attack with Juggernaut"</code>, <code>"Block with 1"</code>).</td>
-  <td><span class="yes">Yes</span> · Alignments 1 &amp; 1b landed and verified (<code>19a556c3</code>, <code>ee88092e</code>, <code>8068a268</code>).</td>
+  <td><strong>Spell-created combat-damage prevention shield &amp; replacement ordering</strong> (<code>Fleeting Flight</code>, <code>Fog Bank</code>, <code>Twinflame Tyrant</code>, CR 615.1 / 616.1). A resolved shield protects one creature from combat damage even if it loses abilities, competes distinctly against a second shield or a printed replacement, and names its source spell when ordered.</td>
+  <td><code>Modification::PreventCombatDamage</code> lives on the protected permanent; combat damage offers <code>ReplacementEffect::PreventCombatDamage</code> (distinct from <code>Fog Bank</code>’s two-way <code>PreventCombatDamageToOrFromSelf</code>), keyed by <code>ReplacementId { source: object, effect: Some(timestamp), .. }</code> (<code>ReplacementCandidate::shield</code>), labelled via <code>source_definition</code> (<code>"Fleeting Flight: Prevent all combat damage"</code>) while keeping <code>source()</code> on the protected permanent. Wired across all 5 observability/text layers (<code>MODIFICATION_NAMES</code>/<code>MODIFICATION_VARIANTS</code> = 39). <code>OrderReplacement</code> focuses the source permanent (joining in v11 and direct-manipulating on the board in Academy), is admitted in <code>possible_worlds.rs</code>, reads <code>"Choose which replacement applies next"</code> in <code>prompt.ts</code>, and groups in <code>recording.py</code>.</td>
+  <td><span class="yes">Yes</span> · Alignments 4 &amp; 5 landed (<code>14fc8277</code>, <code>8068a268</code>, <code>57c18aa9</code>).</td>
 </tr>
 <tr>
-  <td><strong>Spell-created combat-damage prevention shield</strong> (<code>Fleeting Flight</code>, CR 615.1).</td>
-  <td><code>Modification::PreventCombatDamage</code> is a resolved record on the protected permanent; combat damage to it offers <code>ReplacementEffect::PreventCombatDamage</code> (distinct from <code>Fog Bank</code>’s two-way <code>PreventCombatDamageToOrFromSelf</code>), keyed by <code>ReplacementId { source: object, effect: Some(timestamp), .. }</code> (<code>ReplacementCandidate::shield</code>), labelled from <code>source_definition</code> (<code>"Fleeting Flight: Prevent all combat damage"</code>) while keeping <code>source()</code> on the protected permanent, surviving <code>LoseAllAbilities</code>, and wired across all 5 observability/text layers (<code>MODIFICATION_NAMES</code>/<code>MODIFICATION_VARIANTS</code> = 39).</td>
-  <td><span class="yes">Yes</span> · Alignment 4 &amp; compression <code>8068a268</code> landed (except Academy’s generic <code>"Choose a mode"</code> prompt header for <code>order_replacement</code> above).</td>
+  <td><strong>Mandatory combat declarations, previews &amp; Academy wording</strong> (<code>Juggernaut</code>, <code>Sower of Chaos</code>, <code>MustBeBlockedByAllAble</code>, CR 508.1d / 509.1c). One attack-requirement and one blocking authority; pre-declared participants under <code>skip_trivial: true</code> stay visible and legal in previews and button copy.</td>
+  <td>Single <code>Game::must_attack</code> and <code>Game::can_block</code> queries. <code>structured_offer.rs</code> falls back from compound to exact atomic offers whenever an undecided attacker must attack or an attacker must be blocked by all able creatures (matching <code>Menace</code>); direct <code>structured_attacker_offers()</code> refuses. <code>combat_preview.rs</code> marks <code>must_attack</code>, reads both <code>declared_attackers()</code> and <code>declared_blocks()</code> symmetrically, and refuses moving a pre-declared block with <code>"{B} already blocks {X}."</code>. Academy’s <code>committedOf(frame)</code> merges live committed declarations into <code>draftWords()</code> (<code>"Attack with Juggernaut"</code>, <code>"Block with 1"</code>).</td>
+  <td><span class="yes">Yes</span> · Alignments 1 &amp; 1b landed (<code>19a556c3</code>, <code>1759e827</code>, <code>ee88092e</code>, <code>8068a268</code>).</td>
 </tr>
 <tr>
-  <td><strong>In-library reveal &amp; bottom-placement knowledge</strong> (<code>Spinner of Souls</code>, <code>Campus Guide</code>, <code>Uncharted Voyage</code>, <code>Cruel Tutor</code>).</td>
-  <td><code>On top</code> / <code>On the bottom</code> labels, <code>place_entrant_on_bottom</code> → <code>LibraryKnowledge::move_top_to(bottom)</code>, <code>Effect::Reveal</code> + <code>selected_revealed</code> + <code>remember_placed_top</code>, and in-library <code>reveal_until_to_hand</code> recording <code>public[0]</code>/<code>own[0]</code> before moving a single passed card to the bottom.</td>
-  <td><span class="yes">Yes</span> · Alignments 2 &amp; 2b landed and verified (<code>6a35dbaf</code>, <code>51b89332</code>, <code>ee88092e</code>).</td>
+  <td><strong>In-library reveal &amp; bottom-placement knowledge</strong> (<code>Spinner of Souls</code>, <code>Campus Guide</code>, <code>Uncharted Voyage</code>, <code>Cruel Tutor</code>). Revealed library cards never pass through Exile; top/bottom choices say <code>On top</code> / <code>On the bottom</code>; bottom placement keeps known top positions and remembers a single revealed bottom card.</td>
+  <td><code>place_entrant_on_bottom</code> → <code>LibraryKnowledge::move_top_to(bottom)</code> preserves upper facts; <code>Effect::Reveal</code> + <code>selected_revealed</code> + <code>remember_placed_top</code> records public vs. owner-only top knowledge; in-library <code>Effect::RevealUntilToHand</code> uses <code>inspected_library_departure</code> and records <code>public[0]</code>/<code>own[0]</code> before moving a single passed card to the bottom. Optional search/reveal uses <code>Effect::Modal</code> with an empty second mode (matching <code>Solemn Simulacrum</code>).</td>
+  <td><span class="yes">Yes</span> · Alignments 2 &amp; 2b landed (<code>6a35dbaf</code>, <code>51b89332</code>, <code>ee88092e</code>).</td>
 </tr>
 <tr>
-  <td><strong>Mandatory combat declarations on atomic &amp; compound policy offers</strong> (<code>Juggernaut</code>, <code>Sower of Chaos</code>, <code>MustBeBlockedByAllAble</code>).</td>
-  <td>Single <code>Game::must_attack</code> and <code>Game::can_block</code> authorities; <code>compound_offers()</code> falls back to exact atomic offers whenever an undecided attacker must attack or an attacker must be blocked by all able creatures (matching <code>Menace</code>); direct <code>structured_attacker_offers()</code> refuses.</td>
-  <td><span class="yes">Yes</span> · sound across all masks under both <code>skip_trivial</code> settings (<code>19a556c3</code>, <code>1759e827</code>).</td>
+  <td><strong>Layered names, life-gated statics, attachments, and activation targeting</strong> (<code>Witness Protection</code>, <code>Eaten by Piranhas</code>, <code>Twinblade Paladin</code>, <code>Treetop Snarespinner</code>, <code>Honest Work</code>, <code>Pirate’s Cutlass</code>, <code>Arcanis</code>). One name-setting layer operation; independent name/subtype flags; cache invalidation on life change; Auras and Equipment share one attachment subject; activated abilities can target their own source unless restricted by “another”.</td>
+  <td><code>Modification::SetName</code> is the sole name operation (folded <code>Operation::Name</code>); <code>name_set</code> and <code>creature_types_set</code> gate observation rows separately; <code>Revisions.life</code> / <code>ReadSet.life</code> invalidates <code>Condition::LifeAtLeast</code>; <code>TriggerSubject::Attached</code> unifies Auras and Equipment (with token rename from <code>EnchantedCreature</code>); <code>ActivatedAbilityOnStack.attached</code> removed; <code>ObjectSelector::ExactSource</code> binds exact battlefield identity; <code>TargetRequirement::another</code> governs activated self-targeting.</td>
+  <td><span class="yes">Yes</span> · Alignment 3 landed (<code>51b89332</code>, <code>1759e827</code>).</td>
 </tr>
 <tr>
-  <td><strong>Layered characteristic replacement, life-gated statics, attachments, and activation targeting</strong> (<code>Witness Protection</code>, <code>Eaten by Piranhas</code>, <code>Twinblade Paladin</code>, <code>Treetop Snarespinner</code>, <code>Honest Work</code>, <code>Pirate’s Cutlass</code>).</td>
-  <td><code>Modification::SetName</code> is the sole name operation; <code>name_set</code> and <code>creature_types_set</code> gate observation rows independently; <code>Revisions.life</code> / <code>ReadSet.life</code> invalidates <code>Condition::LifeAtLeast</code>; <code>TriggerSubject::Attached</code> unifies Auras &amp; Equipment; <code>ActivatedAbilityOnStack.attached</code> removed; <code>TargetRequirement::another</code> governs activated self-targeting.</td>
-  <td><span class="yes">Yes</span> · Alignment 3 landed and verified (<code>51b89332</code>, <code>1759e827</code>).</td>
+  <td><strong>First-strike / double-strike damage step, per-source lifelink, death-exile, and stun counters</strong> (CR 510.4, 702.15, <code>ExileIfWouldDie</code>, <code>CounterKind::Stun</code>). A second combat damage step is publicly visible across every consumer; lifelink groups committed damage per source and controller; death-exile and stun counters compose cleanly on existing replacement authorities.</td>
+  <td><code>CombatState.first_strikers</code> and <code>regular_damage_step</code> project to <code>TurnData.another_damage_step</code> and <code>PermanentData.first_strike_participant</code> across v11, JSON, all 6 protocol schemas, <code>experience_projection.py</code>, <code>text_observation.py</code>, and Academy (<code>"To regular damage"</code>, card chips, inspect, unpiling). Lifelink totals committed damage per source/controller. 5g’s <code>ExileIfWouldDie</code> and <code>CounterKind::Stun</code> cards compose without new primitives.</td>
+  <td><span class="yes">Yes</span> · End-to-end parity across all consumers.</td>
 </tr>
 <tr>
-  <td><strong>First-strike / double-strike damage step, death-exile, and stun counters</strong> (<code>another_damage_step</code>, <code>first_strike_participant</code>, <code>ExileIfWouldDie</code>, <code>CounterKind::Stun</code>).</td>
-  <td><code>another_damage_step</code> and <code>first_strike_participant</code> flow end-to-end through native state, v11 columns, JSON/experience projection, LLM text, and Academy (<code>"To regular damage"</code>, card chips, inspect, unpiling). Batch 5g’s <code>ExileIfWouldDie</code> and <code>CounterKind::Stun</code> cards compose cleanly on the existing authorities.</td>
-  <td><span class="yes">Yes</span> · end-to-end parity across all consumers (<code>14fc8277</code> and earlier slices).</td>
+  <td><strong>222-card Foundations readiness boundary</strong>. Ready-now cards compose from native primitives with Scryfall-matched first printings and directed fixtures; larger engine gaps carry an explicit deferral and exact rules obligation in the ledger.</td>
+  <td>207 defined (204 newly authored + 3 pre-existing), 15 explicitly deferred with exact rules obligations in <code>fdn.jsonl</code>, 0 awaiting audit.</td>
+  <td><span class="yes">Yes</span> · Complete cohort accounting; semantic corpus refresh and parity checks remain with gate.</td>
 </tr>
 </table>
 
-<div class="callout">
-<strong>Biggest mismatch · <code>Decision::AssignCombatDamage</code> (and <code>OrderReplacement</code>’s prompt) leaking its <code>ActionSpaceKind::Modal</code> transport into four consumers (live on HEAD <code>6a572f60</code>).</strong><br>
-<code>AssignCombatDamage</code> is a <strong>numeric quantity choice</strong> (<code>minimum..=remaining</code>) over a <strong>specific attacker → blocker pair</strong> on public battlefield state — not a spell mode. Yet today: (1) v11 encodes its amounts only in categorical <code>action::MODE</code> (<code>one_hot:15</code>), collapsing 15–22 damage (e.g. <code>Preposterous Proportions</code> on <code>Quakestrider Ceratops</code>) into identical rows with <code>has_x = 0, x = 0</code>; (2) per-action <code>focus</code> is <code>[]</code> in both v11 and Academy even though <code>ActionSpace.focus</code> already computed <code>[attacker, blocker]</code>; (3) <code>possible_worlds.rs</code> rejects it with <code>UnsupportedActingPrompt</code>; and (4) Academy’s <code>promptLine</code> calls both <code>assign_combat_damage</code> and <code>order_replacement</code> <code>"Choose a mode"</code> while <code>recording.py</code> fails to group multi-blocker assignment steps into one move.
-</div>
-
-<h2>Before vs. after · Alignment 5 (pre-gate) <span class="tag proposed">Proposed</span></h2>
-
+<h2>End-to-end walkthrough of the final alignment <span class="tag existing">Existing</span></h2>
 <div class="compare">
 <div class="panel">
-<h3>1. v11 numeric amount &amp; attacker/blocker focus <span class="tag existing">Existing</span></h3>
-<pre>22/18 Quakestrider Ceratops (trample) blocked by 2/2 Gray Ogre:
-  offers: ChooseMode { mode: 2..=22 }
-  Game::announces_x -&gt; false
-  action row for mode=15..=22:
-    action::MODE = 16..23 -&gt; ALL map to one_hot:15["above 15"]!
-    action::HAS_X = 0.0, action::X = 0.0  (no numeric magnitude!)
-  Observation::action_focus:
-    suspended.frame.source() == None -&gt; focus = []
-    v11 action_focus = [-1, -1]  (unanchored to attacker/blocker!)
-    Academy offer.subjects = []</pre>
+<h3>Before Alignment 5 (<code>6a572f60</code>)</h3>
+<pre>17/3 trampling War Mammoth blocked by 1/1 Llanowar Elves:
+  v11 actions:
+    action::MODE = 16, 17 -&gt; both collapsed into one_hot:15["above 15"]
+    action::HAS_X = 0.0, action::X = 0.0
+    action_focus = [-1, -1]
+  possible_worlds.rs:
+    Err(MaterializeError::UnsupportedActingPrompt)
+  Academy:
+    promptLine -&gt; "Choose a mode" (for both assign_combat_damage
+                  and order_replacement)
+    recording.py -&gt; multi-blocker steps split into separate moves</pre>
 </div>
 <div class="panel">
-<h3>1. v11 numeric amount &amp; attacker/blocker focus <span class="tag proposed">Proposed</span></h3>
-<pre>flow/action.rs:
-  Game::announces_x includes Decision::AssignCombatDamage { .. }.
-  action_description matches AssignCombatDamage BEFORE the
-  `if self.announces_x(action) =&gt; "X = {mode}"` arm so labels
-  stay "Quakestrider Ceratops assigns 15 to Gray Ogre, 7 to ...".
-  v11 action row (no layout/width change!):
-    action::HAS_X = 1.0, action::X = amount / 10.0 (steps:8 + scalar)
-
-agent/observation.rs (Observation::action_focus):
-  For (ChooseMode, Some(Decision::AssignCombatDamage { attacker, blocker, .. })):
-    return vec![game.state[*attacker].id, game.state[*blocker].id];
-  Fits max_focus_objects = 2 exactly (mirroring DeclareBlocker).</pre>
+<h3>Delivered on HEAD (<code>e539326b</code>)</h3>
+<pre>17/3 trampling War Mammoth blocked by 1/1 Llanowar Elves:
+  v11 actions (no layout/width change):
+    action::HAS_X = 1.0, action::X = amount / 10.0  (1.5 vs 1.6 vs 1.7)
+    action_focus = [mammoth_perm_row, elves_perm_row]
+    description = "War Mammoth assigns {n} to Llanowar Elves, {17-n} to defending player"
+  possible_worlds.rs:
+    admits Decision::AssignCombatDamage in Modal refresh arm
+  Academy:
+    view.ts:anchorOf -&gt; prompt rail buttons; askedObjects -&gt; {mammoth, elves}
+    prompt.ts -&gt; "Assign combat damage" / "Choose which replacement applies next"
+    recording.py -&gt; multi-blocker steps group into one move, keeping card caps</pre>
 </div>
 </div>
 
-<div class="compare">
-<div class="panel">
-<h3>2. Search &amp; Academy modal-stage parity <span class="tag existing">Existing</span></h3>
-<pre>managym/src/possible_worlds.rs:660-689:
-  ActionSpaceKind::Modal matches ONLY Decision::OrderReplacement.
-  AssignCombatDamage -&gt; Err(MaterializeError::UnsupportedActingPrompt)!
-
-academy/ui/src/lib/board/prompt.ts:63-67:
-  stage = 'assign_combat_damage', source = null -&gt; "Choose a mode"
-  stage = 'order_replacement',    source = null -&gt; "Choose a mode"
-
-managym/academy/recording.py:39-62:
-  RESOLVING_STAGES has "order_replacement", omits "assign_combat_damage"
-  -&gt; multi-blocker damage steps split into separate moves.</pre>
-</div>
-<div class="panel">
-<h3>2. Search &amp; Academy modal-stage parity <span class="tag proposed">Proposed</span></h3>
-<pre>managym/src/possible_worlds.rs:668:
-  Match Decision::OrderReplacement { .. }
-      | Decision::AssignCombatDamage { .. }
-  (all combat participants, P/T, marked damage, and assigned
-  amounts are public and invariant under hidden-zone resampling).
-
-academy/ui/src/lib/board/view.ts:
-  isButton() returns true when stage === 'assign_combat_damage'
-  so 2..N damage choices stay prompt rail buttons (not hidden in
-  a popup menu on the attacker card!), and askedObjects() adds
-  their [attacker, blocker] subjects for board highlight.
-
-academy/ui/src/lib/board/prompt.ts + managym/academy/recording.py:
-  'assign_combat_damage' -&gt; "Assign combat damage"
-  'order_replacement'    -&gt; "Choose which replacement applies next"
-  Add "assign_combat_damage" to RESOLVING_STAGES.</pre>
-</div>
-</div>
-
-<h3>Stress-testing the proposal (normal, failure, recovery, counterexamples)</h3>
+<h3>Normal, failure, and recovery checks</h3>
 <ul>
-  <li><strong>Normal path:</strong> A 22/18 <code>Quakestrider Ceratops</code> (pumped by <code>Preposterous Proportions</code>) blocked by a 2/2 <code>Gray Ogre</code> offers <code>2..=22</code>: every v11 action row carries <code>has_x = 1.0</code>, <code>x = amount / 10.0</code>, and <code>action_focus = [attacker_row, blocker_row]</code>, so 15 vs. 22 are numerically distinct and directly joined to both combatants. Possible-world search materializes cleanly. Academy shows <code>"Assign combat damage"</code> with buttons <code>"Quakestrider Ceratops assigns 2 to Gray Ogre, 20 to defending player"</code>… and highlights both creatures on the board. On a double-block, both assignment prompts group into one move in recordings.</li>
-  <li><strong>Failure &amp; recovery:</strong> Submitting an out-of-range mode (&lt; <code>minimum</code> or &gt; <code>remaining</code>) still returns <code>AgentError("illegal combat damage assignment")</code> with <code>suspended_decision</code> preserved; stale revisions fail Command binding; single-option assignments (<code>minimum == remaining</code>) are still auto-assigned before any prompt opens.</li>
-  <li><strong>Counterexample 1 · Academy card-menu trap:</strong> Adding <code>[attacker, blocker]</code> to <code>Observation::action_focus</code> without updating <code>view.ts:isButton</code> would cause <code>anchorOf</code> to anchor all 5–20 damage offers onto the attacker card’s popup menu instead of rail buttons. Keeping <code>assign_combat_damage</code> in <code>isButton</code> prevents this while still highlighting both subjects in <code>askedObjects</code>.</li>
-  <li><strong>Counterexample 2 · <code>action_description</code> <code>"X = {mode}"</code> trap:</strong> Adding <code>AssignCombatDamage</code> to <code>Game::announces_x</code> without keeping its custom description ahead of the <code>if self.announces_x(action)</code> arm at <code>flow/action.rs:131</code> would turn <code>"War Mammoth assigns 1 to Llanowar Elves, 2 to defending player"</code> into <code>"X = 1"</code>. Checking X-announcement decisions explicitly for <code>"X = {mode}"</code> preserves the exact wording.</li>
-  <li><strong>Counterexample 3 · Possible-world invariance:</strong> Hidden cards in hands or libraries never alter battlefield P/T, marked damage, trample, or deathtouch (hand-size CDAs read zone counts, which resampling preserves), so <code>*minimum..=*remaining</code> stays valid in every resampled world.</li>
-  <li><strong>Counterexample 4 · Stored checkpoints &amp; legacy v9/v10:</strong> <code>action::HAS_X</code>/<code>action::X</code> are already existing v11 columns (no layout change) and absent on legacy v9/v10; stored TLA pilots remain untouched.</li>
+  <li><strong>Normal path:</strong> 17/3 trampling <code>War Mammoth</code> blocked by <code>Llanowar Elves</code> produces 17 offers with distinct <code>has_x = 1.0</code>, <code>x = 0.1..1.7</code>, exact <code>[mammoth, elves]</code> permanent focus rows, preserved <code>"assigns"</code> descriptions, admitted possible worlds, prompt rail buttons highlighting both combatants, and single-move narration across multi-blockers.</li>
+  <li><strong>Failure &amp; recovery:</strong> Out-of-range modes fail with <code>AgentError("illegal combat damage assignment")</code> leaving <code>suspended_decision</code> intact; stale revisions fail Command binding; single-option assignments auto-assign before a prompt opens; stored v11 TLA pilots and curated records are unchanged (zero layout or vocabulary break).</li>
+  <li><strong>Minor non-blocking observation:</strong> <code>ActionSpace.focus</code> at <code>decision.rs:1612</code> still holds card object IDs while per-action <code>Observation::action_focus</code> holds permanent IDs (matching <code>DeclareBlocker</code>). No consumer reads <code>ActionSpace.focus</code> for <code>Modal</code> spaces (only <code>search.rs</code> compares it for equality), so nothing disagrees at runtime. Similarly, <code>OrderReplacement</code> offers anchor directly onto their replacement-source permanent on the board (direct manipulation, with every offer also listed in the rail), which is distinct from <code>AssignCombatDamage</code>’s 2..N identical-subject numeric rail buttons.</li>
 </ul>
 
 <h2>Outside this work (noted plainly, not part of MTG-421)</h2>
 <ul>
-  <li><strong>Expressing required candidates inside compound <code>ChoiceStep::Select</code>:</strong> Extending the structured-offer wire schema with per-candidate required flags (so <code>compound_offers</code> can keep a single multi-select even when <code>Juggernaut</code> or lure effects are active) is a protocol change. Falling back to <code>structured_search_offers()</code> matches the existing <code>Menace</code> pattern and keeps every surface sound today.</li>
+  <li><strong>Expressing required candidates inside compound <code>ChoiceStep::Select</code>:</strong> Extending the structured-offer wire schema with per-candidate required flags (so <code>compound_offers</code> can keep a single multi-select even when <code>Juggernaut</code> or lure effects are active) is a protocol change. Falling back to exact atomic offers matches the existing <code>Menace</code> pattern and keeps every surface sound today.</li>
   <li><strong><code>CardPredicate</code> inline size (<code>min_toughness: Option&lt;u8&gt;</code>) &amp; competing death-exile replacements:</strong> Boxing cold <code>CardPredicate</code> fields and moving <code>ExileIfWouldDie</code> / <code>Finality</code> into <code>collect_replacements</code> (needed once any-origin replacements like <code>Dryad Militant</code> / <code>Darksteel Colossus</code> enter) remain separate engine tracks outside MTG-421.</li>
   <li><strong>Preserving known cards below <code>k &gt;= 2</code> passed cards in <code>reveal_until_to_hand</code>:</strong> Shifting untouched facts below <code>k &gt;= 2</code> randomly bottomed cards requires a targeted top-prefix removal helper on <code>LibraryKnowledge</code> rather than <code>reposition_library_object</code>’s <code>forget_order()</code>; lossy forgetting is always sound and outside MTG-421.</li>
 </ul>
 
-<h2>Archived reviews · resolved on branch <span class="tag existing">Existing</span></h2>
-<p class="muted"><strong>Pre-5g (<code>75577c36</code> → resolved in <code>ee88092e</code>, <code>14fc8277</code>, <code>8068a268</code>):</strong> Symmetric <code>declared_blocks()</code> in <code>combat_preview.rs</code>, <code>committedOf(frame)</code> in Academy’s <code>draftWords()</code>, target-only <code>ReplacementEffect::PreventCombatDamage</code> with timestamped <code>ReplacementId.effect</code> and 5-layer observability/text wiring, and <code>k = 1</code> bottom knowledge in <code>reveal_until_to_hand</code> all landed and passed tests.<br>
-<strong>Pre-5f follow-up &amp; earlier (<code>bcf99c45</code>, <code>a2dc71f0</code>, <code>8098ca4c</code> → resolved):</strong> Mandatory combat fallback in <code>structured_offer.rs</code>, single <code>Game::must_attack</code> and <code>Game::can_block</code> queries, <code>must_attack</code> on <code>DeclarableCreature</code>, folded <code>Modification::SetName</code>, independent <code>name_set</code> / <code>creature_types_set</code> flags, <code>Revisions.life</code> for <code>Condition::LifeAtLeast</code>, <code>Effect::Reveal</code> + <code>remember_placed_top</code>, in-library <code>Effect::RevealUntilToHand</code>, library-end labels, unified <code>ChooseMode</code> descriptions, deleted <code>ActivatedAbilityOnStack.attached</code>, unified <code>TriggerSubject::Attached</code>, and single-card tutors on <code>search_library</code>.</p>
-
 <h2>Questions for review</h2>
-<p class="muted">Headless Graph pass: bold choices below are written into <code>scratch/plan.md</code> as reversible design choices made for review.</p>
+<p class="muted">Reversible design choices landed on MTG-421 for review; none require stopping before gate.</p>
 <ol>
-  <li>How should v11 encode the damage amount of <code>Decision::AssignCombatDamage</code> so values ≥ 15 stay distinct and numeric? <strong>1a · Reuse existing <code>announces_x</code> → <code>action::HAS_X</code> / <code>action::X</code> (no v11 layout change), while keeping <code>AssignCombatDamage</code>’s custom combat-damage description ahead of <code>"X = {mode}"</code> (selected for review).</strong> 1b · Add a dedicated numeric column to the <code>actions</code> v11 buffer for assigned damage.</li>
-  <li>How should Academy place <code>Decision::AssignCombatDamage</code> offers once <code>Observation::action_focus</code> attaches <code>[attacker, blocker]</code>? <strong>2a · Keep them as prompt rail buttons in <code>view.ts:isButton</code> and highlight <code>[attacker, blocker]</code> via <code>askedObjects</code> so 2..N damage choices never hide in a card popup menu (selected for review).</strong> 2b · Anchor them on the attacker card via the default <code>anchorOf</code> path.</li>
+  <li><strong>Combat damage numeric encoding in v11:</strong> <strong>1a · Reuse <code>announces_x</code> → <code>action::HAS_X</code> / <code>action::X</code> (no v11 layout change), keeping <code>AssignCombatDamage</code>’s custom description ahead of <code>"X = {mode}"</code> (built).</strong> 1b · Add a dedicated numeric column to the <code>actions</code> v11 buffer for assigned damage.</li>
+  <li><strong>Academy placement of <code>assign_combat_damage</code> offers:</strong> <strong>2a · Keep them as prompt rail buttons via <code>view.ts:anchorOf</code> and highlight <code>[attacker, blocker]</code> via <code>askedObjects</code> so 2..N damage choices never hide in a card popup menu (built).</strong> 2b · Anchor them on the attacker card via the default object-anchor path.</li>
+  <li><strong>Academy placement of <code>order_replacement</code> offers:</strong> <strong>3a · Keep direct-manipulation anchoring on each replacement source’s permanent (with every offer also in the rail’s “All legal choices”) (built).</strong> 3b · Route <code>order_replacement</code> to prompt rail buttons like <code>assign_combat_damage</code> so competing replacements sit directly under <code>"Choose which replacement applies next"</code> even when two shields share one permanent.</li>
 </ol>
 </main>
 </html>
