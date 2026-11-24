@@ -31,7 +31,7 @@ on MLX in explicit CPU float32.
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | full policy architecture parity, damped and PPO training, live tokens, belief sampling/fitting, exact same-backend continuation, sampled health, local evaluation, and portable policy and belief containers | [mlx.md](mlx.md) |
+| `mlx` | full policy architecture parity, damped and PPO training, live tokens, belief sampling/fitting, portable cross-backend continuation, sampled health, local evaluation, and portable policy and belief containers | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
@@ -143,8 +143,10 @@ precision and sampling. Native game streams, seat routing and complete-game
 accounting stay in the collector. Rollout records contain NumPy arrays;
 packing validates them through the injected numerical capability. Torch
 collection uses its private generator seeded at `seed + 1`, shared by learner
-actions and current-self opponent actions. A resumed run starts a fresh
-stream; the generator's state is saved only in a numerical incident.
+actions and current-self opponent actions. Tracked saves record it in
+`sampling.safetensors` under the `torch:<device>` domain so same-domain resumes
+continue the same stream; cross-domain resumes reseed deterministically from
+`(run.seed, counts.updates)`.
 
 ### Tracked recipes
 
@@ -159,22 +161,65 @@ state.
 
 ### Continuing a run
 
-Resume the same Etude run from its committed save in the original backend.
-Torch registers its learner, optimizer and EMA objects and starts fresh game and
-sampling streams at the saved update. MLX atomically stages
-`training.safetensors` (raw and EMA weights, Adam state, collector sampling RNG
-and MLX RNG) alongside framework-free `continuation.json` (global-slot stream
-roots and committed action prefixes, `learned_game_rows`, opponent RNG when
-`behavior="random"`, minibatch RNG, and Python/NumPy RNGs), bound by SHA-256 in
-`schema="2"`. Resuming a schema-2 MLX save restores weights, optimizer, counts,
-live streams and RNGs so the next update continues from the same decisions
-(existing schema-1 MLX saves remain readable with fresh streams). Source, world,
-input, artifact digest and stage-lineage checks still apply. See the
-[two-attempt CLI example](mlx.md#tracked-training-and-recovery).
+Every tracked self-play run writes the same four files into
+`out/state/save-NNNNNNNN/` through Etude's `run.resume(export=, restore=, extra=)`
+API, whichever backend runs it:
 
-Torch retains its format-4 snapshots and the historical `torch_rng` field,
-restoring framework RNG last. Snapshots and incident evidence use the producing
-backend's format.
+| File | Content |
+| --- | --- |
+| `state.json` | Etude clocks, seed, commit, file inventory and `Counts` (updates, transitions, optimizer steps, saved model settings, input readings and snapshot-bank state) |
+| `continuation.json` | Framework-free `HostContinuation` (schema 2): global-slot stream roots and committed action prefixes, `learned_game_rows`, opponent RNG, minibatch RNG and Python/NumPy RNGs |
+| `learner.safetensors` | Canonical float32 `raw/<canonical>`, optional `ema/<canonical>`, `adam/step`, `adam/exp_avg/<canonical>` and `adam/exp_avg_sq/<canonical>` for stepped parameters, plus the `schema="canonical-v1"` manifest (`precision`, `has_ema`, per-parameter `param_steps`, observation config, lookup-buffer digests, `counts_sha256`, `continuation_sha256`, `sampling_sha256`, `sampling_domain`) |
+| `sampling.safetensors` | Backend sampling RNG arrays keyed by `sampling_domain` (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) |
+
+Any backend that supports the saved model and precision can continue a save.
+For a launched run, supply the new recipe config when continuing from the
+parent's saved output. Etude queues the child in the parent's worker pool, so
+that pool must provide the selected backend and device.
+
+```sh
+uv run etude continue --run RUN --until updates=4 --config '{"backend":"mlx","device":"mps"}'
+```
+
+Within the same `sampling_domain`, resume restores the learner, EMA, Adam,
+counts, native games and sampling streams. In bounded CPU float32 self-play,
+the next update reproduces the host and sampling files byte for byte, every
+learner tensor and every work counter. Each attempt measures its own elapsed
+training time, which contributes to the learner header's `counts_sha256`.
+Across sampling domains (Torch ↔ MLX or Torch across CUDA/MPS/CPU), resume
+still verifies `sampling_sha256`, reseeds sampling deterministically from
+`(run.seed, counts.updates)`, and logs `run/sampling_reseeded=1` on the first
+resumed update.
+
+Because PyTorch `Adam` skips `state[p]["step"]` when a conditional module
+receives `grad is None`, `learner.safetensors` records per-parameter
+`param_steps` (`0` means unstepped and omits zero moment tensors). Both backends
+restore each parameter's moments and update count. MLX uses the difference
+between that count and the global step for bias correction on subsequent dense
+updates, including a previously unused parameter's first update. On Torch → MLX,
+`run/adam_steps_aligned` counts the parameters whose clocks trailed the global
+step when training resumed.
+
+Published policy milestones (`out/policies/NNNNNNNN-{raw,ema}.safetensors`)
+stay separate from `out/state/save-NNNNNNNN/`: milestones carry `world_binding`,
+`checkpoint_source` and forward-compatible catalog rebinding, while training
+saves are strict exact-match continuation snapshots that validate every header,
+buffer digest, parameter, Adam tensor, host state and sampling digest before
+installing weights. The collector then verifies the reconstructed games before
+training or publishing a milestone.
+
+Legacy Torch saves written by Etude object registration (`learner.pt`,
+`optimizer.pt`, optional `ema.pt`) still resume read-only on Torch with fresh
+game and sampling streams, and write the canonical four-file layout on their
+next save; MLX refuses them with an actionable message to resume once on Torch
+first. Pre-unification MLX `training.safetensors` saves are refused explicitly
+on both backends. See the
+[tracked MLX training guide](mlx.md#tracked-training-and-recovery) and
+[training recovery](../../docs/training.md#recovery).
+
+Numerical incident evidence still uses the producing backend's format (`.pt` on
+Torch, `.safetensors` on MLX), and `manabot/training/loops/minimal.py` remains a
+standalone Torch tutorial loop.
 
 ### Inspection and belief
 
@@ -461,11 +506,13 @@ metadata = read_metadata("policy.safetensors")
 metadata["world_binding"], metadata["hypers"]["agent_hypers"]
 ```
 
-Torch uses `.pt` for optimizer state, update snapshots and numerical incidents.
-MLX writes its own continuation and incident tensors as safetensors. Both
-portable policy exports (`.safetensors`) and portable belief samplers
-(`belief.safetensors`) can be read by either backend; legacy `.pt` policies and
-belief samplers load only on Torch.
+Tracked training continuation uses the shared four-file safetensors/JSON layout
+across both backends ([continuing a run](#continuing-a-run)); Torch still reads
+legacy `.pt` saves and uses `.pt` for numerical incidents, while MLX writes
+numerical incidents as safetensors. Portable policy exports (`.safetensors`)
+and belief samplers (`belief.safetensors`) load on either backend for
+evaluation and fresh learners; legacy `.pt` policies and belief samplers load
+only on Torch.
 
 ### Convert an older `.pt` checkpoint
 

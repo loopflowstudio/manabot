@@ -590,6 +590,9 @@ _DTYPES = {
     "I32": np.int32,
     "I16": np.int16,
     "I8": np.int8,
+    "U64": np.uint64,
+    "U32": np.uint32,
+    "U16": np.uint16,
     "U8": np.uint8,
     "BOOL": np.bool_,
 }

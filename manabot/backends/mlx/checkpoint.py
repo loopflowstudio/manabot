@@ -15,7 +15,7 @@ and preserves norms. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from contextlib import contextmanager
 import importlib
 import json
@@ -83,53 +83,58 @@ def put_parameter(out: dict[str, np.ndarray], name: str, value: np.ndarray) -> N
     out[name] = np.asarray(value, dtype=np.float32, order="C")
 
 
+def mlx_names(canonical: str) -> tuple[str, ...]:
+    """Native leaves of a canonical parameter, in packed tensor order."""
+    name = _SEQUENTIAL.sub(r"\1\2.layers.\3.", gru_name(canonical, _GRU))
+    if name.endswith(
+        (
+            ".mha.qkv_weight",
+            ".mha.qkv_bias",
+            ".self_attn.qkv_weight",
+            ".self_attn.qkv_bias",
+        )
+    ):
+        stem, leaf = name.rsplit(".", 1)
+        return tuple(f"{stem}.{part}_proj.{leaf.removeprefix('qkv_')}" for part in _QKV)
+    return (name,)
+
+
 def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Canonical arrays in MLX names; only renames and splits, preserving norms."""
     out: dict[str, np.ndarray] = {}
-
     for name, tensor in canonical.items():
-        name = _SEQUENTIAL.sub(r"\1\2.layers.\3.", gru_name(name, _GRU))
-        if name.endswith(
-            (
-                ".mha.qkv_weight",
-                ".mha.qkv_bias",
-                ".self_attn.qkv_weight",
-                ".self_attn.qkv_bias",
-            )
-        ):
-            stem, leaf = name.rsplit(".", 1)
-            leaf = leaf.removeprefix("qkv_")
-            for part, value in zip(_QKV, np.split(tensor, 3), strict=True):
-                put_parameter(out, f"{stem}.{part}_proj.{leaf}", value)
-            continue
-        put_parameter(out, name, tensor)
+        names = mlx_names(name)
+        parts = (tensor,) if len(names) == 1 else np.split(tensor, len(names))
+        for leaf, value in zip(names, parts, strict=True):
+            put_parameter(out, leaf, value)
     return out
+
+
+def canonical_groups(names: Collection[str]) -> dict[str, tuple[str, ...]]:
+    """Group a native policy tree by canonical parameter, including packed QKV."""
+    groups: dict[str, tuple[str, ...]] = {}
+    for name in names:
+        canonical = _MLX_SEQUENTIAL.sub(r"\1\2.\3.", gru_name(name, _GRU_INVERSE))
+        matched = re.fullmatch(
+            r"(.*\.(?:mha|self_attn))\.(query|key|value)_proj\.(weight|bias)", canonical
+        )
+        if matched:
+            stem, _, leaf = matched.groups()
+            canonical = f"{stem}.qkv_{leaf}"
+        if canonical not in groups:
+            leaves = mlx_names(canonical)
+            if not all(leaf in names for leaf in leaves):
+                raise KeyError(f"incomplete MLX projections for {canonical}")
+            groups[canonical] = leaves
+    return groups
 
 
 def canonical_from_mlx(mlx_named: ParameterArrays) -> dict[str, np.ndarray]:
     """Inverse of `mlx_parameters`: MLX names and split QKV back to canonical."""
     out: dict[str, np.ndarray] = {}
-    qkv: dict[tuple[str, str], dict[str, np.ndarray]] = {}
-
-    for name, tensor in mlx_named.items():
-        canonical = _MLX_SEQUENTIAL.sub(r"\1\2.\3.", gru_name(name, _GRU_INVERSE))
-        matched = re.match(
-            r"^(.*\.(?:mha|self_attn))\.(query|key|value)_proj\.(weight|bias)$",
-            canonical,
-        )
-        if matched is not None:
-            stem, part, leaf = matched.groups()
-            qkv.setdefault((stem, leaf), {})[part] = tensor
-            continue
-        put_parameter(out, canonical, tensor)
-    for (stem, leaf), parts in qkv.items():
-        if parts.keys() != set(_QKV):
-            raise KeyError(f"incomplete MLX attention projections for {stem}.{leaf}")
-        put_parameter(
-            out,
-            f"{stem}.qkv_{leaf}",
-            np.concatenate([parts[part] for part in _QKV], axis=0),
-        )
+    for name, leaves in canonical_groups(mlx_named.keys()).items():
+        parts = [mlx_named[leaf] for leaf in leaves]
+        put_parameter(out, name, parts[0] if len(parts) == 1 else np.concatenate(parts))
     return out
 
 
@@ -167,6 +172,16 @@ def assemble(
     return policy
 
 
+def policy_arrays(agent: MLXActorCritic) -> dict[str, np.ndarray]:
+    if agent.compute_dtype != mx.float32:
+        raise ValueError("close the forward precision scope before saving")
+    return canonical_from_mlx(flat_numpy(agent.parameters()))
+
+
+def policy_buffers(agent: MLXActorCritic) -> dict[str, np.ndarray]:
+    return agent.buffers()
+
+
 def save_checkpoint(
     agent: MLXActorCritic,
     obs_space: ObservationSpace,
@@ -177,9 +192,7 @@ def save_checkpoint(
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
     """Save an MLX policy into the shared portable safetensors container."""
-    if agent.compute_dtype != mx.float32:
-        raise ValueError("close the forward precision scope before saving")
-    parameters = canonical_from_mlx(flat_numpy(agent.parameters()))
+    parameters = policy_arrays(agent)
     receipt = architecture_receipt(
         agent.config,
         obs_space,
@@ -190,7 +203,7 @@ def save_checkpoint(
         obs_space,
         path,
         parameters=parameters,
-        buffers=agent.buffers(),
+        buffers=policy_buffers(agent),
         readings=agent.readings,
         architecture=receipt,
         player_configs=player_configs,

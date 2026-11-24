@@ -9,7 +9,7 @@ from typing import Any
 
 import duckdb
 from etude.checkpoints import CheckpointRecord
-from etude.run import as_storage, located_runs
+from etude.run import RunListing, as_storage
 from etude.storage import Storage
 from etude.train.read import RunData, read, read_all
 from pydantic import TypeAdapter
@@ -337,9 +337,7 @@ def parent_run(storage: Storage, name: str, update: int, digest: str) -> RunData
     keys = sorted(storage.keys(""))
     matches = [
         ancestor
-        for ancestor in read_all(
-            storage, keys=keys, declarations=located_runs(storage, keys, run=name)
-        )
+        for ancestor in read_all(RunListing(storage, dict.fromkeys(keys), run=name))
         if any(
             cp.at.get("updates") == update and cp.artifact.sha256 == digest
             for cp in ancestor.checkpoints

@@ -281,3 +281,24 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   shared tensors equal the control's. A control without the log capacities is
   refused as a trunk. Test reliance by seating the same checkpoint with
   `config={"blank_decision_memory": True}` through `manabot.eval.pairing`.
+- Portable continuation and backend switching (`out/state/save-*/` with
+  `learner.safetensors`, `sampling.safetensors`, `continuation.json`):
+  `etude continue` needs a launched parent (on an `etude train` run it says
+  "the launcher has no run"), and `--resume --config` with another backend
+  refuses with `run_identity_conflict`. Emulate the launcher's continued child
+  locally: copy the parent's `track/<exp>/out` to `track/<new>/out`, then
+  `etude train manabot/recipes/local.py --experiment <new> --config
+  '{"backend":"mlx","device":"mps"}' --until updates=N` (about 30 s). Read
+  `run/sampling_reseeded` and `run/adam_steps_aligned` with
+  `read(...).points(m, clock="updates")`: only the first resumed update has
+  them (Torch→MLX on `local` showed 17 aligned clocks; MLX→Torch only the
+  reseed). Save folders are numbered by save, not update: read `at` in
+  `state.json`. For exactness, Ctrl-C a `--config '{"updates":4}'` run on a
+  pty once `out/policies/00000002-raw.safetensors` exists (exit 75),
+  `--resume`, and compare tensor bytes of `00000004-*.safetensors` with an
+  uninterrupted run; only `bc.counts.training_seconds` differs. A legacy save
+  comes from a detached `main` worktree with this checkout's `.so` when Rust
+  is unchanged (`learner.pt`/`optimizer.pt`/`ema.pt`); MLX refuses it, Torch
+  `--resume` rewrites it in the four-file layout, and a copy then continues
+  on MLX. Editing a seed in `continuation.json` must refuse naming that file
+  and leave `out/` byte-identical (Etude marks the attempt `failed`).
