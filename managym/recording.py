@@ -633,9 +633,9 @@ class _Capture:
         raise NotImplementedError
 
     def evidence(self) -> GameRecord:
-        """Deprecated spelling of snapshot, removed in 0.4.0."""
+        """Deprecated spelling of snapshot, removed in 0.3.0."""
         warnings.warn(
-            "evidence() is deprecated; use snapshot(); removal in 0.4.0",
+            "evidence() is deprecated; use snapshot(); removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -2305,11 +2305,11 @@ def read_record(path: Path) -> GameRecord:
 
 
 class FailureEvidence(GameRecord):
-    """Deprecated name of GameRecord, removed in 0.4.0."""
+    """Deprecated name of GameRecord, removed in 0.3.0."""
 
     def __init__(self, **data: Any) -> None:
         warnings.warn(
-            "FailureEvidence is deprecated; use GameRecord; removal in 0.4.0",
+            "FailureEvidence is deprecated; use GameRecord; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -2318,7 +2318,7 @@ class FailureEvidence(GameRecord):
 
 def read_failure(path: Path) -> GameRecord:
     warnings.warn(
-        "read_failure is deprecated; use read_record; removal in 0.4.0",
+        "read_failure is deprecated; use read_record; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -2329,7 +2329,7 @@ def __getattr__(name: str) -> Any:
     if name == "CapturedVector":
         warnings.warn(
             "managym.recording.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.4.0",
+            "use RecordedVectorEnv; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )

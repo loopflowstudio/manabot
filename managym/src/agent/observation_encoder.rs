@@ -165,7 +165,7 @@ pub enum InputLayout {
     /// the `stack` segment holds every spell and ability. Battlefield object
     /// and spell ids index their permanent and stack rows.
     OneToken,
-    /// Deprecated policy inputs v9 and v10 (`legacy_input`), removed in 0.4.0.
+    /// Deprecated policy inputs v9 and v10 (`legacy_input`), removed in 0.3.0.
     Legacy,
 }
 

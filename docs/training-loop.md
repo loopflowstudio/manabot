@@ -218,7 +218,7 @@ Save this recipe as `snapshot_recipe.py`. Plain and snapshot collection support
 `1 <= workers <= streams`. Adaptive collection uses one worker. Single-worker
 snapshot collection also accepts a buffered `SnapshotVector` or a factory taking
 `(observation_space, match, num_envs, seed)`. The deprecated
-`InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
+`InMemorySnapshotVector.factory` alias will be removed in 0.3.0.
 
 ```python
 from typing import Literal

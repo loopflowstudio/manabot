@@ -307,7 +307,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   (v6) and evaluation records write none; a reader ignores one in an older file
   (`manabot.model.world.current_binding_form`, optional `world` fields omitted
   when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
-  warning alias until 0.4.0. Matchup ids keep `w17` as the plain string
+  warning alias until 0.3.0. Matchup ids keep `w17` as the plain string
   `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
   literal, so retained tournaments find their records. Add no new label.
 - Main carries policy input v11, the fresh default
@@ -316,7 +316,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   permanents own one effective `CharacteristicsData` projection plus object
   identity and token status; spells own a `SpellData` projection, and abilities
   carry only source references. Old Python `.card` and flat characteristic
-  getters derive from those records (removed in 0.4.0); the `stack`
+  getters derive from those records (removed in 0.3.0); the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
   one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
@@ -324,7 +324,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
   deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
   `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
-  the best v9 one, not before 0.4.0); never extend it. A checkpoint,
+  the best v9 one, not before 0.3.0); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
   (`ac601834d` is the last revision supporting v1-v8). Add no other version
@@ -373,7 +373,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   (`column("facts", "value")` in `manabot.env.observation`). Give new columns
   or rows a directed native test on a constructed position.
   `ObservationSpace.encode`, `space.encoder` and `ObservationEncoder` are
-  warning aliases removed in 0.4.0; frozen experiment files keep them.
+  warning aliases removed in 0.3.0; frozen experiment files keep them.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native

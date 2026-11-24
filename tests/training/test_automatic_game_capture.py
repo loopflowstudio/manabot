@@ -535,5 +535,5 @@ def test_portable_record_names_warn_before_removal(name: str) -> None:
     from manabot.env import failures
     from managym import recording
 
-    with pytest.warns(DeprecationWarning, match="removal in 0.4.0"):
+    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
         assert getattr(failures, name) is getattr(recording, name)

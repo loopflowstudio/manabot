@@ -362,7 +362,7 @@ def parameter_health(
 def __getattr__(name: str) -> type[_StepRecorder]:
     if name == "StepRecorder":
         warnings.warn(
-            "StepRecorder moved to manabot.training.updates.health; removal in 0.4.0",
+            "StepRecorder moved to manabot.training.updates.health; removal in 0.3.0",
             DeprecationWarning,
             stacklevel=2,
         )

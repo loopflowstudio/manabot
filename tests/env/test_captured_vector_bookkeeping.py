@@ -305,7 +305,7 @@ def test_captured_vector_deprecated_alias_warns_and_resolves() -> None:
     import manabot.env.failures as failures
     import managym.recording as recording
 
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert recording.CapturedVector is recording.RecordedVectorEnv
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         assert failures.CapturedVector is failures.RecordedVectorEnv

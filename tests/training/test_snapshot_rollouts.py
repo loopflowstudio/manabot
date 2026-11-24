@@ -2135,7 +2135,7 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
 def test_deprecated_snapshot_factory_uses_native_deferred_slots(
     use_factory: bool,
 ) -> None:
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         vector = (
             InMemorySnapshotVector.factory(ObservationSpace(), Match(), 1, 42)
             if use_factory

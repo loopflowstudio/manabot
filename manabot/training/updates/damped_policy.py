@@ -72,7 +72,7 @@ def compute_targets(
 ) -> DampedTargets:
     """Compatibility reader for the original three damped target arrays."""
     warnings.warn(
-        "compute_targets is deprecated and will be removed in 0.4.0; use compute_batch_targets",
+        "compute_targets is deprecated and will be removed in 0.3.0; use compute_batch_targets",
         DeprecationWarning,
         stacklevel=2,
     )

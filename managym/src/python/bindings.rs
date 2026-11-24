@@ -1817,7 +1817,7 @@ fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> 
     py.import_bound("warnings")?.call_method1(
         "warn",
         (
-            format!("{old} is deprecated; use {new}; removal in 0.4.0"),
+            format!("{old} is deprecated; use {new}; removal in 0.3.0"),
             py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             // A native getter has no Python frame, so level 1 is the caller.
             1,
@@ -3177,7 +3177,7 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    /// Deprecated input v9/v10 card rows (removed in 0.4.0): the observation's
+    /// Deprecated input v9/v10 card rows (removed in 0.3.0): the observation's
     /// cards with battlefield objects and stack spells listed as cards again.
     fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
         let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
@@ -3898,7 +3898,7 @@ impl PyEnv {
     ) -> PyResult<Self> {
         if enable_behavior_tracking {
             py.import_bound("warnings")?.call_method1("warn", (
-                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.4.0",
+                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.3.0",
                 py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
             ))?;
         }
@@ -4968,7 +4968,7 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
-    /// Deprecated: encode with native default capacities. Removal in 0.4.0.
+    /// Deprecated: encode with native default capacities. Removal in 0.3.0.
     #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
@@ -4980,7 +4980,7 @@ impl PyEnv {
             py,
             "Env.encode_observation is deprecated; allocate buffers from \
              managym.observation_layout() or ObservationSpace and call \
-             managym.encode_observation_into; removal in 0.4.0",
+             managym.encode_observation_into; removal in 0.3.0",
         )?;
         let rust_obs = Observation::from(obs);
         if max_facts == Some(0) {
@@ -4998,7 +4998,7 @@ impl PyEnv {
         Ok(out.into_any().unbind())
     }
 
-    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.4.0.
+    /// Deprecated alias of `managym.encode_observation_into`. Removal in 0.3.0.
     #[pyo3(signature = (obs, out, action_overflow="error"))]
     fn encode_observation_into(
         &self,
@@ -5010,7 +5010,7 @@ impl PyEnv {
         warn_deprecated(
             py,
             "Env.encode_observation_into is deprecated; use \
-             managym.encode_observation_into; removal in 0.4.0",
+             managym.encode_observation_into; removal in 0.3.0",
         )?;
         let config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         let layout = super::layout_bindings::ObservationLayout::from_config(config)?;
@@ -5528,7 +5528,7 @@ fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
     pyo3::PyErr::warn_bound(
         py,
         &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.4.0.",
+        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.3.0.",
         2,
     )
 }

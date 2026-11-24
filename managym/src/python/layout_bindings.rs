@@ -32,7 +32,7 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 /// Keys are the encoder's array names; `policy_history` selects the public
 /// history rows of `events`; `turn_state` adds the `player_turn_state` and
 /// `card_turn_state` arrays (inputs v10 and v11); `legacy` selects the
-/// deprecated v9/v10 object rows (removed in 0.4.0) instead of input v11's
+/// deprecated v9/v10 object rows (removed in 0.3.0) instead of input v11's
 /// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
 /// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]

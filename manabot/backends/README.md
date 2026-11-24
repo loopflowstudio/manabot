@@ -181,7 +181,7 @@ Torch and MLX learners supply sampled gradient and parameter measurements on the
 first optimizer step of iteration 1 and every 25th iteration. An optimizer
 failure after clipping retains the gradient sample. The former
 `manabot.backends.torch.learner.StepRecorder` import is deprecated and will be
-removed in 0.4.0. The update, rollout and search-sampling modules can all be
+removed in 0.3.0. The update, rollout and search-sampling modules can all be
 imported with Torch absent.
 
 ## Algorithms are written once
@@ -247,7 +247,7 @@ backend against them:
 
 The shared `damped_policy_loss(rl, ...)` and `minibatch_objective` in
 `manabot.training.updates.objective` compose the policy and critic terms.
-Calling `backend.rl.damped_policy_loss(...)` emits a deprecation warning until removal in 0.4.0.
+Calling `backend.rl.damped_policy_loss(...)` emits a deprecation warning until removal in 0.3.0.
 
 An update writes its minibatch loss as a closure over the policy forward and
 hands it to the learner, because a functional framework differentiates a

@@ -410,7 +410,7 @@ impl PyVectorEnv {
         if !inferred {
             super::bindings::warn_deprecated(
                 buffers.py(),
-                "VectorEnv.set_buffers is deprecated; use VectorEnv.set_observation_layout for v11 observations; removal in 0.4.0",
+                "VectorEnv.set_buffers is deprecated; use VectorEnv.set_observation_layout for v11 observations; removal in 0.3.0",
             )?;
         }
         let layout = registered_layout(&buffers, layout)?;
@@ -798,7 +798,7 @@ fn registered_layout<'a>(
     }
     super::bindings::warn_deprecated(
         buffers.py(),
-        "set_buffers without layout is deprecated; pass layout=...; removal in 0.4.0",
+        "set_buffers without layout is deprecated; pass layout=...; removal in 0.3.0",
     )?;
     Ok(std::borrow::Cow::Owned(ObservationLayout::from_config(
         input_buffer_config(buffers)?,
@@ -1285,7 +1285,7 @@ fn encode_observations_into(
 ) -> PyResult<Vec<usize>> {
     super::bindings::warn_deprecated(
         py,
-        "encode_observations_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.4.0",
+        "encode_observations_into is deprecated; use encode_observation_batch for v11 observations; removal in 0.3.0",
     )?;
     if envs.len() > capacity {
         return Err(PyValueError::new_err(format!(

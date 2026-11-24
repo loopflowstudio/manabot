@@ -9,7 +9,7 @@
 //! else depends on it.
 //!
 //! Its whole surface is frozen; deleting it (and the `InputLayout::Legacy`
-//! branches that call it) removes inputs v9 and v10. Removal release: 0.4.0.
+//! branches that call it) removes inputs v9 and v10. Removal release: 0.3.0.
 //! MTG-353 owns the general mechanism for checkpoints across worlds.
 
 use std::collections::HashMap;

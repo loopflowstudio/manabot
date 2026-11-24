@@ -122,7 +122,7 @@ whole game. It is a read-only seat sequence; slicing and re-wrapping with
 A plain list of seats uses the open default.
 `MatchConfig.from_players(first, second, decklists="closed")`
 records native seats and rejects differing worlds. The old
-`PlayerConfig.disclosure` alias warns and will be removed in 0.4.0; disagreeing
+`PlayerConfig.disclosure` alias warns and will be removed in 0.3.0; disagreeing
 legacy seat values or hints conflicting with the game setting raise when
 creating a game. Evaluation matchups take
 `MatchConfig.decklists`, open or closed, never mixed; an
@@ -514,7 +514,7 @@ and steps through it with no policy, checkpoint or manabot. A loop of your own
 passes `games_path=` to its collector. Games cut off when the run stopped open
 as interrupted. A fresh game between current policies is an evaluation game,
 not a training game; evaluation records those the same way. `record_games(...)`
-and `manabot export-game` warn and are removed in 0.4.0. The
+and `manabot export-game` warn and are removed in 0.3.0. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 
@@ -571,7 +571,7 @@ keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
 identities. Main defaults to v11 and loads deprecated v9/v10 checkpoints
-until 0.4.0; see
+until 0.3.0; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-10` renders each native payload once with exact public source and

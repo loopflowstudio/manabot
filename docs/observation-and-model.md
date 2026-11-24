@@ -561,7 +561,7 @@ definition/reference after the source leaves. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
 The old Python `.card` accessors and flat characteristic getters are derived
-compatibility aliases, warn, and are removed in 0.4.0. Frozen viewer JSON
+compatibility aliases, warn, and are removed in 0.3.0. Frozen viewer JSON
 keeps its existing fields and bytes; those wire records are normalized on read.
 Historical captures whose object identity is missing or ambiguous are refused.
 Academy's retained `base_power`/`base_toughness` fields still mean effective
@@ -581,7 +581,7 @@ Checkpoints trained before v11 read the v9/v10 rows: a battlefield object or a
 stack spell was also a card row, permanent rows (38 columns) had no
 characteristics and stack abilities had no row. Selecting v9 or v10 warns
 (`DeprecationWarning`). They are removed once a v11 player is at least as
-strong as the strongest v9 one, and not before 0.4.0. Their rows are rebuilt from
+strong as the strongest v9 one, and not before 0.3.0. Their rows are rebuilt from
 the same observation by `agent/legacy_input.rs` and
 `manabot/env/legacy_input.py`, and match the encoders of 452d7b5357 byte for
 byte; the model reads them through the same `ActorCritic`, without a stack

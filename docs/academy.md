@@ -349,7 +349,7 @@ with serve(port=0) as academy:
   `RecordedGame` values (`index`, `seed`, `stream`, `players`,
   `decisions`, `ended`, `digest`), for choosing one in code. The former
   `deal_seed`, `leg`, `decks` and `game_trace_sha256` properties warn and are
-  removed in 0.4.0.
+  removed in 0.3.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
   opens it in the default browser; `academy.open()` opens Academy with no game.
@@ -419,7 +419,7 @@ other. Statistics over a recorded fraction describe that fraction
 | `replay.rejected` | The games were recorded in another world or with other card content; the message names the build to use. |
 
 `record_games(...)`, `TrainingGames` and `manabot export-game` still work,
-warn, and are removed in 0.4.0. Receipts and
+warn, and are removed in 0.3.0. Receipts and
 exported games they already wrote keep opening.
 
 ### Play a game

@@ -48,7 +48,7 @@ type PolicyObservation = ObservationBuffers | managym.ObservationBatch
 
 # Release that removes `ObservationSpace.encode`, `space.encoder` and
 # `ObservationEncoder`.
-REMOVAL_RELEASE = "0.4.0"
+REMOVAL_RELEASE = "0.3.0"
 
 # Input v11 with public history and decision memory: every array a v11
 # reader can meet. Legacy v9/v10 rows are `observation_layout(legacy=True)`.

@@ -136,15 +136,15 @@ def test_encoder_names_warn_and_name_their_removal(
 ) -> None:
     _, obs = board
     space = ObservationSpace()
-    with pytest.warns(DeprecationWarning, match=r"ObservationSpace\.encode .*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"ObservationSpace\.encode .*0\.3\.0"):
         encoded = space.encode(obs)
     expected = encode_observation(space, obs)
     assert encoded.keys() == expected.keys()
     for key, value in expected.items():
         np.testing.assert_array_equal(encoded[key], value, err_msg=key)
-    with pytest.warns(DeprecationWarning, match=r"encoder is deprecated .*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"encoder is deprecated .*0\.3\.0"):
         assert space.encoder is space
-    with pytest.warns(DeprecationWarning, match=r"ObservationEncoder .*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"ObservationEncoder .*0\.3\.0"):
         layout = observation.ObservationEncoder(ObservationConfig(max_actions=7))
     assert layout.config.max_actions == layout.allocate()["actions"].shape[0] == 7
 
@@ -323,7 +323,7 @@ def test_deprecated_catalog_names_warn_and_delegate(
 
 def test_world_version_warns_and_names_its_removal() -> None:
     assert "WORLD_VERSION" not in vars(managym)
-    with pytest.warns(DeprecationWarning, match=r"WORLD_VERSION.*0\.4\.0"):
+    with pytest.warns(DeprecationWarning, match=r"WORLD_VERSION.*0\.3\.0"):
         assert managym.WORLD_VERSION == "w17"
     assert set(managym.world_identity()) == {"card_digest"}
 
@@ -398,7 +398,7 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
     space = ObservationSpace()
     vector = managym.VectorEnv(1)
     with pytest.warns(
-        DeprecationWarning, match=r"set_observation_layout.*0\.4\.0"
+        DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"
     ):
         vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
 
@@ -407,7 +407,7 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
         [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     )
     with pytest.warns(
-        DeprecationWarning, match=r"encode_observation_batch.*0\.4\.0"
+        DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"
     ):
         managym.encode_observations_into([env], space.layout, space.allocate(1), 1)
 
@@ -417,16 +417,16 @@ def test_layoutless_vector_registration_warns_and_preserves_memory_configuration
 ):
     buffers = allocate_vector_buffers(ObservationSpace(), 1)
     plain = managym.VectorEnv(1)
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         plain.set_buffers(buffers)
     with (
-        pytest.warns(DeprecationWarning, match="0.4.0"),
+        pytest.warns(DeprecationWarning, match="0.3.0"),
         pytest.raises(ValueError, match="unexpected buffer"),
     ):
         plain.set_buffers(dict(buffers, unknown=buffers["rewards"]))
     memory = managym.VectorEnv(1, decision_memory=True)
     with (
-        pytest.warns(DeprecationWarning, match="0.4.0"),
+        pytest.warns(DeprecationWarning, match="0.3.0"),
         pytest.raises(ValueError, match="decision memory"),
     ):
         memory.set_buffers(buffers)

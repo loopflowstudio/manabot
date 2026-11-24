@@ -129,7 +129,7 @@ def test_published_damped_loss_calls_the_shared_rule(name: str) -> None:
     expected = damped_policy_loss(
         backend.rl, *rows, clip=0.2, collection_kl=0.1, tau=0.05
     )
-    with pytest.warns(DeprecationWarning, match="0.4.0"):
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
         actual = backend.rl.damped_policy_loss(
             *rows, clip=0.2, collection_kl=0.1, tau=0.05
         )

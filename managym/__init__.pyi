@@ -117,7 +117,7 @@ def observation_layout(
     is a caller-selected capacity. `policy_history` selects the public history
     rows of `events` instead of raw events; `turn_state` adds
     `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
-    selects the deprecated v9/v10 object rows (removed in 0.4.0) instead of
+    selects the deprecated v9/v10 object rows (removed in 0.3.0) instead of
     input v11's one-token rows and `stack`. Seats are viewer-relative.
     No game or buffer is created.
     """
@@ -425,14 +425,14 @@ class Env:
         obs: Observation,
         max_facts: int | None = None,
     ) -> Dict[str, np.ndarray]:
-        """Deprecated: arrays at native default capacities; removal in 0.4.0."""
+        """Deprecated: arrays at native default capacities; removal in 0.3.0."""
     def encode_observation_into(
         self,
         obs: Observation,
         out: Dict[str, np.ndarray],
         action_overflow: str = "error",
     ) -> None:
-        """Deprecated alias of `managym.encode_observation_into`; removal in 0.4.0."""
+        """Deprecated alias of `managym.encode_observation_into`; removal in 0.3.0."""
 
 class StructuredOfferSet:
     def projection_json(self) -> str: ...
@@ -603,7 +603,7 @@ class VectorEnv:
         *,
         layout: ObservationLayout | None = None,
     ) -> None:
-        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.4.0."""
+        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
         ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
@@ -695,7 +695,7 @@ class PlayerConfig:
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Deprecated per-seat hint, removed in 0.4.0; use GameSetup.decklists.
+    # Deprecated per-seat hint, removed in 0.3.0; use GameSetup.decklists.
     disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
@@ -1050,7 +1050,7 @@ class ObservationCharacteristics:
 class Card:
     """A visible card outside the battlefield and stack.
 
-    Flat characteristic accessors are deprecated aliases, removed in 0.4.0.
+    Flat characteristic accessors are deprecated aliases, removed in 0.3.0.
     """
 
     characteristics: ObservationCharacteristics
@@ -1148,7 +1148,7 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
-    # Derived characteristic aliases warn; removed in 0.4.0.
+    # Derived characteristic aliases warn; removed in 0.3.0.
     power: int
     toughness: int
     is_animated: bool
@@ -1182,7 +1182,7 @@ class Permanent:
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
     @property
-    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.4.0")
+    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.3.0")
     def card(self) -> Card | None: ...
 
 class Turn:
@@ -1246,7 +1246,7 @@ class StackObject:
     # Whether a spell's kicker cost was paid.
     kicked: bool
     @property
-    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.4.0")
+    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.3.0")
     def card(self) -> Card | None: ...
 
 class EventData:
@@ -1283,7 +1283,7 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
-    # Deprecated input v9/v10 card rows (removed in 0.4.0).
+    # Deprecated input v9/v10 card rows (removed in 0.3.0).
     def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
@@ -1294,7 +1294,7 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
-# Deprecated: the label of the last numbered world; removed in 0.4.0.
+# Deprecated: the label of the last numbered world; removed in 0.3.0.
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
@@ -1399,7 +1399,7 @@ def encode_observations_into(
     buffers: Dict[str, np.ndarray],
     capacity: int,
 ) -> list[int]:
-    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.4.0.
+    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
 
     Write each env's acting-player view into rows 0..len(envs) of buffers.
 
