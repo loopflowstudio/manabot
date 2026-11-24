@@ -4511,7 +4511,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
     };
     spell(&mut game, "Time Stop");
     game.exile_top_cards_to_play(player, 1, crate::state::ability::PlayWindow::ThisTurn);
-    let playable = game.state.cast_permissions.exile_grants[0].object;
+    let playable = game.exile_granted_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     assert_eq!(
@@ -4527,7 +4527,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         .pending
         .iter()
         .any(|line| line.contains("turn is ending")));
-    assert!(game.exile_grant_on(playable).is_some());
+    assert!(game.play_grants_on(playable).next().is_some());
     let copy_in_exile = game.state.zones.successor(copy).unwrap();
     assert_eq!(
         game.state.zones.zone_of(copy_in_exile),
@@ -4550,7 +4550,7 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         assert!(fork.state.permanents[second].is_none());
         assert_eq!(fork.state.zones.zone_of(copy_in_exile), None);
         assert!(
-            fork.exile_grant_on(playable).is_none(),
+            fork.play_grants_on(playable).next().is_none(),
             "this-turn play permission expires before cleanup priority"
         );
         assert_eq!(fork.state.stack_objects.len(), 1);
@@ -4796,6 +4796,7 @@ fn prepared_seed_sutures() -> (Game, [ObjectId; 2], [ObjectId; 2]) {
         419,
         true,
     );
+    game.keep_opening_hands();
     let player = game.active_player();
     let opponent = PlayerId(1 - player.0);
     game.state.turn.current_phase = 1;
