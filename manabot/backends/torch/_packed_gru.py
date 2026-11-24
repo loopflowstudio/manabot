@@ -18,8 +18,7 @@ Packed layout (PyTorch's): sequences sorted by descending length; step t holds
 `sizes[t]` rows, the prefix of that order, at rows `offsets[t]:offsets[t+1]`.
 """
 
-from __future__ import annotations
-
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -32,7 +31,7 @@ from torch.nn.utils.rnn import PackedSequence
 def packed_gru(
     gru: nn.GRU,
     data: torch.Tensor,
-    sizes: list[int],
+    sizes: Sequence[int],
     initial: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Run `gru` over packed rows `data` [N,I] with live counts `sizes`.
@@ -53,7 +52,7 @@ def packed_gru(
 def hand_packed_gru(
     gru: nn.GRU,
     data: torch.Tensor,
-    sizes: list[int],
+    sizes: Sequence[int],
     initial: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """`packed_gru` with the input projection hoisted and a hand-written backward."""
@@ -65,7 +64,7 @@ def hand_packed_gru(
     )
     with torch.autocast(data.device.type, enabled=False):
         projected = F.linear(data.to(w_ih.dtype), w_ih, b_ih)
-        state = (
+        initial = (
             projected.new_zeros(sizes[0], gru.hidden_size)
             if initial is None
             else initial.to(projected.dtype)
@@ -77,13 +76,13 @@ def hand_packed_gru(
         previous = [np.arange(sizes[0]) + total] + [
             offsets[step - 1] + np.arange(sizes[step]) for step in range(1, len(sizes))
         ]
-        following = sizes[1:] + [0]
+        following = [*sizes[1:], 0]
         final = [
             offsets[step] + np.arange(following[step], sizes[step])
             for step in range(len(sizes))
         ][::-1]
         rows = torch.from_numpy(np.concatenate(previous + final)).to(data.device)
-        outputs = _Recurrence.apply(projected, w_hh, b_hh, state, rows[:total], sizes)
+        outputs = _Recurrence.apply(projected, w_hh, b_hh, initial, rows[:total], sizes)
         return outputs, outputs[rows[total:]]
 
 
@@ -103,7 +102,7 @@ class _Recurrence(torch.autograd.Function):
         b_hh: torch.Tensor,
         initial: torch.Tensor,
         previous_rows: torch.Tensor,
-        sizes: list[int],
+        sizes: Sequence[int],
     ) -> torch.Tensor:
         width = w_hh.shape[1]
         state = initial
@@ -130,7 +129,7 @@ class _Recurrence(torch.autograd.Function):
         ctx: Any, upstream: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, None, None]:
         projected, w_hh, b_hh, initial, previous_rows, result = ctx.saved_tensors
-        sizes: list[int] = ctx.sizes
+        sizes: Sequence[int] = ctx.sizes
         width = w_hh.shape[1]
         # Recompute every row's gates at once from its previous state.
         previous = torch.cat([result, initial])[previous_rows]

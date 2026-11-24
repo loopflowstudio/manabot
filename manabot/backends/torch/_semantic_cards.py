@@ -158,7 +158,7 @@ class SemanticCardEncoder(nn.Module):
         # at every chunk boundary. The same GRU encodes every real token once.
         # MPS runs the hand-written recurrence, which has no such cost, in one call.
         tokens = self.token_embedding(programs.tokens)
-        steps = list(programs.schedule.sizes)
+        steps = programs.schedule.sizes
         chunk = len(steps) if tokens.device.type == "mps" else 64
         state: torch.Tensor | None = None
         finished: list[torch.Tensor] = []

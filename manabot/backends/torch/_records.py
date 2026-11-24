@@ -34,6 +34,6 @@ class RecordReducer(nn.Module):
     ) -> torch.Tensor:
         """Reduce prepared sequences without rediscovering their routes on device."""
         data = tokens[schedule.gather]
-        _, hidden = packed_gru(self.gru, data, list(schedule.sizes))
+        _, hidden = packed_gru(self.gru, data, schedule.sizes)
         pooled = hidden[schedule.restore]
         return self.output(torch.tanh(pooled))

@@ -106,7 +106,7 @@ class FactEncoder(nn.Module):
             packed, _ = packed_gru(
                 self.program_sequence,
                 tokens[program.schedule.gather],
-                list(program.schedule.sizes),
+                program.schedule.sizes,
             )
             sequence = packed[program.schedule.unpack]
             hidden = hidden.masked_scatter(

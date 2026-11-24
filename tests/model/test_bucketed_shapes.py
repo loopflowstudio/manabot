@@ -26,7 +26,7 @@ from manabot.policy.buckets import (
     row_needs,
     sizes_of,
 )
-from manabot.policy.prepare import prepare
+from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
@@ -501,12 +501,15 @@ def test_mps_live_fact_routes_match_padded_outputs_and_gradients(
     if not bucketed:
         reference.bucketed_shapes = False
     padded_input = device_input(reference, obs)
-    monkeypatch.setattr(ActorCritic, "device_type", property(lambda _: "mps"))
+    monkeypatch.setattr(ActorCritic, "device_type", "mps")
     live_input = device_input(reference, obs)
     live = int((obs["facts"][..., FACT_VALID_INDEX] == 1).sum())
     assert live > 0 and padded_input.facts.programs is not None
     assert live_input.facts.compact
-    assert live_input.facts.kinds.shape == (1, max(64, 1 << (live - 1).bit_length()))
+    assert live_input.facts.kinds.shape == (
+        1,
+        max(MIN_LIVE_FACT_ROWS, 1 << (live - 1).bit_length()),
+    )
     gradients = []
     outputs = []
     for prepared in (padded_input, live_input):
