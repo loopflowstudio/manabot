@@ -57,3 +57,12 @@
   `manabot/backends/torch/_decision_memory.py`, the root selection rules use
   host record keys, viewer identities and native epochs. A second traversal
   could diverge on the restored branches introduced by `82c5d1d1b7`.
+
+## Slice 4
+
+- A 65-record prefix on MLX CPU prepared 65 records cold and one warm.
+  Reusing the same record nodes after changing the native epoch or viewer
+  lineage prepared all 65 again. Each result agreed with the dense forward.
+- The memory gate is a rank-zero checkpoint parameter. NumPy's
+  `ascontiguousarray` promotes it to shape `(1,)`; requesting C order in
+  `asarray` preserves the scalar through the MLX checkpoint mapping.

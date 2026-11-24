@@ -25,47 +25,7 @@ identity and native epoch even when branches share the same record nodes.
 1. **Done (`90211689b7`)** — Gray Ogre PPO runs on MLX through the shared update with `world=None`, hashed records, and historical mean. A Torch-blocked recipe registered a policy after one MPS Adam step and both backends reloaded it with identical outputs.
 2. **Done (`ec62204d49`)** — Seven architecture cases matched Torch on forwards, gradients and clipped Adam weights. A collected WDL rollout trained through the shared categorical returns and the single `UpdateBackend` / `RL` surface.
 3. **Done (`a95bdce183`)** — Ten focused tests passed, including belief-row forward, gradient and Adam parity, portable sampler reads across backends and legacy Torch zip reads. The linked Torch-blocked Etude jobs registered the PPO policy and its bound sampler.
-4. **Next — recent events, decision memory, live tokens, and docs.**
-   - Port Torch's `RecentEventEncoder` over `Prepared.events` and include
-     event validity in the context mask for stream normalization.
-   - Port Torch's `DecisionMemory` over prepared prefixes for GRU and
-     transformer with one and four summaries. Let `PackedGRU.run` start
-     from supplied states for causal DAG fold levels. Implement the memory
-     gate, projection, scale and `memory_gates()` on attention layers.
-     Wire `memory_roots` through `PolicyInference` and `prepare_admitted`.
-     Share `CollectionMemory`'s record traversal and lifetime rules for GRU
-     serving, with backend-specific tensor operations. Keep learner folds
-     differentiable, cached serving roots detached and scoped to frozen
-     weights, and the current last record live. Use retained prefixes without
-     per-row raw padding and keep one draw per original row group.
-   - In `mlx/checkpoint.py`, map the `detail_map`, `reference_map`,
-     `member_map` and `record_output` sequentials and split/concat
-     `.self_attn.qkv_*` like `.mha.qkv_*`. Use the shared
-     `pretrained_memory_branch` check in MLX. Build a memory branch with the
-     published policy's readings and copy the exact common tensors, keeping
-     the newly initialized memory encoder, gates and projections.
-   - Move the live-token device check from `SelfPlay.valid_settings` to
-     `SelfPlayRuntime.admit_execution` before opening a run. Torch requires
-     CUDA for self-play with live tokens but still supports CPU policy
-     construction and checkpoint loading for reference checks. MLX admits
-     CPU and MPS. Thread `live_tokens` and existing bucket options through
-     MLX construction and checkpoint loading. The tracked loop already
-     receives a run from `track`. Check at the recipe boundary before
-     `track` and cover `self_play` and `fresh_iteration` before they resume
-     state or create output.
-   - In MLX attention, gather valid objects and any neutral critic token
-     with `Prepared.live_index`. Keep gates, norms, projections and MLPs
-     on the packed rows. Derive sequence lengths, scatter positions and
-     the additive key mask on the host from `Prepared.live_offsets`.
-     Around fused SDPA, scatter Q/K/V to `[B, H, max_live, d]`, gather
-     packed results, and restore original object coordinates at the end.
-     The attention bound is `O(B * max_live^2)`, with no device scalar
-     read and no batch-wide `[T, T]` mask.
-   - Remove the remaining architecture rejections. Keep input versions
-     9–11 and existing input and checkpoint admission. Reconcile
-     `manabot/backends/mlx.md`, `manabot/backends/README.md`,
-     `docs/observation-and-model.md`, and `docs/training.md` with the
-     verified entry points and limits.
+4. **Done (`230c18b879`)** — Recent events and both decision-memory encoders run on MLX. GRU collection shares the lifetime-bound record cache with Torch. Live-token attention packs all object layers and bounds SDPA by the longest live sequence. MLX can branch from a published control with its saved column readings. Self-play admits live tokens on MLX CPU/MPS and Torch CUDA.
 
 ## Acceptance
 
@@ -90,14 +50,21 @@ identity and native epoch even when branches share the same record nodes.
 - The remaining architecture refusals are removed. Input-version refusal and
   checkpoint error context still work.
 
-Rebuild the Apple Silicon engine for `82c5d1d1b7` before the gate so native
-snapshot and vector bindings match the checkout.
+## Next — Apple Silicon gate
+
+The local CPython 3.13 extension was rebuilt from this checkout after test
+collection found the previous binary lacked `managym.SlotLoad`. The five new
+architecture cases passed the existing forward, gradient and clipped Adam
+tolerances. A bounded PPO update branched from a Torch control with legacy
+readings, trained nonzero gates and reloaded them on MLX CPU and MPS.
+The full gate and the captured parity check in `docs/development.md` remain.
 
 ```sh
 uv run --extra mlx --extra dev pytest -q \
   tests/model/test_mlx_backend.py tests/belief \
   tests/training/test_update_backends.py tests/training/test_update_backend_protocols.py \
   tests/training/test_memory_chunk_cache.py tests/training/test_memory_prefix_storage.py \
+  tests/training/test_memory_collection_fold.py tests/training/test_memory_learner_fold.py \
   tests/training/test_mlx_workflow.py tests/training/test_recipe_etude.py \
   tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py \
   tests/test_package_boundaries.py

@@ -1,34 +1,36 @@
-at: a95bdce1839f3429fc097b5c23787724943f56ea
+at: 230c18b8790cb54c55886a9eb50a8e2da93e41f4
 first:
   - path: manabot/backends/mlx.md
-    why: Policy outputs, training commands and intended backend coverage
-  - path: manabot/belief/protocol.py
-    why: Backend contract for sampler weights and search draws
+    why: Supported architectures, training commands and checkpoint formats
+  - path: docs/observation-and-model.md
+    why: Live-token coordinates and whole-game memory semantics
+  - path: manabot/training/state/backend.py
+    why: Backend admission for self-play execution
+  - path: manabot/policy/collection_memory.py
+    why: Shared GRU cache ownership and native lineage checks
+  - path: manabot/backends/mlx/decision_memory.py
+    why: Differentiable record encoders and frozen serving roots
+  - path: manabot/backends/mlx/live_tokens.py
+    why: Packed projections and bounded attention
+  - path: manabot/backends/mlx/policy.py
+    why: Join history, belief and memory to both heads
+  - path: manabot/backends/mlx/checkpoint.py
+    why: Map canonical weights and gradients across architectures
+  - path: manabot/backends/mlx/runtime.py
+    why: Branch from the published control's readings and weights
+  - path: manabot/training/updates/backend.py
+    why: Common learner and critic interfaces for both updates
+  - path: manabot/policy/returns.py
+    why: Outcome mixtures at terminals and bootstrap cuts
+  - path: manabot/training/updates/ppo.py
+    why: One clipped PPO step across execution chunks
   - path: manabot/belief/checkpoint.py
-    why: Portable bytes, legacy reads, identities and training seeds
-  - path: manabot/recipes/belief_sampler.py
-    why: Fit and register from the delivered policy
+    why: Portable sampler storage and legacy Torch reads
   - path: manabot/backends/mlx/belief.py
     why: Physical odds and learned joint hand probabilities
   - path: manabot/backends/mlx/belief_fit.py
-    why: Train recurrent corrections from private hand labels
-  - path: manabot/training/updates/backend.py
-    why: Shared contract for learners and both critic types
-  - path: manabot/policy/returns.py
-    why: Frozen outcome mixtures across terminals and bootstrap cuts
-  - path: manabot/backends/mlx/policy.py
-    why: Belief rows, attention variants and critic readouts
-  - path: manabot/backends/mlx/collection.py
-    why: Store each sampled decision's outcome probabilities
-  - path: manabot/training/updates/targets.py
-    why: Build training targets from the collected distributions
-  - path: manabot/training/updates/ppo.py
-    why: Accumulate one clipped PPO step across execution chunks
-  - path: manabot/training/rollout/admission.py
-    why: Bound host preparation and release prefetched rows
+    why: Fit the recurrent corrections from private hand labels
   - path: tests/model/test_mlx_backend.py
-    why: Compare real forwards, gradient directions and Adam weights
-  - path: tests/belief/test_sampling_fit.py
-    why: Compare joint probabilities across writers and readers
+    why: Compare forwards, gradients, optimizer steps and warm starts
   - path: tests/training/test_mlx_workflow.py
-    why: Check linked jobs and artifacts with Torch imports blocked
+    why: Verify linked job artifacts with Torch imports blocked
