@@ -397,6 +397,8 @@ pub(crate) struct EventResult {
     pub moved: Option<ObjectId>,
     pub excess_damage: Option<i32>,
     pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
+    /// Life this damage member gains through lifelink; its batch commits it.
+    pub lifelink: Option<crate::flow::damage::LifelinkGain>,
 }
 
 pub(crate) enum BatchProgress {
@@ -691,6 +693,7 @@ impl Game {
             }
             results.push(result);
         }
+        self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
         if let EventBinding::Moved {
             linked: Some((source, returns)),
             ..

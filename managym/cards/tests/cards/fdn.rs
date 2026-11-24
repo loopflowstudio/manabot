@@ -2714,6 +2714,75 @@ fn bloodthirsty_conqueror_gains_each_actual_loss_with_its_own_amount() {
     s.assert_winner(0);
 }
 
+/// A lifelink creature dealing damage to several recipients at once gains
+/// life once (CR 119.9; Exemplar of Light ruling), so Exemplar places one
+/// counter for Sire of Seven Deaths' trample through two blockers. Two
+/// lifelink attackers dealing damage at the same time are two gains.
+#[test]
+fn exemplar_of_light_counts_one_gain_per_lifelink_source() {
+    use crate::support::inspect::counters;
+    use managym::agent::action::{Action, ActionSpaceKind};
+
+    let mut s = five_color_setup(&[
+        "Exemplar of Light",
+        "Sire of Seven Deaths",
+        "Savannah Lions",
+    ]);
+    let exemplar = s.force_permanent_on_battlefield(0, "Exemplar of Light");
+    let sire = s.force_permanent_on_battlefield(0, "Sire of Seven Deaths");
+    let lions = [
+        s.force_permanent_on_battlefield(1, "Savannah Lions"),
+        s.force_permanent_on_battlefield(1, "Savannah Lions"),
+    ];
+    crate::support::game::clear_summoning_sickness(&mut s, sire);
+    crate::support::play::pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, sire);
+    crate::support::play::pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    // Menace: both Lions block the Sire.
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(a, Action::DeclareBlocker { blocker, attacker: Some(at), .. }
+                    if lions.contains(blocker) && *at == sire)
+            })
+            .expect("block the Sire");
+        s.step_action(index);
+    }
+    s.advance_to_active_step(0, StepKind::End);
+    s.assert_life(0, 27);
+    s.assert_life(1, 15);
+    assert_eq!(s.game().state.turn.history[0].life_gains, 1);
+    assert_eq!(counters(&s, exemplar), 1);
+
+    // Two lifelink sources in the same damage step are two gains.
+    let mut s = five_color_setup(&["Exemplar of Light", "Healer's Hawk"]);
+    let exemplar = s.force_permanent_on_battlefield(0, "Exemplar of Light");
+    let hawks = [
+        s.force_permanent_on_battlefield(0, "Healer's Hawk"),
+        s.force_permanent_on_battlefield(0, "Healer's Hawk"),
+    ];
+    for hawk in hawks {
+        crate::support::game::clear_summoning_sickness(&mut s, hawk);
+    }
+    crate::support::play::pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        match s.action_space().actions.iter().position(|a| {
+            matches!(a, Action::DeclareAttacker { permanent, attack: true, .. }
+                if hawks.contains(permanent))
+        }) {
+            Some(index) => s.step_action(index),
+            None => s.decline_attack(),
+        }
+    }
+    s.advance_to_active_step(0, StepKind::End);
+    s.assert_life(0, 22);
+    assert_eq!(s.game().state.turn.history[0].life_gains, 2);
+    assert_eq!(counters(&s, exemplar), 2);
+}
+
 #[test]
 fn exemplar_of_light_draws_once_each_turn_for_counters_on_itself() {
     use crate::support::inspect::{counters, hand};

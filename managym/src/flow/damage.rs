@@ -16,7 +16,33 @@ use crate::{
     },
 };
 
+/// Life a lifelink source's damage gains its controller, committed by the
+/// damage's simultaneous batch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LifelinkGain {
+    pub source: ObjectId,
+    pub controller: PlayerId,
+    pub amount: i32,
+}
+
 impl Game {
+    /// Commit each lifelink source's total from one simultaneous damage
+    /// event as a single gain, in first-damage order: a creature that deals
+    /// damage to several recipients at once gains life once (CR 119.9), and
+    /// two lifelink sources are two gains.
+    pub(crate) fn commit_lifelink_gains(&mut self, gains: impl IntoIterator<Item = LifelinkGain>) {
+        let mut totals: Vec<LifelinkGain> = Vec::new();
+        for gain in gains {
+            match totals.iter_mut().find(|total| total.source == gain.source) {
+                Some(total) => total.amount += gain.amount,
+                None => totals.push(gain),
+            }
+        }
+        for total in totals {
+            self.commit_life_change(total.controller, total.amount);
+        }
+    }
+
     /// Excess after replacement, measured against the pre-commit creature.
     /// Deathtouch makes one remaining damage lethal (CR 120.4a).
     pub(crate) fn excess_for_damage(
@@ -60,11 +86,16 @@ impl Game {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
         });
-        let lifelink_controller = source.and_then(|object_ref| {
+        let lifelink = source.and_then(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Lifelink))
                 .then(|| self.source_controller(object_ref))
                 .flatten()
+                .map(|controller| LifelinkGain {
+                    source: object_ref,
+                    controller,
+                    amount,
+                })
         });
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
@@ -159,9 +190,9 @@ impl Game {
             }
         }
 
-        if let Some(controller) = lifelink_controller {
-            self.commit_life_change(controller, amount);
-        }
+        // The batch commits the gain: one source's damage dealt at the same
+        // time is one life-gain event (CR 120.3f, 119.9).
+        result.lifelink = lifelink;
         result.committed = true;
         result
     }
