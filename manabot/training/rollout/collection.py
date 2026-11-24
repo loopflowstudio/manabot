@@ -3,7 +3,8 @@
 A ``Collector`` is the state of some native game streams: ``open_collector``
 starts them, ``collect`` (or ``collect_pair``) steps them under a frozen
 behavior scope and returns a ``RolloutBatch``, and ``close_collector`` releases
-them. At an update boundary, capture_collector retains the native roots for replay. Who learns and when a batch closes are separate declarations. One-seat collection
+them. At an update boundary, ``capture_collector`` retains the native roots for
+replay. Who learns and when a batch closes are separate declarations. One-seat collection
 alternates learner seats by stream; default both-seat self-play keeps a separate
 trajectory for each seat. Complete-game closure collects at least the requested
 decisions per native stream, then finishes its current game. Complete trajectories
@@ -42,6 +43,7 @@ from manabot.env.memory_store import (
     MEMORY_FIELDS,
     MemoryStore,
     Prefix,
+    PrefixIdentity,
     PrefixObservation,
     select_rows,
 )
@@ -105,7 +107,7 @@ from manabot.training.state.game_errors import (
     GameOutcome,
     RecordAttempt,
 )
-from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig
+from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig, SlotLoad
 from managym.recording import DecisionAnnotation
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
@@ -250,6 +252,7 @@ class _EpisodeAssignment:
     generation: int | None = None
     ordinal: int = -1
     choices: int = 0
+    # This slot already holds the fresh opening for the next allocation.
     fresh_ready: bool = False
 
 
@@ -715,7 +718,7 @@ class Collector:
     # The calling loop owns enablement and resets this timer. Only the
     # collecting thread records host intervals; workers never share it.
     profiler: Profiler
-    # ShardedVectorEnv, RecordedVectorEnv or a diagnostic root's Python vector.
+    # Native streams, an injected snapshot vector, or a diagnostic root.
     _env: Any
     _buffers: dict[str, np.ndarray]
     _observation_keys: list[str]
@@ -751,7 +754,8 @@ class Collector:
     _results: list[GameResult] = field(default_factory=list)
     _allocations: list[AllocationRow] = field(default_factory=list)
     _uncommitted_batch: RolloutBatch | None = None
-    _needs_assignment: set[int] = field(default_factory=set)
+    # Ended ordinary games, including action-limited slots still live in native.
+    _needs_refill: set[int] = field(default_factory=set)
     _reverse_cells: list[int] = field(default_factory=list)
     _episodes: list[_EpisodeAssignment] = field(default_factory=list)
     capture_predicate: CapturePredicate | None = None
@@ -835,15 +839,16 @@ def stream_roots(env: RecordedVectorEnv | BufferedStreams) -> list[StreamRootSta
 
 
 def capture_collector(collector: Collector) -> CollectorSnapshot:
-    """Capture settled slots without drawing from the collector or its opponent.
+    """Capture replayable roots without sampling policy actions.
 
-    A snapshot collector first opens the fresh game its next allocation would
-    install in each parked slot. Playing that opening, or overwriting it with a
-    branch and refunding its seed, matches the uncaptured collector.
+    Open the next fresh game for each settled slot that needs one. A snapshot
+    allocation can play that opening or overwrite it and refund its seed.
     """
     env = collector._env
     if collector._episodes:
         _open_fresh_roots(collector)
+    elif collector._needs_refill:
+        _refill(collector, sorted(collector._needs_refill))
     return CollectorSnapshot(
         schema_version=1,
         num_envs=collector.num_envs,
@@ -1094,7 +1099,6 @@ def open_collector(
             num_envs,
             seed,
             workers,
-            auto_reset=not snapshots,
             decision_memory=capture_decisions,
             decision_memory_include_own=memory.decision_memory_include_own,
             games_path=games_path,
@@ -1188,7 +1192,11 @@ def open_collector(
             action_overflow=observation_space.config.action_overflow,
             layout=observation_space.layout,
         )
-        if not uniform_roster:
+        if sampler is not None:
+            collector.stream_matches = [
+                _assigned_match(collector, a) for a in assignments
+            ]
+        elif not uniform_roster:
             collector.stream_matches = stream_matches(
                 match, num_envs, matchup_curriculum
             )
@@ -1210,12 +1218,7 @@ def open_collector(
             )
         if snapshot is not None:
             reconstruct_collector(collector, snapshot, deck_source)
-        elif sampler is not None:
-            collector.stream_matches = [
-                _assigned_match(collector, a) for a in assignments
-            ]
-            env.reset_each_into_buffers([m.to_rust() for m in collector.stream_matches])
-        elif matchup_curriculum in ("fixed", "elemental-uniform"):
+        elif sampler is None and matchup_curriculum in ("fixed", "elemental-uniform"):
             setup = match.to_rust()
             if deck_source is not None:
                 setup = GameSetup(setup, decklists=deck_source.decklists)
@@ -1255,11 +1258,6 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
 
     Only `rows` hold new games: a stream's setup is fixed until it resets.
     """
-    if collector._sampler is not None:
-        for row in rows:
-            collector.stream_matches[row] = _assigned_match(
-                collector, collector._assignments[row]
-            )
     if collector.uniform_roster:
         # Actual native setups, not indices: they remain exact for any deck
         # the run submitted, even one outside the supply it began with.
@@ -1343,15 +1341,32 @@ def _capture_memory(
         return ()
     with collector.profiler.track("Memory capture"):
         env = collector._env
-        return collector._memory_store.capture_live_rows(
-            buffers,
-            rows,
-            env.current_game_seeds(),
+        seats = (
             env.current_agent_indices()
             if players is None
-            else [p if p is not None else -1 for p in players],
-            env.current_game_generations(),
-            env.decision_memory_cursors(),
+            else [p if p is not None else -1 for p in players]
+        )
+        live = np.asarray(seats)[rows] != -1
+        live_rows = rows if live.all() else rows[live]
+        prefixes: tuple[Prefix, ...] = ()
+        if live_rows.size:
+            prefixes = collector._memory_store.capture_live_rows(
+                buffers,
+                live_rows,
+                env.current_game_seeds(),
+                seats,
+                env.current_game_generations(),
+                env.decision_memory_cursors(),
+            )
+        if live_rows.size == rows.size:
+            return prefixes
+        # Terminal bootstrap rows have no viewer. Keep their place in next_obs.
+        captured = iter(prefixes)
+        return tuple(
+            next(captured)
+            if playing
+            else Prefix(PrefixIdentity(f"terminal-{row}", 0, "terminal"), None)
+            for row, playing in zip(rows, live, strict=True)
         )
 
 
@@ -1529,7 +1544,7 @@ def _collect(
     opponent_inference: CollectionScope | None = None,
 ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
-    if collector._needs_assignment or collector._results:
+    if collector._uncommitted_batch is not None or collector._results:
         raise ValueError("commit adaptive targets before the next collection")
     start = time.perf_counter()
     env = collector._env
@@ -1626,13 +1641,20 @@ def _collect(
                     collector._pending[slot] is not None
                 ):
                     _finalize(collector, slot, reward=0.0, done=False)
-        active = (
-            ~completed
-            if complete_games
-            else np.array([len(stream) < num_steps for stream in collector._streams])
-        )
-        if not active.any():
-            break
+            active = (
+                ~completed
+                if complete_games
+                else np.array(
+                    [len(stream) < num_steps for stream in collector._streams]
+                )
+            )
+            if not active.any():
+                break
+            if collector._needs_refill:
+                refill = sorted(row for row in collector._needs_refill if active[row])
+                if refill:
+                    _refill(collector, refill)
+                    acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
         collector.stats.idle_stream_steps += num_envs - int(active.sum())
         collector._record_annotations = [None] * num_envs
         actions = np.zeros(num_envs, dtype=np.int64)
@@ -1802,24 +1824,32 @@ def _role_cell(collector: Collector, row: int, seat: int) -> int:
     )
 
 
-def _reassign(collector: Collector, rows: set[int]) -> None:
+def _refill(collector: Collector, rows: list[int]) -> None:
+    """Install active streams' next roots in stream order, then count their starts."""
     if not rows:
         return
-    assert collector._sampler is not None
-    chosen = {row: collector._sampler.draw() for row in sorted(rows)}
-    collector._env.reassign_roots_into_buffers(
-        [
-            _assigned_match(collector, chosen[row]).to_rust() if row in chosen else None
-            for row in range(collector.num_envs)
-        ]
-    )
-    for row, assignment in chosen.items():
-        collector._assignments[row] = assignment
-    collector._needs_assignment -= rows
-    _refresh_roots(collector, np.array(sorted(rows), dtype=np.int64))
-    for row in sorted(rows):
-        _record_assignment(collector, row)
+    if collector._sampler is None:
+        collector._env.load_slots_into_buffers([SlotLoad.fresh(row) for row in rows])
+    else:
+        assignments = [collector._sampler.draw() for _ in rows]
+        matches = [_assigned_match(collector, assignment) for assignment in assignments]
+        collector._env.load_slots_into_buffers(
+            [
+                SlotLoad.fresh(row, match.to_rust())
+                for row, match in zip(rows, matches, strict=True)
+            ]
+        )
+        for row, assignment, match in zip(rows, assignments, matches, strict=True):
+            collector._assignments[row] = assignment
+            collector.stream_matches[row] = match
+    collector._needs_refill.difference_update(rows)
+    _refresh_roots(collector, np.asarray(rows))
+    for row in rows:
+        if collector._sampler is not None:
+            _record_assignment(collector, row)
         _expose(collector, row, "game_roots")
+        if collector.game_errors:
+            collector._game_started[row] = time.perf_counter()
 
 
 def commit_adaptive(
@@ -1852,7 +1882,7 @@ def commit_adaptive(
     results = list(collector._results)
     collector._sampler.commit(results, chunks)
     collector._results.clear()
-    _reassign(collector, set(collector._needs_assignment))
+    _refill(collector, sorted(collector._needs_refill))
     collector._uncommitted_batch = None
     exposures: list[ExposureRow] = []
     legal_counts = np.diff(batch.action_data.offsets)
@@ -2185,7 +2215,6 @@ def _settle_step(
     complete_games = collector.batch_closure == "complete-games"
     done = active & ((buffers["terminated"] > 0) | (buffers["truncated"] > 0))
     infos = env.get_last_info() if collector.game_errors or done.any() else []
-    replace = np.zeros(collector.num_envs, dtype=bool)
     failed = np.zeros(collector.num_envs, dtype=bool)
     if collector.game_errors:
         for row in np.flatnonzero(active):
@@ -2221,8 +2250,6 @@ def _settle_step(
             )
             failed[row] = True
             done[row] = False
-            # Native truncation already reset this stream.
-            replace[row] = not bool(buffers["truncated"][row])
     for row in np.flatnonzero(done):
         winner = infos[row].get("winner_index")
         winner = int(winner) if winner is not None else None
@@ -2298,9 +2325,6 @@ def _settle_step(
     # Deferred slots keep their scheduler allocation until the next start.
     if collector.game_error_state.stop_reason:
         raise GameErrorLimit(collector.game_error_state.stop_reason)
-    auto_reset = getattr(env, "auto_reset", True)
-    if replace.any() and auto_reset:
-        env.replace_failed_into_buffers(replace.tolist())
     closed = done
     if cuts:
         assert snapshots is not None and collector.stats.snapshot is not None
@@ -2315,20 +2339,7 @@ def _settle_step(
             completed[row] = _stream_at_floor(collector, int(row), games, num_steps)
 
     ended = np.flatnonzero(closed | failed)
-    if collector._sampler is not None:
-        # Adaptive roots: a finished stream waits for its next assignment,
-        # drawn now or after the scores of this update commit.
-        for row in ended:
-            collector._ordinals[row] += 1
-            collector._needs_assignment.add(int(row))
-        _reassign(
-            collector,
-            {row for row in collector._needs_assignment if not completed[row]},
-        )
     if snapshots is not None:
-        for row in ended:
-            episode = collector._episodes[row]
-            episode.fresh_ready = auto_reset and episode.branch is None
         plan = snapshots.plan
         if plan is None:
             snapshots.ready.extend(int(row) for row in ended if not completed[row])
@@ -2347,11 +2358,11 @@ def _settle_step(
             ):
                 _discard_group_rows(collector, plan.discarded)
             snapshots.ready.extend(map(int, ended))
-    elif ended.size:
-        _refresh_roots(collector, ended)
-        if collector._sampler is None:
+    else:
+        collector._needs_refill.update(map(int, ended))
+        if collector._sampler is not None:
             for row in ended:
-                _expose(collector, int(row), "game_roots")
+                collector._ordinals[row] += 1
 
 
 def _stream_at_floor(
@@ -2426,11 +2437,8 @@ def _settle_attempt(
     actions: list[int | str] = [] if completed else list(collector._game_actions[row])
     inputs = None
     if branch is not None and not completed:
-        if not getattr(collector._env, "auto_reset", True):
-            inputs = collector._env.game_inputs(row)
-            actions = inputs.actions
-        else:
-            actions = [*branch.recipe.actions, *actions]
+        inputs = collector._env.game_inputs(row)
+        actions = inputs.actions
     config = collector.observation_space.config
     observation = (
         config

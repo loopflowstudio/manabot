@@ -25,7 +25,10 @@ use crate::{
             EncodedObservationMut, ObservationEncoderConfig,
         },
         rollout_pool::RolloutPool,
-        vector_env::{ObservationRead, ObservationWriteError, SlotLoad, SlotLoadResult, VectorEnv},
+        vector_env::{
+            ObservationRead, ObservationWriteError, SlotLoad, SlotLoadResult, SlotReplacement,
+            VectorEnv,
+        },
     },
     infra::profiler::InfoDict,
     python::{
@@ -143,11 +146,26 @@ struct PySlotLoad(SlotLoad);
 
 #[pymethods]
 impl PySlotLoad {
+    #[getter]
+    fn slot(&self) -> usize {
+        self.0.slot()
+    }
+
+    fn with_slot(&self, slot: usize) -> Self {
+        Self(self.0.with_slot(slot))
+    }
+
+    /// A fresh game using the setup already configured for this slot.
+    #[getter]
+    fn uses_slot_setup(&self) -> bool {
+        matches!(self.0, SlotLoad::Fresh(_, None))
+    }
+
     /// Detached replay authority for a recording wrapper, including the intervention.
     #[getter]
     fn branch_root(&self) -> Option<(PyGameSnapshot, PyRestoreOptions)> {
         match &self.0 {
-            SlotLoad::Fresh(_) => None,
+            SlotLoad::Fresh(..) => None,
             SlotLoad::Snapshot(_, source, options) => {
                 Some((PyGameSnapshot(source.clone()), PyRestoreOptions(*options)))
             }
@@ -155,8 +173,13 @@ impl PySlotLoad {
     }
 
     #[staticmethod]
-    fn fresh(slot: usize) -> Self {
-        Self(SlotLoad::Fresh(slot))
+    #[pyo3(signature = (slot, player_configs=None))]
+    fn fresh(slot: usize, player_configs: Option<Bound<'_, PyAny>>) -> PyResult<Self> {
+        let setup = player_configs
+            .as_ref()
+            .map(super::bindings::game_setup)
+            .transpose()?;
+        Ok(Self(SlotLoad::Fresh(slot, setup)))
     }
 
     #[staticmethod]
@@ -171,6 +194,16 @@ impl PySlotLoad {
             snapshot.0.clone(),
             options.map(|o| o.0).unwrap_or_default(),
         ))
+    }
+}
+
+#[pymethods]
+impl SlotLoadResult {
+    fn with_slot(&self, slot: usize) -> Self {
+        Self {
+            slot,
+            ..self.clone()
+        }
     }
 }
 
@@ -194,15 +227,6 @@ thread_local! {
 #[pymethods]
 impl PyVectorEnv {
     #[cfg(feature = "benchmark")]
-    fn _benchmark_load_root(&mut self, root: &crate::python::bindings::PyEnv) -> PyResult<()> {
-        let env = root
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
-        self.inner.benchmark_load_root(&env).map_err(map_agent_err)
-    }
-
-    #[cfg(feature = "benchmark")]
     fn _benchmark_allocations_start(&self) {
         crate::allocator::start();
     }
@@ -213,7 +237,7 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false, auto_reset=true))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
         num_envs: usize,
         seed: u64,
@@ -223,11 +247,9 @@ impl PyVectorEnv {
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
         decision_memory: bool,
-        auto_reset: bool,
     ) -> PyResult<Self> {
         let policies = parse_player_policies(player_policies, opponent_policy)?;
         let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
-            .with_auto_reset(auto_reset)
             .with_decision_memory(decision_memory)
             .with_decision_memory_include_own(decision_memory_include_own);
         if let Some(stride) = seed_stride {
@@ -456,40 +478,6 @@ impl PyVectorEnv {
         })
     }
 
-    fn reassign_roots_into_buffers(
-        &mut self,
-        py: Python<'_>,
-        player_configs: Vec<Option<Bound<'_, PyAny>>>,
-    ) -> PyResult<()> {
-        let configs = player_configs
-            .into_iter()
-            .map(|row| {
-                row.map(|players| super::bindings::game_setup(&players))
-                    .transpose()
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.reassign_with_writer(
-                configs,
-                |slot, obs| {
-                    if let Destination::Packed(writer) = buffers.fields {
-                        return writer.lock().unwrap().append(slot, obs, &config);
-                    }
-                    encode(obs, &config)
-                        .map(|_| ())
-                        .map_err(ObservationWriteError::from)
-                },
-                |index, obs, reward, terminated, truncated| {
-                    if matches!(buffers.fields, Destination::Packed(_)) {
-                        return Ok(buffers.write_step_state(index, reward, terminated, truncated)?);
-                    }
-                    buffers.clear_memory_cursor(index);
-                    buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
-                },
-            )
-        })
-    }
-
     fn next_fresh_seeds(&self) -> Vec<u64> {
         self.inner.next_fresh_seeds().to_vec()
     }
@@ -529,59 +517,25 @@ impl PyVectorEnv {
         py: Python<'_>,
         requests: Vec<PySlotLoad>,
     ) -> PyResult<Vec<SlotLoadResult>> {
-        let requests: Vec<_> = requests.into_iter().map(|r| r.0).collect();
-        let loaded = self.with_buffers(py, move |inner, buffers, config| {
-            // Admission needs one private row regardless of the number of siblings.
-            let mut admission: Option<EncodedObservation> = None;
-            inner
-                .load_slots_into(
-                    &requests,
-                    |slot, obs| {
-                        // Owners may have resized a registered array between calls.
-                        // Check every selected destination before publishing any of them.
-                        match &buffers.fields {
-                            Destination::Dense(fields) => {
-                                fields.encoded_row_mut(slot, &config)?;
-                            }
-                            Destination::Packed(writer) => {
-                                writer.lock().unwrap().append(slot, obs, &config)?;
-                            }
-                        }
-                        buffers.rewards.element_ptr(slot)?;
-                        buffers.terminated.element_ptr(slot)?;
-                        buffers.truncated.element_ptr(slot)?;
-                        if matches!(buffers.fields, Destination::Packed(_)) {
-                            return Ok(());
-                        }
-                        if let Some(row) = &mut admission {
-                            encode_into(obs, &config, row.buffers_mut())?;
-                        } else {
-                            admission = Some(encode(obs, &config)?);
-                        }
-                        Ok(())
-                    },
-                    |slot, obs, terminal| {
-                        if matches!(buffers.fields, Destination::Packed(_)) {
-                            return Ok(buffers.write_step_state(slot, 0.0, terminal, false)?);
-                        }
-                        buffers.clear_memory_cursor(slot);
-                        buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
-                        if terminal {
-                            buffers.clear_memory_cursor(slot);
-                        }
-                        Ok(())
-                    },
-                )
-                .map_err(map_write_error)
-        })?;
-        self.last_info.resize_with(self.num_envs, InfoDict::new);
-        Ok(loaded
+        let prepared = self.prepare_slot_buffers(py, requests)?;
+        self.publish_slot_buffers(py, prepared)
+    }
+
+    /// Keep every vector exclusively borrowed across both phases of a sharded load.
+    #[staticmethod]
+    fn _load_shard_buffers(
+        py: Python<'_>,
+        batches: Vec<(PyRefMut<'_, PyVectorEnv>, Vec<PySlotLoad>)>,
+    ) -> PyResult<Vec<Vec<SlotLoadResult>>> {
+        let mut admitted = Vec::with_capacity(batches.len());
+        for (mut vector, requests) in batches {
+            let replacements = vector.prepare_slot_buffers(py, requests)?;
+            admitted.push((vector, replacements));
+        }
+        admitted
             .into_iter()
-            .map(|(result, info)| {
-                self.last_info[result.slot] = info;
-                result
-            })
-            .collect())
+            .map(|(mut vector, replacements)| vector.publish_slot_buffers(py, replacements))
+            .collect()
     }
 
     #[pyo3(signature = (actions, active=None))]
@@ -763,14 +717,6 @@ impl PyVectorEnv {
                 buffers.clear_memory_cursor(slot);
             }
             Ok(infos)
-        })
-    }
-
-    fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
-        self.run_into_buffers(py, move |inner, buffers, config| {
-            inner.replace_with_writer(&failed, |index, obs, reward, done, truncated| {
-                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
-            })
         })
     }
 
@@ -1018,6 +964,64 @@ fn map_write_error(error: ObservationWriteError) -> PyErr {
 
 #[cfg(feature = "python")]
 impl PyVectorEnv {
+    fn prepare_slot_buffers(
+        &mut self,
+        py: Python<'_>,
+        requests: Vec<PySlotLoad>,
+    ) -> PyResult<Vec<SlotReplacement>> {
+        let requests: Vec<_> = requests.into_iter().map(|request| request.0).collect();
+        self.with_buffers(py, move |inner, buffers, config| {
+            let mut admission: Option<EncodedObservation> = None;
+            inner
+                .prepare_slots(&requests, |slot, obs| {
+                    // Owners may have resized a registered array between calls.
+                    // Check every selected destination before publishing any of them.
+                    // Packed rows are appended only when published, so a rejected
+                    // load (including a sibling shard's) leaves no frozen batch.
+                    if let Destination::Dense(fields) = &buffers.fields {
+                        fields.encoded_row_mut(slot, &config)?;
+                    }
+                    buffers.rewards.element_ptr(slot)?;
+                    buffers.terminated.element_ptr(slot)?;
+                    buffers.truncated.element_ptr(slot)?;
+                    if let Some(row) = &mut admission {
+                        encode_into(obs, &config, row.buffers_mut())?;
+                    } else {
+                        admission = Some(encode(obs, &config)?);
+                    }
+                    Ok(())
+                })
+                .map_err(map_write_error)
+        })
+    }
+
+    fn publish_slot_buffers(
+        &mut self,
+        py: Python<'_>,
+        replacements: Vec<SlotReplacement>,
+    ) -> PyResult<Vec<SlotLoadResult>> {
+        let loaded = self.with_buffers(py, move |inner, buffers, config| {
+            inner
+                .publish_slots(replacements, |slot, obs, terminal| {
+                    buffers.clear_memory_cursor(slot);
+                    buffers.write_encoded_row(slot, obs, 0.0, terminal, false, &config)?;
+                    if terminal {
+                        buffers.clear_memory_cursor(slot);
+                    }
+                    Ok(())
+                })
+                .map_err(map_write_error)
+        })?;
+        self.last_info.resize_with(self.num_envs, InfoDict::new);
+        Ok(loaded
+            .into_iter()
+            .map(|(result, info)| {
+                self.last_info[result.slot] = info;
+                result
+            })
+            .collect())
+    }
+
     fn run_into_buffers(
         &mut self,
         py: Python<'_>,

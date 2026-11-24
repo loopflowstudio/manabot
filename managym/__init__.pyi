@@ -524,15 +524,23 @@ class ObservationBatch:
 
 class SlotLoad:
     @property
+    def slot(self) -> int: ...
+    @property
+    def uses_slot_setup(self) -> bool: ...
+    def with_slot(self, slot: int) -> SlotLoad: ...
+    @property
     def branch_root(self) -> tuple[GameSnapshot, RestoreOptions] | None: ...
     @staticmethod
-    def fresh(slot: int) -> SlotLoad: ...
+    def fresh(
+        slot: int, player_configs: GameSetup | list[PlayerConfig] | None = None
+    ) -> SlotLoad: ...
     @staticmethod
     def snapshot(
         slot: int, snapshot: GameSnapshot, options: RestoreOptions | None = None
     ) -> SlotLoad: ...
 
 class SlotLoadResult:
+    def with_slot(self, slot: int) -> SlotLoadResult: ...
     @property
     def slot(self) -> int: ...
     @property
@@ -558,7 +566,6 @@ class VectorEnv:
         opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
         *,
-        auto_reset: bool = True,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
         player_policies: tuple[
@@ -608,16 +615,12 @@ class VectorEnv:
     ) -> None:
         """Deal each setup at its supplied seed, or at the stream's next seed."""
         ...
-    def reassign_roots_into_buffers(
-        self, player_configs: list[GameSetup | list[PlayerConfig] | None]
-    ) -> None: ...
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
     ) -> None: ...
     def step_isolated_into_buffers(
         self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None: ...
-    def replace_failed_into_buffers(self, failed: list[bool]) -> None: ...
     def buffered_call_timings(self) -> tuple[float, float]:
         """Cumulative (stepping_seconds, encoding_seconds) of buffered calls."""
     def semantic_decision_frames_json(
@@ -630,6 +633,10 @@ class VectorEnv:
     def next_fresh_seeds(self) -> list[int]: ...
     def snapshot_slots(self, mask: Sequence[bool]) -> list[GameSnapshot | None]: ...
     def slot_metadata(self, mask: Sequence[bool]) -> list[SnapshotMetadata | None]: ...
+    @staticmethod
+    def _load_shard_buffers(
+        batches: Sequence[tuple[VectorEnv, Sequence[SlotLoad]]],
+    ) -> list[list[SlotLoadResult]]: ...
     def load_slots_into_buffers(
         self, requests: Sequence[SlotLoad]
     ) -> list[SlotLoadResult]: ...
@@ -653,7 +660,7 @@ class VectorEnv:
     ) -> list[ObservationRead]:
         """Write selected fixed-seat views in slot order; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
-        """One native seat per slot; after done, snapshots describe the reset game."""
+        """Read one native seat per slot, including hands in parked terminal games."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...
     def set_uniform_roster(self, roster: Sequence[PlayerConfig]) -> None: ...
     def set_training_decks(

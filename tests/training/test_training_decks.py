@@ -179,7 +179,7 @@ def test_collector_resets_seats_seeds_and_exposure(
         assert first._env.current_game_seeds() != initial
         exposure = first.stats.exposure
         assert len(exposure) >= 3
-        assert sum(row["game_roots"] for row in exposure.values()) == 6
+        assert sum(row["game_roots"] for row in exposure.values()) == 4
         assert (
             sum(row["learner_transitions"] for row in exposure.values())
             == batch.actions.size
@@ -347,7 +347,8 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
         assert env.current_player_configs()[0][0].decklist == before[0][0].decklist
         env.reset_seeds_into_buffers(env.current_game_seeds())
         # Retained replay inputs name the decks each later root actually used.
-        for game in env.games:
+        for slot in range(collector.num_envs):
+            game = env.game_inputs(slot)
             assert {player.name for player in game.players} == {
                 player.name for player in replacement
             }
@@ -420,8 +421,12 @@ def test_failure_records_actual_sampled_decks(
                 *root, decklists=root.decklists
             )
             assert attempt.decks_digest == (decks.digest if sampled else None)
+        # Reject the supplied actions from live decision frames.
+        collector._env.load_slots_into_buffers(
+            [managym.SlotLoad.fresh(slot) for slot in range(collector.num_envs)]
+        )
         scope = CaptureScope(tmp_path / "failures")
-        with capture_scope(scope), pytest.raises(Exception):
+        with capture_scope(scope), pytest.raises(managym.AgentError):
             collector._env.step_into_buffers([-1, -1])
         evidence = GameRecord.model_validate_json(scope.paths[-1].read_bytes())
         if sampled:
@@ -437,7 +442,7 @@ def test_failure_records_actual_sampled_decks(
         close_collector(collector)
 
 
-def test_independent_population_retains_event_ids_and_mirrors() -> None:
+def test_independent_population_retains_event_ids_and_mirrors(tmp_path: Path) -> None:
     deck = Deck({"Plains": 10})
     source = UniformDecks(
         decks=(deck, deck),
@@ -446,18 +451,24 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
     )
     assert [player.name for player in source.players()] == ["event-a", "event-b"]
     source.check()
-    collector = _collector(source)
-    try:
-        batch = collect(collector, _agent(), 1)
-        assert batch is not None and collector.stats.games == 4
-        for pair in collector._env.current_player_configs():
-            assert all(player.name in source.entry_ids for player in pair)
-            assert pair[0].deck == pair[1].deck == deck
-        identity = collector._env.identities["deck_source"]
+    with capture_scope(
+        CaptureScope(tmp_path / "failures", settings=RunSettings(record_games=1))
+    ):
+        collector = _collector(source)
+        try:
+            collect(collector, _agent(), 1)
+            assert collector.stats.games == 4
+            for pair in collector._env.current_player_configs():
+                assert all(player.name in source.entry_ids for player in pair)
+                assert pair[0].deck == pair[1].deck == deck
+        finally:
+            close_collector(collector)
+    records = list(read_records(tmp_path / "games"))
+    assert len(records) == 4
+    for record in records:
+        identity = record.identities["deck_source"]
         assert identity["sampling_policy"] == "uniform-independent-v1"
         assert identity["deck_ids"] == ["event-a", "event-b"]
-    finally:
-        close_collector(collector)
     with pytest.raises(ValueError, match="entry IDs"):
         UniformDecks(
             decks=(deck,), sampling="uniform-independent-v1", entry_ids=("same", "same")
@@ -486,7 +497,7 @@ def test_source_disclosure_preserves_open_identity(
     assert UniformDecks.model_validate(record) == configured
 
 
-def test_closed_fixed_roots_survive_auto_reset(decks: UniformDecks) -> None:
+def test_closed_fixed_roots_survive_refill(decks: UniformDecks) -> None:
     match = Match(decks.model_copy(update={"decklists": "closed"}).match_config())
     collector = open_collector(
         ObservationSpace(),

@@ -2142,7 +2142,6 @@ def test_deprecated_snapshot_factory_uses_native_deferred_slots(
             else InMemorySnapshotVector(ObservationSpace(), 1, 42)
         )
     try:
-        assert not vector.auto_reset
         assert vector.next_fresh_seeds() == [42]
     finally:
         vector.close()
@@ -2257,7 +2256,6 @@ def test_deferred_collector_cuts_beside_terminal_failed_and_parked_slots() -> No
 
     with (
         patch.object(vector, "install_slots", wraps=vector.install_slots) as installs,
-        patch.object(vector, "replace_failed_into_buffers", side_effect=AssertionError),
         patch.object(vector, "step_isolated_into_buffers", side_effect=fail_once),
         patch.object(
             vector,
