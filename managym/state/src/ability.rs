@@ -177,7 +177,7 @@ pub enum TriggerCondition {
 /// instruction resolves, when the resolution-only questions
 /// ([`Condition::is_resolution_only`]) can also read the resolving spell or
 /// ability. Definitions never use those outside `Effect::If`.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Condition {
     YourTurn,
     OpponentControlsMoreCreatures,

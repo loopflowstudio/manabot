@@ -163,8 +163,11 @@ fn execution_names(out: &mut Vec<RecordName>) {
         add(TokenKind::Text, name);
     }
     // A play grant's condition reaches its fact program as rules text.
-    for condition in play_grant_conditions() {
-        add(TokenKind::Text, &condition);
+    for (_, definition) in default_content_pack().definition_entries() {
+        let json = serde_json::to_value(definition).expect("serializable definition");
+        for condition in play_grant_conditions(&json) {
+            add(TokenKind::Text, &condition_text(&condition));
+        }
     }
     add(TokenKind::Structure, "PlayGrantExtension");
     add(TokenKind::Structure, "/PlayGrantExtension");
@@ -299,28 +302,15 @@ fn execution_names(out: &mut Vec<RecordName>) {
     }
 }
 
-/// The text of every condition a printed spell puts on the cards it lets
-/// you play (Flameshape's "you control a Wizard"), front face and inset.
-fn play_grant_conditions() -> Vec<String> {
-    let mut out = Vec::new();
-    for (_, definition) in default_content_pack().definition_entries() {
-        let printed = &definition.printed;
-        let inset = printed.inset.as_ref().map(|inset| inset.characteristics());
-        for effect in printed.spell_effects.iter().chain(
-            inset
-                .into_iter()
-                .flat_map(|inset| inset.spell_effects.iter()),
-        ) {
-            if let crate::state::ability::Effect::ExileTopCardsToPlay {
-                condition: Some(condition),
-                ..
-            } = effect
-            {
-                out.push(condition_text(condition));
-            }
-        }
-    }
-    out
+/// Every condition a serialized definition puts on the cards it lets you
+/// play (Flameshape's "you control a Wizard"), wherever the effect sits:
+/// a spell, an inset, a trigger, an activation or an `If` branch.
+fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
+    objects(value)
+        .into_iter()
+        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
+        .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
+        .collect()
 }
 
 /// Every JSON object nested in a serialized definition.
@@ -364,6 +354,28 @@ fn combat_restrictions(value: &serde_json::Value) -> Vec<CardPredicate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn play_grant_conditions_are_found_at_any_depth() {
+        use crate::state::ability::{Condition, Effect, PlayWindow};
+        let wizard = Condition::ControlsAtLeast {
+            distinct_names: false,
+            count: 1,
+            predicate: CardPredicate::default(),
+        };
+        let nested = Effect::If {
+            condition: Condition::YourTurn,
+            then: vec![Effect::ExileTopCardsToPlay {
+                count: 2,
+                until: PlayWindow::WhileExiled,
+                face_down: true,
+                condition: Some(wizard.clone()),
+            }],
+            otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+        };
+        let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
+        assert_eq!(play_grant_conditions(&json), [wizard]);
+    }
 
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {

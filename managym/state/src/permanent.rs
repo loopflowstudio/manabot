@@ -6,7 +6,9 @@ use super::{
 };
 
 /// Counter kinds the engine knows (CR 122). A new kind is one variant here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CounterKind {
     PlusOnePlusOne,

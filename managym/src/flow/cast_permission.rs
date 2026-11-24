@@ -204,7 +204,7 @@ impl Game {
     /// Airbend a permanent or spell. Only a card that reaches exile gets the grant.
     pub(crate) fn airbend(&mut self, object_id: ObjectId) {
         let owner = self.state[object_id].owner;
-        self.exile_with_play_grant(object_id, false, |object| PlayGrant {
+        self.exile_with_play_grant(object_id, ZoneEntry::default(), |object| PlayGrant {
             cost: Some(ManaCost::parse(AIRBEND_COST)),
             ..PlayGrant::new(object, owner)
         });
@@ -226,7 +226,13 @@ impl Game {
             let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
                 return;
             };
-            self.exile_with_play_grant(object_id, face_down, |object| PlayGrant {
+            // The known order of the rest of the library shifts up by one.
+            let entry = ZoneEntry {
+                face_down,
+                library_top_departure: true,
+                ..ZoneEntry::default()
+            };
+            self.exile_with_play_grant(object_id, entry, |object| PlayGrant {
                 this_turn: until == PlayWindow::ThisTurn,
                 through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
                 face_down,
@@ -267,7 +273,11 @@ impl Game {
 
     pub(crate) fn complete_foretell(&mut self, player: PlayerId, card: CardId) {
         let turn = self.state.turn.turn_number;
-        self.exile_with_play_grant(self.state.object_of(card), true, |object| PlayGrant {
+        let face_down = ZoneEntry {
+            face_down: true,
+            ..ZoneEntry::default()
+        };
+        self.exile_with_play_grant(self.state.object_of(card), face_down, |object| PlayGrant {
             after_turn: Some(turn),
             foretold: true,
             ..PlayGrant::new(object, player)
@@ -410,7 +420,7 @@ impl Game {
             return;
         };
         let mana_value = self.object_mana_value(object_id);
-        self.exile_with_play_grant(object_id, false, |object| {
+        self.exile_with_play_grant(object_id, ZoneEntry::default(), |object| {
             let base = PlayGrant {
                 source: Some(source),
                 own_turn_only: true,
@@ -431,23 +441,17 @@ impl Game {
         });
     }
 
-    /// Exile `object` (face up, or face down per CR 406.3) and add the play
-    /// grant `grant` builds for the exiled object. A token, or a card a
-    /// replacement kept out of exile, receives no grant.
+    /// Exile `object` with `entry` (face down per CR 406.3, or from the top
+    /// of a library) and add the play grant `grant` builds for the exiled
+    /// object. A token, or a card a replacement kept out of exile, receives
+    /// no grant.
     fn exile_with_play_grant(
         &mut self,
         object: ObjectId,
-        face_down: bool,
+        entry: ZoneEntry,
         grant: impl FnOnce(ObjectId) -> PlayGrant,
     ) {
-        let exiled = self.move_object_with_entry(
-            object,
-            ZoneType::Exile,
-            ZoneEntry {
-                face_down,
-                ..ZoneEntry::default()
-            },
-        );
+        let exiled = self.move_object_with_entry(object, ZoneType::Exile, entry);
         if self.state.zones.zone_of(exiled) != Some(ZoneType::Exile)
             || !self.state[exiled].is_card()
         {

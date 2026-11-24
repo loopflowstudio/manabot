@@ -10911,6 +10911,61 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     assert!(!can_cast(&s, ogre));
 }
 
+/// Zuko exiles the known top card after a scry kept two on top: the rest
+/// of its owner's known order shifts up one rather than being forgotten,
+/// and determinizing for the owner keeps the next card in place. Debug
+/// builds check every library fact after each move.
+#[test]
+fn zuko_exiling_a_scried_top_card_keeps_the_next_known_position() {
+    use crate::support::play::cast_profile;
+    use managym::state::card::SpellProfile;
+    let mut s = five_color_setup(&["Zuko, Exiled Prince", "Bilbo Baggins, Burglar", "Gray Ogre"]);
+    let zuko = s.force_permanent_on_battlefield(0, "Zuko, Exiled Prince");
+    let glance = move_from_library(&mut s, 0, "Bilbo Baggins, Burglar", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Mountain", "Gray Ogre"]);
+    cast_profile(&mut s, glance, SpellProfile::Adventure);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    while s.action_space().kind == ActionSpaceKind::Scry {
+        choose(&mut s, |a| {
+            matches!(
+                a,
+                Action::ScryCard {
+                    to_bottom: false,
+                    ..
+                }
+            )
+        });
+    }
+    settle(&mut s);
+    let definition =
+        |s: &Scenario, object: ObjectId| s.game().state[now(s, object)].definition_id.0;
+    let known = |s: &Scenario| {
+        Observation::for_player(s.game(), PlayerId(0))
+            .agent
+            .known_library
+    };
+    assert_eq!(
+        known(&s),
+        BTreeMap::from([(0, definition(&s, top[0])), (1, definition(&s, top[1]))])
+    );
+
+    activate(&mut s, zuko, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Exile));
+    assert_eq!(known(&s), BTreeMap::from([(0, definition(&s, top[1]))]));
+    for seed in 0..8 {
+        let mut game = s.game().clone();
+        game.determinize(PlayerId(0), seed).unwrap();
+        assert_eq!(
+            game.state
+                .zones
+                .top(ZoneType::Library, PlayerId(0))
+                .map(|top| game.state[top].definition_id.0),
+            Some(definition(&s, top[1]))
+        );
+    }
+}
+
 /// Zuko's Conviction returns a creature card from your graveyard to hand, or,
 /// kicked, puts it onto the battlefield tapped. Noncreature cards are not
 /// targets.
