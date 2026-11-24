@@ -1,15 +1,25 @@
 ---
-requires: decomposition plan, changed consumers and preserved behavior evidence
-produces: scalability findings in the existing scratch design
+requires: a decomposition plan, the changed consumers and their behavior checks
+produces: composability findings in `scratch/plan.md`
+action_style: procedural
 ---
-Review whether real cards now compose through one maintainable rules authority.
+Judge whether real cards compose through one rules authority without card-specific engine logic.
 
-1. Follow at least two distinct representative consumers where available. Check
-   that the planned deletion cut removed exclusive predecessors, tests and data
-   paths while retaining required behavior on the surviving owner.
-2. Look for card-specific dispatch, duplicated rules state, adapters and unused
-   abstractions. A smaller diff or renamed type is not evidence of scalability.
-3. Retain concrete findings and whether the phase criterion is met. A discovered
-   rules defect requires revising the working contract and rerunning affected
-   evidence before this phase can pass. Later performance evidence is invalidated
-   by semantic changes. Gate owns affected suites once; reuse focused results.
+1. Follow at least two distinct representative consumers through the shared
+   mechanism. Confirm the planned deletions removed their exclusive
+   predecessors, tests and data paths while keeping required behavior on the
+   surviving owner.
+2. Flag card-specific dispatch, duplicated rules state, adapters, unused
+   abstractions, and specialized types or variants that fuse multiple
+   orthogonal axes (selectors, conditions, triggers, effects, transforms)
+   instead of composing them. A smaller diff or a renamed type doesn't prove
+   cards compose.
+3. Reuse the current head's focused test results; leave full suites to CI.
+   Write concrete findings into `scratch/plan.md` without editing code.
+
+When deciding whether to continue:
+
+- **Iterate** with the remaining duplication, unbuilt slices or any rules
+  defect (a rules defect voids dependent numbers and fixes the contract
+  first).
+- **Advance** when the criterion holds.
