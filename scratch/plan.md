@@ -152,7 +152,15 @@ Instructions retired (`/usr/bin/time -l`, stable to 0.1% under any load) against
 - `e99ca6604d`: `ProgramProjection` (`agent/continuation.rs`) owns the tokens-and-text rule for `ContinuationFrame::program` and `DelayedEffects`.
 - PR #593 is published and ready. Merge `3ca5b59f93` brought main `610370233c` (one casting authority for Adventures/Omens/prepared/modal faces, 207 Foundations cards with combat damage choices); conflict resolutions are in `questions.md`. **All local evidence above predates this merge**; CI on `3ca5b59f93` is the first run over the merged tree (in progress at realign).
 
-## Next: `gate`
+## Next: entry face and object form (post-merge concept review, before gate)
+
+The post-merge concept review ([concept-review.html](concept-review.html), at `687e8e0ebd`) followed a modal back face and an Adventure through the merged tree. Main's casting authority reuses this branch's form in two places whose names no longer fit. Choices made for review: 1a, 2a, 3a on the page.
+
+1. **`ZoneEntry.face: EntryFace { Front, Transformed, ModalBack }`** (`flow/proposed_event.rs`) replaces `transformed: bool`, which means both "enters transformed" (CR 712.14) and "a modal card played or cast as its back" (CR 712.11). Writers: `play.rs:700` and `decision.rs:1487` write `ModalBack` for `SpellProfile::BackFace`; the `Effect::Move { transformed }` branch (`resolution.rs:936`) writes `Transformed`; `resolution.rs:2350` and tests write `Front`. Readers: `battlefield_entry_face` (`zones.rs:832`) and the commit (`zones.rs:990`) match the enum, so the commit no longer tries modal and falls back to transform; `effect_execution.rs:747` writes `"enters transformed"` only for `Transformed` and a new `"enters back face up"` for `ModalBack` (add it beside `"enters transformed"` in the field list at `effect_execution.rs:94`). Serialization: keep the `transformed` key (bool, true only for `Transformed`) and add `modal_back` skipped when false, so recorded bytes change only for a pending modal-back entry. Witness: a pending modal-back entry's projected fields say "enters back face up", never "enters transformed" (fails before); existing modal-back play/cast tests stay green. CR 712.14a ("stays in its zone") is not added: no catalog card asks a non-transforming card to enter transformed; note it in `questions.md`.
+2. **Rename `BattlefieldForm` → `ObjectForm`** (`state/src/game_object.rs`; Rust-only, not serialized). Its doc and `mint_appearance`'s comment name the stack forms too: an inset Adventure/Omen/prepared spell being cast and a cast modal back keep the card's printing in `backing`.
+3. Checks: debug nextest lib + `rules_tests` + `canonical_replay_tests` + `scenario_tests`, cards crate; `cargo fmt --all`; rebuild the cp313 extension; Python `tests/semantic/test_manifest_text.py`, `tests/model/test_pinned_pilot.py`. Then gate.
+
+## Then: `gate`
 
 - Read CI on `3ca5b59f93`; a failure caused by the merge is fixed in place. Engine Budget there is the speed verdict (the earlier `bench_steps` failure was the unified `benchmark` feature, fixed in `9f841c3e74`).
 - Re-record the frozen semantic conformance evidence (content digest moved; `questions.md`).

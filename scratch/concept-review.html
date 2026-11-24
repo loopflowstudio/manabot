@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Concept review · Battlefield forms, viewer identities &amp; persistent sources · MTG-420</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concept review · object forms after the casting-authority merge · MTG-420</title>
 <style>
 :root{color-scheme:light dark;font:16px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas);--codebg:color-mix(in srgb,CanvasText 7%,Canvas)}
 body{max-width:60rem;margin:2.5rem auto;padding:0 1.15rem}
-h1,h2,h3{line-height:1.2}
-h2{margin-top:2.2rem}
+h1,h2,h3{line-height:1.2}h2{margin-top:2.2rem}
 table{width:100%;border-collapse:collapse;margin:.9rem 0 1.25rem}
 th,td{text-align:left;vertical-align:top;padding:.55rem .65rem;border-bottom:1px solid var(--line)}
 thead th{font-size:.88rem;color:var(--muted)}
@@ -13,8 +15,7 @@ code{font-size:.88em;background:var(--codebg);padding:.08em .3em;border-radius:.
 pre{background:var(--codebg);padding:.75rem .9rem;border-radius:.35rem;overflow-x:auto;font-size:.85rem;line-height:1.42;margin:.55rem 0}
 pre code{background:none;padding:0}
 .callout{border-inline-start:.28rem solid var(--accent);background:var(--card);padding:.95rem 1.15rem;margin:1.25rem 0;border-radius:0 .35rem .35rem 0}
-.callout.ok{border-inline-start-color:var(--yes)}
-.tag{display:inline-block;font-size:.74rem;font-weight:600;letter-spacing:.02em;padding:.08rem .42rem;border-radius:.25rem;vertical-align:baseline;margin-inline-end:.35rem}
+.tag{display:inline-block;font-size:.74rem;font-weight:600;padding:.08rem .42rem;border-radius:.25rem;margin-inline-end:.35rem}
 .existing{background:color-mix(in srgb,CanvasText 12%,Canvas);color:CanvasText}
 .proposed{background:color-mix(in srgb,var(--prop) 20%,Canvas);color:var(--prop)}
 .yes{background:color-mix(in srgb,var(--yes) 20%,Canvas);color:var(--yes)}
@@ -22,136 +23,91 @@ pre code{background:none;padding:0}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:.85rem 0}
 .panel{border:1px solid var(--line);border-radius:.35rem;padding:.85rem 1rem;background:var(--card)}
 .panel h3{margin:0 0 .45rem;font-size:.98rem}
-.muted{color:var(--muted)}
 @media (max-width:740px){.grid{grid-template-columns:1fr}}
 </style>
-<main>
-<small class="muted">MTG-420 · post-build full concept review · base <code>5d85077748</code> → <code>71e5b0734a</code></small>
-<h1>Do battlefield forms, viewer identities and persistent sources line up end to end?</h1>
+</head>
+<body>
+<p class="tag existing">MTG-420 · post-merge concept review · base <code>5d85077748</code> → <code>687e8e0ebd</code></p>
+<h1>Do the product's concepts and the code's concepts line up for object forms?</h1>
 
-<p><strong>Area reviewed.</strong> The full MTG-420 battlefield-form, copiable-snapshot, persistent-source, viewer-identity, hidden-slot sampling and downstream-consumer surface from merge base <code>5d85077748</code> to <code>71e5b0734a</code>: native state (<code>managym/state/src/{game_object,permanent,stack_object,effect,zone}.rs</code>, <code>managym/src/cards/{content_pack,tokens}.rs</code>, <code>managym/src/state/hash.rs</code>), rules flow and samplers (<code>managym/src/flow/{identity,zones,proposed_event,resolution,triggers,trigger,effects,layers,statics,sba,cast_permission,action,decision,search,selection_sampling,knowledge,stabilization}.rs</code>, <code>managym/src/possible_worlds.rs</code>), and every consumer (<code>managym/src/agent/{observation,observation_layout,observation_encoder,observation_json,continuation,effect_execution,shared_effects,policy_history,decision_memory,structured_offer,ability_description}.rs</code>, <code>managym/src/{decision_capture,decision_context,experience}.rs</code>, <code>managym/src/python/bindings.rs</code>, <code>managym/{__init__.pyi,decision_capture.py,experience.py,experience_projection.py}</code>, <code>protocol/*.schema.json</code>, <code>manabot/semantic/text_observation.py</code>, and <code>academy/ui/src/lib/</code>). Reviewed as a whole against base with fresh eyes after item 5 (<code>b804a1b341</code>, <code>90197a3a4f</code>) and engine optimization (<code>29d7adc98d</code>).</p>
+<p><strong>Area reviewed.</strong> What an object shows versus what it is: transform, meld, face-down manifests, entry and token copies, departed appearances (LKI), viewer identity — now joined by main's casting authority (<code>662e9ce96c</code>: Adventures, Omens, prepared spells and modal double-faced cards), which merge <code>3ca5b59f93</code> wired into this branch's <code>BattlefieldForm</code>. The previous page (at <code>71e5b0734a</code>) found nothing left; since then only the measurement fixes, <code>ProgramProjection</code> and that merge changed the area. The merge is where the two models meet, so this pass follows a modal back face and an Adventure through the form.</p>
 
-<section class="callout ok">
-<h2>Verdict · Nothing left to change in MTG-420</h2>
-<p><span class="tag existing">Existing</span><span class="tag yes">Aligned</span> Both conceptual mismatches found in the prior post-build review are closed cleanly at <code>71e5b0734a</code> without leaving duplicate authorities or broken edge cases, and the post-optimization guards in <code>29d7adc98d</code> preserve exact SBA and meld-separation semantics:</p>
-<ul>
-<li><strong>Face-down status vs. nameless copies:</strong> <code>BattlefieldFacts.face_down</code> carries face-down status into LKI; <code>Game::observed_face_down</code> (<code>flow/identity.rs:137-144</code>) is the single live-and-departed reader feeding <code>observed_identity</code>, <code>observed_object_name</code> and both trigger descriptions through <code>Game::unnamed_label</code> (<code>FACE_DOWN_NAME</code> vs. <code>NAMELESS_PERMANENT_NAME</code>). <code>PermanentData.face_down</code> reaches observation JSON (omitted when false), PyO3 bindings, <code>__init__.pyi</code>, <code>experience.py</code>/<code>experience.rs</code>, all five <code>protocol/*.schema.json</code> files, <code>experience_projection.py</code>, v11 permanent column 52 (<code>permanent::FACE_DOWN</code>, prefix-compatible with saved checkpoints without bumping input version), and <code>manabot/semantic/text_observation.py</code>. <code>CopyData</code> for a copy of a manifest (<code>registry_key == -1</code>) encodes cleanly as <code>0.0</code> in facts, skips definition lookup in capture, and renders <code>copy of a nameless permanent</code> in LLM text. <code>pinned_objects</code> checks the entry controller (CR 708.5).</li>
-<li><strong>Linked-exile grant source identity:</strong> <code>CastPermissionData.source_permanent_id</code> (<code>observation.rs:1677-1682</code>) projects through <code>lookup_current_permanent(source)</code> → <code>permanent_event_ref(id)</code> → viewer <code>PublicId</code>, matching <code>StackObjectData.source_permanent_id</code>, <code>PermanentData.id</code>, <code>attached_to</code>, <code>blocking</code> and <code>text_observation.py</code>. An audit of every remaining <code>.0 as i32</code> cast across <code>agent/</code> and <code>decision_*.rs</code> confirms no other <code>PermanentId</code> storage index leaks onto a viewer-ID field.</li>
-<li><strong>Canonical state, LKI form retention &amp; optimization guards:</strong> All ten battlefield forms (ordinary card/token, transformed card/token, front-face transforming token, melded pair, entry copy, face-down manifest, entry/token copy of manifest) hash distinctly in <code>CanonicalCard</code> + <code>Permanent</code> + <code>ZoneManager</code>. <code>release_resolved_forms</code> retains departed <code>lki.copiable</code> while any delayed trigger watches or originates from that object, so <code>source_face</code> resolves departed anonymous sources without falling back to the catalog. In <code>29d7adc98d</code>, skipping <code>layer_views</code> when no permanent is attached (<code>sba.rs</code>) and reading <code>melded_card</code> before mutating <code>zones</code> (<code>zones.rs</code>) are strictly semantics-preserving.</li>
-</ul>
+<div class="callout">
+<strong>Verdict · two mismatches from the merge, one small slice before gate.</strong>
+<ol>
+<li><strong>One name for two ideas:</strong> <code>ZoneEntry.transformed</code> means both “enters transformed” (a transforming card, CR 712.14) and “enters with its modal back face up” (a played or cast modal back, CR 712.11). The commit then guesses which by reading <code>modal_back</code>, and the program projection tells the policy and LLM <em>“enters transformed”</em> for a Pathway-style land played as its back face.</li>
+<li><strong>A name narrower than its thing:</strong> <code>BattlefieldForm</code> now also lives on stack objects. <code>show_inset</code> (an Adventure or Omen being cast) and <code>show_modal_back</code> on a cast back face both install a backing through it before the object is anywhere near the battlefield.</li>
+</ol>
+Everything else from the earlier reviews still holds over the merged tree: one transformability authority (<code>ContentPack::transforming_faces</code> → <code>catalog_faces</code>, which already refuses a modal back), one face-down reader (<code>Game::observed_face_down</code>), one identity authority (<code>Game::observed_identity</code>).
+</div>
+
+<h2>Walk · a modal back face, played and cast</h2>
+<table>
+<thead><tr><th>Step</th><th>What a person knows</th><th>What the code does at HEAD</th></tr></thead>
+<tbody>
+<tr><td>Play the back face as a land</td><td>“I play the back face.” It is a modal double-faced card; it does not transform.</td><td><code>play.rs:700</code> writes <code>ZoneEntry { transformed: profile == BackFace }</code>.</td></tr>
+<tr><td>Entry face</td><td>The back face enters.</td><td><code>battlefield_entry_face</code> (<code>zones.rs:832</code>) branches on <code>entry.transformed</code>, then on <code>front.modal_back</code> to pick a catalog row instead of the transform authority.</td></tr>
+<tr><td>Commit</td><td>It is on the battlefield back face up; it will return front up when it leaves.</td><td><code>zones.rs:990</code>: <code>if entry.transformed &amp;&amp; !self.show_modal_back(..) { turn_over(Transform) }</code> — “try modal, else transform”.</td></tr>
+<tr><td>Agent's view of a pending entry</td><td>Nothing transformed.</td><td><code>effect_execution.rs:747</code> writes <code>"enters transformed"</code> for every <code>transformed</code> entry: the policy and LLM see a transform that did not happen.</td></tr>
+<tr><td>Counterexample</td><td>A “return it transformed” effect over a card that is not a transforming DFC stays where it is (CR 712.14a).</td><td>The same bool would put a modal card onto the battlefield back face up. No catalog card reaches this (both <code>exile_and_return_transformed</code> users return themselves, transforming cards), so it is a latent mismatch, not a live bug.</td></tr>
+</tbody>
+</table>
 
 <div class="grid">
-<div class="panel">
-<h3><span class="tag existing">Before item 5</span> Guessed from <code>ANONYMOUS</code> &amp; raw <code>PermanentId</code></h3>
-<pre><code>// flow/identity.rs (live vs departed disagreed)
-departed: lki.battlefield.manifested
-          || lki.definition_id == CardDefId::ANONYMOUS
+<div class="panel"><h3><span class="tag existing">Existing</span>one bool, a guess at commit</h3>
+<pre><code>// proposed_event.rs
+/// Battlefield: enters with its back face up (CR 712.14).
+pub transformed: bool,
 
-// Clone of manifest bounced to hand:
-live:     (entity=90, incarnation=2)
-departed: (entity=90, incarnation=0), CardMoved = None
-label:    "a face-down permanent"
+// zones.rs commit
+if entry.transformed &amp;&amp; !self.show_modal_back(object_id) {
+    self.turn_over(object_id, FormTransition::Transform);
+}
+// effect_execution.rs
+if entry.transformed { self.field("enters transformed", &amp;true) }</code></pre></div>
+<div class="panel"><h3><span class="tag proposed">Proposed</span>the entry says which face</h3>
+<pre><code>// proposed_event.rs
+pub enum EntryFace { #[default] Front,
+    /// CR 712.14: a transforming card's back face.
+    Transformed,
+    /// CR 712.11: a modal card played or cast as its back.
+    ModalBack }
+pub face: EntryFace,
 
-// observation.rs (storage index leaked)
-source_permanent_id: lookup_current_permanent(source)
-    .map(|id| id.0 as i32) // 0 → "Seat 1", 2 → crash</code></pre>
+// zones.rs commit
+match entry.face {
+    EntryFace::ModalBack =&gt; assert!(self.show_modal_back(id)),
+    EntryFace::Transformed =&gt; self.turn_over(id, Transform),
+    EntryFace::Front =&gt; {}
+}
+// effect_execution.rs: "enters transformed" / "enters back face up"</code></pre></div>
 </div>
-<div class="panel">
-<h3><span class="tag existing">Built at HEAD</span> Explicit status &amp; viewer <code>PublicId</code></h3>
-<pre><code>// flow/identity.rs (one authority live and departed)
-let hides_card = manifested || self.observed_face_down(object);
+<p>Play and cast write <code>ModalBack</code>; <code>Effect::Move { transformed }</code> writes <code>Transformed</code>. <code>battlefield_entry_face</code> matches the same enum. Serialization keeps the <code>transformed</code> key for <code>Transformed</code> and adds a <code>modal_back</code> key skipped when false, so recorded bytes change only for a pending modal-back entry. CR 712.14a (a non-transforming card told to enter transformed stays put) has no catalog witness and is not added; <code>Transformed</code> over a card with no transforming faces keeps today's front-up entry.</p>
 
-// Clone of manifest vs manifest vs Witness-Protected manifest:
-manifest:          "a face-down permanent" / P1 (face-down permanent); face down
-Clone of manifest: "a nameless permanent"  / P2 (nameless permanent) [incarnation kept]
-Witness-Protected: "Legitimate Businessperson" / face_down=true, v11[52]=1.0
-
-// observation.rs (viewer PublicId)
-source_permanent_id: lookup_current_permanent(source)
-    .and_then(|id| permanent_event_ref(id)).map(|o| o.entity.0 as i32)</code></pre>
-</div>
-</div>
-</section>
-
-<h2>Concrete walks · normal path, counterexample and recovery</h2>
+<h2>Do the concepts line up?</h2>
 <table>
-<thead><tr><th>Step</th><th>Face-up Clone copying a face-down manifest, dealing damage &amp; bouncing</th><th>Manifested creature enchanted by Witness Protection</th><th>Azula exiling Ragnarok with linked cast grants</th><th>Transformed / copied DFC (Cecil) across departure &amp; token copies</th></tr></thead>
+<thead><tr><th>Product concept</th><th>Code concept</th><th>Fit</th></tr></thead>
 <tbody>
-<tr><th>Normal path</th>
-<td>Player 0 manifests a card. Player 1 casts <em>Clone</em> entering as a copy of the face-down permanent (a face-up nameless 2/2). Clone deals 2 damage and is bounced to hand or dies with a granted trigger.</td>
-<td>Player 0 manifests <em>Llanowar Elves</em>; Player 1 enchants it with <em>Witness Protection</em> (1/1 <em>Legitimate Businessperson</em>, loses all abilities). Player 0 retains the special action to turn it face up for <code>{G}</code>.</td>
-<td>Player 1 controls <em>Azula, Cunning Usurper</em> (<code>PermanentId(2)</code>, <code>PublicId(87)</code>) and exiles melded <em>Ragnarok</em>. Player 0 orders Fang and Vanille; both exiled cards gain linked cast grants bound to Azula’s exact object.</td>
-<td><em>Electroduplicate</em> copies an <em>Ember Island Production</em> nonlegendary <em>Cecil, Redeemed Paladin</em> token and transforms three times; a face-up <em>Clone</em> copies either face of Cecil; a departed front-face Cecil is copied from LKI.</td></tr>
-<tr><th>Counterexample tested</th>
-<td>A face-up Clone has <code>definition_id == ANONYMOUS</code> and empty name, just like a manifest. Does departure flip its incarnation to <code>0</code>, suppress its bounce <code>CardMoved</code>, or mislabel it as face down?</td>
-<td>With <em>Witness Protection</em>, the manifest has a non-empty name and (for its controller) a catalog <code>registry_key</code>. Can v11, LLM text and protocol consumers still tell it is face down?</td>
-<td>With Azula at a non-zero <code>PermanentId</code>, does <code>source_permanent_id</code> collide with player <code>PublicId(0)</code> or crash <code>text_observation.py</code>? Does the grant cleanly drop <code>source_permanent_id</code> once Azula leaves?</td>
-<td>Does a Clone of Cecil illegally transform? Do copy exceptions stack twice across transforms? Does a departed Clone of Cecil falsely inherit catalog back faces?</td></tr>
-<tr><th>Behavior at HEAD &amp; recovery</th>
-<td><strong>Holds:</strong> <code>BattlefieldFacts.face_down</code> is <code>false</code> for Clone and <code>true</code> for the manifest. <code>observed_identity</code> keeps Clone’s <code>(90, gen)</code> and public bounce event across live, LKI, capture and fork; labels call Clone <code>"a nameless permanent"</code> and the manifest <code>"a face-down permanent"</code>.</td>
-<td><strong>Holds:</strong> <code>PermanentData.face_down</code> (JSON-omitted when false) and v11 <code>permanent::FACE_DOWN</code> (col 52) stay <code>true</code>; LLM text emits <code>; face down</code>; saved checkpoints slice to prefix 52 with no input-version bump.</td>
-<td><strong>Holds:</strong> <code>source_permanent_id</code> emits viewer <code>PublicId(87)</code>, renders <code>while they control P… (Azula, Cunning Usurper)</code>, stays valid across forks/reconnects and becomes <code>None</code> once Azula leaves the battlefield.</td>
-<td><strong>Holds:</strong> <code>ContentPack::transforming_faces</code> reads <code>Object.form</code> first (<code>None</code> for Clone, raw <code>TransformingFaces</code> for tokens); <code>Object::show</code> applies copy exceptions once per face; <code>retain_copiable_values</code> keeps Clone’s <code>faces: None</code> in LKI while ordinary Cecil reconstructs <code>catalog_faces</code>.</td></tr>
+<tr><td>What an object shows vs. what it is (manifest, meld result, entry copy, transformed face, <em>Adventure being cast, modal back</em>)</td><td><code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (backing, faces, face_down, copy)</td><td><span class="tag no">No</span>One idea, right shape, wrong name: the form is on stack objects too (<code>show_inset</code>, cast <code>show_modal_back</code>). Rename to <code>ObjectForm</code> and say so in its doc and in <code>mint_appearance</code>'s comment.</td></tr>
+<tr><td>Entering back face up: transformed vs. modal back</td><td><code>ZoneEntry.transformed: bool</code> + <code>modal_back</code> guess at commit</td><td><span class="tag no">No</span>One name for two ideas; mislabels the agent's view. <code>EntryFace</code> above.</td></tr>
+<tr><td>Can it transform?</td><td><code>ContentPack::transforming_faces</code> / <code>catalog_faces</code> (refuses <code>modal_back</code>)</td><td><span class="tag yes">Yes</span>Survives the merge; a modal back has no transforming faces, so <code>turn_over</code> is a no-op on it.</td></tr>
+<tr><td>Mana value of a shown face</td><td><code>Object::mana_value_cost</code> (front's cost only for transforming faces)</td><td><span class="tag yes">Yes</span>A modal back uses its own cost.</td></tr>
+<tr><td>Face down vs. nameless; hidden identity</td><td><code>observed_face_down</code>, <code>observed_identity</code>, <code>unnamed_label</code>, v11 <code>face_down</code></td><td><span class="tag yes">Yes</span>Unchanged by the merge.</td></tr>
+<tr><td>Departed appearance</td><td><code>ObjectLki</code> + <code>BattlefieldFacts</code>, <code>retain_forms</code></td><td><span class="tag yes">Yes</span></td></tr>
+<tr><td>Waiting delayed program shown to the agent</td><td><code>DelayedEffects</code> through <code>ProgramProjection</code></td><td><span class="tag yes">Yes</span>One projection rule for frames and delayed triggers.</td></tr>
 </tbody>
 </table>
 
-<h2>Do the product concepts and the code concepts line up?</h2>
-<table>
-<thead><tr><th>Product concept (rules &amp; player view)</th><th>Code concept (types &amp; owners)</th><th>Fit &amp; diagnosis</th></tr></thead>
-<tbody>
-<tr><td><strong>Battlefield forms: ordinary, transformed, melded, entry-copy &amp; face-down</strong><br>CR 707.5, 707.8a, 708.2, 712, 713.</td>
-<td><code>Object.form: Option&lt;Box&lt;BattlefieldForm&gt;&gt;</code> (<code>backing</code>, <code>faces</code>, <code>face_down</code>, <code>copy</code>; <code>Object</code> ≤ 40B), <code>Permanent.manifested</code>, <code>ZoneManager.melded_cards</code>, <code>CanonicalCard</code> backing/front ids.</td>
-<td><span class="tag yes">Yes</span> Distinct lifetimes have distinct owners: appearance form on <code>Object</code>, permanent-stint alias provenance on <code>Permanent</code>, physical-card zone membership on <code>ZoneManager</code>.</td></tr>
-
-<tr><td><strong>Transformability, face transitions &amp; copiable snapshots</strong><br>Clone of Cecil cannot transform; token copy of Cecil transforms with exceptions applied once; departed copy sources keep catalog faces only for transforming cards.</td>
-<td><code>ContentPack::transforming_faces</code>, <code>catalog_faces</code>, <code>retain_copiable_values</code>, <code>departed_copiable_values</code>, <code>Game::turn_over</code>, <code>Object::show_transforming_face</code>.</td>
-<td><span class="tag yes">Yes</span> Single transformability authority and single transition helper; copy exceptions apply once per raw face.</td></tr>
-
-<tr><td><strong>Exact departures, linked returns, spell entries, clause targets &amp; public-zone moves</strong><br>Batches 1–2 (CR 400.7, 601.2c, 603.10a, 608.2b, 610.3).</td>
-<td><code>ObjectLki</code>, <code>CharacteristicView</code>, <code>ExileLink</code>, <code>SpellEntry</code>, <code>target_fits_clause</code>, <code>ZoneMatching</code>, <code>object_mana_value</code>, <code>EffectFrame.attached</code>.</td>
-<td><span class="tag yes">Yes</span> Single matchers and distinct lifetime types.</td></tr>
-
-<tr><td><strong>Stack trigger projections, Layer 3–7 characteristics, activation limits, summoning sickness &amp; layered SBAs</strong><br>Batch 3 (CR 205.3d/m, 302.6, 303.4d, 602.5b, 704.5m/n/p).</td>
-<td><code>StackObjectData.chosen_mode/x</code>, <code>catalog_join_misses</code>, <code>SetName</code>, <code>CreatureTypes::All</code> + <code>has_all_creature_types</code>, <code>once_per_object</code>/<code>is_use_limited</code>, <code>restricted_by_summoning_sickness</code>, <code>ZoneEntry.attached_to</code>, <code>aura_attachment_illegal</code>.</td>
-<td><span class="tag yes">Yes</span> One owner per rule across rules, observations, tokens and text.</td></tr>
-
-<tr><td><strong>Resumable linked exile, meld-order actor &amp; joint hidden-slot sampling</strong><br>Azula / Hama exiling Ragnarok; uniform joint <code>(foretold, manifest)</code> deals, constrained weights and controller pinning (CR 708.5).</td>
-<td><code>EventBinding::ExileLinked</code>, <code>meld_order_choice</code>, <code>grant_exile_linked</code>, <code>selection_hidden_allocations</code>, <code>draw_manifests</code>, <code>fill_manifest_slots</code>, <code>ZoneEntry::is_face_down</code>, <code>EventBatch::public_entries</code> / <code>pending_movers</code>, <code>pinned_objects</code>.</td>
-<td><span class="tag yes">Yes</span> Resumable across forks; controller-based face-down entry pinning matches CR 708.5.</td></tr>
-
-<tr><td><strong>Viewer identity <code>(entity, incarnation)</code> for manifests, turn-up &amp; decision memory</strong><br>Hidden cards keep <code>(permanent.id, 0)</code> across live, turn-up and departure without exposing physical-card slot or generation; face-up copies of manifests keep their own exact identity.</td>
-<td><code>Game::observed_identity</code>, <code>observed_face_down</code>, <code>hidden_card_alias</code>, <code>object_event_ref</code>, <code>observed_object_id</code>, <code>decision_memory::own_projection</code>, Academy incarnation-0 joins.</td>
-<td><span class="tag yes">Yes</span> Live and departed paths share <code>manifested || self.observed_face_down(object)</code>; no identity flip on departure.</td></tr>
-
-<tr><td><strong>Face-down status vs. nameless face in observations, policy tensors, LLM text &amp; native labels</strong><br>Every consumer distinguishes face-down permanents from face-up nameless copies using consistent names.</td>
-<td><code>BattlefieldFacts.face_down</code>, <code>PermanentData.face_down</code>, v11 <code>permanent::FACE_DOWN</code> (col 52), <code>Game::unnamed_label</code> (<code>FACE_DOWN_NAME</code> / <code>NAMELESS_PERMANENT_NAME</code>), <code>experience.{py,rs}</code>, <code>experience_projection.py</code>, <code>protocol/*.schema.json</code>, <code>text_observation.py</code>.</td>
-<td><span class="tag yes">Yes</span> Explicit boolean across every native, tensor, protocol and LLM text surface; native and LLM labels match.</td></tr>
-
-<tr><td><strong>Linked-exile cast permission source identity</strong><br>“While you control [permanent]” cites the controlling permanent’s viewer <code>PublicId</code>.</td>
-<td><code>observation.rs:1677-1682</code> projects <code>ExileCastGrant.source</code> through <code>lookup_current_permanent</code> → <code>permanent_event_ref</code> → viewer <code>PublicId</code>.</td>
-<td><span class="tag yes">Yes</span> Matches every other <code>*_permanent_id</code> field and renders cleanly in <code>text_observation.py</code>.</td></tr>
-
-<tr><td><strong>Creation-time values frozen into delayed triggers</strong><br>Nine-Lives Familiar’s <code>revival - 1</code>.</td>
-<td><code>EffectValue::DeathCountersMinus</code> frozen in <code>resolution.rs</code>.</td>
-<td><span class="tag no">Deferred</span> Known minor mismatch already tracked in <code>scratch/plan.md</code>; stays deferred until a second delayed-trigger consumer appears.</td></tr>
-</tbody>
-</table>
-
-<h2>Outside this work (separate outcomes)</h2>
-<p>None of these block MTG-420; each is a separate UI, schema or future-card outcome:</p>
+<h2>Outside this work</h2>
 <ul>
-<li><strong>Academy Svelte UI presentation of <code>PermanentState.face_down</code> and nameless <code>copy_of</code>:</strong> <code>experience_projection.py</code> and the protocol schemas already transmit <code>face_down: true</code>, but MTG-420 does not touch <code>academy/ui/</code>. A small UI follow-up would add <code>face_down?: boolean</code> to <code>PermanentState</code> (<code>academy/ui/src/lib/types.ts</code>), include it in <code>pileKey</code> (<code>view.ts</code>), display a face-down badge/card-back in <code>BoardCard.svelte</code> and <code>Inspect.svelte</code>, and fall back when <code>copy_of.name</code> is empty (<code>inspect.ts:61</code>).</li>
-<li><strong>Public-history v1 <code>HistoryReference::Card</code> face-down status:</strong> When a face-down permanent deals damage, <code>policy_history.rs</code> records <code>HistoryReference::Card { definition: None, … }</code> without a <code>face_down</code> flag, so <code>text_observation.py:560</code> renders it as <code>"nameless permanent"</code> in the history suffix (the board, offers and triggers already say <code>face-down permanent</code>). Fixing that requires adding a field to capture/public-history v1 and bumping its schema version.</li>
-<li><strong>General delayed-effect creation-time freezing &amp; <code>Effect::exile_linked</code> vs. <code>Effect::ExileLinked</code> naming:</strong> Deferred by trigger (second delayed-trigger consumer; naming/token pass), as recorded in <code>scratch/plan.md</code> and <code>scratch/questions.md</code>.</li>
+<li>Academy UI rendering of <code>PermanentState.face_down</code> and public-history v1's missing face-down bit (history text says “nameless permanent” for a face-down damage source): as on the previous page, separate outcomes needing a UI change and a capture schema version.</li>
 </ul>
 
-<h2>Review questions (shipped choices for confirmation)</h2>
+<h2>Questions (choices made for review)</h2>
 <ol>
-<li>Face-down status across LKI, observation JSON, v11 column 52, experience protocol and LLM text (shipped at <code>b804a1b341</code> / <code>90197a3a4f</code>):
-  <strong>1a · Keep as built (recommended — separates face-down status from nameless copies everywhere, preserves checkpoint prefix compatibility without bumping input version, and aligns native and LLM terminology).</strong>
-  1b · Also wire <code>PermanentState.face_down</code> into <code>academy/ui/</code> in a separate UI Task.</li>
-<li>Out-of-scope follow-ups (Academy UI face-down rendering, public-history v1 <code>face_down</code> bit, delayed-effect freezing):
-  <strong>2a · Leave outside MTG-420 and advance to PR publication and gate (recommended).</strong>
-  2b · File a dedicated Academy UI Task for <code>PermanentState.face_down</code> rendering now.</li>
+<li><strong>Entry face.</strong> 1a · Replace <code>ZoneEntry.transformed</code> with <code>EntryFace { Front, Transformed, ModalBack }</code> before gate (chosen). 1b · Keep the bool, rename it <code>back_face_up</code>, keep the commit guess. 1c · Leave it; no catalog card reaches the counterexample.</li>
+<li><strong>Form name.</strong> 2a · Rename <code>BattlefieldForm</code> → <code>ObjectForm</code> in the same slice (chosen; Rust-only, not serialized). 2b · Keep the name, widen the doc.</li>
+<li><strong>CR 712.14a.</strong> 3a · Don't add “stays in its zone” without a catalog witness (chosen). 3b · Add it now with a constructed witness.</li>
 </ol>
-</main></html>
+</body>
+</html>
