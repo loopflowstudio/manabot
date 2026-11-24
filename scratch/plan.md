@@ -25,11 +25,7 @@ prefix identity and native epoch even when branches share record nodes.
 2. **Done (`ec62204d49`)** — Remaining critic readouts, attention off, and shared categorical returns with seven architecture parity cases.
 3. **Done (`a95bdce183`)** — Belief-row parity, portable samplers, legacy Torch reads, and linked Torch-blocked policy and sampler jobs.
 4. **Done (`230c18b879`, evidence in `dc864d6c9f`)** — History encoders, shared GRU serving cache, packed live-token attention, backend device admission and memory warm starts.
-5. **Done** — Host preparation stores compact attention coordinates and the additive key mask in `Prepared`. MLX reuses them across forwards. Torch transfers the flat index and offsets and keeps the compact schedule on the host.
-
-## Next — Apple Silicon gate
-
-Run the full backend suite and captured parity check below.
+5. **Done (`80040af539`)** — `Prepared` owns the compact attention coordinates and key mask. On Apple Silicon, 36 focused tests passed, including unequal-length parity and CPU and MPS warm starts.
 
 ## Acceptance
 
@@ -54,18 +50,17 @@ Run the full backend suite and captured parity check below.
 - The remaining architecture refusals are removed. Input-version refusal and
   checkpoint error context still work.
 
-## Apple Silicon gate
+## Next — Apple Silicon gate
 
-The local CPython 3.13 extension was rebuilt from this checkout after test
-collection found the previous binary lacked `managym.SlotLoad`. The five new
-architecture cases passed the existing forward, gradient and clipped Adam
-tolerances. A bounded PPO update branched from a Torch control with legacy
-readings, trained nonzero gates and reloaded them on MLX CPU and MPS.
-Run the full gate and the captured parity check required by
-`docs/development.md#validation-by-change-area`.
+Run the full backend suite and the captured parity check required by
+[`docs/development.md`](../docs/development.md#validation-by-change-area).
+The local CPython 3.13 extension was rebuilt from this checkout after the
+previous binary lacked `managym.SlotLoad`. The earlier broad MLX file run
+during sync did not finish with a passing result. Use verbose output to
+retain the first failing test or the last test started if the process exits.
 
 ```sh
-uv run --extra mlx --extra dev --extra artifacts pytest -q \
+uv run --extra mlx --extra dev --extra artifacts pytest -v \
   tests/model/test_mlx_backend.py tests/belief \
   tests/training/test_update_backends.py tests/training/test_update_backend_protocols.py \
   tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py \
@@ -76,13 +71,6 @@ uv run --extra mlx --extra dev --extra artifacts pytest -q \
   tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py \
   tests/test_package_boundaries.py
 ```
-
-Slice 2 recorded 29 focused passes before sync. After sync, the rebuilt
-engine passed the value-token case and Gray Ogre PPO parity individually.
-The earlier broad MLX file run during sync did not finish with a passing
-result. Its crash context was not captured in full. Gate should run the
-whole file against the rebuilt engine and retain the first failing node
-if the problem recurs.
 
 The artifact manifest lists the retained MLX pilot parity subset. Fetch it
 and check its world admission before using it as gate evidence. If admission
