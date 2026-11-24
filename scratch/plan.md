@@ -2,7 +2,7 @@
 
 ## Working progress
 
-Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (“Kellan, Planar Trailblazer”, “Imprisoned in the Moon” and “Doubling Season”). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate, Drogskol Reaver, Marauding Blight-Priest, Twinflame Tyrant, Fog Bank, Gratuitous Violence and Authority of the Consuls. Twelve cards have documented deferrals and 194 await audit.
+Of the 222 cards selected at base `0b1cc9cfef9c1a98430c825b9764a49237182696`, three already had definitions (“Kellan, Planar Trailblazer”, “Imprisoned in the Moon” and “Doubling Season”). This branch added Lightshell Duo, Arahbo, Helpful Hunter, Regal Caracal, Prideful Parent, Anthem of Champions, Ajani's Pridemate, Drogskol Reaver, Marauding Blight-Priest, Twinflame Tyrant, Fog Bank, Gratuitous Violence, Authority of the Consuls and Diregraf Ghoul. Twelve cards have documented deferrals and 193 await audit.
 
 **Arahbo and Helpful Hunter.** Both native trigger orders resolve from the same position. Foggy Swamp Visions exiled Arahbo from the graveyard. Its token copy entered alone and created exactly one 2/2 Cat. The learning-token streams differed with and without the self-entry alternative. With Scout's Warning available, both text Commands put the named source on the stack first, below the other trigger. Each replay reproduced the digest and rejected stale resubmission. Both choices were valid in v11. The draw was visible in the owner's hand and hidden from the closed opponent's observation and Academy projection.
 
@@ -144,13 +144,11 @@ At `2cc29796`, `damage_source_facts` in `managym/src/flow/proposed_event.rs` rea
 The concept review reran the three entry positions via the Kaladesh fixture at HEAD 2eb740bd. The native entry and trigger model holds. Gate retains the live consumer and stale Command checks.
 **Behavior review at `7ef9b6e3`.** The crossed-control Authority fixture, the Zhao regression and all 75 native observability tests passed. The Authority fixture checks both forks after the trigger reaches the stack, including the exact life-change event. The mandatory tap introduces no player choice. The observability inventory maps it to the permanent’s tapped column. Gate still needs to check the live Authority position through Academy, closed-deck text and v11 tensors, and exercise stale Commands end to end. Authority satisfies its native working obligation. Slice 3 remains open.
 
-**Diregraf Ghoul.** The Innistrad definition uses the entrant’s printed `ReplacementEffect::EntersTapped`. The directed fixture `isd::diregraf_ghoul_enters_tapped` casts the Ghoul and Typhoid Rats in the same game without Authority and checks each permanent when priority returns. The printing fixture records Innistrad #97.
+**Diregraf Ghoul at `64d21de1`.** The Innistrad definition reuses the entrant’s printed `ReplacementEffect::EntersTapped`. In `managym/cards/tests/cards/isd.rs::diregraf_ghoul_enters_tapped`, the Ghoul and Typhoid Rats each cost {B}. The fixture casts each without Authority and checks the first priority window after resolution: the Ghoul is tapped, the Rats are untapped and the stack is empty in both cases. The printing fixture records Innistrad #97 and the FDN ledger points to the definition and directed test.
 
-1. Add remaining FDN token faces needed for this slice (`token.goblin_1_1_r`, `token.knight_1_1_w`, `token.soldier_1_1_w`, `token.dragon_4_4_r_flying`, `token.elf_warrior_1_1_g`, `token.zombie_2_2_b`, `token.dog_1_1_w`, `token.beast_4_4_g`, `token.insect_1_1_bg_flying`, `token.faerie_1_1_u_flying`).
-2. Author **Dragon Fodder**, **Impact Tremors**, **Heroic Reinforcements**, and remaining ready replacement cards (`Elspeth's Smite`, `Scorching Dragonfire`, `Obliterating Bolt`, `Grappling Kraken`, `Fleeting Flight` if local).
-3. Verify:
-   - **Doubling Season + Impact Tremors + Dragon Fodder:** 4 independently identifiable `token.goblin_1_1_r` enter and fire 4 Tremors triggers (vs. 2 without Season).
-   - **Doubling Season boundary:** effect counters vs. loyalty cost vs. resolving permanent-spell copy becoming a token.
+**Next slice — Dragon Fodder and Impact Tremors.** Add the red 1/1 Goblin face with its producer. Resolve Dragon Fodder with Impact Tremors in play and check two distinct Goblin permanents, two triggers and two damage to the opponent. Repeat with the existing Doubling Season definition and check four permanents, four triggers and four damage. Record both cards in the printing fixture and FDN ledger. Add the other token faces with the cards that create them.
+
+Slice 3 also retains Heroic Reinforcements and the local-primitive audit for Elspeth's Smite, Scorching Dragonfire, Obliterating Bolt, Grappling Kraken and Fleeting Flight. Verify Doubling Season separately for effect counters, loyalty costs and a resolving permanent-spell copy becoming a token.
 
 ### Slice 4 — Remaining Bucket B Primitives & Characteristics / Combat / Choice Cards
 1. Add small missing Bucket B primitives confirmed in Step 0:
