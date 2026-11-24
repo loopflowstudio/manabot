@@ -2093,3 +2093,107 @@ fn dropkick_bomber_sacrifices_its_goblin_after_combat_damage_only() {
     assert!(s.game().state.permanents[goblin].is_none(), "sacrificed");
     assert!(s.game().state.permanents[other].is_some());
 }
+
+/// Blocked combat damage also fires the granted sacrifice: the Goblin
+/// survives the Ogre's 2 damage, so only the trigger removes it.
+#[test]
+fn dropkick_bomber_sacrifices_a_blocked_goblin_after_combat_damage() {
+    use crate::support::game::until_end_of_turn;
+    use managym::state::{card::Keywords, effect::Modification};
+    let mut s = five_color_setup(&["Dropkick Bomber", "Raging Goblin", "Gray Ogre"]);
+    let bomber = s.force_permanent_on_battlefield(0, "Dropkick Bomber");
+    let goblin = s.force_permanent_on_battlefield(0, "Raging Goblin");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::AddKeywords(Keywords::of(&[Keyword::Reach])),
+    );
+    until_end_of_turn(
+        &mut s,
+        goblin,
+        Modification::ModifyPt {
+            power: 0,
+            toughness: 3,
+        },
+    );
+    activate(&mut s, bomber, 0);
+    assert!(s.choose_target(Target::Permanent(goblin)));
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, goblin);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    s.advance_to_active_step(0, StepKind::EndOfCombat);
+    assert_eq!(s.game().state.players[1].life, 20, "blocked");
+    assert!(
+        s.game().state.permanents[ogre].is_none(),
+        "2 damage killed it"
+    );
+    assert!(s.game().state.permanents[goblin].is_none(), "sacrificed");
+}
+
+/// Its animation has no duration, and an animated land is summoning sick on
+/// the turn it came under its controller's control (CR 302.6): it attacks
+/// on the next turn, untapped thanks to vigilance.
+#[test]
+fn soulstone_sanctuary_stays_animated_and_attacks_from_the_next_turn() {
+    use crate::support::{game::Scenario, inspect::tapped};
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut s = five_color_setup(&["Soulstone Sanctuary"]);
+    let object = enter_and_settle(&mut s, "Soulstone Sanctuary");
+    let sanctuary = permanent_of(&s, object).unwrap();
+    activate(&mut s, sanctuary, 0);
+    settle(&mut s);
+    let offered = |s: &Scenario| {
+        s.action_space().actions.iter().any(
+            |action| matches!(action, Action::DeclareAttacker { permanent, .. } if *permanent == sanctuary),
+        )
+    };
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(!offered(&s), "sick on its entry turn");
+
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
+    assert!(offered(&s), "still a creature a turn later");
+    attack_with(&mut s, sanctuary);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().state.players[1].life, 17);
+    assert!(!tapped(&s, sanctuary), "vigilance");
+}
+
+/// The entry grant belongs to the creature it was given to (CR 611.2c):
+/// equipping another creature moves only the Armor's +2/+0 and flying.
+#[test]
+fn celestial_armor_entry_protection_stays_when_the_armor_moves() {
+    use crate::support::play::pass_until;
+    use managym::agent::action::ActionSpaceKind;
+    let mut s = five_color_setup(&["Celestial Armor", "Gray Ogre"]);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2W");
+    let armor = cast(&mut s, "Celestial Armor");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(first)));
+    settle(&mut s);
+    let armor = permanent_of(&s, armor).unwrap();
+    let has = |s: &Scenario, id, keyword| keywords(s, id).has(keyword);
+    assert_eq!(s.game().characteristics(first).pt(), (4, 2));
+    for keyword in [Keyword::Flying, Keyword::Hexproof, Keyword::Indestructible] {
+        assert!(has(&s, first, keyword), "{keyword:?}");
+    }
+
+    s.set_player_mana_pool(0, "3W");
+    activate(&mut s, armor, 0);
+    assert!(s.choose_target(Target::Permanent(second)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(first).pt(), (2, 2));
+    assert_eq!(s.game().characteristics(second).pt(), (4, 2));
+    assert!(!has(&s, first, Keyword::Flying) && has(&s, second, Keyword::Flying));
+    for keyword in [Keyword::Hexproof, Keyword::Indestructible] {
+        assert!(has(&s, first, keyword) && !has(&s, second, keyword));
+    }
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!has(&s, first, Keyword::Hexproof), "until end of turn");
+}

@@ -7,8 +7,8 @@ use managym_state::{
     card::ManaAbility,
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticPtBuff, StaticScope,
-        TargetCostReduction,
+        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, StaticKeywordGrant,
+        StaticPtBuff, StaticScope, TargetCostReduction,
     },
     effect::{CopyException, Modification},
     mana::{Mana, ManaCost},
@@ -42,7 +42,68 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         raise_the_past(),
         soulstone_sanctuary(),
         dropkick_bomber(),
+        celestial_armor(),
     ]
+}
+
+fn celestial_armor() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this Equipment enters, attach it to target creature you control. That creature gains hexproof and indestructible until end of turn.\nEquipped creature gets +2/+0 and has flying.\nEquip {3}{W} ({3}{W}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "fdn.celestial_armor",
+        scryfall_id: "809ee8ad-1573-49e5-9e84-b7cdd29efcae",
+        printed: PrintedCharacteristics {
+            name: "Celestial Armor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![
+                    Effect::AttachSourceTo {
+                        what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    },
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        Modification::AddKeywords(Keywords::of(&[
+                            Keyword::Hexproof,
+                            Keyword::Indestructible,
+                        ])),
+                    ),
+                ],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{3}{W}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: 2,
+                    toughness: 0,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Flying]),
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn dropkick_bomber() -> CardDefinition {

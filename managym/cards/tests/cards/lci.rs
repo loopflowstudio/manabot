@@ -38,3 +38,32 @@ fn eaten_by_piranhas_makes_a_black_skeleton_without_its_other_types() {
     assert!(row.temp_subtypes.is_empty(), "set, not added");
     assert_eq!(row.name, None);
 }
+
+/// A hasty creature that loses haste on the turn it entered is summoning
+/// sick again (CR 302.6): the Skeleton can't attack until its controller's
+/// next turn.
+#[test]
+fn eaten_by_piranhas_stops_a_hasty_creature_attacking_the_turn_it_entered() {
+    use crate::support::{inspect::permanent_of, play::enter_and_settle};
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+    };
+    let mut s = five_color_setup(&["Eaten by Piranhas", "Raging Goblin"]);
+    let object = enter_and_settle(&mut s, "Raging Goblin");
+    let goblin = permanent_of(&s, object).unwrap();
+    assert!(!observed(&s, goblin).is_summoning_sick, "haste");
+    cast(&mut s, "Eaten by Piranhas");
+    assert!(s.choose_target(Target::Permanent(goblin)));
+    settle(&mut s);
+    assert!(observed(&s, goblin).is_summoning_sick);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::DeclareAttacker { permanent, .. } if *permanent == goblin)));
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareAttacker);
+}
