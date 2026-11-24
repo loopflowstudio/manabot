@@ -1145,8 +1145,26 @@ pub(crate) fn project_stack_object(
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
+    use crate::state::stack_object::StackObject;
     let mut out = Projection::new(game, viewer, text);
-    if let crate::state::stack_object::StackObject::TriggeredAbility(ability) = object {
+    // "The number of soul counters on this artifact" after it was sacrificed
+    // to pay the cost: the source's last known information (CR 608.2h).
+    let reads_source_lki = |program: &[Effect]| program.iter().any(Effect::reads_source_lki);
+    let source_lki = match object {
+        StackObject::ActivatedAbility(ability) => reads_source_lki(&ability.effects),
+        StackObject::TriggeredAbility(ability) => match &ability.inline_effects {
+            Some(program) => reads_source_lki(program),
+            None => game
+                .source_face(ability.source_object(), ability.source_definition_id)
+                .and_then(|face| face.abilities.get(ability.ability_index))
+                .is_some_and(crate::state::ability::Ability::reads_source_lki),
+        },
+        StackObject::Spell(_) => false,
+    };
+    if source_lki {
+        out.retained_object(object.source_object());
+    }
+    if let StackObject::TriggeredAbility(ability) = object {
         out.trigger_context(
             ability.context,
             ability.source_object(),

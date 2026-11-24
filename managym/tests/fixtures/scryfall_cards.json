@@ -8199,5 +8199,15 @@
     ],
     "oracle_text": "{T}, Put a page counter on this artifact: Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\n{2}, {T}, Put a page counter on this artifact: Draw a card.\nWhen there are four or more page counters on this artifact, exile it. If you do, you gain 4 life.",
     "colors": []
+  },
+  "Ravenous Amulet": {
+    "name": "Ravenous Amulet",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}, {T}, Sacrifice a creature: Draw a card and put a soul counter on this artifact. Activate only as a sorcery.\n{4}, {T}, Sacrifice this artifact: Each opponent loses life equal to the number of soul counters on this artifact.",
+    "colors": []
   }
 }

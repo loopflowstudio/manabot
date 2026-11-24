@@ -58,6 +58,10 @@ impl Ability {
         self.reads(ContextRead::SourcePower)
     }
 
+    pub fn reads_source_lki(&self) -> bool {
+        self.reads(ContextRead::SourceLki)
+    }
+
     pub fn reads_triggering_object(&self) -> bool {
         self.reads(ContextRead::TriggeringObject)
     }
@@ -510,6 +514,9 @@ enum ContextRead {
     /// have left its zone by the time the ability resolves.
     TriggeringObject,
     PaidCost,
+    /// A characteristic of the source other than power, read as it last
+    /// existed once it has left (CR 608.2h).
+    SourceLki,
 }
 
 impl Condition {
@@ -834,6 +841,9 @@ pub enum ObjectProperty {
     ManaValue,
     /// How many of the five colors it is (CR 105.2), `0..=5`.
     Colors,
+    /// How many counters of this kind are on it ("the number of soul
+    /// counters on this artifact").
+    Counters(CounterKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -2079,6 +2089,11 @@ impl Effect {
     pub fn reads_source_power(&self) -> bool {
         self.reads(ContextRead::SourcePower)
     }
+    /// Reads a source characteristic other than power, which a stacked
+    /// ability keeps as last known information once its source has left.
+    pub fn reads_source_lki(&self) -> bool {
+        self.reads(ContextRead::SourceLki)
+    }
     pub fn reads_triggering_object(&self) -> bool {
         self.reads(ContextRead::TriggeringObject)
     }
@@ -2631,6 +2646,9 @@ impl EffectValue {
                 property: ObjectProperty::Power,
                 ..
             } if **of == ObjectSelector::This => read == ContextRead::SourcePower,
+            Self::Property { of, .. } if **of == ObjectSelector::This => {
+                read == ContextRead::SourceLki
+            }
             Self::SourcePower => read == ContextRead::SourcePower,
             Self::TriggeringPower | Self::TriggeringManaValue => {
                 read == ContextRead::TriggeringObject

@@ -3462,3 +3462,49 @@ fn revenge_of_the_rats_counts_creature_cards_and_flashes_back() {
     assert_eq!(s.battlefield_permanents_named(0, "Rat").len(), 4);
     assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
 }
+
+#[test]
+fn ravenous_amulet_drains_by_the_soul_counters_it_had_when_sacrificed() {
+    use crate::support::{game::set_counters, inspect::counters_of, play::select_card};
+    use managym::{agent::observation::Observation, state::permanent::CounterKind::Soul};
+
+    let mut s = five_color_setup(&["Ravenous Amulet", "Gray Ogre"]);
+    let amulet = s.force_permanent_on_battlefield(0, "Ravenous Amulet");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, amulet, 0);
+    let ogre_object = card_of(&s, ogre);
+    select_card(&mut s, ogre_object);
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(permanent_of(&s, ogre_object), None);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+    assert_eq!(counters_of(&s, amulet, Soul), 1);
+
+    set_counters(&mut s, amulet, Soul, 3);
+    s.game_mut().state.permanents[amulet].as_mut().unwrap().tapped = false;
+    let card = card_of(&s, amulet);
+    let life = s.life(1);
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, amulet, 1);
+    spend_colorless(&mut s);
+    assert_eq!(permanent_of(&s, card), None, "sacrificed as a cost");
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let observation = Observation::for_player(s.game(), viewer);
+        let frame = observation
+            .continuation
+            .iter()
+            .find(|frame| frame.kind == 2)
+            .expect("stacked drain");
+        assert!(!frame.effect_execution.is_empty(), "the stack keeps its source's counters");
+    }
+    let capture = s.game().capture_decision(PlayerId(0), 0).unwrap();
+    assert!(capture.frames.iter().any(|frame| frame
+        .effect_execution_summary
+        .iter()
+        .any(|line| line.starts_with("Last known Ravenous Amulet")
+            && line.contains("(Soul, 3)"))));
+    settle(&mut s);
+    assert_eq!(s.life(1), life - 3);
+}

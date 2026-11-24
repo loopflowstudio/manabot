@@ -69,7 +69,9 @@ impl Game {
                 self.spell_info(object).map_or(0, |spell| match property {
                     ObjectProperty::ManaValue => i32::from(spell.mana_value),
                     ObjectProperty::Colors => spell.colors.len() as i32,
-                    ObjectProperty::Power | ObjectProperty::Toughness => 0,
+                    ObjectProperty::Power
+                    | ObjectProperty::Toughness
+                    | ObjectProperty::Counters(_) => 0,
                 })
             }
             _ => 0,
@@ -82,6 +84,9 @@ impl Game {
             ObjectProperty::Toughness => self.layer_view(id).toughness,
             ObjectProperty::ManaValue => self.permanent_mana_value(id),
             ObjectProperty::Colors => self.layer_view(id).colors.len() as i32,
+            ObjectProperty::Counters(kind) => self.state.permanents[id]
+                .as_ref()
+                .map_or(0, |permanent| permanent.counter_count(kind)),
         }
     }
 
@@ -95,6 +100,7 @@ impl Game {
                 .as_ref()
                 .map_or(0, |cost| i32::from(cost.mana_value)),
             ObjectProperty::Colors => lki.colors.len() as i32,
+            ObjectProperty::Counters(kind) => lki.counters.get(kind),
         }
     }
 

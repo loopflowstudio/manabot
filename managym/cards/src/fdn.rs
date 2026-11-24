@@ -19,6 +19,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        ravenous_amulet(),
         hare_apparent(),
         ingenious_leonin(),
         tragic_banshee(),
@@ -478,6 +479,58 @@ fn drake_hatcher() -> CardDefinition {
                 effects: vec![Effect::create_tokens("token.drake", 1)],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ravenous_amulet() -> CardDefinition {
+    let text_box = "{1}, {T}, Sacrifice a creature: Draw a card and put a soul counter on this artifact. Activate only as a sorcery.\n{4}, {T}, Sacrifice this artifact: Each opponent loses life equal to the number of soul counters on this artifact.";
+    CardDefinition {
+        key: "fdn.ravenous_amulet",
+        scryfall_id: "80cadee5-6f26-4440-ad31-a8e573a90436",
+        printed: PrintedCharacteristics {
+            name: "Ravenous Amulet".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{1}"),
+                    tap_source: true,
+                    sacrifice: Some(SacrificeCost {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                        another: false,
+                        or_mana: None,
+                    }),
+                    sorcery_timing: true,
+                    effects: vec![
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        },
+                        Effect::put_counters(ObjectSelector::This, CounterKind::Soul, 1),
+                    ],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{4}"),
+                    tap_source: true,
+                    sacrifice_source: true,
+                    effects: vec![Effect::LoseLife {
+                        player: PlayerSelector::EachOpponent,
+                        amount: EffectValue::Property {
+                            of: Box::new(ObjectSelector::This),
+                            property: ObjectProperty::Counters(CounterKind::Soul),
+                            aggregate: Aggregate::Sum,
+                        },
+                    }],
+                    ..Default::default()
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -939,10 +939,13 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
         } => {
             use crate::state::ability::{Aggregate, ObjectProperty};
             let noun = match property {
-                ObjectProperty::Power => "power",
-                ObjectProperty::Toughness => "toughness",
-                ObjectProperty::ManaValue => "mana value",
-                ObjectProperty::Colors => "number of colors",
+                ObjectProperty::Power => "power".into(),
+                ObjectProperty::Toughness => "toughness".into(),
+                ObjectProperty::ManaValue => "mana value".into(),
+                ObjectProperty::Colors => "number of colors".into(),
+                ObjectProperty::Counters(kind) => {
+                    format!("number of {} counters", counter_description(*kind))
+                }
             };
             let how = match of.as_ref() {
                 ObjectSelector::This | ObjectSelector::Target(_) | ObjectSelector::Triggering => "",

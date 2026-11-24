@@ -944,6 +944,9 @@ impl<'a> Context<'a> {
             ObjectProperty::Toughness => self.objects[&id].view.toughness,
             ObjectProperty::ManaValue => self.game.permanent_mana_value(id),
             ObjectProperty::Colors => self.objects[&id].view.colors.len() as i32,
+            ObjectProperty::Counters(kind) => self.game.state.permanents[id]
+                .as_ref()
+                .map_or(0, |permanent| permanent.counter_count(kind)),
         }
     }
 

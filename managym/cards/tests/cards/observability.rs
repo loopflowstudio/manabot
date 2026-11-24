@@ -6258,3 +6258,19 @@ fn power_batch_catalog_tokens_distinguish_source_target_and_total() {
         }
     }
 }
+
+#[test]
+fn counter_costs_state_triggers_and_counter_counts_reach_the_tokens() {
+    let tome = tokens_of(&card_definition("Mazemind Tome"));
+    let amulet = tokens_of(&card_definition("Ravenous Amulet"));
+    assert!(tome.contains(&(TokenKind::Field, name_value("add_counters"))));
+    assert!(tome.contains(&(TokenKind::Variant, name_value("TriggerCondition::State"))));
+    assert!(tome.contains(&(
+        TokenKind::Variant,
+        name_value("Condition::SourceCountersAtLeast")
+    )));
+    assert!(amulet.contains(&(TokenKind::Variant, name_value("ObjectProperty::Counters"))));
+    for (tokens, kind) in [(&tome, "CounterKind::page"), (&amulet, "CounterKind::soul")] {
+        assert!(tokens.contains(&(TokenKind::Variant, name_value(kind))), "{kind}");
+    }
+}
