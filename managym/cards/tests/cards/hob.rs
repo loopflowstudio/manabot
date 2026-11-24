@@ -1234,3 +1234,48 @@ fn flameshape_plays_a_land_and_a_modal_land_face() {
     expected.sort_by_key(|(verb, object, _)| (*verb, *object));
     assert_eq!(plays, expected);
 }
+
+/// A grant's price names the card's spell face: Kelp Hollow's front is a
+/// land, so Flameshape shows Kelp Warden's {2}{U} and an airbend grant its
+/// own {2}, never "no cost".
+#[test]
+fn a_grant_on_a_land_front_prices_its_spell_back() {
+    use crate::support::{
+        game::{move_from_library, pin_top},
+        inspect::now,
+        play::{cast_card, cast_profile},
+    };
+    use managym::{
+        agent::observation::Observation,
+        flow::cast_permission::PlayGrant,
+        state::{mana::ManaCost, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Gandalf, Goblins' Bane", "Kelp Hollow"]);
+    let gandalf = move_from_library(&mut s, 0, "Gandalf, Goblins' Bane", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Kelp Hollow"]);
+    cast_profile(&mut s, gandalf, SpellProfile::Adventure);
+    settle(&mut s);
+    cast_card(&mut s, gandalf);
+    settle(&mut s);
+    let shaped = now(&s, top[0]);
+    let airbent = move_from_library(&mut s, 0, "Kelp Hollow", ZoneType::Exile);
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        cost: Some(ManaCost::parse("{2}")),
+        ..PlayGrant::new(airbent, PlayerId(0))
+    });
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let cost_of = |object: managym::state::game_object::ObjectId| {
+        let id = s.game().state[object].id.0 as i32;
+        let card = observation
+            .agent_cards
+            .iter()
+            .find(|card| card.id == id)
+            .unwrap();
+        let [grant] = card.cast_permissions.as_slice() else {
+            panic!("one grant on {object:?}");
+        };
+        grant.cost.clone()
+    };
+    assert_eq!(cost_of(shaped), Some(ManaCost::parse("{2}{U}")));
+    assert_eq!(cost_of(airbent), Some(ManaCost::parse("{2}")));
+}

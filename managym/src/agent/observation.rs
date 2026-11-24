@@ -1755,7 +1755,7 @@ impl Observation {
                 .play_grants_on(object_id)
                 .map(|(grant, caster)| CastPermissionData {
                     player_id: game.state.players[caster.0].id.0 as i32,
-                    cost: game.grant_cast_cost(grant, &game.state[grant.object]),
+                    cost: game.grant_card_cast_cost(grant),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,

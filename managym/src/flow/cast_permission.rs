@@ -587,6 +587,26 @@ impl Game {
         })
     }
 
+    /// The price a viewer reads on `grant`'s card: the grant's cost for its
+    /// first spell face, the front unless that is a land and a modal back
+    /// face is a spell (CR 712.8a). A card with no spell face has none.
+    pub(crate) fn grant_card_cast_cost(&self, grant: &PlayGrant) -> Option<ManaCost> {
+        use crate::{cards::content_pack::default_content_pack, state::card::SpellProfile};
+        let object = &self.state[grant.object];
+        let pack = default_content_pack();
+        let face = pack
+            .spell_definition(object, SpellProfile::Front)
+            .filter(|front| !front.types.is_land())
+            .or_else(|| {
+                object
+                    .modal_back
+                    .then(|| pack.spell_definition(object, SpellProfile::BackFace))
+                    .flatten()
+                    .filter(|back| !back.types.is_land())
+            })?;
+        self.grant_cast_cost(grant, face)
+    }
+
     /// The mana or alternative cost `grant` selects for `definition`: its
     /// foretell cost, the grant's alternative, or its mana cost. Additional
     /// costs and reductions apply to these colored pips (CR 601.2f) before
