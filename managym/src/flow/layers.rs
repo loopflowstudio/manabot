@@ -198,7 +198,7 @@ impl ReadSet {
                 }
                 self.selector(of);
             }
-            EffectValue::Objects { of, predicate } => {
+            EffectValue::Objects { of, predicate, .. } => {
                 if let Some(p) = predicate {
                     self.predicate(p);
                 }
@@ -279,11 +279,12 @@ impl SourcePlan {
                         reads.predicate(predicate);
                     }
                 }
-                Operation::Power(cda) => match cda.as_ref() {
+                Operation::Cda { cda, .. } => match cda.as_ref() {
                     PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
                         reads.fields |= CARD_TYPES;
                     }
-                    PowerCda::GraveyardMatching(predicate) => reads.predicate(predicate),
+                    PowerCda::GraveyardMatching(predicate)
+                    | PowerCda::GraveyardMatchingBy { predicate, .. } => reads.predicate(predicate),
                 },
                 _ => {}
             }
@@ -319,7 +320,12 @@ enum Operation {
     Name(String),
     // Expressions resolve before becoming per-target instructions. Indirection
     // keeps their large predicates out of every small resolved modification.
-    Power(Box<PowerCda>),
+    /// A characteristic-defining count; `sets_toughness` sets toughness to
+    /// the same value ("power and toughness are each equal to").
+    Cda {
+        cda: Box<PowerCda>,
+        sets_toughness: bool,
+    },
     Buff(Box<StaticPtBuff>),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
@@ -341,7 +347,7 @@ impl Operation {
         match self {
             Self::Name(_) => NAME,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
-            Self::Power(_) | Self::Buff(_) => POWER,
+            Self::Cda { .. } | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
@@ -814,12 +820,17 @@ impl<'a> Context<'a> {
                             Operation::Modify(m) => Operation::Modify(
                                 m.map_amount(|n| LayerValue::Fixed(self.value(n, id))),
                             ),
-                            Operation::Power(cda) => Operation::Modify(Modification::SetBasePt {
-                                power: Some(LayerValue::Fixed(
-                                    self.cda(cda, self.controller(node.source)),
-                                )),
-                                toughness: None,
-                            }),
+                            Operation::Cda {
+                                cda,
+                                sets_toughness,
+                            } => {
+                                let value =
+                                    LayerValue::Fixed(self.cda(cda, self.controller(node.source)));
+                                Operation::Modify(Modification::SetBasePt {
+                                    power: Some(value.clone()),
+                                    toughness: sets_toughness.then_some(value),
+                                })
+                            }
                             Operation::Buff(buff) => self.buff(buff, node.source, id),
                             op => op.clone(),
                         };
@@ -903,18 +914,25 @@ impl<'a> Context<'a> {
                 .filter(|(id, o)| self.controller(**id) == controller && o.view.is_creature())
                 .count() as i32,
             PowerCda::GraveyardMatching(p) => self.graveyard_count(controller, p),
+            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.game.state.players.len())
+                .map(PlayerId)
+                .filter(|player| who.includes(controller, *player))
+                .map(|player| self.graveyard_count(player, predicate))
+                .sum(),
         }
     }
-    fn graveyard_count(&self, controller: PlayerId, predicate: &CardPredicate) -> i32 {
+    fn graveyard_count(&self, owner: PlayerId, predicate: &CardPredicate) -> i32 {
         self.game
             .state
-            .zone_cards(ZoneType::Graveyard, controller)
+            .zone_cards(ZoneType::Graveyard, owner)
             .filter(|card| {
                 let object = self.game.state.object_of(*card);
                 self.game.off_battlefield_matches(object, predicate, || {
                     let card = &self.game.state[object];
-                    card.power_cda()
-                        .map_or_else(|| card.power.unwrap_or(0), |cda| self.cda(cda, card.owner))
+                    card.pt_cda().map_or_else(
+                        || card.power.unwrap_or(0),
+                        |(cda, _)| self.cda(cda, card.owner),
+                    )
                 })
             })
             .count() as i32
@@ -991,7 +1009,7 @@ impl<'a> Context<'a> {
                     .into_iter()
                     .map(|id| self.property(id, *property)),
             ),
-            EffectValue::Objects { of, predicate } => self
+            EffectValue::Objects { of, predicate, .. } => self
                 .select_permanents(of, source)
                 .into_iter()
                 .filter(|&id| {
@@ -1156,11 +1174,14 @@ impl<'a> Context<'a> {
                 plan.parts
                     .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
             }
-            StaticAbility::CharacteristicPower(cda) => {
+            StaticAbility::CharacteristicPower(cda) | StaticAbility::CharacteristicPt(cda) => {
                 plan.cda = true;
                 plan.parts.push((
                     Layer::CharacteristicPower,
-                    Operation::Power(Box::new(cda.clone())),
+                    Operation::Cda {
+                        cda: Box::new(cda.clone()),
+                        sets_toughness: matches!(entry.ability, StaticAbility::CharacteristicPt(_)),
+                    },
                 ));
             }
             StaticAbility::SetsLandType(set) => {
@@ -1402,7 +1423,7 @@ fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Vec<StaticEn
     view.ward = None;
     view.firebending = 0;
     view.activated_abilities
-        .retain(|ability| ability.mana_choices().is_some());
+        .retain(ActivatedAbilityDefinition::is_mana_ability);
     view.triggered_abilities.clear();
     statics.clear();
 }

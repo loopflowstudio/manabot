@@ -8017,5 +8017,175 @@
     "colors": [
       "W"
     ]
+  },
+  "Elvish Archdruid": {
+    "name": "Elvish Archdruid",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Kiora, the Rising Tide": {
+    "name": "Kiora, the Rising Tide",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Merfolk Noble",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Threshold"
+    ],
+    "oracle_text": "When Kiora enters, draw two cards, then discard two cards.\nThreshold — Whenever Kiora attacks, if there are seven or more cards in your graveyard, you may create Scion of the Deep, a legendary 8/8 blue Octopus creature token.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Crypt Feaster": {
+    "name": "Crypt Feaster",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Zombie",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Threshold",
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nThreshold — Whenever this creature attacks, if there are seven or more cards in your graveyard, this creature gets +2/+0 until end of turn.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Revenge of the Rats": {
+    "name": "Revenge of the Rats",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create a tapped 1/1 black Rat creature token for each creature card in your graveyard.\nFlashback {2}{B}{B} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Enigma Drake": {
+    "name": "Enigma Drake",
+    "mana_cost": "{1}{U}{R}",
+    "type_line": "Creature — Drake",
+    "power": "*",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nEnigma Drake's power is equal to the number of instant and sorcery cards in your graveyard.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Crusader of Odric": {
+    "name": "Crusader of Odric",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "*",
+    "toughness": "*",
+    "keywords": [],
+    "oracle_text": "Crusader of Odric's power and toughness are each equal to the number of creatures you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Consuming Aberration": {
+    "name": "Consuming Aberration",
+    "mana_cost": "{3}{U}{B}",
+    "type_line": "Creature — Horror",
+    "power": "*",
+    "toughness": "*",
+    "keywords": [],
+    "oracle_text": "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.\nWhenever you cast a spell, each opponent reveals cards from the top of their library until they reveal a land card, then puts those cards into their graveyard.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Stroke of Midnight": {
+    "name": "Stroke of Midnight",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target nonland permanent. Its controller creates a 1/1 white Human creature token.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Feed the Swarm": {
+    "name": "Feed the Swarm",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target creature or enchantment an opponent controls. You lose life equal to that permanent's mana value.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Scavenging Ooze": {
+    "name": "Scavenging Ooze",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Ooze",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{G}: Exile target card from a graveyard. If it was a creature card, put a +1/+1 counter on this creature and you gain 1 life.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Cemetery Recruitment": {
+    "name": "Cemetery Recruitment",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return target creature card from your graveyard to your hand. If it's a Zombie card, draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Dread Summons": {
+    "name": "Dread Summons",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Mill"
+    ],
+    "oracle_text": "Each player mills X cards. For each creature card put into a graveyard this way, you create a tapped 2/2 black Zombie creature token. (To mill a card, a player puts the top card of their library into their graveyard.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Maelstrom Pulse": {
+    "name": "Maelstrom Pulse",
+    "mana_cost": "{1}{B}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target nonland permanent and all other permanents with the same name as that permanent.",
+    "colors": [
+      "B",
+      "G"
+    ]
   }
 }

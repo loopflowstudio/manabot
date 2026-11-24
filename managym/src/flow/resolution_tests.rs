@@ -2440,6 +2440,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
                 Effect::MillCards {
                     count: EffectValue::Fixed(3),
                     target: None,
+                    player: None,
                 },
                 select(
                     1,

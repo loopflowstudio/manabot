@@ -40,11 +40,14 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         plain_spirit(),
         powerstone(),
         rabbit(),
+        rat(),
+        scion_of_the_deep(),
         soldier(),
         spirit(),
         treasure(),
         villain(),
         zeppelin(),
+        zombie(),
     ]
 }
 
@@ -491,6 +494,36 @@ fn villain() -> TokenDefinition {
             keywords: Keywords::of(&[Keyword::Menace]),
             ..creature(base, 2, 1, [Color::Black])
         },
+    )
+}
+
+fn rat() -> TokenDefinition {
+    let base = face("Rat", [CardType::Creature], &["Rat"], "");
+    token(
+        "token.rat",
+        "1a85fe9d-ef18-46c4-88b0-cf2e222e30e4",
+        creature(base, 1, 1, [Color::Black]),
+    )
+}
+
+fn scion_of_the_deep() -> TokenDefinition {
+    let base = face("Scion of the Deep", [CardType::Creature], &["Octopus"], "");
+    token(
+        "token.scion_of_the_deep",
+        "26c478f7-b426-4055-8d06-e5782226c826",
+        PrintedCharacteristics {
+            supertypes: vec!["Legendary".into()],
+            ..creature(base, 8, 8, [Color::Blue])
+        },
+    )
+}
+
+fn zombie() -> TokenDefinition {
+    let base = face("Zombie", [CardType::Creature], &["Zombie"], "");
+    token(
+        "token.zombie",
+        "8e7b5995-ee8b-40d1-b157-8df96c02cc5b",
+        creature(base, 2, 2, [Color::Black]),
     )
 }
 

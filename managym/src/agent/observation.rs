@@ -1471,9 +1471,13 @@ impl Observation {
             registry_key: object.registry_key.0 as i32,
             is_copy: !object.is_card(),
             has_announced_x: has_x,
-            characteristics: CharacteristicsData {
-                power: game.object_power(spell.object),
-                ..Self::printed_characteristics_data(game, spell.object)
+            characteristics: {
+                let (power, toughness) = game.object_pt(spell.object);
+                CharacteristicsData {
+                    power,
+                    toughness,
+                    ..Self::printed_characteristics_data(game, spell.object)
+                }
             },
         }
     }
@@ -1663,10 +1667,11 @@ impl Observation {
     }
 
     /// A card's row. On the battlefield every characteristic reads the
-    /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
+    /// layered view (`Game::characteristics`); elsewhere CDAs still set
+    /// power and toughness.
     fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
         let mut card = Self::printed_card_data(game, object_id, zone);
-        card.characteristics.power = game.object_power(object_id);
+        (card.characteristics.power, card.characteristics.toughness) = game.object_pt(object_id);
         card
     }
 

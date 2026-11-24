@@ -1,8 +1,8 @@
 //! Wilds of Eldraine.
 use managym_state::{
     ability::{
-        Ability, CompareOp, Condition, Effect, ObjectSelector, Per, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, CompareOp, Condition, Effect, ObjectSelector, Per, PlayerSelector, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -19,7 +19,40 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         archons_glory(),
         mocking_sprite(),
         scarecrow_guide(),
+        stroke_of_midnight(),
     ]
+}
+
+fn stroke_of_midnight() -> CardDefinition {
+    let text_box = "Destroy target nonland permanent. Its controller creates a 1/1 white Human creature token.";
+    let nonland = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                not_card_types: vec![CardType::Land],
+                ..Default::default()
+            },
+        })
+    };
+    CardDefinition {
+        key: "woe.stroke_of_midnight",
+        scryfall_id: "289ba7ec-e30e-436f-b8d4-c88b65ecd137",
+        printed: PrintedCharacteristics {
+            name: "Stroke of Midnight".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::destroy(nonland()),
+                // Its controller as it last existed, destroyed or not.
+                Effect::ForPlayer {
+                    player: PlayerSelector::TargetController,
+                    effects: vec![Effect::create_tokens("token.human", 1)],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn scarecrow_guide() -> CardDefinition {

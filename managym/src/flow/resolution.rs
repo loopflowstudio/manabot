@@ -130,14 +130,20 @@ impl Game {
             EffectValue::Objects {
                 of,
                 predicate: None,
+                in_zone: None,
             } if **of == ObjectSelector::Moved => frame.moved.len() as i32,
-            EffectValue::Objects { of, predicate } => self
+            EffectValue::Objects {
+                of,
+                predicate,
+                in_zone,
+            } => self
                 .select(of, frame)
                 .into_iter()
                 .filter(|object| {
-                    predicate
-                        .as_ref()
-                        .is_none_or(|predicate| self.object_matches_predicate(*object, predicate))
+                    in_zone.is_none_or(|zone| self.state.zones.zone_of(*object) == Some(zone))
+                        && predicate.as_ref().is_none_or(|predicate| {
+                            self.object_matches_predicate(*object, predicate)
+                        })
                 })
                 .count() as i32,
             EffectValue::DistinctManaValues { of } => self
@@ -721,6 +727,19 @@ impl Game {
 
     /// The players a selector names as the effect resolves; a target player
     /// that is no longer a legal target is skipped.
+    /// Put library cards into their owners' graveyards as one simultaneous
+    /// move (CR 701.17a), bound as the frame's `CardsThisWay`.
+    fn mill_objects(&mut self, frame: &mut EffectFrame, object_ids: Vec<ObjectId>) {
+        frame.this_way.clear();
+        let events: Vec<_> = object_ids
+            .into_iter()
+            .map(|object_id| {
+                self.zone_move_proposal(object_id, ZoneType::Graveyard, ZoneEntry::default())
+            })
+            .collect();
+        frame.batch = Some(self.event_batch(EventBinding::ThisWay, events));
+    }
+
     fn selected_players(&self, selector: &PlayerSelector, frame: &EffectFrame) -> Vec<PlayerId> {
         match selector {
             PlayerSelector::You => vec![frame.controller],
@@ -1130,21 +1149,43 @@ impl Game {
                 self.gain_life(frame.controller, amount);
                 None
             }
-            Effect::MillCards { count, target } => {
-                let player = match target {
-                    Some(_) => match self.present_primary_target(frame) {
-                        Some(Target::Player(player)) => player,
+            Effect::MillCards {
+                count,
+                target,
+                player,
+            } => {
+                let players = match (player, target) {
+                    (Some(player), _) => self.selected_players(player, frame),
+                    (None, Some(_)) => match self.present_primary_target(frame) {
+                        Some(Target::Player(player)) => vec![player],
                         _ => return None,
                     },
-                    None => frame.controller,
+                    (None, None) => vec![frame.controller],
                 };
                 let count = self.effect_value(count, frame).max(0) as usize;
-                frame.this_way.clear();
-                let object_ids = self.library_top_objects(player, count);
-                let events = object_ids.into_iter().map(|object_id| {
-                    self.zone_move_proposal(object_id, ZoneType::Graveyard, ZoneEntry::default())
-                });
-                frame.batch = Some(self.event_batch(EventBinding::ThisWay, events));
+                let object_ids: Vec<_> = players
+                    .into_iter()
+                    .flat_map(|player| self.library_top_objects(player, count))
+                    .collect();
+                self.mill_objects(frame, object_ids);
+                None
+            }
+            Effect::MillUntil { player, predicate } => {
+                let mut object_ids = Vec::new();
+                for player in self.selected_players(player, frame) {
+                    for object_id in self.library_top_objects(player, usize::MAX) {
+                        let definition = self.state[object_id].definition_id;
+                        self.emit(GameEvent::CardRevealed {
+                            owner: player,
+                            definition,
+                        });
+                        object_ids.push(object_id);
+                        if self.object_matches_predicate(object_id, predicate) {
+                            break;
+                        }
+                    }
+                }
+                self.mill_objects(frame, object_ids);
                 None
             }
             Effect::SelectCards {
@@ -2317,6 +2358,25 @@ impl Game {
                 .filter(|slot| self.target_is_present(slot.target))
                 .filter_map(|slot| self.target_object(slot.target))
                 .collect(),
+            ObjectSelector::TargetAndSameName(_) => {
+                let Some(Target::Permanent(target)) = self.present_primary_target(frame) else {
+                    return Vec::new();
+                };
+                let named = CardPredicate {
+                    named: Some(self.characteristics(target).name.clone()),
+                    ..Default::default()
+                };
+                std::iter::once(target)
+                    .chain(
+                        [PlayerId(0), PlayerId(1)]
+                            .into_iter()
+                            .flat_map(|player| self.battlefield_permanents(player))
+                            .filter(|id| *id != target)
+                            .filter(|id| self.permanent_matches_predicate(*id, &named)),
+                    )
+                    .filter_map(|id| self.permanent_object(id))
+                    .collect()
+            }
             ObjectSelector::Triggering => permanent(match frame.context_target {
                 Some(Target::Permanent(id)) => Some(id),
                 _ => None,

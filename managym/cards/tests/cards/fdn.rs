@@ -3350,3 +3350,115 @@ fn ingenious_leonin_grows_another_attacker_and_gives_a_cat_first_strike() {
     assert!(keywords(&s, cat).has(Keyword::FirstStrike));
     assert!(!keywords(&s, ogre).has(Keyword::FirstStrike));
 }
+
+/// Fill `player`'s graveyard with Plains until it holds `count` cards.
+fn graveyard_of(s: &mut crate::support::game::Scenario, player: usize, count: usize) {
+    use crate::support::game::plant_in_graveyard;
+    while s
+        .game()
+        .state
+        .zones
+        .size(ZoneType::Graveyard, PlayerId(player))
+        < count
+    {
+        plant_in_graveyard(s, player, "Plains");
+    }
+}
+
+/// Kiora loots two as it enters. Attacking with seven cards in its
+/// controller's graveyard offers Scion of the Deep, a legendary 8/8; with
+/// six it does not trigger.
+#[test]
+fn kiora_loots_and_offers_the_scion_at_threshold() {
+    use crate::support::{game::clear_summoning_sickness, play::pass_until};
+    use managym::agent::action::{ActionSpaceKind, ActionType};
+    for cards in [6, 7] {
+        let mut s = five_color_setup(&["Kiora, the Rising Tide"]);
+        let kiora = enter_and_settle(&mut s, "Kiora, the Rising Tide");
+        let kiora = permanent_of(&s, kiora).unwrap();
+        assert!(s
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, PlayerId(0))
+            .is_empty());
+        assert_eq!(
+            s.game().state.zones.size(ZoneType::Graveyard, PlayerId(0)),
+            2
+        );
+        graveyard_of(&mut s, 0, cards);
+        clear_summoning_sickness(&mut s, kiora);
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, kiora);
+        if cards == 7 {
+            pass_until(&mut s, ActionSpaceKind::PayOrNot);
+            assert!(s.take_action_by_type(ActionType::PayCost));
+        }
+        settle(&mut s);
+        let scions = s.battlefield_permanents_named(0, "Scion of the Deep");
+        assert_eq!(scions.len(), usize::from(cards == 7), "{cards} cards");
+        if let Some(scion) = scions.first() {
+            let view = s.game().characteristics(*scion);
+            assert_eq!(view.pt(), (8, 8));
+            assert!(view.is_legendary);
+        }
+    }
+}
+
+/// Crypt Feaster's threshold is an intervening "if" (CR 603.4): six cards
+/// never trigger it, and a graveyard that drops below seven before the
+/// trigger resolves gives no bonus.
+#[test]
+fn crypt_feaster_checks_threshold_on_attack_and_resolution() {
+    use crate::support::{game::clear_summoning_sickness, play::pass_until};
+    use managym::agent::action::ActionSpaceKind;
+    for (cards, drop_before_resolution, power) in [(6, false, 3), (7, false, 5), (7, true, 3)] {
+        let mut s = five_color_setup(&["Crypt Feaster"]);
+        let feaster = s.force_permanent_on_battlefield(0, "Crypt Feaster");
+        clear_summoning_sickness(&mut s, feaster);
+        graveyard_of(&mut s, 0, cards);
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, feaster);
+        if drop_before_resolution {
+            assert!(!s.game().state.stack_objects.is_empty());
+            let card = s
+                .game()
+                .state
+                .zones
+                .zone_objects(ZoneType::Graveyard, PlayerId(0))[0];
+            move_card(&mut s, card, ZoneType::Exile);
+        }
+        settle(&mut s);
+        assert_eq!(
+            s.game().characteristics(feaster).pt(),
+            (power, 4),
+            "{cards} cards, dropped: {drop_before_resolution}"
+        );
+    }
+}
+
+/// Revenge of the Rats makes a tapped Rat for each creature card in its
+/// caster's graveyard, and flashes back from there, then is exiled.
+#[test]
+fn revenge_of_the_rats_counts_creature_cards_and_flashes_back() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::{tapped, zone_of},
+        play::{cast, cast_card},
+    };
+    let mut s = five_color_setup(&["Revenge of the Rats", "Gray Ogre"]);
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Plains");
+    plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    let spell = cast(&mut s, "Revenge of the Rats");
+    settle(&mut s);
+    let rats = s.battlefield_permanents_named(0, "Rat");
+    assert_eq!(rats.len(), 2);
+    assert!(rats.iter().all(|rat| tapped(&s, *rat)));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
+    cast_card(&mut s, spell);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Rat").len(), 4);
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
+}

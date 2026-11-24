@@ -1195,6 +1195,18 @@ impl Game {
             } => Some(Target::StackAbility(*ability)),
             _ if !ability.reads_triggering_object() => None,
             GameEvent::SpellCast { object_id, .. } => Some(Target::StackSpell(*object_id)),
+            // "That creature" / "that source" of a damage trigger: the dealing
+            // permanent live or as it last existed, else the dealing spell,
+            // as `subject_matches_damage_source` matched it.
+            GameEvent::DamageDealt {
+                source: Some(source),
+                ..
+            } => Some(
+                self.state
+                    .permanent_of(*source)
+                    .or_else(|| self.object_lki(*source).map(|lki| lki.permanent))
+                    .map_or(Target::StackSpell(*source), Target::Permanent),
+            ),
             GameEvent::CardMoved {
                 object_id,
                 to: ZoneType::Battlefield,

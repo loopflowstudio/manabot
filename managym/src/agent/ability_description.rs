@@ -757,6 +757,18 @@ fn target_description(t: &TargetSpec) -> String {
     format!("target {noun}")
 }
 
+fn zone_phrase(zone: ZoneType) -> &'static str {
+    match zone {
+        ZoneType::Graveyard => "a graveyard",
+        ZoneType::Hand => "a hand",
+        ZoneType::Library => "a library",
+        ZoneType::Exile => "exile",
+        ZoneType::Battlefield => "the battlefield",
+        ZoneType::Stack => "the stack",
+        ZoneType::Command => "the command zone",
+    }
+}
+
 fn player_description(player: &PlayerSelector) -> String {
     match player {
         PlayerSelector::You => "you".into(),
@@ -775,6 +787,10 @@ fn selector_description(triggering: &'static str, selector: &ObjectSelector) -> 
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
         ObjectSelector::Targets(target) => format!("each chosen {}", target_description(target)),
+        ObjectSelector::TargetAndSameName(target) => format!(
+            "{} and all other permanents with the same name as that permanent",
+            target_description(target)
+        ),
         ObjectSelector::Triggering => format!("that {triggering}"),
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),
@@ -939,15 +955,41 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
             "the number of different mana values among {}",
             selector_description(triggering, of)
         ),
-        EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
+        EffectValue::Objects {
+            of,
+            predicate,
+            in_zone,
+        } if matches!(
+            of.as_ref(),
+            ObjectSelector::Moved | ObjectSelector::CardsThisWay
+        ) && (in_zone.is_some() || matches!(of.as_ref(), ObjectSelector::Moved)) =>
+        {
             let objects = match predicate {
+                None if in_zone.is_some() => "cards".into(),
                 None => "objects".into(),
                 Some(predicate) => predicate_description(predicate, "cards"),
             };
-            format!("the number of {objects} moved this way")
+            match in_zone {
+                None => format!("the number of {objects} moved this way"),
+                Some(zone) => format!(
+                    "the number of {objects} put into {} this way",
+                    zone_phrase(*zone)
+                ),
+            }
         }
-        EffectValue::Objects { of, predicate } => {
-            let objects = selector_description(triggering, of);
+        EffectValue::Objects {
+            of,
+            predicate,
+            in_zone,
+        } => {
+            let objects = match in_zone {
+                Some(zone) => format!(
+                    "{} now in {}",
+                    selector_description(triggering, of),
+                    zone_phrase(*zone)
+                ),
+                None => selector_description(triggering, of),
+            };
             match predicate {
                 None => format!("the number of {objects}"),
                 Some(predicate) => format!(
@@ -1159,8 +1201,10 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
         GivePlayerCounters {player, kind, count} => format!("Give {} {count} {} counters", player_description(player), kind.name()),
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(triggering, amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(triggering, amount)),
-        MillCards { count, target: None } => format!("Mill {} cards", value_description(triggering, count)),
-        MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
+        MillCards { count, player: Some(player), .. } => format!("{} mills {} cards", player_description(player), value_description(triggering, count)),
+        MillCards { count, target: None, .. } => format!("Mill {} cards", value_description(triggering, count)),
+        MillCards { count, target: Some(target), .. } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
+        MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description_in(triggering, effects)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
@@ -1684,6 +1728,7 @@ mod tests {
         let count = EffectValue::Objects {
             of: Box::new(ObjectSelector::Moved),
             predicate: Some(CardPredicate::creature()),
+            in_zone: None,
         };
         assert_eq!(
             value_description("permanent", &count),

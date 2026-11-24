@@ -2,14 +2,35 @@
 use managym_state::{
     ability::{Effect, ObjectSelector},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PowerCda,
+        PrintedCharacteristics, StaticAbility,
     },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![krenko_mob_boss()]
+    vec![crusader_of_odric(), krenko_mob_boss()]
+}
+
+fn crusader_of_odric() -> CardDefinition {
+    let text_box = "Crusader of Odric's power and toughness are each equal to the number of creatures you control.";
+    CardDefinition {
+        key: "m13.crusader_of_odric",
+        scryfall_id: "295096bb-1857-4224-bc7b-307b38cfd338",
+        printed: PrintedCharacteristics {
+            name: "Crusader of Odric".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            statics: vec![StaticAbility::CharacteristicPt(
+                PowerCda::CreaturesYouControl,
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn krenko_mob_boss() -> CardDefinition {

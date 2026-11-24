@@ -14,16 +14,20 @@
 
 mod aer;
 mod afr;
+mod akh;
+mod arb;
 mod atq;
 mod bfz;
 mod blb;
 mod bng;
 mod bro;
 mod c14;
+mod c15;
 mod c17;
 mod c19;
 mod chk;
 mod clb;
+mod cmd;
 mod cmr;
 mod csp;
 mod dft;
@@ -111,6 +115,7 @@ mod wth;
 mod wwk;
 mod xln;
 mod zen;
+mod znr;
 
 use std::sync::OnceLock;
 
@@ -143,16 +148,20 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
 const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
+    akh::cards,
+    arb::cards,
     atq::cards,
-    blb::cards,
     bfz::cards,
+    blb::cards,
     bng::cards,
     bro::cards,
     c14::cards,
+    c15::cards,
     c17::cards,
-    chk::cards,
     c19::cards,
+    chk::cards,
     clb::cards,
+    cmd::cards,
     cmr::cards,
     csp::cards,
     dft::cards,
@@ -212,9 +221,9 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     psal::cards,
     ptk::cards,
     rav::cards,
-    roe::cards,
     rix::cards,
     rna::cards,
+    roe::cards,
     rtr::cards,
     shm::cards,
     snc::cards,
@@ -235,8 +244,9 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     vow::cards,
     war::cards,
     woe::cards,
-    wwk::cards,
     wth::cards,
+    wwk::cards,
     xln::cards,
     zen::cards,
+    znr::cards,
 ];

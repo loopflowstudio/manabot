@@ -10905,7 +10905,7 @@ fn corrected_card_characteristics_match_oracle() {
     let suki = object("Suki, Kyoshi Warrior");
     assert!(suki.supertypes.iter().any(|s| s == "legendary"));
     assert_eq!(suki.toughness, Some(4));
-    assert!(suki.power_cda().is_some());
+    assert!(suki.pt_cda().is_some());
 }
 
 #[test]

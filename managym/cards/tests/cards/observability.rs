@@ -488,6 +488,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
         ObjectSelector::Targets(_) => "ObjectSelector::Targets",
+        ObjectSelector::TargetAndSameName(_) => "ObjectSelector::TargetAndSameName",
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
@@ -505,11 +506,12 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 17] {
+fn selector_witnesses() -> [ObjectSelector; 18] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Targets(TargetSpec::Creature),
+        ObjectSelector::TargetAndSameName(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
@@ -758,6 +760,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
         Effect::MillCards { .. } => "Effect::MillCards",
+        Effect::MillUntil { .. } => "Effect::MillUntil",
         Effect::SelectCards { .. } => "Effect::SelectCards",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
@@ -886,6 +889,14 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::MillCards {
             count: EffectValue::Fixed(2),
             target: None,
+            player: None,
+        },
+        Effect::MillUntil {
+            player: PlayerSelector::EachOpponent,
+            predicate: CardPredicate {
+                card_type: Some(CardType::Land),
+                ..Default::default()
+            },
         },
         Effect::SelectCards {
             from: ObjectSelector::CardsThisWay,
@@ -1594,6 +1605,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "suki_power_tracks_creature_count_and_attack_makes_a_token",
         ),
+        StaticAbility::CharacteristicPt(_) => witnessed(
+            "StaticAbility::CharacteristicPt",
+            Seen::Permanent(permanent::TOUGHNESS),
+            "Crusader of Odric",
+            "m13",
+            "crusader_of_odric_counts_creatures_on_and_off_the_battlefield",
+        ),
         StaticAbility::Ward(_) => witnessed(
             "StaticAbility::Ward",
             Seen::Card(card::WARD_COST),
@@ -1891,6 +1909,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
             per_graveyard_matching: None,
         }),
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
+        StaticAbility::CharacteristicPt(PowerCda::GraveyardMatchingBy {
+            who: Actor::Opponent,
+            predicate: Box::default(),
+        }),
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
         StaticAbility::CastFromLibraryTop(creature()),

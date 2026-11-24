@@ -1234,6 +1234,7 @@ fn avatar_destiny() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::TriggeringPower,
                         target: None,
+                        player: None,
                     },
                     Effect::move_to(ObjectSelector::This, ZoneType::Hand),
                     Effect::SelectCards {
@@ -4844,6 +4845,7 @@ fn hama_the_bloodbender() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(3),
                         target: Some(TargetSpec::Opponent),
+                        player: None,
                     },
                     Effect::ExileLinked {
                         chooser: LinkedChooser::Controller,
@@ -6169,6 +6171,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         Effect::MillCards {
                             count: EffectValue::Fixed(3),
                             target: None,
+                            player: None,
                         },
                         Effect::create_tokens("token.food", 1),
                     ],
@@ -6465,6 +6468,7 @@ fn master_pakku() -> CardDefinition {
                             },
                         },
                         target: Some(TargetSpec::Player),
+                        player: None,
                     }],
                 },
             ],
@@ -7140,6 +7144,7 @@ fn ostrich_horse() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(3),
                         target: None,
+                        player: None,
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,
@@ -7463,6 +7468,7 @@ fn platypus_bear() -> CardDefinition {
                 effects: vec![Effect::MillCards {
                     count: EffectValue::Fixed(2),
                     target: None,
+                    player: None,
                 }],
             }],
             statics: vec![StaticAbility::AttacksDespiteDefender(
@@ -8648,6 +8654,7 @@ fn sokka_s_haiku() -> CardDefinition {
                 Effect::MillCards {
                     count: EffectValue::Fixed(3),
                     target: None,
+                    player: None,
                 },
                 Effect::TargetClause {
                     requirement: TargetRequirement::one(TargetSpec::Permanent {
@@ -8831,6 +8838,7 @@ fn sparring_dummy() -> CardDefinition {
                     Effect::MillCards {
                         count: EffectValue::Fixed(1),
                         target: None,
+                        player: None,
                     },
                     Effect::SelectCards {
                         from: ObjectSelector::CardsThisWay,

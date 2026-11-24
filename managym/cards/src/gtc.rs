@@ -1,7 +1,13 @@
 //! Gatecrash.
 use managym_state::{
-    ability::{Ability, AttackSize, Effect, ObjectSelector, Per, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    ability::{
+        Ability, Actor, AttackSize, Effect, ObjectSelector, Per, PlayerSelector, TriggerCondition,
+        TriggerSubject,
+    },
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PowerCda, PrintedCharacteristics,
+        StaticAbility,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -12,6 +18,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         aurelia_the_warleader(),
         boros_guildgate(),
+        consuming_aberration(),
         dimir_guildgate(),
         gruul_guildgate(),
         orzhov_guildgate(),
@@ -92,6 +99,40 @@ fn aurelia_the_warleader() -> CardDefinition {
                     },
                     Effect::AdditionalCombatPhase { attackers: None },
                 ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn consuming_aberration() -> CardDefinition {
+    let text_box = "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.\nWhenever you cast a spell, each opponent reveals cards from the top of their library until they reveal a land card, then puts those cards into their graveyard.";
+    CardDefinition {
+        key: "gtc.consuming_aberration",
+        scryfall_id: "6354de66-f7f8-4e33-98d0-52624d3d7828",
+        printed: PrintedCharacteristics {
+            name: "Consuming Aberration".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Horror".into()],
+            statics: vec![StaticAbility::CharacteristicPt(
+                PowerCda::GraveyardMatchingBy {
+                    who: Actor::Opponent,
+                    predicate: Box::default(),
+                },
+            )],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
+                intervening_if: None,
+                effects: vec![Effect::MillUntil {
+                    player: PlayerSelector::EachOpponent,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

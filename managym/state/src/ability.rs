@@ -945,6 +945,11 @@ pub enum EffectValue {
         /// even if a successor has since changed zones again.
         #[serde(skip_serializing_if = "Option::is_none")]
         predicate: Option<CardPredicate>,
+        /// Count only objects now in this zone: "put into a graveyard this
+        /// way" excludes a milled card a replacement exiled instead (CR
+        /// 614.6), "return it to your hand" one that went elsewhere.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        in_zone: Option<ZoneType>,
     },
     /// "The amount of mana spent to cast" the resolving spell, or the
     /// permanent whose entering triggered the resolving ability (CR 601.2h):
@@ -1013,6 +1018,12 @@ pub enum ObjectSelector {
     /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
     /// run a separate instruction sequence or commit a separate event per slot.
     Targets(TargetSpec),
+    /// The clause's chosen target permanent and every other permanent with
+    /// the same name as it (CR 201.2a: an empty name matches nothing), fixed
+    /// together so one instruction acts on all of them at once ("destroy
+    /// target nonland permanent and all other permanents with the same name
+    /// as that permanent"). Nothing once the target is illegal (CR 608.2b).
+    TargetAndSameName(TargetSpec),
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
@@ -1117,6 +1128,7 @@ impl ObjectSelector {
         EffectValue::Objects {
             of: Box::new(self),
             predicate: None,
+            in_zone: None,
         }
     }
 
@@ -1165,7 +1177,7 @@ impl ObjectSelector {
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
-            Self::Target(spec) | Self::Targets(spec) => Some(spec),
+            Self::Target(spec) | Self::Targets(spec) | Self::TargetAndSameName(spec) => Some(spec),
             Self::TargetPlayersZone { spec, .. } => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
@@ -1338,10 +1350,25 @@ pub enum Effect {
     DrainLife {
         amount: EffectValue,
     },
+    /// Mill `count` cards (CR 701.17a), all milled cards one simultaneous
+    /// move bound as `CardsThisWay`.
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
         target: Option<TargetSpec>,
+        /// The players who mill ("each player mills X cards"), in APNAP
+        /// order; `None` means `target`, else the controller.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        player: Option<PlayerSelector>,
+    },
+    /// For each selected player: reveal cards from the top of their library
+    /// until a card matching `predicate` is revealed or the library runs
+    /// out, then put every revealed card into their graveyard (Consuming
+    /// Aberration). All players' cards move as one batch bound as
+    /// `CardsThisWay`.
+    MillUntil {
+        player: PlayerSelector,
+        predicate: CardPredicate,
     },
     /// Choose a subset of exact objects from `from`, then run `effects` in
     /// a child scope where `Selected` names them. An empty selection runs
@@ -2255,7 +2282,16 @@ impl Effect {
             | Effect::LoseLife { player, .. }
             | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
-            Effect::MillCards { target, .. } => target.as_ref(),
+            Effect::MillCards {
+                target,
+                player: None,
+                ..
+            } => target.as_ref(),
+            Effect::MillCards {
+                player: Some(player),
+                ..
+            }
+            | Effect::MillUntil { player, .. } => player.target_spec(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target }

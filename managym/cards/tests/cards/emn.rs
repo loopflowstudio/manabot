@@ -53,3 +53,27 @@ fn mirrorwing_dragon_redirects_copies_onto_the_casters_creatures() {
     settle(&mut s);
     s.assert_life(1, 17);
 }
+
+/// Cemetery Recruitment returns a creature card and draws only when the
+/// card it returned to the hand is a Zombie.
+#[test]
+fn cemetery_recruitment_draws_only_for_a_zombie() {
+    use crate::support::game::plant_in_graveyard;
+    use managym::state::{game_object::PlayerId, zone::ZoneType};
+    for (returned, drawn) in [("Gray Ogre", 0), ("Crypt Feaster", 1)] {
+        let mut s = five_color_setup(&["Cemetery Recruitment", "Gray Ogre", "Crypt Feaster"]);
+        let card = plant_in_graveyard(&mut s, 0, returned);
+        cast(&mut s, "Cemetery Recruitment");
+        assert!(s.choose_target(Target::GraveyardCard(card)));
+        settle(&mut s);
+        let hand = s
+            .game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, PlayerId(0));
+        assert_eq!(hand.len(), 1 + drawn, "{returned}");
+        assert!(hand
+            .iter()
+            .any(|object| s.game().state[*object].name == returned));
+    }
+}

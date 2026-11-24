@@ -1,19 +1,79 @@
 //! Tests for cards filed in `src/m10.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_setup, force_new_card_in_hand},
+    game::{clear_summoning_sickness, five_color_setup, force_new_card_in_hand, until_end_of_turn},
     inspect::counters_of,
-    play::{cast_card, pass_until, settle},
+    play::{cast_card, pass_until, settle, tap_for_mana},
 };
 use managym::{
     agent::action::{ActionSpaceKind, ActionType},
     flow::turn::StepKind,
     state::{
+        effect::Modification,
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         player::ManaPayment,
     },
 };
+
+/// Elvish Archdruid's mana ability counts the Elves its controller controls
+/// as it is activated, itself included, and resolves at once (CR 605.3a).
+/// Losing its other abilities keeps that mana ability (CR 605.1a) and ends
+/// the lord bonus; losing the Elf type leaves nothing to count.
+#[test]
+fn elvish_archdruid_adds_green_for_each_elf_off_the_stack() {
+    const GREEN: usize = 4;
+    for (case, expected_green, token_pt) in [
+        ("lord", 3, (2, 2)),
+        ("nonmana abilities lost", 3, (1, 1)),
+        ("no elf type", 2, (2, 2)),
+    ] {
+        let mut s = five_color_setup(&["Elvish Archdruid"]);
+        s.allow_priority_floats();
+        let druid = s.force_permanent_on_battlefield(0, "Elvish Archdruid");
+        clear_summoning_sickness(&mut s, druid);
+        let elves: Vec<_> = (0..2)
+            .map(|_| {
+                s.game_mut()
+                    .create_token("token.green_elf_warrior", PlayerId(0), false)
+                    .unwrap()
+            })
+            .collect();
+        match case {
+            "nonmana abilities lost" => {
+                until_end_of_turn(&mut s, druid, Modification::LoseNonManaAbilities)
+            }
+            "no elf type" => until_end_of_turn(
+                &mut s,
+                druid,
+                Modification::SetCreatureTypes(vec!["Druid".into()]),
+            ),
+            _ => {}
+        }
+        assert_eq!(
+            s.game().characteristics(elves[0]).pt(),
+            token_pt,
+            "{case}: lord bonus"
+        );
+        assert_eq!(
+            s.game().characteristics(druid).activated_abilities.len(),
+            1,
+            "{case}: the mana ability stays"
+        );
+        s.set_player_mana_pool(0, "");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        tap_for_mana(&mut s, druid);
+        assert!(
+            s.game().state.stack_objects.is_empty(),
+            "{case}: off the stack"
+        );
+        assert_eq!(
+            s.game().state.players[0].mana_pool.mana[GREEN],
+            expected_green,
+            "{case}: green added"
+        );
+    }
+}
 
 /// Mold Adder may grow when an opponent casts a blue or black spell: the
 /// controller accepts or declines, a blue-black spell triggers it once, and a

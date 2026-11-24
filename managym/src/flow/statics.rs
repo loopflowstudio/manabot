@@ -98,12 +98,7 @@ impl Characteristics {
             ability.power_up
                 || ability.reduce_by_source_power
                 || ability.cost_reduction_per.is_some()
-                || matches!(ability.effects.as_slice(), [crate::state::ability::Effect::AddMana { amount, until_end_of_combat: false, .. }] if !matches!(amount, crate::state::ability::EffectValue::Fixed(1)))
-                || matches!(
-                    ability.effects.as_slice(),
-                    [crate::state::ability::Effect::If { .. }
-                        | crate::state::ability::Effect::AddOneColorManaValue { .. }]
-                )
+                || ability.has_dynamic_mana_output()
         })
     }
 
@@ -395,9 +390,11 @@ impl Game {
 
         let power = view.power.clamp(0, u8::MAX.into()) as u8;
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
-            if let [effect] = ability.effects.as_slice() {
-                if let Some(effect) = self.current_mana_output(effect, permanent.controller) {
-                    ability.effects = vec![effect];
+            if ability.has_dynamic_mana_output() {
+                if let Some(output) =
+                    self.current_mana_output(&ability.effects[0], permanent.controller)
+                {
+                    ability.effects[0] = output;
                 }
             }
             if ability.power_up && permanent.entered_this_turn(self.state.turn.turn_number) {
@@ -461,26 +458,33 @@ impl Game {
             None,
         )
     }
-    /// Power in the object's current zone (CR 604.3). On the stack "you"
-    /// means the spell's controller; elsewhere off the battlefield it means
-    /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+    /// Power and toughness in the object's current zone (CR 604.3): a
+    /// characteristic-defining ability applies everywhere. On the stack
+    /// "you" means the spell's controller; elsewhere off the battlefield it
+    /// means the owner (CR 109.5), including owned outside-game copies.
+    pub fn object_pt(&self, object_id: ObjectId) -> (i32, i32) {
         if let Some(permanent) = self.state.permanent_of(object_id) {
-            return self.characteristics(permanent).power;
+            return self.characteristics(permanent).pt();
         }
         // An outside-game card is allocated but in no zone.
         let object = self
             .state
             .object(object_id)
             .unwrap_or_else(|_| self.state.entry_object(object_id));
-        let Some(cda) = object.power_cda() else {
-            return object.power.unwrap_or(0);
+        let printed = (object.power.unwrap_or(0), object.toughness.unwrap_or(0));
+        let Some((cda, sets_toughness)) = object.pt_cda() else {
+            return printed;
         };
         let controller = self
             .spell_on_stack(object_id)
             .map(|spell| spell.controller)
             .unwrap_or(object.owner);
-        self.cda_power(cda, controller)
+        let value = self.cda_value(cda, controller);
+        (value, if sets_toughness { value } else { printed.1 })
+    }
+
+    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+        self.object_pt(object_id).0
     }
 
     /// Contextual predicates must read CDA power rather than a printed star's
@@ -597,9 +601,9 @@ impl Game {
         let power = if predicate.reads_power() {
             self.object_lki(object).map_or_else(
                 || {
-                    printing.power_cda().map_or_else(
+                    printing.pt_cda().map_or_else(
                         || printing.power.unwrap_or(0),
-                        |cda| self.cda_power(cda, owner),
+                        |(cda, _)| self.cda_value(cda, owner),
                     )
                 },
                 |lki| lki.power,
@@ -634,9 +638,9 @@ impl Game {
         }
         let row = self.state.entry_object(object);
         let power = if predicate.reads_power() {
-            row.power_cda().map_or_else(
+            row.pt_cda().map_or_else(
                 || row.power.unwrap_or(0),
-                |cda| self.cda_power(cda, row.owner),
+                |(cda, _)| self.cda_value(cda, row.owner),
             )
         } else {
             0
@@ -644,7 +648,7 @@ impl Game {
         predicate.matches_object_with_power(row, power)
     }
 
-    fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
+    fn cda_value(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
         match cda {
             PowerCda::CountersOnLandsYouControl => self
                 .layer_views(self.iter_battlefield_permanents(controller))
@@ -659,6 +663,11 @@ impl Game {
             PowerCda::GraveyardMatching(predicate) => {
                 self.count_graveyard_matching(controller, predicate) as i32
             }
+            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.state.players.len())
+                .map(PlayerId)
+                .filter(|player| who.includes(controller, *player))
+                .map(|player| self.count_graveyard_matching(player, predicate) as i32)
+                .sum(),
         }
     }
 

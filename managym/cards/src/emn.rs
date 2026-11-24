@@ -1,8 +1,8 @@
 //! Eldritch Moon.
 use managym_state::{
     ability::{
-        Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerCondition,
+        Ability, CompareOp, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -11,10 +11,15 @@ use managym_state::{
     effect::Modification,
     mana::{Colors, Mana, ManaCost},
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![imprisoned_in_the_moon(), mirrorwing_dragon()]
+    vec![
+        cemetery_recruitment(),
+        imprisoned_in_the_moon(),
+        mirrorwing_dragon(),
+    ]
 }
 
 fn mirrorwing_dragon() -> CardDefinition {
@@ -92,6 +97,46 @@ fn imprisoned_in_the_moon() -> CardDefinition {
                 what: ObjectSelector::Target(enchantable.clone()),
             }],
             targeting: vec![TargetRequirement::one(enchantable)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cemetery_recruitment() -> CardDefinition {
+    let text_box = "Return target creature card from your graveyard to your hand. If it's a Zombie card, draw a card.";
+    CardDefinition {
+        key: "emn.cemetery_recruitment",
+        scryfall_id: "3a23adea-9f4a-409c-a37d-323eee781273",
+        printed: PrintedCharacteristics {
+            name: "Cemetery Recruitment".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::return_to_hand(ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                    predicate: CardPredicate::creature(),
+                })),
+                // "it": the card this returned, as it is in the hand.
+                Effect::If {
+                    condition: Condition::compare(
+                        EffectValue::Objects {
+                            of: Box::new(ObjectSelector::Moved),
+                            predicate: Some(CardPredicate {
+                                subtype: Some("Zombie".into()),
+                                ..Default::default()
+                            }),
+                            in_zone: Some(ZoneType::Hand),
+                        },
+                        CompareOp::Ge,
+                        1,
+                    ),
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                },
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

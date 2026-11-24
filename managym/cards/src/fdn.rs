@@ -66,7 +66,122 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         archmage_of_runes(),
         goblin_negotiation(),
         niv_mizzet_visionary(),
+        kiora_the_rising_tide(),
+        crypt_feaster(),
+        revenge_of_the_rats(),
     ]
+}
+
+/// Threshold (ability word, CR 207.2c): "if there are seven or more cards in your
+/// graveyard", checked as the trigger would trigger and again as it
+/// resolves (CR 603.4).
+fn threshold() -> Condition {
+    Condition::GraveyardAtLeast {
+        count: 7,
+        predicate: CardPredicate::default(),
+    }
+}
+
+fn kiora_the_rising_tide() -> CardDefinition {
+    let text_box = "When Kiora enters, draw two cards, then discard two cards.\nThreshold — Whenever Kiora attacks, if there are seven or more cards in your graveyard, you may create Scion of the Deep, a legendary 8/8 blue Octopus creature token.";
+    CardDefinition {
+        key: "fdn.kiora_the_rising_tide",
+        scryfall_id: "83f20a32-9f5d-4a68-8995-549e57554da2",
+        printed: PrintedCharacteristics {
+            name: "Kiora, the Rising Tide".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Merfolk".into(), "Noble".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(2),
+                        },
+                        Effect::Discard {
+                            what: ObjectSelector::You,
+                            count: 2,
+                        },
+                    ],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: Some(threshold()),
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::default()),
+                        if_paid: vec![Effect::create_tokens("token.scion_of_the_deep", 1)],
+                        if_declined: vec![],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crypt_feaster() -> CardDefinition {
+    let text_box = "Menace (This creature can't be blocked except by two or more creatures.)\nThreshold — Whenever this creature attacks, if there are seven or more cards in your graveyard, this creature gets +2/+0 until end of turn.";
+    CardDefinition {
+        key: "fdn.crypt_feaster",
+        scryfall_id: "3b072811-998a-4a71-b59c-6afecc0dc4b6",
+        printed: PrintedCharacteristics {
+            name: "Crypt Feaster".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: Some(threshold()),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(2, 0),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn revenge_of_the_rats() -> CardDefinition {
+    let text_box = "Create a tapped 1/1 black Rat creature token for each creature card in your graveyard.\nFlashback {2}{B}{B} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+    CardDefinition {
+        key: "fdn.revenge_of_the_rats",
+        scryfall_id: "1f463c55-39a0-4f2f-aae3-0c5540bde5b7",
+        printed: PrintedCharacteristics {
+            name: "Revenge of the Rats".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{2}{B}{B}"))],
+            // Counted as it resolves; cast with flashback, the spell is on
+            // the stack and not among the creature cards (CR 702.34a).
+            spell_effects: vec![Effect::CreateToken {
+                token: "token.rat".into(),
+                count: EffectValue::GraveyardMatching {
+                    base: 0,
+                    predicate: CardPredicate::creature(),
+                },
+                tapped_and_attacking: false,
+                tapped: true,
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn vanguard_seraph() -> CardDefinition {

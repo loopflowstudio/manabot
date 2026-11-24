@@ -329,6 +329,14 @@ pub enum PowerCda {
     /// "This creature's power is equal to the number of [predicate] cards
     /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
     GraveyardMatching(Box<CardPredicate>),
+    /// The number of [predicate] cards in the graveyards of every player
+    /// `who` names ("cards in your opponents' graveyards", Consuming
+    /// Aberration). `who` is relative to the object's controller, or its
+    /// owner off the battlefield and stack (CR 109.5).
+    GraveyardMatchingBy {
+        who: crate::ability::Actor,
+        predicate: Box<CardPredicate>,
+    },
 }
 
 /// Which battlefield permanents a static P/T buff applies to.
@@ -554,11 +562,59 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
     ) && effect.target_spec().is_none()
 }
 
+/// A leading effect that adds mana now (CR 605.1a): fixed or counted mana, X
+/// mana of one color, a branch between two such outputs, or a choice among
+/// fixed outputs.
+fn is_mana_output(effect: &Effect) -> bool {
+    match effect {
+        Effect::AddMana {
+            until_end_of_combat,
+            ..
+        } => !until_end_of_combat,
+        Effect::AddOneColorManaValue { .. } => true,
+        Effect::If {
+            then, otherwise, ..
+        } => [then, otherwise]
+            .iter()
+            .all(|branch| matches!(branch.as_slice(), [effect @ Effect::AddMana { .. }] if is_mana_output(effect))),
+        Effect::Modal { modes } => modes.iter().all(|effects| {
+            matches!(
+                effects.as_slice(),
+                [Effect::AddMana {
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: false,
+                    ..
+                }]
+            )
+        }),
+        _ => false,
+    }
+}
+
 impl ActivatedAbilityDefinition {
-    /// The outputs of a mana ability (CR 605.1a): an untargeted activation
-    /// whose leading effect adds one of these mana, optionally followed by
-    /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
-    /// for an ability that uses the stack.
+    /// Whether this is a mana ability (CR 605.1a): an untargeted activation
+    /// whose leading effect could add mana, optionally followed by the
+    /// untargeted non-mana instructions of [`Self::mana_suffix`]. Its output
+    /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
+    /// mana ability never uses the stack.
+    pub fn is_mana_ability(&self) -> bool {
+        let Some((effect, suffix)) = self.effects.split_first() else {
+            return false;
+        };
+        suffix.iter().all(is_mana_suffix_effect) && is_mana_output(effect)
+    }
+
+    /// A mana ability whose output reads the game ("Add {G} for each Elf you
+    /// control", a conditional branch, X mana of one color). Characteristics
+    /// finalize it to concrete [`Self::mana_choices`] when they are read.
+    pub fn has_dynamic_mana_output(&self) -> bool {
+        self.is_mana_ability() && self.mana_choices().is_none()
+    }
+
+    /// The concrete outputs of a mana ability: a leading effect adding one of
+    /// these mana. `None` for an ability that uses the stack and for a mana
+    /// ability whose output has not been finalized against the game
+    /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
         let (effect, suffix) = self.effects.split_first()?;
         if !suffix.iter().all(is_mana_suffix_effect) {
@@ -637,9 +693,10 @@ impl ActivatedAbilityDefinition {
     /// resolving with it, off the stack, once per activation (CR 605.3b).
     /// Empty for an ability that is not a mana ability.
     pub fn mana_suffix(&self) -> &[Effect] {
-        match self.mana_choices() {
-            Some(_) => &self.effects[1..],
-            None => &[],
+        if self.is_mana_ability() {
+            &self.effects[1..]
+        } else {
+            &[]
         }
     }
 
@@ -948,6 +1005,10 @@ pub enum StaticAbility {
     /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
     /// ignored.
     CharacteristicPower(PowerCda),
+    /// Characteristic-defining power and toughness, each equal to the same
+    /// count ("power and toughness are each equal to", CR 604.3, layer 7a);
+    /// printed `power` and `toughness` are ignored in every zone.
+    CharacteristicPt(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
     /// target" trigger, "counter it unless that player pays [cost]". The
     /// cost is mana or a waterbend ("Ward—Waterbend {4}").
@@ -1467,9 +1528,12 @@ impl PrintedCharacteristics {
         })
     }
 
-    pub fn power_cda(&self) -> Option<&PowerCda> {
+    /// The characteristic-defining P/T ability, and whether it also defines
+    /// toughness (`CharacteristicPt`) rather than power alone.
+    pub fn pt_cda(&self) -> Option<(&PowerCda, bool)> {
         self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CharacteristicPower(cda) => Some(cda),
+            StaticAbility::CharacteristicPower(cda) => Some((cda, false)),
+            StaticAbility::CharacteristicPt(cda) => Some((cda, true)),
             _ => None,
         })
     }

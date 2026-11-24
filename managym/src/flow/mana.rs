@@ -1649,7 +1649,10 @@ impl Game {
                 } else {
                     otherwise
                 };
-                Some(branch[0].clone())
+                Some(
+                    self.current_mana_output(&branch[0], controller)
+                        .unwrap_or_else(|| branch[0].clone()),
+                )
             }
             Effect::AddMana {
                 mana,
