@@ -482,7 +482,7 @@ columns! { action {
     25: HAS_ROUTE_COST => ("has_route_cost", ValueLayout::FLAG),
     26: ROUTE_MANA_VALUE => ("route_mana_value", ValueLayout::COUNT_TENTHS),
     27: QUOTA_TYPE => ("quota_type", ValueLayout::new(ValueKind::Category {size:9}, "Permanent type spent by this play (CardType + 1)", "0 absent; 1..9")),
-    28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:3}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen", "0 front face or no spell; 1..3")),
+    28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -747,7 +747,7 @@ columns! { relation {
     46: HEXPROOF => ("hexproof", ValueLayout::FLAG),
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
-    49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:3}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen", "0 front face or no spell; 1..3")),
+    49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
 } }
 
 #[derive(Clone, Debug)]

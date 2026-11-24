@@ -54,7 +54,9 @@ mod khm;
 mod kld;
 mod ktk;
 mod lea;
+mod m11;
 mod m12;
+mod m13;
 mod m15;
 mod m20;
 mod mbs;
@@ -88,6 +90,7 @@ mod ths;
 mod tla;
 mod tle;
 mod tokens;
+mod tsp;
 mod ulg;
 mod vis;
 mod war;
@@ -178,7 +181,9 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     kld::cards,
     ktk::cards,
     lea::cards,
+    m11::cards,
     m12::cards,
+    m13::cards,
     m15::cards,
     m20::cards,
     mbs::cards,
@@ -211,6 +216,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ths::cards,
     tla::cards,
     tle::cards,
+    tsp::cards,
     ulg::cards,
     vis::cards,
     war::cards,

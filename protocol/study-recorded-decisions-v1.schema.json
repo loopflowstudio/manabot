@@ -1145,6 +1145,9 @@
         "flash": {
           "type": "boolean"
         },
+        "flashback": {
+          "type": "boolean"
+        },
         "follows_source_controller": {
           "type": "boolean"
         },

@@ -3,12 +3,12 @@ use super::enters_prepared;
 use managym_state::{
     ability::{
         Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect,
-        EffectValue, ObjectSelector, PaymentCost, Per, PlayerSelector, TargetSpec,
+        EffectValue, LibraryEnd, ObjectSelector, PaymentCost, Per, PlayerSelector, TargetSpec,
         TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
-        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
+        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility, TapCost,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -19,6 +19,8 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         biblioplex_tomekeeper(),
+        harmonized_trio(),
+        joined_researchers(),
         abigale_poet_laureate(),
         emeritus_of_abundance(),
         emeritus_of_truce(),
@@ -1092,6 +1094,101 @@ fn emeritus_of_truce() -> CardDefinition {
                 ],
                 ..Default::default()
             }.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn joined_researchers() -> CardDefinition {
+    let text = "First strike\nAt the beginning of each end step, if an opponent has more cards in hand than you, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let draw = Effect::DrawCards {
+        count: EffectValue::Fixed(3),
+    };
+    let spell = PrintedCharacteristics {
+        name: "Secret Rendezvous".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        text_box: "You and target opponent each draw three cards.".into(),
+        spell_effects: vec![
+            draw.clone(),
+            Effect::ForPlayer {
+                player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                effects: vec![draw],
+            },
+        ],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "sos.joined_researchers",
+        scryfall_id: "1ebaafe0-3a9a-424c-8698-d26e7be45343",
+        printed: PrintedCharacteristics {
+            name: "Joined Researchers".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(2),
+            text_box: text.into(),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
+                intervening_if: Some(Condition::OpponentHasMoreCardsInHand),
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+            }],
+            inset: Some(InsetSpell::Prepared(spell.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn harmonized_trio() -> CardDefinition {
+    let text = "{T}, Tap two untapped creatures you control: This creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)";
+    let put_on_top = Effect::SelectCards {
+        from: ObjectSelector::Zone(ZoneType::Hand),
+        predicate: CardPredicate::default(),
+        min: 1,
+        max: EffectValue::Fixed(1),
+        effects: vec![Effect::put_in_library(
+            ObjectSelector::Selected,
+            LibraryEnd::Top,
+        )],
+        if_declined: vec![],
+    };
+    let spell = PrintedCharacteristics {
+        name: "Brainstorm".into(),
+        mana_cost: Some(ManaCost::parse("{U}")),
+        types: CardTypes::new([CardType::Instant]),
+        text_box: "Draw three cards, then put two cards from your hand on top of your library in any order.".into(),
+        spell_effects: vec![Effect::DrawCards { count: EffectValue::Fixed(3) }, put_on_top.clone(), put_on_top],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "sos.harmonized_trio",
+        scryfall_id: "617208ff-dd9b-44fd-a740-d3188081e5cc",
+        printed: PrintedCharacteristics {
+            name: "Harmonized Trio".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Merfolk".into(), "Bard".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(1),
+            text_box: text.into(),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                tap_cost: Some(TapCost {
+                    predicate: CardPredicate::creature(),
+                    count: 2,
+                }),
+                effects: vec![Effect::Prepare {
+                    what: ObjectSelector::This,
+                }],
+                ..Default::default()
+            }],
+            inset: Some(InsetSpell::Prepared(spell.into())),
             ..Default::default()
         },
         ..Default::default()

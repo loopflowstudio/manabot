@@ -1181,3 +1181,403 @@ fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
     s.pass_priority();
     assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
 }
+
+#[test]
+fn omniscience_offers_paid_and_free_casts_with_optional_costs() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::top_spell,
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        flow::cast_permission::PlayRoute,
+        state::target::Target,
+    };
+    let mut s = five_color_unfunded_setup(&["Omniscience", "Burst Lightning"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(0, "Omniscience");
+    }
+    let burst = move_from_library(&mut s, 0, "Burst Lightning", ZoneType::Hand);
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let prices: Vec<_> = obs
+        .action_space
+        .actions
+        .iter()
+        .filter_map(|offer| offer.route_mana_value)
+        .collect();
+    assert_eq!(prices, [1, 0]);
+    for (route, price) in [(PlayRoute::Hand, 1), (PlayRoute::FreeFromHand, 0)] {
+        let root = fork_choosing(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, route: Some(chosen), .. } if *object == burst && *chosen == route),
+        );
+        for kicked in [false, true] {
+            let mut branch = fork_choosing(&root, |a| {
+                if kicked {
+                    matches!(a, Action::PayCost { .. })
+                } else {
+                    matches!(a, Action::Decline { .. })
+                }
+            });
+            assert!(branch.choose_target(Target::Player(PlayerId(1))));
+            if branch.action_space().kind == managym::agent::action::ActionSpaceKind::PayOrNot {
+                choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+            }
+            let spell = top_spell(&branch);
+            assert_eq!(spell.spent.mana().len(), price + if kicked { 4 } else { 0 });
+            assert_eq!(spell.kicked, kicked);
+            settle(&mut branch);
+            assert_eq!(
+                branch.game().state.players[1].life,
+                if kicked { 16 } else { 18 }
+            );
+        }
+    }
+}
+
+#[test]
+fn high_fae_trickster_changes_timing_after_zone_permission() {
+    use crate::support::{game::move_from_library, inspect::can_cast};
+    use managym::flow::cast_permission::PlayGrant;
+    let mut s = five_color_setup(&["High Fae Trickster", "Gray Ogre", "Drannith Magistrate"]);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    let ogre = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, ogre));
+    s.force_permanent_on_battlefield(0, "High Fae Trickster");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, ogre));
+    let exile = move_card(&mut s, ogre, ZoneType::Exile);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, exile));
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(exile, PlayerId(0)));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, exile));
+    s.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, exile));
+}
+
+#[test]
+fn think_twice_draws_from_hand_then_graveyard() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, top_spell, zone_of},
+        play::choose,
+    };
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Think Twice"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let card = move_from_library(&mut s, 0, "Think Twice", ZoneType::Hand);
+    for (flashback, price, destination) in
+        [(false, 2, ZoneType::Graveyard), (true, 3, ZoneType::Exile)]
+    {
+        s.set_player_mana_pool(0, if flashback { "2U" } else { "1U" });
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(&s, card);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { object: legal, .. } if *legal == object),
+        );
+        let spell = top_spell(&s);
+        assert_eq!(spell.flashback, flashback);
+        assert_eq!(spell.spent.mana().len(), price);
+        let size = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+        settle(&mut s);
+        assert_eq!(
+            s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+            size + 1
+        );
+        assert_eq!(zone_of(&s, card), Some(destination));
+    }
+}
+
+#[test]
+fn reassembling_skeleton_returns_only_its_activated_appearance_tapped() {
+    use crate::support::{game::move_from_library, play::activate_card};
+    let mut s = five_color_setup(&["Reassembling Skeleton"]);
+    s.set_player_mana_pool(0, "1B");
+    let skeleton = move_from_library(&mut s, 0, "Reassembling Skeleton", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate_card(&mut s, skeleton, 0);
+    let mut blink = s.clone();
+    assert_eq!(blink.game().state.stack_objects.len(), 1);
+    let exiled = move_card(&mut blink, skeleton, ZoneType::Exile);
+    let mut exiled_only = blink.clone();
+    settle(&mut exiled_only);
+    assert_eq!(
+        exiled_only.game().state.zones.zone_of(exiled),
+        Some(ZoneType::Exile)
+    );
+    move_card(&mut blink, exiled, ZoneType::Graveyard);
+    settle(&mut blink);
+    assert!(permanent_of(&blink, skeleton).is_none());
+    settle(&mut s);
+    let permanent = permanent_of(&s, skeleton).unwrap();
+    assert!(
+        s.game().state.permanents[permanent]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
+}
+
+#[test]
+fn suspicious_shambler_exiles_as_cost_and_creates_two_zombies() {
+    use crate::support::{game::move_from_library, inspect::zone_of, play::activate_card};
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Suspicious Shambler"]);
+    let card = move_from_library(&mut s, 0, "Suspicious Shambler", ZoneType::Graveyard);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "4BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == card)));
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "4BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate_card(&mut s, card, 0);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    assert!(s.battlefield_permanents_named(0, "Zombie").is_empty());
+    settle(&mut s);
+    let zombies = s.battlefield_permanents_named(0, "Zombie");
+    assert_eq!(zombies.len(), 2);
+    for id in zombies {
+        let view = s.game().characteristics(id);
+        assert!(view.has_subtype("Zombie"));
+        assert_eq!(view.pt(), (2, 2));
+    }
+}
+
+#[test]
+fn granted_foreign_land_enters_under_its_players_control() {
+    use crate::support::{game::move_from_library, play::choose};
+    use managym::{agent::action::Action, flow::cast_permission::PlayGrant};
+    let mut s = five_color_setup(&[]);
+    let land = move_from_library(&mut s, 1, "Swamp", ZoneType::Exile);
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(land, PlayerId(0)));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand {object, ..} if *object == land),
+    );
+    let permanent = s.game().state.permanents[permanent_of(&s, land).unwrap()]
+        .as_ref()
+        .unwrap();
+    assert_eq!(permanent.controller, PlayerId(0));
+    assert_eq!(s.game().state[permanent.object].owner, PlayerId(1));
+}
+
+#[test]
+fn omniscience_preserves_sacrifices_and_fixes_printed_x_at_zero() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, top_spell, zone_of},
+        play::{choose, select_card},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::PlayRoute,
+        state::{
+            card::SpellProfile,
+            game_object::Target,
+            payment::{How, Toward},
+        },
+    };
+    let mut s = five_color_unfunded_setup(&[
+        "Omniscience",
+        "Archon's Glory",
+        "Deadly Dispute",
+        "Gray Ogre",
+        "Scavenger Regent",
+    ]);
+    let omni = s.force_permanent_on_battlefield(0, "Omniscience");
+    let dispute = move_from_library(&mut s, 0, "Deadly Dispute", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, dispute));
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let glory = move_from_library(&mut s, 0, "Archon's Glory", ZoneType::Hand);
+    let regent = move_from_library(&mut s, 0, "Scavenger Regent", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for (spell, payer, reason) in [
+        (dispute, ogre, Toward::Printed),
+        (glory, omni, Toward::Bargain),
+    ] {
+        let mut branch = s.clone();
+        choose(
+            &mut branch,
+            |a| matches!(a, Action::CastSpell {object, route: Some(PlayRoute::FreeFromHand), ..} if *object == spell),
+        );
+        if spell == glory {
+            choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+            assert!(branch.choose_target(Target::Permanent(ogre)));
+        }
+        let paid = card_of(&branch, payer);
+        select_card(&mut branch, paid);
+        let stack = top_spell(&branch);
+        assert_eq!(stack.spent.total(), 0);
+        assert_eq!(
+            stack
+                .spent
+                .contributed(How::Sacrificed, reason)
+                .collect::<Vec<_>>(),
+            [paid]
+        );
+        assert_eq!(zone_of(&branch, paid), Some(ZoneType::Graveyard));
+    }
+    s.set_player_mana_pool(0, "5BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {object, route: Some(PlayRoute::FreeFromHand), profile: SpellProfile::Omen, ..} if *object == regent),
+    );
+    let spell = top_spell(&s);
+    assert_eq!(spell.x, 0);
+    assert_eq!(spell.spent.total(), 0);
+}
+
+#[test]
+fn sphinx_grants_its_target_flashback_alongside_the_printed_cost() {
+    use crate::support::{
+        game::{clear_summoning_sickness, move_from_library},
+        inspect::{top_spell, zone_of},
+        play::{choose, fork_choosing, pass_until},
+    };
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        flow::cast_permission::PlayRoute,
+        state::game_object::Target,
+    };
+    let mut s = five_color_setup(&["Sphinx of Forgotten Lore", "Think Twice"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let sphinx = s.force_permanent_on_battlefield(0, "Sphinx of Forgotten Lore");
+    clear_summoning_sickness(&mut s, sphinx);
+    let object = move_from_library(&mut s, 0, "Think Twice", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Think Twice", ZoneType::Graveyard);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, sphinx);
+    assert!(s.choose_target(Target::GraveyardCard(object)));
+    let source = card_of(&s, sphinx);
+    move_card(&mut s, source, ZoneType::Graveyard);
+    settle(&mut s);
+    s.set_player_mana_pool(0, "2U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let observer = Observation::for_player(s.game(), PlayerId(0));
+    let granted = observer
+        .agent_cards
+        .iter()
+        .find(|card| !card.cast_permissions.is_empty())
+        .unwrap();
+    assert!(granted.cast_permissions[0].flashback);
+    assert!(granted.cast_permissions[0].this_turn);
+    assert_eq!(
+        s.action_space()
+            .actions
+            .iter()
+            .filter(|a| matches!(a, Action::CastSpell {object: id, ..} if *id==other))
+            .count(),
+        1
+    );
+    for (route, price) in [(PlayRoute::PrintedFlashback, 3), (PlayRoute::Grant(0), 2)] {
+        let mut branch = fork_choosing(
+            &s,
+            |a| matches!(a,Action::CastSpell{object:id,route:Some(chosen),..} if *id==object && route==*chosen),
+        );
+        if branch.action_space().kind == ActionSpaceKind::PayOrNot {
+            choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+        }
+        let spell = top_spell(&branch);
+        assert_eq!(spell.spent.total(), price);
+        assert!(spell.flashback);
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, object), Some(ZoneType::Exile));
+    }
+}
+
+#[test]
+fn harbinger_requires_its_surcharge_only_for_its_own_flash_permission() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, top_spell, zone_of},
+        play::{cast_profile, choose, fork_choosing, pass_until, select_card},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::cast_permission::PlayRoute,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut root = five_color_unfunded_setup(&[
+        "Harbinger of the Tides",
+        "Gray Ogre",
+        "Omniscience",
+        "High Fae Trickster",
+    ]);
+    root.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    root.advance_to_active_step(0, StepKind::Upkeep);
+    let ogre = root.force_permanent_on_battlefield(1, "Gray Ogre");
+    let other = root.force_permanent_on_battlefield(1, "Gray Ogre");
+    root.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let target = card_of(&root, ogre);
+    let card = move_from_library(&mut root, 0, "Harbinger of the Tides", ZoneType::Hand);
+    root.set_player_mana_pool(0, "UU");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&root, card));
+    root.set_player_mana_pool(0, "2UU");
+    let mut paid = root.clone();
+    cast_profile(&mut paid, card, SpellProfile::Front);
+    assert_eq!(top_spell(&paid).spent.total(), 4);
+    pass_until(&mut paid, ActionSpaceKind::ChooseTarget);
+    assert!(!paid.choose_target(Target::Permanent(other)));
+    assert!(paid.choose_target(Target::Permanent(ogre)));
+    crate::support::play::resolve_top(&mut paid);
+    let mut declined = paid.clone();
+    choose(&mut declined, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut declined);
+    assert_eq!(zone_of(&declined, target), Some(ZoneType::Battlefield));
+    select_card(&mut paid, target);
+    settle(&mut paid);
+    assert_eq!(zone_of(&paid, target), Some(ZoneType::Hand));
+
+    root.force_permanent_on_battlefield(0, "Omniscience");
+    root.set_player_mana_pool(0, "2");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    let free = |a: &Action| matches!(a,Action::CastSpell{object,route:Some(PlayRoute::FreeFromHand),..} if *object==card);
+    let forced = fork_choosing(&root, free);
+    assert_eq!(top_spell(&forced).spent.total(), 2);
+
+    // With another flash permission the player can choose either price.
+    root.force_permanent_on_battlefield(0, "High Fae Trickster");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    let optional = fork_choosing(&root, free);
+    for (pay, price) in [(true, 2), (false, 0)] {
+        let branch = fork_choosing(&optional, |a| {
+            if pay {
+                matches!(a, Action::PayCost { .. })
+            } else {
+                matches!(a, Action::Decline { .. })
+            }
+        });
+        assert_eq!(top_spell(&branch).spent.total(), price);
+        assert!(!top_spell(&branch).kicked);
+    }
+}

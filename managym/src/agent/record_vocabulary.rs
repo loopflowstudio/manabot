@@ -180,7 +180,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
             "GameEvent",
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
-        ("SpellProfile", &["Omen"][..]),
+        ("SpellProfile", &["Omen", "BackFace"][..]),
         ("LibraryEnd", &["Top", "Bottom"][..]),
         // Supported stack-ability targeting has no printed card program yet.
         ("TargetSpec", &["Ability"][..]),

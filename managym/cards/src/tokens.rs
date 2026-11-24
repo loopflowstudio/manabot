@@ -24,6 +24,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         clue(),
         dragon(),
         elf_warrior(),
+        elf(),
         food(),
         human(),
         human_soldier(),
@@ -33,10 +34,12 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         plain_spirit(),
         powerstone(),
         soldier(),
+        white_soldier(),
         spirit(),
         treasure(),
         villain(),
         zeppelin(),
+        zombie(),
         cadet(),
         fractal(),
         heartwood(),
@@ -502,5 +505,32 @@ fn inkling() -> TokenDefinition {
                 [Color::White, Color::Black],
             )
         },
+    )
+}
+
+fn zombie() -> TokenDefinition {
+    let base = face("Zombie", [CardType::Creature], &["Zombie"], "");
+    token(
+        "token.zombie",
+        "e29a360b-11fd-42ba-82ba-de8f7e136c20",
+        creature(base, 2, 2, [Color::Black]),
+    )
+}
+
+fn white_soldier() -> TokenDefinition {
+    let base = face("Soldier", [CardType::Creature], &["Soldier"], "");
+    token(
+        "token.white_soldier",
+        "7ddd5153-2d16-4a4e-b9bc-f20313d322da",
+        creature(base, 2, 2, [Color::White]),
+    )
+}
+
+fn elf() -> TokenDefinition {
+    let base = face("Elf", [CardType::Creature], &["Elf"], "");
+    token(
+        "token.elf",
+        "761c7c31-c6c5-44e2-a845-f590542b6eda",
+        creature(base, 1, 1, [Color::Green]),
     )
 }

@@ -179,7 +179,9 @@ impl Game {
                     }) {
                     cast
                 } else {
-                    CastChoices::from_route(
+                    self.cast_via(
+                        player,
+                        *object,
                         self.selected_play_route(player, *object, *route)?,
                         *profile,
                     )

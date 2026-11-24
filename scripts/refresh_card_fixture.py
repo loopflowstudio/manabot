@@ -17,6 +17,7 @@ from __future__ import annotations
 import gzip
 import io
 import json
+import re
 from pathlib import Path
 import sys
 import urllib.request
@@ -44,20 +45,26 @@ FIELDS = [
 ]
 
 
-def registered_names() -> list[str]:
-    """Every real card name in the world pool, sorted.
-
-    The pool lists every card a set file defines. Token definitions
-    (`token.*` keys) are not real cards, and rules fixtures such as Crossroads
-    of Destiny have no key.
-    """
-    rows = [row for row in content_pool(WORLD_POOL)["definitions"] if row["key"]]
-    tokens = sorted(
-        row["registry_name"] for row in rows if row["key"].startswith("token.")
-    )
-    if tokens:
-        print(f"skipping tokens (no fixture entry): {', '.join(tokens)}")
-    return sorted({row["registry_name"] for row in rows} - set(tokens))
+def registered_names(oracle: dict[str, dict]) -> list[str]:
+    """Registered printings and their registered back faces, by printed name."""
+    rows = content_pool(WORLD_POOL)["definitions"]
+    names = {
+        row["registry_name"]
+        for row in rows
+        if row["key"] and not row["key"].startswith("token.")
+    }
+    registered = {row["registry_name"] for row in rows}
+    # Back faces have no key of their own. Join them through the printing
+    # so keyless rules fixtures are never mistaken for real cards.
+    backs = {
+        face["name"]
+        for name in names
+        if (card := oracle.get(name))
+        and card.get("layout") in ("modal_dfc", "transform")
+        for face in card["card_faces"][1:]
+        if face["name"] in registered
+    }
+    return sorted(names | backs)
 
 
 def http_get(url: str) -> bytes:
@@ -107,14 +114,29 @@ def oracle_cards() -> dict[str, dict]:
             # These layouts register one physical card under its front name.
             front = card["card_faces"][0]
             by_name.setdefault(front["name"], card | front)
+        if card.get("layout") in ("modal_dfc", "transform"):
+            for face in card["card_faces"]:
+                # Scryfall lists keywords on the whole card. An ability such as
+                # Photon's hexproof belongs only to the face that prints it.
+                text = face.get("oracle_text", "")
+                keywords = [
+                    keyword
+                    for keyword in card.get("keywords", [])
+                    if re.search(
+                        rf"(?:^|, ){re.escape(keyword)}(?=\b|$)",
+                        text,
+                        re.IGNORECASE | re.MULTILINE,
+                    )
+                ]
+                by_name.setdefault(face["name"], card | face | {"keywords": keywords})
         by_name.setdefault(card["name"], card)
     return by_name
 
 
 def main() -> int:
-    names = registered_names()
-    print(f"{len(names)} registered real-card candidates")
     by_name = oracle_cards()
+    names = registered_names(by_name)
+    print(f"{len(names)} registered real-card candidates")
 
     cards: dict[str, dict] = {}
     missing: list[str] = []

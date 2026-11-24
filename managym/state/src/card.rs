@@ -470,6 +470,8 @@ pub enum Restriction {
     CantAttackOrBlock,
     /// CR 502.3.
     DoesntUntap,
+    /// No creature can be declared as its blocker (CR 509.1b).
+    CantBeBlocked,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
 }
@@ -883,6 +885,10 @@ pub enum StaticAbility {
     /// flashback cost is {1}, any other spell's is its mana cost (Iroh, Grand
     /// Lotus).
     GraveyardSpellsHaveFlashback,
+    /// The controller may cast spells from hand without paying their mana costs.
+    CastFromHandWithoutManaCost,
+    /// The controller may cast spells as though they had flash.
+    CastSpellsAsThoughFlash(CardPredicate),
     /// Each matching permanent you control has "{T}: Add one mana of any
     /// color."
     GrantsAnyColorManaAbility(CardPredicate),
@@ -1027,6 +1033,8 @@ pub enum AdditionalCost {
     Sacrifice(Box<SacrificeCost>),
     /// Kicker (CR 702.33): an optional cost chosen while casting.
     Kicker(ManaCost),
+    /// Optional additional cost to cast as though the spell had flash.
+    FlashSurcharge(ManaCost),
     /// "As an additional cost, you may waterbend [cost]": an optional cost
     /// chosen like kicker whose generic mana may be paid by tapping artifacts
     /// and creatures.
@@ -1089,6 +1097,7 @@ pub enum SpellProfile {
     Front,
     Adventure,
     Omen,
+    BackFace,
 }
 
 impl SpellProfile {
@@ -1103,6 +1112,7 @@ impl serde::Serialize for SpellProfile {
         match self {
             Self::Front | Self::Adventure => serializer.serialize_bool(*self == Self::Adventure),
             Self::Omen => serializer.serialize_unit_variant("SpellProfile", 2, "Omen"),
+            Self::BackFace => serializer.serialize_unit_variant("SpellProfile", 3, "BackFace"),
         }
     }
 }
@@ -1140,6 +1150,8 @@ impl InsetSpell {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
+    /// The other catalog face can be cast in its own right (CR 712.11).
+    pub modal_back: bool,
     pub inset: Option<InsetSpell>,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
@@ -1288,19 +1300,15 @@ struct DefinitionWire<'a> {
     toughness: &'a Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     back_face: Option<&'a str>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    modal_back: bool,
 }
 
 impl PrintedCharacteristics {
     pub fn spell_profiles(&self) -> impl Iterator<Item = SpellProfile> {
         std::iter::once(SpellProfile::Front)
             .chain(self.inset.as_ref().and_then(InsetSpell::casting_profile))
-    }
-
-    pub fn spell_characteristics(&self, profile: SpellProfile) -> Option<&Self> {
-        match profile {
-            SpellProfile::Front => Some(self),
-            _ => self.inset_definition(profile).map(Arc::as_ref),
-        }
+            .chain(self.modal_back.then_some(SpellProfile::BackFace))
     }
 
     pub(crate) fn inset_definition(&self, profile: SpellProfile) -> Option<&Arc<Self>> {
@@ -1312,8 +1320,10 @@ impl PrintedCharacteristics {
 
     fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
         DefinitionWire {
-            adventure: self.spell_characteristics(SpellProfile::Adventure),
-            omen: self.spell_characteristics(SpellProfile::Omen),
+            adventure: self
+                .inset_definition(SpellProfile::Adventure)
+                .map(Arc::as_ref),
+            omen: self.inset_definition(SpellProfile::Omen).map(Arc::as_ref),
             prepared: match &self.inset {
                 Some(InsetSpell::Prepared(spell)) => Some(spell),
                 _ => None,
@@ -1339,6 +1349,7 @@ impl PrintedCharacteristics {
             power: &self.power,
             toughness: &self.toughness,
             back_face,
+            modal_back: self.modal_back,
         }
     }
 }
@@ -1392,6 +1403,7 @@ pub enum CastOption<'a> {
     Kicker,
     /// Bargain (CR 702.166): sacrifice an artifact, enchantment or token.
     Bargain,
+    FlashSurcharge(&'a ManaCost),
     /// This mana rather than the mana cost, while a condition holds.
     AlternativeMana(&'a ManaCost),
     /// Exile a card from hand rather than pay the mana cost.
@@ -1404,6 +1416,7 @@ impl CastOption<'_> {
     pub fn words(self) -> (&'static str, &'static str) {
         match self {
             Self::Kicker => ("kicked", "kicker"),
+            Self::FlashSurcharge(_) => ("cast as though it had flash", "flash surcharge"),
             Self::Bargain => ("bargained", "bargain"),
             Self::AlternativeMana(_) | Self::ExileFromHand => {
                 ("cast for its alternative cost", "alternative cost")
@@ -1471,6 +1484,7 @@ impl PrintedCharacteristics {
             | AdditionalCost::Waterbend(kicker)
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
             AdditionalCost::Sacrifice(_)
+            | AdditionalCost::FlashSurcharge(_)
             | AdditionalCost::RequiredWaterbend(_)
             | AdditionalCost::Replicate(_)
             | AdditionalCost::Convoke
@@ -1492,11 +1506,20 @@ impl PrintedCharacteristics {
             Some(CastOption::ExileFromHand)
         } else if let Some((cost, _)) = self.alternative_mana() {
             Some(CastOption::AlternativeMana(cost))
+        } else if let Some(cost) = self.flash_surcharge() {
+            Some(CastOption::FlashSurcharge(cost))
         } else if self.bargain() {
             Some(CastOption::Bargain)
         } else {
             self.optional_cost().map(|_| CastOption::Kicker)
         }
+    }
+
+    pub fn flash_surcharge(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::FlashSurcharge(cost) => Some(cost),
+            _ => None,
+        })
     }
 
     /// Whether casting this spell discards a card as an additional cost.

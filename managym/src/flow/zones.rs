@@ -502,6 +502,7 @@ impl Game {
         self.state.cast_permissions.grant(PlayGrant {
             source: Some(source),
             prepared: true,
+            follows_source_controller: true,
             ..PlayGrant::new(object, controller)
         });
     }
@@ -746,7 +747,12 @@ impl Game {
         let object_id = self
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
-        self.state[object_id].show_spell(entry.profile);
+        match entry.profile {
+            crate::state::card::SpellProfile::BackFace => {
+                assert!(self.show_back_face(object_id), "offered back face")
+            }
+            profile => self.state[object_id].show_inset(profile),
+        }
         if let Some(player) = entry.adventure_player {
             if self.state[object_id].is_card() {
                 self.state

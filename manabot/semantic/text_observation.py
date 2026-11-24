@@ -296,7 +296,7 @@ def _yes(value: bool) -> str:
 
 
 # Native `spell_profile_code`: the printed spell an offer or announcement casts.
-_SPELL_PROFILES = {1: "Adventure", 2: "Omen"}
+_SPELL_PROFILES = {1: "Adventure", 2: "Omen", 3: "back face"}
 
 
 def _selectors(mode: int | None, ability: int | None) -> list[str]:
@@ -959,6 +959,8 @@ class _Renderer:
             if permission.cost is None
             else f"cast for {_mana(permission.cost)}"
         ]
+        if permission.flashback:
+            terms.append("with flashback, exiling the spell when it leaves the stack")
         if permission.on_adventure:
             terms.append("permanent spell only")
         if permission.this_turn:

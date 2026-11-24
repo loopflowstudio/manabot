@@ -1,12 +1,13 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, ObjectSelector, PaymentCost, Per, PlayWindow,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
+        PlayWindow, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility, TargetCostReduction,
+        ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
+        CardTypes, Keyword, Keywords, PrintedCharacteristics, SacrificeCost, StaticAbility,
+        TargetCostReduction,
     },
     effect::Modification,
     mana::ManaCost,
@@ -24,6 +25,9 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         luminous_rebuke(),
         leyline_axe(),
         sire_of_seven_deaths(),
+        high_fae_trickster(),
+        sphinx_of_forgotten_lore(),
+        suspicious_shambler(),
         zul_ashur_lich_lord(),
     ]
 }
@@ -265,6 +269,7 @@ fn zul_ashur_lich_lord() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::GrantGraveyardCastThisTurn {
+                    flashback: false,
                     target: TargetSpec::GraveyardCardYouOwn {
                         predicate: CardPredicate {
                             subtype: Some("Zombie".into()),
@@ -336,6 +341,89 @@ fn herald_of_eternal_dawn() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying, Keyword::Flash]),
             statics: vec![StaticAbility::CantLoseAndOpponentsCantWin],
             text_box: "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou can't lose the game and your opponents can't win the game.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn high_fae_trickster() -> CardDefinition {
+    let rules_text = "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou may cast spells as though they had flash.";
+    CardDefinition {
+        key: "fdn.high_fae_trickster",
+        scryfall_id: "7f1b93ea-1ec1-4010-9343-765742f5088b",
+        printed: PrintedCharacteristics {
+            name: "High Fae Trickster".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Faerie".into(), "Wizard".into()],
+            power: Some(4),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            statics: vec![StaticAbility::CastSpellsAsThoughFlash(
+                CardPredicate::default(),
+            )],
+            text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn suspicious_shambler() -> CardDefinition {
+    let rules_text = "{4}{B}{B}, Exile this card from your graveyard: Create two 2/2 black Zombie creature tokens. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fdn.suspicious_shambler",
+        scryfall_id: "3d2c5345-eb55-4bca-9183-b4e1404405f8",
+        printed: PrintedCharacteristics {
+            name: "Suspicious Shambler".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(4),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Graveyard,
+                mana_cost: ManaCost::parse("{4}{B}{B}"),
+                sorcery_timing: true,
+                exile_source: true,
+                effects: vec![Effect::create_tokens("token.zombie", EffectValue::Fixed(2))],
+                ..Default::default()
+            }],
+            text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sphinx_of_forgotten_lore() -> CardDefinition {
+    let text = "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nWhenever this creature attacks, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to that card's mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)";
+    CardDefinition {
+        key: "fdn.sphinx_of_forgotten_lore",
+        scryfall_id: "af6e46b8-62ed-4bca-ba38-a821f225b59f",
+        printed: PrintedCharacteristics {
+            name: "Sphinx of Forgotten Lore".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Sphinx".into()],
+            power: Some(3),
+            toughness: Some(3),
+            text_box: text.into(),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::GrantGraveyardCastThisTurn {
+                    flashback: true,
+                    target: TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                            ..Default::default()
+                        },
+                    },
+                }],
+            }],
             ..Default::default()
         },
         ..Default::default()

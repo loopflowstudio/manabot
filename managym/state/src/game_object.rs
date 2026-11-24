@@ -685,8 +685,8 @@ impl Object {
     /// face's (CR 712.8e).
     pub fn mana_value_cost(&self) -> Option<&ManaCost> {
         match &self.front {
-            Some((_, front)) => front.mana_cost.as_ref(),
-            None => self.mana_cost.as_ref(),
+            Some((_, front)) if !front.modal_back => front.mana_cost.as_ref(),
+            _ => self.mana_cost.as_ref(),
         }
     }
 
@@ -716,11 +716,11 @@ impl Object {
     }
 
     /// Show the selected spell while retaining the physical card's definition.
-    pub fn show_spell(&mut self, profile: SpellProfile) {
+    pub fn show_inset(&mut self, profile: SpellProfile) {
         if profile.is_front() {
             return;
         }
-        let spell = Arc::clone(self.spell_definition(profile).expect("offered inset spell"));
+        let spell = Arc::clone(self.inset_definition(profile).expect("offered inset spell"));
         self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
         self.definition = spell;
     }
@@ -749,7 +749,7 @@ impl Object {
     }
 
     /// The shared characteristics used to announce, pay for and stack a spell.
-    pub fn spell_definition(&self, profile: SpellProfile) -> Option<&Arc<PrintedCharacteristics>> {
+    pub fn front_or_inset(&self, profile: SpellProfile) -> Option<&Arc<PrintedCharacteristics>> {
         if profile.is_front() {
             Some(&self.definition)
         } else {

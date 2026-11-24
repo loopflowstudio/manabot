@@ -924,6 +924,7 @@ class CastPermission:
     any_mana: bool
     waterbend: bool
     foretold: bool
+    flashback: bool
     follows_source_controller: bool
     on_adventure: bool
 

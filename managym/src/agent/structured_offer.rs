@@ -2,25 +2,24 @@
 //!
 //! The current `ActionSpace` and target legality queries remain authoritative.
 //! This module projects a narrow, uncapped typed view for priority pass,
-//! single `AnyTarget` target casts, complete combat declarations, and
+//! single-target casts, complete combat declarations, and
 //! commuting waterbend payments,
 //! then lowers accepted IDs through the existing rules executor. It
 //! intentionally does not own match revisions, prompt persistence, recovery,
 //! or policy decoding. `compound_offers` covers the full legal surface and
 //! `compound_commands` lowers its atomic selections to canonical Commands.
 
-use crate::state::card::Keyword;
-use crate::state::card::SpellProfile;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     agent::action::{Action, ActionSpaceKind},
-    flow::game::Game,
+    cards::content_pack::default_content_pack,
+    flow::{cast_permission::PlayRoute, game::Game},
     state::{
         ability::TargetSpec,
-        card::Restriction,
+        card::{Keyword, Restriction, SpellProfile},
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
@@ -212,7 +211,8 @@ pub enum AtomicCommand {
         binding: OfferSetBinding,
         player: PlayerId,
         object: ObjectId,
-        route: Option<crate::flow::cast_permission::PlayRoute>,
+        route: Option<PlayRoute>,
+        profile: SpellProfile,
         targets: Vec<BoundTarget>,
     },
     DeclareAttackers {
@@ -248,7 +248,8 @@ enum InternalOffer {
     CastSingleTarget {
         player: PlayerId,
         object: ObjectId,
-        route: Option<crate::flow::cast_permission::PlayRoute>,
+        route: Option<PlayRoute>,
+        profile: SpellProfile,
         role: RoleId,
         targets: BTreeMap<CandidateId, BoundTarget>,
     },
@@ -353,6 +354,7 @@ impl StructuredOfferSet {
                 player,
                 object,
                 route,
+                profile,
                 role,
                 targets,
             } => {
@@ -375,6 +377,7 @@ impl StructuredOfferSet {
                     player: *player,
                     object: *object,
                     route: *route,
+                    profile: *profile,
                     targets: vec![target],
                 })
             }
@@ -647,8 +650,8 @@ impl Game {
                         object, profile, ..
                     },
                 ) => Some(PublicCommitment::Cast {
-                    card: self.state[*object]
-                        .spell_characteristics(*profile)
+                    card: default_content_pack()
+                        .spell_definition(&self.state[*object], *profile)
                         .expect("offered spell")
                         .name
                         .clone(),
@@ -715,45 +718,20 @@ impl Game {
                 Ok(self.structured_waterbend_offers()?.unwrap_or(complete))
             }
             Some(ActionSpaceKind::Priority) => {
-                let presentation = self.structured_priority_offers()?;
                 for offer in &mut complete.projection.offers {
-                    let Some(InternalOffer::SearchAction {
-                        action:
-                            Action::CastSpell {
-                                object,
-                                route,
-                                profile: SpellProfile::Front,
-                                ..
-                            },
-                    }) = complete.internal.get(&offer.id)
+                    let Some(InternalOffer::SearchAction { action }) =
+                        complete.internal.get(&offer.id)
                     else {
                         continue;
                     };
-                    let replacement =
-                        presentation
-                            .internal
-                            .iter()
-                            .find_map(|(id, inner)| match inner {
-                                InternalOffer::CastSingleTarget {
-                                    object: target_card,
-                                    route: target_route,
-                                    ..
-                                } if target_card == object && route == target_route => {
-                                    Some((*id, inner.clone()))
-                                }
-                                _ => None,
-                            });
-                    if let Some((id, inner)) = replacement {
-                        let original_id = offer.id;
-                        *offer = presentation
-                            .projection
-                            .offers
-                            .iter()
-                            .find(|candidate| candidate.id == id)
-                            .expect("bound offer")
-                            .clone();
-                        offer.id = original_id;
-                        complete.internal.insert(original_id, inner);
+                    if let Some((projection, binding)) = self.single_target_offer(
+                        action,
+                        offer.id,
+                        offer.actor,
+                        self.compound_targets_for_action(action),
+                    )? {
+                        complete.internal.insert(offer.id, binding);
+                        *offer = projection;
                     }
                 }
                 Ok(complete)
@@ -1038,8 +1016,8 @@ impl Game {
     /// Project the currently covered priority actions without changing state.
     ///
     /// Unsupported legacy actions remain available through `ActionSpace`; this
-    /// experimental projection currently covers pass and non-kicked casts with
-    /// exactly one required `AnyTarget` target.
+    /// experimental projection covers pass and casts with a single target
+    /// that can be chosen immediately.
     pub fn structured_priority_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
         if self.is_game_over() {
             return Err(StructuredOfferError::GameOver);
@@ -1076,98 +1054,17 @@ impl Game {
                     });
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
-                Action::CastSpell {
-                    profile: SpellProfile::Front,
-                    player,
-                    object,
-                    route,
-                } => {
-                    let card_ref = &self.state[*object];
-                    if card_ref.optional_cost().is_some() {
-                        continue;
-                    }
-                    let requirements = card_ref.target_requirements();
-                    if requirements.len() != 1 {
-                        continue;
-                    }
-                    let requirement = &requirements[0];
-                    if requirement.min != 1
-                        || requirement.max != 1
-                        || requirement.spec != TargetSpec::AnyTarget
-                    {
-                        continue;
-                    }
-
-                    let legal_targets =
-                        self.legal_targets_for_requirement(*player, *object, requirement);
-                    if legal_targets.is_empty() {
-                        return Err(StructuredOfferError::Invariant(format!(
-                            "castable card {} has no legal target",
-                            card_ref.name
-                        )));
-                    }
-
-                    let role = RoleId(1);
-                    let mut candidates = Vec::with_capacity(legal_targets.len());
-                    let mut target_by_candidate = BTreeMap::new();
-                    for target in legal_targets {
-                        let candidate_id = next_candidate_id(candidates.len())?;
-                        let bound_target = self.bind_target(target)?;
-                        let (subject, label) = self.subject_and_label(bound_target)?;
-                        candidates.push(Candidate {
-                            id: candidate_id,
-                            value: CandidateValue::Subject { subject },
-                            label,
-                            help: None,
-                            preview: None,
-                        });
-                        target_by_candidate.insert(candidate_id, bound_target);
-                    }
-
+                Action::CastSpell { .. } => {
                     let id = next_offer_id(offers.len())?;
-                    offers.push(InteractionOffer {
+                    if let Some((offer, binding)) = self.single_target_offer(
+                        action,
                         id,
-                        actor: wire_actor,
-                        verb: OfferVerb::Cast,
-                        public_commitment: None,
-                        source: Some(SubjectRef::Object {
-                            id: object_render_id(
-                                card_ref.id,
-                                self.state
-                                    .live(*object)
-                                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?
-                                    .generation(),
-                            ),
-                        }),
-                        label: self
-                            .action_description(action)
-                            .unwrap_or_else(|| format!("Cast {}", card_ref.name)),
-                        help: None,
-                        choices: vec![ChoiceStep::Select {
-                            role,
-                            label: "Target".to_string(),
-                            candidates: CandidateSource {
-                                id: CandidateSourceId(0),
-                                depends_on: Vec::new(),
-                                initial: Some(candidates),
-                            },
-                            min: 1,
-                            max: 1,
-                            ordered: false,
-                            distinct: true,
-                        }],
-                        confirm_label: "Cast".to_string(),
-                    });
-                    internal.insert(
-                        id,
-                        InternalOffer::CastSingleTarget {
-                            player: *player,
-                            object: *object,
-                            route: *route,
-                            role,
-                            targets: target_by_candidate,
-                        },
-                    );
+                        wire_actor,
+                        self.priority_precondition_targets(action),
+                    )? {
+                        offers.push(offer);
+                        internal.insert(id, binding);
+                    }
                 }
                 _ => {}
             }
@@ -1182,6 +1079,163 @@ impl Game {
             binding: OfferSetBinding(self.decision_epoch),
             internal,
         })
+    }
+
+    // Recorded Commands address these candidates by their position in the compact
+    // priority projection. Keep its front-face AnyTarget ordering stable.
+    fn priority_precondition_targets(&self, action: &Action) -> Option<Vec<Target>> {
+        let Action::CastSpell {
+            player,
+            object,
+            profile: SpellProfile::Front,
+            ..
+        } = action
+        else {
+            return None;
+        };
+        let card = &self.state[*object];
+        let requirements = card.target_requirements();
+        let [requirement] = requirements.as_slice() else {
+            return None;
+        };
+        (card.optional_cost().is_none()
+            && requirement.spec == TargetSpec::AnyTarget
+            && requirement.min == 1
+            && requirement.max == 1)
+            .then(|| self.legal_targets_for_requirement(*player, *object, requirement))
+    }
+
+    fn single_target_offer(
+        &self,
+        action: &Action,
+        id: OfferId,
+        wire_actor: u8,
+        targets: Option<Vec<Target>>,
+    ) -> Result<Option<(InteractionOffer, InternalOffer)>, StructuredOfferError> {
+        let Action::CastSpell {
+            player,
+            object,
+            route,
+            profile,
+        } = action
+        else {
+            return Ok(None);
+        };
+        let Some(legal_targets) = targets else {
+            return Ok(None);
+        };
+
+        let role = RoleId(1);
+        let mut candidates = Vec::with_capacity(legal_targets.len());
+        let mut target_by_candidate = BTreeMap::new();
+        for target in legal_targets {
+            let candidate_id = next_candidate_id(candidates.len())?;
+            let bound_target = self.bind_target(target)?;
+            let (subject, label) = self.subject_and_label(bound_target)?;
+            candidates.push(Candidate {
+                id: candidate_id,
+                value: CandidateValue::Subject { subject },
+                label,
+                help: None,
+                preview: None,
+            });
+            target_by_candidate.insert(candidate_id, bound_target);
+        }
+
+        let offer = InteractionOffer {
+            id,
+            actor: wire_actor,
+            verb: OfferVerb::Cast,
+            public_commitment: None,
+            source: Some(SubjectRef::Object {
+                id: object_render_id(
+                    self.state[*object].id,
+                    self.state
+                        .live(*object)
+                        .ok_or(StructuredOfferError::InvalidCurrentTarget)?
+                        .generation(),
+                ),
+            }),
+            label: self
+                .action_description(action)
+                .unwrap_or_else(|| format!("Cast {}", self.state[*object].name)),
+            help: None,
+            choices: vec![ChoiceStep::Select {
+                role,
+                label: "Target".to_string(),
+                candidates: CandidateSource {
+                    id: CandidateSourceId(0),
+                    depends_on: Vec::new(),
+                    initial: Some(candidates),
+                },
+                min: 1,
+                max: 1,
+                ordered: false,
+                distinct: true,
+            }],
+            confirm_label: "Cast".to_string(),
+        };
+        Ok(Some((
+            offer,
+            InternalOffer::CastSingleTarget {
+                player: *player,
+                object: *object,
+                route: *route,
+                profile: *profile,
+                role,
+                targets: target_by_candidate,
+            },
+        )))
+    }
+
+    /// Bind a target only when it is the next announcement choice. Other
+    /// announcements retain their action-aligned offer and native prompts.
+    fn compound_targets_for_action(&self, action: &Action) -> Option<Vec<Target>> {
+        let Action::CastSpell {
+            player,
+            object,
+            route,
+            profile,
+        } = *action
+        else {
+            return None;
+        };
+        let spell = default_content_pack().spell_definition(&self.state[object], profile)?;
+        let requirements = spell.target_requirements();
+        let [requirement] = requirements.as_slice() else {
+            return None;
+        };
+        if requirement.min != 1
+            || requirement.max != 1
+            || requirement.max_x
+            || requirement.total_mana_value_x
+            || requirement.opponent_chooses
+            || !matches!(
+                requirement.spec,
+                TargetSpec::AnyTarget | TargetSpec::Creature | TargetSpec::Permanent { .. }
+            )
+            || spell.cast_option().is_some()
+            || spell.spell_modes().is_some()
+        {
+            return None;
+        }
+        let cast = self.cast_via(
+            player,
+            object,
+            self.selected_play_route(player, object, route).ok()?,
+            profile,
+        );
+        if self.cast_needs_x_announcement(object, cast) {
+            return None;
+        }
+        Some(
+            self.legal_targets_for_requirement(player, object, requirement)
+                .into_iter()
+                .filter(|target| {
+                    self.target_leaves_cost_payable(player, object, cast, &[], *target)
+                })
+                .collect(),
+        )
     }
 
     /// Project one complete CR 508 attacker declaration as an unordered
@@ -1358,6 +1412,7 @@ impl Game {
             }
             AtomicCommand::CastSpell {
                 route,
+                profile,
                 player,
                 object,
                 targets,
@@ -1369,29 +1424,22 @@ impl Game {
                         targets.len()
                     )));
                 }
+                let action = Action::CastSpell {
+                    player: *player,
+                    object: *object,
+                    route: *route,
+                    profile: *profile,
+                };
                 let cast = self
                     .action_space()
                     .filter(|space| space.kind == ActionSpaceKind::Priority)
-                    .and_then(|space| {
-                        space.actions.iter().position(|action| {
-                            matches!(
-                                action,
-                                Action::CastSpell {
-                                    profile: SpellProfile::Front, player: legal_player,
-                                    object: legal_card, route:legal_route,
-                                } if legal_player == player && legal_card == object && legal_route == route
-                            )
-                        })
-                    })
+                    .and_then(|space| space.actions.iter().position(|legal| legal == &action))
                     .ok_or(StructuredOfferError::WrongDecision)?;
-                // Validate the declared target even when native trivial-choice
-                // skipping will commit it before an external prompt appears.
+                // Trivial-decision skipping may commit the sole target during the cast step.
                 let wanted = self.resolve_bound_target(targets[0])?;
-                let requirements = self.state[*object].target_requirements();
-                if requirements.len() != 1
-                    || !self
-                        .legal_targets_for_requirement(*player, *object, &requirements[0])
-                        .contains(&wanted)
+                if !self
+                    .compound_targets_for_action(&action)
+                    .is_some_and(|legal| legal.contains(&wanted))
                 {
                     return Err(StructuredOfferError::StaleOrIllegal(
                         "structured target is no longer legal".into(),

@@ -63,8 +63,8 @@ struct TargetSelection {
 
 impl CastChoices {
     pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
-        object
-            .spell_definition(self.profile)
+        crate::cards::content_pack::default_content_pack()
+            .spell_definition(object, self.profile)
             .expect("offered spell profile")
     }
 
@@ -81,17 +81,6 @@ impl CastChoices {
         predicate.matches_printed_spell(self.spell(card), card.kind())
     }
 
-    pub(crate) fn from_route(route: PlayRoute, profile: SpellProfile) -> Self {
-        Self {
-            profile,
-            route: (route != PlayRoute::Hand).then_some(route),
-            flashback: matches!(
-                route,
-                PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback
-            ),
-            ..Self::default()
-        }
-    }
     pub(super) fn grant(
         self,
         game: &Game,
@@ -105,6 +94,40 @@ impl CastChoices {
 }
 
 impl Game {
+    pub(crate) fn cast_via(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        route: PlayRoute,
+        profile: SpellProfile,
+    ) -> CastChoices {
+        let flashback = match route {
+            PlayRoute::PrintedFlashback | PlayRoute::GrantedFlashback => true,
+            PlayRoute::Grant(key) => self
+                .grant_by_key(object, key)
+                .is_some_and(|grant| grant.flashback),
+            _ => false,
+        };
+        let mut cast = CastChoices {
+            profile,
+            free: route == PlayRoute::FreeFromHand,
+            route: (route != PlayRoute::Hand).then_some(route),
+            flashback,
+            ..Default::default()
+        };
+        // A surcharge is mandatory only when this is the permission that
+        // makes casting timely. Other flash grants still allow normal payment.
+        if crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], profile)
+            .is_some_and(|spell| spell.flash_surcharge().is_some())
+            && !self.can_cast_sorceries(player)
+            && !self.has_instant_timing(player, object, cast)
+        {
+            cast.flash_surcharge = true;
+        }
+        cast
+    }
+
     pub fn can_cast_sorceries(&self, player: PlayerId) -> bool {
         // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
         // during a main phase with an empty stack.
@@ -122,24 +145,17 @@ impl Game {
         // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to
         // one per turn, plus each additional land play granted.
         self.can_cast_sorceries(player)
-            && self.state.turn.lands_played < 1 + self.additional_land_plays()
+            && self.state.turn.lands_played < 1 + self.additional_land_plays(player)
     }
 
-    /// Additional land plays every player has on their turns (CR 305.2).
-    fn additional_land_plays(&self) -> u32 {
-        let permanents = [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.iter_battlefield_permanents(player));
-        self.layer_views(permanents)
-            .map(|(_, view)| {
-                view.static_abilities
-                    .iter()
-                    .filter(|ability| {
-                        matches!(ability, StaticAbility::AdditionalLandPlayEachPlayer)
-                    })
-                    .count() as u32
+    fn additional_land_plays(&self, player: PlayerId) -> u32 {
+        let granted = self
+            .player_effects(player)
+            .filter(|effect| {
+                effect.modification == crate::state::effect::Modification::AdditionalLandPlay
             })
-            .sum()
+            .count() as u32;
+        self.layer_board().additional_land_plays_each_player + granted
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
@@ -156,19 +172,11 @@ impl Game {
         }
     }
 
-    /// Whether a layered static ability on the player's battlefield matches.
-    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&StaticAbility) -> bool) -> bool {
-        self.layer_views(self.iter_battlefield_permanents(player))
-            .any(|(_, view)| view.static_abilities.iter().any(&has))
-    }
-
     /// Whether `player` may cast spells only from their hand: an "until your
     /// next turn" restriction, or an opponent's permanent that says so.
     pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
         self.hand_only_until(player).is_some()
-            || self.active_permanent_has(PlayerId(1 - player.0), |ability| {
-                *ability == StaticAbility::OpponentsCastOnlyFromHand
-            })
+            || self.layer_board().play_permissions[1 - player.0].opponents_hand_only
     }
 
     /// Collect the permissions before timing or payment eliminates individual routes.
@@ -180,7 +188,11 @@ impl Game {
         let land = self.state[object].types.is_land();
         match self.state.zones.zone_of(object) {
             Some(ZoneType::Hand) if self.state[object].owner == player => {
-                Cow::Borrowed(&[PlayRoute::Hand])
+                if !land && self.layer_board().play_permissions[player.0].free_from_hand {
+                    Cow::Borrowed(&[PlayRoute::Hand, PlayRoute::FreeFromHand])
+                } else {
+                    Cow::Borrowed(&[PlayRoute::Hand])
+                }
             }
             _ if !land && self.casts_only_from_hand(player) => Cow::Borrowed(&[]),
             Some(zone @ (ZoneType::Exile | ZoneType::Graveyard)) => {
@@ -197,9 +209,7 @@ impl Game {
                         routes.push(PlayRoute::PrintedFlashback);
                     }
                     if self.active_player() == player
-                        && self.active_permanent_has(player, |ability| {
-                            *ability == StaticAbility::GraveyardSpellsHaveFlashback
-                        })
+                        && self.layer_board().play_permissions[player.0].graveyard_flashback
                         && self
                             .granted_flashback_cost(object)
                             .as_ref()
@@ -208,7 +218,9 @@ impl Game {
                         routes.push(PlayRoute::GrantedFlashback);
                     }
                 }
-                if self.active_player() != player || !self.state[object].types.is_permanent() {
+                if self.active_player() != player
+                    || (!self.state[object].types.is_permanent() && !self.state[object].modal_back)
+                {
                     return routes.into();
                 }
                 for (id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
@@ -220,7 +232,14 @@ impl Game {
                     }
                     let grantor = self.state.permanents[id].as_ref().unwrap();
                     let source = grantor.object;
-                    for &kind in &self.state[object].types.types {
+                    let card = &self.state[object];
+                    let back = crate::cards::content_pack::default_content_pack()
+                        .spell_definition(card, SpellProfile::BackFace);
+                    let other_types = back
+                        .into_iter()
+                        .flat_map(|spell| &spell.types.types)
+                        .filter(|kind| !card.types.types.contains(kind));
+                    for &kind in card.types.types.iter().chain(other_types) {
                         use crate::state::card::CardType::*;
                         if matches!(kind, Instant | Sorcery | Kindred) || (land && kind != Land) {
                             continue;
@@ -258,28 +277,29 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> bool {
-        if self.state[object]
-            .spell_characteristics(cast.profile)
+        if crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], cast.profile)
             .is_none()
         {
             return false;
         }
         match cast.route.unwrap_or(PlayRoute::Hand) {
-            PlayRoute::LibraryTop => self.active_permanent_has(player, |ability| match ability {
-                StaticAbility::CastFromLibraryTop(predicate) => {
-                    cast.matches_spell(self, object, predicate)
-                }
-                _ => false,
-            }),
-            PlayRoute::Hand => true,
+            PlayRoute::LibraryTop => self.layer_board().play_permissions[player.0]
+                .library_spells
+                .iter()
+                .any(|predicate| cast.matches_spell(self, object, predicate)),
+            PlayRoute::Hand | PlayRoute::FreeFromHand => true,
+            PlayRoute::GraveyardType { kind, .. } => {
+                cast.spell(&self.state[object]).types.types.contains(&kind)
+            }
             PlayRoute::Grant(key) if !cast.profile.is_front() => self
                 .grant_by_key(object, key)
-                .is_some_and(|grant| !grant.on_adventure && !grant.foretold),
+                .is_some_and(|grant| !grant.on_adventure && !grant.foretold && !grant.flashback),
             _ => cast.profile.is_front(),
         }
     }
 
-    pub(super) fn selected_play_route(
+    pub(crate) fn selected_play_route(
         &self,
         player: PlayerId,
         object: ObjectId,
@@ -342,6 +362,9 @@ impl Game {
         let card_ref = cast.spell(&self.state[object]);
         let mut cost = self.casting_mana_cost(object, cast)?.with_x(cast.x);
         cost.purpose = SpendingContext::Cast(SpellSnapshot(Arc::clone(card_ref)));
+        if cast.flash_surcharge {
+            cost = cost.plus(card_ref.flash_surcharge()?);
+        }
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -451,22 +474,23 @@ impl Game {
         if !card_ref.types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
         }
-        if card_ref.owner != player {
-            return Err(AgentError("card does not belong to player".to_string()));
-        }
         let route = self.selected_play_route(player, self.state.object_of(card), selected)?;
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
         // CR 305.2 — Track one normal land play per turn.
+        let controller = (card_ref.owner != player).then_some(player);
         self.spend_play_route(player, Some(route));
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
             self.state.object_of(card),
             ZoneType::Battlefield,
-            Default::default(),
+            crate::flow::proposed_event::ZoneEntry {
+                controller,
+                ..Default::default()
+            },
         )]));
         frame.completion = FrameCompletion::Continue;
         self.run_frame(frame);
@@ -492,7 +516,7 @@ impl Game {
             return Err(AgentError("land cards cannot be cast".into()));
         }
         let route = self.selected_play_route(player, object, selected)?;
-        let cast = CastChoices::from_route(route, profile);
+        let cast = self.cast_via(player, object, route, profile);
         if !self.permits_spell(player, object, cast) {
             return Err(AgentError("permission does not allow this spell".into()));
         }
@@ -679,6 +703,16 @@ impl Game {
         object: ObjectId,
         cast: CastChoices,
     ) -> Option<CastChoices> {
+        if cast.spell(&self.state[object]).flash_surcharge().is_some() {
+            let paid = CastChoices {
+                flash_surcharge: true,
+                ..cast
+            };
+            return (cast.flash_surcharge
+                || cast.resolving
+                || !self.can_pay_cast(player, object, paid))
+            .then_some(cast);
+        }
         let kicked = CastChoices {
             kicked: true,
             ..cast
@@ -739,9 +773,16 @@ impl Game {
             return Err(AgentError("wrong player for kicker choice".to_string()));
         }
         self.pending_choice = None;
-        let cast = CastChoices {
-            kicked: pay,
-            ..cast
+        let cast = if cast.spell(&self.state[object]).flash_surcharge().is_some() {
+            CastChoices {
+                flash_surcharge: pay,
+                ..cast
+            }
+        } else {
+            CastChoices {
+                kicked: pay,
+                ..cast
+            }
         };
         self.begin_mode_selection(player, object, cast)
     }
@@ -938,7 +979,7 @@ impl Game {
 
     /// With a target-dependent reduction, a choice that would leave the
     /// spell's total cost unpayable is not offered (CR 601.2f-h).
-    fn target_leaves_cost_payable(
+    pub(crate) fn target_leaves_cost_payable(
         &self,
         player: PlayerId,
         object: ObjectId,
@@ -968,7 +1009,7 @@ impl Game {
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.within_target_mana_budget(requirement, x, chosen.iter().copied(), *target)
+                self.fits_target_clause(requirement, x, chosen.iter().copied(), *target)
             })
             // Distinctness and the budget are local to this clause.
             .filter(|target| !chosen.contains(target))
@@ -1652,7 +1693,10 @@ impl Game {
                     }
                     ActivationSource::Card(_) => false,
                 };
-                !is_source && !chosen.contains(target)
+                !is_source
+                    && !chosen.contains(target)
+                    && (!clause.same_graveyard
+                        || self.fits_target_clause(&clause, 0, chosen.iter().copied(), *target))
             })
             .collect();
         if !clause.shares_creature_type {

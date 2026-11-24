@@ -385,6 +385,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
                 "its shared-effect row on the permanent's kept row; the action tensor omits it",
             ),
         ),
+        Modification::AdditionalLandPlay => (
+            "Modification::AdditionalLandPlay",
+            Seen::Via("shared player effect and an additional legal land play"),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -450,6 +454,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::ExileIfWouldLeave),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
+        (true, Modification::AdditionalLandPlay),
         (true, Modification::NextCreatureCastFlash),
         (true, Modification::SkipsCombatPhasesNextTurn),
         (true, Modification::LifeTotalCantChange),
@@ -462,8 +467,6 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::HasAbilitiesOfSource),
     ]
 }
-
-const MODIFICATION_VARIANTS: usize = 37;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -927,6 +930,7 @@ fn effect_witnesses() -> Vec<Effect> {
             },
         },
         Effect::GrantGraveyardCastThisTurn {
+            flashback: false,
             target: TargetSpec::GraveyardCardYouOwn {
                 predicate: creature(),
             },
@@ -1229,6 +1233,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::OpponentHasMoreCardsInHand => "Condition::OpponentHasMoreCardsInHand",
         Condition::OpponentControlsMoreCreatures => "Condition::OpponentControlsMoreCreatures",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
@@ -1277,6 +1282,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
         Condition::OpponentControlsMoreCreatures,
+        Condition::OpponentHasMoreCardsInHand,
         Condition::TargetDealtDamageThisTurn,
         Condition::SourceCountersAtLeast {
             kind: CounterKind::Quest,
@@ -1332,6 +1338,12 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "Beorn the Fierce",
             "hob",
             "beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types",
+        ),
+        StaticAbility::CastFromHandWithoutManaCost => witnessed(
+            "StaticAbility::CastFromHandWithoutManaCost", Seen::Actions("paid and free hand casts have distinct prices"), "Omniscience", "fdn", "omniscience_offers_paid_and_free_casts_with_optional_costs",
+        ),
+        StaticAbility::CastSpellsAsThoughFlash(_) => witnessed(
+            "StaticAbility::CastSpellsAsThoughFlash", Seen::Actions("instant timing still requires permission for the zone"), "High Fae Trickster", "fdn", "high_fae_trickster_changes_timing_after_zone_permission",
         ),
         StaticAbility::GraveyardSpellsHaveFlashback => witnessed(
             "StaticAbility::GraveyardSpellsHaveFlashback",
@@ -1643,6 +1655,7 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "tla",
             "deadly_precision_sacrifices_artifact_before_destroying_a_different_creature",
         ),
+        AdditionalCost::FlashSurcharge(_) => witnessed("AdditionalCost::FlashSurcharge", Seen::Actions("timing-dependent total casting cost"), "Harbinger of the Tides","fdn","harbinger_requires_its_surcharge_only_for_its_own_flash_permission"),
         AdditionalCost::Kicker(_) => witnessed(
             "AdditionalCost::Kicker",
             Seen::Card(card::KICKER_COST),
@@ -1751,6 +1764,8 @@ fn static_witnesses() -> Vec<StaticAbility> {
                 toughness: managym::state::card::LayerValue::Fixed(2),
             }],
         }),
+        StaticAbility::CastFromHandWithoutManaCost,
+        StaticAbility::CastSpellsAsThoughFlash(CardPredicate::default()),
         StaticAbility::GraveyardSpellsHaveFlashback,
         StaticAbility::GrantsAnyColorManaAbility(creature()),
         StaticAbility::CantBeBlockedIf(Condition::YourTurn),
@@ -1866,6 +1881,7 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
             or_mana: None,
         })),
         AdditionalCost::Kicker(ManaCost::parse("{4}")),
+        AdditionalCost::FlashSurcharge(ManaCost::parse("{2}")),
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
         AdditionalCost::Replicate(ManaCost::parse("{R}")),
@@ -2333,15 +2349,17 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
 #[test]
 fn every_continuous_effect_variant_reaches_the_learning_tokens() {
     let witnesses = modification_witnesses();
-    assert_eq!(witnesses.len(), MODIFICATION_VARIANTS);
+    let variants = managym::agent::observation::MODIFICATION_NAMES;
+    assert_eq!(witnesses.len(), variants.len());
     let names: BTreeSet<_> = witnesses
         .iter()
         .map(|(_, modification)| modification_seen(modification).0)
         .collect();
-    assert_eq!(
-        names.len(),
-        MODIFICATION_VARIANTS,
-        "one witness per variant"
+    assert!(
+        variants
+            .iter()
+            .all(|name| names.contains(format!("Modification::{name}").as_str())),
+        "one witness per observed modification"
     );
     for (on_player, modification) in witnesses {
         let affected = if on_player {
@@ -3284,6 +3302,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         flash => [column(Card, card::PERMISSION_FLASH)],
         any_mana => [column(Card, card::PERMISSION_ANY_MANA)],
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
+        flashback => [FactOccurrence(FactKind::EffectProgram)],
         follows_source_controller => [FactOccurrence(FactKind::EffectProgram)],
         on_adventure => [FactOccurrence(FactKind::EffectProgram)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],

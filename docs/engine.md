@@ -913,9 +913,11 @@ fn lightning_bolt() -> CardDefinition {
 colors, keywords, abilities, text and power/toughness as printed. It is the
 input to the layer system; `Game::characteristics(id)` returns the layered
 view of a game object after continuous effects. A `CardDefinition` adds the
-card's identity (`key` and a required `scryfall_id`) and, for a transforming
-card, its back face's `PrintedCharacteristics` (`back_face`; the outer
-`..Default::default()` leaves it empty).
+card’s identity (`key` and a required `scryfall_id`). Double-faced cards
+register their `back_face` alongside the front. A front with `modal_back`
+offers either printed face when the play permission allows it. Casting Photon
+uses Photon’s cost and abilities, then the permanent enters back face up.
+Moving the permanent to the graveyard restores Monica Rambeau.
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
@@ -1163,6 +1165,25 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | CR 715.3d | resolving an Adventure can give its caster permission to cast the permanent spell from exile | the selected Adventure replacement grants access to the exact exile successor. Bilbo’s competing exile replacement creates no grant. |
 | [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
+
+Yue’s hand permission checks the spell being announced, so it can offer
+Spew Flame from Smaug. Solstice Revelations likewise checks Charring Bite’s
+mana value when it exiles Twinmaw Stormbrood. During targeting, the caster
+sees the chosen spell name in the decision context and its profile in the
+continuation. Both viewers see the spell once it reaches the stack.
+
+Omniscience offers the ordinary hand cast and a cast without paying the mana
+cost whenever both are payable. Additional copies grant the same choice.
+Kicker, bargain, and required sacrifices still apply to the free cast.
+High Fae Trickster changes the timing of an otherwise legal cast. Harbinger of
+the Tides can supply its own flash permission for two more mana, including
+when Omniscience pays its printed cost. If another effect grants flash,
+Harbinger also offers the cast without the surcharge.
+
+Sphinx of Forgotten Lore grants its chosen graveyard card flashback at that
+card’s mana cost until cleanup. The permission survives the Sphinx leaving
+play. A card with printed flashback keeps both prices. Either flashback cast
+exiles the spell when it leaves the stack.
 
 When Etali, Primal Storm attacks, its controller exiles the top card of each
 library. They can cast the eligible spells in either order for free, or stop

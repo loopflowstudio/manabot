@@ -248,15 +248,14 @@ impl Game {
         self.lookup_current_permanent(source).ok()
     }
 
-    /// Clause-wide mana-value budget; paid X belongs to this occurrence,
-    /// independent of its source's current state or later mana production.
-    fn within_trigger_mana_budget(
+    /// Check against earlier targets of this clause. Paid X belongs to the trigger.
+    fn fits_trigger_target_clause(
         &self,
         trigger: &PendingTrigger,
         requirement: &crate::state::ability::TargetRequirement,
         target: Target,
     ) -> bool {
-        self.within_target_mana_budget(
+        self.fits_target_clause(
             requirement,
             trigger.x,
             trigger
@@ -269,19 +268,31 @@ impl Game {
         )
     }
 
-    pub(crate) fn within_target_mana_budget(
+    pub(crate) fn fits_target_clause(
         &self,
         requirement: &crate::state::ability::TargetRequirement,
         x: u8,
-        chosen: impl Iterator<Item = Target>,
+        chosen: impl Iterator<Item = Target> + Clone,
         target: Target,
     ) -> bool {
-        !requirement.total_mana_value_x
-            || self.target_mana_value(target)
-                + chosen
-                    .map(|target| self.target_mana_value(target))
-                    .sum::<u32>()
-                <= u32::from(x)
+        // A graveyard card's owner fixes which graveyard it was targeted in,
+        // even if that appearance has left before a copied spell is retargeted.
+        let graveyard = |target| match target {
+            Target::GraveyardCard(id) => {
+                self.state.objects.get(id.slot()).map(|object| object.owner)
+            }
+            _ => None,
+        };
+        let same_graveyard = !requirement.same_graveyard
+            || graveyard(target)
+                .is_some_and(|owner| chosen.clone().all(|other| graveyard(other) == Some(owner)));
+        same_graveyard
+            && (!requirement.total_mana_value_x
+                || self.target_mana_value(target)
+                    + chosen
+                        .map(|other| self.target_mana_value(other))
+                        .sum::<u32>()
+                    <= u32::from(x))
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -319,7 +330,7 @@ impl Game {
             .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
             || duplicate
-            || !self.within_trigger_mana_budget(trigger, requirement, target)
+            || !self.fits_trigger_target_clause(trigger, requirement, target)
             || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
             || !self.within_source_bound(
@@ -450,7 +461,7 @@ impl Game {
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
                     .filter(|target| {
-                        self.within_trigger_mana_budget(&trigger, requirement, *target)
+                        self.fits_trigger_target_clause(&trigger, requirement, *target)
                     })
                     .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
                     .filter(|target| {

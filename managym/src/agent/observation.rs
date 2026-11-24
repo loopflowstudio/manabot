@@ -218,6 +218,8 @@ pub struct CastPermissionData {
     /// Entitlement follows the current controller of the source.
     #[serde(default)]
     pub follows_source_controller: bool,
+    #[serde(default)]
+    pub flashback: bool,
     /// Permanent sustaining this permission.
     #[serde(default)]
     pub source_permanent_id: Option<i32>,
@@ -500,6 +502,7 @@ pub fn spell_profile_code(profile: SpellProfile) -> u8 {
         SpellProfile::Front => 0,
         SpellProfile::Adventure => 1,
         SpellProfile::Omen => 2,
+        SpellProfile::BackFace => 3,
     }
 }
 
@@ -607,7 +610,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 37] = [
+pub const MODIFICATION_NAMES: [&str; 38] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -645,6 +648,7 @@ pub const MODIFICATION_NAMES: [&str; 37] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "AdditionalLandPlay",
 ];
 
 impl ContinuousEffectData {
@@ -747,6 +751,7 @@ impl ContinuousEffectData {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
+            Modification::AdditionalLandPlay => "AdditionalLandPlay",
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
@@ -1083,7 +1088,7 @@ impl Observation {
                             let (route_mana_value, quota_type) = match action {
                                 Action::CastSpell { object, route: Some(route), .. }
                                 | Action::PlayLand { object, route: Some(route), .. } => {
-                                    let cast = crate::flow::game::CastChoices::from_route(*route, profile);
+                                    let cast = game.cast_via(action.player(), *object, *route, profile);
                                     let cost = game.casting_mana_cost(*object, cast);
                                     let quota = match route {
                                         crate::flow::cast_permission::PlayRoute::GraveyardType { kind, .. } => Some(*kind as u8 + 1),
@@ -1722,7 +1727,8 @@ impl Observation {
                     any_mana: grant.any_mana,
                     waterbend: grant.waterbend,
                     foretold: grant.foretold,
-                    follows_source_controller: grant.prepared,
+                    follows_source_controller: grant.follows_source_controller,
+                    flashback: grant.flashback,
                     on_adventure: grant.on_adventure,
                 })
                 .collect(),

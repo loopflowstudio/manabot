@@ -112,15 +112,22 @@ export function labelText(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** Source-conditioned permissions from the inspected card's viewer projection. */
+/** Play permissions from the inspected card's viewer projection. */
 export function permissionTerms(card: Pick<CardState, 'cast_permission' | 'cast_permissions'> | null, permanentName: (id: number) => string, playerName: (id: number) => string): string[] {
   const grants = card?.cast_permissions ?? (card?.cast_permission ? [card.cast_permission] : []);
   return grants.flatMap(grant => {
-    if (grant.source_permanent_id == null) return [];
-    const source = permanentName(grant.source_permanent_id);
     const player = playerName(grant.player_id);
-    return [grant.follows_source_controller
-      ? `The controller of ${source} may cast this (currently ${player}).`
-      : `${player} may cast this while they control ${source}.`];
+    const terms: string[] = [];
+    if (grant.source_permanent_id != null) {
+      const source = permanentName(grant.source_permanent_id);
+      terms.push(grant.follows_source_controller
+        ? `The controller of ${source} may cast this (currently ${player}).`
+        : `${player} may cast this while they control ${source}.`);
+    }
+    if (grant.flashback) {
+      const duration = grant.this_turn ? ' this turn' : '';
+      terms.push(`${player} may cast this with flashback${duration}. Exile it when it leaves the stack.`);
+    }
+    return terms;
   });
 }

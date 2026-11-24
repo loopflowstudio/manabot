@@ -353,7 +353,10 @@ impl Game {
                                 !profile.is_front()
                                     && spell_profile_code(*profile) == frame.spell_profile
                             })
-                            .and_then(|profile| self.state[source].spell_definition(profile))
+                            .and_then(|profile| {
+                                crate::cards::content_pack::default_content_pack()
+                                    .spell_definition(&self.state[source], profile)
+                            })
                         {
                             view.label = spell.name.clone();
                         }
@@ -431,6 +434,7 @@ impl Game {
         // offers: `KickerChoice` asks bargain and alternative costs too.
         let cast_option = match &self.pending_choice {
             Some(PendingChoice::KickerChoice { object, cast, .. }) => match cast.spell(&self.state[*object]).cast_option() {
+                Some(CastOption::FlashSurcharge(cost)) => format!("Choose whether to pay {} more to cast as though it had flash.", cost_label(cost)),
                 Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
                 Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
                 Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),

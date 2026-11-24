@@ -32,6 +32,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PlayRoute {
     Hand,
+    FreeFromHand,
     LibraryTop,
     PrintedFlashback,
     GrantedFlashback,
@@ -93,6 +94,12 @@ pub struct PlayGrant {
     /// CR 715.3d: only the permanent spell may be cast with this grant.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub on_adventure: bool,
+    /// The grant's caster tracks the player who controls its battlefield source.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub follows_source_controller: bool,
+    /// This cast uses flashback and exiles the spell when it leaves the stack.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
     /// This exact exile copy survives while linked to its battlefield source.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
@@ -122,6 +129,8 @@ impl PlayGrant {
             foretold: false,
             on_adventure: false,
             prepared: false,
+            follows_source_controller: false,
+            flashback: false,
         }
     }
 }
@@ -433,11 +442,11 @@ impl Game {
     /// its source, while a fixed-player grant may require continued control.
     fn grant_player(&self, grant: &PlayGrant) -> Option<PlayerId> {
         let Some(source) = grant.source else {
-            return (!grant.prepared).then_some(grant.player);
+            return (!grant.follows_source_controller).then_some(grant.player);
         };
         let permanent = self.lookup_current_permanent(source).ok()?;
         let controller = self.state.permanents[permanent].as_ref()?.controller;
-        (grant.prepared || controller == grant.player).then_some(controller)
+        (grant.follows_source_controller || controller == grant.player).then_some(controller)
     }
 
     /// The live grant letting `player` play this exact card now.

@@ -110,6 +110,8 @@ pub enum Modification<N = i32> {
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// One more land play for the affected player (CR 305.2).
+    AdditionalLandPlay,
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
@@ -193,6 +195,7 @@ impl<N> Modification<N> {
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
@@ -259,6 +262,7 @@ impl Modification {
             | Self::ExileIfWouldDie
             | Self::ExileIfWouldLeave
             | Self::KeepUnspentMana(_)
+            | Self::AdditionalLandPlay
             | Self::NoMaximumHandSize
             | Self::NextCreatureCastFlash
             | Self::SkipsCombatPhasesNextTurn

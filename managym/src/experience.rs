@@ -355,6 +355,8 @@ pub struct LegacyCastPermissionView {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub follows_source_controller: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub on_adventure: bool,
 }
 

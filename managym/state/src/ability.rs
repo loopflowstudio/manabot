@@ -177,6 +177,7 @@ pub enum TriggerCondition {
 pub enum Condition {
     YourTurn,
     OpponentControlsMoreCreatures,
+    OpponentHasMoreCardsInHand,
     Always,
     CardsDrawnAtLeast {
         count: u32,
@@ -361,6 +362,7 @@ impl Condition {
             | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::OpponentControlsMoreCreatures
+            | Condition::OpponentHasMoreCardsInHand
             | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
@@ -1098,6 +1100,8 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// The controller may cast the targeted graveyard card this turn at its normal cost and timing.
     GrantGraveyardCastThisTurn {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        flashback: bool,
         target: TargetSpec,
     },
     /// "Exile the top `count` cards of your library. You may play them
@@ -1581,6 +1585,9 @@ pub struct TargetRequirement {
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
+    /// All graveyard cards in this clause come from a single graveyard.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub same_graveyard: bool,
     /// "Target creature of an opponent's choice": the controller's opponent
     /// chooses this clause's targets as the ability is activated; legality
     /// is still from the controller's side (CR 115.4).
@@ -1602,6 +1609,7 @@ impl TargetRequirement {
             another: false,
             max_x: false,
             total_mana_value_x: false,
+            same_graveyard: false,
             opponent_chooses: false,
         }
     }
@@ -1801,9 +1809,8 @@ impl Effect {
             | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
-            Effect::GrantGraveyardCastThisTurn { target } | Effect::ExileLinked { target, .. } => {
-                Some(target)
-            }
+            Effect::GrantGraveyardCastThisTurn { target, .. }
+            | Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),

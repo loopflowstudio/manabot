@@ -1254,9 +1254,10 @@ impl Game {
                 }
                 None
             }
-            Effect::GrantGraveyardCastThisTurn { .. } => {
+            Effect::GrantGraveyardCastThisTurn { flashback, .. } => {
                 if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
                     let grant = PlayGrant {
+                        flashback: *flashback,
                         origin: frame
                             .source_ref()
                             .map(|source| self.state.source_base(source).0),
@@ -2402,6 +2403,9 @@ impl Game {
         let object = frame.source()?;
         match frame.source_ref() {
             Some(source) => self.state.live(source).or_else(|| {
+                // Only a departing battlefield source can refer to the card it
+                // became this way. A graveyard activation keeps its exact source.
+                self.object_lki(source)?;
                 self.state.zones.successor(source).filter(|successor| {
                     matches!(
                         self.state.zones.zone_of(*successor),

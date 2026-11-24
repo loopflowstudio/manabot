@@ -62,3 +62,7 @@ Concept review (whole casting/permission area) makes four reversible choices rec
 - Model Omniscience as `PlayRoute::FreeFromHand` (deduplicated across copies) rather than overloading `kicked: bool`, so free casts still allow Kicker/Bargain (CR 118.9d) and compose with Harbinger's `AdditionalCost::FlashSurcharge`.
 - Store exiled-card counters (Tinybones stash counters) in sparse `GameState.object_counters: BTreeMap<ObjectId, Counters>` instead of adding a `Counters` field to every `Object`, keeping normal object size/clone cost unchanged and preserving CR 400.7 staleness.
 - Reuse `CardDefinition.back_face` with `modal_back: bool` and `SpellProfile::BackFace` (resolving with `ZoneEntry { transformed: true }`) rather than adding a fourth `InsetSpell::ModalBack` variant.
+
+Preserve the compact priority projection's existing front-face AnyTarget ordering. Recorded Command preconditions use its positional candidate addresses. The complete compound API binds targets from its own action, including the selected face and payment route.
+
+Use the original M11, M13 and Time Spiral printing keys for the Foundations reprints. Their game fixtures stay with the Foundations permission cohort.

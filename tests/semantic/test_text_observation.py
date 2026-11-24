@@ -663,6 +663,19 @@ def test_zul_ashur_graveyard_cast_in_text_and_policy_input(
         assert board_card["cast_permissions"][0]["follows_source_controller"]
         del first["follows_source_controller"]
 
+        first["flashback"] = True
+        flashed = managym.Observation.from_json(json.dumps(state))
+        assert not np.array_equal(encode_observation(space, flashed)["facts"], facts)
+        line = _card_line(render_decision(_redigest(payload)).text, alias)
+        assert "with flashback" in line
+        board_card = next(
+            c
+            for c in serialize_observation(flashed)["agent"]["graveyard"]
+            if c["id"] == card["id"]
+        )
+        assert board_card["cast_permissions"][0]["flashback"]
+        del first["flashback"]
+
         # A reader using the original card columns still sees the first grant.
         card["cast_permission"] = card.pop("cast_permissions")[0]
         single = managym.Observation.from_json(json.dumps(state))

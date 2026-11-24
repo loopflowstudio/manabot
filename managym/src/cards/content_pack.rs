@@ -21,7 +21,7 @@ use crate::state::{
     ability::{Ability, PaymentCost},
     card::{
         CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
-        TokenDefinition,
+        SpellProfile, TokenDefinition,
     },
     game_object::{Object, PlayerId, PublicId},
 };
@@ -242,9 +242,26 @@ impl ContentPack {
 
     /// The back face's row of the double-faced card whose front is `front`.
     pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<PrintedCharacteristics>)> {
+        let (id, printed) = self.back_face_row(front)?;
+        Some((id, Arc::clone(printed)))
+    }
+
+    fn back_face_row(&self, front: CardDefId) -> Option<(CardDefId, &Arc<PrintedCharacteristics>)> {
         self.definition(front)?.back_face.as_ref()?;
         let back = CardDefId(front.0 + 1);
-        Some((back, Arc::clone(&self.definitions[back.0 as usize].printed)))
+        Some((back, &self.definition(back)?.printed))
+    }
+
+    /// Both modes of a double-faced card use their registered face rows.
+    pub fn spell_definition<'a>(
+        &'a self,
+        object: &'a Object,
+        profile: SpellProfile,
+    ) -> Option<&'a Arc<PrintedCharacteristics>> {
+        if profile == SpellProfile::BackFace && object.modal_back {
+            return self.back_face_row(object.definition_id).map(|(_, row)| row);
+        }
+        object.front_or_inset(profile)
     }
 
     /// The front face whose back face is `back`; `None` for any other row.

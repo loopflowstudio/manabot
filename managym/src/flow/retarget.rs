@@ -109,7 +109,7 @@ impl Game {
             .into_iter()
             .filter(|target| Some(*target) != current && *target != self_target)
             .filter(|target| {
-                self.within_target_mana_budget(&requirement, x, other_targets.clone(), *target)
+                self.fits_target_clause(&requirement, x, other_targets.clone(), *target)
             })
             .filter(|target| !other_targets.clone().any(|chosen| chosen == *target))
             .filter(|target| {
@@ -171,6 +171,8 @@ impl Game {
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
                 spell.object = self.create_spell_copy(spell.object, id, controller);
+                // A stack copy was never cast using the original’s permission.
+                spell.flashback = false;
                 spell.exile_instead_of_graveyard = false;
                 spell.id = id;
                 spell.controller = controller;

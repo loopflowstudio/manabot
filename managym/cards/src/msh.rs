@@ -12,6 +12,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         ironheart_clever_champion(),
         quicksilver_brash_blur(),
+        monica_rambeau(),
         construct_a_cosmic_cube(),
     ]
 }
@@ -124,5 +125,74 @@ fn construct_a_cosmic_cube() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+fn monica_rambeau() -> CardDefinition {
+    let rules_text = "Flying, prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\n{2}{R}{W}{W}: Transform Monica Rambeau. Activate only as a sorcery.";
+    let other_face_text = "Flying, hexproof, prowess\nWhenever you cast a noncreature spell, put a +1/+1 counter on each other creature you control.";
+    use managym_state::{
+        ability::{Ability, Actor, Effect, ObjectSelector, TriggerCondition},
+        card::ActivatedAbilityDefinition,
+        permanent::CounterKind,
+    };
+    let noncreature_trigger = |effect| Ability::Triggered {
+        condition: TriggerCondition::casts(
+            Actor::You,
+            CardPredicate {
+                not_card_types: vec![CardType::Creature],
+                ..Default::default()
+            },
+        ),
+        intervening_if: None,
+        effects: vec![effect],
+    };
+    let prowess = noncreature_trigger(Effect::until_end_of_turn(
+        ObjectSelector::This,
+        managym_state::effect::Modification::pump(1, 1),
+    ));
+    CardDefinition {
+        key: "msh.monica_rambeau",
+        scryfall_id: "3f995518-b12a-4623-9ab3-b79a5cef3cba",
+        printed: PrintedCharacteristics {
+            name: "Monica Rambeau".into(),
+            modal_back: true,
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Hero".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![prowess.clone()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}{R}{W}{W}"),
+                effects: vec![Effect::TransformSource],
+                ..Default::default()
+            }],
+            text_box: rules_text.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
+            name: "Photon, Living Light".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elemental".into(), "Hero".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Hexproof]),
+            abilities: vec![
+                prowess,
+                noncreature_trigger(Effect::put_counters(
+                    ObjectSelector::each_other_you_control(CardPredicate::creature()),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )),
+            ],
+            text_box: other_face_text.into(),
+            ..Default::default()
+        })),
     }
 }

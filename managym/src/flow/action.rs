@@ -57,7 +57,9 @@ impl Game {
                 ..
             } if !profile.is_front() => Some(format!(
                 "Cast {}",
-                self.state[*object].spell_characteristics(*profile)?.name
+                default_content_pack()
+                    .spell_definition(&self.state[*object], *profile)?
+                    .name
             )),
             Action::CastSpell {
                 object,
@@ -70,7 +72,8 @@ impl Game {
                 ..
             } => {
                 use crate::flow::cast_permission::PlayRoute;
-                let card = self.state[*object].spell_characteristics(action.spell_profile())?;
+                let card = default_content_pack()
+                    .spell_definition(&self.state[*object], action.spell_profile())?;
                 let terms = match route {
                     PlayRoute::GraveyardType { source, kind, .. } => format!(
                         "using {} (object {}, {kind:?} for this turn)",
@@ -99,6 +102,7 @@ impl Game {
                     PlayRoute::GrantedFlashback => "with granted flashback".into(),
                     PlayRoute::LibraryTop => "from library".into(),
                     PlayRoute::Hand => "from hand".into(),
+                    PlayRoute::FreeFromHand => "from hand without paying its mana cost".into(),
                 };
                 let verb = if card.types.is_land() { "Play" } else { "Cast" };
                 Some(format!("{verb} {} {terms}", card.name))
@@ -289,6 +293,10 @@ impl Game {
                         CastOption::Bargain => {
                             Some("Bargain: sacrifice an artifact, enchantment or token".into())
                         }
+                        CastOption::FlashSurcharge(cost) => Some(format!(
+                            "Pay {} more to cast as though it had flash",
+                            cost_label(cost)
+                        )),
                         CastOption::Kicker => None,
                     }
                 }
@@ -434,6 +442,7 @@ impl Game {
                     if let Action::CastSpell { object, .. } = action {
                         let spell = cast.spell(&self.state[object]);
                         spell_spends = mana_value > 0
+                            || spell.flash_surcharge().is_some()
                             || self.cast_needs_x_announcement(object, cast)
                             || spell
                                 .optional_cost()
@@ -673,7 +682,7 @@ impl Game {
         for &permission in routes.iter() {
             let route = (routes.len() > 1).then_some(permission);
             for profile in self.state[object].spell_profiles() {
-                let cast = CastChoices::from_route(permission, profile);
+                let cast = self.cast_via(player, object, permission, profile);
                 if !self.permits_spell(player, object, cast) {
                     continue;
                 }

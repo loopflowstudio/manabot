@@ -328,6 +328,9 @@ pub struct CastChoices {
     /// Casting via flashback replaces any departure from the stack with exile.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flashback: bool,
+    /// The caster chose or needed the printed permission to cast with flash.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flash_surcharge: bool,
     /// The optional additional cost (kicker, or a waterbend additional cost)
     /// is paid (CR 702.33).
     pub kicked: bool,

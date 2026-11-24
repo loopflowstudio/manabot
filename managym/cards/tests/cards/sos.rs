@@ -98,3 +98,100 @@ fn prepared_insets_cast_from_exile() {
         ("Studious First-Year", "Rampant Growth"),
     ]);
 }
+
+#[test]
+fn harmonized_trio_pays_three_distinct_taps_and_orders_brainstorm() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, hand, library, now, offered_cards, tapped},
+        play::{activate, resolve_top, select_card},
+    };
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Harmonized Trio", "Gray Ogre"]);
+    let trio = s.force_permanent_on_battlefield(0, "Harmonized Trio");
+    clear_summoning_sickness(&mut s, trio);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s.action_space().actions.iter().any(
+        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == trio)
+    ));
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, trio, 0);
+    for payer in [first, second] {
+        assert!(!offered_cards(&s).contains(&card_of(&s, trio)));
+        let object = card_of(&s, payer);
+        select_card(&mut s, object);
+    }
+    assert!([trio, first, second].into_iter().all(|id| tapped(&s, id)));
+    settle(&mut s);
+    let copy = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, PlayerId(0))[0];
+    assert_eq!(s.game().state[copy].name, "Brainstorm");
+    cast_card(&mut s, copy);
+    resolve_top(&mut s);
+    let cards = hand(&s, 0);
+    assert_eq!(cards.len(), 3);
+    for (first, second) in [(cards[0], cards[1]), (cards[1], cards[0])] {
+        let mut branch = s.clone();
+        select_card(&mut branch, first);
+        select_card(&mut branch, second);
+        settle(&mut branch);
+        let deck = library(&branch, 0);
+        assert_eq!(
+            &deck[deck.len() - 2..],
+            &[now(&branch, first), now(&branch, second)]
+        );
+        assert_eq!(hand(&branch, 0), [cards[2]]);
+    }
+}
+
+#[test]
+fn joined_researchers_rechecks_hand_sizes_and_both_players_draw_three() {
+    use crate::support::{
+        game::{move_card, move_from_library},
+        inspect::hand,
+        play::choose,
+    };
+    use managym::{agent::action::Action, flow::turn::StepKind, state::target::Target};
+    let mut s = five_color_setup(&["Joined Researchers"]);
+    s.force_permanent_on_battlefield(0, "Joined Researchers");
+    let mut equal = s.clone();
+    equal.advance_to_active_step(0, StepKind::End);
+    assert!(equal.game().state.stack_objects.is_empty());
+    let opposing = move_from_library(&mut s, 1, "Island", ZoneType::Hand);
+    s.advance_to_active_step(0, StepKind::End);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let mut no_longer_ahead = s.clone();
+    move_card(&mut no_longer_ahead, opposing, ZoneType::Graveyard);
+    settle(&mut no_longer_ahead);
+    no_longer_ahead.assert_zone_size(0, ZoneType::Exile, 0);
+    settle(&mut s);
+    let copy = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Exile, PlayerId(0))[0];
+    assert_eq!(s.game().state[copy].name, "Secret Rendezvous");
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "1WW");
+    let sizes = [0, 1].map(|p| hand(&s, p).len());
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, copy);
+    choose(&mut s, |action| {
+        matches!(
+            action,
+            Action::ChooseTarget {
+                target: Target::Player(PlayerId(1)),
+                ..
+            }
+        )
+    });
+    settle(&mut s);
+    for (p, before) in sizes.into_iter().enumerate() {
+        assert_eq!(hand(&s, p).len(), before + 3);
+    }
+}

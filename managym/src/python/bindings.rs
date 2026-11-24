@@ -2103,6 +2103,8 @@ pub struct PyCastPermission {
     #[pyo3(get)]
     pub follows_source_controller: bool,
     #[pyo3(get)]
+    pub flashback: bool,
+    #[pyo3(get)]
     pub on_adventure: bool,
 }
 
@@ -2122,6 +2124,7 @@ impl From<CastPermissionData> for PyCastPermission {
             waterbend: value.waterbend,
             foretold: value.foretold,
             follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
             on_adventure: value.on_adventure,
         }
     }
@@ -2143,6 +2146,7 @@ impl From<PyCastPermission> for CastPermissionData {
             waterbend: value.waterbend,
             foretold: value.foretold,
             follows_source_controller: value.follows_source_controller,
+            flashback: value.flashback,
             on_adventure: value.on_adventure,
         }
     }

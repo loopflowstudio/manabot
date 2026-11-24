@@ -1991,7 +1991,11 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
     for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
         for grant in &card.cast_permissions {
             let overlapping = card.cast_permissions.len() > 1;
-            if !overlapping && grant.source_permanent_id.is_none() && !grant.on_adventure {
+            if !overlapping
+                && grant.source_permanent_id.is_none()
+                && !grant.on_adventure
+                && !grant.flashback
+            {
                 continue;
             }
             let terms = (
@@ -2007,7 +2011,17 @@ fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
                 grant.waterbend,
                 grant.foretold,
             );
-            let tokens = if grant.follows_source_controller {
+            let tokens = if grant.flashback {
+                crate::cards::tokens::rules_tokens(
+                    &(
+                        terms,
+                        grant.on_adventure,
+                        grant.follows_source_controller,
+                        true,
+                    ),
+                    pack(),
+                )
+            } else if grant.follows_source_controller {
                 crate::cards::tokens::rules_tokens(&(terms, grant.on_adventure, true), pack())
             } else if grant.on_adventure {
                 crate::cards::tokens::rules_tokens(&(terms, true), pack())

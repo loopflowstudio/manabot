@@ -372,6 +372,9 @@ fn condition_text(condition: &Condition) -> String {
         Condition::ControlsUnownedAtLeast { count } => {
             format!("you control {count} or more permanents you don't own")
         }
+        Condition::OpponentHasMoreCardsInHand => {
+            "an opponent has more cards in hand than you".into()
+        }
         Condition::CardsInHandAtLeast { count } => {
             format!("you have {count} or more cards in hand")
         }
@@ -965,13 +968,15 @@ fn effect_description(effect: &Effect) -> Option<String> {
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(max), predicate_description(predicate, "cards"), selector_description(from), effects_description(effects), effects_description(if_declined)),
-        TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description(effects)),
+        TargetClause { requirement, effects } => format!("Choose {}–{} {}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },effects_description(effects)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(what)),
         Airbend { what: what @ ObjectSelector::Each { .. } } => format!("Airbend {}. Their owners may cast them from exile for {{2}}", selector_description(what)),
         Airbend { what } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",selector_description(what)),
-        GrantGraveyardCastThisTurn { target } => format!("You may cast {} this turn", target_description(target)),
+        GrantGraveyardCastThisTurn { target, flashback } => if *flashback {
+            format!("{} gains flashback at its mana cost until end of turn", target_description(target))
+        } else { format!("You may cast {} this turn", target_description(target)) },
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileTopCardsToPlay { count, until } => format!(
             "Exile the top {} of your library. You may play {} {}",
@@ -1274,6 +1279,7 @@ pub(super) fn continuous_description(
             "{subject} don't lose unspent {} mana as steps and phases end{until}",
             format!("{color:?}").to_lowercase()
         ),
+        Modification::AdditionalLandPlay => format!("{subject} may play an additional land{until}"),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
         Modification::NextCreatureCastFlash => {
             let this_turn = match duration {

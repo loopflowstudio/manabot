@@ -272,6 +272,9 @@ impl Serialize for CastPermissionJson<'_> {
         if value.flash {
             map.serialize_entry("flash", &true)?;
         }
+        if value.flashback {
+            map.serialize_entry("flashback", &true)?;
+        }
         if value.follows_source_controller {
             map.serialize_entry("follows_source_controller", &true)?;
         }

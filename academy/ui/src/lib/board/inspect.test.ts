@@ -97,4 +97,8 @@ it('names who can cast before a source changes control', () => {
     'Alice may cast this while they control Blossom-Blessed Angel.',
     'The controller of Blossom-Blessed Angel may cast this (currently Alice).',
   ]);
+  expect(permissionTerms({ cast_permission: { ...grant, flashback: true, this_turn: true } }, source, player)).toEqual([
+    'Alice may cast this while they control Blossom-Blessed Angel.',
+    'Alice may cast this with flashback this turn. Exile it when it leaves the stack.',
+  ]);
 });

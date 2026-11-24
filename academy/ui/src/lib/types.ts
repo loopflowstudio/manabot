@@ -52,6 +52,7 @@ export interface CastPermission {
   any_mana?: boolean;
   waterbend?: boolean;
   foretold?: boolean;
+  flashback?: boolean;
   follows_source_controller?: boolean;
   on_adventure?: boolean;
 }

@@ -516,3 +516,371 @@ fn scavenger_regent_ward_offers_each_discard_and_decline() {
     assert_eq!(zone_of(&s, cards[1]), Some(ZoneType::Hand));
     assert_eq!(permanent(&s, dragon).damage, 3);
 }
+
+#[test]
+fn skimming_strike_draws_without_a_target_or_after_tapping_one() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{hand, permanent_of, tapped, zone_of},
+        play::{cast_profile, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Dirgur Island Dragon", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = move_from_library(&mut s, 0, "Dirgur Island Dragon", ZoneType::Hand);
+    let mut front = s.clone();
+    cast_profile(&mut front, card, SpellProfile::Front);
+    settle(&mut front);
+    let object = card_of(&front, permanent_of(&front, card).unwrap());
+    assert_eq!(
+        front.game().state[object]
+            .ward()
+            .unwrap()
+            .mana()
+            .unwrap()
+            .mana_value,
+        2
+    );
+    cast_profile(&mut s, card, SpellProfile::Omen);
+    for tap in [true, false] {
+        let mut branch = s.clone();
+        if tap {
+            assert!(branch.choose_target(Target::Permanent(ogre)));
+        } else {
+            choose(&mut branch, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut branch);
+        assert_eq!(tapped(&branch, ogre), tap);
+        assert_eq!(hand(&branch, 0).len(), 1);
+        assert_eq!(zone_of(&branch, card), Some(ZoneType::Library));
+    }
+}
+
+#[test]
+fn roost_seek_finds_a_basic_and_sagu_wildling_gains_three() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{hand, zone_of},
+        play::{cast_profile, resolve_top},
+    };
+    use managym::state::card::SpellProfile;
+    let mut s = five_color_setup(&["Sagu Wildling"]);
+    let card = move_from_library(&mut s, 0, "Sagu Wildling", ZoneType::Hand);
+    let mut front = s.clone();
+    cast_profile(&mut front, card, SpellProfile::Front);
+    settle(&mut front);
+    assert_eq!(front.life(0), 23);
+    cast_profile(&mut s, card, SpellProfile::Omen);
+    resolve_top(&mut s);
+    let candidates = offered_cards(&s);
+    assert!(!candidates.is_empty());
+    assert!(candidates
+        .iter()
+        .all(|c| s.game().state[*c].types.is_land()));
+    select_card(&mut s, candidates[0]);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0), [now(&s, candidates[0])]);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Library));
+}
+
+#[test]
+fn disruptive_stormbrood_and_petty_revenge_destroy_different_targets() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::zone_of,
+        play::{cast_profile, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s = five_color_setup(&[
+        "Disruptive Stormbrood",
+        "Omniscience",
+        "Gray Ogre",
+        "Craw Wurm",
+    ]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let artifact_or_enchantment = s.force_permanent_on_battlefield(1, "Omniscience");
+    let small = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let large = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let card = move_from_library(&mut s, 0, "Disruptive Stormbrood", ZoneType::Hand);
+    for (profile, target) in [
+        (SpellProfile::Omen, small),
+        (SpellProfile::Front, artifact_or_enchantment),
+    ] {
+        let mut branch = s.clone();
+        let object = card_of(&branch, target);
+        cast_profile(&mut branch, card, profile);
+        pass_until(&mut branch, ActionSpaceKind::ChooseTarget);
+        assert!(!branch.choose_target(Target::Permanent(large)));
+        assert!(branch.choose_target(Target::Permanent(target)));
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, object), Some(ZoneType::Graveyard));
+    }
+}
+
+#[test]
+fn dynamic_soar_receives_whirlwings_sorcery_timing_and_purging_removes_its_counters() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{counters, keywords, permanent_of},
+        play::{cast_profile, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        flow::turn::StepKind,
+        state::{
+            card::{Keyword, SpellProfile},
+            game_object::Target,
+        },
+    };
+    let mut s = five_color_setup(&["Whirlwing Stormbrood", "Purging Stormbrood", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let whirl = move_from_library(&mut s, 0, "Whirlwing Stormbrood", ZoneType::Hand);
+    let second = move_from_library(&mut s, 0, "Whirlwing Stormbrood", ZoneType::Hand);
+    let purge = move_from_library(&mut s, 0, "Purging Stormbrood", ZoneType::Hand);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "14UUGBWW");
+    cast_profile(&mut s, whirl, SpellProfile::Front);
+    settle(&mut s);
+    cast_profile(&mut s, second, SpellProfile::Omen);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 3);
+    s.set_player_mana_pool(0, "4BW");
+    let mut absorb = s.clone();
+    cast_profile(&mut absorb, purge, SpellProfile::Omen);
+    assert!(absorb.choose_target(Target::Permanent(ogre)));
+    settle(&mut absorb);
+    assert_eq!(absorb.game().characteristics(ogre).pt(), (7, 7));
+    for keyword in [Keyword::Lifelink, Keyword::Hexproof] {
+        assert!(keywords(&absorb, ogre).has(keyword));
+    }
+    cast_profile(&mut s, purge, SpellProfile::Front);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 0);
+    let object = card_of(&s, permanent_of(&s, purge).unwrap());
+    assert_eq!(
+        s.game().state[object].ward(),
+        Some(&managym::state::ability::PaymentCost::Life(2))
+    );
+}
+
+#[test]
+fn riling_dawnbreaker_creates_a_white_soldier_or_pumps_another_creature() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::permanent_of,
+        play::cast_profile,
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Riling Dawnbreaker"]);
+    let card = move_from_library(&mut s, 0, "Riling Dawnbreaker", ZoneType::Hand);
+    let second = move_from_library(&mut s, 0, "Riling Dawnbreaker", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Omen);
+    settle(&mut s);
+    let [soldier] = s.battlefield_permanents_named(0, "Soldier")[..] else {
+        panic!("one Soldier")
+    };
+    assert_eq!(s.game().characteristics(soldier).pt(), (2, 2));
+    assert!(s.game().state[card_of(&s, soldier)]
+        .colors()
+        .contains(&Color::White));
+    cast_profile(&mut s, second, SpellProfile::Front);
+    settle(&mut s);
+    let dragon = permanent_of(&s, second).unwrap();
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(!s.choose_target(Target::Permanent(dragon)));
+    assert!(s.choose_target(Target::Permanent(soldier)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(soldier).pt(), (3, 2));
+}
+
+#[test]
+fn marang_bounces_two_other_nonlands_or_draws_then_discards() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{hand, permanent_of, zone_of},
+        play::{cast_profile, pass_until, resolve_top},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut s = five_color_setup(&["Marang River Regent", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let ogres = [0, 1].map(|p| s.force_permanent_on_battlefield(p, "Gray Ogre"));
+    let land = s.force_permanent_on_battlefield(0, "Island");
+    let card = move_from_library(&mut s, 0, "Marang River Regent", ZoneType::Hand);
+    let mut front = s.clone();
+    cast_profile(&mut front, card, SpellProfile::Front);
+    pass_until(&mut front, ActionSpaceKind::ChooseTarget);
+    let dragon = permanent_of(&front, card).unwrap();
+    assert!(!front.choose_target(Target::Permanent(dragon)));
+    assert!(!front.choose_target(Target::Permanent(land)));
+    for ogre in ogres {
+        assert!(front.choose_target(Target::Permanent(ogre)));
+    }
+    settle(&mut front);
+    for ogre in ogres {
+        assert_eq!(zone_of(&front, card_of(&s, ogre)), Some(ZoneType::Hand));
+    }
+    cast_profile(&mut s, card, SpellProfile::Omen);
+    resolve_top(&mut s);
+    assert_eq!(hand(&s, 0).len(), 3);
+    let discard = offered_cards(&s)[0];
+    select_card(&mut s, discard);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 2);
+    assert_eq!(zone_of(&s, discard), Some(ZoneType::Graveyard));
+}
+
+#[test]
+fn flush_out_draws_only_after_discard_and_stormshriek_pumps_itself() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{hand, permanent_of},
+        play::{activate, cast_profile},
+    };
+    use managym::state::card::SpellProfile;
+    let mut s = five_color_setup(&["Stormshriek Feral"]);
+    let card = move_from_library(&mut s, 0, "Stormshriek Feral", ZoneType::Hand);
+    let mut front = s.clone();
+    cast_profile(&mut front, card, SpellProfile::Front);
+    settle(&mut front);
+    let dragon = permanent_of(&front, card).unwrap();
+    let (power, toughness) = front.game().characteristics(dragon).pt();
+    activate(&mut front, dragon, 0);
+    settle(&mut front);
+    assert_eq!(
+        front.game().characteristics(dragon).pt(),
+        (power + 1, toughness)
+    );
+    for available in [false, true] {
+        let mut branch = s.clone();
+        if available {
+            move_from_library(&mut branch, 0, "Mountain", ZoneType::Hand);
+        }
+        cast_profile(&mut branch, card, SpellProfile::Omen);
+        settle(&mut branch);
+        assert_eq!(hand(&branch, 0).len(), if available { 2 } else { 0 });
+    }
+}
+
+#[test]
+fn runescale_triggers_for_noncreatures_and_dragons_and_chilling_screech_caps_mana_value() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{permanent_of, zone_of},
+        play::cast_profile,
+    };
+    use managym::state::{card::SpellProfile, game_object::Target};
+    let mut s = five_color_setup(&[
+        "Runescale Stormbrood",
+        "Gray Ogre",
+        "Think Twice",
+        "Sagu Wildling",
+    ]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let card = move_from_library(&mut s, 0, "Runescale Stormbrood", ZoneType::Hand);
+    let answer = move_from_library(&mut s, 0, "Runescale Stormbrood", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Front);
+    settle(&mut s);
+    let runescale = permanent_of(&s, card).unwrap();
+    let (power, toughness) = s.game().characteristics(runescale).pt();
+    for (target, bonus) in [("Gray Ogre", 0), ("Sagu Wildling", 2), ("Think Twice", 2)] {
+        let mut branch = s.clone();
+        let spell = move_from_library(&mut branch, 0, target, ZoneType::Hand);
+        cast_profile(&mut branch, spell, SpellProfile::Front);
+        // Triggered P/T changes resolve before the spell.
+        if bonus != 0 {
+            crate::support::play::resolve_top(&mut branch);
+        }
+        assert_eq!(
+            branch.game().characteristics(runescale).pt(),
+            (power + bonus, toughness)
+        );
+        let target_id = now(&branch, spell);
+        let legal=branch.action_space().actions.iter().any(|a|matches!(a,managym::agent::action::Action::CastSpell{object,profile:SpellProfile::Omen,..} if *object==answer));
+        assert_eq!(legal, target == "Think Twice");
+        if legal {
+            cast_profile(&mut branch, answer, SpellProfile::Omen);
+            assert!(branch.choose_target(Target::StackSpell(target_id)));
+            settle(&mut branch);
+            assert_eq!(zone_of(&branch, spell), Some(ZoneType::Graveyard));
+            assert_eq!(branch.zone_size(0, ZoneType::Hand), 0);
+        }
+    }
+}
+
+#[test]
+fn feral_deathgorger_exiles_up_to_two_from_one_chosen_graveyard() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::{counters, hand, zone_of},
+        play::{cast_profile, choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut root = five_color_setup(&["Feral Deathgorger", "Gray Ogre"]);
+    let ogre = root.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = move_from_library(&mut root, 0, "Feral Deathgorger", ZoneType::Hand);
+    root.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let graves = [0, 1].map(|p| {
+        ["Island", "Forest"].map(|land| move_from_library(&mut root, p, land, ZoneType::Graveyard))
+    });
+    let mut entry = root.clone();
+    cast_profile(&mut entry, card, SpellProfile::Front);
+    pass_until(&mut entry, ActionSpaceKind::ChooseTarget);
+    let decline = |a: &Action| matches!(a, Action::Decline { .. });
+    for seat in [0, 1] {
+        for count in 0..=2 {
+            let mut branch = entry.clone();
+            if count > 0 {
+                assert!(branch.choose_target(Target::GraveyardCard(graves[seat][0])));
+                assert!(!branch.choose_target(Target::GraveyardCard(graves[1 - seat][0])));
+            }
+            if count == 2 {
+                assert!(branch.choose_target(Target::GraveyardCard(graves[seat][1])));
+            } else {
+                choose(&mut branch, decline);
+            }
+            settle(&mut branch);
+            for (i, id) in graves[seat].iter().enumerate() {
+                assert_eq!(
+                    zone_of(&branch, *id),
+                    Some(if i < count {
+                        ZoneType::Exile
+                    } else {
+                        ZoneType::Graveyard
+                    })
+                );
+            }
+        }
+    }
+    cast_profile(&mut root, card, SpellProfile::Omen);
+    for targeted in [true, false] {
+        let mut branch = root.clone();
+        if targeted {
+            assert!(branch.choose_target(Target::Permanent(ogre)));
+        } else {
+            choose(&mut branch, decline);
+        }
+        settle(&mut branch);
+        assert_eq!(counters(&branch, ogre), i32::from(targeted));
+        assert_eq!(hand(&branch, 0).len(), 1);
+        assert_eq!(zone_of(&branch, card), Some(ZoneType::Library));
+    }
+}

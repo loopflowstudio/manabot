@@ -7602,5 +7602,455 @@
     "colors": [
       "B"
     ]
+  },
+  "High Fae Trickster": {
+    "name": "High Fae Trickster",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Faerie Wizard",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou may cast spells as though they had flash.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Omniscience": {
+    "name": "Omniscience",
+    "mana_cost": "{7}{U}{U}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "You may cast spells from your hand without paying their mana costs.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Reassembling Skeleton": {
+    "name": "Reassembling Skeleton",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Skeleton Warrior",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{1}{B}: Return this card from your graveyard to the battlefield tapped.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Suspicious Shambler": {
+    "name": "Suspicious Shambler",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Zombie",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{4}{B}{B}, Exile this card from your graveyard: Create two 2/2 black Zombie creature tokens. Activate only as a sorcery.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Think Twice": {
+    "name": "Think Twice",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Draw a card.\nFlashback {2}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Monica Rambeau": {
+    "name": "Monica Rambeau",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Creature — Human Hero",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Prowess"
+    ],
+    "oracle_text": "Flying, prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\n{2}{R}{W}{W}: Transform Monica Rambeau. Activate only as a sorcery.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Photon, Living Light": {
+    "name": "Photon, Living Light",
+    "mana_cost": "{2}{R}{W}{W}",
+    "type_line": "Legendary Creature — Elemental Hero",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Prowess",
+      "Hexproof"
+    ],
+    "oracle_text": "Flying, hexproof, prowess\nWhenever you cast a noncreature spell, put a +1/+1 counter on each other creature you control.",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Dirgur Island Dragon": {
+    "name": "Dirgur Island Dragon",
+    "mana_cost": "{5}{U}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sagu Wildling": {
+    "name": "Sagu Wildling",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you gain 3 life.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Disruptive Stormbrood": {
+    "name": "Disruptive Stormbrood",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, destroy up to one target artifact or enchantment.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Purging Stormbrood": {
+    "name": "Purging Stormbrood",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying\nWard—Pay 2 life.\nWhen this creature enters, remove all counters from up to one target creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Whirlwing Stormbrood": {
+    "name": "Whirlwing Stormbrood",
+    "mana_cost": "{4}{U}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nFlying\nYou may cast sorcery spells and Dragon spells as though they had flash.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Bofur, Reliable Guardian": {
+    "name": "Bofur, Reliable Guardian",
+    "mana_cost": "{W}",
+    "type_line": "Legendary Creature — Dwarf Scout",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink",
+    "colors": [
+      "W"
+    ]
+  },
+  "Velvetwing Butterflies": {
+    "name": "Velvetwing Butterflies",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Insect",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying",
+    "colors": [
+      "W"
+    ]
+  },
+  "Bilbo Baggins, Burglar": {
+    "name": "Bilbo Baggins, Burglar",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Halfling Rogue",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "When Bilbo Baggins enters, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Joined Researchers": {
+    "name": "Joined Researchers",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "First strike",
+      "Prepared"
+    ],
+    "oracle_text": "First strike\nAt the beginning of each end step, if an opponent has more cards in hand than you, this creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Harmonized Trio": {
+    "name": "Harmonized Trio",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Merfolk Bard Wizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "{T}, Tap two untapped creatures you control: This creature becomes prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Lake-town Mariners": {
+    "name": "Lake-town Mariners",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Human Citizen",
+    "power": "6",
+    "toughness": "5",
+    "keywords": [
+      "Vigilance",
+      "Ward"
+    ],
+    "oracle_text": "Vigilance\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Gollum, Silent Slinker": {
+    "name": "Gollum, Silent Slinker",
+    "mana_cost": "{3}{B}",
+    "type_line": "Legendary Creature — Halfling Horror",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Glóin the Mighty": {
+    "name": "Glóin the Mighty",
+    "mana_cost": "{3}{R}",
+    "type_line": "Legendary Creature — Dwarf Warrior",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "At the beginning of your first main phase, add {R}{R}.",
+    "colors": [
+      "R"
+    ]
+  },
+  "The Arkenstone": {
+    "name": "The Arkenstone",
+    "mana_cost": "{5}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +1/+1.\nAt the beginning of your end step, draw a card.",
+    "colors": []
+  },
+  "Riling Dawnbreaker": {
+    "name": "Riling Dawnbreaker",
+    "mana_cost": "{4}{W}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying, vigilance\nAt the beginning of combat on your turn, another target creature you control gets +1/+0 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Marang River Regent": {
+    "name": "Marang River Regent",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Dragon",
+    "power": "6",
+    "toughness": "7",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, return up to two other target nonland permanents to their owners' hands.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Stormshriek Feral": {
+    "name": "Stormshriek Feral",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Haste"
+    ],
+    "oracle_text": "Flying, haste\n{1}{R}: This creature gets +1/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Runescale Stormbrood": {
+    "name": "Runescale Stormbrood",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you cast a noncreature spell or a Dragon spell, this creature gets +2/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Sphinx of Forgotten Lore": {
+    "name": "Sphinx of Forgotten Lore",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Creature — Sphinx",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nWhenever this creature attacks, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to that card's mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Beorn, Reluctant Host": {
+    "name": "Beorn, Reluctant Host",
+    "mana_cost": "{4}{G}",
+    "type_line": "Legendary Creature — Human Bear Shapeshifter",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample",
+    "colors": [
+      "G"
+    ]
+  },
+  "Harbinger of the Tides": {
+    "name": "Harbinger of the Tides",
+    "mana_cost": "{U}{U}",
+    "type_line": "Creature — Merfolk Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "You may cast this spell as though it had flash if you pay {2} more to cast it. (You may cast it any time you could cast an instant.)\nWhen this creature enters, you may return target tapped creature an opponent controls to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Most Decrepit Old Bird": {
+    "name": "Most Decrepit Old Bird",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Bird",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Threshold",
+      "Mill"
+    ],
+    "oracle_text": "Flying\nThreshold — This creature gets +1/+1 as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Thranduil, Sindarin Liege": {
+    "name": "Thranduil, Sindarin Liege",
+    "mana_cost": "{2}{G/U}{G/U}",
+    "type_line": "Legendary Creature — Elf Noble",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Landfall"
+    ],
+    "oracle_text": "Other Elves you control get +1/+1.\nLandfall — Whenever a land you control enters, create a 1/1 green Elf creature token.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "My Precious": {
+    "name": "My Precious",
+    "mana_cost": "{3}",
+    "type_line": "Legendary Artifact — Equipment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has hexproof and can't be blocked.\nEquip—{2}, Pay 2 life.",
+    "colors": []
+  },
+  "Feral Deathgorger": {
+    "name": "Feral Deathgorger",
+    "mana_cost": "{5}{B}",
+    "type_line": "Creature — Dragon",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Deathtouch",
+      "Flying"
+    ],
+    "oracle_text": "Flying, deathtouch\nWhen this creature enters, exile up to two target cards from a single graveyard.",
+    "colors": [
+      "B"
+    ]
   }
 }

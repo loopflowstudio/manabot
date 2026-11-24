@@ -739,7 +739,10 @@ impl Decision {
                 exile_instants_and_sorceries: true,
                 ..
             }
-        ) && (!profile.is_front() || object.types.is_spell());
+        ) && crate::cards::content_pack::default_content_pack()
+            .spell_definition(object, profile)?
+            .types
+            .is_spell();
         Some(CastChoices {
             profile,
             free: !paid,
@@ -1450,24 +1453,21 @@ impl Game {
                         // has already left the stack (CR 608.2n); the entry
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
-                            let profile = self
-                                .state
-                                .stack_objects
-                                .iter()
-                                .find_map(|entry| match entry {
-                                    crate::state::stack_object::StackObject::Spell(spell)
-                                        if spell.object == object =>
-                                    {
-                                        Some(spell.profile)
-                                    }
-                                    _ => None,
-                                })
+                            let index = self
+                                .find_spell_on_stack_index(object)
                                 .expect("resolving spell on stack");
+                            let crate::state::stack_object::StackObject::Spell(spell) =
+                                &self.state.stack_objects[index]
+                            else {
+                                unreachable!()
+                            };
+                            let profile = spell.profile;
                             let (to, entry) = if self.state[object].types.is_permanent() {
                                 (
                                     ZoneType::Battlefield,
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
+                                        transformed: profile == SpellProfile::BackFace,
                                         x: frame.x,
                                         // Spend effects that applied to
                                         // this spell as it was cast.
@@ -2931,7 +2931,7 @@ impl Game {
                 Decision::CastDuringResolution { .. },
                 Action::CastSpell {
                     object: object_id,
-                    profile: SpellProfile::Adventure | SpellProfile::Omen,
+                    profile: SpellProfile::Adventure | SpellProfile::Omen | SpellProfile::BackFace,
                     ..
                 }
                 | Action::SelectCard {

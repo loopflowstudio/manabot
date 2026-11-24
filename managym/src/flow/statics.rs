@@ -185,11 +185,25 @@ impl Drop for BoardScan<'_> {
     }
 }
 
+/// Permissions granted by this player's active permanents. Priority checks these
+/// for each candidate card and face during the same immutable board scan.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct StaticPlayPermissions {
+    pub look_at_top: bool,
+    pub free_from_hand: bool,
+    pub opponents_hand_only: bool,
+    pub graveyard_flashback: bool,
+    pub library_spells: Vec<CardPredicate>,
+    pub flash_spells: Vec<CardPredicate>,
+}
+
 #[derive(Debug, PartialEq)]
-struct LayerBoard {
+pub(super) struct LayerBoard {
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
-    library_top_visibility: [bool; 2],
+    pub play_permissions: [StaticPlayPermissions; 2],
+    pub additional_land_plays_each_player: u32,
+    restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
     reads_mana: bool,
     reads_tapped: bool,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
@@ -245,18 +259,42 @@ impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
-        let mut library_top_visibility = [false; 2];
+        let mut restrictions = Vec::new();
+        let mut additional_land_plays_each_player = 0;
+        let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
         for (id, object) in context.objects {
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
-            if !self.is_phased_out(id)
-                && object
-                    .view
-                    .static_abilities
-                    .contains(&StaticAbility::LookAtLibraryTop)
-            {
+            if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
                 let controller = self.state.permanents[id].as_ref().unwrap().controller;
-                library_top_visibility[controller.0] = true;
+                let permissions = &mut play_permissions[controller.0];
+                for ability in &object.view.static_abilities {
+                    match ability {
+                        StaticAbility::Restriction(rule) => {
+                            restrictions.push((id, controller, rule.clone()))
+                        }
+                        StaticAbility::AdditionalLandPlayEachPlayer => {
+                            additional_land_plays_each_player += 1
+                        }
+                        StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
+                        StaticAbility::CastFromHandWithoutManaCost => {
+                            permissions.free_from_hand = true
+                        }
+                        StaticAbility::OpponentsCastOnlyFromHand => {
+                            permissions.opponents_hand_only = true
+                        }
+                        StaticAbility::GraveyardSpellsHaveFlashback => {
+                            permissions.graveyard_flashback = true
+                        }
+                        StaticAbility::CastFromLibraryTop(predicate) => {
+                            permissions.library_spells.push(predicate.clone())
+                        }
+                        StaticAbility::CastSpellsAsThoughFlash(predicate) => {
+                            permissions.flash_spells.push(predicate.clone())
+                        }
+                        _ => {}
+                    }
+                }
             }
             objects[id.0] = Some(object.view.clone());
         }
@@ -264,14 +302,19 @@ impl Game {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             dynamic_activations,
+            additional_land_plays_each_player,
+            restrictions,
             objects,
-            library_top_visibility,
+            play_permissions,
         }
     }
 
     /// Both seats share the same layered board and its invalidation rules.
     pub(crate) fn visible_library_tops(&self) -> [bool; 2] {
-        self.layer_board().library_top_visibility
+        self.layer_board()
+            .play_permissions
+            .each_ref()
+            .map(|p| p.look_at_top)
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
@@ -291,7 +334,7 @@ impl Game {
             game: std::marker::PhantomData,
         }
     }
-    fn layer_board(&self) -> Arc<LayerBoard> {
+    pub(super) fn layer_board(&self) -> Arc<LayerBoard> {
         let revisions = self.state.revisions();
         let cached = self.derived.borrow_mut().at(revisions).board.clone();
         if let Some(board) = cached {
@@ -692,19 +735,16 @@ impl Game {
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
-        self.static_sources().any(|(source, controller, view)| {
-            view.static_abilities.iter().any(|ability| {
-                let StaticAbility::Restriction(restriction) = ability else {
-                    return false;
-                };
-                restriction.kind == kind
-                    && restriction
-                        .unless
-                        .as_ref()
-                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
-                    && self.static_scope_applies(&restriction.scope, source, controller, target)
+        self.layer_board()
+            .restrictions
+            .iter()
+            .any(|(source, controller, rule)| {
+                rule.kind == kind
+                    && rule.unless.as_ref().is_none_or(|condition| {
+                        !self.check_static_condition(condition, *controller)
+                    })
+                    && self.static_scope_applies(&rule.scope, *source, *controller, target)
             })
-        })
     }
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
@@ -724,11 +764,16 @@ impl Game {
         cast: crate::flow::game::CastChoices,
     ) -> bool {
         let granted_flash = cast.grant(self, object).is_some_and(|grant| grant.flash);
-        let object = cast.spell(&self.state[object]);
-        granted_flash
-            || object.is_instant_speed()
-            || (object.types.is_creature() && self.has_next_creature_cast_flash(player))
-            || object
+        let spell = cast.spell(&self.state[object]);
+        cast.flash_surcharge
+            || granted_flash
+            || spell.is_instant_speed()
+            || self.layer_board().play_permissions[player.0]
+                .flash_spells
+                .iter()
+                .any(|predicate| cast.matches_spell(self, object, predicate))
+            || (spell.types.is_creature() && self.has_next_creature_cast_flash(player))
+            || spell
                 .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
@@ -849,6 +894,12 @@ impl Game {
                     .take(*count)
                     .count()
                     == *count
+            }
+            Condition::OpponentHasMoreCardsInHand => {
+                self.state
+                    .zones
+                    .size(ZoneType::Hand, PlayerId(1 - controller.0))
+                    > self.state.zones.size(ZoneType::Hand, controller)
             }
             Condition::CardsInHandAtLeast { count } => {
                 self.state.zones.size(ZoneType::Hand, controller) >= *count
@@ -1039,7 +1090,9 @@ mod cache_tests {
     fn with_stale_board(game: &Game) {
         let board = game.layer_board();
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
-            library_top_visibility: board.library_top_visibility,
+            play_permissions: board.play_permissions.clone(),
+            additional_land_plays_each_player: board.additional_land_plays_each_player,
+            restrictions: board.restrictions.clone(),
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,

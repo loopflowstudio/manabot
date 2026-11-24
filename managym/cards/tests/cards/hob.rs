@@ -292,3 +292,449 @@ fn spew_flame_announcement_names_the_adventure() {
         "Spew Flame"
     );
 }
+
+#[test]
+fn compound_spew_flame_keeps_its_profile_and_target() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{top_spell, zone_of},
+    };
+    use managym::{
+        agent::structured_offer::{ChoiceAnswer, ChoiceStep, OfferSubmission},
+        state::zone::ZoneType,
+    };
+    let mut s = five_color_setup(&["Smaug, the Great Calamity", "Gray Ogre", "Hungry Ghoul"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Hungry Ghoul");
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let offers = s.game().compound_offers().unwrap();
+    let front = offers
+        .projection()
+        .offers
+        .iter()
+        .find(|offer| matches!(&offer.public_commitment, Some(managym::agent::structured_offer::PublicCommitment::Cast { card }) if card == "Smaug, the Great Calamity"))
+        .unwrap();
+    assert!(front.choices.is_empty());
+    let inset = offers
+        .projection()
+        .offers
+        .iter()
+        .find(|offer| offer.label.contains("Spew Flame"))
+        .unwrap();
+    let [ChoiceStep::Select {
+        role, candidates, ..
+    }] = &inset.choices[..]
+    else {
+        panic!("Adventure target")
+    };
+    let target = candidates
+        .initial
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|target| target.label == "Gray Ogre")
+        .unwrap();
+    let submission = OfferSubmission {
+        offer_id: inset.id,
+        answers: vec![ChoiceAnswer::Candidates {
+            role: *role,
+            candidates: vec![target.id],
+        }],
+    };
+    assert_eq!(
+        s.game()
+            .compound_commands(&offers, &submission)
+            .unwrap()
+            .len(),
+        2
+    );
+    s.game_mut()
+        .apply_offer_submission(&offers, &submission)
+        .unwrap();
+    assert_eq!(top_spell(&s).profile, SpellProfile::Adventure);
+    assert_eq!(top_spell(&s).targets, [Target::Permanent(ogre)]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, smaug), Some(ZoneType::Exile));
+}
+
+#[test]
+fn concerted_care_protects_a_controlled_target_then_bofur_has_lifelink() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{keywords, permanent_of},
+        play::cast_profile,
+    };
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Bofur, Reliable Guardian", "Gray Ogre"]);
+    let ally = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let bofur = move_from_library(&mut s, 0, "Bofur, Reliable Guardian", ZoneType::Hand);
+    cast_profile(&mut s, bofur, SpellProfile::Adventure);
+    assert!(!s.choose_target(Target::Permanent(enemy)));
+    assert!(s.choose_target(Target::Permanent(ally)));
+    settle(&mut s);
+    for keyword in [Keyword::Hexproof, Keyword::Indestructible] {
+        assert!(keywords(&s, ally).has(keyword));
+    }
+    cast_profile(&mut s, bofur, SpellProfile::Front);
+    settle(&mut s);
+    assert!(keywords(&s, permanent_of(&s, bofur).unwrap()).has(Keyword::Lifelink));
+}
+
+#[test]
+fn gaze_in_wonder_accepts_one_or_two_distinct_creatures() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{keywords, permanent_of, tapped},
+        play::{cast_profile, choose},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Velvetwing Butterflies", "Gray Ogre"]);
+    let ogres = [0, 1].map(|seat| s.force_permanent_on_battlefield(seat, "Gray Ogre"));
+    let card = move_from_library(&mut s, 0, "Velvetwing Butterflies", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Adventure);
+    assert!(s.choose_target(Target::Permanent(ogres[0])));
+    for both in [false, true] {
+        let mut branch = s.clone();
+        assert!(!branch.choose_target(Target::Permanent(ogres[0])));
+        if both {
+            assert!(branch.choose_target(Target::Permanent(ogres[1])));
+        } else {
+            choose(&mut branch, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut branch);
+        assert!(tapped(&branch, ogres[0]));
+        assert_eq!(tapped(&branch, ogres[1]), both);
+        cast_profile(&mut branch, card, SpellProfile::Front);
+        settle(&mut branch);
+        assert!(keywords(&branch, permanent_of(&branch, card).unwrap()).has(Keyword::Flying));
+    }
+}
+
+#[test]
+fn take_a_glance_scries_two_before_bilbo_draws_on_entry() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::hand,
+        play::{cast_profile, resolve_top},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Bilbo Baggins, Burglar"]);
+    let card = move_from_library(&mut s, 0, "Bilbo Baggins, Burglar", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Adventure);
+    resolve_top(&mut s);
+    let seen: std::collections::HashSet<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ScryCard { object, .. } => Some(*object),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seen.len(), 2);
+    settle(&mut s);
+    cast_profile(&mut s, card, SpellProfile::Front);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 1);
+}
+
+#[test]
+fn gone_fishing_returns_both_controlled_objects_as_new_appearances() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{card_of, permanent_of},
+        play::cast_profile,
+    };
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Lake-town Mariners", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(0, "Island");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let old = [ogre, land].map(|p| card_of(&s, p));
+    let card = move_from_library(&mut s, 0, "Lake-town Mariners", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Adventure);
+    assert!(!s.choose_target(Target::Permanent(enemy)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(!s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(land)));
+    settle(&mut s);
+    for id in old {
+        assert_ne!(card_of(&s, permanent_of(&s, id).unwrap()), id);
+    }
+    cast_profile(&mut s, card, SpellProfile::Front);
+    settle(&mut s);
+    let id = permanent_of(&s, card).unwrap();
+    let c = &s.game().state[card_of(&s, id)];
+    assert!(c.keywords.has(Keyword::Vigilance));
+    assert_eq!(c.ward().unwrap().mana().unwrap().mana_value, 2);
+}
+
+#[test]
+fn meager_meal_separates_the_optional_creature_and_required_player() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{counters, keywords, permanent_of},
+        play::{cast_profile, choose},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut root = five_color_setup(&["Gollum, Silent Slinker", "Gray Ogre"]);
+    let ogre = root.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = move_from_library(&mut root, 0, "Gollum, Silent Slinker", ZoneType::Hand);
+    cast_profile(&mut root, card, SpellProfile::Adventure);
+    for with_counter in [false, true] {
+        let mut s = root.clone();
+        if with_counter {
+            assert!(s.choose_target(Target::Permanent(ogre)));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(&mut s);
+        assert_eq!(counters(&s, ogre), i32::from(with_counter));
+        assert_eq!(s.life(1), 22);
+        cast_profile(&mut s, card, SpellProfile::Front);
+        settle(&mut s);
+        assert!(keywords(&s, permanent_of(&s, card).unwrap()).has(Keyword::Menace));
+    }
+}
+
+#[test]
+fn easy_pickings_hits_opposing_creatures_and_gloin_adds_first_main_mana() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{card_of, zone_of},
+        play::cast_profile,
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{mana::Mana, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Glóin the Mighty", "Savannah Lions"]);
+    let own = s.force_permanent_on_battlefield(0, "Savannah Lions");
+    let theirs = s.force_permanent_on_battlefield(1, "Savannah Lions");
+    let own = card_of(&s, own);
+    let theirs = card_of(&s, theirs);
+    let card = move_from_library(&mut s, 0, "Glóin the Mighty", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Adventure);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, own), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, theirs), Some(ZoneType::Graveyard));
+    cast_profile(&mut s, card, SpellProfile::Front);
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().state.players[1].mana_pool.total(), 0);
+    s.advance_to_active_step(0, StepKind::Main);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("RR"));
+}
+
+#[test]
+fn arkenstone_searches_for_a_legend_then_pumps_and_draws() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{hand, offered_cards},
+        play::{cast_profile, resolve_top, select_card},
+    };
+    use managym::{flow::turn::StepKind, state::zone::ZoneType};
+    let mut s = five_color_setup(&["The Arkenstone", "Bilbo Baggins, Burglar", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let enemy = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let card = move_from_library(&mut s, 0, "The Arkenstone", ZoneType::Hand);
+    cast_profile(&mut s, card, SpellProfile::Adventure);
+    resolve_top(&mut s);
+    let choices = offered_cards(&s);
+    assert!(!choices.is_empty());
+    assert!(choices
+        .iter()
+        .all(|&id| s.game().state[id].name == "Bilbo Baggins, Burglar"));
+    select_card(&mut s, choices[0]);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 1);
+    cast_profile(&mut s, card, SpellProfile::Front);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(enemy).pt(), (2, 2));
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 2);
+}
+
+#[test]
+fn till_and_tend_stacks_land_plays_for_its_caster_until_cleanup() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{keywords, permanent_of},
+        play::{cast_profile, choose},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Beorn, Reluctant Host"]);
+    let lands: Vec<_> = (0..4)
+        .map(|_| move_from_library(&mut s, 0, "Forest", ZoneType::Hand))
+        .collect();
+    let first = move_from_library(&mut s, 0, "Beorn, Reluctant Host", ZoneType::Hand);
+    let second = move_from_library(&mut s, 0, "Beorn, Reluctant Host", ZoneType::Hand);
+    for card in [first, second] {
+        cast_profile(&mut s, card, SpellProfile::Adventure);
+        settle(&mut s);
+    }
+    for land in &lands[..3] {
+        choose(
+            &mut s,
+            |a| matches!(a,Action::PlayLand{object,..} if object==land),
+        );
+    }
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::PlayLand { .. })));
+    cast_profile(&mut s, first, SpellProfile::Front);
+    settle(&mut s);
+    assert!(keywords(&s, permanent_of(&s, first).unwrap()).has(Keyword::Trample));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(
+        s.game()
+            .player_effects(PlayerId(0))
+            .filter(|effect| effect.modification
+                == managym::state::effect::Modification::AdditionalLandPlay)
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn speak_secrets_must_take_a_milled_spell_and_the_bird_tracks_threshold() {
+    use crate::support::{
+        game::{move_card, move_from_library, pin_top},
+        inspect::{hand, now, offered_cards, permanent_of},
+        play::{cast_profile, resolve_top, select_card},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&[
+        "Most Decrepit Old Bird",
+        "Think Twice",
+        "Counterspell",
+        "Gray Ogre",
+    ]);
+    let bird = move_from_library(&mut s, 0, "Most Decrepit Old Bird", ZoneType::Hand);
+    let mill = pin_top(
+        &mut s,
+        &["Island", "Think Twice", "Counterspell", "Gray Ogre"],
+    );
+    s.set_player_mana_pool(0, "1UU");
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    cast_profile(&mut s, bird, SpellProfile::Adventure);
+    resolve_top(&mut s);
+    let choices = offered_cards(&s);
+    assert_eq!(choices.len(), 2);
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    for index in [1, 2] {
+        let mut branch = s.clone();
+        let chosen = now(&branch, mill[index]);
+        assert!(choices.contains(&chosen));
+        select_card(&mut branch, chosen);
+        settle(&mut branch);
+        assert_eq!(hand(&branch, 0), [now(&branch, chosen)]);
+    }
+    select_card(&mut s, choices[0]);
+    settle(&mut s);
+    s.set_player_mana_pool(0, "U");
+    cast_profile(&mut s, bird, SpellProfile::Front);
+    settle(&mut s);
+    let permanent = permanent_of(&s, bird).unwrap();
+    assert_eq!(s.game().characteristics(permanent).pt(), (1, 1));
+    for _ in 0..3 {
+        move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    }
+    assert_eq!(s.game().characteristics(permanent).pt(), (1, 1));
+    let seventh = move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    assert_eq!(s.game().characteristics(permanent).pt(), (2, 2));
+    move_card(&mut s, seventh, ZoneType::Exile);
+    assert_eq!(s.game().characteristics(permanent).pt(), (1, 1));
+}
+
+#[test]
+fn silvan_rally_takes_up_to_two_milled_lands_and_thranduil_buffs_the_elf() {
+    use crate::support::{
+        game::{move_from_library, pin_top},
+        inspect::{hand, offered_cards, permanent_of},
+        play::{cast_profile, choose, play_land, resolve_top, select_card},
+    };
+    use managym::{agent::action::Action, state::zone::ZoneType};
+    let mut s = five_color_setup(&["Thranduil, Sindarin Liege", "Gray Ogre"]);
+    let ruler = move_from_library(&mut s, 0, "Thranduil, Sindarin Liege", ZoneType::Hand);
+    pin_top(&mut s, &["Gray Ogre", "Mountain", "Forest", "Island"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    cast_profile(&mut s, ruler, SpellProfile::Adventure);
+    resolve_top(&mut s);
+    let choices = offered_cards(&s);
+    assert_eq!(choices.len(), 3);
+    for count in 0..=2 {
+        let mut branch = s.clone();
+        for id in choices.iter().take(count) {
+            select_card(&mut branch, *id);
+        }
+        if count < 2 {
+            choose(&mut branch, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut branch);
+        assert_eq!(hand(&branch, 0).len(), count);
+        cast_profile(&mut branch, ruler, SpellProfile::Front);
+        settle(&mut branch);
+        play_land(&mut branch, "Forest");
+        settle(&mut branch);
+        let elf = branch.battlefield_permanents_named(0, "Elf")[0];
+        assert_eq!(branch.game().characteristics(elf).pt(), (2, 2));
+        assert_eq!(
+            branch
+                .game()
+                .characteristics(permanent_of(&branch, ruler).unwrap())
+                .pt(),
+            (2, 3)
+        );
+    }
+}
+
+#[test]
+fn allure_sacrifices_before_drawing_and_my_precious_charges_both_equip_costs() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{card_of, hand, keywords, permanent_of, zone_of},
+        play::{cast_profile, select_card},
+    };
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["My Precious", "Gray Ogre"]);
+    let equipment = move_from_library(&mut s, 0, "My Precious", ZoneType::Hand);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let sacrifice = card_of(&s, first);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    cast_profile(&mut s, equipment, SpellProfile::Adventure);
+    select_card(&mut s, sacrifice);
+    assert_eq!(zone_of(&s, sacrifice), Some(ZoneType::Graveyard));
+    assert!(hand(&s, 0).is_empty());
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), 2);
+    cast_profile(&mut s, equipment, SpellProfile::Front);
+    settle(&mut s);
+    let id = permanent_of(&s, equipment).unwrap();
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, id, 0);
+    assert!(s.choose_target(Target::Permanent(second)));
+    assert_eq!(s.life(0), 18);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert!(keywords(&s, second).has(Keyword::Hexproof));
+    assert!(Observation::for_player(s.game(), PlayerId(0))
+        .agent_permanents
+        .iter()
+        .any(|p| p.cant_be_blocked_this_turn));
+}
