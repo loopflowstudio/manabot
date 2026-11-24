@@ -32,11 +32,7 @@ fn extravagant_replication() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement { another: true, ..TargetRequirement::one(target.clone()) },
-                    effects: vec![Effect::CreateTokenCopy {
-                        count: 1.into(),
-                        of: ObjectSelector::Target(target),
-                        exceptions: vec![],
-                    }],
+                    effects: vec![Effect::create_token_copies(ObjectSelector::Target(target), 1)],
                 }],
             }],
             text_box: "At the beginning of your upkeep, create a token that's a copy of another target nonland permanent you control.".into(),

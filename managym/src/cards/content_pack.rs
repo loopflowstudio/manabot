@@ -23,7 +23,7 @@ use crate::state::{
         CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
         TokenDefinition,
     },
-    game_object::{Object, PlayerId, PublicId},
+    game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId},
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -361,16 +361,42 @@ impl ContentPack {
         }
     }
 
-    pub(crate) fn copiable_values(
-        &self,
-        object: &Object,
-    ) -> crate::state::game_object::CopiableValues {
-        crate::state::game_object::CopiableValues {
+    pub(crate) fn copiable_values(&self, object: &Object) -> CopiableValues {
+        CopiableValues {
             definition_id: object.definition_id.catalog_id(),
             definition: self.object_row(object),
             front: object.front_face().cloned(),
             copy: object.copy.clone(),
         }
+    }
+
+    /// A departed ordinary card needs only its catalog id. Retain a snapshot
+    /// when the catalog cannot reconstruct its kind, face, or copy exceptions.
+    pub(crate) fn retain_copiable_values(&self, object: &Object) -> Option<Arc<CopiableValues>> {
+        if object.copy.is_none()
+            && object.front_face().is_none()
+            && self.definition(object.definition_id).is_some_and(|row| {
+                row.is_token != object.is_card() && &row.printed == object.copiable_face()
+            })
+        {
+            return None;
+        }
+        Some(Arc::new(self.copiable_values(object)))
+    }
+
+    pub(crate) fn departed_copiable_values(&self, lki: &ObjectLki) -> CopiableValues {
+        lki.copiable
+            .as_deref()
+            .cloned()
+            .unwrap_or_else(|| CopiableValues {
+                definition_id: Some(lki.definition_id),
+                definition: self
+                    .definition(lki.definition_id)
+                    .expect("catalog copy source")
+                    .clone(),
+                front: None,
+                copy: None,
+            })
     }
 
     /// A new card object of the card named `name`.

@@ -1,14 +1,16 @@
 //! Foundations behavior through ordinary activation, payment and combat.
-use crate::support::game::move_card;
-use crate::support::inspect::permanent_of;
 use crate::support::{
-    game::five_color_setup,
-    inspect::{card_of, permanent_named},
+    game::{five_color_setup, move_card, Scenario},
+    inspect::{card_of, permanent_named, permanent_of},
     play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
     flow::turn::StepKind,
-    state::{card::Keyword, game_object::PlayerId, zone::ZoneType},
+    state::{
+        card::Keyword,
+        game_object::{ObjectId, PlayerId},
+        zone::ZoneType,
+    },
 };
 
 #[test]
@@ -259,10 +261,7 @@ fn hungry_ghoul_sacrifice_stays_named_while_a_pooled_unit_is_chosen() {
 /// decision names the creature already sacrificed and where it still is.
 #[test]
 fn hungry_ghoul_pending_payment_names_the_creature_already_sacrificed() {
-    use crate::support::{
-        game::{five_color_unfunded_setup, Scenario},
-        play::select_card,
-    };
+    use crate::support::{game::five_color_unfunded_setup, play::select_card};
     use managym::agent::action::Action;
 
     let preview = |s: &Scenario, action: &dyn Fn(&Action) -> bool| {
@@ -481,10 +480,7 @@ fn hungry_ghoul_receipt_names_the_sacrificed_creature_after_it_has_left() {
     }
 }
 
-fn tapped_lands(
-    s: &crate::support::game::Scenario,
-    lands: &[managym::state::game_object::PermanentId],
-) -> usize {
+fn tapped_lands(s: &Scenario, lands: &[managym::state::game_object::PermanentId]) -> usize {
     lands
         .iter()
         .filter(|land| crate::support::inspect::tapped(s, **land))
@@ -567,13 +563,13 @@ const CREATURES: [&str; 4] = [
     "Llanowar Elves",
 ];
 
-fn creatures(s: &mut crate::support::game::Scenario, player: usize, count: usize) {
+fn creatures(s: &mut Scenario, player: usize, count: usize) {
     for index in 0..count {
         s.force_permanent_on_battlefield(player, CREATURES[index / 4]);
     }
 }
 
-fn creature_count(s: &crate::support::game::Scenario, player: usize) -> usize {
+fn creature_count(s: &Scenario, player: usize) -> usize {
     CREATURES
         .iter()
         .map(|name| s.battlefield_permanents_named(player, name).len())
@@ -702,11 +698,7 @@ fn claws_out_costs_less_per_cat_and_pumps_its_casters_creatures() {
     assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
 
-fn replicate(
-    s: &mut crate::support::game::Scenario,
-    target: managym::state::game_object::PermanentId,
-    kicked: bool,
-) {
+fn replicate(s: &mut Scenario, target: managym::state::game_object::PermanentId, kicked: bool) {
     use crate::support::play::{cast, choose};
     use managym::{agent::action::Action, state::game_object::Target};
     cast(s, "Rite of Replication");
@@ -927,14 +919,43 @@ fn herald_protects_against_a_failed_draw_in_its_last_sba_batch() {
     assert_eq!(s.game().state.loss(0).unwrap().reason(), Some("deck_empty"));
 }
 
+/// Replay both legal orders from the same pending end-step decision.
+fn check_both_trigger_orders(s: &mut Scenario, check: impl Fn(&mut Scenario, [ObjectId; 2])) {
+    use crate::support::play::command;
+    use managym::{agent::action::ActionSpaceKind, search_state::witness};
+
+    s.advance_to_step(StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    let orders: [_; 2] = s.action_space().actions.clone().try_into().unwrap();
+    let root = s.snapshot();
+    let [first, second] = orders.map(|order| {
+        s.restore(&root);
+        let committed = command(s, |action| action == &order);
+        let recorded = serde_json::to_vec(&committed).unwrap();
+        let expected = witness(s.game());
+        s.restore(&root);
+        s.game_mut()
+            .execute_semantic_command(&serde_json::from_slice(&recorded).unwrap())
+            .unwrap();
+        assert_eq!(witness(s.game()), expected);
+        let [bottom, top] = s.game().state.stack_objects.as_slice() else {
+            panic!("expected both ordered triggers on the stack");
+        };
+        let sources = [bottom.source_object(), top.source_object()];
+        check(s, sources);
+        sources
+    });
+    assert_eq!(first, [second[1], second[0]]);
+}
+
 #[test]
 fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
     use crate::support::{
         inspect::zone_of,
-        play::{cast, command, resolve_top},
+        play::{cast, resolve_top},
     };
     use managym::{
-        agent::{action::ActionSpaceKind, observation::Observation},
+        agent::observation::Observation,
         state::{game_object::Target, player::ManaPayment},
     };
 
@@ -960,30 +981,9 @@ fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
         .unwrap();
     let clone = card_of(&s, clone);
     let token = card_of(&s, token);
-    s.advance_to_step(StepKind::End);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
-    let orders = s.action_space().actions.clone();
-    assert_eq!(orders.len(), 2);
-    let root = s.snapshot();
-    let mut first_order = Vec::new();
-    for order in orders {
-        s.restore(&root);
-        command(&mut s, |action| action == &order);
-        let hand = move_card(&mut s, clone, ZoneType::Hand);
-        let sources: Vec<_> = s
-            .game()
-            .state
-            .stack_objects
-            .iter()
-            .map(|a| a.source_object())
-            .collect();
-        assert_eq!(sources.len(), 2);
+    check_both_trigger_orders(&mut s, |s, sources| {
+        let hand = move_card(s, clone, ZoneType::Hand);
         assert!(sources.contains(&token) && sources.contains(&clone));
-        if first_order.is_empty() {
-            first_order = sources.clone();
-        } else {
-            assert!(first_order.iter().rev().eq(&sources));
-        }
         for source in sources.iter().rev() {
             for viewer in [PlayerId(0), PlayerId(1)] {
                 let view = Observation::for_player(s.game(), viewer);
@@ -1013,7 +1013,7 @@ fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
                 s.game().state.stack_objects.last().unwrap().source_object(),
                 *source
             );
-            resolve_top(&mut s);
+            resolve_top(s);
             // Even the departed source's ability resolves once (CR 113.7a).
             assert_eq!(
                 s.game()
@@ -1023,17 +1023,14 @@ fn copy_sacrifice_remembers_clones_ability_after_it_returns_to_hand() {
                     .get(&(source.slot(), 0)),
                 Some(&1)
             );
-            assert_eq!(zone_of(&s, hand), Some(ZoneType::Hand));
+            assert_eq!(zone_of(s, hand), Some(ZoneType::Hand));
         }
         assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), [ogre]);
-    }
+    });
 }
 
 /// A temporary death trigger distinguishes the exact recipient from its copies.
-fn grant_coil_death_trigger(
-    s: &mut crate::support::game::Scenario,
-    coil: managym::state::game_object::PermanentId,
-) {
+fn grant_coil_death_trigger(s: &mut Scenario, coil: managym::state::game_object::PermanentId) {
     use managym::state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
         effect::{Affected, EffectDuration, Modification},
@@ -1142,13 +1139,13 @@ fn named_coil_copies_inherit_electroduplicate_but_only_the_recipient_gains_life(
 }
 
 fn check_coil_sacrifices(
-    s: &mut crate::support::game::Scenario,
+    s: &mut Scenario,
     original: managym::state::game_object::PermanentId,
     recipient: managym::state::game_object::PermanentId,
 ) {
-    use crate::support::play::{command, resolve_top};
+    use crate::support::play::resolve_top;
     use managym::{
-        agent::{action::ActionSpaceKind, observation::Observation},
+        agent::observation::Observation,
         state::mana::{Color, Colors},
     };
     use std::collections::BTreeSet;
@@ -1169,29 +1166,7 @@ fn check_coil_sacrifices(
         })
         .collect();
     let grantee = card_of(s, recipient);
-    s.advance_to_step(StepKind::End);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
-    let root = s.snapshot();
-    let orders = s.action_space().actions.clone();
-    assert_eq!(orders.len(), 2);
-    let mut first_sources = Vec::new();
-    for order in orders {
-        s.restore(&root);
-        let committed = command(s, |action| action == &order);
-        let recorded = serde_json::to_vec(&committed).unwrap();
-        let expected = managym::search_state::witness(s.game());
-        s.restore(&root);
-        s.game_mut()
-            .execute_semantic_command(&serde_json::from_slice(&recorded).unwrap())
-            .unwrap();
-        assert_eq!(managym::search_state::witness(s.game()), expected);
-        let sources: Vec<_> = s
-            .game()
-            .state
-            .stack_objects
-            .iter()
-            .map(|a| a.source_object())
-            .collect();
+    check_both_trigger_orders(s, |s, sources| {
         assert_eq!(
             sources.iter().copied().collect::<BTreeSet<_>>(),
             descendants
@@ -1219,11 +1194,6 @@ fn check_coil_sacrifices(
                 recipients
             );
         }
-        if first_sources.is_empty() {
-            first_sources = sources.clone();
-        } else {
-            assert!(sources.iter().rev().eq(&first_sources));
-        }
         let before = s.game().state.players[0].life;
         for source in sources.into_iter().rev() {
             resolve_top(s);
@@ -1238,7 +1208,7 @@ fn check_coil_sacrifices(
         assert_eq!(s.game().state.players[0].life, before + 3);
         assert!(s.game().state.stack_objects.is_empty());
         assert_eq!(s.battlefield_permanents_named(0, "Koma's Coil"), [original]);
-    }
+    });
 }
 
 #[test]

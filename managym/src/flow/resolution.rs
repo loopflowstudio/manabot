@@ -413,7 +413,6 @@ impl Game {
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
-        let source_face = stacked_trigger_face(&triggered);
         let program = stacked_trigger_program(&triggered)
             .unwrap_or_default()
             .to_vec();
@@ -435,7 +434,7 @@ impl Game {
                 intervening_if,
                 effects,
                 ..
-            } = source_face.abilities[triggered.ability_index].clone();
+            } = &stacked_trigger_face(&triggered).abilities[triggered.ability_index];
             // CR 603.4: an intervening "if" that no longer holds removes the
             // ability from the stack doing nothing.
             if intervening_if.as_ref().is_some_and(|condition| {
@@ -448,7 +447,7 @@ impl Game {
             }) {
                 return;
             }
-            (effects, Some(triggered.ability_index))
+            (effects.clone(), Some(triggered.ability_index))
         };
 
         let requirements = crate::state::ability::effect_target_requirements(&effects);
@@ -2513,18 +2512,7 @@ impl Game {
             content.copiable_values(object)
         } else {
             let lki = self.object_lki(copied).expect("departed copy source");
-            lki.copiable.as_deref().cloned().unwrap_or_else(|| {
-                let definition = content
-                    .definition(lki.definition_id)
-                    .expect("catalog copy source")
-                    .clone();
-                crate::state::game_object::CopiableValues {
-                    definition_id: Some(lki.definition_id),
-                    definition,
-                    front: None,
-                    copy: None,
-                }
-            })
+            content.departed_copiable_values(lki)
         };
         TokenSource::Copy { values, exceptions }
     }

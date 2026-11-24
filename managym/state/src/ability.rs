@@ -2050,6 +2050,15 @@ impl Effect {
         }
     }
 
+    /// Create token copies of each selected object with its copiable values.
+    pub fn create_token_copies(of: ObjectSelector, count: impl Into<EffectValue>) -> Self {
+        Effect::CreateTokenCopy {
+            of,
+            count: count.into(),
+            exceptions: Vec::new(),
+        }
+    }
+
     /// "Add [mana]."
     pub fn add_mana(mana: Mana) -> Self {
         Effect::AddMana {

@@ -812,16 +812,7 @@ impl Game {
 
         if let Some(mut lki) = departing_lki {
             let object = self.state.entry_object(object_id);
-            let content = default_content_pack();
-            let catalog_form = content
-                .definition(object.definition_id)
-                .is_some_and(|definition| {
-                    definition.is_token != object.is_card()
-                        && definition.printed == object.copiable_definition()
-                });
-            if object.copy.is_some() || object.front_face().is_some() || !catalog_form {
-                lki.copiable = Some(std::sync::Arc::new(content.copiable_values(object)));
-            }
+            lki.copiable = default_content_pack().retain_copiable_values(object);
             self.record_object_lki(lki);
         }
         let cast_spell = (old_zone == Some(ZoneType::Stack))

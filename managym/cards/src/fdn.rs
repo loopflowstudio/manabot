@@ -71,7 +71,7 @@ fn homunculus_horde() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Draws { who: Actor::You, nth: Some(2) },
-                effects: vec![Effect::CreateTokenCopy { count: 1.into(), of: ObjectSelector::This, exceptions: vec![] }],
+                effects: vec![Effect::create_token_copies(ObjectSelector::This, 1)],
             }],
             text_box: "Whenever you draw your second card each turn, create a token that's a copy of this creature.".into(),
             ..Default::default()

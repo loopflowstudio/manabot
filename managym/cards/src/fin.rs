@@ -375,11 +375,10 @@ fn the_fire_crystal() -> CardDefinition {
                 mana_cost: ManaCost::parse("{4}{R}{R}"),
                 tap_source: true,
                 effects: vec![
-                    Effect::CreateTokenCopy {
-                        count: 1.into(),
-                        of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        exceptions: vec![],
-                    },
+                    Effect::create_token_copies(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        1,
+                    ),
                     Effect::CreateDelayedTrigger {
                         remember: Some(ObjectSelector::CreatedThisWay),
                         event: DelayedEvent::EndStep { your_turn: false },
@@ -408,9 +407,8 @@ fn relms_sketching() -> CardDefinition {
             name: "Relm's Sketching".into(),
             mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![Effect::CreateTokenCopy {
-                count: 1.into(),
-                of: ObjectSelector::Target(TargetSpec::Permanent {
+            spell_effects: vec![Effect::create_token_copies(
+                ObjectSelector::Target(TargetSpec::Permanent {
                     predicate: CardPredicate {
                         card_types_any: vec![
                             CardType::Artifact,
@@ -420,8 +418,8 @@ fn relms_sketching() -> CardDefinition {
                         ..Default::default()
                     },
                 }),
-                exceptions: vec![],
-            }],
+                1,
+            )],
             text_box: "Create a token that's a copy of target artifact, creature, or land.".into(),
             ..Default::default()
         },

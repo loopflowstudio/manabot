@@ -4389,11 +4389,7 @@ fn foggy_swamp_visions() -> CardDefinition {
             spell_effects: vec![Effect::ForEachTarget {
                 effects: vec![
                     Effect::exile(ObjectSelector::Target(creature_card())),
-                    Effect::CreateTokenCopy {
-                        count: 1.into(),
-                        of: ObjectSelector::Target(creature_card()),
-                        exceptions: vec![],
-                    },
+                    Effect::create_token_copies(ObjectSelector::Target(creature_card()), 1),
                     Effect::CreateDelayedTrigger {
                         remember: Some(ObjectSelector::CreatedThisWay),
                         event: DelayedEvent::EndStep { your_turn: true },
@@ -5707,11 +5703,7 @@ fn joo_dee_one_of_many() -> CardDefinition {
                 sorcery_timing: true,
                 effects: vec![
                     Effect::Surveil { count: 1 },
-                    Effect::CreateTokenCopy {
-                        count: 1.into(),
-                        of: ObjectSelector::This,
-                        exceptions: vec![],
-                    },
+                    Effect::create_token_copies(ObjectSelector::This, 1),
                     Effect::Sacrifice {
                         what: ObjectSelector::chosen(CardPredicate {
                             card_types_any: vec![CardType::Artifact, CardType::Creature],
@@ -7306,11 +7298,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
-                effects: vec![Effect::CreateTokenCopy {
-                    count: 1.into(),
-                    of: ObjectSelector::This,
-                    exceptions: vec![],
-                }],
+                effects: vec![Effect::create_token_copies(ObjectSelector::This, 1)],
             }],
             statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
                 scope: StaticScope::This,

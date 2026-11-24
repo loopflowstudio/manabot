@@ -288,11 +288,8 @@ fn into_the_roil() -> CardDefinition {
 
 fn rite_of_replication() -> CardDefinition {
     let text_box = "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.";
-    let copy = |n| Effect::CreateTokenCopy {
-        count: EffectValue::Fixed(n),
-        of: ObjectSelector::Target(TargetSpec::Creature),
-        exceptions: vec![],
-    };
+    let copy =
+        |count| Effect::create_token_copies(ObjectSelector::Target(TargetSpec::Creature), count);
     CardDefinition {
         key: "zen.rite_of_replication",
         scryfall_id: "4530fe45-8a3d-48e9-a7a5-abf8fb1485e3",

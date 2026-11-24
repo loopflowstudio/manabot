@@ -17,11 +17,7 @@ fn self_reflection() -> CardDefinition {
             name: "Self-Reflection".into(),
             mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![Effect::CreateTokenCopy {
-                count: 1.into(),
-                of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                exceptions: vec![],
-            }],
+            spell_effects: vec![Effect::create_token_copies(ObjectSelector::Target(TargetSpec::CreatureYouControl), 1)],
             statics: vec![StaticAbility::Flashback(ManaCost::parse("{3}{U}"))],
             text_box: "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)".into(),
             ..Default::default()
