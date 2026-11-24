@@ -481,6 +481,8 @@ class FactRoutes[A]:
     targets: A  # [B*F] flat object index
     linked: A  # [B,F] float
     programs: FactPrograms[A] | None
+    # Live rows only, as [1,R]; `targets` still name each row's observation.
+    compact: bool = False
 
 
 @dataclass(frozen=True)
@@ -532,6 +534,59 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class PackedAttention[A]:
+    """Flat object indexes per group (-1 pads), and inverse gather for the heads."""
+
+    groups: tuple[A, ...]
+    restore: A  # [B,N] into the concatenated outputs plus a final zero vector
+
+
+def attention_group_count(rows: int) -> int:
+    """Two groups below 192 rows, three below 256, four from 256.
+
+    Each group costs one attention call per layer and saves the padding between
+    its longest row and the rest. At 64 rows two more calls cost about what the
+    9-10% fewer dense slots save; at 256 rows four groups cut dense slots by
+    15-17% and the rows x width^2 self-attention term by 25-29%.
+    """
+    return min(4, max(2, rows // 64))
+
+
+def pack_attention(
+    valid: np.ndarray, used_columns: int
+) -> PackedAttention[np.ndarray] | None:
+    """Split rows sorted by live length into equal groups, each padded to its
+    longest row, only when the groups together beat column compaction.
+
+    `np.array_split` puts the extra rows of an uneven split in the shorter
+    groups, and the stable sort keeps tied rows in batch order.
+    """
+    counts = valid.sum(axis=1)
+    if len(counts) < 2 or counts.min() == 0:
+        return None
+    order = np.argsort(counts, kind="stable")
+    parts = np.array_split(order, attention_group_count(len(counts)))
+    widths = [int(counts[rows[-1]]) for rows in parts]
+    total = sum(len(rows) * width for rows, width in zip(parts, widths, strict=True))
+    if total >= len(valid) * used_columns:
+        return None
+
+    restore = np.full(valid.shape, total, dtype=np.int32)
+    groups = []
+    offset = 0
+    for rows, width in zip(parts, widths, strict=True):
+        present = valid[rows]
+        row, slot = np.nonzero(present)
+        rank = np.cumsum(present, axis=1)[row, slot] - 1
+        gather = np.full((len(rows), width), -1, dtype=np.int32)
+        gather[row, rank] = rows[row] * valid.shape[1] + slot
+        restore[rows[row], slot] = offset + row * width + rank
+        groups.append(gather)
+        offset += gather.size
+    return PackedAttention(tuple(groups), restore)
+
+
+@dataclass(frozen=True)
 class Prepared[A]:
     """One admitted observation batch, ready for a backend policy."""
 
@@ -578,7 +633,7 @@ class Prepared[A]:
     focus: A  # [K,F] flat object index
     focus_mask: A  # [K,F] float
     is_agent: A  # [B,N] includes explicit belief ownership
-    # Inference only: object columns any row uses (None: attend over all).
+    # Dense attention can skip columns empty in every observation.
     attention_columns: A | None = None
     # Configuration identity, independent of a particular model instance.
     binding: str = ""
@@ -597,6 +652,7 @@ class Prepared[A]:
     stack_rows: A | None = None
     stack_targets: A | None = None
     stack_mask: A | None = None
+    packed_attention: PackedAttention[A] | None = None
 
 
 def object_slots(values: Array, remap: Array | None, *, base: int = 1) -> Array:
@@ -623,12 +679,17 @@ def prepare(
     memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
     select_programs: bool = False,
+    compact_learner: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. Bucketed observations retain their original action capacity.
+    are packed. `compact_learner` gives learner batches the same column
+    selection, or packs rows by live length when that is smaller, and routes
+    only live fact rows. Torch never sets it: it keeps padded shapes for
+    gradient reduction order.
+    Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
@@ -663,10 +724,15 @@ def prepare(
             (belief.validity, np.ones((len(belief.validity), 1), np.float32))
         )
     validity = np.concatenate(validity_rows, 1)
+    compact = compact_learner and not inference
     columns = None
-    if inference and not live_tokens:
-        used = np.nonzero((validity != 0).any(0))[0]
-        if 0 < len(used) < validity.shape[1]:
+    packed_attention = None
+    if (inference or compact) and not live_tokens:
+        valid = validity != 0
+        used = np.flatnonzero(valid.any(0))
+        if compact:
+            packed_attention = pack_attention(valid, len(used))
+        if packed_attention is None and 0 < len(used) < validity.shape[1]:
             columns = used
     layout = tables.layout
     batch = obs["actions_valid"].shape[0]
@@ -799,7 +865,7 @@ def prepare(
         else None,
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
-        facts=_facts(facts, tables, objects, object_remap),
+        facts=_facts(facts, tables, objects, object_remap, compact=compact),
         effects=_effects(obs, tables, objects, object_remap),
         relation_features=relation_features,
         relation_valid=relation_valid.astype(f32),
@@ -825,6 +891,7 @@ def prepare(
         + object_slots(focus, object_remap, base=0),
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
+        packed_attention=packed_attention,
         binding=binding,
         bucket_needs=bucket_needs,
         is_agent=np.concatenate(ownership, axis=1),
@@ -901,15 +968,29 @@ def padded_rows(values: Array, valid: Array) -> Array:
 
 
 def _facts(
-    facts: Array, tables: Tables, objects: int, object_remap: Array | None = None
+    facts: Array,
+    tables: Tables,
+    objects: int,
+    object_remap: Array | None = None,
+    *,
+    compact: bool = False,
 ) -> FactRoutes[Array]:
-    batch = len(facts)
+    """Route fact rows into object slots.
+
+    Only live facts are indexed on the host. By default padding is restored to
+    `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
+    `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
+    with targets from each row's own observation; a padded row changes no
+    output or gradient, so the encoder skips that work.
+    """
     valid = (facts[..., FACT_VALID_INDEX] == 1) & (
         facts[..., FACT_KIND_INDEX] <= tables.fact_kinds
     )
-    # Index only live facts on the host. Restore padding before the forward:
-    # its matrix shapes and gradient reduction order must remain unchanged.
     live = facts[valid]
+    routed = (1, len(live)) if compact else valid.shape
+
+    def padded(values: Array) -> Array:
+        return values[None] if compact else padded_rows(values, valid)
 
     kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
     ident, detail = (
@@ -959,8 +1040,8 @@ def _facts(
         )
         token_rows[program] = tables.tokens(token_kind[program], detail[program])
         sources = tables.rows(live[..., FACT_SOURCE_INDEX])
-        id_mask = padded_rows(named.astype(np.float32), valid)
-        detail_mask = padded_rows(named_detail.astype(np.float32), valid)
+        id_mask = padded(named.astype(np.float32))
+        detail_mask = padded(named_detail.astype(np.float32))
     else:
         # Torch linear chooses a different accumulation path for strided inputs.
         columns = np.ascontiguousarray(columns[..., :-1])
@@ -968,24 +1049,27 @@ def _facts(
         detail_rows = detail % tables.record_buckets
         sources = live[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
         # Hashed records embed every row, padding included.
-        id_mask = np.ones(valid.shape, np.float32)
-        detail_mask = np.ones(valid.shape, np.float32)
-    links = padded_rows(live[..., FACT_OBJECT_INDEX].astype(np.int64), valid)
-    base = np.arange(batch)[:, None] * objects
-    all_programs = padded_rows(program, valid)
+        id_mask = np.ones(routed, np.float32)
+        detail_mask = np.ones(routed, np.float32)
+    links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
+    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(facts))[:, None]
+    all_programs = padded(program)
     return FactRoutes(
-        kinds=padded_rows(kinds, valid),
-        columns=padded_rows(columns, valid),
-        id_rows=padded_rows(id_rows, valid),
+        kinds=padded(kinds),
+        columns=padded(columns),
+        id_rows=padded(id_rows),
         id_mask=id_mask,
-        detail_rows=padded_rows(detail_rows, valid),
+        detail_rows=padded(detail_rows),
         detail_mask=detail_mask,
-        token_rows=padded_rows(token_rows, valid),
+        token_rows=padded(token_rows),
         token_mask=all_programs.astype(np.float32),
-        source_rows=padded_rows(sources, valid),
-        targets=(base + object_slots(links, object_remap)).reshape(-1),
-        linked=(valid & (links > 0)).astype(np.float32),
-        programs=_fact_programs(facts, all_programs, tables.order_lengths),
+        source_rows=padded(sources),
+        targets=(owners * objects + object_slots(links, object_remap)).reshape(-1),
+        linked=(links > 0).astype(np.float32),
+        programs=_fact_programs(
+            live[None] if compact else facts, all_programs, tables.order_lengths
+        ),
+        compact=compact,
     )
 
 
