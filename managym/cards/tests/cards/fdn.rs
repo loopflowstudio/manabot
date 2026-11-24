@@ -1521,6 +1521,62 @@ fn departure_valkyries_call_sees_a_creature_dying_beside_it() {
     assert_eq!(zone_of(&s, call_card), Some(ZoneType::Battlefield));
 }
 
+/// Two creatures die in one state-based batch and each Call trigger returns
+/// its own card. Blinking the first returned Angel while the second trigger
+/// waits makes a new object (CR 400.7): it keeps neither the counter nor the
+/// granted Angel type and flying, and the second return touches only its card.
+#[test]
+fn departure_valkyries_call_returns_simultaneous_deaths_and_a_blink_starts_fresh() {
+    use crate::support::{
+        inspect::{counters_of, zone_of},
+        play::{command, resolve_top},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{game_object::ObjectId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Valkyrie's Call", "Gray Ogre", "Hill Giant"]);
+    s.force_permanent_on_battlefield(0, "Valkyrie's Call");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let cards = [card_of(&s, ogre), card_of(&s, giant)];
+    s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 2;
+    s.game_mut().state.permanents[giant]
+        .as_mut()
+        .unwrap()
+        .damage = 3;
+    s.pass_priority();
+    assert!(cards
+        .iter()
+        .all(|&c| zone_of(&s, c) == Some(ZoneType::Graveyard)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    command(&mut s, |_| true);
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+
+    let angel = |s: &Scenario, card: ObjectId| {
+        let id = permanent_of(s, card).unwrap();
+        let view = s.game().characteristics(id);
+        (
+            view.has_subtype("Angel") && view.keywords.has(Keyword::Flying),
+            counters_of(s, id, CounterKind::PlusOnePlusOne),
+        )
+    };
+    resolve_top(&mut s);
+    let (first, second) = match permanent_of(&s, cards[0]) {
+        Some(_) => (cards[0], cards[1]),
+        None => (cards[1], cards[0]),
+    };
+    assert_eq!(angel(&s, first), (true, 1));
+    assert_eq!(zone_of(&s, second), Some(ZoneType::Graveyard));
+
+    let exiled = move_card(&mut s, first, ZoneType::Exile);
+    let blinked = move_card(&mut s, exiled, ZoneType::Battlefield);
+    assert_eq!(angel(&s, blinked), (false, 0));
+    settle(&mut s);
+    assert_eq!(angel(&s, second), (true, 1));
+    assert_eq!(angel(&s, blinked), (false, 0));
+}
+
 #[test]
 fn departure_familiar_freezes_revival_count_and_remembers_exact_card() {
     use crate::support::{
