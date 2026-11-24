@@ -6,9 +6,8 @@ Its forward uses the integer lookups in a `Prepared` batch from
 `manabot.policy.prepare`.
 
 Learner batches select the catalog programs their observations reference.
-Inference and bucketed batches use the full catalog schedule. GRU input and
-recurrent biases remain separate parameters, preserving Adam state and global
-gradient-norm clipping.
+Inference uses the full catalog schedule. The GRU keeps separate input and
+recurrent biases for Adam and global gradient-norm clipping.
 
 Compute precision is policy-owned. Unless given, it follows the model's width
 (`manabot.backends.mlx.arrays.default_precision`): bfloat16 from
@@ -708,7 +707,7 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             inference=inference,
-            select_programs=not inference and not self.bucketed_shapes,
+            select_programs=not inference,
             bucketed=self.bucketed_shapes,
             binding=admission.binding(
                 self.config,

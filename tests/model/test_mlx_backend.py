@@ -441,11 +441,14 @@ def test_v11_baseline_architecture_matches_torch_forward_gradients_and_step(
         ), name
 
 
+@pytest.mark.parametrize("bucketed", [False, True])
 def test_mlx_learner_encodes_only_referenced_catalog_programs(
-    baseline_model: ModelConfig, monkeypatch: pytest.MonkeyPatch
+    baseline_model: ModelConfig, monkeypatch: pytest.MonkeyPatch, bucketed: bool
 ) -> None:
     space = ObservationSpace()
-    policy = resolve("mlx").runtime.create_policy(space, baseline_model)
+    policy = resolve("mlx").runtime.create_policy(
+        space, baseline_model, bucketed_shapes=bucketed
+    )
     env = managym.Env(seed=7)
     env.reset(lesson_match().to_rust())
     obs = encode_observation(

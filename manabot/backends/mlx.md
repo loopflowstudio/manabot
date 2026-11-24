@@ -120,9 +120,9 @@ path in MLX names the same component as in the torch state dict:
 - the attention stack;
 - action heads, name candidates and the critic.
 
-As in PyTorch, the catalog GRU encodes only the definitions referenced by an
-unbucketed learner batch. Bucketed batches use the full schedule. Inference
-can cache the full catalog while the weights are fixed.
+The MLX learner encodes the catalog definitions referenced by each prepared
+batch. With bucketed shapes it selects those definitions after trimming the
+observation. Inference can cache the full catalog while the weights are fixed.
 
 The clipped surrogate computes its likelihood ratio in float32 on MLX and
 float64 on PyTorch. The Apple GPU lacks float64. Ordinary ratios can differ
