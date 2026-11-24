@@ -1,4 +1,4 @@
-at: a2e481d191d87844a91e6ea24a34652ec8d899e1
+at: 430cd59589e986f3ca18175a4762e8a18a8a80cb
 first:
   - path: scratch/plan.md
     why: Tracks verified card batches and remaining rules work.
@@ -7,7 +7,7 @@ first:
   - path: managym/README.md
     why: Explains attachment identity and search disclosure.
   - path: managym/state/src/ability.rs
-    why: Defines target choices and composes temporary grants.
+    why: Defines target choices, the one Aura enchant clause and temporary grants.
   - path: managym/state/src/predicate.rs
     why: Defines flying exclusions and minimum toughness.
   - path: managym/state/src/card.rs
@@ -16,6 +16,8 @@ first:
     why: Defines the combat-damage shield record.
   - path: managym/cards/src/fdn.rs
     why: Assembles the rules for first-printing Foundations cards.
+  - path: managym/src/flow/layers.rs
+    why: Lowers every static spelling into one layer plan and refuses a modification without a layer.
   - path: managym/src/flow/triggers.rs
     why: Binds choices to the face that supplied the trigger.
   - path: managym/src/flow/action.rs
