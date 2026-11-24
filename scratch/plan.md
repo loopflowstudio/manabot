@@ -16,86 +16,61 @@ forced-decision skipping, replay identity and debug cache invariants.
 
 ## Delivered
 
-1. `fe46e6b375` skips all-zero object rows and reads only valid relations. The eight paired snapshots matched every `Prepared` array. Learning preparation fell from 72.47 to 34.59 CPU ms per batch and inference from 68.76 to 22.02. The v9/v11 pinned games and layer-input checks passed. Optional u1952 was unconfigured.
-2. `f21f8fe4f5` carries immutable v11 CSR spans from live frontiers and unmasked vector steps through layout and vocabulary admission into Torch and MLX preparation. V11 native search uses it. The directed count, capacity, cutoff, external rejection, memory preparation and search checks passed. The paired transport result is below.
+1. `fe46e6b375` skips all-zero dense object rows and reads only valid relations, matching every `Prepared` array on eight paired snapshots.
+2. `f21f8fe4f5` carries immutable CSR spans from v11 live frontiers and unmasked vector steps through admission and preparation, including native search.
+3. `cd7f023e25` emits typed v11 CSR directly from the shared encoder and prepares it for Torch and MLX. Eight paired batches matched the dense reference for every projected buffer, outcome and learning and inference `Prepared` field. Directed fixtures cover exact signed words and event IDs beyond float32 precision.
 
-3. The shared v11 encoder emits live rows directly into dense destinations or typed CSR records. Torch and MLX read the same checkpoint-bound `Prepared`. The median 256-stream typed batch used 1,858,818 bytes. The eight paired batches matched every projected buffer, outcome and learning and inference input. Signed words and event IDs above float32 precision have independent exact-integer fixtures.
+`b9b09bc6d9` added `axis_extents` to dense admission for gaps, nonzero
+masked features and referenced empty slots. Native rows use encoder offsets.
+Both paths still bind checkpoint layouts and vocabularies.
 
-The task incorporated `b9b09bc6d9`, which added `axis_extents` for dense inputs
-and normalized admitted references to integer slots. Dense mappings need that
-scanner for gaps, nonzero masked features and referenced empty slots. Native
-admission uses offsets and trusts encoded joins. Keep checkpoint-dependent
-admission on both paths.
-
-## Remaining slices
+## Remaining
 
 ### 4. Use owned spans in training collection, retention and minibatches
 
-- Migrate v11 collector destinations, row selection and rollout ownership
-  together in `manabot/training/rollout/collection.py`. Reuse the counted
-  export and preserve native reset, terminal autoreset, paused streams and
-  isolated per-stream capacity recovery. The current
-  `VectorEnv.step_observation_batch` uses serial `VectorEnv::step` and packs
-  after advancement. It lacks the masked and isolated paths that the
-  collector uses. Feed export into those existing paths with matching
-  outcomes, events and error contracts.
-- Replace v11 dense `ObservationRows` storage and learner repadding with
-  arbitrary gathers of live spans. Preserve row order, repeated indexes,
-  bootstrap rows, collection bucket extents and one sampling call per
-  original group. Keep decision-memory prefixes shared and stream cursors
-  tied to their native stream. Preserve native provenance through trusted
-  selections, and use full admission for mutable or external inputs.
+- Feed the typed row writer into the native vector write callbacks in
+  `managym/src/agent/vector_env.rs` and `managym/src/python/vector_env_bindings.rs`.
+  `step_observation_batch` encodes after the unmasked step returns. That
+  misses the write boundary where isolated stepping classifies capacity
+  failures. Reuse the callbacks for masked and isolated steps, seeded resets,
+  replacements and viewer reads. `PackedRows::append` currently assumes the
+  caller discards the whole batch on error. Commit each observation atomically so a
+  failed slot cannot affect a sibling's offsets. Keep stream order, outcomes,
+  step events, cutoff diagnostics and typed errors through
+  `managym/recording.py` and `manabot/training/rollout/producers.py`.
+- Snapshot self-play (`82c5d1d1b7`, merged in `dbafc8738f`) now runs on
+  native slots across shards. Preserve both terminal autoreset and parked
+  slots, transactional snapshot loads, seeded root succession, and settlement
+  of records, statistics and exposure for explicitly replaced roots. Freeze
+  each horizon from its contributing viewer before releasing the slot. Keep
+  decision-memory prefixes shared, with capture cursors tied to the native
+  stream, viewer and epoch across snapshot branches and resume.
+- Carry immutable v11 spans through `manabot/training/rollout/collection.py`,
+  `actions.py` and `admission.py`. The collector currently copies dense
+  non-action rows, then rejoins them with dense action projections from
+  `PackedActions` on every learner gather. Keep one owner for the v11 legal
+  action fields in the native spans, and retain behavior probabilities in
+  original action coordinates. Gather arbitrary rows, including repeats and
+  frozen bootstraps, with collection bucket extents and native provenance
+  intact. Keep one sampling call per original row group and materialize
+  prefixes within execution row limits. Mutable or external mappings still
+  receive full admission.
 - Check arbitrary gathers and cutoff/recovery, batch closure, self-play and
-  resume. Compare logits, values, sampled actions and replay digests with
-  the dense reference using paired seeds. Measure observed rollout bytes,
-  peak RSS and update throughput on the workload below.
+  resume, including sharded snapshot branches and fixed-view horizons. Compare
+  logits, values, sampled actions and replay digests against the dense
+  reference with paired seeds. Check pinned pilots and package boundaries.
+  Measure rollout bytes, peak RSS and update throughput on the workload below.
 
 ## Measurements to carry forward
 
-Apple M4 Max (16 cores, 128 GB), CPython 3.13.15, release managym with
-mimalloc, CPU Torch with one thread. Baseline `4127aa973f` and slice 2
-`f21f8fe4f5` ran on a shared machine (load roughly 140–185). Times below
-are process CPU time. The baseline whole-update probe hit its 240 s
-subprocess timeout at 13% CPU. Wall throughput and peak RSS are still open.
-
-The workload uses `scratch/bench_tla.py:frontier_v11`, the small TLA frontier
-settings on CPU with `policy_input_version=11`, 256 streams and 64
-`first-legal` slots. The frontier recipe itself uses v9. The stage probes
-use random legal actions (seed 24), a proxy for self-play board shapes.
-The baseline moved 60.2 MB of dense buffers per step, with 0.79 MB nonzero
-on average (`scratch/occupancy-v11.json`). Numeric readings accounted for
-54% cumulative preparation CPU and casts for 4.8%
-(`scratch/prepare-profile.txt`). Baseline stage CPU was 38.5 ms for native
-step plus encode and 2.5 ms for retention copies (`scratch/stages-v11.json`).
-A NumPy zero fill of the full batch cost 1.4 CPU ms.
-
-`uv run python -m scratch.compare_spans` sampled eight paired 256-stream
-batches through step 320. All dense projections, outcomes and learning and
-inference `Prepared` fields matched, using slice 1's preparation as reference.
-
-| Stage (median CPU ms per batch) | Dense | Native CSR |
-| --- | ---: | ---: |
-| Step and encode with outcomes | 28.72 | 33.61 |
-| Admission | 13.89 | 1.01 |
-| Admitted learning preparation | 30.09 | 24.88 |
-| Admitted inference preparation | 22.95 | 18.71 |
-
-The 4.89 ms producer difference includes stepping, packing and freezing.
-The probe did not isolate encoding. Median live values and offsets used
-3,797,400 bytes, including all-zero live rows and zero columns within live
-rows. This projects to about 243 MB for 16,384 rows before headroom or
-retention-specific compaction, against at least 3.7 GB dense non-action
-storage. This is a volume estimate. Recompute it from typed values in
-slice 4. The full historical profiles and occupancy table are in
-`f21f8fe4f5:scratch/plan.md`.
-
-### Typed producer and preparation
-
-The release build ran the same eight-batch probe through step 320 with packed
-native-endian fields in logical column order. Values and offsets occupied
-1,858,818 bytes per batch at the median, 51% below slice 2's 3,797,400
-bytes and 97% below the dense allocation. At 16,384 rows this projects to
-119 MB of transport. Collection storage and peak RSS still need measurement.
+`scratch/compare_spans.py` ran eight paired batches through step 320 on an
+Apple M4 Max with CPython 3.13.15, release managym with mimalloc and
+single-thread CPU Torch. The workload uses `scratch/bench_tla.py:frontier_v11`
+(small TLA frontier, CPU, v11, 256 streams, 64 `first-legal` slots) with
+random legal actions from seed 24. Transport shrank from 60.2 MB dense
+to 3,797,400 bytes with float CSR, then 1,858,818 bytes with typed CSR.
+At 16,384 rows the median typed batch projects to 119 MB of transport.
+Actual rollout storage and peak RSS remain open.
 
 | Stage (median CPU ms per batch) | Dense | Typed CSR |
 | --- | ---: | ---: |
@@ -104,23 +79,16 @@ bytes and 97% below the dense allocation. At 16,384 rows this projects to
 | Admitted learning preparation | 30.82 | 19.66 |
 | Admitted inference preparation | 22.67 | 19.71 |
 
-The paired measurement includes freezing the immutable bytes. The typed
-producer cost 1.25 ms more per batch in this run. Whole-update throughput
-remains a slice 4 measurement. The probe checks dense projection parity on
-ordinary game states. The directed native and decision-memory fixtures
-exercise signed words and IDs beyond float32 precision separately.
+Step timings include native advancement and freezing. The typed result is
+1.25 CPU ms slower at that boundary. Slice 3 test results and earlier stage
+probes are in `cd7f023e25:scratch/plan.md`. Optional u1952 was unavailable.
+Strict all-feature Clippy reported four existing PyO3 binding lints.
 
-The focused encoder and incremental-memory Rust tests passed. Python checks
-covered both backends, v9/v11 pilot replays, the v10 vector path, search,
-external admission, memory, Academy, LLM and capture readers. The optional
-u1952 checkpoint was unavailable. Strict all-feature Clippy reported four
-existing PyO3 binding lints for constructor arity and a step return type.
-
-### Deferred same-machine checks
-
-On an idle machine, compare base and final TLA self-play by stage (encode,
-retention, admission, preparation), rollout bytes, peak RSS and update
-throughput. Keep the recorded rows per update with the results.
+Compare base `4127aa973f` and final TLA self-play on the same idle machine.
+The baseline update probe timed out at 240 seconds with 13% CPU on a busy
+host, leaving throughput and RSS unmeasured. Record rows per update, timings
+for encode, retention, admission and preparation, total rollout bytes and
+training process peak RSS. Keep memory capture under retention.
 
 ```bash
 /usr/bin/time -l uv run python scripts/bench_training_update.py --recipe scratch.bench_tla:frontier_v11 --streams 256 --updates 3 --json scratch/update-v11.json
@@ -130,7 +98,5 @@ cargo run --release --features benchmark --example bench_states --manifest-path 
 Follow the Engine Budget procedure in `docs/development.md` and compare the
 `duplicate-tokens` and `mixed` observe digests (base `70e47630…`,
 `523886bd…`, traces in `scratch/bench-states-observe*.jsonl`). These
-constructed boards approach capacity. The separate encode-only
-`bench_observation` panics on the base at
-`managym/examples/bench_observation.rs:43`, where the fixture unwraps an
-absent PassPriority action. That invocation produced no baseline.
+constructed boards approach capacity. The separate encode-only fixture panics
+on the base and yielded no measurement. See `scratch/questions.md`.
