@@ -100,24 +100,33 @@ def _compile_graphs(root: Path) -> dict[str, list[Step]]:
     return graphs
 
 
+def _phase(steps: list[Step], start: int, plan: str, review: str) -> int:
+    """Check one phase shaped like builtin build; return the index after it.
+
+    The plan step cuts the work into slices. Realign decides the inner loop
+    (another slice, or on), so a slice costs implement and realign only;
+    compress and the phase's review run once per pass over the whole batch,
+    and the review decides whether the phase goes back to implementation.
+    """
+    end = [step.label for step in steps].index(review, start)
+    phase = steps[start : end + 1]
+    head = [step.label for step in phase[:5]]
+    assert head == [plan, "implement", "sync", "realign", "compress"], head
+    implement = phase[1]
+    assert phase[3].returns_to == implement.key, "realign decides the slice loop"
+    assert phase[-1].returns_to == implement.key, f"{review} decides the phase"
+    assert not any(step.interactive for step in phase), f"{plan} phase is headless"
+    return end + 1
+
+
 def _coverage(coverage: list[Step]) -> None:
-    implementations = [step for step in coverage if step.label == "implement"]
-    assert [step.id for step in implementations] == [
-        "implement-working",
-        "implement-scalable",
-        "implement-performance",
-    ]
-    reviews = [
-        "coverage-behavior-review",
-        "coverage-decomposition-review",
-        "engine-performance-review",
-    ]
-    for implementation, review in zip(implementations, reviews, strict=True):
-        position = coverage.index(_one(coverage, review))
-        assert coverage[position + 1].returns_to == implementation.key
-        assert _one(coverage, review).key > implementation.key
+    position = _phase(coverage, 0, "card-batch", "coverage-behavior-review")
+    position = _phase(
+        coverage, position, "coverage-decomposition", "coverage-decomposition-review"
+    )
+    position = _phase(coverage, position, "engine-measure", "engine-performance-review")
+    assert coverage[position].label == "pr-publish"
     _delivery(coverage, coverage[0].key)
-    assert _one(coverage, "pr-publish").key > _one(coverage, reviews[-1]).key
 
 
 def _experiment(experiment: list[Step]) -> None:
@@ -137,23 +146,8 @@ def _experiment(experiment: list[Step]) -> None:
 
 def _performance(steps: list[Step], measure: str, review: str) -> None:
     """Check the optimization loop and its single software delivery boundary."""
-    ordered = [
-        _one(steps, label)
-        for label in (
-            measure,
-            "implement",
-            "compress",
-            "sync",
-            "realign",
-            "concept-review",
-            review,
-            "loop-or-next",
-            "pr-publish",
-        )
-    ]
-    assert steps[: len(ordered)] == ordered, "Performance loop changed order"
-    assert _one(steps, "loop-or-next").returns_to == _one(steps, "implement").key
-    assert not any(step.interactive or step.paths for step in ordered)
+    position = _phase(steps, 0, measure, review)
+    assert steps[position].label == "pr-publish"
     _delivery(steps, _one(steps, measure).key)
 
 
