@@ -136,19 +136,19 @@ no deprecated shims.
    failed-game replacement (immediately, inside `_settle_step`) and snapshot
    installs.
 
-2. **Done — collector refill, memory, and target practice.** Ordinary and adaptive
-   collection load only active ended rows after finalizing pending decisions.
-   Adaptive commit draws its next assignments after updating sampler scores.
-   Target practice parks the resolved observation and stages fresh roots before
-   spending seeds. Parked bootstrap rows retain empty decision-memory prefixes.
-   The seven-land exact-quota fixture leaves a live bootstrap beside a terminal
-   one. The eight-land two-stream fixture binds seeds 197–200 to four records
-   and four terminal statistics, leaving 201 and 202 unspent at batch close.
+2. **Done (6d3cf02810):** Collector refills only active ended rows at the top
+   of each round (`_needs_refill`), adaptive commit draws after score updates,
+   target practice parks and loads explicitly, parked bootstrap rows get empty
+   memory prefixes; seed-parity, batch-end and `action_limit` tests added.
 
-3. **Next — `run_vector_games` (`manabot/sim/rollout.py`) and
-   `scripts/bench_sharded_collection.py`** refill finished streams via
-   `load_slots_into_buffers` (sim passes an `active` mask for seats still
-   needing games); then the full acceptance check below.
+3. **Next — `run_vector_games` (`manabot/sim/rollout.py:178-226`) and
+   `scripts/bench_sharded_collection.py:44-62`** step parked slots after a
+   game ends and would raise `cannot step Terminal slot`. Refill done rows
+   with `load_slots_into_buffers([SlotLoad.fresh(s) ...])` after reading
+   `get_last_info()`; in `run_vector_games` refill only streams whose hero
+   seat still needs games and step only live rows (or stop when none). The
+   bench digest changes if refill timing moves; record it if Engine Budget
+   reads this script. Then run the full acceptance check below.
 
 ## Acceptance check at gate
 
