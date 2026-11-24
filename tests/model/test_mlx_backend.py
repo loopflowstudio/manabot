@@ -787,17 +787,19 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Bucketed attention skips empty columns and preserves opponent focus."""
+    """Grouped attention restores interleaved rows and their focused opponent permanent."""
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
     obs = {
-        k: np.zeros((2, *shape), dtype=np.float32) for k, shape in space.shapes.items()
+        k: np.zeros((4, *shape), dtype=np.float32) for k, shape in space.shapes.items()
     }
     obs["agent_player_valid"][:] = 1
     obs["opponent_player_valid"][:] = 1
-    obs["agent_cards_valid"][0, 1] = 1
-    obs["agent_cards_valid"][1, 0] = 1
+    # Live lengths 6, 3, 5, 4 put nonadjacent rows in both groups.
+    obs["agent_cards_valid"][0, [0, 2, 4]] = 1
+    obs["agent_cards_valid"][2, [1, 3]] = 1
+    obs["agent_cards_valid"][3, 2] = 1
     obs["opponent_permanents_valid"][:, 0] = 1
     obs["actions_valid"][:, :2] = 1
     obs["action_focus"].fill(-1)
@@ -821,30 +823,54 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
     results = []
     for bucketed in (False, True):
         policy = assemble(checkpoint, bucketed_shapes=bucketed)
-        learner = MLXLearner(policy, minibatch_rows=2)
+        learner = MLXLearner(policy, minibatch_rows=4)
         prepared = policy.prepare(obs)
         assert prepared.is_agent.shape == prepared.validity.shape
         table_widths.append(prepared.validity.shape[1])
         widths.clear()
         logits, values = policy.evaluate(prepared)
-        # Both players, both card slots and the focused opponent permanent.
-        assert set(widths) == {5 if bucketed else prepared.validity.shape[1]}
+        assert set(widths) == ({4, 6} if bucketed else {prepared.validity.shape[1]})
         legal = prepared.legal
         logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
         reference = np.where(legal, 0.5, 0).astype(np.float32)
         targets = Targets(
-            np.zeros(2, np.int64),
-            np.array([1, -1], np.float32),
-            np.ones(2, np.float32),
-            np.ones(2, bool),
+            np.zeros(4, np.int64),
+            np.array([1, -1, -0.5, 0.75], np.float32),
+            np.ones(4, np.float32),
+            np.ones(4, bool),
             logs,
             reference,
         )
         loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
         gradients = learner.gradients(loss)
         results.append((logits[:, :2], values, float(loss), gradients))
+    # Inference and single-length batches keep the cheaper single attention call.
+    widths.clear()
+    infer_logits, infer_values = policy.evaluate(policy.prepare(obs, inference=True))
+    assert set(widths) == {8}
+    np.testing.assert_allclose(infer_logits[:, :2], logits[:, :2], atol=2e-6)
+    np.testing.assert_allclose(infer_values, values, atol=2e-6)
+    for identical_rows in ([0], [0, 0]):
+        widths.clear()
+        same = {key: value[identical_rows] for key, value in obs.items()}
+        same_logits, same_values = policy.evaluate(policy.prepare(same))
+        assert set(widths) == {6}
+        np.testing.assert_allclose(
+            same_logits[:, :2], logits[identical_rows, :2], atol=2e-6
+        )
+        np.testing.assert_allclose(same_values, values[identical_rows], atol=2e-6)
+
+    # Odd batches place the middle observation in the shorter half.
+    widths.clear()
+    odd_rows = [0, 1, 2]
+    odd = {key: value[odd_rows] for key, value in obs.items()}
+    odd_logits, odd_values = policy.evaluate(policy.prepare(odd))
+    assert set(widths) == {5, 6}
+    np.testing.assert_allclose(odd_logits[:, :2], logits[odd_rows, :2], atol=2e-6)
+    np.testing.assert_allclose(odd_values, values[odd_rows], atol=2e-6)
+
     padded_width, bucket_width = table_widths
-    assert 5 < bucket_width < padded_width
+    assert 6 < bucket_width < padded_width
     expected, actual = results
     for a, b in zip(actual[:3], expected[:3], strict=True):
         np.testing.assert_allclose(a, b, atol=2e-6)

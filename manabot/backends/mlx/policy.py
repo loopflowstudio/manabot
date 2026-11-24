@@ -835,6 +835,60 @@ class MLXActorCritic(nn.Module):
         with self.forward_precision():
             return self._forward(batch)
 
+    def _attend_objects(
+        self,
+        batch: Prepared[np.ndarray],
+        objects: mx.array,
+        validity: mx.array,
+        sign: mx.array,
+    ) -> mx.array:
+        count, hidden = objects.shape[1:]
+        packed = batch.packed_attention
+        if packed is not None:
+            encoded = []
+            for group in packed.groups:
+                slots = mx.array(group)
+                indices = mx.maximum(slots, 0)
+                attended = _take(objects.reshape(-1, hidden), indices)
+                owners = _take(sign.reshape(-1, 1), indices)
+                values = self._attention_stack(attended, owners, slots >= 0)
+                encoded.append(values.reshape(-1, hidden))
+            # Missing objects all point to the final, constant zero vector.
+            encoded.append(mx.zeros((1, hidden), objects.dtype))
+            return _take(mx.concatenate(encoded), mx.array(packed.restore))
+
+        attended, attended_validity = objects, validity
+        columns = batch.attention_columns
+        if columns is not None:
+            selected = mx.array(columns)
+            attended = mx.take(objects, selected, axis=1)
+            attended_validity = mx.take(validity, selected, axis=1)
+            sign = mx.take(sign, selected, axis=1)
+        encoded_objects = self._attention_stack(attended, sign, attended_validity != 0)
+        if columns is not None:
+            # Restore the original coordinates; unused columns are zero.
+            positions = np.zeros(count, dtype=np.int64)
+            positions[columns] = np.arange(len(columns))
+            used = np.zeros(count, dtype=np.float32)
+            used[columns] = 1
+            encoded_objects = (
+                mx.take(encoded_objects, mx.array(positions), axis=1)
+                * self._floating(used)[None, :, None]
+            )
+        return encoded_objects
+
+    def _attention_stack(
+        self, attended: mx.array, sign: mx.array, keep: mx.array
+    ) -> mx.array:
+        mask = mx.where(keep, 0.0, -mx.inf).astype(attended.dtype)[:, None, None, :]
+        keep = keep[..., None].astype(attended.dtype)
+        encoded_objects = self.attention(attended, sign, mask, keep)
+        for layer in self.extra_attention:
+            encoded_objects = layer(encoded_objects, sign, mask, keep)
+        if "final_norm" in self:
+            encoded_objects = self.final_norm(encoded_objects) * keep
+        return encoded_objects
+
     def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
@@ -981,31 +1035,7 @@ class MLXActorCritic(nn.Module):
         # Attention over the object table.
         validity = self._floating(batch.validity)
         sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
-        attended, attended_validity = objects, validity
-        columns = batch.attention_columns
-        if columns is not None:
-            selected = mx.array(columns)
-            attended = mx.take(objects, selected, axis=1)
-            attended_validity = mx.take(validity, selected, axis=1)
-            sign = mx.take(sign, selected, axis=1)
-        keep = attended_validity != 0
-        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
-        keep = keep[..., None].astype(objects.dtype)
-        encoded_objects = self.attention(attended, sign, mask, keep)
-        for layer in self.extra_attention:
-            encoded_objects = layer(encoded_objects, sign, mask, keep)
-        if "final_norm" in self:
-            encoded_objects = self.final_norm(encoded_objects) * keep
-        if columns is not None:
-            # Restore the original coordinates; unused columns are zero.
-            positions = np.zeros(count, dtype=np.int64)
-            positions[columns] = np.arange(len(columns))
-            used = np.zeros(count, dtype=np.float32)
-            used[columns] = 1
-            encoded_objects = (
-                mx.take(encoded_objects, mx.array(positions), axis=1)
-                * self._floating(used)[None, :, None]
-            )
+        encoded_objects = self._attend_objects(batch, objects, validity, sign)
         keep = (validity != 0)[..., None].astype(objects.dtype)
 
         # Masked-mean critic.

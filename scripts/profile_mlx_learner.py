@@ -36,7 +36,7 @@ from manabot.training.updates.backend import UpdateBackend
 @dataclass(frozen=True)
 class BatchProfile:
     rows: int
-    attention_shape: tuple[int, ...]
+    attention_shapes: tuple[tuple[int, ...], ...]
     live_object_columns: int
     live_objects_per_row: float
     catalog_definitions: int
@@ -77,22 +77,26 @@ def profile_step(
     mx.eval(fixed)
     catalog_forward = perf_counter() - start
 
-    outputs: dict[int, mx.array] = {}
+    outputs: list[mx.array] = []
+    shapes: list[tuple[int, ...]] = []
     attention = ObjectAttention.__call__
 
     def record(layer: ObjectAttention, *args: mx.array) -> mx.array:
         value = attention(layer, *args)
-        outputs[id(layer)] = value
+        outputs.append(value)
+        if layer is policy.attention:
+            shapes.append(value.shape)
         return value
 
     def replay(layer: ObjectAttention, objects: mx.array, *args: mx.array) -> mx.array:
-        return outputs[id(layer)] + (objects - mx.stop_gradient(objects))
+        return next(recorded) + (objects - mx.stop_gradient(objects))
 
     with (
         patch.object(type(policy), "programs", return_value=fixed),
         patch.object(ObjectAttention, "__call__", record),
     ):
-        mx.eval(policy(prepared), list(outputs.values()))
+        mx.eval(policy(prepared), outputs)
+    recorded = iter(outputs)
 
     controls = ["fixed_catalog", "fixed_catalog_attention"]
     if index % 2:
@@ -125,7 +129,7 @@ def profile_step(
     step = perf_counter() - start
     return BatchProfile(
         rows=len(targets.actions),
-        attention_shape=next(iter(outputs.values())).shape,
+        attention_shapes=tuple(shapes),
         live_object_columns=int(prepared.validity.any(axis=0).sum()),
         live_objects_per_row=float(prepared.validity.sum(axis=1).mean()),
         catalog_definitions=len(programs.rows),

@@ -519,6 +519,43 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class PackedAttention[A]:
+    """Flat object indexes per group (-1 pads), and inverse gather for the heads."""
+
+    groups: tuple[A, A]
+    restore: A  # [B,N] into the concatenated outputs plus a final zero vector
+
+
+def pack_attention(
+    valid: np.ndarray, used_columns: int
+) -> PackedAttention[np.ndarray] | None:
+    """Split by live length only when both halves together beat column compaction."""
+    counts = valid.sum(axis=1)
+    if len(counts) < 2 or counts.min() == 0:
+        return None
+    order = np.argsort(counts, kind="stable")
+    halves = np.array_split(order, 2)
+    widths = [int(counts[rows[-1]]) for rows in halves]
+    total = sum(len(rows) * width for rows, width in zip(halves, widths, strict=True))
+    if total >= len(valid) * used_columns:
+        return None
+
+    restore = np.full(valid.shape, total, dtype=np.int32)
+    groups = []
+    offset = 0
+    for rows, width in zip(halves, widths, strict=True):
+        present = valid[rows]
+        row, slot = np.nonzero(present)
+        rank = np.cumsum(present, axis=1)[row, slot] - 1
+        gather = np.full((len(rows), width), -1, dtype=np.int32)
+        gather[row, rank] = rows[row] * valid.shape[1] + slot
+        restore[rows[row], slot] = offset + row * width + rank
+        groups.append(gather)
+        offset += gather.size
+    return PackedAttention((groups[0], groups[1]), restore)
+
+
+@dataclass(frozen=True)
 class Prepared[A]:
     """One admitted observation batch, ready for a backend policy."""
 
@@ -565,7 +602,7 @@ class Prepared[A]:
     focus: A  # [K,F] flat object index
     focus_mask: A  # [K,F] float
     is_agent: A  # [B,N] includes explicit belief ownership
-    # Inference only: object columns any row uses (None: attend over all).
+    # Dense attention can skip columns empty in every observation.
     attention_columns: A | None = None
     # Configuration identity, independent of a particular model instance.
     binding: str = ""
@@ -584,6 +621,7 @@ class Prepared[A]:
     stack_rows: A | None = None
     stack_targets: A | None = None
     stack_mask: A | None = None
+    packed_attention: PackedAttention[A] | None = None
 
 
 def object_ownership(cards: int, permanents: int) -> np.ndarray:
@@ -613,7 +651,8 @@ def prepare(
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
     are packed. `compact_attention` also selects live attention columns for
-    dense learner batches. `action_capacity` retains full logit coordinates
+    dense learner batches. For bucketed learners it packs short and long rows
+    separately when smaller. `action_capacity` retains full logit coordinates
     after trimming.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
@@ -641,9 +680,13 @@ def prepare(
             (validity, belief.validity, np.ones((len(validity), 1), np.float32)), 1
         )
     columns = None
+    packed_attention = None
     if (inference or compact_attention) and not live_tokens:
-        used = np.nonzero((validity != 0).any(0))[0]
-        if 0 < len(used) < validity.shape[1]:
+        valid = validity != 0
+        used = np.flatnonzero(valid.any(0))
+        if compact_attention and bucketed and not inference:
+            packed_attention = pack_attention(valid, len(used))
+        if packed_attention is None and 0 < len(used) < validity.shape[1]:
             columns = used
     layout = tables.layout
     batch = obs["actions_valid"].shape[0]
@@ -810,6 +853,7 @@ def prepare(
         focus=legal_batches[:, None] * objects + focus.clip(min=0),
         focus_mask=(focus != -1).astype(f32),
         attention_columns=columns,
+        packed_attention=packed_attention,
         binding=binding,
         is_agent=ownership,
         # Full-catalog preparation skips the scan for referenced definitions.

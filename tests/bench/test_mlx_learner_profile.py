@@ -31,6 +31,7 @@ def test_profile_updates_every_weight_with_the_full_gradient() -> None:
     backend = resolve("mlx", precision="float32")
     policy, expected = backend.load(weights)
     _, profiled = backend.load(weights)
+    policy.bucketed_shapes = profiled.agent.bucketed_shapes = True
     catalog_key = "semantic_cards.encoder.Wh"
     before = expected.parameters()[catalog_key]
     expected.set_learning_rate(settings.learning_rate)
@@ -39,6 +40,7 @@ def test_profile_updates_every_weight_with_the_full_gradient() -> None:
     )
     norm = expected.step(loss, settings.max_grad_norm)
     sample = profile_step(backend, profiled, obs, targets, settings, 0)
+    assert len(sample.attention_shapes) == 2
     assert sample.rows == len(actions)
     assert sample.loss == pytest.approx(float(loss), abs=1e-7)
     assert sample.norm == pytest.approx(float(norm), rel=1e-6)
