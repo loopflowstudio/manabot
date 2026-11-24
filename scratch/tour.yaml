@@ -1,17 +1,17 @@
-at: a3555c399a09fae74625f5dba153f21deac3a23e
+at: cc3df5fc62a4280d8862d377592f54fde0586369
 first:
+  - path: docs/engine.md
+    why: Read the preparation and casting contract
+  - path: managym/src/flow/cast_permission.rs
+    why: See how grants bind copies to sources
   - path: managym/src/flow/zones.rs
-    why: Follow the exact copy through prepare and unprepare
+    why: Follow copy creation, repeat preparation and removal
   - path: managym/src/flow/resolution_tests.rs
-    why: Fork the paid Waypoint and the upkeep trigger
-  - path: managym/cards/src/fra.rs
-    why: Inspect Coursework and the three upkeep creatures
-  - path: managym/cards/src/sos.rs
-    why: Read Waypoint, Tomekeeper and the triggered creatures
+    why: Compare Waypoint forks, selective unprepare and upkeep
   - path: tests/env/test_game_snapshot.py
-    why: Replay payment and compare both viewers’ linked copies
+    why: Replay Waypoint and Exude Toxin through resolution
   - path: scratch/plan.md
     why: Find the remaining nineteen preparation rows
 hide:
   - path: managym/academy/fixtures/
-    why: Generated from the retained Academy Command prefixes
+    why: Regenerated Academy recordings and navigation digests

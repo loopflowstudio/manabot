@@ -52,6 +52,19 @@ def decision_frame(env: managym.Env) -> DecisionFrame:
     return DecisionFrame.from_json(env.semantic_decision_frame_json())
 
 
+def replay_priority_until_stack_empty(env: managym.Env, restored: managym.Env) -> None:
+    for _ in range(2):
+        if not env.observation_for_player(0).stack_objects:
+            return
+        frame = decision_frame(env)
+        passed = next(o for o in frame.offers if o["verb"] == "pass_priority")
+        command = Command(
+            f"pass-{frame.revision}", frame.revision, passed["id"]
+        ).to_json()
+        assert_replayed_command(env, restored, command)
+    assert not env.observation_for_player(0).stack_objects
+
+
 def test_reseeded_replay_preserves_the_reset_seed_and_both_reseeds() -> None:
     source = managym.Env(seed=42, decision_memory_include_own=True)
     source.reset(setup())
@@ -846,16 +859,7 @@ def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
             sum(p.tapped for p in branch.observation_for_player(0).agent_permanents)
             == 3
         )
-    for _ in range(2):
-        frame = decision_frame(env)
-        passed = next(o for o in frame.offers if o["verb"] == "pass_priority")
-        command = Command(
-            f"pass-{frame.revision}", frame.revision, passed["id"]
-        ).to_json()
-        assert_replayed_command(env, restored, command)
-        if not env.observation_for_player(0).stack_objects:
-            break
-    assert not env.observation_for_player(0).stack_objects
+    replay_priority_until_stack_empty(env, restored)
     assert json.loads(env.search_witness_json())["rng_continuation"] != before
     assert env.search_witness_json() == restored.search_witness_json()
     assert env.state_digest() == restored.state_digest()
@@ -1153,7 +1157,7 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
     for _ in range(350):
         frame = decision_frame(env)
         obs = env.observation_for_player(frame.actor)
-        lands = [p for p in obs.agent_permanents if p.characteristics.name == waypoint]
+        lands = {p.id for p in obs.agent_permanents if p.characteristics.name == waypoint}
         linked = {
             grant.source_permanent_id
             for card in obs.agent_cards
@@ -1169,7 +1173,7 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
                 i
                 for i, offer in enumerate(frame.offers)
                 if offer["verb"] == "activate_ability"
-                and {p.id for p in lands}.intersection(
+                and lands.intersection(
                     obs.action_space.actions[i].focus
                 )
             ),
@@ -1179,12 +1183,12 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
             env.step(activation)
             target = decision_frame(env)
             choices = env.observation_for_player(0).action_space.actions
-            index = next(
-                i
+            index, source = next(
+                (i, candidate)
                 for i, action in enumerate(choices)
-                if unprepared.intersection(action.focus)
+                for candidate in action.focus
+                if candidate in unprepared
             )
-            source = next(iter(unprepared.intersection(choices[index].focus)))
             ready = {p.id for p in obs.agent_permanents if not p.tapped}
             break
 
@@ -1214,26 +1218,18 @@ def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
     ]
     assert len(paid) == 4
     assert any(p.characteristics.name == waypoint for p in paid)
-    for _ in range(8):
-        obs = env.observation_for_player(0)
-        if not obs.stack_objects:
-            break
-        response = decision_frame(env)
-        offer = next(o for o in response.offers if o["verb"] == "pass_priority")
-        assert_replayed_command(
-            env, restored, Command("pass", response.revision, offer["id"]).to_json()
-        )
+
+    def linked_verse(branch: managym.Env, viewer: int) -> int:
+        obs = branch.observation_for_player(viewer)
+        [copy] = [
+            card
+            for card in [*obs.agent_cards, *obs.opponent_cards]
+            if any(g.source_permanent_id == source for g in card.cast_permissions)
+            and card.characteristics.name == "Vicious Verse"
+        ]
+        return copy.id
+
+    replay_priority_until_stack_empty(env, restored)
     for viewer in (0, 1):
-
-        def linked_copy(branch: managym.Env) -> int:
-            observation = branch.observation_for_player(viewer)
-            [copy] = [
-                c
-                for c in [*observation.agent_cards, *observation.opponent_cards]
-                if any(g.source_permanent_id == source for g in c.cast_permissions)
-                and c.characteristics.name == "Vicious Verse"
-            ]
-            return copy.id
-
-        assert linked_copy(env) == linked_copy(restored)
+        assert linked_verse(env, viewer) == linked_verse(restored, viewer)
     assert env.search_witness_json() == restored.search_witness_json()
