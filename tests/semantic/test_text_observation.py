@@ -2399,11 +2399,17 @@ def test_drake_hatcher_text_and_decision_context_show_pending_damage() -> None:
         capture = DecisionInput.model_validate_json(decision.capture_json)
         if any(frame.triggering_amount for frame in capture.frames):
             assert "triggering amount 1" in decision.text
+            label = "Put that many (1) incubation counters"
+            assert label in decision.text
             for viewer in (0, 1):
-                pending = json.loads(env.decision_context_json(viewer))["pending"]
-                assert (
-                    "Drake Hatcher triggered on an event amount of 1." in pending
-                )
+                view = decision_surface_view(env, viewer)
+                (entry,) = view["stack_objects"]
+                assert label in entry["label"]
+                pending = view["decision_context"].get("pending", [])
+                if viewer == env.current_agent_index():
+                    assert "Drake Hatcher triggered on an event amount of 1." in pending
+                else:
+                    assert pending == []
             return
         assert capture.observation.decision is not None
         action = next(

@@ -242,6 +242,7 @@ mod tests {
                 object,
                 definition_id: game.state[object].definition_id,
                 controller: PlayerId(0),
+                profile: Default::default(),
                 mana_value: 3,
                 spent: 3,
                 colors: Default::default(),

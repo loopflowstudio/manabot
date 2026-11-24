@@ -1,6 +1,6 @@
 //! Human descriptions derived from the same ability/effect definitions that resolve.
 //! Offers, public stack inspection and text capture share this projection. It never
-//! evaluates hidden state or predicts an outcome; quantities remain symbolic.
+//! evaluates hidden state or predicts an outcome; unbound quantities remain symbolic.
 
 use crate::cards::content_pack::default_content_pack;
 use crate::state::{
@@ -18,6 +18,24 @@ use crate::state::{
     zone::ZoneType,
 };
 
+/// Bindings available when describing a particular occurrence of a trigger.
+#[derive(Clone, Copy)]
+struct TriggerText {
+    noun: &'static str,
+    amount: i32,
+    x: Option<(&'static str, u8)>,
+}
+
+impl TriggerText {
+    fn symbolic(noun: &'static str) -> Self {
+        Self {
+            noun,
+            amount: 0,
+            x: None,
+        }
+    }
+}
+
 impl crate::flow::game::Game {
     pub(crate) fn pending_trigger_description(
         &self,
@@ -34,6 +52,7 @@ impl crate::flow::game::Game {
             trigger.inline_effects.as_deref(),
             chosen.then_some(trigger.chosen_modes.as_slice()),
             trigger.x,
+            trigger.triggering_amount,
         ))
     }
 }
@@ -48,12 +67,20 @@ pub(crate) fn trigger_description(
     inline: Option<&[Effect]>,
     chosen_modes: Option<&[usize]>,
     x: u8,
+    triggering_amount: i32,
 ) -> String {
     if let Some(effects) = inline {
         return format!(
             "{} — delayed ability: {}",
             object.name,
-            with_trigger_x(effects_description(effects), "that many", x)
+            effects_description_in(
+                TriggerText {
+                    noun: "permanent",
+                    amount: triggering_amount,
+                    x: Some(("that many", x))
+                },
+                effects
+            )
         );
     }
     let Ability::Triggered {
@@ -61,10 +88,14 @@ pub(crate) fn trigger_description(
         intervening_if,
         effects,
     } = &object.abilities[index];
-    let triggering = triggering_noun(condition);
+    let triggering = TriggerText {
+        noun: triggering_noun(condition),
+        amount: triggering_amount,
+        x: bound_x(condition).map(|label| (label, x)),
+    };
     let intervening = intervening_if
         .as_ref()
-        .map(|condition| format!(", if {}", condition_text(triggering, condition)))
+        .map(|condition| format!(", if {}", condition_text_in(triggering, condition)))
         .unwrap_or_default();
     let attached = if object.subtypes.iter().any(|subtype| subtype == "Equipment") {
         "equipped creature"
@@ -89,10 +120,6 @@ pub(crate) fn trigger_description(
         }
         _ => effects_description_in(triggering, effects),
     };
-    let program = match bound_x(condition) {
-        Some(amount) => with_trigger_x(program, amount, x),
-        None => program,
-    };
     format!(
         "{} — {}{intervening}: {program}",
         object.name,
@@ -103,14 +130,10 @@ pub(crate) fn trigger_description(
 /// What a trigger's event calls its triggering object: a cast's spell, a
 /// graveyard arrival's card, otherwise a permanent.
 fn triggering_noun(condition: &TriggerCondition) -> &'static str {
+    if let Some(inner) = condition.inner() {
+        return triggering_noun(inner);
+    }
     match condition {
-        TriggerCondition::WasCast { condition }
-        | TriggerCondition::OnceEachTurn { condition }
-        | TriggerCondition::FromZone { condition, .. }
-        | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::Prepared { condition }
-        | TriggerCondition::WhileSourceAttacking { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => triggering_noun(condition),
         TriggerCondition::Casts { .. }
         | TriggerCondition::YouCastThis
         | TriggerCondition::SpellTargetsOnlyThis { .. } => "spell",
@@ -119,32 +142,12 @@ fn triggering_noun(condition: &TriggerCondition) -> &'static str {
     }
 }
 
-fn with_trigger_x(text: String, amount: &str, x: u8) -> String {
-    text.replace(
-        &value_description("permanent", &EffectValue::X),
-        &format!("{amount} ({x})"),
-    )
-}
-
-/// How the text names the X the trigger's event binds, as `flow/triggers.rs`
-/// assigns it: the source's own entering reads its spell's "X", counters put
-/// and one creature's combat damage total read "that many". `None` keeps X
-/// symbolic until the trigger chooses it while resolving.
+/// An entering permanent reads its spell's X. Counter triggers retain their
+/// printed X binding for existing programs.
 fn bound_x(condition: &TriggerCondition) -> Option<&'static str> {
-    match condition {
-        // The per-creature occurrence binds beneath a gate only.
-        TriggerCondition::ActiveIf { condition, .. } => bound_x(condition),
-        TriggerCondition::DealsCombatDamage {
-            per: Per::Object,
-            to: None,
-            ..
-        } => Some("that many"),
-        condition => wrapped_bound_x(condition),
+    if let Some(inner) = condition.inner() {
+        return bound_x(inner);
     }
-}
-
-/// `bound_x` for the events that bind X beneath any wrapper.
-fn wrapped_bound_x(condition: &TriggerCondition) -> Option<&'static str> {
     match condition {
         TriggerCondition::EntersTheBattlefield {
             subject: TriggerSubject::This,
@@ -152,13 +155,6 @@ fn wrapped_bound_x(condition: &TriggerCondition) -> Option<&'static str> {
         TriggerCondition::PutsCounters { .. }
         | TriggerCondition::NthCounter { .. }
         | TriggerCondition::Chapter { .. } => Some("that many"),
-        TriggerCondition::WasCast { condition }
-        | TriggerCondition::OnceEachTurn { condition }
-        | TriggerCondition::WhileSourceAttacking { condition }
-        | TriggerCondition::FromZone { condition, .. }
-        | TriggerCondition::Prepared { condition }
-        | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => wrapped_bound_x(condition),
         _ => None,
     }
 }
@@ -501,7 +497,11 @@ fn ordinal(n: u32) -> String {
     }
 }
 
-pub(crate) fn condition_text(triggering: &'static str, condition: &Condition) -> String {
+pub(crate) fn condition_text(noun: &'static str, condition: &Condition) -> String {
+    condition_text_in(TriggerText::symbolic(noun), condition)
+}
+
+fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
     match condition {
         Condition::YourTurn => "it is your turn".into(),
         Condition::Always => "always".into(),
@@ -599,17 +599,17 @@ pub(crate) fn condition_text(triggering: &'static str, condition: &Condition) ->
         ),
         Condition::AllOf(conditions) => conditions
             .iter()
-            .map(|condition| condition_text(triggering, condition))
+            .map(|condition| condition_text_in(triggering, condition))
             .collect::<Vec<_>>()
             .join(" and "),
         Condition::AnyOf(conditions) => conditions
             .iter()
-            .map(|condition| condition_text(triggering, condition))
+            .map(|condition| condition_text_in(triggering, condition))
             .collect::<Vec<_>>()
             .join(" or "),
         Condition::Not(condition) => match condition.as_ref() {
             Condition::YourTurn => "it's an opponent's turn".into(),
-            condition => format!("not ({})", condition_text(triggering, condition)),
+            condition => format!("not ({})", condition_text_in(triggering, condition)),
         },
         Condition::Kicked => "it was kicked".into(),
         Condition::TargetMatches(predicate) => format!(
@@ -895,7 +895,7 @@ fn player_description(player: &PlayerSelector) -> String {
     }
 }
 
-fn selector_description(triggering: &'static str, selector: &ObjectSelector) -> String {
+fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> String {
     match selector {
         ObjectSelector::ExactSource => "this object".into(),
         ObjectSelector::This => "this".into(),
@@ -905,7 +905,7 @@ fn selector_description(triggering: &'static str, selector: &ObjectSelector) -> 
             "{} and all other permanents with the same name as that permanent",
             target_description(target)
         ),
-        ObjectSelector::Triggering => format!("that {triggering}"),
+        ObjectSelector::Triggering => format!("that {}", triggering.noun),
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
@@ -969,7 +969,7 @@ fn selector_description(triggering: &'static str, selector: &ObjectSelector) -> 
 }
 
 /// A selector as the subject of a sentence.
-fn selector_subject(triggering: &'static str, selector: &ObjectSelector) -> String {
+fn selector_subject(triggering: TriggerText, selector: &ObjectSelector) -> String {
     let mut text = match selector {
         ObjectSelector::Triggering => "It".to_string(),
         other => selector_description(triggering, other),
@@ -983,7 +983,7 @@ fn selector_subject(triggering: &'static str, selector: &ObjectSelector) -> Stri
 /// One sentence for a `Move`: the verb the destination implies, then its
 /// terms.
 fn move_description(
-    triggering: &'static str,
+    triggering: TriggerText,
     what: &ObjectSelector,
     to: ZoneType,
     tapped: bool,
@@ -1044,11 +1044,16 @@ fn move_description(
     }
 }
 
-fn value_description(triggering: &'static str, value: &EffectValue) -> String {
+fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
-        EffectValue::NegativeX => "minus the announced value of X".into(),
-        EffectValue::X => "the announced value of X".into(),
+        EffectValue::NegativeX => {
+            format!("minus {}", value_description(triggering, &EffectValue::X))
+        }
+        EffectValue::X => match triggering.x {
+            Some((label, x)) => format!("{label} ({x})"),
+            None => "the announced value of X".into(),
+        },
         EffectValue::Property {
             of,
             property,
@@ -1152,6 +1157,9 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
         EffectValue::CardsInHand => "the number of cards in your hand".into(),
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
+        }
+        EffectValue::TriggeringAmount if triggering.amount > 0 => {
+            format!("that many ({})", triggering.amount)
         }
         EffectValue::TriggeringAmount => {
             "the amount of the triggering event (damage dealt or life lost)".into()
@@ -1289,12 +1297,12 @@ fn keywords_description(k: &Keywords) -> String {
 /// Effect text outside a trigger, where the triggering object (if any) is a
 /// permanent.
 pub(crate) fn effects_description(effects: &[Effect]) -> String {
-    effects_description_in("permanent", effects)
+    effects_description_in(TriggerText::symbolic("permanent"), effects)
 }
 
 /// Effect text whose `ObjectSelector::Triggering` reads "that [triggering]"
 /// (see [`triggering_noun`]).
-fn effects_description_in(triggering: &'static str, effects: &[Effect]) -> String {
+fn effects_description_in(triggering: TriggerText, effects: &[Effect]) -> String {
     let parts: Vec<_> = effects
         .iter()
         .filter_map(|effect| effect_description(triggering, effect))
@@ -1308,7 +1316,7 @@ fn effects_description_in(triggering: &'static str, effects: &[Effect]) -> Strin
 
 /// Exhaustive matching makes new effect vocabulary require a human description.
 /// The internal target-clause cursor is not itself an effect a person chooses.
-fn effect_description(triggering: &'static str, effect: &Effect) -> Option<String> {
+fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
@@ -1359,7 +1367,7 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
                 crate::state::ability::PlayWindow::WhileExiled => "for as long as they remain exiled",
             };
             let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
-            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text(triggering, condition))).unwrap_or_default();
+            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text_in(triggering, condition))).unwrap_or_default();
             if *face_down {
                 format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
             } else {
@@ -1458,8 +1466,8 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
             effects_description_in(triggering, effects)
         ),
         If { condition: Condition::Always, then, .. } => effects_description_in(triggering, then),
-        If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text(triggering, condition),effects_description_in(triggering, then)),
-        If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text(triggering, condition),effects_description_in(triggering, then),effects_description_in(triggering, otherwise)),
+        If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text_in(triggering, condition),effects_description_in(triggering, then)),
+        If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text_in(triggering, condition),effects_description_in(triggering, then),effects_description_in(triggering, otherwise)),
         DealDamage { amount, what, by: Some(by) } => format!("{} deals X damage to {}, where X is {}",selector_description(triggering, by),selector_description(triggering, what),value_description(triggering, amount)),
         DealDamage { amount: EffectValue::Fixed(amount), what, by: None } => format!("Deal {amount} damage to {}",selector_description(triggering, what)),
         DealDamage { amount, what, by: None } => format!("Deal X damage to {}, where X is {}",selector_description(triggering, what),value_description(triggering, amount)),
@@ -1494,7 +1502,7 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
 
 /// "Create a token that's a copy of this[, except …]" (CR 707.9).
 fn copy_description(
-    triggering: &'static str,
+    triggering: TriggerText,
     of: &ObjectSelector,
     exceptions: &[Modification<EffectValue>],
 ) -> String {
@@ -1529,11 +1537,16 @@ pub(super) fn continuous_description(
     modification: &Modification<EffectValue>,
     duration: EffectDuration,
 ) -> String {
-    continuous_description_in("permanent", affected, modification, duration)
+    continuous_description_in(
+        TriggerText::symbolic("permanent"),
+        affected,
+        modification,
+        duration,
+    )
 }
 
 fn continuous_description_in(
-    triggering: &'static str,
+    triggering: TriggerText,
     affected: &ObjectSelector,
     modification: &Modification<EffectValue>,
     duration: EffectDuration,
@@ -1603,10 +1616,10 @@ fn continuous_description_in(
                 effects,
             } = ability.as_ref();
             // The granted ability names its own triggering object.
-            let triggering = triggering_noun(condition);
+            let triggering = TriggerText::symbolic(triggering_noun(condition));
             let intervening = intervening_if
                 .as_ref()
-                .map(|c| format!(", if {}", condition_text(triggering, c)))
+                .map(|c| format!(", if {}", condition_text_in(triggering, c)))
                 .unwrap_or_default();
             format!(
                 "{subject} gains ‘{}{intervening}, {}’{until}",
@@ -1904,11 +1917,14 @@ mod tests {
             in_zone: None,
         };
         assert_eq!(
-            value_description("permanent", &count),
+            value_description(TriggerText::symbolic("permanent"), &count),
             "the number of creature cards moved this way"
         );
         assert_eq!(
-            value_description("permanent", &ObjectSelector::Moved.count()),
+            value_description(
+                TriggerText::symbolic("permanent"),
+                &ObjectSelector::Moved.count()
+            ),
             "the number of objects moved this way"
         );
     }
@@ -1966,7 +1982,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let text = trigger_description(&object, 0, None, None, 0);
+        let text = trigger_description(&object, 0, None, None, 0, 0);
         assert!(text.contains("Exile that spell"), "{text}");
         assert!(
             text.contains("Return that permanent to its owner's hand"),

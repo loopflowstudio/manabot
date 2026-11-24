@@ -276,11 +276,19 @@ source-relative effects require the original battlefield object.
 
 For a per-creature combat damage trigger or a life-loss trigger,
 `EffectValue::TriggeringAmount` reads the amount of the event that fired it:
-the damage dealt by that hit, or the life actually lost. Both players can inspect
-that amount on the stacked ability. Drake Hatcher puts that many incubation
-counters on its source even if its power has since changed. Its activation
+the damage dealt by that hit, or the life actually lost. The player ordering
+simultaneous triggers sees each amount in its offer, and both players see it
+on the stack. Quilled Greatwurm counts all combat damage each creature dealt
+in that step, including trample damage split across recipients. Drake Hatcher
+puts that many incubation counters on its source even if its power has since
+changed. Its activation
 spends three incubation counters during payment. Countering the ability
 leaves them spent, and resolving it creates the flying Drake.
+
+A trigger that asks about a spell after it leaves the stack reads the spell
+as cast. After Charring Bite is countered, the waiting trigger still sees a
+red sorcery with mana value two. Its pending description names Charring Bite
+even though Twinmaw Stormbrood is a creature card again.
 
 Death triggers check whether each permanent was a creature as it left the
 battlefield. High-Society Hunter draws for each other nontoken creature that

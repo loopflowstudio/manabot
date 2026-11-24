@@ -312,6 +312,11 @@ impl Game {
             };
             return Some(view);
         }
+        if actor != viewer {
+            view.stage = format!("{:?}", space.kind).to_lowercase();
+            view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
+            return Some(view);
+        }
         for frame in frames.iter().filter(|frame| frame.triggering_amount > 0) {
             let name = frame
                 .source
@@ -325,11 +330,6 @@ impl Game {
                 "{name} triggered on an event amount of {}.",
                 frame.triggering_amount
             ));
-        }
-        if actor != viewer {
-            view.stage = format!("{:?}", space.kind).to_lowercase();
-            view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
-            return Some(view);
         }
         view.pending.extend(
             frames

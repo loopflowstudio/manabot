@@ -112,13 +112,6 @@ impl std::ops::BitOr for EventKinds {
 /// leaves out a source that would have fired.
 fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
     match condition {
-        TriggerCondition::WasCast { condition }
-        | TriggerCondition::OnceEachTurn { condition }
-        | TriggerCondition::FromZone { condition, .. }
-        | TriggerCondition::Prepared { condition }
-        | TriggerCondition::InGraveyard { condition }
-        | TriggerCondition::WhileSourceAttacking { condition }
-        | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
         // `check_state_triggers` asks these, never an event.
         TriggerCondition::NoCounters { .. } | TriggerCondition::State(_) => {
@@ -162,6 +155,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::PutsCounters { .. }
         | TriggerCondition::PutsCountersOn { .. }
         | TriggerCondition::Chapter { .. } => EventKinds::of(EventKind::CountersPut),
+        wrapper => condition_event_kinds(wrapper.inner().expect("trigger wrapper")),
     }
 }
 
@@ -1007,9 +1001,6 @@ impl Game {
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
             let (x, spent) = match event {
-                GameEvent::CombatDamageTotals { .. } => {
-                    (u8::try_from(amount).unwrap_or(u8::MAX), Default::default())
-                }
                 GameEvent::CountersPut { count, .. } => {
                     (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
                 }
@@ -2282,7 +2273,7 @@ impl Game {
                     } else if let Some(lki) = self.object_lki(damage_source) {
                         self.lki_matches_predicate(lki, predicate)
                     } else {
-                        self.recorded_object_matches_predicate(damage_source, predicate)
+                        self.spell_matches_predicate(damage_source, predicate)
                     }
             }
             TriggerSubject::Attached | TriggerSubject::CreatureDamagedByThis => self

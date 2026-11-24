@@ -721,9 +721,9 @@ Capacities are configuration; widths are the layout.
 | --- | --- | --- |
 | `agent_player`, `opponent_player` | 1 × 75 | Player state and public game disclosure |
 | `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield and stack |
-| `agent_permanents`, `opponent_permanents` | 40 × 53 | Permanents with their characteristics |
-| `stack`, `stack_valid` | 32 × 40 (`max_stack_objects`), 32 | Spells and abilities, top first |
-| `player_turn_state`, `card_turn_state` | 2 × 8, 2 × 60 | Turn state (above) |
+| `agent_permanents`, `opponent_permanents` | 40 × 56 | Permanents with their characteristics |
+| `stack`, `stack_valid` | 32 × 46 (`max_stack_objects`), 32 | Spells and abilities, top first |
+| `player_turn_state`, `card_turn_state` | 2 × 15, 2 × 60 | Turn state (above) |
 | `relations` | 64 × 50 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
 | `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |

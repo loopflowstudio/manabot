@@ -1082,6 +1082,7 @@ impl Game {
             object: spell.object,
             definition_id: object.definition_id,
             controller: spell.controller,
+            profile: spell.profile,
             mana_value: object.mana_value_with_x(spell.x),
             spent: spell.spent.total(),
             colors: object.colors(),

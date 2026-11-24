@@ -3404,7 +3404,7 @@ fn quilled_greatwurm() -> CardDefinition {
                 effects: vec![Effect::put_counters(
                     ObjectSelector::Triggering,
                     CounterKind::PlusOnePlusOne,
-                    EffectValue::X,
+                    EffectValue::TriggeringAmount,
                 )],
             }],
             statics: vec![StaticAbility::CastFromGraveyardRemovingCounters(6)],

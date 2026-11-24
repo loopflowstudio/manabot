@@ -1967,6 +1967,7 @@ impl Observation {
                         a.inline_effects.as_deref(),
                         Some(&a.chosen_modes),
                         a.x,
+                        a.triggering_amount,
                     );
                     if let Some(event) = a.context.and_then(|c| game.trigger_event_label(c, viewer))
                     {

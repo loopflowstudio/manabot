@@ -51,6 +51,8 @@ pub struct SpellLki {
     pub object: ObjectId,
     pub definition_id: CardDefId,
     pub controller: PlayerId,
+    #[serde(default, skip_serializing_if = "SpellProfile::is_front")]
+    pub profile: SpellProfile,
     /// Including its announced X (CR 202.3e).
     pub mana_value: u8,
     /// Total mana actually spent to cast it (CR 601.2h).

@@ -13,7 +13,7 @@ use crate::{
         ability::{Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
-            StaticAbility, StaticScope,
+            SpellProfile, StaticAbility, StaticScope,
         },
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -687,20 +687,41 @@ impl Game {
         cast: RecordedCast,
         predicate: &CardPredicate,
     ) -> bool {
-        if cast.profile.is_front() || self.state.live(cast.object).is_some() {
-            return self.recorded_object_matches_predicate(cast.object, predicate);
+        self.recorded_spell_matches_predicate(cast.object, cast.profile, predicate)
+    }
+
+    /// Live spells already show their chosen printing. After departure, read
+    /// the profile of that exact stack incarnation from its last known information.
+    pub(super) fn spell_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let profile = self
+            .state
+            .spell_lki
+            .get(&object)
+            .map_or(SpellProfile::Front, |spell| spell.profile);
+        self.recorded_spell_matches_predicate(object, profile, predicate)
+    }
+
+    fn recorded_spell_matches_predicate(
+        &self,
+        object: ObjectId,
+        profile: SpellProfile,
+        predicate: &CardPredicate,
+    ) -> bool {
+        if profile.is_front() || self.state.live(object).is_some() {
+            return self.recorded_object_matches_predicate(object, predicate);
         }
-        let (definition, printing) = self.state.source_base(cast.object);
+        let (definition, printing) = self.state.source_base(object);
         let (_, _, kind) = self
             .state
             .objects
-            .provenance(cast.object)
+            .provenance(object)
             .expect("recorded provenance");
-        let spell = crate::cards::content_pack::default_content_pack().recorded_spell(
-            definition,
-            printing,
-            cast.profile,
-        );
+        let spell = crate::cards::content_pack::default_content_pack()
+            .recorded_spell(definition, printing, profile);
         predicate.matches_printed_spell(spell, kind)
     }
 
@@ -1182,7 +1203,7 @@ impl Game {
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
-                Some(Target::StackSpell(object_id)) if self.recorded_object_matches_predicate(object_id, predicate)
+                Some(Target::StackSpell(object_id)) if self.spell_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =

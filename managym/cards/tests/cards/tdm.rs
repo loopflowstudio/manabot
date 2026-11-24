@@ -226,6 +226,75 @@ fn vizier_filters_twinmaw_profiles_and_mana() {
     assert_eq!(s.game().state.players[0].life, life + 5);
 }
 
+#[test]
+fn countered_omen_keeps_its_cast_profile_for_the_waiting_trigger() {
+    use crate::support::{
+        game::{five_color_setup, inject_ability},
+        inspect::stack_spell_card,
+        play::cast_profile,
+    };
+    use managym::state::{
+        ability::{Ability, Actor, Condition, Effect, EffectValue, TriggerCondition},
+        card::SpellProfile,
+        game_object::Target,
+        predicate::CardPredicate,
+    };
+
+    let mut s = five_color_setup(&["Twinmaw Stormbrood", "Counterspell", "Gray Ogre"]);
+    s.game_mut().mana_payment = [ManaPayment::Auto; 2];
+    let watcher = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let source = card_of(&s, watcher);
+    inject_ability(
+        &mut s,
+        source,
+        Ability::Triggered {
+            condition: TriggerCondition::casts(Actor::Opponent, CardPredicate::default()),
+            intervening_if: None,
+            effects: vec![Effect::If {
+                condition: Condition::TriggeringSpellMatches(CardPredicate::instant_or_sorcery()),
+                then: vec![Effect::GainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
+                otherwise: vec![],
+            }],
+        },
+    );
+
+    let card = force_new_card_in_hand(&mut s, 0, "Twinmaw Stormbrood");
+    cast_profile(&mut s, card, SpellProfile::Omen);
+    assert!(s.choose_target(Target::Permanent(watcher)));
+    let omen = stack_spell_card(&s, "Charring Bite");
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+    s.pass_priority();
+    let counter = force_new_card_in_hand(&mut s, 1, "Counterspell");
+    cast_card(&mut s, counter);
+    assert!(s.choose_target(Target::StackSpell(omen)));
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    let spell = &s.game().state.spell_lki[&omen];
+    assert_eq!(spell.profile, SpellProfile::Omen);
+    assert_eq!(spell.colors, [Color::Red].into_iter().collect());
+    let public_inputs = [PlayerId(0), PlayerId(1)].map(|viewer| {
+        s.game()
+            .continuation_frames(viewer)
+            .into_iter()
+            .find(|frame| frame.kind == 3)
+            .expect("waiting cast trigger")
+            .effect_execution
+    });
+    assert!(!public_inputs[0].is_empty());
+    assert_eq!(public_inputs[0], public_inputs[1]);
+    let actor = s.action_space().player.unwrap();
+    let text = s.game().decision_context(actor).unwrap().pending.join(" ");
+    assert!(
+        text.contains("Last known spell Charring Bite: mana value 2, 1 color(s), 2 mana spent"),
+        "{text}"
+    );
+    settle(&mut s);
+    s.assert_life(1, 21);
+}
+
 /// Give only the Omen an exile alternative. Its front still requires six mana.
 #[test]
 fn charring_bite_uses_the_selected_profiles_alternative_cost() {

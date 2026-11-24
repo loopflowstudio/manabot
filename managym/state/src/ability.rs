@@ -300,7 +300,7 @@ pub enum TriggerCondition {
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
     /// prevented damage excluded. `to` is a player matching that actor, or
     /// `None` for any recipient ("deals combat damage"); then each creature
-    /// that does triggers once with its total that step as X ("that many")
+    /// that does triggers once with its total that step as the triggering amount ("that many")
     /// and itself as "it". `per` says whether it triggers once for each
     /// creature that does or once per combat damage step ("one or more").
     DealsCombatDamage {
@@ -3045,15 +3045,65 @@ pub struct GrantClock {
 }
 
 impl TriggerCondition {
-    pub fn once_each_turn(&self) -> bool {
+    /// The condition whose event this wrapper restricts.
+    pub fn inner(&self) -> Option<&Self> {
         match self {
-            Self::OnceEachTurn { .. } => true,
             Self::WasCast { condition }
+            | Self::OnceEachTurn { condition }
+            | Self::WhileSourceAttacking { condition }
             | Self::FromZone { condition, .. }
+            | Self::Prepared { condition }
             | Self::InGraveyard { condition }
-            | Self::ActiveIf { condition, .. }
-            | Self::WhileSourceAttacking { condition } => condition.once_each_turn(),
-            _ => false,
+            | Self::ActiveIf { condition, .. } => Some(condition),
+            Self::Sacrificed { .. }
+            | Self::NoCounters { .. }
+            | Self::State(_)
+            | Self::YouCastThis
+            | Self::Expend(_)
+            | Self::SpellTargetsOnlyThis { .. }
+            | Self::EntersTheBattlefield { .. }
+            | Self::Dies { .. }
+            | Self::LeavesTheBattlefield { .. }
+            | Self::Attacks { .. }
+            | Self::BecomesTapped { .. }
+            | Self::BecomesUntapped { .. }
+            | Self::TappedForMana { .. }
+            | Self::BecomesTargeted { .. }
+            | Self::YourAttackingCreatureTriggers
+            | Self::Chapter { .. }
+            | Self::NthCounter { .. }
+            | Self::PutsCounters { .. }
+            | Self::PutsCountersOn { .. }
+            | Self::Casts { .. }
+            | Self::Draws { .. }
+            | Self::GainsLife { .. }
+            | Self::LosesLife { .. }
+            | Self::BeginningOf { .. }
+            | Self::Performs { .. }
+            | Self::PutIntoGraveyard { .. }
+            | Self::DealsCombatDamage { .. }
+            | Self::DealsDamage { .. } => None,
         }
+    }
+
+    pub fn once_each_turn(&self) -> bool {
+        matches!(self, Self::OnceEachTurn { .. }) || self.inner().is_some_and(Self::once_each_turn)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TriggerCondition;
+
+    #[test]
+    fn prepared_preserves_a_nested_once_each_turn_limit() {
+        let prepared = |condition| TriggerCondition::Prepared {
+            condition: Box::new(condition),
+        };
+        assert!(!prepared(TriggerCondition::YouCastThis).once_each_turn());
+        assert!(prepared(TriggerCondition::OnceEachTurn {
+            condition: Box::new(TriggerCondition::YouCastThis),
+        })
+        .once_each_turn());
     }
 }

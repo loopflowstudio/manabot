@@ -126,6 +126,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "last known attachment",
     "last known definition",
     "last known spell",
+    "last known spell profile",
     "legend group",
     "legends kept",
     "library end",
@@ -365,10 +366,23 @@ impl<'a> Projection<'a> {
             "last known spell",
             &(spell.mana_value, &spell.colors, spell.spent),
         );
+        if !spell.profile.is_front() {
+            self.field("last known spell profile", &spell.profile);
+        }
+        let game = self.game;
         self.summary(|| {
+            let name = if spell.profile.is_front() {
+                Self::label(definition)
+            } else {
+                let (id, printing) = game.state.source_base(spell.object);
+                default_content_pack()
+                    .recorded_spell(id, printing, spell.profile)
+                    .name
+                    .clone()
+            };
             format!(
                 "Last known spell {}: mana value {}, {} color(s), {} mana spent.",
-                Self::label(definition),
+                name,
                 spell.mana_value,
                 spell.colors.len(),
                 spell.spent
