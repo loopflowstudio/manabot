@@ -513,24 +513,39 @@ Checks, all debug: cards target (912), `managym` lib (359), rules (188), `match_
 
 Not covered (see `scratch/questions.md`): a noncreature Dragon for Firespitter's overlap, a multi-target spell for Rhino, spell copies for Unravel and An Offer, and a stolen spell for An Offer.
 
-Next: the behavior review of this batch (compression `4502508574` landed; the review has not run), which also settles the metamorphic name-hash failure above. Then **Damage recipients, amounts and results** below, whose `source_controller` fix now reads `spell_info`.
+Next: run the behavior review of this draw/cast batch (compression `4502508574` landed; the review has not run), then implement the four slices below to close all 81 primary FDN rows and the remaining cross-set witnesses.
 
-### Later slices
+### Next slice · Departed-name LKI repair and damage recipients, amounts and results (Hash v29)
 
-- **Damage recipients, amounts and results** — Goblin Negotiation; Quilled Greatwurm†; Koma, World-Eater†; Niv-Mizzet, Visionary; Lathril, Blade of the Elves†; Gateway Sneak; Trygon Predator.
-  - *Planned unifications from concept review:* add `combat: bool` to `GameEvent::DamageDealt`; fix `Game::source_controller` (`flow/damage.rs`) to read `spell_info` before falling back to owner provenance (matching `source_keywords` for stolen spells); add `TriggerCondition::DealsNoncombatDamage` (or generalized `DealsDamage`) binding `event_amount` into existing `triggering_amount` (v11 slot 16); reset `frame.excess_damage = excess.unwrap_or(0)` unconditionally in `EventBinding::Damage` so prevented/zero damage never leaks stale excess damage.
-- **Count or filter live permanents** — Hare Apparent; Brass's Bounty; Krenko, Mob Boss; Dwynen's Elite; Elvish Archdruid†; Inspiring Call; Ingenious Leonin; Leonin Vanguard; Volley Veteran; Archway Angel; Dragonmaster Outcast; Cryptic Caves†.
-  - *Planned unifications:* add `CardPredicate.named: Option<String>` (for *Hare Apparent*) and target-relative name matching alongside `namesake` (for *Maelstrom Pulse* below; empty face-down names match nothing per CR 201.2a).
-- **Graveyard thresholds, counts and characteristic definitions** — Kiora, the Rising Tide; Crypt Feaster; Revenge of the Rats; Consuming Aberration; Enigma Drake; Crusader of Odric.
-  - *Planned unifications:* generalize `PowerCda` to support `*/*` P/T CDAs (`CharacteristicPt`) and `who: Actor` graveyard scope (opponents' graveyards for *Consuming Aberration*) across `layers.rs::cda` and off-battlefield `statics.rs` reads.
-- **Move results and retained characteristics** — Stroke of Midnight; Scavenging Ooze; Cemetery Recruitment; Dread Summons; Maelstrom Pulse; Feed the Swarm.
-  - *Planned unifications:* add optional `player: Option<PlayerSelector>` to `Effect::MillCards` (beside legacy `target`) so `EachPlayer` commits all milled cards in one `EventBinding::ThisWay` batch, and verify actual graveyard destination for *Dread Summons* under exile replacements.
-- **Cost reductions from the board** — Arcane Epiphany†; Ghalta, Primal Hunger†; Ballyrush Banneret†; Gate Colossus†.
-- **Kicked spells and entry provenance** — Sun-Blessed Healer†; Gnarlid Colony†; Grow from the Ashes†; Nullpriest of Oblivion†; Gatekeeper of Malakir†.
-- **Resolving payments, sacrifices and choices** — Arbiter of Woe†; Vampire Gourmand†; Perforating Artist†; Frenzied Goblin†; Mentor of the Meek†; Desecration Demon†; Redcap Gutter-Dweller†; Springbloom Druid†; Ovika, Enigma Goliath† (once composite `PaymentCost` lands).
-- **Activation costs, thresholds, mana and tap events** — Zul Ashur, Lich Lord†; Fishing Pole†; Ravenous Amulet†; Wishclaw Talisman†; Immersturm Predator†; Savage Ventmaw†; Mazemind Tome; Three Tree Mascot†.
-  - *Planned unification:* generalize `check_state_triggers` (`flow/triggers.rs`, CR 603.8) to handle `TriggerCondition::CountersAtLeast { kind, count }` beside `NoCounters` for *Mazemind Tome*.
-- **Turn departures and alternative casts** — Plasma Bolt (EOE) and Michelangelo, Game Master (TMT). The interaction table below distinguishes each predicate and retains the warp integration check.
+Built around two unifications (see [scratch/concept-review.html](concept-review.html)):
+
+1. **Rules-only departed names and one departed-printing reader** (fixes the active `compatibility_names_and_content_allocations_are_metamorphic` failure, a silent departed-`Clone` predicate bug, CR 201.2a, and per-snapshot `String` allocations):
+   - Replace `ObjectLki.name: String` (`state/src/game_object.rs:307`) with `#[serde(skip_serializing_if = "Option::is_none")] pub renamed: Option<String>`, populated in `snapshot_current_permanent` (`flow/identity.rs:70`) only when `characteristics.name != definition.name` (e.g. `SetCharacteristics { named }` or face-down `""`). Unmodified printed and copied permanents store `None`, so compatibility card renames never enter `GameState::deterministic_hash`.
+   - Share `Game::lki_face_printing` (`copiable.printed` else `source_base` for name/supertypes) and `Game::lki_mana_printing` (`copiable.front` else `lki_face_printing` for mana value, CR 712.8e) across `statics.rs::lki_matches_predicate` and `resolution.rs::departed_property`; effective departed name is `lki.renamed.as_deref().unwrap_or(&face.name)`.
+   - Enforce CR 201.2a (`!a.is_empty() && a == b`) in `layers.rs::matches_permanent_facts` so two nameless face-down permanents never match as namesakes.
+2. **Unified damage attribution, noncombat triggers and excess damage**:
+   - Add `combat: bool` to `GameEvent::DamageDealt` (`flow/event.rs:73`).
+   - Fix `Game::source_controller` (`flow/damage.rs:260`) to consult `self.spell_info(source)` after `object_lki` and before owner provenance (matching `source_keywords`, fixing stolen-spell lifelink and damage attribution).
+   - Add `TriggerCondition::DealsNoncombatDamage { source: Actor, to: Actor }` reading `GameEvent::DamageDealt { source: Some(src), target: DamageTarget::Player(p), amount, combat: false }` through `source_controller`; wire `event_amount` (`amount as i32`) and `event_player` (`Some(*p)`) so noncombat triggers bind into existing `triggering_amount` (v11 fact slot 16) with zero new stack/tensor columns.
+   - Unconditionally set `frame.excess_damage = excess.unwrap_or(0)` in `EventBinding::Damage` (`flow/decision.rs:1515`) so prevented/zero damage never leaks stale excess damage.
+
+Cards (4 primary → 58/81, plus cost candidates):
+- Primary FDN: *Goblin Negotiation* (`fdn`), *Niv-Mizzet, Visionary* (`fdn`, reuses existing `StaticAbility::NoMaximumHandSize`), *Gateway Sneak* (`rna`), *Trygon Predator* (`dis`, uses 2-player `TargetSpec::PermanentOpponentControls`).
+- Cost-primary candidates: *Lathril, Blade of the Elves* (`khc`, combat-damage token creation + tap-10-Elves activation cost); check *Quilled Greatwurm*† (`fdn`) and record its `play_permissions` / distributed-counter-removal blocker if still gated.
+- Verify `compatibility_names_and_content_allocations_are_metamorphic` passes in debug, plus stolen-spell noncombat damage, departed-source noncombat damage, prevented excess damage, and departed-`Clone` LKI predicate witnesses.
+
+### Following slices
+
+- **Live-board counts, name predicates and turn departures** (10 primary → 68/81 + 2 cost + 2 cross-set = 14 cards):
+  - *Unifications:* add `#[serde(skip_serializing_if = "Option::is_none")] pub named: Option<String>` to `CardPredicate` (using CR 201.2a non-empty match and marking `NAME` in `layers.rs::ReadSet`); add `Condition::PermanentLeftThisTurn { who: Actor, nonland: bool }` and `Condition::WarpedThisTurn` reading existing `PlayerTurnHistory` cols 12–14 (zero new state or hash fields).
+  - *Cards:* *Hare Apparent* (`fdn`), *Brass's Bounty* (`rix`), *Krenko, Mob Boss* (`m13`), *Dwynen's Elite* (`ori`), *Inspiring Call* (`dtk`), *Ingenious Leonin* (`fdn`), *Leonin Vanguard* (`m19`), *Volley Veteran* (`m19`), *Archway Angel* (`rna`), *Dragonmaster Outcast* (`wwk`); *Elvish Archdruid*† (`m10`), *Cryptic Caves*† (`m20`); cross-set witnesses *Plasma Bolt* (`eoe`, void) and *Michelangelo, Game Master* (`tmt`, disappear).
+- **Graveyard thresholds, all-zone `*/*` CDAs and move results** (12 primary → 80/81 + 1 cost = 13 cards):
+  - *Unifications:* add `PowerCda::GraveyardMatchingBy { who: Actor, predicate: Box<CardPredicate> }` and `StaticAbility::CharacteristicPt(PowerCda)` (keeping legacy `PowerCda::GraveyardMatching` and `CharacteristicPower` for pinned pilots; share evaluation across `layers.rs` and off-battlefield `statics.rs`, including off-battlefield toughness); add `Effect::MillUntil { player: PlayerSelector, predicate: CardPredicate }` (deterministic reveal + single `EventBinding::ThisWay` batch for *Consuming Aberration*); add optional `player: Option<PlayerSelector>` to `Effect::MillCards` (beside legacy `target`) so `EachPlayer` commits one `EventBinding::ThisWay` batch; add optional `in_zone: Option<ZoneType>` to `EffectValue::Objects` (preserving CR 701.13c in `frame.this_way` while verifying actual `ZoneType::Graveyard` for *Dread Summons* under exile replacement); add `ObjectSelector::TargetAndSameName(TargetSpec)` for simultaneous target + CR 201.2a namesake destruction (*Maelstrom Pulse*).
+  - *Cards:* *Kiora, the Rising Tide* (`fdn`), *Crypt Feaster* (`fdn`), *Revenge of the Rats* (`fdn`), *Consuming Aberration* (`gtc`), *Enigma Drake* (`akh`), *Crusader of Odric* (`m13`), *Stroke of Midnight* (`woe`), *Scavenging Ooze* (`cmd`), *Cemetery Recruitment* (`emn`), *Dread Summons* (`c15`), *Maelstrom Pulse* (`arb`), *Feed the Swarm* (`znr`); *Ghalta, Primal Hunger*† (`rix`).
+- **State triggers, remaining cost rows, CR 104.4b draw and working-review closure** (1 primary → 81/81 + feasible cost rows + cleanup):
+  - *Unifications:* generalize `check_state_triggers` (`flow/triggers.rs:1429`, CR 603.8) to handle `TriggerCondition::CountersAtLeast { kind, count }` beside `NoCounters` (adding `CounterKind::Page`) for *Mazemind Tome* (81st primary FDN row).
+  - *Cost-primary closure:* evaluate and author remaining feasible cost-dep rows (*Ravenous Amulet*†, *Mentor of the Meek*†, *Immersturm Predator*†, *Fishing Pole*†, *Ballyrush Banneret*†, *Arcane Epiphany*†, *Gate Colossus*†) and record concrete blockers for any gated on out-of-scope mechanics (*Ovika*'s composite ward cost, *Quilled Greatwurm*'s distributed counter removal, kicked/resolving-payment candidates outside the primary cohort).
+  - *Dedicated CR 104.4b mandatory-loop draw slice* (`GameOutcome::Draw` + cycle detection in `tick.rs` with loop partner), plus cleanup of Findings 3–5 and final re-recording of `evidence-opening-v1.json`.
 
 Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
 
