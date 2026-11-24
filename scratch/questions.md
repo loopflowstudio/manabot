@@ -91,9 +91,7 @@ Four reversible choices recorded in `scratch/concept-review.html` and `scratch/p
 - Consolidate all static play permissions (`graveyard_type_sources`, `exile_counter_plays`, `extra_land_plays`) onto `LayerBoard.play_permissions`, deduplicate `exile_playable_objects`, add `PlayRoute::PrintedGraveyard` for Quilled Greatwurm (so counter removal never fires on Muldrotha/Zul routes), and check `cast.spell(spell).types.is_land()` in `cast_spell_action`.
 - Project `SpellOnStack.{from_prepared, flashback}` to `StackObjectData`, v11 `stack::{FROM_PREPARED, FLASHBACK}`, `text_observation.py`, and `experience_projection.py`, and replace the growing positional-tuple ladder in `permission_facts` with a named extension record for post-TLA grant terms (preserving Hama's legacy token sequence).
 
-Slice 1 choices: the stack's `flashback` flag projects `SpellOnStack.flashback` (stack-exit exile from a flashback route); resolution-cast `exile_instead_of_graveyard` stays unprojected. The pooled-mana text keeps its existing "only for …" wording, so Heartwood's class reads "only for anything but spells from hand". Sanar's activation gate is a general `ActivatedAbilityDefinition.condition` checked with the other activation terms, not a Sanar-specific flag. The Academy UI does not yet render the new stack flags.
-
-Realign after Slice 1: exclusion restrictions render as "only for anything but …" in LLM text (`text_observation.py:865`) and Academy (`mana.ts:11`, `Plate.svelte:41`). Powerstone already read this way; left unchanged pending a wording choice ("spendable on anything but …" would change existing LLM text).
+Slice 1 choices: the stack's `flashback` flag projects `SpellOnStack.flashback` (stack-exit exile from a flashback route); resolution-cast `exile_instead_of_graveyard` stays unprojected. The pooled-mana text keeps its existing "only for …" wording, so Heartwood's class reads "only for anything but spells from hand". Sanar's activation gate is a general `ActivatedAbilityDefinition.condition` checked with the other activation terms, not a Sanar-specific flag.
 
 ## 2026-11-23 post-Slice-1 concept review (`9b48f4abe3` vs `88ce96bd6b`)
 
