@@ -198,3 +198,9 @@ Three reversible choices recorded in `scratch/concept-review.html` and `scratch/
 
 - The casting structure already met the criterion (table in `scratch/plan.md`, Later phases). The one cut: `play_routes` no longer repeats `permits_spell`'s land-face and cast-only-from-hand rules. It costs a few refused candidate routes per priority scan under a hand-only lock or Omniscience with lands in hand; not measured, gate's Engine Budget covers it.
 - Left alone, each with one consumer: the trigger-X binding's second classifier (`bound_x`; moving it onto the trigger changes hashed trigger state), Iroh's Lesson {1} flashback price in `granted_flashback_cost`, and `LinkedGrant`'s two forms.
+
+## 2026-11-24 post-measurement whole-branch concept review (`ce06c12d3f` vs `3040e9969c`)
+
+Two reversible choices recorded in `scratch/concept-review.html` and `scratch/plan.md` as a small pre-gate repair pass:
+- Rename `CardTypes::is_spell()` to `CardTypes::is_instant_or_sorcery()` (3 Rust callers; `CardTypeData.is_spell` keeps its serialized key), enforce `face.types.is_instant_or_sorcery() || face.has_subtype("Lesson")` in `permits_spell` and `granted_flashback_cost` (plus `flashback().is_some()` / `graveyard_counter_cast().is_some()` on `PrintedFlashback` / `PrintedGraveyard`), and add Iroh graveyard-permanent regression tests in `tla.rs` — fixes the live rules regression introduced by `fd57d06120` where Iroh granted flashback to every creature, artifact, enchantment, and planeswalker in your graveyard.
+- Set `ZoneEntry.library_top_departure` when `push_spell_to_stack` or `play_land` moves the current library top card, matching `draw_cards` and `exile_top_cards_to_play` so casting from library top (Vizier / Planetarium) shifts `known_library` via `remove_top()` instead of wiping remembered positions via `forget_order()`.
