@@ -32,15 +32,25 @@ use crate::{
 impl Game {
     fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         self.state.live(object)?;
-        let display_id = self
-            .state
-            .object_to_permanent
-            .get(object.slot())
-            .and_then(|permanent| *permanent)
-            .and_then(|permanent| self.state.permanents[permanent].as_ref())
-            .map_or(self.state[object].id.0, |permanent| permanent.id.0);
+        // A face-down permanent is named by its permanent alias, never by the
+        // card's public id or the storage slot that holds it.
+        let hidden = self.hides_physical_card(object);
+        let display_id = if hidden {
+            self.observed_object_id(object).0
+        } else {
+            self.state
+                .object_to_permanent
+                .get(object.slot())
+                .and_then(|permanent| *permanent)
+                .and_then(|permanent| self.state.permanents[permanent].as_ref())
+                .map_or(self.state[object].id.0, |permanent| permanent.id.0)
+        };
         Some(DecisionObjectView {
-            entity_id: object.slot() as u32,
+            entity_id: if hidden {
+                display_id
+            } else {
+                object.slot() as u32
+            },
             subject: SubjectRef::Object {
                 id: ObjectRenderId {
                     entity: display_id,
@@ -215,6 +225,9 @@ impl Game {
                 crate::state::zone::ZoneType::Graveyard,
             ] {
                 for object in self.state.zones.zone_objects(zone, player).iter() {
+                    if self.hides_physical_card(*object) {
+                        continue;
+                    }
                     if let Some(view) = self.decision_object(*object) {
                         subjects.insert(format!("object:{}", object.slot()), view.subject);
                     }
@@ -244,7 +257,7 @@ impl Game {
                     } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state.source_base(*object).1.name
+                        self.observed_object_name(*object)
                     )),
                     GameEvent::SpellCast {
                         object_id: object, ..
@@ -264,7 +277,7 @@ impl Game {
                     )),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state.source_base(*source_object).1.name
+                        self.observed_object_name(*source_object)
                     )),
                     _ => None,
                 }

@@ -96,6 +96,35 @@ impl Game {
             .0
     }
 
+    /// The catalog definition a viewer may learn for a source object, live or
+    /// departed: its last shown face, never the printing behind a face-down
+    /// permanent (`ANONYMOUS` gives `None`).
+    pub(crate) fn observed_source_definition(&self, object: ObjectId) -> Option<CardDefId> {
+        if self.state.live(object).is_some() {
+            return self.state[object].definition_id.catalog_id();
+        }
+        match self.object_lki(object) {
+            Some(lki) => lki.definition_id.catalog_id(),
+            None => self.state.source_base(object).0.catalog_id(),
+        }
+    }
+
+    /// The name a viewer may read for an object in event prose: a face-down
+    /// permanent, live or as it last existed, is named only as one.
+    pub(crate) fn observed_object_name(&self, object: ObjectId) -> &str {
+        let face_down = if self.state.live(object).is_some() {
+            self.state[object].is_face_down()
+        } else {
+            self.object_lki(object)
+                .is_some_and(|lki| lki.definition_id == CardDefId::ANONYMOUS)
+        };
+        if face_down {
+            "a face-down permanent"
+        } else {
+            &self.state.source_base(object).1.name
+        }
+    }
+
     /// Snapshot the current battlefield object for triggers and LKI.
     pub(crate) fn snapshot_current_permanent(&self, object: ObjectId) -> Option<ObjectLki> {
         let permanent_id = self.lookup_current_permanent(object).ok()?;

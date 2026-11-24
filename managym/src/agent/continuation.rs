@@ -486,7 +486,10 @@ impl Game {
             .source_ref()
             .map(|r| self.visible_reference(r, viewer))
             .unwrap_or_default();
-        source.definition = Some(self.state.source_base(trigger.source_object()).0 .0);
+        source.definition = source.definition.or_else(|| {
+            self.observed_source_definition(trigger.source_object())
+                .map(|definition| definition.0)
+        });
         let context = match &trigger.event {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))

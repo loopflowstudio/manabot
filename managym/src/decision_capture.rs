@@ -97,9 +97,13 @@ impl Game {
         for object in &agent.agent_sideboard {
             ids.insert(object.registry_key as u32);
         }
-        for stack in &agent.stack_objects {
-            ids.insert(stack.source_card_registry_key as u32);
-        }
+        // A face-down or token source has no catalog key (negative).
+        ids.extend(
+            agent
+                .stack_objects
+                .iter()
+                .filter_map(|stack| u32::try_from(stack.source_card_registry_key).ok()),
+        );
         for player in [&agent.agent, &agent.opponent] {
             ids.extend(player.known_hand.keys());
             ids.extend(player.known_library.values());
@@ -143,6 +147,20 @@ impl Game {
                 "source": reference(&event.source), "target": reference(&event.target)})
             })
             .collect();
+        for copy in agent
+            .agent_permanents
+            .iter()
+            .chain(&agent.opponent_permanents)
+            .filter_map(|permanent| permanent.copy.as_ref())
+        {
+            ids.extend(u32::try_from(copy.registry_key).ok());
+            ids.extend(
+                copy.exceptions
+                    .iter()
+                    .filter_map(|exception| exception.source_registry_key)
+                    .filter_map(|key| u32::try_from(key).ok()),
+            );
+        }
         for effects in [&agent.agent.effects, &agent.opponent.effects]
             .into_iter()
             .chain(
@@ -157,7 +175,7 @@ impl Game {
                 effects
                     .iter()
                     .filter_map(|effect| effect.source_registry_key)
-                    .map(|key| key as u32),
+                    .filter_map(|key| u32::try_from(key).ok()),
             );
         }
         for frame in &agent.continuation {
@@ -283,5 +301,99 @@ mod tests {
             game.capture_decision(actor, 0).unwrap().digest,
             snapshot.digest
         );
+    }
+
+    /// Player 0 manifests `hidden` and `other`, grants its face-down
+    /// permanent flying, bounces the other manifest after one of its
+    /// abilities is countered, and player 1 must choose a creature to
+    /// destroy. Returns the four projections player 1 sees.
+    fn manifest_root(hidden: &str, other: &str) -> [Value; 4] {
+        use crate::{
+            flow::decision::EffectFrame,
+            state::{
+                ability::{Effect, ObjectSelector},
+                card::{CardType, Keyword, Keywords},
+                effect::{Affected, EffectDuration, Modification},
+                game_object::PublicId,
+                predicate::CardPredicate,
+                zone::ZoneType,
+            },
+        };
+        let deck = BTreeMap::from([
+            ("Gray Ogre".into(), 4),
+            ("Forest".into(), 4),
+            ("Mountain".into(), 32),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            708_2,
+            false,
+        );
+        game.keep_opening_hands();
+        game.scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+            .unwrap();
+        let owner = PlayerId(0);
+        let library = |game: &Game, name: &str| {
+            *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, owner)
+                .iter()
+                .find(|object| game.state[**object].name == name)
+                .unwrap()
+        };
+        let face_down = game.manifest(library(&game, hidden), owner);
+        let bounced = game.manifest(library(&game, other), owner);
+        game.apply_continuous(
+            Some(face_down),
+            owner,
+            [Affected::Object(face_down)],
+            Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+            EffectDuration::EndOfTurn,
+        );
+        game.emit(GameEvent::AbilityCountered {
+            ability: PublicId(0),
+            source_object: bounced,
+            controller: owner,
+            by: None,
+        });
+        game.move_object(bounced, ZoneType::Hand);
+        game.run_frame(EffectFrame::new(
+            PlayerId(1),
+            vec![Effect::destroy(ObjectSelector::chosen(CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            }))],
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let viewer = PlayerId(1);
+        assert_eq!(game.action_space().unwrap().player, Some(viewer));
+        let context = game.decision_context(viewer).unwrap();
+        assert!(context
+            .recent_facts
+            .iter()
+            .any(|fact| fact == "An ability of a face-down permanent was countered."));
+        let capture = serde_json::to_value(game.capture_decision(viewer, 8).unwrap()).unwrap();
+        [
+            serde_json::to_value(game.decision_offer_subjects(viewer)).unwrap(),
+            serde_json::to_value(context).unwrap(),
+            serde_json::to_value(game.presentation_subjects()).unwrap(),
+            capture,
+        ]
+    }
+
+    /// Two roots that differ only in which card backs each manifest give the
+    /// choosing opponent identical offer subjects, context, presentation
+    /// subjects and capture (CR 708.2).
+    #[test]
+    fn swapped_manifests_project_alike_to_the_choosing_opponent() {
+        let ogre_first = manifest_root("Gray Ogre", "Forest");
+        let forest_first = manifest_root("Forest", "Gray Ogre");
+        for (index, (left, right)) in ogre_first.iter().zip(&forest_first).enumerate() {
+            assert_eq!(left, right, "projection {index}");
+        }
     }
 }
