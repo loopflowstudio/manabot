@@ -9,8 +9,9 @@ draw each game's pair natively from that game's seed, so draws match for any
 worker count. No policy or CUDA state enters a producer thread.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -21,6 +22,7 @@ from numpy.typing import NDArray
 
 from manabot.env.failures import CapturedVector
 import managym
+from managym.recording import GameInputs
 
 Array = NDArray[np.generic]
 
@@ -69,6 +71,18 @@ class BufferedStreams:
     def _owned_shards(self) -> Sequence[StreamShard]:
         """Buffer binding and cleanup include parked sources as well as active streams."""
         return self._shards
+
+    @property
+    def games(self) -> list[GameInputs]:
+        """Current replay inputs in global slot order."""
+        return [game for shard in self._shards for game in shard.native.games]
+
+    @contextmanager
+    def reconstructing(self) -> Iterator[None]:
+        with ExitStack() as stack:
+            for shard in self._owned_shards():
+                stack.enter_context(shard.native.reconstructing())
+            yield
 
     def set_buffers(
         self,
@@ -183,13 +197,18 @@ class BufferedStreams:
             ]
         )
 
-    def reset_each_into_buffers(self, players: list[managym.GameSetup]) -> None:
+    def reset_each_into_buffers(
+        self, players: list[managym.GameSetup], *, seeds: list[int] | None = None
+    ) -> None:
         self._rows(len(players))
+        if seeds is not None:
+            self._rows(len(seeds))
         self._run(
             [
                 partial(
                     shard.native.reset_each_into_buffers,
                     players[shard.start : shard.stop],
+                    seeds=None if seeds is None else seeds[shard.start : shard.stop],
                 )
                 for shard in self._shards
             ]
@@ -295,6 +314,19 @@ class BufferedStreams:
         self._check()
         return [
             seed for shard in self._shards for seed in shard.native.current_game_seeds()
+        ]
+
+    def state_digests(self, active: list[bool] | None = None) -> list[str | None]:
+        """Hash selected games in global slot order, leaving masked slots empty."""
+        self._check()
+        if active is not None:
+            self._rows(len(active))
+        return [
+            digest
+            for shard in self._shards
+            for digest in shard.native.state_digests(
+                None if active is None else active[shard.start : shard.stop]
+            )
         ]
 
     def current_game_generations(self) -> list[int]:

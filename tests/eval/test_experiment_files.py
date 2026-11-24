@@ -43,7 +43,6 @@ from experiments import (
     seat_comparison,
     tla_frontier,
     tla_trophies,
-    tla_trophies_colab,
     tla_trophies_floor,
 )
 from experiments.elemental_grid import DECKS
@@ -68,7 +67,6 @@ DECLARED: list[tuple[ModuleType, tuple[str, ...], dict[str, int]]] = [
     ),
     (tla_frontier, ("--revision", "HEAD"), FRONTIER_JOBS),
     (tla_trophies, (), {"trophy-w64-raw": 3}),
-    (tla_trophies_colab, (), {"w64": 1, "w160l8": 1}),
     (
         tla_trophies_floor,
         (),
@@ -111,7 +109,6 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "seat_comparison",
         "tla_frontier",
         "tla_trophies",
-        "tla_trophies_colab",
         "tla_trophies_floor",
     }
     assert NOT_YET_RUNNABLE <= found

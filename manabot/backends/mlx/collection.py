@@ -45,8 +45,14 @@ class CollectionSession:
         self._key, draw = mx.random.split(self._key)
         return draw
 
-    def snapshot_rng(self) -> object:
+    def snapshot_rng(self) -> np.ndarray:
         return np.array(self._key)
+
+    def restore_rng(self, state: object) -> None:
+        key = np.asarray(state)
+        if key.shape != (2,) or key.dtype != np.uint32:
+            raise ValueError("expected an MLX uint32 sampling key")
+        self._key = mx.array(key)
 
     @contextmanager
     def scope(self, agent: BackendPolicy) -> Iterator["CollectionScope"]:

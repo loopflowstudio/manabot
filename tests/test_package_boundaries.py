@@ -391,14 +391,12 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/belief/population.py",
         "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
-        "manabot/eval/local.py",
         "manabot/eval/agent_loader.py",
         "manabot/experiment/numerics.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/sim/qwen_provider.py",
         "manabot/reports/belief.py",
-        "manabot/sim/native_game.py",
         *_TORCH_LOOPS,
         "manabot/training/mps.py",
         "manabot/verify/action_cases.py",
@@ -431,6 +429,7 @@ _GENERIC_ALLOWED = (
     "manabot.infra.profiler",
     "manabot.policy.returns",
     "manabot.training.updates.objective",
+    "manabot.training.updates.health",
 )
 
 
@@ -450,7 +449,6 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
         "manabot/backends/torch/learner.py: manabot.policy.checkpoint",
         "manabot/backends/torch/learner.py: manabot.training.learning",
-        "manabot/backends/torch/learner.py: manabot.training.updates.health",
         "manabot/backends/torch/arrays.py: manabot.policy.prepare",
     ]
 

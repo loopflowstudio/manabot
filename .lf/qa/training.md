@@ -63,6 +63,24 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   refuses it on CPU inside `track`. A resume with a changed precision must
   refuse with `run_identity_conflict`. Read `execution/precision` from the
   run's `metrics/*.permanent.json` labels.
+  Exact MLX recovery: on `device: "cpu"`, Ctrl-C a `--until updates=6` run on a
+  pty, `--resume`, and compare `out/policies/00000006-*.safetensors` tensor
+  bytes with an uninterrupted run in another `ETUDE_HOME`: they are identical.
+  Etude keeps the save before the final update, so `out/state/` of a finished
+  run may name an earlier update than its policies. Edit a seed in a copy's
+  `continuation.json`; resume must refuse naming `continuation_sha256` and leave
+  `out/` byte-identical. To block Torch for a CLI and its children, put a
+  directory holding `torch/__init__.py` (`raise ImportError`) on `PYTHONPATH`.
+  `manabot.eval.local --backend mlx` writes the same `request.json` as Torch
+  but plays different games (each framework samples with its own RNG);
+  `--status`/`--continue` take the `panel` directory. Per-game `decisions`,
+  `game_seconds` and candidate `latency` are in `<out>/panel/rows.json`; a
+  game that ran out of time names "game wall-clock budget exhausted" in
+  `panel/failures/`. Rules changes merged from main can lengthen a fixed deal's
+  games past `tests/training/test_mlx_workflow.py`'s 90-second panels; measure
+  deal lengths that way before raising a budget. Rebuild the extension after
+  such a merge: saves written before an appended input column refuse `--resume`
+  by naming the changed readings, which is correct.
 - Training guide (`docs/training-loop.md`): run its example command verbatim
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'

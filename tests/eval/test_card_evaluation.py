@@ -1106,14 +1106,7 @@ def test_any_evaluation_can_deliver_card_data_beside_its_own_tables(
         assert not list(root.rglob("*.json.gz")), "handed-over evidence remains"
         checked = audit(db, tmp_path)
         assert (checked.games, checked.problems) == (2, ())
-        row = db.execute(
-            "select path from duckdb_databases() where database_name = current_database()"
-        ).fetchone()
-        assert row is not None and row[0] is not None
-        db_path = str(row[0])
-    with duckdb.connect(db_path) as writable:
-        writable.execute("update card_counts set gih_copies = gih_copies + 1")
-    with card_db("grid-like", tmp_path) as db:
+        db.execute("update card_counts set gih_copies = gih_copies + 1")
         assert len(audit(db, tmp_path).problems) == 2
     with pytest.raises(ValueError, match="card_evidence_dir"):
         trace_card_tables(root, {}, (first.player_id, second.player_id))
