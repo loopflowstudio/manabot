@@ -589,29 +589,17 @@ impl Game {
         } else {
             0
         };
-        predicate.matches_printing(
-            face,
-            row.kind(),
-            // A manifested permanent is a face-down 2/2 with mana value 0
-            // (CR 708.2), whatever card it hides.
-            entry.meld.map_or_else(
-                || {
-                    if entry.manifested {
-                        0
-                    } else {
-                        row.mana_value_cost().map_or(0, |c| c.mana_value)
-                    }
-                },
-                |(second, _)| {
-                    self.meld_mana_value(
-                        self.state.card_of(object).expect("melded primary card"),
-                        second,
-                    )
-                },
+        // A manifested permanent is a face-down 2/2 with mana value 0
+        // (CR 708.2), whatever card it hides.
+        let mana_value = match entry.meld {
+            _ if entry.manifested => 0,
+            Some((second, _)) => self.meld_mana_value(
+                self.state.card_of(object).expect("melded primary card"),
+                second,
             ),
-            power,
-            &[],
-        )
+            None => row.mana_value_cost().map_or(0, |c| c.mana_value),
+        };
+        predicate.matches_printing(face, row.kind(), mana_value, power, &[])
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {

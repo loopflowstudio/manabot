@@ -1841,7 +1841,7 @@ impl Game {
                 let modes: Vec<Vec<Effect>> = self
                     .state
                     .exiled_with(source)
-                    .filter(|object| predicate.matches_object(&self.state[*object]))
+                    .filter(|object| self.object_matches_predicate(*object, predicate))
                     .map(|object_id| {
                         vec![Effect::HaveAbilitiesOf {
                             definition: self.state[object_id].definition_id,

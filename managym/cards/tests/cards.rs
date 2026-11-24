@@ -8,7 +8,7 @@
 #[path = "../../tests/support/mod.rs"]
 mod support;
 
-use managym::agent::env::GameSnapshot;
+use managym::{agent::env::GameSnapshot, state::game_object::ObjectId};
 use support::game::{deck, Scenario};
 
 // Constructed card positions use the benchmark fixture access enabled by this crate.
@@ -320,18 +320,18 @@ fn check_kicked_return(name: &str, mana: &str, second_target: &str, excluded: &s
 /// The objects in both graveyards after a mass return resolves, followed to
 /// their current appearances.
 struct GraveyardReturn {
-    momo: managym::state::game_object::ObjectId,
-    sailor: managym::state::game_object::ObjectId,
-    drake: managym::state::game_object::ObjectId,
-    bolt: managym::state::game_object::ObjectId,
-    their_sailor: managym::state::game_object::ObjectId,
+    momo: ObjectId,
+    sailor: ObjectId,
+    drake: ObjectId,
+    bolt: ObjectId,
+    their_sailor: ObjectId,
 }
 
 /// Cast `spell` over two graveyards: the caster's Momo, Spectral Sailor
 /// (mana value 1, flying), Wind Drake (mana value 3, flying) and Lightning
 /// Bolt, and the opponent's Spectral Sailor. Momo triggers once for each
 /// other flier entering under its controller's control together with it.
-fn return_from_two_graveyards(spell: &str) -> (support::game::Scenario, GraveyardReturn) {
+fn return_from_two_graveyards(spell: &str) -> (Scenario, GraveyardReturn) {
     use support::{
         game::{five_color_setup, plant_in_graveyard},
         inspect::now,

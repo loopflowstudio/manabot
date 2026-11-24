@@ -4,7 +4,7 @@
 
 use super::card::{CardType, Keyword, PrintedCharacteristics};
 
-use super::game_object::{Object, ObjectKind};
+use super::game_object::ObjectKind;
 use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
@@ -146,26 +146,11 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
-    /// Match against an object's printed characteristics.
-    pub fn matches_object(&self, object: &Object) -> bool {
-        self.matches(object, object.power.unwrap_or(0), &[])
-    }
-
-    /// Full matching: `power` substitutes the card's printed power and
-    /// `added_types` are card types the object has in addition to its printed
-    /// types (an animated land's creature type, a granted land type).
-    pub fn matches(&self, object: &Object, power: i32, added_types: &[CardType]) -> bool {
-        self.matches_printing(
-            object,
-            object.kind(),
-            object.mana_value_cost().map_or(0, |cost| cost.mana_value),
-            power,
-            added_types,
-        )
-    }
-
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
+    /// `power` substitutes the printed power and `added_types` are card types
+    /// the object has beyond its printed ones (an animated land's creature
+    /// type, a granted land type).
     pub fn matches_printing(
         &self,
         object: &PrintedCharacteristics,
