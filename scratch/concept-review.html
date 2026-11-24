@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Concept review · entry face after the build · MTG-420</title>
+<title>Concept review · entry face owns every form · MTG-420</title>
 <style>
 :root{color-scheme:light dark;font:16px/1.55 system-ui,-apple-system,sans-serif;--accent:#5c857b;--no:#b94a48;--yes:#3d7a5a;--prop:#4f6d9a;--muted:GrayText;--card:color-mix(in srgb,CanvasText 4%,Canvas);--line:color-mix(in srgb,CanvasText 16%,Canvas);--codebg:color-mix(in srgb,CanvasText 7%,Canvas)}
 body{max-width:60rem;margin:2.5rem auto;padding:0 1.15rem}
@@ -27,99 +27,54 @@ pre code{background:none;padding:0}
 </style>
 </head>
 <body>
-<p class="tag existing">MTG-420 · post-build concept review · <code>687e8e0ebd</code> → <code>876e2f49a1</code></p>
-<h1>Does “the face a permanent shows as it enters” have one owner in the code?</h1>
+<p class="tag existing">MTG-420 · post-build concept review · base <code>main</code> → <code>ee62307d00</code></p>
+<h1>Does “what a permanent shows as it enters” now have one owner?</h1>
 
-<p><strong>Area reviewed.</strong> How a card arrives on the battlefield showing something other than its front: a transforming card entering transformed, a modal card played or cast as its back, a manifest entering face down, and a meld pair entering as one result. The last pass built <code>EntryFace</code> and renamed <code>ObjectForm</code>; this pass reads <code>ZoneEntry</code> as it now stands, against main, as someone seeing it for the first time.</p>
+<p><strong>Area reviewed.</strong> Everything a card can show on arrival at the battlefield, and what it keeps showing afterwards: front, transformed, modal back, manifest and meld result (<code>ZoneEntry.face: EntryFace</code>), the object's persistent form (<code>ObjectForm</code>), the manifest's identity provenance (<code>Permanent.manifested</code>), and the bridge from casting (<code>SpellProfile</code> → <code>EntryFace::played_as</code>). This pass reads the whole branch against main after <code>85638eb653</code>/<code>586ffa1984</code>, not only the last diff.</p>
 
 <div class="callout">
-<strong>Verdict · the built change is right; one concept still lives in three fields.</strong>
-<p><code>EntryFace</code> fixed one name for two ideas. But <code>ZoneEntry</code> still answers the question “what does the entering permanent show?” three ways: <code>manifested: bool</code>, <code>meld: Option&lt;(CardId, CardDefId)&gt;</code> and <code>face: EntryFace</code>. Every reader re-derives the same precedence (manifest, else meld, else face), and the type allows states no writer makes and no rule has: a manifest entering transformed, a meld result with its modal back up. <strong>Plan changed:</strong> fold manifest and meld into <code>EntryFace</code> before gate, serialized byte for byte as today.</p>
+<strong>Verdict · nothing to change.</strong>
+<p>Each idea a player knows about now has one owner. An entry proposes one <code>EntryFace</code>, and each reader matches it once. The commit turns that face into one persistent <code>ObjectForm</code>, and the next zone move restores it (CR 400.7). The two remaining look-alikes, <code>Permanent.manifested</code> and <code>ZoneEntry.face_down</code>, turned out to be separate concepts. Both are documented as such.</p>
 </div>
 
-<h2>Walk: a manifest, a meld and a modal land enter</h2>
-<p>A person knows four ways a card can arrive showing something other than its front. Each is exactly one answer; they never combine (a manifest is face down, so no face is up; a meld result is the combined card, CR 712.4c; transforming and modal backs are different card kinds).</p>
+<h2>Walk: Manifest Dread, then turn it up, then bounce it</h2>
+<ol>
+<li><strong>Propose.</strong> <code>Game::manifest</code> writes <code>ZoneEntry { face: EntryFace::Manifested, .. }</code>. A replacement reading the entering object sees <code>&amp;MANIFESTED</code> from <code>battlefield_entry_face</code>, with mana value 0 from <code>statics.rs</code>. Viewers see a hidden move through <code>is_face_down()</code>.</li>
+<li><strong>Commit.</strong> One <code>match entry.face</code> (<code>zones.rs</code>) calls <code>turn_face_down</code>. <code>ObjectForm.backing</code> holds the hidden printing, and <code>face_down = true</code>. <code>Permanent.manifested = true</code> records the provenance.</li>
+<li><strong>Turn face up.</strong> <code>Object::turn_face_up</code> restores the backing. <code>face_down</code> goes false and <code>manifested</code> stays true, on purpose: the permanent keeps its viewer alias (<code>identity.rs:85</code>) and never takes on the deck-order id of the card it hid.</li>
+<li><strong>Failure / recovery.</strong> The permanent is bounced. Its LKI keeps both <code>manifested</code> and <code>face_down</code> as they were at departure. The new hand object mints a plain appearance, and Academy recovery and replay read the recorded <code>manifested</code> key, whose bytes are unchanged (witness <code>an_entry_face_reads_and_records_only_its_own_form</code>).</li>
+</ol>
+
+<h2>Product concepts against code concepts</h2>
 <table>
-<thead><tr><th>Product concept</th><th>Code today</th><th>Lines up?</th></tr></thead>
+<thead><tr><th>What a person knows</th><th>Code owner</th><th>Lines up?</th></tr></thead>
 <tbody>
-<tr><td>Enters with its front up</td><td><code>EntryFace::Front</code></td><td><span class="tag yes">yes</span></td></tr>
-<tr><td>Enters transformed (CR 712.14)</td><td><code>EntryFace::Transformed</code>, written only by <code>Effect::Move { transformed }</code></td><td><span class="tag yes">yes</span> since <code>03a71493ac</code></td></tr>
-<tr><td>Played or cast as its modal back (CR 712.11)</td><td><code>EntryFace::ModalBack</code> via <code>EntryFace::played_as</code>; projects “enters back face up”</td><td><span class="tag yes">yes</span> since <code>03a71493ac</code></td></tr>
-<tr><td>Manifested: a face-down 2/2 (CR 701.40, 708.2)</td><td><code>ZoneEntry.manifested: bool</code>, beside <code>face</code></td><td><span class="tag no">no</span> a sibling of the face it excludes</td></tr>
-<tr><td>Melded with its partner (CR 701.42, 712.4c)</td><td><code>ZoneEntry.meld: Option&lt;(CardId, CardDefId)&gt;</code>, beside <code>face</code></td><td><span class="tag no">no</span> same</td></tr>
-<tr><td>Foretold face down into exile (CR 702.143a)</td><td><code>ZoneEntry.face_down</code> (exile only; <code>for_zone</code> clears it for the battlefield)</td><td><span class="tag yes">yes</span> a different zone's term</td></tr>
-<tr><td>Cast as an Adventure, Omen, prepared or modal back</td><td><code>ZoneEntry.profile: SpellProfile</code> (stack)</td><td><span class="tag yes">yes</span> the stack's alternative set; kept separate (below)</td></tr>
-<tr><td>What an object is beneath its shown face, any zone</td><td><code>ObjectForm</code> (renamed from <code>BattlefieldForm</code>)</td><td><span class="tag yes">yes</span> since <code>03a71493ac</code></td></tr>
+<tr><td>A card enters showing its front, transformed, its modal back, face down as a manifest, or melded with its partner</td><td><code>EntryFace { Front, Transformed, ModalBack, Manifested, Melded { partner, result } }</code>. The variants exclude one another by construction.</td><td><span class="tag yes">yes</span></td></tr>
+<tr><td>“Casting the back face” becomes “the back face enters”</td><td><code>EntryFace::played_as(SpellProfile)</code>, the one bridge, used by play and resolution</td><td><span class="tag yes">yes</span></td></tr>
+<tr><td>What a permanent shows now, and the printing behind it</td><td><code>ObjectForm { backing, faces, face_down, copy }</code>, restored by <code>mint_appearance</code></td><td><span class="tag yes">yes</span></td></tr>
+<tr><td>“It was a manifest”: the alias survives reveal and departure</td><td><code>Permanent.manifested</code> / <code>BattlefieldFacts.manifested</code>. This is provenance, separate from orientation, and stays true after turn-up.</td><td><span class="tag yes">yes</span> (a different fact from <code>face_down</code>, documented on both)</td></tr>
+<tr><td>A foretold card sits face down in exile</td><td><code>ZoneEntry.face_down</code> (exile only; <code>for_zone</code> clears it for the battlefield, drops <code>face</code> for exile) and cast-permission grants (<code>is_face_down_in_exile</code>)</td><td><span class="tag yes">yes</span> for this work. A per-zone field. See below for the separate outcome.</td></tr>
+<tr><td>A card that can't transform is told to enter transformed (CR 712.14a: it stays put)</td><td><code>battlefield_entry_face</code> returns <code>None</code>; no catalog card asks</td><td><span class="tag existing">not modeled</span> (in <code>questions.md</code>; nothing to witness it)</td></tr>
 </tbody>
 </table>
 
-<h2>Biggest mismatch: one question, three readers with their own precedence</h2>
+<h2>Counterexamples tried</h2>
 <div class="grid">
-<div class="panel"><h3><span class="tag existing">existing</span> three fields</h3>
-<pre><code>// zones.rs battlefield_entry_face
-if entry.manifested { MANIFESTED }
-else if let Some((_, r)) = entry.meld { r }
-else { match entry.face { … } }
-
-// statics.rs entering mana value
-match entry.meld {
-    _ if entry.manifested =&gt; 0,
-    Some((second, _)) =&gt; meld_mana_value,
-    None =&gt; row mana value,
-}
-
-// zones.rs commit
-if let Some(..) = entry.meld { join + show_melded }
-if entry.manifested { turn_face_down }
-match entry.face { … }   // runs after both</code></pre>
-<p>The commit's three independent <code>if</code>s would happily meld, turn face down and transform one object. Nothing forbids it but the writers' discipline.</p>
-</div>
-<div class="panel"><h3><span class="tag proposed">proposed</span> one enum</h3>
-<pre><code>pub(crate) enum EntryFace {
-    #[default] Front,
-    Transformed,          // CR 712.14
-    ModalBack,            // CR 712.11
-    Manifested,           // CR 701.40, 708.2
-    Melded { partner: CardId, result: CardDefId },
-}
-
-// every reader is one match
-match entry.face {
-    Front =&gt; object,
-    Transformed =&gt; back face,
-    ModalBack =&gt; modal back row,
-    Manifested =&gt; &amp;*MANIFESTED,
-    Melded { result, .. } =&gt; result row,
-}</code></pre>
-<p><code>is_face_down()</code> becomes <code>face_down || face == Manifested</code>; <code>permanent.manifested</code> reads <code>entry.face == Manifested</code>.</p>
-</div>
+<div class="panel"><h3>Fold exile <code>face_down</code> into <code>EntryFace</code>?</h3><p>Rejected. A face-down exile card has no characteristics. A manifest is a 2/2 with mana value 0. Viewer access to an exiled card comes from grants (foretell owner, a face-down grant), not from the object form. One enum would mean two rules under one name, and the always-serialized <code>face_down</code> key would need a second compatibility shim.</p></div>
+<div class="panel"><h3>Derive <code>Permanent.manifested</code> from <code>ObjectForm.face_down</code>?</h3><p>Rejected. A face-up former manifest must keep its alias (CR 708.2 identity hiding, <code>tests/academy/test_manifest_recovery.py</code>), so the two facts differ after turn-up.</p></div>
 </div>
 
-<h3>Tested against a normal path, a failure and recovery</h3>
-<ul>
-<li><strong>Normal:</strong> Manifest Dread's entry, Ragnarok's meld and Cecil's transform each have one writer (<code>Game::manifest</code>, the meld resolution at <code>resolution.rs:1334</code>, <code>Effect::Move</code>); each sets exactly one variant. Existing <code>dsk.rs</code>, <code>fin.rs</code> and <code>cr_712_modal_faces</code> tests cover them unchanged.</li>
-<li><strong>Retained state:</strong> a pending entry serializes inside retained frames and canonical replays. The serializer already flattens <code>EntryFace</code> at the position of <code>face</code>, between where <code>manifested</code> and <code>meld</code> sit today, so it can emit <code>manifested</code> (when true), <code>transformed</code>, <code>modal_back</code> (when true), <code>meld</code> (when present) in today's order: recorded bytes stay identical. Canonical replay and the pinned pilot are the check.</li>
-<li><strong>Counterexample sought:</strong> a card that manifests a meld result, or enters a manifest transformed. None exists in the rules: a manifest is face down (no face is up, CR 708.2), and turning it face up is a later action on the permanent, not an entry term. If one ever does, it is a new variant, which is the right place for it.</li>
-</ul>
-
-<h2>Considered and left</h2>
-<ul>
-<li><strong>Merging <code>SpellProfile</code> (stack) into <code>EntryFace</code>.</strong> Passed over: the stack's alternatives (Adventure, Omen, prepared, modal back) and the battlefield's (transformed, manifested, melded) barely overlap; one enum would make each zone accept faces it can't take. <code>EntryFace::played_as</code> is the single bridge.</li>
-<li><strong>The <code>cast_adventure</code> key for <code>profile</code></strong> is main's historical name for every spell profile; renaming it changes recorded bytes. Out of this work.</li>
-<li><strong><code>battlefield_entry_face</code>'s doc cites only CR 712.14</strong>; it should name the face precedence the enum now owns. Folded into the slice.</li>
-</ul>
-
-<h2>Recommendation and first slice</h2>
-<p>One commit before gate: add <code>Manifested</code> and <code>Melded</code> to <code>EntryFace</code>, delete <code>ZoneEntry.manifested</code> and <code>ZoneEntry.meld</code>, convert the two writers and the readers in <code>zones.rs</code>, <code>statics.rs</code>, <code>proposed_event.rs</code> (<code>is_face_down</code>) and <code>resolution_tests.rs</code>, and extend the serializer and the existing wire witness to all five variants. It shows soonest whether it holds through the canonical replay suite (unchanged bytes) and the manifest/meld card tests.</p>
+<h2>Outside this work</h2>
+<p>“Face down” on an exiled card is a grant property (<code>CastGrant.foretold | face_down</code>). On a permanent it is an object property (<code>ObjectForm.face_down</code>). So the engine has two answers to “is this object face down?”, one per zone. Unifying them would put face-down exile on the object form, so LKI, labels and sampling read one flag. That needs a foretell/face-down-exile Task: it touches main's casting authority and hidden-slot allocation, not battlefield forms.</p>
 
 <h2>Questions</h2>
 <ol>
-<li>Fold manifest and meld into <code>EntryFace</code>?
-  <ol type="a"><li>Yes, before gate (chosen for review).</li><li>No; three fields are clear enough.</li><li>Later, as its own Task.</li></ol></li>
-<li>Keep recorded entry bytes identical?
-  <ol type="a"><li>Yes, via the custom serializer (chosen).</li><li>No; let the frozen evidence re-record in gate absorb a new <code>face</code> key.</li></ol></li>
-<li>Keep <code>SpellProfile</code> and <code>EntryFace</code> separate?
-  <ol type="a"><li>Yes, one per zone, bridged by <code>played_as</code> (chosen).</li><li>No; one face-on-entry enum for every zone.</li></ol></li>
+<li>Is the entry-face work done for MTG-420?
+  <ol type="a"><li>Yes: go to <code>gate</code> (chosen).</li><li>No: another pass (name the form).</li></ol></li>
+<li>Exile face-down as an object-form fact:
+  <ol type="a"><li>File a separate Task after MTG-420 lands.</li><li>Leave it as is (chosen: no card needs it yet).</li></ol></li>
+<li>CR 712.14a (“stays in its zone”):
+  <ol type="a"><li>Model it when a catalog card asks a non-transforming card to enter transformed (chosen).</li><li>Model it now without a card witness.</li></ol></li>
 </ol>
 </body>
 </html>
