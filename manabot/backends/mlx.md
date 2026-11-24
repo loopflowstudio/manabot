@@ -123,7 +123,8 @@ path in MLX names the same component as in the torch state dict:
 The MLX learner encodes the catalog definitions referenced by each prepared
 batch. With bucketed shapes it selects those definitions after trimming the
 observation. For attention it sorts observations by live object count and packs
-the shorter and longer halves separately when that saves dense slots. Otherwise
+equal groups separately when that saves dense slots: two groups below 192 rows,
+three below 256 and four from 256. Otherwise
 it uses the object columns present anywhere in the batch. It restores the
 bucket's object coordinates before the critic and action focus lookups.
 Bucketed learner batches also encode only live fact rows, scattering each into

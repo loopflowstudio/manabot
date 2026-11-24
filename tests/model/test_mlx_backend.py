@@ -917,6 +917,66 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
         )
 
 
+@pytest.mark.parametrize(("rows", "groups"), [(64, 2), (192, 3), (256, 4)])
+def test_large_bucketed_batches_pack_more_attention_groups(
+    tmp_path: Path, rows: int, groups: int
+) -> None:
+    """Large batches pack more, shorter attention groups with unchanged outputs."""
+
+    _, _, agent = _converted(tmp_path)
+    space = agent.observation_space
+    obs = {
+        k: np.zeros((rows, *shape), dtype=np.float32)
+        for k, shape in space.shapes.items()
+    }
+    obs["agent_player_valid"][:] = 1
+    obs["opponent_player_valid"][:] = 1
+    obs["opponent_permanents_valid"][:, 0] = 1
+    cards = space.shapes["agent_cards"][0]
+    rng = np.random.default_rng(7)
+    for b, live in enumerate(rng.integers(0, cards + 1, rows)):
+        obs["agent_cards_valid"][b, rng.permutation(cards)[:live]] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"].fill(-1)
+    obs["action_focus"][:, 0, 0] = 0
+    obs["action_focus"][:, 1, 0] = 2 + 2 * cards + space.shapes["agent_permanents"][0]
+    returns = rng.uniform(-1, 1, rows).astype(np.float32)
+    checkpoint = policy_weights(agent)
+    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    results = []
+    for bucketed in (False, True):
+        policy = assemble(checkpoint, bucketed_shapes=bucketed)
+        learner = MLXLearner(policy, minibatch_rows=rows)
+        prepared = policy.prepare(obs)
+        packed = prepared.packed_attention
+        if bucketed:
+            assert packed is not None and len(packed.groups) == groups
+            widths = [group.shape[1] for group in packed.groups]
+            assert widths == sorted(widths) and len(set(widths)) == groups
+        else:
+            assert packed is None
+        logits, values = policy.evaluate(prepared)
+        legal = prepared.legal
+        targets = Targets(
+            np.zeros(rows, np.int64),
+            returns,
+            np.ones(rows, np.float32),
+            np.ones(rows, bool),
+            np.where(legal, np.log(0.5), -np.inf).astype(np.float32),
+            np.where(legal, 0.5, 0).astype(np.float32),
+        )
+        loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
+        results.append((logits[:, :2], values, float(loss), learner.gradients(loss)))
+    expected, actual = results
+    for a, b in zip(actual[:3], expected[:3], strict=True):
+        np.testing.assert_allclose(a, b, atol=2e-6)
+    assert actual[3].keys() == expected[3].keys()
+    for key in expected[3]:
+        np.testing.assert_allclose(
+            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
+        )
+
+
 def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
     precision: Precision = "bfloat16"
