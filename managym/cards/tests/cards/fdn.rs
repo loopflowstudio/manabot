@@ -1260,9 +1260,9 @@ fn stack_departures(s: &mut Scenario) {
 fn departure_returns_use_last_creature_types_and_exact_graveyard_cards() {
     use crate::support::inspect::{counters_of, zone_of};
     use managym::state::permanent::CounterKind;
-    for (creature, added_type, count) in [
-        ("Gray Ogre", "Angel", 1), ("Infernal Vessel", "Demon", 2)
-    ] {
+    for (creature, added_type, count) in
+        [("Gray Ogre", "Angel", 1), ("Infernal Vessel", "Demon", 2)]
+    {
         let mut s = five_color_setup(&[creature, "Valkyrie's Call"]);
         if added_type == "Angel" {
             s.force_permanent_on_battlefield(0, "Valkyrie's Call");
@@ -1275,14 +1275,20 @@ fn departure_returns_use_last_creature_types_and_exact_graveyard_cards() {
         let hand = move_card(&mut s, grave, ZoneType::Hand);
         let later_grave = move_card(&mut s, hand, ZoneType::Graveyard);
         settle(&mut s);
-        assert_eq!(s.game().state.zones.zone_of(later_grave), Some(ZoneType::Graveyard));
+        assert_eq!(
+            s.game().state.zones.zone_of(later_grave),
+            Some(ZoneType::Graveyard)
+        );
         s.restore(&root);
         settle(&mut s);
         let returned = permanent_of(&s, original).unwrap();
         let view = s.game().characteristics(returned);
         assert!(view.has_subtype(added_type));
         assert_eq!(view.keywords.has(Keyword::Flying), added_type == "Angel");
-        assert_eq!(counters_of(&s, returned, CounterKind::PlusOnePlusOne), count);
+        assert_eq!(
+            counters_of(&s, returned, CounterKind::PlusOnePlusOne),
+            count
+        );
         move_card(&mut s, original, ZoneType::Graveyard);
         stack_departures(&mut s);
         assert!(s.game().state.stack_objects.is_empty());
@@ -1292,7 +1298,10 @@ fn departure_returns_use_last_creature_types_and_exact_graveyard_cards() {
 
 #[test]
 fn departure_manifested_land_and_mooned_creature_use_battlefield_types() {
-    use crate::support::{inspect::{library_card, zone_of}, play::cast};
+    use crate::support::{
+        inspect::{library_card, zone_of},
+        play::cast,
+    };
     use managym::state::game_object::Target;
     let mut s = five_color_setup(&["Valkyrie's Call", "Gray Ogre", "Imprisoned in the Moon"]);
     s.force_permanent_on_battlefield(0, "Valkyrie's Call");
@@ -1325,8 +1334,12 @@ fn departure_angelic_destiny_and_enchanted_creature_die_together() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     let enchanted = s.game().characteristics(ogre);
-    assert_eq!(enchanted.pt(), (6,6));
-    assert!(enchanted.has_subtype("Angel") && enchanted.keywords.has(Keyword::FirstStrike) && enchanted.keywords.has(Keyword::Flying));
+    assert_eq!(enchanted.pt(), (6, 6));
+    assert!(
+        enchanted.has_subtype("Angel")
+            && enchanted.keywords.has(Keyword::FirstStrike)
+            && enchanted.keywords.has(Keyword::Flying)
+    );
     // The animated Aura has zero toughness in the same SBA batch that
     // destroys the lethally damaged creature it enchants.
     let id = permanent_of(&s, aura).unwrap();
@@ -1343,7 +1356,10 @@ fn departure_angelic_destiny_and_enchanted_creature_die_together() {
 #[test]
 fn departure_linked_enchantments_bind_target_counts_and_both_appearances() {
     use crate::support::{game::enter_battlefield, inspect::zone_of, play::command};
-    use managym::{agent::action::{Action, ActionSpaceKind}, state::game_object::Target};
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::game_object::Target,
+    };
     for name in ["Prayer of Binding", "Banishing Light", "Stasis Snare"] {
         let prayer = name == "Prayer of Binding";
         let mut s = five_color_setup(&[name, "Gray Ogre"]);
@@ -1358,53 +1374,71 @@ fn departure_linked_enchantments_bind_target_counts_and_both_appearances() {
         let target = card_of(&s, ogre);
         let enchantment = enter_battlefield(&mut s, name);
         let source = card_of(&s, enchantment);
-        if s.action_space().kind != ActionSpaceKind::ChooseTarget { s.pass_priority(); }
+        if s.action_space().kind != ActionSpaceKind::ChooseTarget {
+            s.pass_priority();
+        }
         let choosing = s.snapshot();
-        assert_eq!(s.action_space().actions.iter().any(|a| matches!(a, Action::Decline {..})), prayer);
+        assert_eq!(
+            s.action_space()
+                .actions
+                .iter()
+                .any(|a| matches!(a, Action::Decline { .. })),
+            prayer
+        );
         if prayer {
-            command(&mut s, |a| matches!(a, Action::Decline {..}));
+            command(&mut s, |a| matches!(a, Action::Decline { .. }));
             settle(&mut s);
-            s.assert_life(0,22);
-            assert_eq!(zone_of(&s,target),Some(ZoneType::Battlefield));
+            s.assert_life(0, 22);
+            assert_eq!(zone_of(&s, target), Some(ZoneType::Battlefield));
             s.restore(&choosing);
         }
-        command(&mut s, |a| matches!(a, Action::ChooseTarget {target: Target::Permanent(id), ..} if *id == ogre));
+        command(
+            &mut s,
+            |a| matches!(a, Action::ChooseTarget {target: Target::Permanent(id), ..} if *id == ogre),
+        );
         let stacked = s.snapshot();
         move_card(&mut s, source, ZoneType::Hand);
         settle(&mut s);
-        assert_eq!(zone_of(&s,target),Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, target), Some(ZoneType::Battlefield));
         s.restore(&stacked);
-        move_card(&mut s,target,ZoneType::Hand);
+        move_card(&mut s, target, ZoneType::Hand);
         settle(&mut s);
-        s.assert_life(0,20);
+        s.assert_life(0, 20);
         s.restore(&stacked);
         settle(&mut s);
-        assert_eq!(zone_of(&s,target),Some(ZoneType::Exile));
+        assert_eq!(zone_of(&s, target), Some(ZoneType::Exile));
         let exiled = s.snapshot();
         move_card(&mut s, source, ZoneType::Hand);
-        assert_eq!(zone_of(&s,target),Some(ZoneType::Battlefield));
+        assert_eq!(zone_of(&s, target), Some(ZoneType::Battlefield));
         s.restore(&exiled);
         move_card(&mut s, target, ZoneType::Hand);
-        let later = move_card(&mut s,target,ZoneType::Exile);
+        let later = move_card(&mut s, target, ZoneType::Exile);
         move_card(&mut s, source, ZoneType::Hand);
-        assert_eq!(s.game().state.zones.zone_of(later),Some(ZoneType::Exile));
+        assert_eq!(s.game().state.zones.zone_of(later), Some(ZoneType::Exile));
     }
 }
 
 #[test]
 fn departure_each_hoarding_dragon_recovers_only_its_exiled_artifact() {
-    use crate::support::{game::enter_battlefield, inspect::{library_card,zone_of}, play::{command,pass_until}};
-    use managym::agent::action::{Action,ActionSpaceKind};
+    use crate::support::{
+        game::enter_battlefield,
+        inspect::{library_card, zone_of},
+        play::{command, pass_until},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
     let mut s = five_color_setup(&["Hoarding Dragon", "Hedron Archive", "Leyline Axe"]);
     let dragons = ["Hedron Archive", "Leyline Axe"].map(|name| {
-        let artifact = library_card(&s,0,name);
-        let dragon = enter_battlefield(&mut s,"Hoarding Dragon");
-        pass_until(&mut s,ActionSpaceKind::Modal);
-        command(&mut s, |a| matches!(a, Action::ChooseMode {mode:0,..}));
-        command(&mut s, |a| matches!(a, Action::SelectCard {object,..} if *object == artifact));
+        let artifact = library_card(&s, 0, name);
+        let dragon = enter_battlefield(&mut s, "Hoarding Dragon");
+        pass_until(&mut s, ActionSpaceKind::Modal);
+        command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+        command(
+            &mut s,
+            |a| matches!(a, Action::SelectCard {object,..} if *object == artifact),
+        );
         settle(&mut s);
-        assert_eq!(zone_of(&s,artifact),Some(ZoneType::Exile));
-        (card_of(&s,dragon),artifact)
+        assert_eq!(zone_of(&s, artifact), Some(ZoneType::Exile));
+        (card_of(&s, dragon), artifact)
     });
     let root = s.snapshot();
     for index in 0..2 {
@@ -1413,77 +1447,235 @@ fn departure_each_hoarding_dragon_recovers_only_its_exiled_artifact() {
         move_card(&mut s, source, ZoneType::Graveyard);
         stack_departures(&mut s);
         pass_until(&mut s, ActionSpaceKind::Modal);
-        command(&mut s, |a| matches!(a,Action::ChooseMode {mode:0,..}));
+        command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
         settle(&mut s);
-        assert_eq!(zone_of(&s,artifact),Some(ZoneType::Hand));
-        assert_eq!(zone_of(&s,dragons[1-index].1),Some(ZoneType::Exile));
+        assert_eq!(zone_of(&s, artifact), Some(ZoneType::Hand));
+        assert_eq!(zone_of(&s, dragons[1 - index].1), Some(ZoneType::Exile));
     }
+
+    // A bounced and replayed Dragon is a new object: its death cannot reach
+    // the card the earlier appearance exiled.
+    s.restore(&root);
+    let (source, artifact) = dragons[0];
+    let in_hand = move_card(&mut s, source, ZoneType::Hand);
+    settle(&mut s);
+    move_card(&mut s, in_hand, ZoneType::Battlefield);
+    stack_departures(&mut s);
+    if s.action_space().kind == ActionSpaceKind::Modal {
+        command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    }
+    settle(&mut s);
+    move_card(&mut s, source, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, artifact), Some(ZoneType::Exile));
+}
+
+#[test]
+fn departure_valkyries_call_sees_a_creature_dying_beside_it() {
+    use crate::support::{
+        game::until_end_of_turn,
+        inspect::{counters_of, zone_of},
+        play::command,
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{effect::Modification, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Valkyrie's Call", "Gray Ogre"]);
+    let call = s.force_permanent_on_battlefield(0, "Valkyrie's Call");
+    let call_card = card_of(&s, call);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    // The animated Call (0/0) and the lethally damaged Ogre leave in one
+    // state-based batch. Each trigger looks back (CR 603.10a), and the Call
+    // was itself a nontoken, non-Angel creature, so both cards return.
+    until_end_of_turn(&mut s, call, Modification::BecomeCreature);
+    s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 2;
+    s.pass_priority();
+    assert!(s.game().state.permanents[call].is_none());
+    assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    command(&mut s, |_| true);
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+    settle(&mut s);
+    let returned = permanent_of(&s, card).unwrap();
+    let view = s.game().characteristics(returned);
+    assert!(view.has_subtype("Angel") && view.keywords.has(Keyword::Flying));
+    assert_eq!(counters_of(&s, returned, CounterKind::PlusOnePlusOne), 1);
+    assert_eq!(zone_of(&s, call_card), Some(ZoneType::Battlefield));
 }
 
 #[test]
 fn departure_familiar_freezes_revival_count_and_remembers_exact_card() {
-    use crate::support::{game::set_counters,inspect::{zone_of,counters_of},play::{cast,command}};
-    use managym::{agent::action::Action,state::{permanent::CounterKind,player::ManaPayment}};
+    use crate::support::{
+        game::set_counters,
+        inspect::{counters_of, zone_of},
+        play::{cast, command},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, player::ManaPayment},
+    };
     let mut s = five_color_setup(&["Nine-Lives Familiar"]);
     s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    let familiar = cast(&mut s,"Nine-Lives Familiar");
+    let familiar = cast(&mut s, "Nine-Lives Familiar");
     settle(&mut s);
-    let id = permanent_of(&s,familiar).unwrap();
-    assert_eq!(counters_of(&s,id,CounterKind::Revival),8);
-    set_counters(&mut s,id,CounterKind::Revival,4);
-    let grave = move_card(&mut s,familiar,ZoneType::Graveyard);
+    let id = permanent_of(&s, familiar).unwrap();
+    assert_eq!(counters_of(&s, id, CounterKind::Revival), 8);
+    set_counters(&mut s, id, CounterKind::Revival, 4);
+    let grave = move_card(&mut s, familiar, ZoneType::Graveyard);
     stack_departures(&mut s);
     settle(&mut s);
-    assert_eq!(s.game().state.delayed_triggers.len(),1);
+    assert_eq!(s.game().state.delayed_triggers.len(), 1);
     s.advance_to_step(StepKind::End);
     let root = s.snapshot();
-    command(&mut s, |a| matches!(a, Action::PassPriority {..}));
+    command(&mut s, |a| matches!(a, Action::PassPriority { .. }));
     settle(&mut s);
-    let returned = permanent_of(&s,familiar).unwrap();
-    assert_eq!(counters_of(&s,returned,CounterKind::Revival),3);
+    let returned = permanent_of(&s, familiar).unwrap();
+    assert_eq!(counters_of(&s, returned, CounterKind::Revival), 3);
     s.restore(&root);
-    move_card(&mut s,grave,ZoneType::Hand);
-    move_card(&mut s,grave,ZoneType::Graveyard);
+    move_card(&mut s, grave, ZoneType::Hand);
+    move_card(&mut s, grave, ZoneType::Graveyard);
     settle(&mut s);
-    assert_eq!(zone_of(&s,grave),Some(ZoneType::Graveyard));
-    let blink = move_card(&mut s,grave,ZoneType::Battlefield);
-    assert_eq!(counters_of(&s,permanent_of(&s,blink).unwrap(),CounterKind::Revival),0);
-    move_card(&mut s,blink,ZoneType::Graveyard);
+    assert_eq!(zone_of(&s, grave), Some(ZoneType::Graveyard));
+    let blink = move_card(&mut s, grave, ZoneType::Battlefield);
+    assert_eq!(
+        counters_of(&s, permanent_of(&s, blink).unwrap(), CounterKind::Revival),
+        0
+    );
+    move_card(&mut s, blink, ZoneType::Graveyard);
     stack_departures(&mut s);
     assert!(s.game().state.stack_objects.is_empty());
 }
 
 #[test]
 fn departure_kykar_modes_blink_another_creature_or_create_a_flying_spirit() {
-    use crate::support::{inspect::{offered_targets,zone_of},play::{cast,command,pass_until}};
-    use managym::{agent::action::{Action,ActionSpaceKind},state::{game_object::Target,mana::Color,player::ManaPayment}};
-    let mut s = five_color_setup(&["Kykar, Zephyr Awakener","Gray Ogre","Hedron Archive"]);
+    use crate::support::{
+        inspect::{offered_targets, zone_of},
+        play::{cast, command, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, mana::Color, player::ManaPayment},
+    };
+    let mut s = five_color_setup(&["Kykar, Zephyr Awakener", "Gray Ogre", "Hedron Archive"]);
     s.game_mut().mana_payment[0] = ManaPayment::Auto;
-    s.force_permanent_on_battlefield(0,"Kykar, Zephyr Awakener");
-    let ogre = s.force_permanent_on_battlefield(0,"Gray Ogre");
-    let card = card_of(&s,ogre);
-    cast(&mut s,"Hedron Archive");
+    s.force_permanent_on_battlefield(0, "Kykar, Zephyr Awakener");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Hedron Archive");
     pass_until(&mut s, ActionSpaceKind::Modal);
     let root = s.snapshot();
-    command(&mut s, |a| matches!(a,Action::ChooseMode {mode:1,..}));
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
     settle(&mut s);
-    let spirit = s.game().characteristics(permanent_named(&s,"Spirit"));
+    let spirit = s.game().characteristics(permanent_named(&s, "Spirit"));
     assert!(spirit.keywords.has(Keyword::Flying) && spirit.colors.contains(&Color::White));
-    assert_eq!(spirit.pt(),(1,1));
+    assert_eq!(spirit.pt(), (1, 1));
     s.restore(&root);
-    command(&mut s, |a| matches!(a,Action::ChooseMode {mode:0,..}));
-    assert_eq!(offered_targets(&s),vec![Target::Permanent(ogre)]);
-    command(&mut s, |a| matches!(a,Action::ChooseTarget {target:Target::Permanent(id),..} if *id==ogre));
+    command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(ogre)]);
+    command(
+        &mut s,
+        |a| matches!(a,Action::ChooseTarget {target:Target::Permanent(id),..} if *id==ogre),
+    );
     settle(&mut s);
-    assert_eq!(zone_of(&s,card),Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
     let exiled = s.snapshot();
     s.advance_to_step(StepKind::End);
     settle(&mut s);
-    assert_ne!(permanent_of(&s,card).unwrap(),ogre);
+    assert_ne!(permanent_of(&s, card).unwrap(), ogre);
     s.restore(&exiled);
-    move_card(&mut s,card,ZoneType::Hand);
-    let later = move_card(&mut s,card,ZoneType::Exile);
+    move_card(&mut s, card, ZoneType::Hand);
+    let later = move_card(&mut s, card, ZoneType::Exile);
     s.advance_to_step(StepKind::End);
     settle(&mut s);
-    assert_eq!(s.game().state.zones.zone_of(later),Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(later), Some(ZoneType::Exile));
+}
+
+#[test]
+fn departure_granted_returns_follow_owner_controller_and_one_incarnation() {
+    use crate::support::{
+        game::enter_battlefield,
+        inspect::{counters_of, tapped, zone_of},
+        play::{cast, command},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&[
+        "Fake Your Own Death",
+        "Undying Malice",
+        "Gray Ogre",
+        "Agent of Treachery",
+    ]);
+    let root = s.snapshot();
+
+    // A stolen creature returns tapped to its owner; the trigger's controller
+    // gets the Treasure.
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    enter_battlefield(&mut s, "Agent of Treachery");
+    if s.action_space().kind != ActionSpaceKind::ChooseTarget {
+        s.pass_priority();
+    }
+    command(
+        &mut s,
+        |a| matches!(a, Action::ChooseTarget { target: Target::Permanent(id), .. } if *id == ogre),
+    );
+    settle(&mut s);
+    let controller = |s: &Scenario, id: managym::state::game_object::PermanentId| {
+        s.game().state.permanents[id].as_ref().unwrap().controller
+    };
+    assert_eq!(controller(&s, ogre), PlayerId(0));
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Fake Your Own Death");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 2));
+    move_card(&mut s, card, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    settle(&mut s);
+    let returned = permanent_of(&s, card).unwrap();
+    assert_eq!(controller(&s, returned), PlayerId(1));
+    assert!(tapped(&s, returned));
+    assert_eq!(s.game().characteristics(returned).pt(), (2, 2));
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+    // The grant belonged to the departed appearance.
+    move_card(&mut s, card, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+
+    // A dying token cannot return, but still makes Treasure.
+    s.restore(&root);
+    let token = s
+        .game_mut()
+        .create_token("token.flying_spirit", PlayerId(0), false)
+        .unwrap();
+    let token_object = card_of(&s, token);
+    cast(&mut s, "Fake Your Own Death");
+    assert!(s.choose_target(Target::Permanent(token)));
+    settle(&mut s);
+    s.game_mut().move_object(token_object, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Spirit").is_empty());
+    assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
+
+    // Malice returns the owner's card tapped with one +1/+1 counter.
+    s.restore(&root);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    cast(&mut s, "Undying Malice");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    settle(&mut s);
+    let returned = permanent_of(&s, card).unwrap();
+    assert!(tapped(&s, returned));
+    assert_eq!(counters_of(&s, returned, CounterKind::PlusOnePlusOne), 1);
+    move_card(&mut s, card, ZoneType::Graveyard);
+    stack_departures(&mut s);
+    assert!(s.game().state.stack_objects.is_empty());
 }
