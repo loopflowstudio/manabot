@@ -252,9 +252,7 @@ impl Game {
     }
 
     /// The program a pending frame projects, by the stacked rule
-    /// (`stacked_trigger_program`): a flagged inline program, or chosen modes
-    /// of a modal rule other than exactly one, which the projected mode and
-    /// catalog join cannot recover.
+    /// (`stacked_trigger_program`).
     pub(crate) fn pending_trigger_program<'a>(
         &'a self,
         trigger: &'a PendingTrigger,
@@ -262,16 +260,16 @@ impl Game {
         if let Some(effects) = &trigger.inline_effects {
             return trigger.program.then(|| effects.as_slice().into());
         }
-        let modal = matches!(
-            self.pending_trigger_face(trigger)?
-                .abilities
-                .get(trigger.ability_index)?
-                .effects(),
-            [Effect::TriggerModes { .. }]
-        );
-        (modal && trigger.modes_chosen && pending_trigger_mode(trigger).is_none())
-            .then(|| self.pending_trigger_effects(trigger))
-            .flatten()
+        crate::flow::resolution::catalog_join_misses(
+            self.pending_trigger_face(trigger)?,
+            self.pending_trigger_definition(trigger),
+            trigger.ability_index,
+            trigger
+                .modes_chosen
+                .then_some(trigger.chosen_modes.as_slice()),
+        )
+        .then(|| self.pending_trigger_effects(trigger))
+        .flatten()
     }
 
     fn trigger_requirements(&self, trigger: &PendingTrigger) -> Option<Vec<TargetRequirement>> {

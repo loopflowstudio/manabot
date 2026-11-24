@@ -64,32 +64,44 @@ pub(crate) fn stacked_trigger_effects(
 }
 
 /// The program a catalog join and the projected mode cannot recover for a
-/// viewer or a suspended frame: an unrecoverable inline program, a face
-/// snapshot that differs from the catalog, or modal choices other than one
-/// mode.
+/// viewer or a suspended frame: an unrecoverable inline program, or a printed
+/// ability `catalog_join_misses`.
 pub(crate) fn stacked_trigger_program(
     trigger: &TriggeredAbilityOnStack,
 ) -> Option<std::borrow::Cow<'_, [Effect]>> {
     if let Some(effects) = &trigger.inline_effects {
         return trigger.program.then(|| effects.as_slice().into());
     }
-    let index = trigger.ability_index;
-    let snapshot_differs = trigger
-        .source_face
-        .as_ref()
-        .and_then(|face| face.abilities.get(index))
-        .is_some_and(|ability| {
-            default_content_pack()
-                .definition(trigger.source_definition_id)
-                .and_then(|row| row.abilities.get(index))
-                != Some(ability)
-        });
+    catalog_join_misses(
+        stacked_trigger_face(trigger),
+        trigger.source_definition_id,
+        trigger.ability_index,
+        Some(&trigger.chosen_modes),
+    )
+    .then(|| stacked_trigger_effects(trigger))
+}
+
+/// Whether a viewer joining `definition`'s catalog row at `index` (and the
+/// single projected mode) misses what `face` runs there: the face is a
+/// snapshot whose ability differs from the catalog (a copy exception's
+/// grant), or a modal rule's chosen modes are other than exactly one.
+/// `chosen_modes` is `None` while modes are unchosen, when the viewer reads
+/// the whole modal rule.
+pub(crate) fn catalog_join_misses(
+    face: &PrintedCharacteristics,
+    definition: CardDefId,
+    index: usize,
+    chosen_modes: Option<&[usize]>,
+) -> bool {
+    let ability = face.abilities.get(index);
+    let catalog = default_content_pack()
+        .definition(definition)
+        .and_then(|row| row.abilities.get(index));
     let modal = matches!(
-        stacked_trigger_face(trigger).abilities[index].effects(),
-        [Effect::TriggerModes { .. }]
+        ability.map(Ability::effects),
+        Some([Effect::TriggerModes { .. }])
     );
-    (snapshot_differs || (modal && stacked_trigger_mode(trigger).is_none()))
-        .then(|| stacked_trigger_effects(trigger))
+    catalog != ability || (modal && chosen_modes.is_some_and(|modes| modes.len() != 1))
 }
 
 /// The single chosen mode of a modal trigger, which a viewer joins to the

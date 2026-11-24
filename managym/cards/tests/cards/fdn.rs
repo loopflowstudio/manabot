@@ -926,6 +926,19 @@ fn check_both_trigger_orders(s: &mut Scenario, check: impl Fn(&mut Scenario, [Ob
 
     s.advance_to_step(StepKind::End);
     assert_eq!(s.action_space().kind, ActionSpaceKind::OrderTriggers);
+    // The copy-granted ability is no catalog slot: each placement frame
+    // carries the program the stacked trigger will carry.
+    let view = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    let placements: Vec<_> = view
+        .continuation
+        .iter()
+        .filter(|frame| matches!(frame.kind, 7 | 8))
+        .collect();
+    assert_eq!(placements.len(), 2);
+    assert!(placements.iter().all(|frame| frame
+        .program_description
+        .as_ref()
+        .is_some_and(|text| text.to_lowercase().contains("sacrifice"))));
     let orders: [_; 2] = s.action_space().actions.clone().try_into().unwrap();
     let root = s.snapshot();
     let [first, second] = orders.map(|order| {
