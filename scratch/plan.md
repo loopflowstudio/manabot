@@ -85,35 +85,31 @@ cut, and wrote the new checkpoint and five matching terminal records
 and statistics rows. The optional MLX package-boundary test passed.
 See [the QA transcript](qa.html).
 
-## Next at Gate
+## Gate validation
 
-All implementation slices are complete. Reuse the focused results above.
-The combined Python acceptance suite still needs a green run with the fixes
-on the integrated branch. Include the continuation and collector checks from
-[validation by change area](../docs/development.md#validation-by-change-area).
+On the `origin/main`-merged branch (`aca4559bbc`), all gate checks passed:
 
-```bash
-uv run --extra dev pytest \
-  tests/env/test_vector_snapshot_slots.py \
-  tests/env/test_fixed_seat_observations.py \
-  tests/env/test_hand_snapshots.py \
-  tests/env/test_vector_reducers.py \
-  tests/env/test_env.py \
-  tests/env/test_engine_recording.py \
-  tests/env/test_game_record_writer.py \
-  tests/academy/test_game_records.py \
-  tests/training/test_game_errors.py \
-  tests/training/test_snapshot_rollouts.py \
-  tests/training/test_training_game_journals.py \
-  tests/training/test_training_decks.py \
-  tests/training/test_adaptive_two_seat.py \
-  tests/training/test_collection.py \
-  tests/training/test_memory_prefix_storage.py \
-  tests/verify/test_native_buffer_capacities.py \
-  tests/test_package_boundaries.py -q
-CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --test-threads 2 vector_env
-git grep -nE "auto_reset|with_auto_reset|replace_failed_into|reassign_roots_into" -- managym manabot docs tests scripts
-```
+- Combined Python acceptance suite (24 test modules including all listed gate
+  modules plus captured bookkeeping, native player policies, rollout, credit
+  assignment, elemental uniform, two-seat learning and sharded benchmark):
+  **514 passed, 5 skipped**.
+- Collector, batch-closure, self-play loop, recipe Etude, layer input and
+  Elemental world checks (`tests/training/test_batch_closure.py`,
+  `tests/training/test_self_play_loop.py`, `tests/training/test_recipe_etude.py`,
+  `tests/model/test_layer_input.py`, `tests/semantic/test_elemental_world.py`):
+  **72 passed**.
+- Native `vector_env` tests (`cargo test --lib vector_env` and `cargo nextest`):
+  **26 passed**.
+- `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `ruff check`,
+  `ruff format --check` on all 34 changed Python/stub files, and `git diff --check`:
+  clean. (`cargo clippy --all-features` on Rust 1.98 hits pre-existing
+  `clippy::too_many_arguments` on `#[pymethods] fn new` in `bindings.rs`,
+  `layout_bindings.rs`, and `vector_env_bindings.rs`, where `PyVectorEnv::new`
+  dropped from 9 to 8 arguments.)
+- Removed-API grep (`auto_reset|with_auto_reset|replace_failed_into|reassign_roots_into`)
+  returned no matches.
+- `docs/engine-python.md` batched slot-loading example printed seeds 42 and 45,
+  then `[42, 47]`.
 
 ## Demo
 

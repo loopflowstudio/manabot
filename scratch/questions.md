@@ -65,3 +65,6 @@ See `scratch/concept-review.html` for full tradeoffs and numbered review questio
   wrote Torch's `learner.pt` and had no collector continuation file.
   Used a smaller Gray Ogre matchup with two streams and one branch per
   group to verify MLX resume within a bounded QA run.
+- **Squash-merge conflicts:** Kept the branch's conflict resolutions when
+  syncing main. The tree at `82c5d1d1b7` is identical to `b82e31e123`,
+  which the branch already incorporated via `a6b50cd8bd`.
