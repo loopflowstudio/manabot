@@ -186,3 +186,5 @@ Use the final pre-change fixture binary for both constructed-board comparisons,
 including Connoisseur's two trigger-order offers. Reuse the budget reference
 binaries built on this Mac for the preceding measurement. All 541 retained tracked inputs under
 `managym/` and `content/` matched their git blobs at `f299750a45`.
+
+The chosen-tap payment optimization is ordered after gate, not before: the local paired Engine Budget already passes after the damage-history change, so it does not block acceptance. Run it here only if the hosted budget fails; otherwise file it as its own Task.

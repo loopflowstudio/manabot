@@ -602,19 +602,10 @@ and added five counters. With the rebuilt CPython 3.13 extension,
 chosen Giant gives 3 in the public label and 0.3 in both packed v11 rows.
 The remaining measurement belongs to the Engine Budget and stress-state pass.
 
-**Decomposition re-review at `d87fe6e918` (2026-11-24): criterion not met,
-then resolved.** Lunar Convocation and Bakersbane Duo each compose through one
-owner (`PlayerTurnHistory.life_gained` written once in `flow/zones.rs`, read
-only through `EffectValue::LifeGainedThisTurn`; one `TriggerCondition::Expend`
-matcher). No card key appears in engine `src/` or `state/src/`. The three
-blocking defects (Greatwurm's second amount carrier clamped at 255, wrapper
-walkers omitting `Prepared`, `SpellLki` without `SpellProfile`) are fixed in
-the section below and compressed at `a721dc4cbb`; the code now has
-`EffectValue::TriggeringAmount` at `cards/src/fdn.rs:3407`, exhaustive
-`TriggerCondition::inner` (`state/src/ability.rs:3049`) and
-`SpellLki.profile` (`state/src/stack_object.rs:54`). The only remaining
-`u8` clamp on trigger X is the legacy `CountersPut` binding kept for pinned
-pilots. The review itself has not been repeated against these fixes.
+The re-review at `d87fe6e918` found three blockers (Greatwurm's second amount
+carrier clamped at 255, wrapper walkers omitting `Prepared`, `SpellLki`
+without `SpellProfile`). The alignment below fixed them, and the review at
+`76b037bad6` (under Open before publishing) confirmed the criterion.
 
 ## Post-merge concept alignment
 
@@ -693,8 +684,9 @@ casting-only conformance receipts retain their original revisions.
 2. The paired local Engine Budget passed at `b62f8b7ece` after the
    damage-history change. Gate still owns the hosted result. See the
    [engine measurement](#engine-measurement--2026-11-24).
-3. The four Academy failures in `scratch/questions.md`: gate confirms whether
-   they also fail on main.
+3. The four Academy failures and the `test_learn_evidence.py` opening
+   `ParityDivergence` (seat 1 viewer digests only) in `scratch/questions.md`:
+   gate confirms whether they also fail on main.
 
 The rebuilt CPython 3.13 extension replayed the bundled v9 and v11 pilots.
 The optional u1952 checkpoint was unavailable. The directed text check
@@ -716,13 +708,19 @@ description recursion is per-wrapper text. No card key in engine `src/` or
 Debug nextest: 11 cards cases (four Greatwurm incl. 258 + 260 = 518 counters,
 Hatcher order offers and stack labels "that many (1)/(3)", Hatcher catalog,
 countered Omen, trample controls) and the state `prepared_preserves_a_nested_once_each_turn_limit`
-passed. Retained, not blockers: the legacy `CountersPut` `trigger.x` u8 binding
-(pinned pilots) and `match_trigger_wrappers`' `leaf =>` fallthrough, which
-would treat a nested `InGraveyard` as a leaf; only top-level use exists
-(`tla.rs:11197`).
+passed. Retained, not a blocker: the legacy `CountersPut` `trigger.x` u8
+binding (pinned pilots). Compression at `3b774590f3` closed the
+`match_trigger_wrappers` fallthrough: a nested `InGraveyard` now never matches
+at event time (its only use is top-level, `tla.rs:11197`, read by the
+graveyard caller), and any other unpeeled wrapper fails a debug assertion.
 
-**Next.** `gate`: full debug suite, integrated Watch privacy, Engine Budget
-and the Academy baseline comparisons.
+**Next: `gate`.** Full debug suite (nextest `--profile ci`), the integrated
+Watch replay/privacy checks in item 1, the hosted Engine Budget, and the
+Academy and `test_learn_evidence.py` comparisons against main in item 3. The
+chosen-tap payment slice (implementation order item 2) is a measured
+improvement, not an acceptance blocker: the local budget already passes. Do
+it after gate only if the hosted budget fails or the branch stays open for
+review; otherwise leave it as its own Task.
 
 ## Directed interactions for integrated validation
 
@@ -841,7 +839,7 @@ The 216 paired control cells agree on reported outputs (including simulated coun
 
    The [damage-history measurement archive](damage-history-measurements.zip) contains the eight before/after fixture files, raw budget samples, scheduling counters, paired comparison, debug results and Academy replay check.
 
-2. **Next measured slice.** Build the chosen-tap payment inputs once per pending decision. Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
+2. **Planned measured slice (not an acceptance blocker; see Next above).** Build the chosen-tap payment inputs once per pending decision. Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
 
 Fumigate examined 29 / 89 / 305 trigger sources for one match. At 16 the measured resolution still took .042 ms. Keep that observation for a workload where simultaneous departures dominate before changing pre-batch LKI matching. First-gain matching examined exactly one source per offer on both listener boards. Neither result justifies another history store. Keep all choices, overflow errors and configured capacity behavior, native trivial skipping and debug cache assertions through both planned slices.
 
