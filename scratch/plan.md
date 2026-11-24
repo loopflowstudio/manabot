@@ -262,155 +262,30 @@ text, and 0.3 in the v11 stack row. The native cases and Python text
 fixtures are in `cards/tests/cards/fdn.rs` and
 `tests/semantic/test_text_observation.py`.
 
-### Behavior review at `54b4c6042c`
+### Behavior reviews through the mana-split batch
 
-MTG-422's `d12eb496b3` and the host-preparation merge `074bc49a64` are
-ancestors of the reviewed head. All eight `attack_batch_` fixtures and 44
-selected debug cards controls passed, including Linden/Chart, TLA firebending,
-target authority, token coverage and payment. All 12 debug cases in
-`search_state_contract` and `canonical_replay_tests` also passed. The earlier
-bare per-attacker doubler failure is closed. Two declared members each retain
-their own two triggers. The previous Linden formatting and hash-version
-findings are closed.
+Behavior reviews at `54b4c6042c` (attack), `59a8f767a2` (power), `67f9d3ee34`
+(life) and `23797c77f9` (mana split) each passed the debug `cards` target,
+`managym` lib and replay/search contracts, plus the focused Python selection on
+a rebuilt extension. Findings 1–7 are closed (fixtures moved to first-printing
+test modules, ledger pointers filled, per-source lifelink batching, "no modes
+chosen" stack text, Academy fixtures keep opening hands through native offers).
+Their full text is in git at `f4bcb48c4a:scratch/plan.md`.
 
-- The 0/2/3 attacker fork produces one Armasaur trigger at three and one
-  Battlesong trigger for each nonempty declaration. Both place their target
-  through ordinary `ChooseTarget` offers. Existing attackers join Ancestor
-  Dragon's and Jazal's resolution-time counts through the live attacking
-  predicate. Raid reads the turn's committed declaration regardless of who
-  remains in combat. Aurelia reads the exact object's first declaration, so
-  becoming an attacker by entering combat and regaining a lost ability have
-  different outcomes. These checks agree with CR 506.5, 508.3–4, 603.2d and
-  608.2h. [Comprehensive Rules](https://magic.wizards.com/en/rules)
-- Alesha's native target offers exclude Serra Angel at power three, and the
-  pending trigger retains power three after Alesha leaves. Both native views
-  and v11 stack rows show it. The Panda and Immolator witnesses above exercise
-  the same exact source across reentry. Midnight Snack reads the five life
-  gained from two events, including after sacrificing the Snack. Food and
-  Goblin creation use the catalog's existing token path. The distinct gain
-  and amount columns and text checked out on the rebuilt extension.
-  [Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
-- The Tolarian Terror branches retain six or seven spent mana in the native
-  spell and both v11 rows. The comparison still sees the chosen spell after
-  Counterspell moves it off the stack. The counted mana ability produces one
-  or two green in the live-board fork. The payment controls confirmed the
-  restricted Ally pool pays before ordinary mana, Animal Attendant offers
-  both spends for the green pip, and Uncle's Musings offers meaningful spends
-  for its generic pips with different receipts. Waterbend taps and leftover
-  floating mana stay distinct from the committed contributions. Bakersbane's
-  two viewers also read the caster's committed turn spend in text and v11.
-
-The installed CPython 3.13 extension predated `axis_buffers` from the host
-preparation merge. After rebuilding and atomically replacing it, the focused
-Python selection reported 39 passes and the six Academy fixture failures
-below. Five additional checks for v11 prepared joins and Torch host admission
-passed. The passing controls include named layout and v10 model ingress,
-text and tensors for public spend and draws, manual Commands and stale
-rejection, hidden-hand permutation, and a serialized snapshot that replays a
-Command with issued object bindings.
-
-Two in-memory restores per offer replayed the yes and no Commands from one
-partial Linden/Savannah Lions declaration. Each duplicate returned
-`stale_revision` with its witness intact, and both branches preserved the
-root. Finishing the declaration produced one or two committed attackers in
-both viewer JSON round trips, v11 permanent rows, history-free LLM text and
-the Academy Python projection. A separate pending Serra Angel cast showed
-five spent mana to both choosers through the same surfaces.
-
-**Power batch behavior review at `59a8f767a2`**
-
-The working phase for the power batch is satisfied. All 13 `power_batch_` debug
-cases passed, as did the whole debug `cards` target (877), the `managym` lib
-(358), and `search_state_contract` plus `canonical_replay_tests` (12). After
-the extension was rebuilt at this head and replaced atomically, 120 focused
-Python checks passed and one skipped (the optional u1952 checkpoint). They
-covered text, effect execution, v10 input, named layout, pinned pilots and
-Immolator source power. All eight ledger rows link to their source and fixture.
-
-- The definitions match the printed rules. Goblin and Ruby check "while"
-  only when the trigger fires (`ActiveIf`). Hornbeetle and Surrak use
-  intervening-if conditions that resolution checks again (CR 603.4), and
-  Surrak's total includes negative power. Ashroot and the Partners fix X at
-  resolution from live power or LKI (CR 608.2h). For negative power, Bulk Up
-  follows the Unleash Fury doubling ruling. Bite Down does nothing if either
-  target is illegal (CR 608.2b).
-- `match_trigger_wrappers` removes `WasCast`, `FromZone`,
-  `WhileSourceAttacking`, `ActiveIf` and `OnceEachTurn` before the leaf
-  emits members. The battlefield and graveyard paths share it. A
-  once-per-turn limit keeps the first member that passes the intervening
-  condition and caps doublers at one. There is no official ruling for that
-  cap; it follows a judge answer (Teysa/Sefris) and is recorded as the rules
-  reading. Grant clocks key on (recipient object, grantor, timestamp, static
-  slot, ability index), so a reentered recipient or grantor gets a fresh limit.
-  Used grants count toward the public `once_each_turn_used` and enter the
-  match hash only when nonempty.
-- Fixed during review: `flow/triggers.rs` imported `Condition` without using
-  it, so the debug build warned and clippy would fail under `-D warnings`.
-  The import is gone.
-- Constraints for later batches, not defects here:
-  `EffectValue::Property { of: Target(_) }` reads `frame.primary_target()`,
-  so a card that reads the property of its second target needs the clause's
-  own target. Static `Condition::Compare` in `layers.rs` reads power at the
-  current point in the layer system and mana value from the live card, not a
-  layer-1 copy. No authored static depends on either case. No fixture changes
-  Ashroot's power after resolution to show the pump stays fixed; the
-  `ModifyPt` path already stores a fixed value.
-
-**Life batch behavior review at `67f9d3ee34`**
-
-The working phase for the life batch is satisfied except Finding 6 below. These passed at this head, all in debug: the cards target (887, including the ten life-batch cases and the Sozin's Comet/Katara control), the `managym` lib (359, including the live-attacker heuristic control), and `search_state_contract` plus `canonical_replay_tests` (12). The extension was built at `a0b213f734`, and the compression after it changed no behavior. With it, 109 text-observation and named-layout Python checks passed. All eight ledger rows name their first-printing source and fixture. Conqueror's row also records the deferred CR 104.4b draw as pending.
-
-- The definitions match the printed rules and the Scryfall rulings. Seraph's `nth: Some(1)` reads the turn's committed gain ordinal, so a Seraph that arrives after the turn's first gain waits for the next turn. Conqueror binds the life actually lost, so Teferi's Protection gives no event. Life paid as a cost goes through `commit_life_change` and triggers it, per the ruling. Bloodthief and Collector use CR 603.4 intervening-if conditions. Second Rite reads the life total on resolution (CR 608.2c). Ayli reads the sacrificed creature's LKI toughness, shows the pending amount to both viewers, and checks "activate only if" only on activation (CR 602.5b, matching the ruling). Indulgence's discount is generic mana only.
-- Findings 1 and 2 are closed. Firebending grants are ordinary attack triggers that pass through the shared occurrence path, and the heuristic reads the live `attacking` permanents.
-- Rules reading recorded in questions.md, not a defect: each combat source's damage to a player is its own `LifeChanged`, so two unblocked attackers give two Conqueror triggers (2 and 3) rather than one trigger for 5. The total gained is the same. No CR rule or card ruling settles whether simultaneous damage from several sources is one life-loss event; CR 119.9 only covers gains.
-
-**Mana-split batch behavior review at `23797c77f9`**
-
-The working phase for the mana-split, `DealsDamage` source, `*/*` CDA, move-result and multi-player mill batch (`f5e7244bf4`–`3be3b3295f`) is satisfied, with no new finding. These passed at this head in debug: the cards target (944), the `managym` lib (361), `rules_tests` (190, 2 ignored), `search_state_contract`, `canonical_replay_tests` and `match_state_hash_tests`. The compression `3be3b3295f` changed no behavior: a pattern rewrite in `value_description` and the `object_pt(..).0` rename. The focused Python result recorded at `965b0e0ea1` (116 passed, 1 skipped) therefore still applies. This review did not rebuild the extension.
-
-- The definitions match the printed rules and CR. Kiora's and Crypt Feaster's threshold is an intervening-if that is checked again on resolution (CR 603.4), and the Feaster drop-below-seven fork shows it. Stroke of Midnight gives the Human to the target's last controller, including when an indestructible target survives. Feed the Swarm reads mana value by LKI. Maelstrom Pulse destroys nothing when its only target is illegal (CR 608.2b). `accepts_name` rejects an empty name, so a nameless target has no namesakes (CR 201.2a). Cemetery Recruitment draws only for a Zombie returned to the hand. Revenge of the Rats counts on resolution and is exiled after flashback. CDAs apply in every zone (CR 604.3): Crusader and Aberration in hand, the v11 card row and stack rows, all through `object_pt`.
-- Payment: probe not kept. Archdruid, an Elf token and one Forest pay for Llanowar Elves. Manual payment offers the Archdruid activation, and tapping it commits one G with one G floating separately in the pool (`spent=1`, pool G=1). Auto payment taps the Forest and leaves the Archdruid untapped, so it wastes no mana. Every `mana_choices` consumer (offers, autotapper, preview, decision memory) reads finalized layered views. `current_mana_output` returns a concrete output for every `is_mana_ability` leading effect, so no dynamic ability reaches those consumers unfinalized.
-- Constraints for later batches, not defects here. The `DamageDealt` binding falls back to `Target::StackSpell(source)` for a source that is neither a permanent, its LKI nor a stack spell (for example, a hand ability such as channel). No authored card reads "that source" for such damage, so the fallback is unexercised. `TargetAndSameName` iterates seats 0 and 1, as `Scope::Battlefield` does. Dread Summons' replacement-exile control still needs a catalog replacement.
-
-**Findings** (Finding 10, open, is under the closing-slice behavior review)
-
-3. **Closed in `cf12733e50`.** Six Academy fixtures still assumed reset starts in priority: two cases in
-   `test_semantic_boundary.py` ask for `pass_priority` at the opening Keep
-   offer; `test_combat_preview.py` and all three Blast cases inject a board
-   while the action space is `Modal`. Keep both opening hands through native
-   offers before reaching the fixture position, then rerun the offer,
-   stale-command, recovery and privacy assertions.
-4. **Closed in `6aa5452f11`.** Card fixtures for the attack and power batches lived in
-   `managym/cards/tests/cards/fdn.rs` even when the card's first-printing
-   module is another set (Bite Down `dmu.rs`, Surrak `dtk.rs`, Halana and
-   Alena `vow.rs`, Ruby `woe.rs`, among others). The repository rule puts a
-   one-card test in its set's test module. Move single-card fixtures there and
-   update the ledger `fixture` paths; keep cross-card interaction tests where
-   their subject card lives.
-5. **Closed in `6aa5452f11`.** Six early ledger rows lacked fixture pointers (Cat Collector, Venom
-   Connoisseur, Predator Ooze, Steel Hellkite, Fumigate, Exsanguinate). Their
-   fixtures are named in the slices above.
-6. **Closed in the death slice.** **One lifelink source hitting several recipients is several life-gain events.** The rulings for Exemplar of Light, Sanguine Bond and Vito say "a single creature with lifelink [dealing] combat damage to multiple creatures, players… at the same time… triggers only once." `deal_damage` (`flow/damage.rs`, the `lifelink_controller` tail) calls `commit_life_change` for each damage event, so each recipient becomes a separate gain. Reproduction: an Exemplar of Light and a Hill Giant with lifelink and trample; Savannah Lions blocks the Giant. Life goes 20 → 23 and 20 → 18 as expected, but `turn.history[0].life_gains == 2` and Exemplar gets two counters where the rulings give one. Fix: within one simultaneous damage batch (`event_batch`, combat or a multi-recipient spell), sum lifelink gains per source and commit each source's sum as one gain. Two lifelink sources still make two events. Add this fixture, plus a two-source control, to `fdn.rs` beside Exemplar's test, and record the gain count in its ledger row. The defect predates this batch, but the batch's gain readers (Exemplar, and any later "Nth time" gain) are what expose it.
-
-7. **Closed in `4502508574`.** **A stacked "up to" modal trigger that chose no modes reads as all of
-   them.** `trigger_description` (`agent/ability_description.rs`) only
-   prefixes "chosen mode N" when `chosen_modes` is nonempty and otherwise
-   describes the printed `TriggerModes`. Before the death slice an empty
-   choice became `inline_effects = Some([])`. Reproduction: Bumi, King of
-   Three Trials enters with no Lesson in its controller's graveyard (X = 0)
-   and the trigger is placed after one priority pass. Both viewers' stack
-   row reads "Choose up to 0 plus the number of Lesson cards… Put 3 +1/+1
-   counters…; or … Scry 3; or … Earthbend 3", `chosen_mode` is `None`, and
-   the frame has no program. It resolves to nothing (0 counters), which is
-   correct. Fix: a stacked trigger has always chosen its modes. Pass
-   whether the choice is made (stack: always; placement: `modes_chosen`)
-   and render a made empty choice as "no modes chosen". Add the zero-Lesson
-   case to `tla.rs::bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard`,
-   asserting both viewers' text.
-
-Still open beyond findings: recorded Watch playback of a partial
-declaration, the full debug and browser gate, frozen pilot compatibility on
-the merged preparation path, and Engine Budget comparisons.
+Constraints these reviews left for later cards, not defects:
+- `EffectValue::Property { of: Target(_) }` reads `frame.primary_target()`;
+  a card reading its second target's property needs the clause's own target.
+- Static `Condition::Compare` in `layers.rs` reads power at the current layer
+  point and mana value from the live card, not a layer-1 copy.
+- `OnceEachTurn` under trigger doublers caps at one member, following a judge
+  answer (Teysa/Sefris); no official ruling.
+- The `DamageDealt` binding falls back to `Target::StackSpell(source)` for a
+  source that is neither permanent, LKI nor stack spell (hand abilities);
+  unexercised.
+- `TargetAndSameName` iterates seats 0 and 1, as `Scope::Battlefield` does.
+- Dread Summons' replacement-exile control still needs a catalog replacement.
+- Each combat source's loss is its own `LifeChanged` (two Conqueror triggers
+  for two attackers); see `scratch/questions.md`.
 
 ## Remaining mechanic batches
 
@@ -422,9 +297,9 @@ All 81 primary FDN rows (47 `event_history`, 34 `context_queries`) have
 definitions and native fixture pointers, with no `pending` note (checked
 against `fdn.jsonl` at `a1f79ee437`). Fiendish Panda and Heartfire Immolator
 satisfy the additional exact-source witnesses. Cost-primary rows citing either
-dependency: 15 of 17 delivered; Quilled Greatwurm (`play_permissions` plus
-distributed counter removal) and Ovika (composite mana-and-life ward) carry
-recorded blockers. Keep the established cross-set and integration boundaries.
+dependency: 16 of 17 delivered. Quilled Greatwurm landed after the casting
+authority sync; Ovika (composite mana-and-life ward: `ward_cost`/`ward_life`
+pay one or the other) carries the recorded blocker. Keep the established cross-set and integration boundaries.
 
 ### Implemented slice · Power at attack, combat and resolution
 
@@ -638,74 +513,51 @@ The working phase for this slice is **not satisfied**: Finding 10 below (a false
 
 Remaining for this slice: implement concept-review items 1–3 with Finding 10, then re-record hash v31 evidence as planned.
 
-### Implemented slice · Closing-slice concept alignment (persistent CR 104.4b watch, draw orientation, grantor-cost authority and state-trigger identity)
+### Implemented slice · CR 104.4b mandatory-loop draw (Findings 10–18)
 
-Built in `86c6f44a8a` on hash contract **v31** from the full-branch concept review at `65cebaf342` (`scratch/concept-review.html`), which found the watch reset whenever `tick_priority` returned a space (so CR 104.4b never fired with any unrelated instant or ability available), Python Academy inverting `won` on draws, and grantor costs checked only for `exile_grantor`. What exists:
+`MandatoryLoopWatch` lives on `PriorityState.loop_watch` and survives passes.
+`tick_priority` counts each finished resolution once (`resolution_owed`), after
+stabilization has applied SBAs and placed triggers and after terminal results;
+past `UNWATCHED` (64) it records `GameState::loop_fingerprint` (`state/hash.rs`:
+match state minus life, poison, event logs, priority, id allocation, stack-object
+ids, with ability-use counts saturated at 16). A repeated fingerprint with no new
+life low or poison high for a seat that can lose draws; `CAP` (10,000) ends
+unbounded growth. `PriorityState::clear_loop_watch` is the only reset: step start,
+`reset`, a successful non-pass action, publishing a non-priority space with more
+than one action, and a finished resolution leaving the stack empty. Grantor costs
+(`has_grantor_cost`) reserve through `SourceReservation::owed`; Python
+`viewer_view`/`normalize_observation_to_hero` take the winning seat.
 
-- `MandatoryLoopWatch` lives on `PriorityState.loop_watch: Option<Box<_>>` and survives passes; poison counts as progress only for a seat that `can_lose`. Since `89632b774e` `repeats` takes a sample closure and fingerprints only past `UNWATCHED`, so short chains pay nothing.
-- `ActivatedAbilityDefinition::has_grantor_cost` covers both grantor kinds in payment reservation, action focus and `action_description`; `state_trigger_waiting` ignores triggers with `inline_effects`, so a granted trigger never holds a printed state trigger.
-- The watch (`priority.rs::MandatoryLoopWatch`) counts resolutions; after `UNWATCHED` (64) it records `GameState::loop_fingerprint` (`state/hash.rs`): the canonical match state minus life totals, event logs, priority, id/timestamp allocation and waiting-trigger enqueue ids, with turn-history counts saturated at 16. A loop is a repeated fingerprint with no new life low or poison high for a seat that can lose; `CAP` (10,000) still ends unbounded growth. A probe of the Herald loop showed only waiting-trigger ids differing between cycles once those fields were masked.
-- Cleared by: any non-pass priority action (`execute_action`), mana abilities (`on_non_pass_action`), `reset`, `on_step_start`, publishing a non-priority space with more than one action (a real choice), and a resolution leaving the stack, pending triggers and placement empty.
-- Python: `viewer_view(obs, viewer, *, winner)` and `normalize_observation_to_hero(observation, human_seat, *, winner)` (and `person_board`) take the winning seat; the unused `hero_view` is removed.
-- Tap-grantor text: "pay {1}, {T}, and tap Fishing Pole (permanent N)"; exile-grantor text is unchanged.
+Fixtures (`fdn.rs`): `bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices`,
+`bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain`,
+`a_finite_chain_over_counters_is_no_mandatory_loop`,
+`a_rejected_action_leaves_the_loop_watch`,
+`a_poison_loop_against_a_protected_player_draws_promptly`,
+`a_suspended_resolution_is_not_counted_toward_a_loop`,
+`a_loop_of_suspending_resolutions_draws`,
+`a_state_trigger_loop_draws_while_its_condition_stays_true`,
+`an_untap_trigger_loop_draws_when_the_trigger_untaps_its_source`,
+`a_choice_during_resolution_clears_the_loop_watch`,
+`two_fishing_poles_on_one_creature_offer_activations_naming_each_pole`;
+`m21.rs` `mazemind_tome_state_trigger_is_not_held_by_another_trigger_of_the_tome`;
+`state/loop_fingerprint_tests.rs`. Not covered by a game: the grantor tap
+reservation (no catalog witness) and terminal SBA precedence at `CAP` (control
+flow only; a probe needs 10,000 resolutions). The v31 semantic-kernel corpus
+was re-recorded with every final state hash and outcome unchanged
+(`3049b48fdb`, then the five Finding 18 traces).
 
-Tests: `fdn.rs` `bloodthirsty_conqueror_loop_draws_while_players_pass_with_choices`, `bloodthirsty_conqueror_loop_ends_when_a_player_kills_the_drain`, `a_finite_chain_over_counters_is_no_mandatory_loop` (Finding 10, 100 counters), `two_fishing_poles_on_one_creature_offer_activations_naming_each_pole`; `m21.rs` `mazemind_tome_state_trigger_is_not_held_by_another_trigger_of_the_tome`; `priority.rs` unit tests; `tests/academy/test_play_modes.py` viewer and trace draw cases. The grantor tap reservation has no catalog witness (no grantor taps for mana or waterbends), so it is covered only by reading.
+**Syncs onto main.** `912f8e622a` (`88fe2ebf6c`): 207 FDN cards with combat
+damage choices; the Exemplar fixture now answers trample assignment, and the
+Pridemate lifelink test compares simultaneous gains as a set (main commits them
+in `ObjectId` order). `662e9ce96c` (casting authority, about 90 cards) and
+`610370233c` (Torch MPS): main's effective mana value, prepared-cast and
+flashback stack columns keep 37–39 and the six history columns follow at 40–45;
+Quilled Greatwurm is delivered through main's `PlayRoute::PrintedGraveyard`
+(`scratch/questions.md`, "Sync onto main at `610370233c`").
 
-Checks: debug workspace under nextest (`--profile ci`, 1655 tests) failed only on the v31 pins (14 `frozen_*` semantic-kernel cases, the Clone witness) and a unit-test expectation, all since fixed. Semantic-kernel w17-v6 re-recorded in `3049b48fdb`: 14 cases, 3049 commands, every non-digest field unchanged. Opening authored-match authority (193 decisions, digests only) and live/headless parity (`RUL5_PARITY_OK`, no divergence) plus the Academy demo/choice-navigation fixtures refreshed in `3e7ca196fd`. With the rebuilt cp313 extension: authority/parity tests and the focused Python selection (text observation, effect-execution input, v10, named layout, pinned pilot, Academy boundary, combat preview, Blast, learn setup, decision surface) pass except four Academy tests listed in `scratch/questions.md` that do not touch these paths.
-
-**Alignment fix (Findings 11–16), from the concept review at `31c81eda80` and behavior review at `170739d3e6`.** The review, in debug at a head including `89632b774e`, found no v31 drift but showed a poison loop against Herald of Eternal Dawn drawing only at `CAP` (10,000 resolutions, poison 4999, 65 s in debug) because `loop_fingerprint` kept player poison. The other findings came from reading: a rejected priority action ended the watch (12), a suspended resolution counted toward it (13), `stack_objects[*].id` stayed in the fingerprint (14), saturation clamped `ObjectId`/`CardDefId` elements rather than counts (15), and the announced tap-grantor reservation omitted `sacrifice` (16).
-
-Built in `c36ed44f43`: `execute_action` clears the watch only after a non-pass priority action succeeds; `tick_priority` skips the watch while a resolution is suspended; `loop_fingerprint` masks player poison (dropping an emptied map), strips stack-object ids inside each `{variant: body}` and saturates only the count of ability-use entries; both announced grantor reservations hold `sacrifice: true` (since `c36a622534`, every owed source reserves through `SourceReservation::owed`). Directed checks, each shown to fail without its fix: `fdn::a_rejected_action_leaves_the_loop_watch` (a), `fdn::a_poison_loop_against_a_protected_player_draws_promptly` (b; 57 s to CAP before, now within `UNWATCHED + 64`), `fdn::a_suspended_resolution_is_not_counted_toward_a_loop` (d; count 2, not 3), and `state/loop_fingerprint_tests.rs` (poison masked but other counters kept, stack ids, saturation keeps distinct sources). Check (c) as a game could not fail: in a steady cycle the sample right after the cycle's bottom-most new object resolves holds only older objects, so some sample repeats whatever the ids; the fingerprint unit test covers the strip instead. The grantor reservation has no catalog witness (Finding 16) and no test. Debug, after the fix: `priority.rs` units 4/4, loop and closing-slice card fixtures 17/17, `search_state_contract`, `canonical_replay_tests`, `semantic_conformance_tests` and `match_state_hash_tests` 43/43; no hash-version bump. The Python extension was not rebuilt in this checkout. After `c36a622534` the ten loop and Fishing Pole card fixtures pass in debug; the full debug workspace has not been rerun since `86c6f44a8a`, so gate's CI is that check.
-
-**Behavior review of the alignment fix at `b1fb16f09c`.** Findings 11–16 are fixed as planned, and each fix matches its rule: the watch clears only after a priority action succeeds, poison and stack-object ids are masked, only ability-use counts saturate, and every owed source reserves through `SourceReservation::owed`. Debug at this head: `managym` lib `priority`/`loop_fingerprint` 8/8, `canonical_replay_tests` 6/6, `search_state_contract` 6/6, `semantic_conformance_tests` 20/20 (no v31 drift, no hash-version bump), and the loop, Conqueror, Fishing Pole, Mazemind Tome, suspended and rejected-action card fixtures 13/13. The probes below were not kept. It found Finding 17, since fixed.
-
-17. **A loop whose resolutions all stop for a decision is never counted, so it never ends, not even at `CAP`.** `watch_for_mandatory_loop` has one call site, after `resolve_top_of_stack` in `tick_priority`. Since `c36ed44f43`, a resolution that suspends is skipped there, and the resumption path (`decision.rs`, `run_frame`/`continue_resolution` after the suspended decision is answered) counts nothing when it finishes. Reproduction (probe, debug `cards`): Bloodthirsty Conqueror; Gray Ogre with an injected "whenever you gain life, tap a chosen creature named Gray Ogre you control, then gain 1 life"; empty hands; Bolt the opponent. With `skip_trivial = false`, the watch counted 2 resolutions (Bolt, Conqueror) and stayed at 2 across 600 steps while life climbed 20 → 205. With `skip_trivial = true`, one `pass_priority` call never returned (17 CPU minutes, 5.6 GB RSS, then killed). This gap predates the fix: with the skip reverted, the watch was `None` throughout, because the suspended ability is off the stack (stack 0, nothing pending) and the emptied-stack rule cleared the watch on every cycle. The fix helps a loop that mixes suspending and ordinary resolutions, but a loop made only of suspending resolutions is still unbounded. Required fix: count each resolution exactly once, when it finishes, wherever it finishes. For example, mark the watch owed when `tick_priority` skips a suspended resolution, and count it (fingerprint, draw and `CAP`) on the next `tick_priority` pass with no suspension and no pending choice. Keep the emptied-stack clear for that finished state only. Add the probe as a directed `fdn.rs` test under `skip_trivial = true`; it must draw within `LOOP_RECOGNIZED_WITHIN`. Check (d), `a_suspended_resolution_is_not_counted_toward_a_loop`, pins only the count during suspension; it stays valid once the count lands at completion.
-
-**Finding 17 fix (`31a2d7dbd3`, compressed in `0b592982ee`).** Every resolution sets the unhashed `PriorityState::resolution_owed`, suspended or not, and `tick_priority` counts it in one place, its loop top, once no suspended decision or pending choice remains (CR 608.2m), via `end_mandatory_loop` (fingerprint, draw, `CAP`, and the emptied-stack clear, which therefore runs only at finished resolutions). Pending choices are player-initiated payment and activation targeting, never produced by a resolution, so an offered action space sees the flag only while a hashed suspended resolution waits; step start and `reset` clear it. Directed test `fdn::a_loop_of_suspending_resolutions_draws` (the probe, `skip_trivial = true`) draws within `LOOP_RECOGNIZED_WITHIN`; check (d) still pins the count during suspension.
-
-Checks. At `31a2d7dbd3`, debug: the new test and the loop card fixtures, lib `priority`/`loop_fingerprint` 8/8, `canonical_replay_tests`, `search_state_contract`, `match_state_hash_tests`; no hash-version bump. `semantic_conformance_tests` drifted on three trace hashes (`ur-vs-gw-5eef`, `gw-vs-ur-5eee`, `sacrifice-163`) because those games finish suspended resolutions that the hashed watch now counts; re-recorded in the same commit with 14 cases, 3049 commands and every final state hash unchanged. Rebuilt cp313: authored-match parity, choice navigation and Learn setup pass unchanged; one opening-parity Learn failure is in `scratch/questions.md` as predating this fix. At `0b592982ee`, debug: lib 8/8, canonical_replay + search_state_contract + semantic_conformance + match_state_hash 43/43 with no trace drift, loop card fixtures 14/14.
-
-**Post-Finding-17 full-branch concept review at `b817943ea0` (`scratch/concept-review.html`) — Finding 18.** Audited the entire MTG-418 surface against merged base `a40a5ee146` (including the `1633beec4d` packed v11 `ObservationBatch` merge: dense, packed CSR, `FactKind::payload_divisor`, and `manabot/policy/prepare.py::_facts` all line up). Found one remaining structural mismatch in the CR 104.4b loop-watch lifecycle:
-
-18. **Count each finished resolution *after* CR 117.5 / 704.3 / 603.8 stabilization, and unify loop-watch clearing.**
-    - *Why the current order breaks:* `tick_priority()` (`managym/src/flow/tick.rs:479-498`) consumes `resolution_owed` and runs `end_mandatory_loop()` **before** `stabilize_before_priority()`. Because `end_mandatory_loop()` clears `loop_watch = None` whenever `stack_is_empty() && pending_triggers.is_empty() && trigger_placement.is_none()`, any mandatory loop whose next trigger is created inside `stabilize_before_priority()` wipes `loop_watch = None` on every cycle and hangs forever without even reaching `CAP`:
-      1. **CR 603.8 state-trigger loops** (`check_state_triggers()` only runs inside `stabilize_before_priority()`): a state trigger whose resolution leaves its condition true clears `loop_watch` every cycle.
-      2. **Non-batch `emit()` trigger loops**, including `BecomesUntapped` (`untap_permanent()` in `zones.rs:312` pushes `PermanentUntapped` to `pending_events`, never `pending_triggers`; `process_game_events()` runs inside `stabilize_before_priority()`).
-      3. **SBA-triggered loops** (e.g., 0/0 creature enters -> CR 704.5f SBA kills it -> death trigger returns it).
-      4. **Terminal SBA precedence at `CAP`:** if the 10,000th resolution kills a player via SBA (`life <= 0`, `poison >= 10`, `drew_when_empty`), running `end_mandatory_loop()` before `stabilize_before_priority()` declares `Draw { mandatory_loop: true }` before `commit_state_based_losses()` can award the win.
-    - *Why clearing is split:* `tick.rs:114` (publishing a non-priority decision with `actions.len() > 1`), `action.rs:1005` (non-pass action, including a mid-resolution mana activation), and `priority.rs:63` (`on_non_pass_action`) clear `loop_watch = None` while leaving `resolution_owed = true`. After a player makes a 2-option mid-resolution choice while another object sits on the stack, the stale `resolution_owed = true` immediately seeds a new `MandatoryLoopWatch` at `resolutions = 1` for that player-chosen resolution.
-    - *Required fix (hash contract v31 intact, no version bump):*
-      1. Add `PriorityState::clear_loop_watch(&mut self)` in `managym/src/flow/priority.rs` setting both `self.loop_watch = None` and `self.resolution_owed = false`. Route all clearing sites through it: `PriorityState::reset`, `PriorityState::on_non_pass_action`, `tick.rs::on_step_start`, `tick.rs::tick` (on `space.kind != ActionSpaceKind::Priority && space.actions.len() > 1`), `tick.rs::end_mandatory_loop` (empty stack), and `action.rs::execute_action` (after `dispatch_action(action)?` succeeds on a non-pass action). Keep `resolution_owed` as `#[serde(skip)]` and update its doc comment to note that it is `true` only across forced 1-action suspensions or stabilization prompts (both hashed) and is always `false` before any priority or multi-option decision.
-      2. In `managym/src/flow/tick.rs::tick_priority()`: set `self.state.priority_mut().resolution_owed = true; stabilized = false;` immediately after `resolve_top_of_stack()` (when step stays initialized and `!is_game_over()`). Move the `if self.state.priority.resolution_owed` block **after** `if !stabilized { stabilize_before_priority() ...; stabilized = true; }` and `if self.is_game_over() { return None; }`. Simplify `end_mandatory_loop()`'s empty check to `if self.stack_is_empty()` — stabilization guarantees `pending_events`, `pending_triggers`, and `trigger_placement` are empty and all SBAs/state triggers have settled.
-      3. Add three directed tests in `managym/cards/tests/cards/fdn.rs` (each failing at `b817943ea0` and passing after the fix): (a) a CR 603.8 state-trigger loop (`State(SourceCountersAtLeast(Page, 4))` -> `gain_life(1)`) under `skip_trivial = true` drawing within `LOOP_RECOGNIZED_WITHIN`; (b) a `BecomesUntapped` loop (`Tap(This)`, `Untap(This)`) under `skip_trivial = true` drawing within `LOOP_RECOGNIZED_WITHIN`; (c) a 2-option mid-resolution choice with another object still on the stack leaving `loop_watch` as `None` after the choice finishes. Keep `a_suspended_resolution_is_not_counted_toward_a_loop` (count 2 during suspension) and `a_loop_of_suspending_resolutions_draws` passing.
-      4. Run the debug selection (`priority`/`loop_fingerprint` units, `canonical_replay_tests`, `search_state_contract`, `match_state_hash_tests`, `semantic_conformance_tests`, and the loop/Conqueror/Fishing Pole/Mazemind Tome/suspended/rejected-action card fixtures). If any `semantic-kernel-w17-v6` trace digest moves because stabilized watch counts shifted (same 14 cases, 3049 commands, same outcomes and final hashes, still hash contract v31), re-record `evidence-opening-v1.json` (and opening authored-match/parity receipts if affected) in the same pass.
-
-**Behavior review of Finding 18 at `06c05f0ad2` (probes in debug `cards`, not kept).** The `flow/` rules code is unchanged since `0b592982ee`, whose debug selection (lib 8/8, the four contract suites 43/43, loop card fixtures 14/14) stands for the Finding 17 fix. Finding 18 is not yet implemented, and three of its claims reproduce under `skip_trivial = false`, 600 `advance_default_action` steps each:
-- *State trigger (18.1):* Gray Ogre with one +1/+1 counter and an injected `State(SourceCountersAtLeast { PlusOnePlusOne, 1 })` → `gain_life(1)`, on an empty stack. Life went from 20 to 270, `loop_watch` was `None` at every sample, and there was no draw.
-- *Untap trigger (18.2):* Conqueror plus a Gray Ogre with injected "whenever you gain life" and "whenever this becomes untapped", each `[Tap This, Untap This]`, then Bolt the opponent. One trigger stayed on the stack, `loop_watch` was `None` throughout, and there was no draw.
-- *Stale owed flag (18, clearing):* the Finding 17 shape with two Gray Ogres, so the chosen tap is a 2-option `LookAndSelect`. When the choice is published the watch is `None` with `resolution_owed = true` and an empty stack. On the next priority the watch is `Some(1)`: the player-chosen resolution seeds it. The fix needs no other object on the stack for this; the new gain-life trigger in `pending_triggers` is enough. Directed test (c) can use this exact shape.
-- *SBA precedence at `CAP` (18.4):* confirmed only by reading. A probe would take 10,000 resolutions. The fix order (stabilize, then `is_game_over`, then count) settles it structurally.
-Under `skip_trivial = true`, both 18.1 and 18.2 are unbounded inside one call, like the Finding 17 repro. Their directed tests must run under `skip_trivial = true` and draw within `LOOP_RECOGNIZED_WITHIN`, as the plan says. The working phase is not satisfied: implement Finding 18, then rerun the same debug selection.
-
-**Finding 18 implementation.** The watch now samples after stabilization has applied state-based actions and placed the next triggers, with terminal results checked first. Every reset of the watch cancels the pending resolution count too. All three directed fixtures failed on the previous engine and pass on this change. The state trigger and the untap trigger draw within 128 resolutions with forced decisions skipped. Choosing between two Ogres leaves the watch empty at the next priority, with a gain trigger on the stack. The forced discard still pauses at a count of two.
-
-The v31 semantic-kernel corpus regenerated with 14 games, 3,049 commands and 15 Phase rows. Only the trace digests for `gw-vs-ur-5eee`, `ur-vs-gw-5eef`, `elemental-163`, `elemental-164` and `sacrifice-163` changed. All final state hashes and outcomes matched.
-
-Focused debug results after refreshing the five traces: priority and fingerprint units 8/8, canonical replay, search, match-state hash and semantic conformance 43/43, directed card fixtures 17/17. With the rebuilt CPython 3.13 extension the checked Academy opening authority and live/headless parity receipts both pass as recorded. Terminal SBA precedence at the 10,000-resolution cap was checked by control-flow order only.
-
-Built in `b5bbe85dca`, compressed in `d3486c59fb`; the code matches: `PriorityState::clear_loop_watch` is the only reset (`priority.rs`, `tick.rs` step start, multi-option publish and empty stack, `action.rs` non-pass action), and the count runs after stabilization in `tick_priority`. Fixtures: `fdn::a_state_trigger_loop_draws_while_its_condition_stays_true`, `an_untap_trigger_loop_draws_when_the_trigger_untaps_its_source`, `a_choice_during_resolution_clears_the_loop_watch`.
-
-**Sync onto main `912f8e622a` (`88fe2ebf6c`).** Main brought 207 more FDN cards with combat damage choices, two skip-if-empty hashed combat fields (`first_strikers`, `regular_damage_step`; hash version stays 31) and a v11 first-strike column at position 52, ahead of the branch's three history columns (`scratch/questions.md`, "Sync onto main"). Post-merge checks are recorded below.
-
-**Behavior review of the merged head (`f4bcb48c4a`).** Debug nextest (`--profile ci`): `cards`, `managym` lib, `search_state_contract`, `canonical_replay_tests`, `match_state_hash_tests` and `semantic_conformance_tests` ran 1591 tests. There was no v31 trace drift, and 2 failures, both from the merge seam:
-- `fdn::exemplar_of_light_counts_one_gain_per_lifelink_source` (branch fixture). Main made a trampler's blocker assignment a player decision (CR 510.1c), and the fixture never answered it. The default sent all seven of the Sire's damage to the Lions, so the defender stayed at 20. The fixture now assigns one damage to each Lion and five to the player.
-- `tla::two_lifelink_attackers_trigger_pridemate_twice_in_one_damage_step` (main fixture). Main committed simultaneous lifelink gains in `ObjectId` order (a `BTreeMap`). The merged `commit_lifelink_gains` keeps the branch's first-damage order. Both are one gain per source (CR 119.9) and deterministic, and Pridemate still gets two counters. The assertion now compares the sorted gains.
-
-After both edits, all 16 Exemplar/lifelink card fixtures passed. Other merge reads checked out: life-gain listeners stamp ordinals through `commit_life_change` (lifelink included), and v11 permanent columns are 52 first-strike participant then 53–55 history. With the rebuilt cp313 extension, the focused Python selection (text, effect-execution input, v10, named layout, pinned pilot, Immolator, Blast, Academy boundary/combat preview/learn/decision surface/play modes) gave 166 passed, 1 skipped and 3 failed. Authority, parity and choice navigation gave 20 passed and 1 failed. All four failures are the pre-existing ones in `scratch/questions.md`. The working phase is satisfied on the merged head.
-
-Next comes gate; a moved trace digest there is re-recorded like Finding 18's. At gate, Engine Budget will see moved digests (untap events in the hashed ledger, hash v31) and the per-resolution watch; adopt the PR's run as the reference if it stays within 10%. Gate also confirms whether the pre-existing Academy failures in `scratch/questions.md` fail on main.
-
-Bakersbane Duo’s receipt-backed crossing supplies the integrated Unravel control.
+Debug nextest at `f4bcb48c4a` (1591 tests across `cards`, lib and the four
+contract suites) had no v31 drift after the two merge-seam fixture fixes. The
+four pre-existing Academy failures are in `scratch/questions.md`.
 
 ## Decomposition review
 
@@ -772,7 +624,34 @@ The remaining measurement belongs to the Engine Budget and stress-state pass.
   projections, Python, v11 and text as new queries land. Save prefixes and
   frozen evidence, and keep hidden identities out of both projections.
   The semantic-kernel, authored-match and live/headless parity receipts are
-  refreshed at hash v31 (`3049b48fdb`, `3e7ca196fd`). Integrated replay and privacy checks and Engine Budget remain open.
+  refreshed at hash v31 (`3049b48fdb`, `3e7ca196fd`).
+- Ovika stays blocked until ward can pay one composite mana-and-life cost.
+- Plasma Bolt's actual warp cast is still unreachable: main's casting
+  authority (`662e9ce96c`) has no warp route and nothing writes
+  `TurnHistory.warped_this_turn` (its fixture sets the flag). The writer
+  belongs at the warp cast commit in the casting-permission work.
+
+### Open before publishing
+
+1. Integrated replay and privacy checks (below), including recorded Watch
+   playback of a partial attack declaration and of the departed-Clone
+   interaction.
+2. Frozen pilot compatibility on the merged preparation path
+   (`tests/model/test_pinned_pilot.py` with the rebuilt extension).
+3. Engine Budget: digests moved (untap events in the hashed ledger, hash v31,
+   per-resolution loop watch). Adopt the PR's own run as the reference if it
+   stays within 10%; the `bench_states` stress layers are listed under
+   Performance below.
+4. The four Academy failures in `scratch/questions.md`: gate confirms whether
+   they also fail on main.
+
+**Next.** The compress pass `31588d944d` (−165 lines across triggers,
+resolution, statics, payment, LKI and projection) goes to
+`coverage-decomposition-review`, then gate for items 1–4. At the synced
+head `60908f4ccf`, debug nextest (`--profile ci`: `cards`, `managym` lib,
+`search_state_contract`, `canonical_replay_tests`, `match_state_hash_tests`,
+`semantic_conformance_tests`) ran 1697 tests, all passing, with no v31 trace
+drift. The Python extension was not rebuilt at this head.
 
 ## Directed interactions for integrated validation
 
