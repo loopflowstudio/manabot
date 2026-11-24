@@ -65,11 +65,11 @@ use managym::{
     cards::tokens::{catalog_tokens, definition_tokens, name_value, rules_tokens, TokenKind},
     state::{
         ability::{
-            Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
-            DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser,
-            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector,
-            Scope, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject, TurnStep,
+            Ability, Actor, AttackSize, Condition, DamageKind, DamageRecipientFilter, DelayedEvent,
+            DelayedExpiry, DelayedFrequency, DistinctSearchEnd, Effect, EffectValue, Except,
+            KeywordAction, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
+            Per, PlayWindow, PlayerSelector, Scope, SpellTargetFilter, TargetRequirement,
+            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardType, Keyword,
@@ -1146,7 +1146,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
         TriggerCondition::DealsCombatDamage { .. } => "TriggerCondition::DealsCombatDamage",
-        TriggerCondition::DealsNoncombatDamage { .. } => "TriggerCondition::DealsNoncombatDamage",
+        TriggerCondition::DealsDamage { .. } => "TriggerCondition::DealsDamage",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
     }
 }
@@ -1200,9 +1200,15 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             to: Actor::You,
             per: Per::Batch,
         },
-        TriggerCondition::DealsNoncombatDamage {
-            source: Actor::You,
-            to: Actor::Opponent,
+        TriggerCondition::DealsDamage {
+            kind: DamageKind::Noncombat,
+            source: TriggerSubject::you_control(CardPredicate::default()),
+            to: DamageRecipientFilter::Player(Actor::Opponent),
+        },
+        TriggerCondition::DealsDamage {
+            kind: DamageKind::Combat,
+            source: TriggerSubject::you_control(CardPredicate::creature()),
+            to: DamageRecipientFilter::Any,
         },
         TriggerCondition::Sacrificed {
             subject: TriggerSubject::another_you_control(CardPredicate::creature()),

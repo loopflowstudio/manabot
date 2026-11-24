@@ -1,9 +1,10 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, Effect, EffectValue,
-        ObjectProperty, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind,
+        DamageRecipientFilter, Effect, EffectValue, ObjectProperty, ObjectSelector, PaymentCost,
+        Per, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -1562,9 +1563,10 @@ fn niv_mizzet_visionary() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             statics: vec![StaticAbility::NoMaximumHandSize],
             abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::DealsNoncombatDamage {
-                    source: Actor::You,
-                    to: Actor::Opponent,
+                condition: TriggerCondition::DealsDamage {
+                    kind: DamageKind::Noncombat,
+                    source: TriggerSubject::you_control(CardPredicate::default()),
+                    to: DamageRecipientFilter::Player(Actor::Opponent),
                 },
                 intervening_if: None,
                 effects: vec![Effect::DrawCards {

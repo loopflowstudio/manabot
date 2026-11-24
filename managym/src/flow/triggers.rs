@@ -16,9 +16,9 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, DelayedFrequency, Effect, EffectiveTrigger, KeywordAction, Per,
-            SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-            TurnStep,
+            Ability, Actor, DamageRecipientFilter, DelayedFrequency, Effect, EffectiveTrigger,
+            KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
+            TriggerSubject, TurnStep,
         },
         card::CardDefId,
         effect::{EffectDuration, Modification},
@@ -136,7 +136,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
-        TriggerCondition::DealsNoncombatDamage { .. } => EventKinds::of(EventKind::DamageDealt),
+        TriggerCondition::DealsDamage { .. } => EventKinds::of(EventKind::DamageDealt),
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
@@ -157,21 +157,13 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
 }
 
 /// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
-/// the damage of its own combat hit, noncombat damage dealt to a player, or
-/// the life a player actually lost.
+/// the damage of its own combat hit or damage event, or the life a player
+/// actually lost.
 fn event_amount(event: &GameEvent, hit: Option<CombatPlayerHit>) -> i32 {
     match (event, hit) {
         (_, Some(hit)) => hit.amount,
         (GameEvent::LifeChanged { old, new, .. }, None) if new < old => old - new,
-        (
-            GameEvent::DamageDealt {
-                target: DamageTarget::Player(_),
-                amount,
-                combat: false,
-                ..
-            },
-            None,
-        ) => *amount as i32,
+        (GameEvent::DamageDealt { amount, .. }, None) => *amount as i32,
         _ => 0,
     }
 }
@@ -2080,18 +2072,28 @@ impl Game {
                     && nth.is_none_or(|n| n == *gain_ordinal)
             }
             (
-                TriggerCondition::DealsNoncombatDamage { source, to },
+                TriggerCondition::DealsDamage { kind, source, to },
                 GameEvent::DamageDealt {
                     source: Some(damage_source),
-                    target: DamageTarget::Player(player),
-                    combat: false,
+                    target,
+                    combat,
                     ..
                 },
             ) => {
-                to.includes(source_controller, *player)
-                    && self
-                        .source_controller(*damage_source)
-                        .is_some_and(|controller| source.includes(source_controller, controller))
+                kind.includes(*combat)
+                    && match (to, target) {
+                        (DamageRecipientFilter::Any, _) => true,
+                        (DamageRecipientFilter::Player(actor), DamageTarget::Player(player)) => {
+                            actor.includes(source_controller, *player)
+                        }
+                        (DamageRecipientFilter::Player(_), _) => false,
+                    }
+                    && self.subject_matches_damage_source(
+                        source,
+                        source_object,
+                        source_controller,
+                        *damage_source,
+                    )
             }
             (
                 TriggerCondition::LosesLife { who },
@@ -2249,6 +2251,55 @@ impl Game {
                 .and_then(|aura| aura.attached_to)
                 .is_some_and(|attached| {
                     Some(attached) == departed && self.state.object_lki.contains(attached)
+                }),
+        }
+    }
+
+    /// Whether the object that dealt damage is `subject`, as it is or last
+    /// was: a live permanent, a departed one's last known information, or a
+    /// spell on or off the stack. Its controller is
+    /// [`Game::source_controller`]'s, so a stolen spell's damage is its
+    /// controller's.
+    fn subject_matches_damage_source(
+        &self,
+        subject: &TriggerSubject,
+        source_object: ObjectId,
+        source_controller: PlayerId,
+        damage_source: ObjectId,
+    ) -> bool {
+        match subject {
+            TriggerSubject::This => damage_source == source_object,
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                !(*another && damage_source == source_object)
+                    && self
+                        .source_controller(damage_source)
+                        .is_some_and(|controller| {
+                            controlled_by.includes(source_controller, controller)
+                        })
+                    && match self.state.permanent_of(damage_source) {
+                        Some(permanent) => self.permanent_matches_predicate(permanent, predicate),
+                        None => match self.object_lki(damage_source) {
+                            Some(lki) => self.lki_matches_predicate(lki, predicate),
+                            None => {
+                                self.recorded_object_matches_predicate(damage_source, predicate)
+                            }
+                        },
+                    }
+            }
+            TriggerSubject::EnchantedCreature | TriggerSubject::CreatureDamagedByThis => self
+                .state
+                .permanent_of(damage_source)
+                .is_some_and(|permanent| {
+                    self.subject_matches_permanent(
+                        subject,
+                        source_object,
+                        source_controller,
+                        permanent,
+                    )
                 }),
         }
     }

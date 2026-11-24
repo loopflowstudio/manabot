@@ -252,15 +252,18 @@ pub enum TriggerCondition {
         to: Actor,
         per: Per,
     },
-    /// "Whenever a source [source] controls deals noncombat damage to
-    /// [to]" (CR 120.2b): once per damage event to a player, prevented
-    /// damage excluded. The source's controller is read as it is or last
-    /// was, a spell's included. The damage dealt is the trigger's amount
-    /// (`EffectValue::TriggeringAmount`, "that many") and the damaged player
-    /// is "that player".
-    DealsNoncombatDamage {
-        source: Actor,
-        to: Actor,
+    /// "Whenever [source] deals [kind] damage to [to]" (CR 120.2): once per
+    /// committed damage event, prevented damage excluded. The source is any
+    /// object that dealt it, a spell included, matched as it is or last was
+    /// with its controller (CR 120.2b); an empty predicate is "a source".
+    /// The damage dealt is the trigger's amount (`EffectValue::TriggeringAmount`,
+    /// "that many"), a damaged player is "that player", and the source is
+    /// the triggering object. `DealsCombatDamage` keeps its once-per-batch
+    /// combat-hit form for pinned pilots.
+    DealsDamage {
+        kind: DamageKind,
+        source: TriggerSubject,
+        to: DamageRecipientFilter,
     },
     /// The inner condition, for an ability that functions only while its
     /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
@@ -622,6 +625,32 @@ impl Actor {
             Actor::AnyPlayer => true,
         }
     }
+}
+
+/// Which damage a `TriggerCondition::DealsDamage` watches (CR 120.2a, b).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageKind {
+    Any,
+    Combat,
+    Noncombat,
+}
+
+impl DamageKind {
+    pub fn includes(self, combat: bool) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Combat => combat,
+            Self::Noncombat => !combat,
+        }
+    }
+}
+
+/// What a `TriggerCondition::DealsDamage` event must damage: a player the
+/// actor names, or anything (a player, creature, planeswalker or battle).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageRecipientFilter {
+    Player(Actor),
+    Any,
 }
 
 /// A step whose beginning triggers abilities (CR 503.1a, 504.2, 505.4,
