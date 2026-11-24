@@ -1480,7 +1480,7 @@ def _lightshell_position(
     spells = ("Lightshell Duo", "Accumulate Wisdom") if wisdom else ("Lightshell Duo",)
     deck = dict.fromkeys((*spells, *library), 1)
     deck["Island"] = lands + 1
-    env.reset(
+    raw, _ = env.reset(
         managym.GameSetup(
             [
                 managym.PlayerConfig("a", deck),
@@ -1490,6 +1490,7 @@ def _lightshell_position(
             mana_payment=("auto", "auto"),
         )
     )
+    keep_opening_hands(env, raw)
     env.scenario_clear_hand(0)
     for name in library:
         env.scenario_force_card_in_hand(0, name)
@@ -1988,7 +1989,8 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ).read_text()
     )
     matchup = manifest["matchup"]
-    env = managym.Env(seed=197, decision_memory=True)
+    # A seed whose uniformly random game is still live after 600 steps.
+    env = managym.Env(seed=208, decision_memory=True)
     raw, _ = env.reset(
         [
             managym.PlayerConfig(role, matchup[role]["cards"])
@@ -1996,13 +1998,13 @@ def test_curated_long_game_decision_memory_preserves_distinct_snapshots() -> Non
         ]
     )
     keep_opening_hands(env, raw)
-    rng = random.Random(197)
+    rng = random.Random(208)
     for _ in range(600):
         env.step(rng.randrange(env.action_count()))
     memory = read_records(
         env.observation_for_player(env.current_agent_index()).decision_memory_json()
     )
-    assert len(memory) == 441
+    assert len(memory) == 357
     decision = capture_text_decision(env)
     _assert_memory_contexts(decision.text, memory)
     assert len({r.context.model_dump_json() for r in memory}) > 250
@@ -2052,7 +2054,7 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
     arahbo = "Arahbo, the First Fang"
     hunter = "Helpful Hunter"
     env = managym.Env(seed=23)
-    env.reset(
+    raw, _ = env.reset(
         managym.GameSetup(
             [
                 managym.PlayerConfig(
@@ -2071,6 +2073,7 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
             mana_payment=("auto", "auto"),
         )
     )
+    keep_opening_hands(env, raw)
     env.scenario_clear_hand(0)
     for _ in range(6):
         env.scenario_force_battlefield(0, "Plains", ready=True)
