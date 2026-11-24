@@ -1,33 +1,37 @@
-at: 16c6fd0db86f35539c61bbf03a4cd7592da04ad3
+at: 47dec0aa77290194b440f98bdd0e09c842b8d4d1
 first:
+  - path: scratch/plan.md
+    why: Batch 1 scope, delivered rows and open checks.
   - path: docs/engine.md
     why: Follow a copy and its trigger through departure.
-  - path: scratch/plan.md
-    why: Locate card batches and outstanding interaction checks.
   - path: managym/state/src/game_object.rs
-    why: Distinguish an appearance’s copiable values from its printing.
-  - path: managym/state/src/effect.rs
-    why: Define the exceptions a copy can inherit.
-  - path: managym/src/cards/content_pack.rs
-    why: Retain only forms the catalog cannot reconstruct.
-  - path: managym/state/src/stack_object.rs
-    why: Bind a stacked trigger to its original face.
+    why: Departure LKI keeps effective battlefield facts.
+  - path: managym/state/src/ability.rs
+    why: Counted entry, ExiledWithSource, explicit exile target counts.
+  - path: managym/src/flow/layers.rs
+    why: One predicate matcher for live and departed permanents.
+  - path: managym/src/flow/identity.rs
+    why: Capture battlefield facts as a permanent leaves.
   - path: managym/src/flow/triggers.rs
-    why: Place the original ability and validate its targets.
+    why: Departure triggers read LKI and a departed Aura.
+  - path: managym/src/flow/statics.rs
+    why: Source conditions answer from last known information.
   - path: managym/src/flow/resolution.rs
-    why: Resolve retained triggers and copy exact appearances.
+    why: Follow departures to arrivals; freeze death counts.
   - path: managym/src/flow/zones.rs
-    why: Track physical cards through battlefield form changes.
-  - path: managym/src/flow/target_authority_tests.rs
-    why: Choose a departed source’s mode and exact target.
-  - path: managym/cards/tests/cards/lea.rs
-    why: Check suspended copies and departed forms across forks.
+    why: Only until-leaves links return when the source departs.
+  - path: managym/src/flow/game.rs
+    why: Prune exile-with links once nothing watches the source.
+  - path: managym/cards/src/fdn.rs
+    why: Kykar, Familiar, Vessel and Valkyrie's Call.
   - path: managym/cards/tests/cards/fdn.rs
-    why: Replay both orders of the copied triggers.
+    why: Departure cases with forks and stale Commands.
+  - path: managym/cards/tests/cards/observability.rs
+    why: New selector and value reach tokens and text.
+  - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
+    why: Delivered ledger rows.
   - path: managym/cards/tests/cards/fin.rs
-    why: Compare transform, meld and token departures.
-  - path: managym/cards/tests/cards/dsk.rs
-    why: Compare hidden printings and their public copies.
-  - path: tests/academy/test_manifest_recovery.py
-    why: Reconnect, reveal and reopen the replay archive.
-hide: []
+    why: Earlier transform, meld and token departures.
+hide:
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Appended printing rows for the new cards.
