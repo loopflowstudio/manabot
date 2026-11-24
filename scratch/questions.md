@@ -67,3 +67,9 @@ Concept-review (`49cc87c7`) choices folded into Batch 5g:
 - Spell-created prevention shield (`Fleeting Flight`): add a target-only `ReplacementEffect::PreventCombatDamage` variant (distinct from `Fog Bank`'s two-way `PreventCombatDamageToOrFromSelf`) and wire `Modification::PreventCombatDamage` across all 5 observability/text layers including `text_observation.py`.
 - Single-passed-card `reveal_until_to_hand`: record the publicly revealed `[top]` card at `public[0]` and `own[0]` right before `place_entrant_on_bottom(*top)` so both viewers keep the exact bottom fact.
 
+
+## Batch 5g choices
+
+- A resolved shield's `ReplacementId` reuses the existing fields: `source` is the protected object, `definition_index` the effect timestamp and `static_ability: true`. That keeps the serialized identity shape unchanged and cannot collide within one damage event (no static ability replaces damage), but it overloads "static". A dedicated namespace enum would be clearer if more record-backed replacements arrive.
+- Fleeting Flight's effect description reads "Prevent all combat damage that would be dealt to target creature until end of turn" (the shared `until` suffix), where the Oracle says "this turn".
+- The curated decision-memory witness moved from seed 197 to 208, the only seed in 190–259 still live at step 600 with more than 250 distinct contexts; it is a fixture choice, not a property of the seed.
