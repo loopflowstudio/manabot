@@ -175,6 +175,19 @@ class TestBatchedSampler:
 
 
 class TestVectorDriver:
+    def test_only_unfinished_seat_quota_keeps_playing(self) -> None:
+        records, stats = run_vector_games(
+            RandomBatchController(1),
+            RandomBatchController(2),
+            num_games=3,
+            num_streams=2,
+            deck={"Forest": 8},
+            max_env_steps=100,
+        )
+        assert sorted(game.hero_seat for game in records) == [0, 0, 1]
+        assert all(game.winner in (0, 1) for game in records)
+        assert stats["total_env_steps"] == sum(game.steps for game in records)
+
     def test_seat_balanced_records(self):
         torch.manual_seed(0)
         agent = ActorCritic(ObservationSpace(), ModelConfig())

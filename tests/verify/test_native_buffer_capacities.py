@@ -173,7 +173,7 @@ def test_permanent_overflow_isolates_only_its_stream(workers: int) -> None:
         reference = encode_observation(space, obs)
         for key, value in reference.items():
             np.testing.assert_array_equal(buffers[key][1], value, err_msg=key)
-        vector.replace_failed_into_buffers([True, False])
+        vector.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert vector.current_game_seeds() == [game.seed + 2, game.seed + 1]
         if isinstance(vector, RecordedVectorEnv):
             assert (

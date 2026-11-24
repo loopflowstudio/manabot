@@ -510,6 +510,8 @@ class MemoryStore:
             self._live_metadata = np.zeros((count, 2, 7), np.uint64)
             self._live_valid = np.zeros((count, 2), np.bool_)
         selected_seats = np.asarray(seats, dtype=np.int64)[rows]
+        if ((selected_seats < 0) | (selected_seats > 1)).any():
+            raise ValueError("decision-memory capture requires a live seat (0 or 1)")
         selected_epochs = np.asarray(epochs, dtype=np.uint64)[rows]
         selected_seeds = np.asarray(seeds, dtype=np.uint64)[rows]
         selected_cursors = np.asarray(cursors, dtype=np.uint64)[rows, selected_seats]

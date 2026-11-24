@@ -245,7 +245,8 @@ def test_statistics_sink_repeated_drains_preserve_games(
             )
             vector.reset_all(players())
             for _ in range(500):
-                vector.step([0])
+                if vector.step([0])[0][2]:
+                    vector.reset_all(players())
                 if games_path.exists() and len(list(read_records(games_path))) >= 3:
                     break
             else:
