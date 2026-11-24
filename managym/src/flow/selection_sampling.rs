@@ -440,7 +440,7 @@ impl Game {
     /// Exact objects already known to this viewer must not be exchanged for a
     /// same-definition copy. Departed incarnations impose no current-zone slot.
     pub(crate) fn pinned_objects(&self, viewer: PlayerId) -> Vec<ObjectId> {
-        // A viewer who may see a face-down entry knows which card it is.
+        // A face-down entry's controller may look at it (CR 708.5).
         let mut pinned: Vec<_> = self
             .pending_batches()
             .flat_map(EventBatch::pending_movers)
@@ -448,7 +448,10 @@ impl Game {
                 *to == ZoneType::Battlefield
                     && self.state.live(*object).is_some()
                     && (!entry.is_face_down()
-                        || self.shares_information(viewer, self.state[*object].owner))
+                        || self.shares_information(
+                            viewer,
+                            entry.controller.unwrap_or(self.state[*object].owner),
+                        ))
             })
             .map(|(object, ..)| object)
             .collect();

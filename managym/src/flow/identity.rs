@@ -15,8 +15,10 @@ use crate::{
     },
 };
 
-/// How a permanent showing no name is called in human labels.
+/// How a face-down permanent showing no name is called in human labels.
 pub(crate) const FACE_DOWN_NAME: &str = "a face-down permanent";
+/// How a face-up permanent with no name (a copy of a manifest) is called.
+pub(crate) const NAMELESS_PERMANENT_NAME: &str = "a nameless permanent";
 
 /// Exact public reference and the storage slot a decision or event may cite.
 pub(crate) struct ObservedIdentity {
@@ -89,7 +91,7 @@ impl Game {
         } else if let Some(lki) = self.object_lki(object) {
             (
                 lki.presentation_id,
-                lki.battlefield.manifested || lki.definition_id == CardDefId::ANONYMOUS,
+                lki.battlefield.manifested || lki.battlefield.face_down,
             )
         } else {
             (self.state.objects.provenance(object)?.0, false)
@@ -135,11 +137,31 @@ impl Game {
         }
     }
 
+    /// Whether an object is face down now, or was when it left the
+    /// battlefield (CR 708.2).
+    pub(crate) fn observed_face_down(&self, object: ObjectId) -> bool {
+        if self.state.live(object).is_some() {
+            self.state[object].is_face_down()
+        } else {
+            self.object_lki(object)
+                .is_some_and(|lki| lki.battlefield.face_down)
+        }
+    }
+
+    /// How a label names an object that shows no name.
+    pub(crate) fn unnamed_label(&self, object: ObjectId) -> &'static str {
+        if self.observed_face_down(object) {
+            FACE_DOWN_NAME
+        } else {
+            NAMELESS_PERMANENT_NAME
+        }
+    }
+
     /// The name a viewer may read for an object: its live effective name,
     /// else its last effective battlefield name once departed, else the name
     /// of the definition it shows. A face-down permanent has no name unless an
-    /// effect gives it one (Witness Protection), so it reads as a face-down
-    /// permanent.
+    /// effect gives it one (Witness Protection); neither has a face-up copy of
+    /// one, which reads as a nameless permanent.
     pub(crate) fn observed_object_name(&self, object: ObjectId) -> String {
         let name = if let Ok(permanent) = self.lookup_current_permanent(object) {
             Some(self.characteristics(permanent).name.clone())
@@ -156,7 +178,7 @@ impl Game {
                     .definition(definition)
                     .map(|row| row.printed.name.clone())
             })
-            .unwrap_or_else(|| FACE_DOWN_NAME.to_owned())
+            .unwrap_or_else(|| self.unnamed_label(object).to_owned())
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.
@@ -195,6 +217,7 @@ impl Game {
                 in_combat: self.permanent_in_combat(permanent_id),
                 tapped: permanent.tapped,
                 manifested: permanent.manifested,
+                face_down: definition.is_face_down(),
             }),
             attached_to: permanent.attached_to,
             meld_partner: None,

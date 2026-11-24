@@ -492,7 +492,9 @@ class _Renderer:
             object_id = permanent.object_id
             if object_id is None:
                 object_id = next(historical_ids)
-            name = permanent.characteristics.name or "nameless permanent"
+            name = permanent.characteristics.name or (
+                "face-down permanent" if permanent.face_down else "nameless permanent"
+            )
             label = f"P{index + 1} ({name})"
             self._alias(label, object_id, permanent.id)
         for index, item in enumerate(self.state.stack_objects):
@@ -1023,6 +1025,8 @@ class _Renderer:
             for kind, count in sorted(permanent.counters.items())
             if count
         ]
+        if permanent.face_down:
+            parts.append("face down")
         if permanent.attached_to is not None:
             parts.append(f"attached to {self.name(permanent.attached_to)}")
         if permanent.name is not None:

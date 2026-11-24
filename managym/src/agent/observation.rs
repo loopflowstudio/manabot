@@ -822,6 +822,9 @@ pub struct PermanentData {
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     pub abilities_lost: bool,
+    /// Face down (CR 708.2): a manifest, even one an effect names. A face-up
+    /// copy of a manifest is nameless but not face down.
+    pub face_down: bool,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: once per object (exhaust CR 702.177a, power-up, "activate
     /// only once") or once each turn (CR 602.5b).
@@ -1602,6 +1605,7 @@ impl Observation {
                     .map(|attacker| attacker.id.0 as i32)
             }),
             abilities_lost: characteristics.abilities_lost,
+            face_down: object.is_face_down(),
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             entered_this_turn: permanent.entered_this_turn(game.state.turn.turn_number),
             used_abilities: characteristics
@@ -1673,7 +1677,8 @@ impl Observation {
                     source_permanent_id: grant.source.and_then(|source| {
                         game.lookup_current_permanent(source)
                             .ok()
-                            .map(|id| id.0 as i32)
+                            .and_then(|id| game.permanent_event_ref(id))
+                            .map(|object| object.entity.0 as i32)
                     }),
                     flash: grant.flash,
                     any_mana: grant.any_mana,
@@ -1717,9 +1722,9 @@ impl Observation {
                 StackObject::ActivatedAbility(a) => {
                     Some(super::ability_description::effects_description(&a.effects))
                 }
-                StackObject::TriggeredAbility(a) => {
-                    Some(super::ability_description::stacked_trigger_description(a))
-                }
+                StackObject::TriggeredAbility(a) => Some(
+                    super::ability_description::stacked_trigger_description(game, a),
+                ),
                 _ => None,
             },
             stack_object_id: stack_object.id().0 as i32,

@@ -307,6 +307,33 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
 
 
+def test_a_cast_grant_names_its_source_permanent_by_its_viewer_id() -> None:
+    """Azula's grant on the card she exiled names her battlefield row: the
+    permission's source is her permanent's viewer id, as on every other row."""
+    env = priority_root(
+        ("Azula, Cunning Usurper",),
+        ("Swamp", "Swamp", "Swamp", "Island", "Island"),
+        opponent=("Gray Ogre",),
+    )
+    for _ in range(12):
+        decision = capture_text_decision(env)
+        if "while they control" in decision.text:
+            break
+        action = next(
+            (a for a in decision.actions if "Pass" not in a.description),
+            decision.actions[0],
+        )
+        submit_response(env, decision, action.reference)
+    else:
+        raise AssertionError("Azula's grant never appeared")
+    grant = re.search(r"while they control (P\d+) \(([^)]*)\)", decision.text)
+    assert grant is not None, decision.text
+    assert grant[2] == "Azula, Cunning Usurper"
+    assert re.search(
+        rf"^{grant[1]} \(Azula, Cunning Usurper\)", decision.text, re.MULTILINE
+    )
+
+
 @pytest.mark.parametrize(
     "config",
     [
@@ -726,6 +753,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "granted_firebending": "firebending",
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
+        "face_down": "face down",
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",

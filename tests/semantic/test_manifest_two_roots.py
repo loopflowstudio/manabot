@@ -115,7 +115,7 @@ def test_two_manifest_roots_are_byte_equal_to_the_opponent() -> None:
     left, right = opponent_views(first), opponent_views(second)
     for consumer in left:
         assert left[consumer] == right[consumer], consumer
-    assert "(nameless permanent)" in str(left["text"])
+    assert "(face-down permanent)" in str(left["text"])
 
     for root in (first, second):
         replay = managym.GameSnapshot.from_replay_json(

@@ -311,6 +311,10 @@ pub struct BattlefieldFacts {
     /// permanent alias after it was turned face up and left.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub manifested: bool,
+    /// It was face down when it left (CR 708.2). Distinct from lacking a
+    /// catalog definition: a face-up copy of a manifest has none either.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
 }
 
 /// Battlefield facts retained for a departed exact object.

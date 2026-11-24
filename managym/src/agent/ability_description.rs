@@ -24,6 +24,7 @@ pub(crate) fn pending_trigger_description(
 ) -> Option<String> {
     Some(trigger_description(
         game.pending_trigger_face(trigger)?,
+        game.unnamed_label(trigger.source_object()),
         trigger.ability_index,
         trigger.inline_effects.is_some(),
         &game.pending_trigger_effects(trigger)?,
@@ -31,10 +32,12 @@ pub(crate) fn pending_trigger_description(
 }
 
 pub(super) fn stacked_trigger_description(
+    game: &crate::flow::game::Game,
     trigger: &crate::state::stack_object::TriggeredAbilityOnStack,
 ) -> String {
     trigger_description(
         crate::flow::resolution::stacked_trigger_face(trigger),
+        game.unnamed_label(trigger.source_identity.object()),
         trigger.ability_index,
         trigger.inline_effects.is_some(),
         &crate::flow::resolution::stacked_trigger_effects(trigger),
@@ -43,15 +46,17 @@ pub(super) fn stacked_trigger_description(
 
 /// `effects` are what the trigger will run, so chosen modes read as
 /// themselves (CR 700.2b). Inline delayed payloads have no printed ability:
-/// their ability index is not a card slot.
+/// their ability index is not a card slot. `unnamed` labels a source showing
+/// no name: face down, or a face-up copy of a manifest.
 fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
+    unnamed: &str,
     index: usize,
     inline: bool,
     effects: &[Effect],
 ) -> String {
     let name = if object.name.is_empty() {
-        crate::flow::identity::FACE_DOWN_NAME
+        unnamed
     } else {
         &object.name
     };

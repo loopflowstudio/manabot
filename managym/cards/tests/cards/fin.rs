@@ -1065,6 +1065,24 @@ fn azula_ragnarok_exile_is_ordered_by_the_exiling_owner_and_grants_both_cards() 
             assert!(grant.flash && grant.any_mana);
             assert_eq!(grant.cost, None::<ManaCost>);
         }
+        // The grant names Azula by the viewer id her permanent row carries.
+        let azula_id = grants
+            .exile_grants
+            .iter()
+            .find_map(|grant| grant.source)
+            .and_then(|source| s.game().lookup_current_permanent(source).ok())
+            .map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32)
+            .expect("Azula on the battlefield");
+        let view = Observation::for_player(s.game(), caster);
+        assert!(view.agent_permanents.iter().any(|row| row.id == azula_id));
+        let sources: Vec<_> = view
+            .agent_cards
+            .iter()
+            .chain(&view.opponent_cards)
+            .filter_map(|card| card.cast_permission.as_ref())
+            .map(|permission| permission.source_permanent_id)
+            .collect();
+        assert_eq!(sources, [Some(azula_id); 2]);
         let before = witness(s.game());
         assert!(s.game_mut().execute_semantic_command(&cmd).is_err());
         assert_eq!(witness(s.game()), before);

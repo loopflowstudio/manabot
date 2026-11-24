@@ -3381,6 +3381,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
+        face_down => [column(Permanent, permanent::FACE_DOWN)],
         entered_this_turn => [column(Permanent, permanent::ENTERED_THIS_TURN)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
         used_abilities => [Fact(FactKind::UsedAbility)],

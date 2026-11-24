@@ -788,3 +788,98 @@ fn labels_name_a_face_down_manifest_and_a_witness_protected_creature() {
         );
     }
 }
+
+/// A face-up Clone of a face-down manifest copies a nameless 2/2 (CR 707.2)
+/// but is not face down (CR 708.2): its row says so, labels call it "a
+/// nameless permanent", and once it leaves its move still names its card.
+#[test]
+fn a_clone_of_a_manifest_is_nameless_but_not_face_down() {
+    use crate::support::{
+        game::move_card,
+        inspect::permanent_of,
+        play::{cast, cast_clone_as},
+    };
+    use managym::agent::{
+        observation::{EventEntityKind, EventType},
+        observation_layout::permanent,
+    };
+    let mut s = five_color_setup(&["Clone", "Lightning Bolt", "Gray Ogre"]);
+    let card = pin_top(&mut s, &["Gray Ogre"])[0];
+    let manifest = s.game_mut().manifest(card, PlayerId(0));
+    let manifest = s.game().lookup_current_permanent(manifest).unwrap();
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let clone = cast_clone_as(&mut s, manifest);
+    let copy = permanent_of(&s, clone).expect("entered");
+    let ids =
+        [manifest, copy].map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32);
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let view = Observation::for_player(s.game(), viewer);
+        let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
+        let (rows, buffer) = if viewer == PlayerId(0) {
+            (&view.agent_permanents, &encoded.agent_permanents)
+        } else {
+            (&view.opponent_permanents, &encoded.opponent_permanents)
+        };
+        for (id, face_down) in ids.into_iter().zip([true, false]) {
+            let slot = rows.iter().position(|row| row.id == id).unwrap();
+            assert!(rows[slot].characteristics.name.is_empty());
+            assert_eq!(rows[slot].face_down, face_down);
+            assert_eq!(
+                buffer[slot * permanent::WIDTH + permanent::FACE_DOWN],
+                f32::from(u8::from(face_down))
+            );
+        }
+    }
+
+    let before_bolt = s.snapshot();
+    cast(&mut s, "Lightning Bolt");
+    let subjects = serde_json::to_string(&s.game().decision_offer_subjects(PlayerId(0))).unwrap();
+    for label in ["a face-down permanent", "a nameless permanent"] {
+        assert!(
+            subjects.contains(&format!("\"label\":\"{label}\"")),
+            "{subjects}"
+        );
+    }
+    s.restore(&before_bolt);
+
+    s.game_mut().take_observation_events();
+    move_card(&mut s, clone, ZoneType::Hand);
+    let events = s.game_mut().take_observation_events();
+    let rows = Observation::new(s.game(), &events).recent_events;
+    let moved = rows
+        .iter()
+        .find(|row| row.event_type == EventType::CardMoved as i32)
+        .expect("bounce");
+    assert_ne!(moved.source_kind, EventEntityKind::None as i32, "{moved:?}");
+}
+
+/// Witness Protection names a manifest (CR 613.1c) without turning it face
+/// up: its row and v11 buffer still say face down.
+#[test]
+fn a_named_manifest_is_still_face_down() {
+    use crate::support::play::{cast, settle};
+    use managym::{agent::observation_layout::permanent, state::game_object::Target};
+    let mut s = five_color_setup(&["Witness Protection", "Gray Ogre"]);
+    let card = pin_top(&mut s, &["Gray Ogre"])[0];
+    let object = s.game_mut().manifest(card, PlayerId(0));
+    let manifest = s.game().lookup_current_permanent(object).unwrap();
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Witness Protection");
+    assert!(s.choose_target(Target::Permanent(manifest)));
+    settle(&mut s);
+    let id = s.game().state.permanents[manifest].as_ref().unwrap().id.0 as i32;
+    let view = Observation::for_player(s.game(), PlayerId(1));
+    let slot = view
+        .opponent_permanents
+        .iter()
+        .position(|row| row.id == id)
+        .unwrap();
+    let row = &view.opponent_permanents[slot];
+    assert_eq!(row.characteristics.name, "Legitimate Businessperson");
+    assert!(row.face_down);
+    let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(
+        encoded.opponent_permanents[slot * permanent::WIDTH + permanent::FACE_DOWN],
+        1.0
+    );
+}

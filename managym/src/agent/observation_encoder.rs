@@ -1658,6 +1658,7 @@ fn encode_permanent_features(
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
         out[permanent::ENTERED_THIS_TURN] = bool_to_f32(permanent.entered_this_turn);
+        out[permanent::FACE_DOWN] = bool_to_f32(permanent.face_down);
         out[permanent::MANA_VALUE] = f32::from(permanent.mana_value()) / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);

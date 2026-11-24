@@ -40,9 +40,10 @@ def test_manifest_target_alias_from_both_seats() -> None:
         row = next(
             line
             for line in decision.text.splitlines()
-            if "(nameless permanent)" in line and "power/toughness 2/2" in line
+            if "(face-down permanent)" in line and "power/toughness 2/2" in line
         )
-        alias = re.search(r"P\d+ \(nameless permanent\)", row)
+        assert "; face down" in row
+        alias = re.search(r"P\d+ \(face-down permanent\)", row)
         assert alias is not None
         printing = re.search(r"\[(D\d+)\]", row)
         if viewer == owner:
@@ -74,7 +75,7 @@ def test_a_dead_manifests_granted_trigger_renders_without_its_printing() -> None
     assert selected is not None
     for spell in ("Undying Malice", "Lightning Bolt"):
         take(env, rf"Cast .*{spell}")
-        take(env, r"Target P\d+ \(nameless permanent\)")
+        take(env, r"Target P\d+ \(face-down permanent\)")
         take(env, "Pass priority")
         take(env, "Pass priority")
 

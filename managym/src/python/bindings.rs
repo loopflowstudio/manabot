@@ -2406,6 +2406,10 @@ impl PyPermanent {
         self.data.abilities_lost = value;
     }
     #[getter]
+    fn face_down(&self) -> bool {
+        self.data.face_down
+    }
+    #[getter]
     fn used_abilities(&self) -> Vec<usize> {
         self.data.used_abilities.clone()
     }

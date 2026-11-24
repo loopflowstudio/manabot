@@ -778,6 +778,9 @@ pub(super) struct WirePermanentData {
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    /// Face down (CR 708.2); omitted when face up.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: once per object (exhaust CR 702.177a, power-up, "activate
     /// only once") or once each turn (CR 602.5b).
@@ -907,6 +910,7 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            face_down: w.face_down,
             used_abilities: w.used_abilities,
             entered_this_turn: w.entered_this_turn,
             dealt_damage_this_turn: w.dealt_damage_this_turn,
@@ -976,6 +980,7 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            face_down: self.face_down,
             used_abilities: self.used_abilities.clone(),
             entered_this_turn: self.entered_this_turn,
             dealt_damage_this_turn: self.dealt_damage_this_turn,

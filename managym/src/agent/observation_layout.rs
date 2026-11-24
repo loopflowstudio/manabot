@@ -404,6 +404,7 @@ columns! { permanent {
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
     51: ENTERED_THIS_TURN => ("entered_this_turn", ValueLayout::FLAG),
+    52: FACE_DOWN => ("face_down", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -1115,7 +1116,7 @@ mod tests {
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 52 } else { 38 },
+                    if one_token { 53 } else { 38 },
                 ),
                 (
                     "actions",

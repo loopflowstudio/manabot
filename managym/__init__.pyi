@@ -1135,6 +1135,8 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    # Face down (CR 708.2); a face-up copy of a manifest is nameless, not face down.
+    face_down: bool
     used_abilities: list[int]
     entered_this_turn: bool
     dealt_damage_this_turn: bool
