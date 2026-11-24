@@ -154,15 +154,19 @@ impl Game {
 
         self.on_step_end(step);
         self.remember_controlled_hands();
-        if step == StepKind::CombatDamage {
-            if let Some(combat) = self.state.combat.as_mut() {
-                if combat.another_damage_step() {
-                    combat.regular_damage_step = true;
-                    self.state.turn.step_initialized = false;
-                    self.state.turn.turn_based_actions_complete = false;
-                    return None;
-                }
-            }
+        // Read before writing: a mutable borrow of `state` advances every
+        // derived-cache revision, and most damage steps have no second pass.
+        if step == StepKind::CombatDamage
+            && self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.another_damage_step())
+        {
+            self.state.combat.as_mut().unwrap().regular_damage_step = true;
+            self.state.turn.step_initialized = false;
+            self.state.turn.turn_based_actions_complete = false;
+            return None;
         }
         if self.state.turn.cleanup_priority {
             // CR 514.3a: repeat cleanup after its priority round finishes.
