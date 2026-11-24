@@ -14,6 +14,7 @@ import numpy as np
 from manabot.env.memory_store import select_rows
 from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
+from manabot.policy.native_rows import ObservationSelection
 from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.rollout.actions import ActionValidator
@@ -36,7 +37,11 @@ def prepared_chunks[A](
     profiler: Profiler,
 ) -> Iterator[Prepared[A]]:
     """Prepare borrowed rows in order. The caller samples once across all chunks."""
-    count = len(observation["actions_valid"])
+    count = (
+        len(observation.coordinates)
+        if isinstance(observation, ObservationSelection)
+        else len(observation["actions_valid"])
+    )
     width = count if execution_rows is None else execution_rows
     if width < 1:
         raise ValueError("execution rows must be positive")

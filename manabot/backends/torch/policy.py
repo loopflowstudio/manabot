@@ -57,7 +57,7 @@ from manabot.policy.buckets import (
 )
 from manabot.policy.catalog import fresh_policy_tables
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.native_rows import NativeRows, native_rows
+from manabot.policy.native_rows import NativeRows, ObservationSelection, native_rows
 from manabot.policy.prepare import BeliefRows, Layout, Prepared, Tables, prepare
 from manabot.policy.protocol import InferenceResult
 from manabot.policy.readings import Readings, fresh_readings
@@ -535,7 +535,7 @@ class ActorCritic(nn.Module):
         self, obs: PolicyObservation
     ) -> tuple[BucketedObservation | NativeRows | None, Tables]:
         spec = self._admission_spec()
-        if type(obs) is managym.ObservationBatch:
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
             return admission.admit_native(
                 obs, spec, bucketed=self.bucketed_shapes
             ), spec.tables
@@ -569,12 +569,13 @@ class ActorCritic(nn.Module):
         `inference` selects compaction and catalog coverage independently of
         autograd mode; bucketed batches always use the full catalog schedule.
         """
-        if type(obs) is managym.ObservationBatch:
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
             rows = native_rows(
                 obs,
                 self.observation_space,
                 bucketed=self.bucketed_shapes,
                 objects=self.object_trimming(),
+                minimum_needs=needs,
             )
             return self._prepare_rows(
                 rows, self._admission_spec().tables, inference, memory_roots
@@ -1339,7 +1340,7 @@ class PolicyInference:
     @torch.no_grad()
     def prepare(self, obs: PolicyObservation) -> Prepared[torch.Tensor]:
         self.check(self.agent)
-        if type(obs) is not managym.ObservationBatch and any(
+        if type(obs) not in (managym.ObservationBatch, ObservationSelection) and any(
             not isinstance(value, np.ndarray) for value in obs.values()
         ):
             raise TypeError("inference preparation requires NumPy observation buffers")

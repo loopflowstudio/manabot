@@ -246,28 +246,29 @@ def live_memory(obs: "ObservationBuffers") -> list[tuple[np.ndarray, ...]]:
 
 
 def record_chunks(
-    rows: tuple[np.ndarray, ...], size: int = 32, cursor: MemoryCursor = MemoryCursor()
+    rows: tuple[np.ndarray, ...], size: int = 32, *, reference_offset: int = 0
 ) -> list[tuple[np.ndarray, ...]]:
     """Partition records with their owned members and newly introduced snapshots.
 
+    Rows begin at one record boundary. Member joins retain absolute reference
+    indexes, including references introduced before this suffix.
     Check slicing bounds before conversion: malformed imports cannot allocate
     from counts or hide an unowned companion suffix outside the final chunk.
     """
     records, details, references, members = rows
     result = []
-    member_start, reference_start, detail_start = (
-        cursor.members,
-        cursor.references,
-        cursor.details,
-    )
-    for start in range(cursor.records, len(records), size):
+    member_start = reference_start = detail_start = 0
+    for start in range(0, len(records), size):
         headers = records[start : start + size]
         count = headers[:, _RECORD_COUNTS].sum(dtype=np.float64)
         if count < 0 or count > len(members) - member_start:
             raise ValueError("invalid decision-memory member partition")
         member_end = member_start + int(count)
         joins = members[member_start:member_end]
-        last = joins[:, _MEMBER_REFERENCE].max(initial=reference_start)
+        last = (
+            joins[:, _MEMBER_REFERENCE].max(initial=reference_offset + reference_start)
+            - reference_offset
+        )
         if last < reference_start or last > len(references):
             raise ValueError("invalid decision-memory member join")
         reference_end = int(last)
@@ -598,7 +599,10 @@ def chunk_observation(node: "Tail | RecordNode") -> dict[str, np.ndarray]:
 
 def retained_memory(obs: object) -> "PrefixObservation | None":
     from manabot.env.memory_store import PrefixObservation
+    from manabot.policy.native_rows import ObservationSelection
 
+    if type(obs) is ObservationSelection:
+        return obs.memory
     return (
         obs
         if isinstance(obs, PrefixObservation)

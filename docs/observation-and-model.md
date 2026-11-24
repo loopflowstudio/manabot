@@ -237,9 +237,11 @@ into the trimmed object table. Models with belief rows or
 `historical_mean` value aggregation keep the full object table. Logits retain
 the original action slots.
 
-Torch and MLX collection borrow the original group or a contiguous slice
-while preparing it. Both sample once in the original row order and keep the
-measured extents on the host. The learner checks the
+Torch and MLX prepare v11 decisions from the live spans of each selected
+stream. A masked step can leave several native batches represented in the
+same group. Both backends sample once in original group order, even when
+preparation splits it across execution chunks. The rollout retains the
+collection extents and shares immutable decision-memory prefixes. The learner checks the
 current rollout rows at admission and uses their collection extents as a lower
 bound, since packing keeps only legal actions. Later minibatches take the
 maximum across their admitted rows.

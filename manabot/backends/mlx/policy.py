@@ -53,7 +53,7 @@ from manabot.policy.buckets import (
     object_trimming,
 )
 from manabot.policy.checkpoint import Dimensions
-from manabot.policy.native_rows import NativeRows, native_rows
+from manabot.policy.native_rows import NativeRows, ObservationSelection, native_rows
 from manabot.policy.prepare import (
     Packed,
     Prepared,
@@ -617,12 +617,13 @@ class MLXActorCritic(nn.Module):
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
-        if type(obs) is managym.ObservationBatch:
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
             rows = native_rows(
                 obs,
                 space,
                 bucketed=self.bucketed_shapes,
                 objects=self.object_trimming(),
+                minimum_needs=needs,
             )
             return self._prepare_rows(rows, inference)
         bucketed = (
@@ -654,7 +655,7 @@ class MLXActorCritic(nn.Module):
         self, obs: PolicyObservation
     ) -> BucketedObservation | NativeRows | None:
         spec = admission.Spec(self.config, self._static.space, self._static.tables, 0)
-        if type(obs) is managym.ObservationBatch:
+        if type(obs) in (managym.ObservationBatch, ObservationSelection):
             return admission.admit_native(obs, spec, bucketed=self.bucketed_shapes)
         mask = np.asarray(obs["actions_valid"])
         try:

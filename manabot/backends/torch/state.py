@@ -16,7 +16,8 @@ from torch import Tensor
 
 from manabot.backends.torch.learner import Learner
 from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import PrefixObservation, archive_memory
+from manabot.env.memory_store import archive_memory, select_rows
+from manabot.policy.decision_memory import retained_memory
 from manabot.policy.protocol import BackendPolicy
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 
@@ -115,22 +116,25 @@ def capture_incident(
         recorded = batch.recorded.index[selected]
         batch_tensors.update(
             {
-                f"observation/{key}": torch.as_tensor(value[recorded])
-                for key, value in batch.recorded.rows.items()
+                f"observation/{key}": torch.tensor(value)
+                for key, value in batch.recorded.gather(selected).items()
             }
         )
         batch_tensors.update(
             {
-                f"next_observation/{key}": torch.as_tensor(value[:max_rows])
-                for key, value in batch.next_obs.items()
+                f"next_observation/{key}": torch.tensor(value)
+                for key, value in select_rows(
+                    batch.next_obs, slice(0, max_rows)
+                ).items()
                 if key not in MEMORY_FIELDS
             }
         )
         if batch.recorded.memory_capacities is not None:
             prefixes = [batch.recorded.memory[int(row)] for row in recorded]
             next_count = 0
-            if isinstance(batch.next_obs, PrefixObservation):
-                next_prefixes = batch.next_obs.prefixes[:max_rows]
+            next_memory = retained_memory(batch.next_obs)
+            if next_memory is not None:
+                next_prefixes = next_memory.prefixes[:max_rows]
                 next_count = len(next_prefixes)
                 prefixes.extend(next_prefixes)
             archive = archive_memory(prefixes, batch.recorded.memory_capacities)

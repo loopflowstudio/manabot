@@ -680,7 +680,13 @@ def prepare(
         action_capacity = obs.buckets.capacities["actions"]
         obs = obs.rows
     memory = (
-        prepare_memory(obs, tables, fold=memory_fold, roots=memory_roots, native=native)
+        prepare_memory(
+            native.memory if native is not None and native.memory is not None else obs,
+            tables,
+            fold=memory_fold,
+            roots=memory_roots,
+            native=native,
+        )
         if memory_summaries
         else None
     )

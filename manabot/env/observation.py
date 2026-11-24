@@ -293,6 +293,13 @@ def allocate_vector_buffers(
     """Allocate observation and step-result arrays for n native vector streams."""
     return {
         **obs_space.allocate(n),
+        **step_buffers(n),
+    }
+
+
+def step_buffers(n: int) -> dict[str, np.ndarray]:
+    """Per-stream outcomes written by both native observation transports."""
+    return {
         "rewards": np.zeros(n, dtype=np.float64),
         "terminated": np.zeros(n, dtype=np.uint8),
         "truncated": np.zeros(n, dtype=np.uint8),

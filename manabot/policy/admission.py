@@ -70,7 +70,12 @@ from manabot.policy.decision_memory import (
     validate_memory_vocabulary,
     validate_retained_memory,
 )
-from manabot.policy.native_rows import NativeRows, full_word, native_rows
+from manabot.policy.native_rows import (
+    NativeRows,
+    ObservationSelection,
+    full_word,
+    native_rows,
+)
 from manabot.policy.prepare import (
     NAMED_DETAIL_KINDS,
     OBJECT_KEYS,
@@ -293,12 +298,17 @@ def admit(
 
 
 def admit_native(
-    batch: managym.ObservationBatch, spec: Spec, *, bucketed: bool
+    batch: managym.ObservationBatch | ObservationSelection,
+    spec: Spec,
+    *,
+    bucketed: bool,
 ) -> NativeRows:
     """The encoder owns row boundaries and native joins. Admit model-dependent lookups."""
     rows = native_rows(
         batch, spec.space, bucketed=bucketed, objects=object_trimming(spec.model)
     )
+    if rows.memory is not None:
+        check_memory_contract(rows.memory, spec)
     data = rows.tables
     if spec.model.belief_count_buckets:
         # Belief state is supplied by the policy and needs an external mapping.

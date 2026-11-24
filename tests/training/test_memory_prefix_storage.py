@@ -32,6 +32,7 @@ from manabot.env.memory_store import (
 )
 from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 from manabot.infra.config import ObservationConfig, RewardConfig
+from manabot.policy.decision_memory import retained_memory
 from manabot.training.rollout.collection import (
     Collector,
     RecordedObservations,
@@ -186,7 +187,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
     try:
         first = collect(original, model, 16)
         before = first.observations(np.array([15, 0, 15])).observation.materialize()
-        assert isinstance(first.next_obs, PrefixObservation)
+        assert retained_memory(first.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         bootstrap_before = first.next_obs.materialize()
         with torch.no_grad():
@@ -213,14 +214,16 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
             assert not gathered  # retained preparation never gathers dense history
-            prefix = first.next_obs.prefixes[0]
+            memory = retained_memory(first.next_obs)
+            assert memory is not None
+            prefix = memory.prefixes[0]
             selected = PrefixObservation(
                 {
                     key: np.repeat(value, 3, axis=0)
                     for key, value in first.next_obs.items()
                 },
                 [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
-                first.next_obs.memory_capacities,
+                memory.memory_capacities,
             )
             selected_batch = replace(
                 first, next_obs=selected, next_done=np.zeros(3, bool)
@@ -246,7 +249,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
         torch.testing.assert_close(actual_value, expected_value)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         second = collect(original, model, 8)
-        assert isinstance(second.next_obs, PrefixObservation)
+        assert retained_memory(second.next_obs) is not None
         # The retained bootstrap survives native buffer reuse by later collection.
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
@@ -341,7 +344,7 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     try:
         batch = collect(collector, model, 4)
         assert batch.actions.size == 4
-        assert isinstance(batch.next_obs, PrefixObservation)
+        assert retained_memory(batch.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
         assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
@@ -542,6 +545,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
+        native_index: int | None = None,
     ) -> Prefix:
         calls.append(row)
         return original(
@@ -551,6 +555,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
             epoch=epoch,
             counts=counts,
             tail_version=tail_version,
+            native_index=native_index,
         )
 
     monkeypatch.setattr(store, "_capture_live_admitted", capture)

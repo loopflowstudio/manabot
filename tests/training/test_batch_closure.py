@@ -14,6 +14,7 @@ from manabot.infra.config import RewardConfig
 from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
+from tests.fixtures.dense_collector import dense_collector
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,7 +60,7 @@ def _one_seat(closure: BatchClosure) -> Collector:
         batch_closure=closure,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = ScriptedGames(collector._buffers)
+    collector._env = ScriptedGames(dense_collector(collector))
     return collector
 
 

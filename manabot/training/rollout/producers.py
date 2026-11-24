@@ -1,6 +1,7 @@
 """Persistent CPU observation producers for one GPU-owned collector.
 
-ShardedVectorEnv gives each worker disjoint native streams and NumPy row views.
+BufferedStreams gives each worker disjoint native streams and outcome buffers.
+V11 observation coordinates keep their native owners across the shard barrier.
 Native buffered calls release the GIL; a barrier completes every shard before
 returning to the collector. The parent retains global batching, policy sampling,
 rollout ordering and recovery. Global reset strides make stream identity
@@ -131,6 +132,55 @@ class BufferedStreams:
                 )
                 for shard in self._shards
             ]
+        )
+
+    def set_observation_layout(
+        self,
+        buffers: dict[str, Array],
+        action_overflow: str,
+        *,
+        layout: managym.ObservationLayout,
+    ) -> None:
+        for value in buffers.values():
+            self._rows(len(value))
+        self._run(
+            [
+                partial(
+                    shard.native.set_observation_layout,
+                    {key: value[shard.rows] for key, value in buffers.items()},
+                    action_overflow,
+                    layout=layout,
+                )
+                for shard in self._shards
+            ]
+        )
+
+    def observation_rows(self) -> list[tuple[managym.ObservationBatch, int]]:
+        return self._read_rows(lambda native: native.observation_rows())
+
+    def observations_for_players(
+        self, players: Sequence[int | None]
+    ) -> tuple[list[ObservationRead], managym.ObservationBatch]:
+        self._rows(len(players))
+        selected = [
+            s for s in self._shards if any(p is not None for p in players[s.rows])
+        ]
+        if not selected:
+            selected = self._shards[:1]
+        results = self._run(
+            [
+                partial(s.native.observations_for_players, players[s.rows])
+                for s in selected
+            ]
+        )
+        reads = [
+            ObservationRead(s.start + r.slot, r.player, r.game_id, r.seed, r.revision)
+            for s, (local, _) in zip(selected, results, strict=True)
+            for r in local
+        ]
+        first = results[0][1]
+        return reads, first if len(results) == 1 else first.gather(
+            [(batch, i) for _, batch in results for i in range(batch.batch_size)]
         )
 
     def write_observations_for_players(

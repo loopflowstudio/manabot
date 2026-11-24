@@ -29,6 +29,7 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
+from tests.fixtures.dense_collector import dense_collector
 from tests.model.prepared_routes import device_input
 
 
@@ -101,7 +102,7 @@ def _collector(
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
-        collector._env = ScriptedGames(collector._buffers)
+        collector._env = ScriptedGames(dense_collector(collector))
     return collector
 
 
