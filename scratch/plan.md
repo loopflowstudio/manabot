@@ -67,6 +67,8 @@ Decomposition check at `c1c8a2f490`: met. Both cards are data over `ZoneMatching
 
 Debug evidence after the last commit: all 880 cards-crate tests (`observability::` included), the 194 `rules_tests` and `canonical_replay_tests`, and 347 of 348 engine lib tests. The failing lib test, `observation_json::…historical_captures_move_battlefield_and_spell_rows_onto_their_records`, also fails at base `25ba418a2a` (`questions.md`). Modal-trigger stack bytes changed (`inline_effects` → `chosen_modes`): Python trigger-order, pinned-pilot and Engine Budget digests run at gate on the rebuilt extension.
 
+Compression `3702646188` is behavior-preserving: activation availability short-circuits `min == 0` clauses before collecting targets, and `stacked_trigger_program` reads the single-mode case through `stacked_trigger_mode`. No test run is recorded after it; the cohort review below reruns the cohort's directed checks first.
+
 **Next: review the whole batch together.** Each card composes from shared rules and has a directed debug case in its first-printing set's test file. Check the `SpellEntry` owner, the shared clause predicate (`target_fits_clause` plus `can_add_clause_target`), the `attached` vs `context_target` split, the `chosen_trigger_effects` owner and the single `Effect::Move` path. Then Batch 3.
 
 Defer general delayed-effect value freezing until a second card needs it. `CreateDelayedTrigger` freezes `DeathCountersMinus` for Nine-Lives Familiar. The post-Batch 1 concept review in `scratch/concept-review.html` records the proposed generalization if another consumer appears.
