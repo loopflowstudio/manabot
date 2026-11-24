@@ -304,6 +304,10 @@ class TorchBackend:
         torch.set_num_threads(1)
 
     @property
+    def belief_fit(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.belief_fit")
+
+    @property
     def learner(self) -> ModuleType:
         return importlib.import_module("manabot.backends.torch.learner")
 

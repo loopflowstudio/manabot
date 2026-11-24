@@ -7,8 +7,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -17,7 +15,9 @@ from manabot.backends.torch.checkpoint import (
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
+from manabot.backends.torch.facts import FactEncoder
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,

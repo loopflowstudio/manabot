@@ -150,10 +150,11 @@ checkpoints or experiment evidence.
   Cite a method when claiming to implement it; document meaningful departures.
 - Keep docstrings concise: state non-obvious contracts, side effects and
   failure behavior; omit `Args:`/`Returns:` boilerplate and obvious narration.
-- Put imports at the top; use explicit imports. Do not prefix a function with
-  an underscore merely because it is used only within its module.
-  Keep one implementation and one owner for each fact; use git for
-  old versions rather than `_new`, `_old`, or `_backup` variants.
+  Update comments with behavior.
+- Put imports at the top; use explicit imports. Do not prefix a function or
+  module with an underscore merely because it is internal; keep peer packages
+  aligned in layout. Keep one implementation and one owner for each fact; use
+  git for old versions rather than `_new`, `_old`, or `_backup` variants.
 - Import names from their defining modules (`manabot.env.observation`, not
   `manabot.env`); package `__init__` files re-export nothing, so evaluation
   game and replay children stay Torch-free
