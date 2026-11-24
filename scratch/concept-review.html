@@ -1,13 +1,19 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Who sees the pending discard?</title>
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>What survives the second draw?</title>
 <style>
 :root{color-scheme:light dark;font:17px/1.55 system-ui;color:CanvasText;background:Canvas}body{max-width:54rem;margin:3rem auto;padding:0 1rem 3rem}h1,h2{line-height:1.15}h2{margin-top:2rem}table{width:100%;border-collapse:collapse}th,td{padding:.6rem;text-align:left;vertical-align:top;border-bottom:1px solid GrayText}code{overflow-wrap:anywhere}aside{border-inline-start:4px solid #888;padding-inline:1rem}li{margin:.45rem 0}small{font-weight:bold}
 </style><main><small>Managym · MTG-418 · Foundations and Standard</small>
 <h1>Do the player’s questions and the engine’s records line up?</h1>
 <p>Foundations asks players to remember a hit, recognize what an instruction actually did, and inspect the board as a spell resolves. The time named by the instruction determines which facts the engine needs.</p>
-<aside><h2>Biggest remaining mismatch · When did I spend my fourth mana?</h2>
-<p><b>Existing.</b> Blast shows how a committed result survives a pause. Once the Ogre has six damage, reconnect returns the caster to the same three choices. The waiting viewer sees the same frame whether the hidden land is Island or Plains. A spent Command leaves the completed position intact.</p>
-<p><b>Before.</b> A PaymentReceipt can answer how much went into a cast. Bakersbane Duo asks a different question about a particular moment during its controller’s turn. At three mana already spent, a cast paid with two crosses four even though neither its individual receipt nor the resulting total equals four.</p>
-<p><b>Proposed.</b> At cast commitment, add the receipt’s actual mana once to the payer’s turn total. Match listeners present at that event against the old and new totals. A later Duo can see the total but cannot inherit the trigger. Keep the spell’s receipt available for Unravel even if the turn total subsequently grows.</p></aside>
+<aside><h2>Biggest mismatch · What does “a copy of this creature” mean after it leaves?</h2>
+<p><b>Existing.</b> The second draw already has one owner. Each successful draw emits <code>CardDrawn { player, nth_this_turn }</code>. Three draws emit ordinals 1, 2 and 3. A controller’s <code>Draws</code> listener can recognize the middle event even after the total reaches three.</p>
+<p><b>Before.</b> A Clone copying Homunculus Horde earns the copy trigger. With Clone present, <code>copy_source</code> can read its copy effect. After departure the same function falls back to the base printing. A restored trigger could therefore create a Clone token where the player earned a Horde copy. This failure is predicted from the code path. The directed fixture is pending.</p>
+<p><b>Proposed.</b> Let the ability read its exact source’s copiable values when it resolves. If the source has left, use its values immediately before departure. Capturing at draw two would freeze a still-live source too early. Counters and temporary pumps stay outside the copy.</p></aside>
+<h2>Proposed fixture · One draw instruction, three listeners</h2>
+<table><tr><th>Fork after draw three</th><th>Expected result after resolution</th></tr>
+<tr><td>Wizard, Mystic and a Clone copying Horde saw draw two.</td><td>One Wizard counter, one flying Faerie and one Horde copy. The copy enters after the draw and earns no trigger of its own.</td></tr>
+<tr><td>Remove Clone while its trigger waits. Restore that position twice.</td><td>Both restores create the same Horde copy. A later appearance of Clone supplies no values to the old ability.</td></tr>
+<tr><td>Counter only the copy trigger.</td><td>The counter and Faerie still resolve. The drawing player’s total stays at three. Both viewers can know that total while hand identities follow native disclosure.</td></tr></table>
+
 <h2>Existing · Two Hatchers hit the same player</h2>
 <table><tr><th>Moment</th><th>What the player can recover</th></tr>
 <tr><td>Combat damage commits</td><td>One Hatcher deals one, the other three. Each CombatPlayerHit pairs source and recipient with its own amount.</td></tr>
@@ -29,7 +35,9 @@
 <tr><td>Did another nontoken creature die?</td><td>Hunter’s matching subject excludes its own departure and tokens. Each qualifying departure yields one stack entry.</td><td>Yes</td></tr>
 <tr><td>Did a creature die this turn?</td><td>The committed move and delayed watcher read was_creature from the exact departure. TurnState holds one public bit, cleared at the next turn.</td><td>Yes</td></tr>
 <tr><td>Can I see the damage before choosing a discard?</td><td>Blast resolves damage then Effect::discard_draw(1, 1). Its LookAndSelect action space belongs to the caster.</td><td>Yes</td></tr>
-<tr><td>What did I spend casting that spell?</td><td>PaymentReceipt owns the committed units. The planned Expend threshold and Unravel comparison still need their consumers.</td><td>No · partial</td></tr></tbody></table>
+<tr><td>Did my cast cross four?</td><td>commit_spell_payment binds the receipt-backed crossing. Two Duos trigger at three → five, even when the spell is countered. The late Duo misses it.</td><td>Yes</td></tr>
+<tr><td>Was that my second draw?</td><td>CardDrawn carries the ordinal used by Draws. The three FDN definitions still need their batch fixture.</td><td>Yes</td></tr>
+<tr><td>What should my departed Horde copy?</td><td>copy_source retains the printing but loses the departed incarnation’s copy and face state.</td><td>No</td></tr></tbody></table>
 <h2>One saved Hellkite decision · existing behavior</h2>
 <p>The earlier menu offered one with only an untapped Hellkite. Selecting it panicked because the payment required mana. The repaired menu and the payment step use the same ability cost.</p>
 <table><tr><th>Position</th><th>Complete X offer</th><th>Payment observed</th></tr>
@@ -52,4 +60,4 @@
 <tr><td>Discard Island, then repeat the Command</td><td>Both viewers identify Island in the caster’s graveyard. The duplicate returns stale_revision and preserves the committed witness.</td></tr>
 <tr><td>Swap the hidden Island for Plains</td><td>The caster’s hand, tensor card rows, text and Academy choice reflect the substitution. The waiting seat has equal JSON, tensors and recovery frames and receives no text decision. Socket resume with the session credentials restores all three choices.</td></tr></table>
 <p>Evidence: tests/academy/test_incinerating_blast.py (three passing cases). Socket recovery exercises a live session initialized from a restored position. Recorded Watch history still needs its own comparison at the selected viewer’s presentation cursor.</p>
-<h2>Questions for review</h2><ol><li>Which event earns Duo’s trigger? <b>1a</b> The committed cast that crosses four (selected). <b>1b</b> A later check finding four or more spent.</li><li>What survives countering the spell? <b>2a</b> Only the mana shown in earlier receipts. <b>2b</b> The committed spend and an already pending Duo trigger (selected).</li></ol></main></html>
+<h2>Questions for review</h2><ol><li>When should a still-live Horde supply its copiable values? <b>1a</b> At resolution (selected). <b>1b</b> On the second draw.</li><li>What demonstrates departed-source support? <b>2a</b> A departed printed Horde. <b>2b</b> A departed Clone copying Horde, restored with its ability pending (selected).</li></ol></main></html>
