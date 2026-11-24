@@ -54,3 +54,5 @@ Use an ordinary-play Voxmancer alongside the constructed Angel for the Waypoint 
 Use blink for the Emeritus source-loss branch. Resolving the original trigger with the same card back in play distinguishes source appearance from physical card identity.
 
 Group the outstanding rows by preparation, printed spell programs, and zone permissions. Each group shares the native fixtures listed in the plan.
+
+The six history-dependent preparation rows wait on MTG-418 instead of adding turn-history counters here. The brief says to defer such cards. Leech Collector counts as one: "first life gain this turn" differs from a once-each-turn trigger when life was gained before it entered.
