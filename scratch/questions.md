@@ -38,3 +38,5 @@ Use Regent’s existing Omen as the prepared-inset control. Changing only the in
 Use an unrelated exiled spell copy as the negative cleanup control in the two-source fixture.
 
 For the two-copy fixture, both branches cast Counterspell through a native Command and then cast the surviving Seed Suture targeting the Angel. This checks that the surviving offer still executes after the counter.
+
+The transfer review selects a fixed-player source-conditioned grant as the comparison. Transfer holds both object identities constant while distinguishing a change of caster from a loss of access.
