@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
+        Keywords, PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Color, Mana, ManaCost},
@@ -214,19 +214,15 @@ fn goblin_oriflamme() -> CardDefinition {
             name: "Goblin Oriflamme".into(),
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Enchantment]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     attacking: true,
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -1,10 +1,7 @@
 //! Streets of New Capenna.
 
 use managym_state::{
-    ability::{
-        Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
-        TriggerSubject,
-    },
+    ability::{Ability, Effect, ObjectSelector, PlayerSelector, TargetSpec, TriggerSubject},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, PrintedCharacteristics,
         StaticAbility, StaticScope,
@@ -102,10 +99,7 @@ fn witness_protection() -> CardDefinition {
                     },
                 ],
             )],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             text_box: text_box.into(),
             ..Default::default()
         },

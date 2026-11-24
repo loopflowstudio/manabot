@@ -2221,6 +2221,15 @@ impl Effect {
         Effect::Tap { what }
     }
 
+    /// An Aura spell's "Enchant [spec]" (CR 702.5): it resolves attached to
+    /// one target matching `spec`. `Object::enchant` reads the spec back, so
+    /// the cast target and the CR 704.5m recheck come from this one clause.
+    pub fn enchant(spec: TargetSpec) -> Self {
+        Effect::AttachSourceTo {
+            what: ObjectSelector::Target(spec),
+        }
+    }
+
     pub fn untap(what: ObjectSelector) -> Self {
         Effect::Untap { what }
     }

@@ -870,10 +870,7 @@ fn twinblade_blessing() -> CardDefinition {
                     Keyword::DoubleStrike,
                 ]))],
             )],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             name: "Twinblade Blessing".into(),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
@@ -1033,9 +1030,7 @@ fn starlight_snare() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{U}")),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             statics: vec![StaticAbility::Restriction(StaticRestriction {
                 scope: StaticScope::Attached,
                 kind: Restriction::DoesntUntap,

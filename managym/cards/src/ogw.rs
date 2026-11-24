@@ -1,6 +1,6 @@
 //! Oath of the Gatewatch.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{Effect, ObjectSelector, TargetSpec},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
         StaticAbility, StaticScope,
@@ -69,10 +69,7 @@ fn untamed_hunger() -> CardDefinition {
                     Modification::pump(2, 1),
                 ],
             )],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             name: "Untamed Hunger".into(),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],

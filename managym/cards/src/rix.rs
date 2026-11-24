@@ -5,7 +5,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -216,14 +216,14 @@ fn kitesail_corsair() -> CardDefinition {
             subtypes: vec!["Human".into(), "Pirate".into()],
             power: Some(2),
             toughness: Some(1),
-            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::This,
-                condition: Some(Condition::SourceMatches(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::SourceMatches(CardPredicate {
                     attacking: true,
                     ..Default::default()
                 })),
-                keywords: Keywords::of(&[Keyword::Flying]),
-            })],
+                vec![Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -79,10 +79,7 @@ fn eaten_by_piranhas() -> CardDefinition {
                     },
                 ],
             )],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             text_box: text_box.into(),
             ..Default::default()
         },

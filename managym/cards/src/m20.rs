@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::{EffectDuration, Modification},
     mana::{Color, ManaCost},
@@ -253,11 +253,13 @@ fn twinblade_paladin() -> CardDefinition {
                 CounterKind::PlusOnePlusOne,
                 1,
             ))],
-            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::This,
-                condition: Some(Condition::LifeAtLeast { amount: 25 }),
-                keywords: Keywords::of(&[Keyword::DoubleStrike]),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::LifeAtLeast { amount: 25 }),
+                vec![Modification::AddKeywords(Keywords::of(&[
+                    Keyword::DoubleStrike,
+                ]))],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

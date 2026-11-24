@@ -1,6 +1,6 @@
 //! Dragon's Maze.
 use managym_state::{
-    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
         PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
@@ -72,10 +72,7 @@ fn unflinching_courage() -> CardDefinition {
                     Modification::pump(2, 2),
                 ],
             )],
-            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-            spell_effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             name: "Unflinching Courage".into(),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],

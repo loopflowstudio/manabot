@@ -927,6 +927,13 @@ impl<'a> Context<'a> {
                 plan.condition = effect.condition.clone();
                 plan.cda = effect.characteristic_defining;
                 for m in &effect.modifications {
+                    // A modification outside the layer system (a prohibition
+                    // or prevention) has no reader here; a printed static
+                    // spelling it would silently do nothing.
+                    debug_assert!(
+                        layer(m).is_some(),
+                        "continuous static modification {m:?} has no layer"
+                    );
                     if let Some(l) = layer(m) {
                         let layer = if plan.cda && l == Layer::BasePower {
                             Layer::CharacteristicPower

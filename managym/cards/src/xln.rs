@@ -5,8 +5,9 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -107,15 +108,11 @@ fn pirate_s_cutlass() -> CardDefinition {
                 }],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 2,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(2, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

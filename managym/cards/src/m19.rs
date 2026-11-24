@@ -6,7 +6,7 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics, StaticAbility, StaticKeywordGrant, StaticScope,
+        PrintedCharacteristics, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -333,15 +333,15 @@ fn kargan_dragonrider() -> CardDefinition {
             subtypes: vec!["Human".into(), "Warrior".into()],
             power: Some(2),
             toughness: Some(2),
-            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::This,
-                condition: Some(Condition::ControlsAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::ControlsAtLeast {
                     distinct_names: false,
                     count: 1,
                     predicate: CardPredicate::subtype("Dragon"),
                 }),
-                keywords: Keywords::of(&[Keyword::Flying]),
-            })],
+                vec![Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
