@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        bloomvine_regent(),
         riling_dawnbreaker(),
         marang_river_regent(),
         stormshriek_feral(),
@@ -66,6 +67,66 @@ fn scavenger_regent() -> CardDefinition {
             statics: vec![StaticAbility::Ward(PaymentCost::Discard)],
             text_box: "Flying\nWard—Discard a card.".into(),
             inset: Some(InsetSpell::Omen(toxin.into())),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn claim_territory() -> PrintedCharacteristics {
+    let basic_forest = CardPredicate {
+        subtype: Some("Forest".into()),
+        ..CardPredicate::basic_land()
+    };
+    PrintedCharacteristics {
+        name: "Claim Territory".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Omen".into()],
+        // The found cards are chosen between once both are known: one enters
+        // tapped, and "the other" is whichever of them is still in the library.
+        spell_effects: vec![Effect::search_library(
+            basic_forest,
+            EffectValue::Fixed(2),
+            vec![
+                Effect::SelectCards {
+                    from: ObjectSelector::Selected,
+                    predicate: CardPredicate::default(),
+                    min: 1,
+                    max: EffectValue::Fixed(1),
+                    effects: vec![Effect::return_to_battlefield(ObjectSelector::Selected, true)],
+                    if_declined: vec![],
+                },
+                Effect::return_to_hand(ObjectSelector::Selected),
+            ],
+        )],
+        text_box: "Search your library for up to two basic Forest cards, reveal them, put one onto the battlefield tapped and the other into your hand, then shuffle. (Also shuffle this card.)".into(),
+        ..Default::default()
+    }
+}
+
+fn bloomvine_regent() -> CardDefinition {
+    CardDefinition {
+        key: "tdm.bloomvine_regent",
+        scryfall_id: "10e0a9a3-f63a-4f92-a083-9d181580e498",
+        printed: PrintedCharacteristics {
+            name: "Bloomvine Regent".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(4),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                // It is a Dragon itself: "this creature or another Dragon".
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::you_control(CardPredicate::subtype("Dragon")),
+                },
+                effects: vec![Effect::gain_life(3)],
+            }],
+            text_box: "Flying\nWhenever this creature or another Dragon you control enters, you gain 3 life.".into(),
+            inset: Some(InsetSpell::Omen(claim_territory().into())),
             ..Default::default()
         },
         ..Default::default()

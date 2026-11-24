@@ -8140,5 +8140,19 @@
     "colors": [
       "R"
     ]
+  },
+  "Bloomvine Regent": {
+    "name": "Bloomvine Regent",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature or another Dragon you control enters, you gain 3 life.",
+    "colors": [
+      "G"
+    ]
   }
 }

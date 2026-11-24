@@ -884,3 +884,71 @@ fn feral_deathgorger_exiles_up_to_two_from_one_chosen_graveyard() {
         assert_eq!(zone_of(&branch, card), Some(ZoneType::Library));
     }
 }
+
+/// Claim Territory finds up to two basic Forests, then its caster chooses
+/// which one enters tapped; the other goes to hand, and the Omen shuffles
+/// into the library. Bloomvine Regent gains 3 life as it or another Dragon
+/// enters.
+#[test]
+fn bloomvine_regent_gains_life_for_dragons_and_claim_territory_splits_two_forests() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library},
+        inspect::hand,
+        play::cast_profile,
+    };
+    use managym::state::card::SpellProfile;
+    let mut s = five_color_setup(&["Bloomvine Regent", "Twinmaw Stormbrood"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let regent = move_from_library(&mut s, 0, "Bloomvine Regent", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2G");
+    cast_profile(&mut s, regent, SpellProfile::Omen);
+    resolve_search(&mut s);
+    let forests = offered_cards(&s);
+    assert!(forests.len() >= 2);
+    assert!(forests
+        .iter()
+        .all(|id| s.game().state[*id].name == "Forest"));
+    select_card(&mut s, forests[0]);
+    select_card(&mut s, forests[1]);
+    // Both found; now choose the one that enters tapped.
+    let found = offered_cards(&s);
+    assert_eq!(found.len(), 2, "{:?}", s.action_space());
+    select_card(&mut s, found[1]);
+    settle(&mut s);
+    let battlefield = s.battlefield_permanents_named(0, "Forest");
+    assert_eq!(battlefield.len(), 1);
+    assert!(
+        s.game().state.permanents[battlefield[0]]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
+    assert_eq!(
+        s.game().state.permanent_of(now(&s, found[1])),
+        Some(battlefield[0])
+    );
+    assert_eq!(hand(&s, 0), [now(&s, found[0])]);
+    assert_eq!(
+        s.game().state.zones.zone_of(now(&s, regent)),
+        Some(ZoneType::Library),
+        "the Omen shuffles itself"
+    );
+
+    let mut s = five_color_setup(&["Bloomvine Regent", "Twinmaw Stormbrood"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let life = s.life(0);
+    let regent = move_from_library(&mut s, 0, "Bloomvine Regent", ZoneType::Hand);
+    cast_profile(&mut s, regent, SpellProfile::Front);
+    settle(&mut s);
+    assert_eq!(s.life(0), life + 3);
+    let dragon = move_from_library(&mut s, 0, "Twinmaw Stormbrood", ZoneType::Hand);
+    cast_profile(&mut s, dragon, SpellProfile::Front);
+    settle(&mut s);
+    // Twinmaw's own enter trigger gains 5 more.
+    assert_eq!(s.life(0), life + 3 + 3 + 5);
+}
+
+fn resolve_search(s: &mut crate::support::game::Scenario) {
+    s.pass_priority();
+    s.pass_priority();
+}
