@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>MTG-419 Concept Review — Whole-Branch Sign-Off After D7</title>
+  <title>MTG-419 Concept Review — Post-Decomposition Whole-Branch Sign-Off</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -178,15 +178,15 @@
 </head>
 <body>
 <main>
-  <p class="kicker">Managym · MTG-419 · Pre-Gate Whole-Branch Concept Review (ef8728b23c vs. main 88ce96bd6b)</p>
+  <p class="kicker">Managym · MTG-419 · Post-Decomposition Whole-Branch Concept Review (ad7c92a355 vs. main 88ce96bd6b)</p>
   <h1>Do the shared casting-profile, play-permission, payment-continuation, and stacked-trigger concepts line up?</h1>
 
   <div class="scope">
-    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and event-bound trigger X area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, trigger.rs, resolution.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>state/src/stack_object.rs</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>experience.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, prompt.ts, Board.svelte, Rail.svelte, Inspect.svelte}</code>, <code>academy/ui/src/lib/projection.ts</code>).<br>
-    <strong>Why this area:</strong> After the pre-gate alignment pass (<code>db3f8e6738..1673a6e053</code>), behavior review caught D7 (a trigger choosing X while resolving rendered <code>"that many (0)"</code> on the stack). Commits <code>2c213d9525..ef8728b23c</code> fixed D7 via <code>bound_x</code> and raised a concept question in <code>scratch/plan.md</code> about whether <code>PendingTrigger.x</code> / <code>TriggeredAbilityOnStack.x</code> should become <code>Option&lt;u8&gt;</code>. Reviewing the whole branch fresh against base <code>88ce96bd6b</code> confirms <strong>every MTG-419 concept aligns</strong>, and testing <code>x: Option&lt;u8&gt;</code> against concrete counterexamples shows keeping <code>x: u8</code> + <code>bound_x</code> is the stronger, state-hash-preserving design. <strong>Outcome: nothing to change in <code>scratch/plan.md</code>; proceed to gate.</strong>
+    <strong>Area reviewed:</strong> The entire MTG-419 shared casting-profile, play-permission, face-down exile privacy, stack provenance, payment-continuation, and event-bound trigger X area against base <code>88ce96bd6b</code> across <code>managym</code> (<code>flow/{play.rs, cast_permission.rs, action.rs, payment.rs, decision.rs, statics.rs, zones.rs, triggers.rs, trigger.rs, resolution.rs, proposed_event.rs, sba.rs, knowledge.rs, search.rs, selection_sampling.rs, mana/preview.rs}</code>, <code>cards/content_pack.rs</code>, <code>state/src/stack_object.rs</code>, <code>possible_worlds.rs</code>, <code>decision_context.rs</code>, <code>agent/{observation.rs, observation_encoder.rs, observation_layout.rs, observation_json.rs, structured_offer.rs, continuation.rs, effect_execution.rs, ability_description.rs}</code>), Python consumers (<code>manabot/semantic/text_observation.py</code>, <code>managym/experience_projection.py</code>), and Academy UI (<code>academy/ui/src/lib/board/{view.ts, inspect.ts, Board.svelte, Rail.svelte, Inspect.svelte, Plate.svelte}</code>).<br>
+    <strong>Why this area:</strong> Decomposition and compression (<code>8c2caf1982..ad7c92a355</code>) removed the remaining duplicate face and cast-only-from-hand checks from <code>play_routes</code> and consolidated its board/card reads ahead of gate. Reviewing the whole branch fresh against base <code>88ce96bd6b</code> confirms <strong>every MTG-419 concept aligns across rules, tensors, LLM text, and Academy UI</strong>, with no per-card dispatch and no second copy of any casting rule. <strong>Outcome: nothing to change in <code>scratch/plan.md</code>; proceed to gate.</strong>
   </div>
 
-  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>ef8728b23c</code>)</h2>
+  <h2>1. Product concepts vs. code concepts (whole branch at HEAD <code>ad7c92a355</code>)</h2>
   <table>
     <thead>
       <tr>
@@ -198,34 +198,34 @@
     </thead>
     <tbody>
       <tr>
-        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play names one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions.</td>
-        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>Game::cast_choices</code>, <code>Game::priority_play</code>, <code>permits_spell</code>, <code>permitted_play_routes</code>, <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code> (<code>observation_layout.rs:487-488</code>).</td>
+        <td><strong>Unified play triple <code>(object, profile, route)</code> &amp; CR 305.9</strong><br>Every spell cast and land play names one exact object, one printed face (Front, Adventure, Omen, BackFace), and one legal route; lands only use land-playing permissions and cast-only-from-hand blocks spells without blocking land plays.</td>
+        <td><code>SpellProfile</code>, <code>PlayRoute</code> (codes <code>1..=9</code>), <code>ContentPack::spell_definition</code>, <code>play_routes</code> &rarr; <code>permits_spell</code> &rarr; <code>permitted_play_routes</code> &rarr; <code>cast_choices</code> &rarr; <code>priority_play</code> (<code>flow/play.rs:234-668</code>), <code>action::{SPELL_PROFILE, PLAY_ROUTE, ROUTE_MANA_VALUE, QUOTA_TYPE}</code> (<code>observation_layout.rs:484-488</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Single authority across priority casts, land plays, resolution casts, and payment preview; per-face disambiguation keeps lone-route <code>route: None</code> on the wire; <code>action::PLAY_ROUTE</code> metadata lists all <code>1..9</code> codes including <code>9 printed graveyard</code>; <code>test_pinned_pilot</code> unchanged.</td>
+        <td>After decomposition, <code>play_routes</code> only opens zone candidates (reading <code>layer_board()</code>, card, ownership, and active player once) while <code>permits_spell</code> is the sole authority matching each route to the selected face and enforcing <code>casts_only_from_hand</code> and CR 305.9. Per-face disambiguation keeps lone-route <code>route: None</code> on the wire; <code>test_pinned_pilot</code> unchanged.</td>
       </tr>
       <tr>
-        <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into or is accepted by it.</td>
-        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:437</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2909</code>), <code>action_description</code> (<code>action.rs:58</code>).</td>
+        <td><strong>Resolution casts vs. priority play routes</strong><br>A <code>CastDuringResolution</code> cast (CR 608.2g) is authorized solely by the resolving instruction; a priority <code>PlayRoute</code> never leaks into or is accepted by it.</td>
+        <td><code>CastAuthority::{Priority, Resolution}</code>, <code>Decision::cast_authority</code>, <code>Game::resolved_play_route</code> (<code>play.rs:428</code>), <code>Decision::CastDuringResolution</code> (<code>decision.rs:2905</code>), <code>action_description</code> (<code>action.rs:58</code>), <code>payment_preview</code> (<code>mana/preview.rs:171</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td><code>resolved_play_route</code> checks <code>suspended_decision.is_some()</code> before <code>route.is_some()</code>; <code>CastDuringResolution</code> requires <code>route: None</code> on non-front <code>Action::CastSpell</code> and rejects forged <code>Some(PlayRoute::Grant(0))</code> (<code>identity_tests::a_resolution_cast_never_inherits_a_priority_route</code>).</td>
+        <td><code>resolved_play_route</code> checks <code>suspended_decision.is_some()</code> before <code>route.is_some()</code>; <code>CastDuringResolution</code> requires <code>route: None</code> on non-front <code>Action::CastSpell</code> and rejects forged <code>Some(PlayRoute::Grant(0))</code>; <code>payment_preview</code> routes through <code>cast_authority()</code> first.</td>
       </tr>
       <tr>
-        <td><strong>Exact grants (“may play” vs. “may cast”), multi-face pricing &amp; CR 601.2h</strong><br>Grants distinguish play vs. cast, price Land//Spell MDFCs by their castable face, and apply <code>any_mana</code> once after reductions and additional costs.</td>
-        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code>, <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code>, <code>PlayGrantTerms</code> / <code>PlayGrantExtension</code>, Academy <code>permissionTerms</code>.</td>
+        <td><strong>Exact grants (“may play” vs. “may cast”), multi-face pricing &amp; CR 601.2h</strong><br>Grants distinguish play vs. cast, price Land//Spell MDFCs by their castable face, and apply <code>any_mana</code> once after reductions and additional costs (CR 601.2f &rarr; 601.2h).</td>
+        <td><code>PlayGrant.{play_lands, prepared, face_down, condition, ...}</code>, <code>LayerBoard.play_permissions</code> (<code>statics.rs:192</code>), <code>exile_with_play_grant</code>, <code>grant_card_cast_cost</code>, <code>effective_spell_cost</code> (<code>play.rs:515</code>), <code>PlayGrantTerms</code> / <code>PlayGrantExtension</code>, Academy <code>permissionTerms</code> (<code>inspect.ts:121</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Aligned across native rules, v11 learning tokens (preserving legacy TLA grant tuples), LLM text, and Academy inspection.</td>
+        <td>One static owner (<code>StaticPlayPermissions</code>), one CR 601.2h step in <code>effective_spell_cost</code> across <code>ExileCounter</code>, <code>PlayGrant.any_mana</code>, and <code>SpendAnyManaToCast</code>; aligned across native rules, v11 learning tokens (preserving legacy TLA tuples), LLM text, and Academy inspection.</td>
       </tr>
       <tr>
         <td><strong>Two-seat face-down exile privacy &amp; determinization</strong><br>Foretold and conditional face-down exiled cards (Flameshape) stay private to authorized viewers across observations, search determinization, and possible worlds.</td>
-        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code>, atomic <code>refill_hidden_exile_slots</code> / <code>ZoneManager::exchange_face_down_exile</code>, <code>shuffle_known_library</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
+        <td><code>is_face_down_in_exile</code> / <code>can_view_face_down_exile</code> / <code>hides_face_down_exile</code> (<code>cast_permission.rs:322-348</code>), atomic <code>refill_hidden_exile_slots</code> / <code>ZoneManager::exchange_face_down_exile</code>, <code>shuffle_known_library</code>, <code>PossibleWorldSpace.face_down_exile</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection and owner-seat resampling.</td>
+        <td>Foretell and Flameshape coexist atomically without duplicate exile or merged grants, including controlled-opponent inspection and owner-seat resampling when no Wizard is controlled.</td>
       </tr>
       <tr>
         <td><strong>Prepared spell copies, stack provenance, cast history, off-battlefield counters &amp; open-ended pooled mana</strong><br>Prepared copies follow source control and vanish when unlinked; stack flags separate prepared/flashback casts from copies; cast history keeps cast profiles; exile counters persist until zone change; non-column mana restrictions use facts.</td>
-        <td><code>prepare_inset</code> / <code>unprepare_inset</code> / <code>sba.rs</code>, <code>StackObjectData.{from_prepared, flashback}</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>, Academy <code>Rail.svelte</code> &amp; <code>inspectableCards</code>.</td>
+        <td><code>prepare_inset</code> / <code>unprepare_inset</code> / <code>sba.rs:289</code>, <code>StackObjectData.{from_prepared, flashback}</code>, <code>TurnState.spells_cast: [Vec&lt;RecordedCast&gt;; 2]</code>, <code>GameState.object_counters</code>, <code>POOLED_MANA</code>, Academy <code>Rail.svelte</code> &amp; <code>inspectableCards</code> (<code>view.ts:168, 258</code>).</td>
         <td><span class="badge yes">Yes</span></td>
-        <td>One representation per concept across rules, state hashing, v11 tensors, LLM text, and Academy stack/board views (including spells announced from graveyard/exile).</td>
+        <td>One representation per concept across rules, state hashing, v11 tensors, LLM text, and Academy stack/board views (including spells announced from graveyard, exile, or library top).</td>
       </tr>
       <tr>
         <td><strong>Multi-step counter-removal cost vs. chosen spell mode</strong><br>Casting Quilled Greatwurm from the graveyard by removing 6 counters one at a time reports remaining counters owed (6 &rarr; 1), never a phantom chosen mode.</td>
@@ -237,56 +237,50 @@
         <td><strong>Event-bound trigger X vs. resolution-chosen X (CR 107.3) &amp; stacked trigger identity</strong><br>Triggers whose event binds an amount (entering permanent’s spell X, counters put, per-creature combat damage) show that number and event object on placement offers and the stack; triggers that choose X while resolving (Wildborn Preserver) keep X symbolic until chosen.</td>
         <td><code>DealsCombatDamage.to: Option&lt;Actor&gt;</code>, trigger-only <code>GameEvent::CombatDamageTotals</code>, <code>FiredTrigger.occurrence</code>, <code>PendingTrigger.x</code> / <code>TriggeredAbilityOnStack.x</code>, <code>StackObjectData.x</code> (<code>observation.rs:1874</code>), <code>trigger_description</code> + <code>bound_x</code> (<code>ability_description.rs:25-102</code>), <code>Game::trigger_event_label</code> (<code>flow/action.rs:450</code>), kind-3 continuation frame <code>context</code> + <code>x</code>.</td>
         <td><span class="badge yes">Yes</span></td>
-        <td><code>bound_x</code> mirrors <code>flow/triggers.rs:1151</code>: <code>EntersTheBattlefield { This }</code> renders <code>"X (N)"</code> (CR 107.3m), <code>PutsCounters</code> / <code>NthCounter</code> / <code>Chapter</code> and per-creature <code>DealsCombatDamage { per: Object, to: None }</code> render <code>"that many (N)"</code>, and all other conditions return <code>None</code> so <code>OptionalManaPaymentX</code> keeps <code>"the announced value of X"</code> with no <code>"(0)"</code>. Checked against all four X-using triggers in the catalog (Wan Shi Tong, Earth Kingdom General, Quilled Greatwurm, Wildborn Preserver).</td>
+        <td><code>bound_x</code> mirrors <code>flow/triggers.rs:1151</code>: <code>EntersTheBattlefield { This }</code> renders <code>"X (N)"</code> (CR 107.3m), <code>PutsCounters</code> / <code>NthCounter</code> / <code>Chapter</code> and per-creature <code>DealsCombatDamage { per: Object, to: None }</code> render <code>"that many (N)"</code>, and all other conditions return <code>None</code> so <code>OptionalManaPaymentX</code> keeps <code>"the announced value of X"</code> with no <code>"(0)"</code>.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. D7 fix &amp; counterexample check on <code>x: Option&lt;u8&gt;</code></h2>
+  <h2>2. Decomposition cut &amp; counterexample checks (<code>8c2caf1982..ad7c92a355</code>)</h2>
   <div class="callout">
-    <strong>Outcome:</strong> Nothing to change in <code>scratch/plan.md</code>. D7 is cleanly closed at HEAD <code>ef8728b23c</code>, and the alternative sketched in <code>scratch/plan.md</code> (<code>PendingTrigger.x: Option&lt;u8&gt;</code> / <code>TriggeredAbilityOnStack.x: Option&lt;u8&gt;</code>) fails three counterexamples without removing <code>bound_x</code>.
+    <strong>Outcome:</strong> Nothing to change in <code>scratch/plan.md</code>. The decomposition pass removed the one remaining rule duplication in <code>play_routes</code> without breaking single-route wire compatibility, and no structural mismatch remains across the branch.
   </div>
 
   <div class="grid">
     <div class="card">
-      <p><span class="badge existing">Before D7 · 04f31e8f90</span></p>
-      <h3>Unconditional substitution broke CR 107.3</h3>
-      <pre>ability_description.rs:47-57
-  let amount = if enters_itself(condition) { "X" } else { "that many" };
-  with_trigger_x(effects_description(effects), amount, x)
-
-// Wildborn Preserver + Gray Ogre entering (X not yet chosen):
-// ❌ "Choose X. You may pay {X}. If you do, When you do:
-//     Put that many (0) +1/+1 counters on this"</pre>
+      <p><span class="badge existing">Before decomposition · ef8728b23c</span></p>
+      <h3><code>play_routes</code> duplicated two <code>permits_spell</code> rules</h3>
+      <pre>flow/play.rs (before 8c2caf1982)
+  let has_spell = !land || self.state[object].modal_back;
+  // Duplicated face rule for Hand/FreeFromHand and LibraryTop:
+  if has_spell &amp;&amp; permissions.free_from_hand { ... }
+  // Duplicated hand-only prohibition outside Hand:
+  _ if !land &amp;&amp; !modal_back &amp;&amp; self.casts_only_from_hand(player) =&gt;
+      Cow::Borrowed(&amp;[]),</pre>
     </div>
 
     <div class="card aligned-box">
-      <p><span class="badge yes">Existing · HEAD ef8728b23c</span></p>
-      <h3><code>bound_x</code> gates substitution on event-bound conditions</h3>
-      <pre>ability_description.rs:47-51, 71-102
-  let text = match bound_x(condition) {
-      Some(amount) =&gt; with_trigger_x(text, amount, x),
-      None =&gt; text,
-  };
-  // EntersTheBattlefield { This }              =&gt; Some("X")
-  // PutsCounters | NthCounter | Chapter        =&gt; Some("that many")
-  // ActiveIf* + DealsCombatDamage(Object,None) =&gt; Some("that many")
-  // everything else (incl. Wildborn Preserver) =&gt; None
-
-// Wildborn Preserver stacked trigger (both viewers):
-// ✓ "Choose X. You may pay {X}. If you do, When you do:
-//    Put the announced value of X +1/+1 counters on this"
-// Quilled Greatwurm stacked triggers (7 and 2):
-// ✓ "Put that many (7) +1/+1 counters ... — event: Quilled Greatwurm"</pre>
+      <p><span class="badge yes">Existing · HEAD ad7c92a355</span></p>
+      <h3>One zone candidate list; <code>permits_spell</code> owns every face &amp; hand-only rule</h3>
+      <pre>flow/play.rs:234-389 (after 8c2caf1982 + 6f0cd50f70)
+  // play_routes reads layer_board(), card, ownership, active once
+  // and opens the zone's routes (Hand/FreeFromHand, Exile/Graveyard
+  // grants/counters/flashback/printed/Muldrotha, LibraryTop).
+  //
+  // permits_spell alone enforces:
+  //   1. casts_only_from_hand =&gt; blocks non-hand spells, keeps lands
+  //   2. CR 305.9 =&gt; lands only via Hand, ExileCounter, Grant(play_lands),
+  //      or GraveyardType(Land); spells never via Land quota</pre>
     </div>
   </div>
 
   <div class="trace">
-    <div class="trace-label">Counterexamples that refute replacing <code>x: u8</code> with <code>x: Option&lt;u8&gt;</code></div>
+    <div class="trace-label">Counterexamples checked against the final model</div>
     <ol>
-      <li><strong>State-hash churn on every ETB trigger:</strong> In <code>flow/triggers.rs:1156</code>, every permanent entering the battlefield (including non-X creatures like Earth Kingdom General) hits the <code>*object == source_object</code> arm with <code>permanent.cast_x == 0</code>. Storing <code>Some(0)</code> would either serialize <code>"x": 0</code> on every ETB trigger in the game (breaking retained v16 state hashes and canonical replays) or require <code>skip_serializing_if</code> to collapse <code>Some(0)</code> back into <code>None</code>.</li>
-      <li><strong>Reflexive triggers read <code>EffectFrame.x: u8</code>:</strong> <code>Effect::WhenYouDo</code> (<code>resolution.rs:1708</code>) copies <code>frame.x: u8</code>, which is <code>0</code> both when a resolving spell/ability had no X and when <code>ChoosePaymentX</code> chose <code>X = 0</code>. <code>Option&lt;u8&gt;</code> on <code>PendingTrigger</code> alone does not distinguish those without widening <code>EffectFrame</code> as well.</li>
-      <li><strong>Wording still requires inspecting <code>condition</code>:</strong> Even with <code>x: Option&lt;u8&gt;</code>, <code>ability_description.rs</code> still classifies <code>condition</code> to choose <code>"X"</code> (entering permanent, CR 107.3m) vs. <code>"that many"</code> (counters put, combat damage). Keeping <code>x: u8</code> + <code>bound_x</code> keeps one small 31-line classifier and preserves every retained state hash.</li>
+      <li><strong>Drannith Magistrate + Muldrotha + Spell//Land MDFC (<code>Tidal Errand // Tidal Haven</code>) in graveyard:</strong> <code>play_routes</code> opens <code>GraveyardType(Land)</code>; <code>permits_spell</code> refuses <code>Front</code> (Sorcery: hand-only lock + non-Land) and admits <code>BackFace</code> (Land: skips hand-only lock, matches <code>kind == Land</code>). Under Omniscience in hand, <code>BackFace</code> admits only <code>Hand</code> (<code>route: None</code>) while <code>Front</code> offers named <code>Hand</code> and <code>FreeFromHand</code>.</li>
+      <li><strong>Artifact land (<code>Thornwood Arbor</code>) in graveyard with Muldrotha:</strong> CR 305.9 admits only <code>GraveyardType(Land)</code>; a forged <code>GraveyardType(Artifact)</code> fails <code>(kind == Land) == land</code> in <code>permits_spell</code> before mutation.</li>
+      <li><strong>Why <code>x: Option&lt;u8&gt;</code> on triggers stays unbuilt:</strong> Converting <code>PendingTrigger.x</code> / <code>TriggeredAbilityOnStack.x</code> to <code>Option&lt;u8&gt;</code> would either churn state hashes on every ETB trigger (<code>cast_x == 0</code>), require widening <code>EffectFrame.x</code> for reflexive <code>WhenYouDo</code> triggers, and still keep <code>bound_x</code> to distinguish <code>"X"</code> (CR 107.3m) from <code>"that many"</code>.</li>
     </ol>
   </div>
 
@@ -310,22 +304,23 @@
   <div class="outside">
     <p><span class="badge outside-badge">Outside MTG-419 · Academy prompt surface</span> <strong>Academy <code>Rail.svelte</code> &amp; <code>prompt.ts</code> do not yet render <code>decision_context.pending</code> or distinguish <code>stage === 'additional_cost'</code>:</strong></p>
     <ul>
-      <li><code>DecisionContextView.pending</code> carries plain-language progress (<code>"6 counters left to remove."</code>, plus pre-existing <code>SelectCards</code>/<code>DistributeCounters</code> summaries), and the rail exposes every exact legal offer and the full engine instruction under <em>Rules detail</em>. However, <code>Rail.svelte</code> does not render <code>context.pending</code>, <code>prompt.ts:61-67</code> uses generic prompt lines across every <code>additional_cost</code> step (Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, RemoveCounters), and <code>academy/ui/src/lib/projection.ts:4-10</code> (<code>exposesOtherPrivateContext</code>) does not yet include <code>context.pending</code>.</li>
+      <li><code>DecisionContextView.pending</code> carries plain-language progress (<code>"6 counters left to remove."</code>, plus pre-existing <code>SelectCards</code>/<code>DistributeCounters</code> summaries), and the rail exposes every exact legal offer and the full engine instruction under <em>Rules detail</em>. However, <code>Rail.svelte</code> does not render <code>context.pending</code>, <code>prompt.ts</code> uses generic prompt lines across every <code>additional_cost</code> step (Crew, Saddle, Station, Sacrifice, Forage, ExileFromHand, RemoveCounters), and <code>academy/ui/src/lib/projection.ts</code> (<code>exposesOtherPrivateContext</code>) does not yet include <code>context.pending</code>.</li>
       <li><strong>What it would take:</strong> A small Game/Academy UI task (~30 lines across <code>Rail.svelte</code>, <code>prompt.ts</code>, <code>projection.ts</code>, plus vitest).</li>
     </ul>
     <p><span class="badge outside-badge">Outside MTG-419 · Payment continuation cleanup</span> <strong>Pre-existing multi-tap <code>CostComponent::Tap</code> in <code>continuation.rs:714-723</code>:</strong> Still writes remaining tap count into <code>frame.mode</code> (same pattern removed from <code>RemoveCounters</code>). Migrating it into <code>project_pending_payment</code> belongs in a dedicated cleanup task so MTG-419 does not churn unrelated retained activation fixtures.</p>
-    <p><span class="badge outside-badge">Outside MTG-419 · Future inline triggers with X</span> <strong><code>trigger_description</code>’s <code>inline</code> arm (<code>ability_description.rs:31-37</code>):</strong> Unconditionally runs <code>with_trigger_x(..., "that many", x)</code> for all <code>inline_effects</code> (reflexive triggers, delayed triggers, chosen modal trigger modes, granted triggers). Safe for the entire current catalog (only reflexive <code>WhenYouDo</code> triggers carry <code>EffectValue::X</code>, and only after <code>ChoosePaymentX</code> binds X); revisit if a future delayed trigger or modal trigger embeds <code>OptionalManaPaymentX</code>.</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Combat priority</span> <strong>Missing priority between first-strike and regular combat damage (CR 510.4):</strong> <code>FrameCompletion::CombatNormal</code> runs immediately after first-strike SBAs without placing triggers or passing priority. File as a separate bug Task at gate.</p>
+    <p><span class="badge outside-badge">Outside MTG-419 · Future inline triggers with X</span> <strong><code>trigger_description</code>’s <code>inline</code> arm (<code>ability_description.rs:31-37</code>):</strong> Unconditionally substitutes <code>"that many (N)"</code> for all <code>inline_effects</code>. Safe for the entire current catalog (only reflexive <code>WhenYouDo</code> triggers carry <code>EffectValue::X</code>, after <code>ChoosePaymentX</code> binds X); revisit if a future delayed or modal trigger embeds <code>OptionalManaPaymentX</code>.</p>
   </div>
 
   <h2>5. Questions for review</h2>
   <p class="muted">No plan change was needed; MTG-419 is ready for gate. Reply with e.g. <code>1b</code> or <code>2b</code> if you want a different disposition.</p>
   <ol class="q-list">
-    <li><strong>Proceed to gate with the current casting/permission/trigger-X model unchanged?</strong>
-      <br><span class="chosen">1a (chosen):</span> Proceed straight to gate — all MTG-419 concepts align across rules, v11 tensors, LLM text, and Academy projection; keep <code>x: u8</code> + <code>bound_x</code> (preserving retained state hashes) and leave <code>scratch/plan.md</code> unchanged.
+    <li><strong>Proceed to gate with the post-decomposition casting/permission/trigger-X model unchanged?</strong>
+      <br><span class="chosen">1a (chosen):</span> Proceed straight to gate — every MTG-419 concept aligns across rules, v11 tensors, LLM text, and Academy projection; keep <code>play_routes</code> + <code>permits_spell</code> and <code>x: u8</code> + <code>bound_x</code>, leaving <code>scratch/plan.md</code> unchanged.
       <br>1b: Hold gate to revisit another casting/permission or trigger-X boundary first (name which).
     </li>
     <li><strong>Disposition of the pre-existing Academy <code>additional_cost</code> prompt / <code>decision_context.pending</code> display gap (plus <code>projection.ts</code> parity):</strong>
-      <br><span class="chosen">2a (chosen):</span> Keep outside MTG-419 and file as a small Game/Academy UI follow-up task at gate (it predates MTG-419 across Crew/Saddle/Station/Sacrifice/Forage/ExileFromHand and touches <code>prompt.ts</code> / <code>Rail.svelte</code> / <code>projection.ts</code>).
+      <br><span class="chosen">2a (chosen):</span> Keep outside MTG-419 and file as a small Game/Academy UI follow-up task at gate (it predates MTG-419 across Crew/Saddle/Station/Sacrifice/Forage/ExileFromHand).
       <br>2b: Pull that ~30-line Academy UI update into MTG-419 before gate.
     </li>
   </ol>
