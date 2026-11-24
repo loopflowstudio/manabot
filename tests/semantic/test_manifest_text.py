@@ -57,3 +57,40 @@ def test_manifest_target_alias_from_both_seats() -> None:
         assert any(alias[0] in a.description for a in targets.actions)
         if viewer == owner:
             take(env, "Pass priority")
+
+
+def test_a_dead_manifests_granted_trigger_renders_without_its_printing() -> None:
+    env = priority_root(
+        ("Manifest Dread", "Undying Malice", "Lightning Bolt"),
+        ("Forest", "Forest", "Swamp", "Mountain"),
+    )
+    owner = env.current_agent_index()
+    take(env, r"Cast .*Manifest Dread")
+    take(env, r"Tap for mana .*Forest")
+    take(env, r"Tap for mana .*Forest")
+    take(env, "Pass priority")
+    take(env, "Pass priority")
+    selected = re.search(r"Native description: Manifest (.+)", take(env, "Select"))
+    assert selected is not None
+    for spell in ("Undying Malice", "Lightning Bolt"):
+        take(env, rf"Cast .*{spell}")
+        take(env, r"Target P\d+ \(nameless permanent\)")
+        take(env, "Pass priority")
+        take(env, "Pass priority")
+
+    lines = []
+    for viewer in (owner, 1 - owner):
+        assert env.current_agent_index() == viewer
+        decision = capture_text_decision(env)
+        (stack,) = (
+            line for line in decision.text.splitlines() if line.startswith("S1:")
+        )
+        # The departed face-down source has neither a live link nor a printing.
+        assert "source unavailable or expired object;" in stack
+        assert "a face-down permanent — delayed ability: Return this card" in stack
+        assert selected[1] not in stack
+        assert "no current link" not in decision.text
+        lines.append(stack.replace("controller You", "controller Opponent"))
+        if viewer == owner:
+            take(env, "Pass priority")
+    assert lines[0] == lines[1]

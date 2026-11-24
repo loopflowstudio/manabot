@@ -537,6 +537,56 @@ def test_face_down_card_text_appears_only_when_present() -> None:
     assert len(changed) == 1 and "face down" in changed[0][1]
 
 
+def test_a_transformed_cecil_token_copy_is_named_by_its_shown_face() -> None:
+    """Ember Island Production copies Cecil; the token attacks and transforms."""
+    env = priority_root(
+        ("Ember Island Production",), ("Island",) * 5 + ("Cecil, Dark Knight",)
+    )
+    owner = env.current_agent_index()
+    env.scenario_set_life(owner, 12)
+    env.scenario_refresh()
+    for pattern in (r"Cast .*Ember Island", "mode 1", r"Target P\d+ \(Cecil"):
+        decision = capture_text_decision(env)
+        action = next(a for a in decision.actions if re.search(pattern, a.description))
+        submit_response(env, decision, action.reference)
+    original = re.search(r"Target (P\d+)", action.description)
+    assert original is not None
+    # Next turn the token (not the original) attacks; its 4 damage drops the
+    # controller to 8, at most half of 20, so the token transforms.
+    for _ in range(120):
+        decision = capture_text_decision(env)
+        if "Cecil, Redeemed Paladin" in decision.text:
+            break
+        preferred = (
+            rf"Attack with (?!{original[1]}\b)P\d+",
+            "Do not attack",
+            "Pass priority",
+        )
+        action = next(
+            (
+                a
+                for pattern in preferred
+                for a in decision.actions
+                if re.search(pattern, a.description)
+            ),
+            decision.actions[0],
+        )
+        submit_response(env, decision, action.reference)
+    else:
+        pytest.fail("the token copy never transformed")
+
+    token = next(
+        line
+        for line in decision.text.splitlines()
+        if "(Cecil, Redeemed Paladin) [D" in line
+    )
+    assert "power/toughness 4/4" in token and "transformed 1" in token
+    assert "token yes" in token
+    assert "expired object" not in decision.text
+    for name in ("Cecil, Dark Knight", "Cecil, Redeemed Paladin"):
+        assert re.search(rf"^D\d+ — {re.escape(name)}\.", decision.text, re.M)
+
+
 def _card_line(text: str, alias: str) -> str:
     return next(line for line in text.splitlines() if line.startswith(f"{alias} ("))
 
