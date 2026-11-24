@@ -678,8 +678,11 @@ impl Game {
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
             }
         }
-        // Stack definitions remain public after the original source departs.
-        frame.source.definition = Some(object.source_definition_id().0);
+        // Stack definitions remain public after the original source departs;
+        // a face-down source's ability records none (CR 708.2).
+        if let Some(definition) = object.source_definition_id().catalog_id() {
+            frame.source.definition = Some(definition.0);
+        }
         frame.targets = self.clause_targets(object.targets(), object.target_req_indices(), viewer);
         if let Some(spent) = stack_receipt(object) {
             super::effect_execution::project_receipt(
