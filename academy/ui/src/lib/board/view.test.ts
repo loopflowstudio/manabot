@@ -8,7 +8,6 @@ import { shortName } from '$lib/opponent-name';
 import { counterTerms, permissionTerms } from './inspect';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
-const PRIMARY_VERBS_TEST = new Set(['pass_priority', 'pay']);
 
 const FIXTURES = new URL('../../../../../managym/academy/fixtures/', import.meta.url);
 const PROTOCOL = new URL('../../../../../protocol/fixtures/', import.meta.url);
@@ -140,7 +139,7 @@ describe('where decisions land', () => {
     opponent.exile = [...opponent.exile, stashed];
     agent.exile = [...agent.exile, flameshaped];
     opponent.inspected = [controlled];
-    const offer = frame.offers.find(candidate => !PRIMARY_VERBS_TEST.has(candidate.verb))!;
+    const offer = frame.offers.find(candidate => !['pass_priority', 'pay'].includes(candidate.verb))!;
     frame.offers = [9001, 9002, 9003].map((id, index) => ({ ...offer, id: index + 1, subjects: [], focus: [id], label: `Play ${id}` }));
     const view = boardView(frame, PLAYERS);
     expect(view.tray.map(item => [item.name, item.card?.id])).toEqual([

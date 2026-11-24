@@ -644,30 +644,19 @@ impl Game {
                 .unwrap_or_else(|| format!("{:?}", action.action_type()));
             let public_commitment = match (action_space.kind, action) {
                 (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
-                (
-                    _,
-                    Action::CastSpell {
-                        object, profile, ..
-                    },
-                ) => Some(PublicCommitment::Cast {
-                    card: default_content_pack()
-                        .spell_definition(&self.state[*object], *profile)
-                        .expect("offered spell")
+                (_, Action::CastSpell { object, .. } | Action::PlayLand { object, .. }) => {
+                    // The chosen face's name: a modal back or an Adventure.
+                    let card = default_content_pack()
+                        .spell_definition(&self.state[*object], action.spell_profile())
+                        .expect("offered face")
                         .name
-                        .clone(),
-                }),
-                (
-                    _,
-                    Action::PlayLand {
-                        object, profile, ..
-                    },
-                ) => Some(PublicCommitment::PlayLand {
-                    card: default_content_pack()
-                        .spell_definition(&self.state[*object], *profile)
-                        .expect("offered land")
-                        .name
-                        .clone(),
-                }),
+                        .clone();
+                    Some(if matches!(action, Action::PlayLand { .. }) {
+                        PublicCommitment::PlayLand { card }
+                    } else {
+                        PublicCommitment::Cast { card }
+                    })
+                }
                 (ActionSpaceKind::Learn, Action::LearnDiscard { object, .. })
                 | (ActionSpaceKind::Discard, Action::SelectCard { object, .. }) => {
                     Some(PublicCommitment::Discard {

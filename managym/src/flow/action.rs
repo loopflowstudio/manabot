@@ -108,26 +108,19 @@ impl Game {
             }
             Action::CastSpell {
                 object,
-                profile,
                 route: None,
                 ..
             }
             | Action::PlayLand {
                 object,
-                profile,
                 route: None,
                 ..
-            } if !profile.is_front() => Some(format!(
-                "{} {}",
-                if matches!(action, Action::PlayLand { .. }) {
-                    "Play"
-                } else {
-                    "Cast"
-                },
-                default_content_pack()
-                    .spell_definition(&self.state[*object], *profile)?
-                    .name
-            )),
+            } if !action.spell_profile().is_front() => {
+                let face = default_content_pack()
+                    .spell_definition(&self.state[*object], action.spell_profile())?;
+                let verb = if face.types.is_land() { "Play" } else { "Cast" };
+                Some(format!("{verb} {}", face.name))
+            }
             Action::ActivateAbility {
                 permanent,
                 ability_index,
