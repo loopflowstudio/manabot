@@ -161,6 +161,7 @@ impl Game {
     /// "Can't be blocked this turn."
     pub fn cant_be_blocked(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::CantBeBlocked)
+            || self.has_restriction(permanent_id, crate::state::card::Restriction::CantBeBlocked)
     }
 
     /// "Can't block this turn."

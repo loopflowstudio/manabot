@@ -26,15 +26,18 @@ export interface CardState {
   toughness: number;
   mana_value: number;
   types: CardTypes;
-  /** Foretold and face down in exile; only its owner's views list it. */
+  /** Face down in exile; only views of players who may look at it list it. */
   face_down?: boolean;
-  /** The permission to play this card from exile, when it has one. */
+  /** The permission to play this card from its current zone, when it has one. */
   cast_permission?: CastPermission;
+  cast_permissions?: CastPermission[];
   /** The value of X announced for this spell on the stack. */
   x?: number;
+  /** Counters on the card off the battlefield ("with a stash counter on it"), by kind. */
+  counters?: Record<string, number>;
 }
 
-/** A public permission to play an exiled card; only set terms are present. */
+/** A public permission to play a card in its current zone; only set terms are present. */
 export interface CastPermission {
   player_id: number;
   /** Mana symbols paid to cast it; absent for a land play. */
@@ -45,12 +48,23 @@ export interface CastPermission {
   own_turn_only?: boolean;
   /** Usable only on a turn numbered after this one. */
   after_turn?: number;
-  /** Lasts while the permitted player controls this permanent. */
+  /** The public permanent sustaining this grant. */
   source_permanent_id?: number;
   flash?: boolean;
   any_mana?: boolean;
   waterbend?: boolean;
   foretold?: boolean;
+  flashback?: boolean;
+  follows_source_controller?: boolean;
+  on_adventure?: boolean;
+  /** This exact exiled copy stays prepared while linked to its source. */
+  prepared?: boolean;
+  /** Face down in exile without Foretell. */
+  face_down?: boolean;
+  /** A land face may be played with it; otherwise it casts spells only. */
+  play_lands?: boolean;
+  /** What must hold to use it, such as "you control a Wizard". */
+  condition?: string;
 }
 
 /** Mana spendable only on the named spell or ability-source subtypes. */
@@ -175,6 +189,7 @@ export interface PlayerState {
   /** `lesson_mana` split by restriction class. */
   restricted_mana?: RestrictedMana[];
   /** Player id whose next turn ends this player's hand-only casting. */
+  spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
   no_maximum_hand_size?: boolean;
   counters?: Record<string, number>;
@@ -271,6 +286,10 @@ export interface StackEntryView {
   chosen_mode?: number;
   /** The announced value of X, when above zero. */
   x?: number;
+  /** A spell cast from a prepared copy; its stack copies are not. */
+  from_prepared?: boolean;
+  /** A spell cast with flashback, exiled as it leaves the stack. */
+  flashback?: boolean;
 }
 
 export interface PlayerControlView {

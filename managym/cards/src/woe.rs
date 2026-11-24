@@ -1,7 +1,7 @@
 //! Wilds of Eldraine.
 use managym_state::ability::{
-    Ability, CompareOp, Condition, Effect, ObjectSelector, Per, PlayerSelector, TargetSpec,
-    TriggerCondition, TriggerSubject,
+    Ability, CompareOp, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
+    TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -129,7 +129,7 @@ fn mocking_sprite() -> CardDefinition {
                 first_on_own_turn: false,
                 predicate: CardPredicate::instant_or_sorcery(),
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             text_box: text_box.into(),
             ..Default::default()

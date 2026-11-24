@@ -2181,7 +2181,7 @@ fn power_batch_wrapped_hits_keep_the_creature_and_damage_of_each_hit() {
                 active_if: Condition::YourTurn,
                 condition: Box::new(TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
-                    to: Actor::Opponent,
+                    to: Some(Actor::Opponent),
                     per: Per::Object,
                 }),
             },
@@ -3643,6 +3643,8 @@ fn a_rejected_action_leaves_the_loop_watch() {
     s.game_mut().current_action_space.as_mut().unwrap().actions = vec![Action::CastSpell {
         player: PlayerId(0),
         object,
+        profile: Default::default(),
+        route: None,
     }];
     let before = witness(s.game());
     assert!(s.game_mut().step(0).is_err());
@@ -5279,4 +5281,1974 @@ fn foundations_5g_grappling_kraken() {
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert!(!tapped(&s, ogre));
+}
+
+#[test]
+fn zul_ashur_grants_one_exact_zombie_for_the_turn() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{assert_choice_contract, can_cast, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::game_object::Target,
+    };
+
+    let mut s = five_color_unfunded_setup(&[
+        "Zul Ashur, Lich Lord",
+        "Hungry Ghoul",
+        "Gray Ogre",
+        "Counterspell",
+    ]);
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let zul_card = card_of(&s, zul);
+    let zombie = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    move_from_library(&mut s, 1, "Hungry Ghoul", ZoneType::Graveyard);
+    move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    let targets: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseTarget {
+                target: Target::GraveyardCard(card),
+                ..
+            } => Some(*card),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(targets.len(), 2);
+    assert!(targets.contains(&zombie) && targets.contains(&other));
+    assert_choice_contract(&s);
+    assert!(s.choose_target(Target::GraveyardCard(zombie)));
+    // The activated ability resolves independently of its source.
+    move_card(&mut s, zul_card, ZoneType::Graveyard);
+    settle(&mut s);
+    assert!(!can_cast(&s, zombie)); // The printed mana cost is still owed.
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let permitted: Vec<_> = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .filter_map(|card| Some((card, card.cast_permissions.first()?)))
+            .collect();
+        let [(card, grant)] = permitted.as_slice() else {
+            panic!("expected exactly one public grant")
+        };
+        assert_eq!(card.id, s.game().state[zombie].id.0 as i32);
+        assert_eq!(card.zone, ZoneType::Graveyard);
+        assert!(grant.this_turn);
+        assert_eq!(grant.cost.as_ref().unwrap().mana_value, 2);
+        assert_eq!(grant.player_id, s.game().state.players[0].id.0 as i32);
+    }
+
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, zombie));
+    assert!(!can_cast(&s, other));
+    assert_choice_contract(&s);
+    let cast = |a: &Action| matches!(a, Action::CastSpell { object, .. } if *object == zombie);
+    let mut resolved = fork_choosing(&s, cast);
+    settle(&mut resolved);
+    assert_eq!(zone_of(&resolved, zombie), Some(ZoneType::Battlefield));
+    assert_eq!(resolved.game().state.players[0].mana_pool.total(), 0);
+
+    let mut expired = fork_choosing(&s, |a| matches!(a, Action::PassPriority { .. }));
+    expired.advance_to_active_step(1, StepKind::Main);
+    expired.advance_to_active_step(0, StepKind::Main);
+    expired.set_player_mana_pool(0, "1B");
+    expired.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&expired, zombie));
+
+    // Casting and countering creates two new appearances. Neither inherits
+    // the grant, and an ordinary graveyard cast has no flashback replacement.
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    s.set_player_mana_pool(1, "UU");
+    choose(&mut s, cast);
+    let spell = crate::support::inspect::now(&s, zombie);
+    s.pass_priority();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == counter),
+    );
+    assert!(s.choose_target(Target::StackSpell(spell)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, zombie), Some(ZoneType::Graveyard));
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, zombie));
+}
+
+#[test]
+fn zul_ashur_ward_costs_the_opponent_two_life() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, force_lands},
+        play::{cast_only, resolve_top},
+    };
+    use managym::agent::action::ActionType;
+
+    let mut s = five_color_unfunded_setup(&["Zul Ashur, Lich Lord", "Lightning Bolt"]);
+    let zul = s.force_permanent_on_battlefield(0, "Zul Ashur, Lich Lord");
+    let zombie = card_of(&s, zul);
+    force_lands(&mut s, 1, "Mountain", 1);
+    s.force_card_in_hand(1, "Lightning Bolt");
+    s.advance_to_active_step(1, StepKind::Main);
+    cast_only(&mut s);
+    s.choose_target_named("Zul Ashur, Lich Lord");
+    resolve_top(&mut s);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    s.assert_life(1, 18);
+    settle(&mut s);
+    assert_eq!(
+        crate::support::inspect::zone_of(&s, zombie),
+        Some(ZoneType::Graveyard)
+    );
+}
+
+#[test]
+fn overlapping_grants_price_each_cast_in_both_orders() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        play::fork_choosing,
+    };
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::{PlayGrant, PlayRoute},
+        state::mana::ManaCost,
+    };
+    for free_first in [false, true] {
+        let mut s = five_color_unfunded_setup(&["Hungry Ghoul"]);
+        let card = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+        let grant = PlayGrant::new(card, PlayerId(0));
+        let free = PlayGrant {
+            cost: Some(ManaCost::default()),
+            ..grant.clone()
+        };
+        for terms in if free_first {
+            [free, grant]
+        } else {
+            [grant, free]
+        } {
+            s.game_mut().state.cast_permissions.grant(terms);
+        }
+        s.game_mut().state.cast_permissions.grants.reverse();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(s.game(), viewer);
+            let listed = obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .find(|c| c.id == s.game().state[card].id.0 as i32)
+                .unwrap();
+            let mut costs: Vec<_> = listed
+                .cast_permissions
+                .iter()
+                .map(|g| (g.player_id, g.cost.as_ref().unwrap().mana_value))
+                .collect();
+            costs.sort();
+            let caster = s.game().state.players[0].id.0 as i32;
+            assert_eq!(costs, [(caster, 0), (caster, 2)]);
+            use managym::agent::{
+                observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM, PLAY_GRANT},
+                observation_layout::fact,
+            };
+            let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            let programs: Vec<_> = input
+                .facts
+                .chunks_exact(FACT_DIM)
+                .filter(|row| {
+                    let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
+                    id == managym::cards::tokens::name_value(PLAY_GRANT) as u32
+                        && row[fact::VALUE_2] == 0.
+                })
+                .collect();
+            assert_eq!(programs.len(), 2);
+            assert!(programs[0][fact::OBJECT] > 0.);
+            assert_eq!(programs[0][fact::OBJECT], programs[1][fact::OBJECT]);
+            let restored: managym::agent::observation::Observation =
+                serde_json::from_str(&obs.to_json()).unwrap();
+            assert_eq!(restored.to_json(), obs.to_json());
+        }
+        for funded in [false, true] {
+            if funded {
+                s.set_player_mana_pool(0, "1B");
+            }
+            s.game_mut().scenario_refresh_priority().unwrap();
+            let routes: Vec<_> = s
+                .action_space()
+                .actions
+                .iter()
+                .filter(|a| matches!(a,Action::CastSpell {object,..} if *object==card))
+                .cloned()
+                .collect();
+            assert_eq!(routes.len(), if funded { 2 } else { 1 });
+            for action in routes {
+                let Action::CastSpell {
+                    route: Some(PlayRoute::Grant(index)),
+                    ..
+                } = action
+                else {
+                    panic!("unbound grant")
+                };
+                let free = index == usize::from(!free_first);
+                assert!(funded || free);
+                let branch = fork_choosing(&s, |a| *a == action);
+                assert_eq!(
+                    branch.game().state.players[0].mana_pool.total(),
+                    if free && funded { 2 } else { 0 }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn muldrotha_and_zul_offer_independent_casts() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, now, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::action::Action, flow::cast_permission::PlayRoute, state::game_object::Target,
+    };
+    let mut s = five_color_unfunded_setup(&[
+        "Muldrotha, the Gravetide",
+        "Zul Ashur, Lich Lord",
+        "Hungry Ghoul",
+        "Counterspell",
+    ]);
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let source_id = s.game().state.permanents[muldrotha].as_ref().unwrap().id.0;
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let zombie = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let counter = move_from_library(&mut s, 1, "Counterspell", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    assert!(s.choose_target(Target::GraveyardCard(zombie)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "1B");
+    s.set_player_mana_pool(1, "UU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    use managym::agent::{
+        observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+        observation_layout::action,
+    };
+    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let mut labels = Vec::new();
+    for (index, offer) in obs
+        .action_space
+        .actions
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| {
+            a.focus.first() == Some(&(s.game().state[zombie].id.0 as i32))
+                && a.route_mana_value.is_some()
+        })
+    {
+        let label = offer.description.as_deref().unwrap();
+        let row = &encoded.actions[index * ACTION_DIM..][..ACTION_DIM];
+        assert_eq!(row[action::ROUTE_MANA_VALUE], 0.2);
+        assert_eq!(row[action::QUOTA_TYPE] > 0., label.contains("Muldrotha"));
+        labels.push(label);
+    }
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().any(|label| label.contains("Zul Ashur")));
+    for use_quota in [false, true] {
+        let mut branch = fork_choosing(
+            &s,
+            |a| matches!(a,Action::CastSpell {object,route:Some(route),..} if *object==zombie && matches!(route,PlayRoute::GraveyardType {..})==use_quota),
+        );
+        let spell = now(&branch, zombie);
+        branch.pass_priority();
+        choose(
+            &mut branch,
+            |a| matches!(a,Action::CastSpell {object,..} if *object==counter),
+        );
+        assert!(branch.choose_target(Target::StackSpell(spell)));
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, zombie), Some(ZoneType::Graveyard));
+        branch.set_player_mana_pool(0, "1B");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&branch, other), !use_quota);
+        assert_eq!(can_cast(&branch, zombie), !use_quota);
+        for card in [zombie, other] {
+            crate::support::game::move_card(&mut branch, card, ZoneType::Exile);
+        }
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        for viewer in [PlayerId(0), PlayerId(1)] {
+            let obs = managym::agent::observation::Observation::for_player(branch.game(), viewer);
+            let owner = if viewer == PlayerId(0) {
+                &obs.agent
+            } else {
+                &obs.opponent
+            };
+            assert!(obs
+                .agent_cards
+                .iter()
+                .chain(&obs.opponent_cards)
+                .all(|card| card.owner_id != owner.id || card.zone != ZoneType::Graveyard));
+            assert_eq!(owner.spent_graveyard_types.len(), usize::from(use_quota));
+            if use_quota {
+                assert_eq!(
+                    owner.spent_graveyard_types[0],
+                    (source_id, managym::state::card::CardType::Creature)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn lone_graveyard_routes_keep_their_permission_in_the_observation() {
+    use crate::support::game::{five_color_unfunded_setup, move_from_library};
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        state::game_object::Target,
+    };
+    // A single-route Command names no route, but the offer still shows which
+    // permission it uses: Muldrotha's quota and focus, or a grant's price.
+    let lone_offer = |s: &crate::support::game::Scenario, card| {
+        let obs = Observation::for_player(s.game(), PlayerId(0));
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(
+                |a| matches!(a, Action::CastSpell { object, route: None, .. } if *object == card),
+            )
+            .expect("a single-route cast of the graveyard card");
+        obs.action_space.actions[index].clone()
+    };
+
+    let mut s = five_color_unfunded_setup(&["Muldrotha, the Gravetide", "Hungry Ghoul"]);
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let offer = lone_offer(&s, ghoul);
+    let source = s.game().state.permanents[muldrotha]
+        .as_ref()
+        .unwrap()
+        .object;
+    assert_eq!(
+        offer.quota_type,
+        Some(managym::state::card::CardType::Creature as u8 + 1)
+    );
+    assert_eq!(
+        offer.focus,
+        [
+            s.game().state[ghoul].id.0 as i32,
+            s.game().state[source].id.0 as i32
+        ]
+    );
+    assert!(offer.description.unwrap().contains("Muldrotha"));
+
+    let mut s = five_color_unfunded_setup(&["Zul Ashur, Lich Lord", "Hungry Ghoul"]);
+    let zul = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Zul Ashur, Lich Lord", true)
+        .unwrap();
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zul, 0);
+    assert!(s.choose_target(Target::GraveyardCard(ghoul)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let offer = lone_offer(&s, ghoul);
+    assert_eq!(offer.route_mana_value, Some(2));
+    assert_eq!(offer.quota_type, None);
+    assert!(offer.description.unwrap().contains("Zul Ashur"));
+}
+
+#[test]
+fn stale_ghoul_precondition_preserves_mana_and_muldrotha_allowance() {
+    use crate::support::game::{five_color_unfunded_setup, move_from_library};
+    use managym::{
+        agent::action::Action,
+        decision::{Command, SemanticError},
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Hungry Ghoul", "Lightning Bolt", "Muldrotha, the Gravetide"]);
+    let ghoul = s.force_permanent_on_battlefield(0, "Hungry Ghoul");
+    move_from_library(&mut s, 0, "Lightning Bolt", ZoneType::Hand);
+    s.set_player_mana_pool(0, "R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let [address] = frame.object_candidates.as_slice() else {
+        panic!("only the Ghoul can be targeted as a permanent")
+    };
+    let card = card_of(&s, ghoul);
+    move_card(&mut s, card, ZoneType::Exile);
+    let card = move_card(&mut s, card, ZoneType::Graveyard);
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    s.set_player_mana_pool(0, "1B");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let index = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|action| matches!(action, Action::CastSpell { object, .. } if *object == card))
+        .unwrap();
+    let command = Command {
+        command_id: "stale-ghoul".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![address.clone()],
+    };
+    let before = managym::search_state::witness(s.game());
+    assert!(matches!(
+        s.game_mut().execute_semantic_command(&command),
+        Err(SemanticError::StaleObject)
+    ));
+    assert_eq!(before, managym::search_state::witness(s.game()));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+    assert!(s.game().state.cast_permissions.spent_types.is_empty());
+}
+
+#[test]
+fn muldrotha_spends_the_chosen_type_for_this_incarnation_and_turn() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::can_cast,
+        play::{choose, fork_choosing},
+    };
+    use managym::{agent::action::Action, flow::cast_permission::PlayRoute, state::card::CardType};
+    let mut s = five_color_unfunded_setup(&[
+        "Muldrotha, the Gravetide",
+        "Scarecrow Guide",
+        "Hungry Ghoul",
+    ]);
+    let source = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let dual = move_from_library(&mut s, 0, "Scarecrow Guide", ZoneType::Graveyard);
+    let ghoul = move_from_library(&mut s, 0, "Hungry Ghoul", ZoneType::Graveyard);
+    let swamp = move_from_library(&mut s, 0, "Swamp", ZoneType::Graveyard);
+    let forest = move_from_library(&mut s, 0, "Forest", ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for kind in [CardType::Artifact, CardType::Creature] {
+        let mut branch = fork_choosing(&s, |action| {
+            matches!(action,
+            Action::CastSpell {object, route:Some(PlayRoute::GraveyardType {kind:chosen,..}),..}
+            if *object==dual && *chosen==kind)
+        });
+        settle(&mut branch);
+        branch.set_player_mana_pool(0, "1B");
+        branch.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(can_cast(&branch, ghoul), kind == CardType::Artifact);
+        choose(
+            &mut branch,
+            |action| matches!(action,Action::PlayLand {object,..} if *object==swamp),
+        );
+        assert!(!branch
+            .action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a,Action::PlayLand {object,..} if *object==forest)));
+        if kind == CardType::Creature {
+            let card = card_of(&branch, source);
+            let exiled = move_card(&mut branch, card, ZoneType::Exile);
+            move_card(&mut branch, exiled, ZoneType::Battlefield);
+            settle(&mut branch);
+            branch.game_mut().scenario_refresh_priority().unwrap();
+            assert!(can_cast(&branch, ghoul));
+        } else {
+            branch.advance_to_active_step(1, StepKind::Main);
+            assert!(!can_cast(&branch, ghoul));
+            branch.advance_to_active_step(0, StepKind::Main);
+            assert!(branch
+                .action_space()
+                .actions
+                .iter()
+                .any(|a| matches!(a,Action::PlayLand {object,..} if *object==forest)));
+        }
+    }
+}
+
+#[test]
+fn omniscience_offers_paid_and_free_casts_with_optional_costs() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::top_spell,
+        play::{choose, fork_choosing, spend_named},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        flow::cast_permission::PlayRoute,
+        state::{mana::Color, player::ManaPayment, target::Target},
+    };
+    let mut s = five_color_unfunded_setup(&["Omniscience", "Burst Lightning"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(0, "Omniscience");
+    }
+    let burst = move_from_library(&mut s, 0, "Burst Lightning", ZoneType::Hand);
+    s.set_player_mana_pool(0, "4R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let prices: Vec<_> = obs
+        .action_space
+        .actions
+        .iter()
+        .filter_map(|offer| offer.route_mana_value)
+        .collect();
+    assert_eq!(prices, [1, 0]);
+    for (route, price) in [(PlayRoute::Hand, 1), (PlayRoute::FreeFromHand, 0)] {
+        let root = fork_choosing(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, route: Some(chosen), .. } if *object == burst && *chosen == route),
+        );
+        for kicked in [false, true] {
+            let mut branch = fork_choosing(&root, |a| {
+                if kicked {
+                    matches!(a, Action::PayCost { .. })
+                } else {
+                    matches!(a, Action::Decline { .. })
+                }
+            });
+            assert!(branch.choose_target(Target::Player(PlayerId(1))));
+            if branch.action_space().kind == managym::agent::action::ActionSpaceKind::PayOrNot {
+                choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+            }
+            let spell = top_spell(&branch);
+            assert_eq!(spell.spent.mana().len(), price + if kicked { 4 } else { 0 });
+            assert_eq!(spell.kicked, kicked);
+            settle(&mut branch);
+            assert_eq!(
+                branch.game().state.players[1].life,
+                if kicked { 16 } else { 18 }
+            );
+        }
+    }
+
+    s.game_mut().mana_payment[0] = ManaPayment::Manual;
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, route: Some(PlayRoute::FreeFromHand), .. } if *object == burst),
+    );
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_named(&mut s, |label| label == "Spend {R} (expires at step end)");
+    spend_colorless(&mut s);
+    let spell = top_spell(&s);
+    assert!(spell.kicked);
+    assert_eq!(
+        spell
+            .spent
+            .mana()
+            .iter()
+            .map(|unit| unit.color)
+            .collect::<Vec<_>>(),
+        [
+            Color::Red as u8,
+            Color::Colorless as u8,
+            Color::Colorless as u8,
+            Color::Colorless as u8,
+        ]
+    );
+    settle(&mut s);
+    s.assert_life(1, 16);
+}
+
+#[test]
+fn high_fae_trickster_changes_timing_after_zone_permission() {
+    use crate::support::{game::move_from_library, inspect::can_cast};
+    use managym::flow::cast_permission::PlayGrant;
+    let mut s = five_color_setup(&["High Fae Trickster", "Gray Ogre", "Drannith Magistrate"]);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    let ogre = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, ogre));
+    s.force_permanent_on_battlefield(0, "High Fae Trickster");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, ogre));
+    let exile = move_card(&mut s, ogre, ZoneType::Exile);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, exile));
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(exile, PlayerId(0)));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, exile));
+    s.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, exile));
+}
+
+#[test]
+fn think_twice_draws_from_hand_then_graveyard() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, top_spell, zone_of},
+        play::choose,
+    };
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Think Twice"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let card = move_from_library(&mut s, 0, "Think Twice", ZoneType::Hand);
+    for (flashback, price, destination) in
+        [(false, 2, ZoneType::Graveyard), (true, 3, ZoneType::Exile)]
+    {
+        s.set_player_mana_pool(0, if flashback { "2U" } else { "1U" });
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(&s, card);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::CastSpell { object: legal, .. } if *legal == object),
+        );
+        let spell = top_spell(&s);
+        assert_eq!(spell.flashback, flashback);
+        assert_eq!(spell.spent.mana().len(), price);
+        let size = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+        settle(&mut s);
+        assert_eq!(
+            s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+            size + 1
+        );
+        assert_eq!(zone_of(&s, card), Some(destination));
+    }
+}
+
+#[test]
+fn reassembling_skeleton_returns_only_its_activated_appearance_tapped() {
+    use crate::support::{game::move_from_library, play::activate_card};
+    let mut s = five_color_setup(&["Reassembling Skeleton"]);
+    s.set_player_mana_pool(0, "1B");
+    let skeleton = move_from_library(&mut s, 0, "Reassembling Skeleton", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate_card(&mut s, skeleton, 0);
+    let mut blink = s.clone();
+    assert_eq!(blink.game().state.stack_objects.len(), 1);
+    let exiled = move_card(&mut blink, skeleton, ZoneType::Exile);
+    let mut exiled_only = blink.clone();
+    settle(&mut exiled_only);
+    assert_eq!(
+        exiled_only.game().state.zones.zone_of(exiled),
+        Some(ZoneType::Exile)
+    );
+    move_card(&mut blink, exiled, ZoneType::Graveyard);
+    settle(&mut blink);
+    assert!(permanent_of(&blink, skeleton).is_none());
+    settle(&mut s);
+    let permanent = permanent_of(&s, skeleton).unwrap();
+    assert!(
+        s.game().state.permanents[permanent]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
+}
+
+#[test]
+fn suspicious_shambler_exiles_as_cost_and_creates_two_zombies() {
+    use crate::support::{game::move_from_library, inspect::zone_of, play::activate_card};
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Suspicious Shambler"]);
+    let card = move_from_library(&mut s, 0, "Suspicious Shambler", ZoneType::Graveyard);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "4BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateCardAbility { object, .. } if *object == card)));
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "4BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate_card(&mut s, card, 0);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    assert!(s.battlefield_permanents_named(0, "Zombie").is_empty());
+    settle(&mut s);
+    let zombies = s.battlefield_permanents_named(0, "Zombie");
+    assert_eq!(zombies.len(), 2);
+    for id in zombies {
+        let view = s.game().characteristics(id);
+        assert!(view.has_subtype("Zombie"));
+        assert_eq!(view.pt(), (2, 2));
+    }
+}
+
+#[test]
+fn granted_foreign_land_enters_under_its_players_control() {
+    use crate::support::{game::move_from_library, play::choose};
+    use managym::{agent::action::Action, flow::cast_permission::PlayGrant};
+    let mut s = five_color_setup(&[]);
+    let land = move_from_library(&mut s, 1, "Swamp", ZoneType::Exile);
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        play_lands: true,
+        ..PlayGrant::new(land, PlayerId(0))
+    });
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand {object, ..} if *object == land),
+    );
+    let permanent = s.game().state.permanents[permanent_of(&s, land).unwrap()]
+        .as_ref()
+        .unwrap();
+    assert_eq!(permanent.controller, PlayerId(0));
+    assert_eq!(s.game().state[permanent.object].owner, PlayerId(1));
+}
+
+#[test]
+fn omniscience_preserves_sacrifices_and_fixes_printed_x_at_zero() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, top_spell, zone_of},
+        play::{choose, select_card},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::cast_permission::PlayRoute,
+        state::{
+            card::SpellProfile,
+            game_object::Target,
+            payment::{How, Toward},
+        },
+    };
+    let mut s = five_color_unfunded_setup(&[
+        "Omniscience",
+        "Archon's Glory",
+        "Deadly Dispute",
+        "Gray Ogre",
+        "Scavenger Regent",
+    ]);
+    let omni = s.force_permanent_on_battlefield(0, "Omniscience");
+    let dispute = move_from_library(&mut s, 0, "Deadly Dispute", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, dispute));
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let glory = move_from_library(&mut s, 0, "Archon's Glory", ZoneType::Hand);
+    let regent = move_from_library(&mut s, 0, "Scavenger Regent", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for (spell, payer, reason) in [
+        (dispute, ogre, Toward::Printed),
+        (glory, omni, Toward::Bargain),
+    ] {
+        let mut branch = s.clone();
+        choose(
+            &mut branch,
+            |a| matches!(a, Action::CastSpell {object, route: Some(PlayRoute::FreeFromHand), ..} if *object == spell),
+        );
+        if spell == glory {
+            choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+            assert!(branch.choose_target(Target::Permanent(ogre)));
+        }
+        let paid = card_of(&branch, payer);
+        select_card(&mut branch, paid);
+        let stack = top_spell(&branch);
+        assert_eq!(stack.spent.total(), 0);
+        assert_eq!(
+            stack
+                .spent
+                .contributed(How::Sacrificed, reason)
+                .collect::<Vec<_>>(),
+            [paid]
+        );
+        assert_eq!(zone_of(&branch, paid), Some(ZoneType::Graveyard));
+    }
+    s.set_player_mana_pool(0, "5BB");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell {object, route: Some(PlayRoute::FreeFromHand), profile: SpellProfile::Omen, ..} if *object == regent),
+    );
+    let spell = top_spell(&s);
+    assert_eq!(spell.x, 0);
+    assert_eq!(spell.spent.total(), 0);
+}
+
+#[test]
+fn sphinx_grants_its_target_flashback_alongside_the_printed_cost() {
+    use crate::support::{
+        game::{clear_summoning_sickness, move_from_library},
+        inspect::{top_spell, zone_of},
+        play::{choose, fork_choosing, pass_until},
+    };
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+        },
+        flow::cast_permission::PlayRoute,
+        state::game_object::Target,
+    };
+    let mut s = five_color_setup(&["Sphinx of Forgotten Lore", "Think Twice"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let sphinx = s.force_permanent_on_battlefield(0, "Sphinx of Forgotten Lore");
+    clear_summoning_sickness(&mut s, sphinx);
+    let object = move_from_library(&mut s, 0, "Think Twice", ZoneType::Graveyard);
+    let other = move_from_library(&mut s, 0, "Think Twice", ZoneType::Graveyard);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, sphinx);
+    assert!(s.choose_target(Target::GraveyardCard(object)));
+    let source = card_of(&s, sphinx);
+    move_card(&mut s, source, ZoneType::Graveyard);
+    settle(&mut s);
+    s.set_player_mana_pool(0, "2U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let observer = Observation::for_player(s.game(), PlayerId(0));
+    let granted = observer
+        .agent_cards
+        .iter()
+        .find(|card| !card.cast_permissions.is_empty())
+        .unwrap();
+    assert!(granted.cast_permissions[0].flashback);
+    assert!(granted.cast_permissions[0].this_turn);
+    assert_eq!(
+        s.action_space()
+            .actions
+            .iter()
+            .filter(|a| matches!(a, Action::CastSpell {object: id, ..} if *id==other))
+            .count(),
+        1
+    );
+    for (route, price) in [(PlayRoute::PrintedFlashback, 3), (PlayRoute::Grant(0), 2)] {
+        let mut branch = fork_choosing(
+            &s,
+            |a| matches!(a,Action::CastSpell{object:id,route:Some(chosen),..} if *id==object && route==*chosen),
+        );
+        if branch.action_space().kind == ActionSpaceKind::PayOrNot {
+            choose(&mut branch, |a| matches!(a, Action::PayCost { .. }));
+        }
+        let spell = top_spell(&branch);
+        assert_eq!(spell.spent.total(), price);
+        assert!(spell.flashback);
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, object), Some(ZoneType::Exile));
+    }
+}
+
+/// A resolving effect supplies the timing of its casts (CR 608.2g), so Etali's
+/// free combat cast of Harbinger owes no flash surcharge even with {2} open.
+#[test]
+fn harbinger_cast_by_a_resolving_effect_owes_no_flash_surcharge() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, pin_top},
+        inspect::{now, top_spell},
+        play::{attack_with, choose, pass_until},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+    let mut s = five_color_unfunded_setup(&["Etali, Primal Storm", "Harbinger of the Tides"]);
+    let etali = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Etali, Primal Storm", true)
+        .unwrap();
+    let harbinger = pin_top(&mut s, &["Harbinger of the Tides"])[0];
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, etali);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    s.set_player_mana_pool(0, "2");
+    let harbinger = now(&s, harbinger);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == harbinger),
+    );
+    assert_ne!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    assert_eq!(top_spell(&s).object, now(&s, harbinger));
+    assert_eq!(top_spell(&s).spent.total(), 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+}
+
+#[test]
+fn harbinger_requires_its_surcharge_only_for_its_own_flash_permission() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{can_cast, top_spell, zone_of},
+        play::{cast_profile, choose, fork_choosing, pass_until, select_card},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::cast_permission::PlayRoute,
+        state::{card::SpellProfile, game_object::Target},
+    };
+    let mut root = five_color_unfunded_setup(&[
+        "Harbinger of the Tides",
+        "Gray Ogre",
+        "Omniscience",
+        "High Fae Trickster",
+    ]);
+    root.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    root.advance_to_active_step(0, StepKind::Upkeep);
+    let ogre = root.force_permanent_on_battlefield(1, "Gray Ogre");
+    let other = root.force_permanent_on_battlefield(1, "Gray Ogre");
+    root.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let target = card_of(&root, ogre);
+    let card = move_from_library(&mut root, 0, "Harbinger of the Tides", ZoneType::Hand);
+    root.set_player_mana_pool(0, "UU");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&root, card));
+    root.set_player_mana_pool(0, "2UU");
+    let mut paid = root.clone();
+    cast_profile(&mut paid, card, SpellProfile::Front);
+    assert_eq!(top_spell(&paid).spent.total(), 4);
+    pass_until(&mut paid, ActionSpaceKind::ChooseTarget);
+    assert!(!paid.choose_target(Target::Permanent(other)));
+    assert!(paid.choose_target(Target::Permanent(ogre)));
+    crate::support::play::resolve_top(&mut paid);
+    let mut declined = paid.clone();
+    choose(&mut declined, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut declined);
+    assert_eq!(zone_of(&declined, target), Some(ZoneType::Battlefield));
+    select_card(&mut paid, target);
+    settle(&mut paid);
+    assert_eq!(zone_of(&paid, target), Some(ZoneType::Hand));
+
+    root.force_permanent_on_battlefield(0, "Omniscience");
+    root.set_player_mana_pool(0, "2");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    let free = |a: &Action| matches!(a,Action::CastSpell{object,route:Some(PlayRoute::FreeFromHand),..} if *object==card);
+    let forced = fork_choosing(&root, free);
+    assert_eq!(top_spell(&forced).spent.total(), 2);
+
+    // With another flash permission the player can choose either price.
+    root.force_permanent_on_battlefield(0, "High Fae Trickster");
+    root.game_mut().scenario_refresh_priority().unwrap();
+    let optional = fork_choosing(&root, free);
+    for (pay, price) in [(true, 2), (false, 0)] {
+        let branch = fork_choosing(&optional, |a| {
+            if pay {
+                matches!(a, Action::PayCost { .. })
+            } else {
+                matches!(a, Action::Decline { .. })
+            }
+        });
+        assert_eq!(top_spell(&branch).spent.total(), price);
+        assert!(!top_spell(&branch).kicked);
+    }
+}
+
+/// Tinybones exiles each card an opponent discards with a stash counter.
+/// On its controller's turn they may play those cards they don't own: a
+/// foreign land enters under their control, either printed spell of an
+/// Adventure is offered, and mana of any type pays for it. Every viewer sees
+/// the counter. The permission is Tinybones's, not the exile's: it ends when
+/// Tinybones leaves, does not reach the opponent's turn even with flash from
+/// High Fae Trickster, and yields to Drannith Magistrate for spells only.
+#[test]
+fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, zone_of},
+        play::{activate, cast_profile, choose, resolve_top},
+    };
+    use managym::{
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM},
+            observation_layout::fact,
+        },
+        cards::tokens::name_value,
+        state::{card::SpellProfile, game_object::ObjectId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&[
+        "Tinybones, Bauble Burglar",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+        "High Fae Trickster",
+        "Drannith Magistrate",
+    ]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let tinybones = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let smaug = move_from_library(&mut s, 1, "Smaug, the Great Calamity", ZoneType::Hand);
+    let forest = move_from_library(&mut s, 1, "Forest", ZoneType::Hand);
+    move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+    for card in [smaug, forest] {
+        s.game_mut().state.permanents[tinybones]
+            .as_mut()
+            .unwrap()
+            .tapped = false;
+        activate(&mut s, tinybones, 0);
+        resolve_top(&mut s);
+        let object = now(&s, card);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object: chosen, .. } if *chosen == object),
+        );
+        settle(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+        let exiled = now(&s, card);
+        assert_eq!(
+            s.game().state.object_counters[&exiled].get(CounterKind::Stash),
+            1
+        );
+    }
+    let stash = name_value("CounterKind::stash") as u32;
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let stashed: Vec<_> = obs
+            .agent_cards
+            .iter()
+            .chain(&obs.opponent_cards)
+            .filter(|card| card.counters.get("stash") == Some(&1))
+            .map(|card| card.characteristics.name.as_str())
+            .collect();
+        assert_eq!(
+            stashed,
+            ["Smaug, the Great Calamity", "Forest"],
+            "{viewer:?}"
+        );
+        let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let rows = input
+            .facts
+            .chunks_exact(FACT_DIM)
+            .filter(|row| ((row[fact::ID_HIGH] as u32) << 16 | row[fact::ID_LOW] as u32) == stash)
+            .count();
+        assert_eq!(rows, 2, "a stash fact row per card for {viewer:?}");
+    }
+
+    let offers = |s: &mut crate::support::game::Scenario, card: ObjectId| -> Vec<Action> {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(s, card);
+        s.action_space()
+            .actions
+            .iter()
+            .filter(|a| {
+                matches!(a, Action::CastSpell { object: o, .. } | Action::PlayLand { object: o, .. } if o == &object)
+            })
+            .cloned()
+            .collect()
+    };
+    let profiles = |actions: &[Action]| -> Vec<SpellProfile> {
+        actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::CastSpell { profile, .. } => Some(*profile),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(
+        profiles(&offers(&mut s, smaug)),
+        [SpellProfile::Front, SpellProfile::Adventure]
+    );
+    assert!(matches!(
+        offers(&mut s, forest)[..],
+        [Action::PlayLand { .. }]
+    ));
+
+    // Drannith Magistrate refuses the spells but not the land play.
+    let mut hand_only = s.clone();
+    hand_only.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    assert!(offers(&mut hand_only, smaug).is_empty());
+    assert_eq!(offers(&mut hand_only, forest).len(), 1);
+
+    // Without Tinybones, nothing; the counters stay.
+    let mut gone = s.clone();
+    let source = gone.game().state.permanents[tinybones]
+        .as_ref()
+        .unwrap()
+        .object;
+    move_card(&mut gone, source, ZoneType::Graveyard);
+    assert!(offers(&mut gone, smaug).is_empty());
+    assert!(offers(&mut gone, forest).is_empty());
+    assert_eq!(gone.game().state.object_counters.len(), 2);
+
+    // Not during the opponent's turn, even as though it had flash.
+    let mut theirs = s.clone();
+    theirs.force_permanent_on_battlefield(0, "High Fae Trickster");
+    theirs.advance_to_active_step(1, StepKind::Upkeep);
+    theirs.pass_priority();
+    assert_eq!(theirs.action_space().player, Some(PlayerId(0)));
+    assert!(offers(&mut theirs, smaug).is_empty());
+
+    // Mana of any type pays the Adventure: five blue for {4}{R}.
+    s.set_player_mana_pool(0, "UUUUU");
+    cast_profile(&mut s, smaug, SpellProfile::Adventure);
+    assert!(s.choose_target(managym::state::game_object::Target::Permanent(ogre)));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[ogre].is_none(),
+        "Spew Flame resolved"
+    );
+    assert_eq!(zone_of(&s, smaug), Some(ZoneType::Exile));
+    assert!(
+        !s.game().state.object_counters.contains_key(&now(&s, smaug)),
+        "the stash counter left with the stack appearance"
+    );
+
+    // The foreign land enters under Tinybones's controller.
+    let exiled = now(&s, forest);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand { object, .. } if *object == exiled),
+    );
+    settle(&mut s);
+    let land = s.game().state.permanent_of(now(&s, forest)).unwrap();
+    let land = s.game().state.permanents[land].as_ref().unwrap();
+    assert_eq!(
+        (land.controller, s.game().state[land.object].owner),
+        (PlayerId(0), PlayerId(1))
+    );
+}
+
+/// The stash permission belongs to whichever Tinybones its player controls
+/// now, not to the one that exiled the card: a later Tinybones plays what an
+/// earlier one stashed. An exact grant on the same card adds its own route,
+/// and each (face, route) is offered once.
+#[test]
+fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{now, zone_of},
+        play::{activate, choose, resolve_top},
+    };
+    use managym::{
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+            observation_layout::action as action_columns,
+        },
+        flow::cast_permission::{play_route_code, PlayGrant, PlayRoute},
+        state::permanent::CounterKind,
+    };
+    let mut s = five_color_setup(&["Tinybones, Bauble Burglar"]);
+    s.game_mut().mana_payment[0] = managym::state::player::ManaPayment::Auto;
+    let tinybones = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let forest = move_from_library(&mut s, 1, "Forest", ZoneType::Hand);
+    move_from_library(&mut s, 1, "Island", ZoneType::Hand);
+    activate(&mut s, tinybones, 0);
+    resolve_top(&mut s);
+    let object = now(&s, forest);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object: chosen, .. } if *chosen == object),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, forest), Some(ZoneType::Exile));
+    let routes = |s: &mut crate::support::game::Scenario| -> Vec<Option<PlayRoute>> {
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let object = now(s, forest);
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::PlayLand {
+                    object: o, route, ..
+                } if *o == object => Some(*route),
+                _ => None,
+            })
+            .collect()
+    };
+
+    let source = s.game().state.permanents[tinybones]
+        .as_ref()
+        .unwrap()
+        .object;
+    move_card(&mut s, source, ZoneType::Graveyard);
+    assert!(routes(&mut s).is_empty());
+    s.game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    assert_eq!(routes(&mut s), [None], "the later Tinybones's lone route");
+
+    let exiled = now(&s, forest);
+    // A cast-only grant never plays a land (CR 305.9): only the stash route.
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(exiled, PlayerId(0)));
+    assert_eq!(
+        routes(&mut s),
+        [None],
+        "a cast-only grant adds no land play"
+    );
+    s.game_mut().state.cast_permissions.grant(PlayGrant {
+        play_lands: true,
+        ..PlayGrant::new(exiled, PlayerId(0))
+    });
+    let offered = routes(&mut s);
+    assert_eq!(offered.len(), 2, "{offered:?}");
+    assert!(matches!(offered[0], Some(PlayRoute::Grant(_))));
+    assert_eq!(
+        offered[1],
+        Some(PlayRoute::ExileCounter(CounterKind::Stash))
+    );
+    let exile_offers = s
+        .action_space()
+        .actions
+        .iter()
+        .filter(|a| matches!(a, Action::PlayLand { object, .. } if *object == exiled))
+        .count();
+    assert_eq!(exile_offers, 2, "one card, listed once per route");
+
+    // Both routes are free land plays; only `play_route` tells them apart
+    // in the encoded action rows.
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let indices: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| matches!(a, Action::PlayLand { object, .. } if *object == exiled))
+        .map(|(index, _)| index)
+        .collect();
+    let codes: Vec<_> = indices
+        .iter()
+        .map(|&index| observation.action_space.actions[index].play_route)
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            Some(play_route_code(offered[0].unwrap())),
+            Some(play_route_code(offered[1].unwrap()))
+        ]
+    );
+    assert_ne!(codes[0], codes[1]);
+    let input = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    let rows: Vec<&[f32]> = indices
+        .iter()
+        .map(|&index| &input.actions[index * ACTION_DIM..(index + 1) * ACTION_DIM])
+        .collect();
+    assert_ne!(rows[0], rows[1]);
+    let differing: Vec<usize> = (0..ACTION_DIM)
+        .filter(|&column| rows[0][column] != rows[1][column])
+        .collect();
+    assert_eq!(differing, [action_columns::PLAY_ROUTE]);
+}
+
+/// Loot gives its controller, and only them, a second land play each turn.
+/// Its activation looks at six cards and offers only creature cards with
+/// mana value at most the lands its controller has as it resolves; the
+/// chosen creature enters and the other five go to the bottom.
+#[test]
+fn loot_grants_its_controller_a_land_play_and_finds_a_creature_within_its_lands() {
+    use crate::support::{
+        game::{move_to_hand, pin_top},
+        inspect::{has_action, now, offered_cards, zone_of},
+        play::{play_land, resolve_top, select_card},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+    let mut s = five_color_setup(&[
+        "Loot, Exuberant Explorer",
+        "Gray Ogre",
+        "Tinybones, Bauble Burglar",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let mut theirs = s.clone();
+    theirs
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(1), "Loot, Exuberant Explorer", true)
+        .unwrap();
+    play_land(&mut theirs, "Forest");
+    move_to_hand(&mut theirs, "Island");
+    theirs.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !has_action(&theirs, |a| matches!(a, Action::PlayLand { .. })),
+        "an opponent's Loot"
+    );
+
+    let loot = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Loot, Exuberant Explorer", true)
+        .unwrap();
+    play_land(&mut s, "Forest");
+    play_land(&mut s, "Island");
+    move_to_hand(&mut s, "Plains");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::PlayLand { .. })),
+        "two land plays only"
+    );
+
+    let top = pin_top(
+        &mut s,
+        &[
+            "Gray Ogre",
+            "Tinybones, Bauble Burglar",
+            "Forest",
+            "Island",
+            "Swamp",
+            "Plains",
+        ],
+    );
+    let names = |s: &crate::support::game::Scenario,
+                 cards: Vec<managym::state::game_object::ObjectId>|
+     -> Vec<String> {
+        let mut names: Vec<_> = cards
+            .into_iter()
+            .map(|id| s.game().state[id].name.clone())
+            .collect();
+        names.sort();
+        names
+    };
+    let mut three_lands = s.clone();
+    three_lands.force_permanent_on_battlefield(0, "Mountain");
+    activate(&mut three_lands, loot, 0);
+    resolve_top(&mut three_lands);
+    assert_eq!(
+        names(&three_lands, offered_cards(&three_lands)),
+        ["Gray Ogre", "Tinybones, Bauble Burglar"]
+    );
+
+    activate(&mut s, loot, 0);
+    resolve_top(&mut s);
+    assert_eq!(
+        names(&s, offered_cards(&s)),
+        ["Tinybones, Bauble Burglar"],
+        "two lands: the three-mana Ogre is out of reach"
+    );
+    let found = now(&s, top[1]);
+    select_card(&mut s, found);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Battlefield));
+    let library: Vec<_> = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .copied()
+        .collect();
+    for card in [top[0], top[2], top[3], top[4], top[5]] {
+        let object = now(&s, card);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Library));
+        let position = library.iter().position(|id| *id == object).unwrap();
+        assert!(position < 5, "{position}: on the bottom");
+    }
+}
+
+/// Redcap Gutter-Dweller enters with two Rats that can't block. At its
+/// controller's upkeep they may sacrifice another creature; if they do, it
+/// gets a +1/+1 counter and the top card of their library is exiled,
+/// playable this turn. Declining changes nothing.
+#[test]
+fn redcap_makes_nonblocking_rats_and_trades_one_for_a_counter_and_a_card() {
+    use crate::support::{
+        inspect::{has_action, permanent_named, zone_of},
+        play::{choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::ObjectId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Redcap Gutter-Dweller", "Gray Ogre"]);
+    enter_and_settle(&mut s, "Redcap Gutter-Dweller");
+    let rats = s.battlefield_permanents_named(0, "Rat");
+    assert_eq!(rats.len(), 2);
+    let redcap = permanent_named(&s, "Redcap Gutter-Dweller");
+
+    // The Rats can't block; Redcap can.
+    let mut blocking = s.clone();
+    let attacker = blocking.force_permanent_on_battlefield(1, "Gray Ogre");
+    blocking.advance_to_active_step(1, StepKind::Main);
+    crate::support::game::clear_summoning_sickness(&mut blocking, attacker);
+    pass_until(&mut blocking, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut blocking, attacker);
+    pass_until(&mut blocking, ActionSpaceKind::DeclareBlocker);
+    // Each creature's block is asked in turn; collect who may block the Ogre.
+    let mut blockers = Vec::new();
+    while blocking.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        blockers.extend(
+            blocking
+                .action_space()
+                .actions
+                .iter()
+                .filter_map(|a| match a {
+                    Action::DeclareBlocker {
+                        blocker,
+                        attacker: Some(_),
+                        ..
+                    } => Some(*blocker),
+                    _ => None,
+                }),
+        );
+        choose(&mut blocking, |a| {
+            matches!(a, Action::DeclareBlocker { attacker: None, .. })
+        });
+    }
+    assert!(blockers.contains(&redcap), "{blockers:?}");
+    assert!(
+        rats.iter().all(|rat| !blockers.contains(rat)),
+        "{blockers:?}"
+    );
+
+    let top = |s: &crate::support::game::Scenario| -> ObjectId {
+        s.game()
+            .state
+            .zones
+            .top(ZoneType::Library, PlayerId(0))
+            .unwrap()
+    };
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let mut declined = s.clone();
+    let card = top(&s);
+    assert!(has_action(&declined, |a| matches!(
+        a,
+        Action::Decline { .. }
+    )));
+    choose(&mut declined, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut declined);
+    assert_eq!(declined.battlefield_permanents_named(0, "Rat").len(), 2);
+    assert_eq!(zone_of(&declined, card), Some(ZoneType::Library));
+
+    let rat = s.game().state.permanents[rats[0]].as_ref().unwrap().object;
+    assert!(
+        !has_action(
+            &s,
+            |a| matches!(a, Action::SelectCard { object, .. } if s.game().state.permanent_of(*object) == Some(redcap))
+        ),
+        "another creature"
+    );
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == rat),
+    );
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Rat").len(), 1);
+    assert_eq!(
+        s.game().state.permanents[redcap]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::PlusOnePlusOne),
+        1
+    );
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    let exiled = s
+        .game()
+        .state
+        .zones
+        .top(ZoneType::Exile, PlayerId(0))
+        .unwrap();
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, .. } | Action::PlayLand { object, .. } if *object == exiled)
+        ),
+        "{} is playable this turn",
+        s.game().state[exiled].name
+    );
+}
+
+/// Quilled Greatwurm's own graveyard permission removes six counters, of
+/// any kinds, from among its caster's creatures, asking for the kind only
+/// when a creature holds several. Muldrotha's creature permission and an
+/// exact grant overlap it on the same card; neither removes counters, and
+/// only Muldrotha's spends its quota. Too few counters closes only the
+/// Greatwurm's own route.
+#[test]
+fn quilled_greatwurm_casts_from_the_graveyard_by_removing_six_counters() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, move_from_library},
+        inspect::{has_action, zone_of},
+        play::{choose, fork_choosing},
+    };
+    use managym::{
+        agent::{action::Action, observation::Observation},
+        flow::cast_permission::{play_route_code, PlayGrant, PlayRoute},
+        state::permanent::CounterKind,
+    };
+    let mut s =
+        five_color_unfunded_setup(&["Quilled Greatwurm", "Muldrotha, the Gravetide", "Gray Ogre"]);
+    let muldrotha = s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = move_from_library(&mut s, 0, "Quilled Greatwurm", ZoneType::Graveyard);
+    let add = |s: &mut crate::support::game::Scenario,
+               id: managym::state::game_object::PermanentId,
+               kind: CounterKind,
+               n: i32| {
+        s.game_mut().state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .counters
+            .change(kind, n);
+    };
+    add(&mut s, muldrotha, CounterKind::PlusOnePlusOne, 4);
+    add(&mut s, muldrotha, CounterKind::Stun, 1);
+    add(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    s.game_mut()
+        .state
+        .cast_permissions
+        .grant(PlayGrant::new(wurm, PlayerId(0)));
+    s.set_player_mana_pool(0, "4GG");
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    let routes = |s: &crate::support::game::Scenario| -> Vec<PlayRoute> {
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::CastSpell {
+                    object,
+                    route: Some(route),
+                    ..
+                } if *object == wurm => Some(*route),
+                _ => None,
+            })
+            .collect()
+    };
+    let offered = routes(&s);
+    assert_eq!(offered.len(), 3, "{offered:?}");
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let mut codes: Vec<u8> = obs
+        .action_space
+        .actions
+        .iter()
+        .zip(&s.action_space().actions)
+        .filter(|(_, a)| matches!(a, Action::CastSpell { object, .. } if *object == wurm))
+        .filter_map(|(option, _)| option.play_route)
+        .collect();
+    codes.sort_unstable();
+    assert_eq!(
+        codes,
+        vec![
+            play_route_code(PlayRoute::Grant(0)),
+            play_route_code(PlayRoute::GraveyardType {
+                source: s.game().state.permanents[muldrotha]
+                    .as_ref()
+                    .unwrap()
+                    .object,
+                permanent_id: s.game().state.permanents[muldrotha].as_ref().unwrap().id,
+                kind: managym::state::card::CardType::Creature,
+            }),
+            play_route_code(PlayRoute::PrintedGraveyard),
+        ]
+    );
+    assert!(obs
+        .action_space
+        .actions
+        .iter()
+        .any(|option| option.description.as_deref()
+            == Some("Cast Quilled Greatwurm from graveyard by removing six counters")
+            || option.description.as_deref()
+                == Some("Cast Quilled Greatwurm from graveyard by removing 6 counters")));
+
+    let counters = |s: &crate::support::game::Scenario,
+                    id: managym::state::game_object::PermanentId|
+     -> Vec<(CounterKind, i32)> {
+        s.game().state.permanents[id]
+            .as_ref()
+            .unwrap()
+            .counters
+            .iter()
+            .collect()
+    };
+    let cast_by = |route: fn(&PlayRoute) -> bool| {
+        fork_choosing(
+            &s,
+            |a| matches!(a, Action::CastSpell { object, route: Some(r), .. } if *object == wurm && route(r)),
+        )
+    };
+
+    // The Greatwurm's own route: one counter at a time, the kind asked of
+    // the creature holding two kinds.
+    let mut own = cast_by(|r| *r == PlayRoute::PrintedGraveyard);
+    // Progress is the count still owed, never a chosen mode.
+    let owed = |s: &crate::support::game::Scenario, n: &str| {
+        let context = s.game().decision_context(PlayerId(0)).unwrap();
+        assert_eq!(context.chosen_mode.0, None);
+        assert!(
+            context.pending.iter().any(|line| line == n),
+            "{:?}",
+            context.pending
+        );
+    };
+    owed(&own, "6 counters left to remove.");
+    let ogre_object = own.game().state.permanents[ogre].as_ref().unwrap().object;
+    let muldrotha_object = own.game().state.permanents[muldrotha]
+        .as_ref()
+        .unwrap()
+        .object;
+    choose(
+        &mut own,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre_object),
+    );
+    assert!(counters(&own, ogre).is_empty());
+    owed(&own, "5 counters left to remove.");
+    choose(
+        &mut own,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == muldrotha_object),
+    );
+    let modes: Vec<usize> = own
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        modes,
+        vec![
+            CounterKind::PlusOnePlusOne as usize,
+            CounterKind::Stun as usize
+        ]
+    );
+    let obs = Observation::for_player(own.game(), PlayerId(0));
+    assert!(obs
+        .action_space
+        .actions
+        .iter()
+        .any(|option| option.description.as_deref()
+            == Some("Remove a stun counter from Muldrotha, the Gravetide")));
+    choose(
+        &mut own,
+        |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == CounterKind::Stun as usize),
+    );
+    for _ in 0..4 {
+        choose(
+            &mut own,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == muldrotha_object),
+        );
+    }
+    settle(&mut own);
+    assert!(counters(&own, muldrotha).is_empty());
+    assert!(own.game().state.cast_permissions.spent_types.is_empty());
+    assert_eq!(
+        own.battlefield_permanents_named(0, "Quilled Greatwurm")
+            .len(),
+        1
+    );
+
+    // Muldrotha's permission and the grant remove nothing; only Muldrotha's
+    // spends the creature quota.
+    for (muldrothas, spent) in [(true, 1), (false, 0)] {
+        let mut other = if muldrothas {
+            cast_by(|r| matches!(r, PlayRoute::GraveyardType { .. }))
+        } else {
+            cast_by(|r| matches!(r, PlayRoute::Grant(_)))
+        };
+        settle(&mut other);
+        assert_eq!(counters(&other, muldrotha).len(), 2);
+        assert_eq!(counters(&other, ogre).len(), 1);
+        assert_eq!(other.game().state.cast_permissions.spent_types.len(), spent);
+        assert_eq!(
+            other
+                .battlefield_permanents_named(0, "Quilled Greatwurm")
+                .len(),
+            1
+        );
+    }
+
+    // Five counters close only the Greatwurm's own route.
+    add(&mut s, ogre, CounterKind::PlusOnePlusOne, -1);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let left = routes(&s);
+    assert_eq!(left.len(), 2, "{left:?}");
+    assert!(!left.contains(&PlayRoute::PrintedGraveyard));
+    assert!(has_action(
+        &s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == wurm)
+    ));
+    assert_eq!(zone_of(&s, wurm), Some(ZoneType::Graveyard));
+}
+
+/// "Whenever a creature you control deals combat damage during your turn,
+/// put that many +1/+1 counters on it": each creature triggers once with
+/// its own total, a trample split across a blocker and the player included.
+/// A creature that dies in combat gets nothing, and blocking on the
+/// opponent's turn triggers nothing.
+#[test]
+fn quilled_greatwurm_counts_each_creatures_combat_damage_on_your_turn() {
+    use crate::support::play::{choose, pass_until};
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::PermanentId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Quilled Greatwurm", "Gray Ogre", "Muldrotha, the Gravetide"]);
+    let force = |s: &mut crate::support::game::Scenario, player: usize, name: &str| {
+        s.game_mut()
+            .scenario_force_battlefield(PlayerId(player as _), name, true)
+            .unwrap()
+    };
+    let wurm = force(&mut s, 0, "Quilled Greatwurm");
+    let unblocked = force(&mut s, 0, "Gray Ogre");
+    let doomed = force(&mut s, 0, "Gray Ogre");
+    let chump = force(&mut s, 1, "Gray Ogre");
+    let wall = force(&mut s, 1, "Muldrotha, the Gravetide");
+    let plus = |s: &crate::support::game::Scenario, id: PermanentId| {
+        s.game().state.permanents[id]
+            .as_ref()
+            .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
+    };
+    let life = s.life(1);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        let blocks: &[(PermanentId, PermanentId)] = &[(chump, wurm), (wall, doomed)];
+        choose(&mut s, |a| match a {
+            Action::DeclareBlocker {
+                blocker,
+                attacker: Some(attacker),
+                ..
+            } => blocks.contains(&(*blocker, *attacker)),
+            _ => false,
+        });
+    }
+    // Assign lethal damage to the blocker and trample over for five.
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 2, .. })
+    });
+    s.advance_to_step(StepKind::PostcombatMain);
+    assert_eq!(s.life(1), life - 5 - 2);
+    assert_eq!(plus(&s, wurm), Some(7));
+    assert_eq!(plus(&s, unblocked), Some(2));
+    assert_eq!(plus(&s, doomed), None, "died in combat");
+
+    // On the opponent's turn the Greatwurm's controller blocks: no trigger.
+    s.advance_to_active_step(1, StepKind::Main);
+    let attacker = s.game().state.permanents[wall]
+        .as_ref()
+        .map(|_| wall)
+        .unwrap();
+    crate::support::game::clear_summoning_sickness(&mut s, attacker);
+    s.game_mut().state.permanents[wurm].as_mut().unwrap().tapped = false;
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, attacker);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        choose(&mut s, |a| match a {
+            Action::DeclareBlocker {
+                blocker,
+                attacker: Some(_),
+                ..
+            } => *blocker == wurm,
+            Action::DeclareBlocker { attacker: None, .. } => true,
+            _ => false,
+        });
+    }
+    s.advance_to_step(StepKind::PostcombatMain);
+    assert!(
+        s.game().state.permanents[wall].is_none(),
+        "the Greatwurm dealt its damage"
+    );
+    assert_eq!(plus(&s, wurm), Some(7));
+}
+
+/// Each stacked Greatwurm trigger shows its own creature and amount: the
+/// stack entry's X, its description ("that many", "event: ..."), and the
+/// continuation frame that joins the event creature in the policy input.
+#[test]
+fn quilled_greatwurm_triggers_name_their_creature_and_damage_on_the_stack() {
+    use crate::support::play::choose;
+    use managym::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::{Observation, StackObjectKindData},
+        },
+        state::{game_object::ObjectId, stack_object::StackObject},
+    };
+    let mut s = five_color_setup(&["Quilled Greatwurm", "Gray Ogre"]);
+    let wurm = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Quilled Greatwurm", true)
+        .unwrap();
+    let ogre = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    let mut placement = Vec::new();
+    s.advance_until(
+        |s| {
+            if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+                let obs = Observation::for_player(s.game(), PlayerId(0));
+                placement.extend(
+                    obs.action_space
+                        .actions
+                        .iter()
+                        .filter_map(|option| option.description.clone()),
+                );
+            }
+            s.game().state.stack_objects.len() == 2
+                && s.action_space().kind == ActionSpaceKind::Priority
+        },
+        "both triggers stacked".into(),
+    );
+    assert!(
+        placement
+            .iter()
+            .any(|label| label.contains("put that many (7) +1/+1 counters")
+                || label.contains("Put that many (7) +1/+1 counters")),
+        "{placement:?}"
+    );
+
+    let object = |id: managym::state::game_object::PermanentId| {
+        s.game().state.permanents[id].as_ref().unwrap().object
+    };
+    let (wurm_object, ogre_object) = (object(wurm), object(ogre));
+    let mut stacked: Vec<(u8, ObjectId)> = s
+        .game()
+        .state
+        .stack_objects
+        .iter()
+        .map(|item| match item {
+            StackObject::TriggeredAbility(trigger) => match trigger.context {
+                Some(managym::state::game_object::Target::Permanent(id)) => (
+                    trigger.x,
+                    s.game().state.permanents[id].as_ref().unwrap().object,
+                ),
+                other => panic!("event creature: {other:?}"),
+            },
+            other => panic!("only triggers: {other:?}"),
+        })
+        .collect();
+    stacked.sort();
+    assert_eq!(stacked, vec![(2, ogre_object), (7, wurm_object)]);
+
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let mut entries: Vec<(i32, String)> = obs
+            .stack_objects
+            .iter()
+            .inspect(|item| assert_eq!(item.kind, StackObjectKindData::TriggeredAbility))
+            .map(|item| (item.x, item.description.clone().unwrap()))
+            .collect();
+        entries.sort();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].0, 2);
+        assert!(
+            entries[0].1.contains("Put that many (2) +1/+1 counters")
+                && entries[0].1.contains(" — event: Gray Ogre"),
+            "{entries:?}"
+        );
+        assert_eq!(entries[1].0, 7);
+        assert!(
+            entries[1].1.contains("Put that many (7) +1/+1 counters")
+                && entries[1].1.contains(" — event: Quilled Greatwurm"),
+            "{entries:?}"
+        );
+        assert!(!entries.iter().any(|(_, text)| text.contains("announced")));
+
+        // The policy input joins each stacked trigger to its creature.
+        let mut frames: Vec<(u8, Option<i32>)> = s
+            .game()
+            .continuation_frames(viewer)
+            .iter()
+            .filter(|frame| frame.kind == 3)
+            .map(|frame| (frame.x, frame.context.and_then(|c| c.object)))
+            .collect();
+        frames.sort();
+        assert_eq!(frames.len(), 2);
+        assert_eq!((frames[0].0, frames[1].0), (2, 7));
+        assert!(frames.iter().all(|(_, object)| object.is_some()));
+        assert_ne!(frames[0].1, frames[1].1);
+    }
+}
+
+/// Tinybones lets its controller spend mana as though it were mana of any
+/// type on a stashed card, and that applies to the total cost after
+/// reductions (CR 601.2f before 601.2h): an opponent's stashed Glamdring's
+/// Gleam of Death, {3}{U} less an equipped Glamdring's 2, is paid with {R}{R}.
+#[test]
+fn glamdring_cast_from_a_tinybones_stash_spends_any_mana_after_its_reduction() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{can_cast, zone_of},
+        play::{cast_profile, choose},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{
+            card::SpellProfile,
+            game_object::Target,
+            permanent::{CounterKind, Counters},
+        },
+    };
+    let mut s = five_color_setup(&[
+        "Tinybones, Bauble Burglar",
+        "Glamdring, Foe-hammer",
+        "Gray Ogre",
+    ]);
+    s.game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Tinybones, Bauble Burglar", true)
+        .unwrap();
+    let stashed = move_from_library(&mut s, 1, "Glamdring, Foe-hammer", ZoneType::Exile);
+    let mut stash = Counters::default();
+    stash.change(CounterKind::Stash, 1);
+    s.game_mut().state.object_counters.insert(stashed, stash);
+    s.set_player_mana_pool(0, "RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let gleam = |s: &crate::support::game::Scenario| {
+        s.action_space().actions.iter().any(|a| matches!(
+            a,
+            Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == stashed
+        ))
+    };
+    assert!(can_cast(&s, stashed), "Glamdring's own {{2}} with any mana");
+    assert!(!gleam(&s), "{{3}}{{U}} before the reduction");
+
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let equipment = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Glamdring, Foe-hammer", true)
+        .unwrap();
+    s.set_player_mana_pool(0, "2");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, equipment, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(gleam(&s));
+    let library = s.zone_size(0, ZoneType::Library);
+    cast_profile(&mut s, stashed, SpellProfile::Adventure);
+    if s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::PayCost { .. }))
+    {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, stashed),
+        Some(ZoneType::Exile),
+        "on an adventure"
+    );
+    assert_eq!(
+        s.zone_size(0, ZoneType::Library),
+        library - 6,
+        "Gleam of Death milled six"
+    );
 }

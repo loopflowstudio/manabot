@@ -5,6 +5,7 @@
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
+        cast_permission::PlayGrant,
         decision::{
             Decision, EffectFrame, FrameCompletion, ResolutionCastOffer, ResolutionTarget,
             TargetIteration,
@@ -200,6 +201,10 @@ impl Game {
                     })
             }
             EffectValue::X => i32::from(frame.x),
+            EffectValue::NegativeX => -i32::from(frame.x),
+            EffectValue::TargetPower => {
+                self.target_property(frame.primary_target(), ObjectProperty::Power)
+            }
             EffectValue::TriggeringPower => {
                 self.target_property(frame.context_target, ObjectProperty::Power)
             }
@@ -221,6 +226,9 @@ impl Game {
                 .source_ref()
                 .and_then(|source| self.permanent_power_or_lki(source))
                 .unwrap_or(0),
+            EffectValue::AttachedCreaturePower => self
+                .source_permanent_id(frame)
+                .map_or(0, |source| self.attached_creature_power(source)),
             EffectValue::AttackingMatching { predicate } => self
                 .iter_battlefield_permanents(controller)
                 .filter(|id| {
@@ -407,7 +415,7 @@ impl Game {
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        if self.spell_on_stack(object).is_none() {
+        if self.stack_spell(object).is_none() {
             return;
         }
         if self.state[object]
@@ -748,9 +756,7 @@ impl Game {
             },
             PlayerSelector::Owner => Vec::new(),
             PlayerSelector::TargetController => match frame.primary_target() {
-                Some(Target::Permanent(id)) => {
-                    self.last_known_controller(id).into_iter().collect()
-                }
+                Some(Target::Permanent(id)) => self.last_known_controller(id).into_iter().collect(),
                 // A countered, uncounterable, copied or stolen spell alike.
                 Some(Target::StackSpell(object)) => self
                     .spell_info(object)
@@ -1016,7 +1022,11 @@ impl Game {
                             ..ZoneEntry::default()
                         }
                     } else {
-                        ZoneEntry::default()
+                        // "exile it with a stash counter on it" (CR 122.1).
+                        ZoneEntry {
+                            counters: counters.clone(),
+                            ..ZoneEntry::default()
+                        }
                     };
                     events.push(self.zone_move_proposal(object, *to, entry));
                 }
@@ -1031,6 +1041,17 @@ impl Game {
                     },
                     events,
                 ));
+                None
+            }
+            Effect::Prepare { what } | Effect::Unprepare { what } => {
+                for id in self.selected_permanents(what, frame) {
+                    let source = self.state.permanents[id].as_ref().unwrap().object;
+                    if matches!(effect, Effect::Prepare { .. }) {
+                        self.prepare_inset(source);
+                    } else {
+                        self.unprepare_inset(source);
+                    }
+                }
                 None
             }
             Effect::Tap { what } => {
@@ -1387,22 +1408,29 @@ impl Game {
                 let selected = self.select(what, frame);
                 let mut bent = false;
                 for object in selected {
-                    match self.state.zones.zone_of(object) {
-                        Some(ZoneType::Battlefield) => {
-                            if let Ok(id) = self.lookup_current_permanent(object) {
-                                self.airbend_permanent(id);
-                                bent = true;
-                            }
-                        }
-                        Some(ZoneType::Stack) => {
-                            self.airbend_spell(object);
-                            bent = true;
-                        }
-                        _ => {}
+                    if matches!(self.state.zones.zone_of(object), Some(ZoneType::Stack))
+                        || self.lookup_current_permanent(object).is_ok()
+                    {
+                        self.airbend(object);
+                        bent = true;
                     }
                 }
                 if bent {
                     self.record_bending(frame.controller, crate::flow::turn::Bending::Air);
+                }
+                None
+            }
+            Effect::GrantGraveyardCastThisTurn { flashback, .. } => {
+                if let Target::GraveyardCard(object) = self.present_primary_target(frame)? {
+                    let grant = PlayGrant {
+                        flashback: *flashback,
+                        origin: frame
+                            .source_ref()
+                            .map(|source| self.state.source_base(source).0),
+                        this_turn: true,
+                        ..PlayGrant::new(object, frame.controller)
+                    };
+                    self.state.cast_permissions.grant(grant);
                 }
                 None
             }
@@ -1436,6 +1464,21 @@ impl Game {
                 };
                 (!self.linked_exile_candidates(&decision).is_empty()).then_some(decision)
             }
+            Effect::CastFromGraveyard {
+                predicate,
+                exile_instants_and_sorceries,
+            } => {
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    spends: None,
+                    offer: ResolutionCastOffer::Graveyard {
+                        predicate: predicate.clone(),
+                        exile_instants_and_sorceries: *exile_instants_and_sorceries,
+                    },
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
+            }
             Effect::CastFromHandFree { predicate } => {
                 let decision = Decision::CastDuringResolution {
                     player: frame.controller,
@@ -1463,16 +1506,17 @@ impl Game {
                     }
                 }
                 let object_id = nonland?;
-                let limit = self.effect_value(below, frame);
+                let below = self.effect_value(below, frame);
                 let decision = Decision::CastDuringResolution {
                     player,
                     paid: false,
-                    offer: ResolutionCastOffer::Exiled { object: object_id },
+                    offer: ResolutionCastOffer::Exiled {
+                        object: object_id,
+                        below,
+                    },
                     spends: None,
                 };
-                if i32::from(self.object_mana_value(object_id)) < limit
-                    && !self.resolution_cast_candidates(&decision).is_empty()
-                {
+                if !self.resolution_cast_candidates(&decision).is_empty() {
                     return Some(decision);
                 }
                 self.reveal_object_to_hand(object_id, player, ZoneEntry::default());
@@ -1490,6 +1534,21 @@ impl Game {
                     Vec::new(),
                     vec![Effect::sacrifice_this()],
                 )))
+            }
+            Effect::ExileEachLibraryTopCastFree => {
+                let mut objects = Vec::new();
+                for owner in [PlayerId(0), PlayerId(1)] {
+                    if let Some(card) = self.library_top_card(owner) {
+                        objects.push(self.move_object(self.state.object_of(card), ZoneType::Exile));
+                    }
+                }
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    offer: ResolutionCastOffer::AmongExiled { objects },
+                    paid: false,
+                    spends: None,
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::Cascade => {
                 let player = frame.controller;
@@ -1518,6 +1577,7 @@ impl Game {
                         offer: ResolutionCastOffer::Cascade {
                             object: object_id,
                             exiled: exiled.clone(),
+                            below,
                         },
                         spends: None,
                     })
@@ -1612,8 +1672,19 @@ impl Game {
                 ));
                 None
             }
-            Effect::ExileTopCardsToPlay { count, until } => {
-                self.exile_top_cards_to_play(frame.controller, *count, *until);
+            Effect::ExileTopCardsToPlay {
+                count,
+                until,
+                face_down,
+                condition,
+            } => {
+                self.exile_top_cards_to_play(
+                    frame.controller,
+                    *count,
+                    *until,
+                    *face_down,
+                    condition.as_ref(),
+                );
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {
@@ -2128,6 +2199,7 @@ impl Game {
                 min_select,
                 max_select,
                 predicate,
+                max_mana_value,
             } => {
                 let look = self.effect_value(look, frame).max(0) as usize;
                 let looked = self.library_top_objects(frame.controller, look);
@@ -2135,13 +2207,24 @@ impl Game {
                     return None;
                 }
                 self.remember_library_objects(frame.controller, &looked);
+                // The decision carries the bound as resolved now.
+                let mut predicate = predicate.clone();
+                if let Some(value) = max_mana_value {
+                    let bound =
+                        u8::try_from(self.effect_value(value, frame).max(0)).unwrap_or(u8::MAX);
+                    predicate.max_mana_value = Some(
+                        predicate
+                            .max_mana_value
+                            .map_or(bound, |printed| printed.min(bound)),
+                    );
+                }
                 Some(Decision::LookAndSelect {
                     random_order: *random_order,
                     reveal: *reveal,
                     to_battlefield: *to_battlefield,
                     player: frame.controller,
                     looked,
-                    predicate: predicate.clone(),
+                    predicate,
                     selected: 0,
                     min_select: *min_select,
                     max_select: *max_select,
@@ -2394,10 +2477,13 @@ impl Game {
                     .filter_map(|id| self.permanent_object(id))
                     .collect()
             }
-            ObjectSelector::Triggering => permanent(match frame.context_target {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            }),
+            ObjectSelector::Triggering => match frame.context_target {
+                Some(Target::Permanent(id)) => permanent(Some(id)),
+                Some(Target::GraveyardCard(object)) => {
+                    self.state.live(object).into_iter().collect()
+                }
+                _ => Vec::new(),
+            },
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame
                 .created
@@ -2420,6 +2506,11 @@ impl Game {
                 .iter()
                 .map(|binding| binding.object)
                 .filter(|object| self.state.live(*object).is_some())
+                .collect(),
+            ObjectSelector::Matching { of, predicate } => self
+                .select(of, frame)
+                .into_iter()
+                .filter(|object| self.object_matches_predicate(*object, predicate))
                 .collect(),
             ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
                 (match what {
@@ -2562,9 +2653,11 @@ impl Game {
                     })
             }
             ObjectSelector::Triggering => match frame.context_target {
-                Some(Target::Permanent(id)) => {
-                    self.with_permanent_or_lki(id, |p| p.counters.clone(), |lki| lki.counters.clone())
-                }
+                Some(Target::Permanent(id)) => self.with_permanent_or_lki(
+                    id,
+                    |p| p.counters.clone(),
+                    |lki| lki.counters.clone(),
+                ),
                 _ => None,
             },
             other => self
@@ -2582,6 +2675,9 @@ impl Game {
         let object = frame.source()?;
         match frame.source_ref() {
             Some(source) => self.state.live(source).or_else(|| {
+                // Only a departing battlefield source can refer to the card it
+                // became this way. A graveyard activation keeps its exact source.
+                self.object_lki(source)?;
                 self.state.zones.successor(source).filter(|successor| {
                     matches!(
                         self.state.zones.zone_of(*successor),
@@ -2589,7 +2685,7 @@ impl Game {
                     )
                 })
             }),
-            None => self.spell_on_stack(object).is_some().then_some(object),
+            None => self.stack_spell(object).is_some().then_some(object),
         }
     }
 
@@ -2702,7 +2798,7 @@ impl Game {
                 _ => false,
             },
             Target::StackSpell(object) => {
-                self.spell_on_stack(object).is_some_and(|spell| match spec {
+                self.stack_spell(object).is_some_and(|spell| match spec {
                     TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
                     TargetSpec::SpellMatching { predicate } => {
                         self.object_matches_predicate(object, predicate)
@@ -2836,7 +2932,7 @@ impl Game {
     /// The object's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
-        let x = self.spell_on_stack(object).map_or(0, |spell| spell.x);
+        let x = self.stack_spell(object).map_or(0, |spell| spell.x);
         self.state[object].mana_value_with_x(x)
     }
 }

@@ -933,9 +933,11 @@ fn lightning_bolt() -> CardDefinition {
 colors, keywords, abilities, text and power/toughness as printed. It is the
 input to the layer system; `Game::characteristics(id)` returns the layered
 view of a game object after continuous effects. A `CardDefinition` adds the
-card's identity (`key` and a required `scryfall_id`) and, for a transforming
-card, its back face's `PrintedCharacteristics` (`back_face`; the outer
-`..Default::default()` leaves it empty).
+card’s identity (`key` and a required `scryfall_id`). Double-faced cards
+register their `back_face` alongside the front. A front with `modal_back`
+offers either printed face when the play permission allows it. Casting Photon
+uses Photon’s cost and abilities, then the permanent enters back face up.
+Moving the permanent to the graveyard restores Monica Rambeau.
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
@@ -1208,10 +1210,67 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | --- | --- | --- |
 | CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
 | CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | `CardMoved.object_id` is the successor; `departed` names its exact pre-move appearance for LKI |
-| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact exiled `ObjectId` it applies to; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
+| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact `ObjectId` in its permitted zone; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
 | CR 400.7i | an effect that lets a land be played finds the land on the battlefield | the entry batch's `EventResult.moved`, bound when the batch completes (an entry replacement may suspend it first) |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
+| CR 715.3d | resolving an Adventure can give its caster permission to cast the permanent spell from exile | the selected Adventure replacement grants access to the exact exile successor. Bilbo’s competing exile replacement creates no grant. |
+| [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
+
+Yue’s hand permission checks the spell being announced, so it can offer
+Spew Flame from Smaug. Solstice Revelations likewise checks Charring Bite’s
+mana value when it exiles Twinmaw Stormbrood. During targeting, the caster
+sees the chosen spell name in the decision context and its profile in the
+continuation. Both viewers see the spell once it reaches the stack.
+
+Omniscience offers the ordinary hand cast and a cast without paying the mana
+cost whenever both are payable. Additional copies grant the same choice.
+Kicker, bargain, and required sacrifices still apply to the free cast.
+High Fae Trickster changes the timing of an otherwise legal cast. Harbinger of
+the Tides can supply its own flash permission for two more mana, including
+when Omniscience pays its printed cost. If another effect grants flash,
+Harbinger also offers the cast without the surcharge.
+
+Sphinx of Forgotten Lore grants its chosen graveyard card flashback at that
+card’s mana cost until cleanup. The permission survives the Sphinx leaving
+play. A card with printed flashback keeps both prices. Either flashback cast
+exiles the spell when it leaves the stack.
+
+On its controller’s turn, Iroh, Grand Lotus grants graveyard Lessons flashback
+for {1} and other instants and sorceries flashback for their mana cost. A
+creature with an Adventure in the graveyard still needs another permission to
+cast either face.
+
+Casting the top card with Vizier of the Menagerie or Planetarium of Wan Shi
+Tong moves each remembered library position up by one. A player who scried
+the second card knows the new top. That knowledge stays private.
+
+When Etali, Primal Storm attacks, its controller exiles the top card of each
+library. They can cast the eligible spells in either order for free, or stop
+and leave the remaining cards in exile. Choosing Charring Bite from an exiled
+Twinmaw Stormbrood asks for its target. Once the cast commits, Etali offers
+the remaining spell before anyone receives priority. The last spell cast
+resolves first.
+
+Volcanic Torrent’s cascade stops at the first nonland card with mana value
+below five. If it finds Scavenger Regent, the chooser can cast Regent, cast
+Exude Toxin at X=0, or decline. The resulting spell must also have mana
+value below five.
+
+Targeting Scavenger Regent with an opposing spell or ability triggers ward.
+The spell or ability’s controller can discard a card of their choice to keep the spell or ability
+on the stack. Declining counters it.
+
+Exude Toxin costs {X}{B}{B}. At X=1 its stack mana value is 3. Casting it
+without paying its mana cost fixes X at zero, spends no mana, and gives it
+stack mana value 2. Both viewers can inspect this value. The v11 stack row
+keeps the selected printing’s base value in `mana_value` and reports the
+on-stack value in `effective_mana_value`.
+
+A spell cast from a prepared copy is a prepared spell; one cast with flashback
+is exiled as it leaves the stack. Both facts belong to the cast, so a copy of
+the spell has neither. Observations, the v11 stack row (`from_prepared`,
+`flashback`), the text and Academy's stack entries show them to both viewers.
 
 Entry replacements supply instructions for the new object, rather than facts
 carried from the old one. An "enters as a copy" choice (CR 614.1c) supplies
@@ -1321,7 +1380,31 @@ for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() 
 let zone = game.state.zones.zone_of(game.state.object_of(card));
 ```
 
-A token or copy that leaves the battlefield or stack is briefly in another
+A prepared permanent links its battlefield appearance to a spell copy in exile.
+The copy belongs to the controller at preparation. Its casting permission follows
+the permanent’s current controller. Both viewers see the current caster and the
+`follows_source_controller` term before control changes. If Agent of Treachery takes Blossom-Blessed
+Angel, its new controller can pay for the linked Seed Suture and cast it during
+their main phase with an empty stack. Emergency Phytomedic’s controller can
+still cast its own Seed Suture. Casting moves the copy to the stack and ends the
+link, even if the spell is subsequently countered. A source that leaves the
+battlefield loses its link, and the next state-based check removes the exile copy.
+A returning Angel creates a fresh copy. A Command bound to the departed Angel
+is stale even when submitted at the current decision revision.
+
+Skycoach Waypoint can target any creature. When its ability resolves, a creature
+with a prepare spell and no linked copy gains one. Preparing it again keeps the
+same copy and permission. The three FRA creatures that prepare during upkeep
+check the link both when upkeep begins and when their trigger resolves.
+Infinite Coursework taps and unprepares its attached creature when the Aura’s
+entry trigger resolves. Only that creature’s linked copy ceases to exist.
+
+Emeritus of Truce gives the chosen player a flying Inkling before comparing
+creature counts. Its trigger can prepare only the battlefield appearance that
+triggered it. Its prepared Swords to Plowshares exiles the target creature
+and uses its last known power for the life its controller gains.
+
+An ordinary token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
 a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps

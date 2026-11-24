@@ -185,8 +185,9 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
 /// CR 106.6: a restriction may name any subtype. Mana for Ogre spells casts
 /// Gray Ogre and nothing else; mana for abilities of Scarecrow sources pays
 /// Scarecrow Guide's activation but not a Scarecrow spell. The observation
-/// keeps each restriction whole, and the policy input, whose columns name
-/// only Lesson, Shrine and Ally purposes, refuses it rather than drop it.
+/// keeps each restriction whole: the policy input's columns name only
+/// Lesson, Shrine and Ally purposes, and any other restriction is a pooled
+/// mana class.
 #[test]
 fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     use managym::{
@@ -213,15 +214,18 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, ogre));
     assert!(!can_cast(&s, strike));
+    // Only Lesson, Shrine and Ally purposes have columns; any other
+    // restriction is its own pooled class, a POOLED_MANA fact row.
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    let restricted = &observation.agent.restricted_mana;
-    assert_eq!(restricted.len(), 1);
-    assert_eq!(restricted[0].spells, ["Ogre"]);
-    assert_eq!(restricted[0].mana, [0, 0, 0, 3, 0, 0]);
-    assert!(matches!(
-        encode(&observation, &ObservationEncoderConfig::default()),
-        Err(ObservationEncodeError::Unrepresentable(state)) if state == "mana restricted to Ogre spells"
-    ));
+    assert!(observation.agent.restricted_mana.is_empty());
+    let pooled = &observation.agent.pooled_mana_classes;
+    assert_eq!(pooled.len(), 1);
+    assert!(pooled[0]
+        .restriction
+        .as_deref()
+        .is_some_and(|restriction| restriction.contains("Ogre")));
+    assert_eq!(pooled[0].mana, [0, 0, 0, 3, 0, 0]);
+    encode(&observation, &ObservationEncoderConfig::default()).unwrap();
     // The columns sum Lesson, Shrine and Ally purposes, so only the classes
     // they solve for encode: these two pools would share one encoding.
     let class = |spells: &[&str], abilities: &[&str]| RestrictedManaData {

@@ -121,6 +121,15 @@ impl Game {
             .collect()
     }
 
+    /// Whether `object` is the top card of its owner's library, so moving it
+    /// shifts every remembered library position up by one.
+    pub(super) fn is_library_top(&self, object: ObjectId) -> bool {
+        self.state
+            .zones
+            .top(ZoneType::Library, self.state[object].owner)
+            == Some(object)
+    }
+
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
         self.state.library_order_pins_mut(player).clear();
         self.state.known_library_mut(player).forget_order();
@@ -440,6 +449,65 @@ impl Game {
         object
     }
 
+    pub(super) fn prepared_copy(&self, source: ObjectId) -> Option<ObjectId> {
+        self.state
+            .cast_permissions
+            .grants
+            .iter()
+            .find(|grant| {
+                grant.prepared
+                    && grant.source == Some(source)
+                    && self.state.zones.zone_of(grant.object) == Some(ZoneType::Exile)
+            })
+            .map(|grant| grant.object)
+    }
+
+    pub(super) fn unprepare_inset(&mut self, source: ObjectId) {
+        let Some(copy) = self.prepared_copy(source) else {
+            return;
+        };
+        let owner = self.state[copy].owner;
+        self.state.zones.remove_object(copy);
+        self.capture_object_move(copy, Some(ZoneType::Exile), None, owner);
+        self.state
+            .cast_permissions
+            .grants
+            .retain(|grant| !(grant.prepared && grant.source == Some(source)));
+    }
+
+    pub(super) fn prepare_inset(&mut self, source: ObjectId) {
+        use crate::{flow::cast_permission::PlayGrant, state::card::InsetSpell};
+        let Some(InsetSpell::Prepared(program)) = &self.state[source].inset else {
+            return;
+        };
+        if self.prepared_copy(source).is_some() {
+            return;
+        }
+        let Ok(id) = self.lookup_current_permanent(source) else {
+            return;
+        };
+        let controller = self.state.permanents[id].as_ref().unwrap().controller;
+        let program = program.clone();
+        let id = self.state.id_gen.next_id();
+        let copy = Object::from_definition(
+            id,
+            controller,
+            self.state[source].definition_id,
+            program,
+            false,
+        );
+        let copy = Object::spell_copy(copy, id, controller);
+        let object = self.add_object(copy);
+        self.state.place_object(object, controller, ZoneType::Exile);
+        self.capture_object_move(object, None, Some(ZoneType::Exile), controller);
+        self.state.cast_permissions.grant(PlayGrant {
+            source: Some(source),
+            prepared: true,
+            follows_source_controller: true,
+            ..PlayGrant::new(object, controller)
+        });
+    }
+
     /// Count permanents a player controls matching a predicate (e.g.
     /// "for each Island you control").
     pub(crate) fn count_battlefield_matching(
@@ -490,6 +558,13 @@ impl Game {
         self.state.events_mut().push(event);
     }
 
+    /// Offer `event` to triggered abilities only: it joins no ledger,
+    /// observation or policy history, because it restates what those
+    /// already record in another shape.
+    pub(crate) fn emit_trigger_event(&mut self, event: GameEvent) {
+        self.state.pending_events_mut().push(event);
+    }
+
     /// Publish an additive viewer fact in the committed observation window
     /// without changing trigger matching or the rules-event ledger.
     /// Presentation projection consumes these facts; policy encoders filter
@@ -506,10 +581,18 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> ObjectId {
+        self.spend_play_route(controller, cast.route);
         let cast_from = self.state.zones.zone_of(object).expect("cast source zone");
-        let flashback = cast_from == ZoneType::Graveyard;
         // CR 400.7g, h: the spell is the object the card became on the stack.
-        let object = self.move_object(object, ZoneType::Stack);
+        let object = self.move_object_with_entry(
+            object,
+            ZoneType::Stack,
+            ZoneEntry {
+                profile: cast.profile,
+                library_top_departure: self.is_library_top(object),
+                ..Default::default()
+            },
+        );
         let id = self.state.id_gen_mut().next_id();
         let source_definition_id = self.state[object].definition_id;
         self.state
@@ -519,7 +602,10 @@ impl Game {
                 object,
                 controller,
                 cast_from,
-                flashback,
+                flashback: cast.flashback,
+                from_prepared: cast.from_prepared,
+                profile: cast.profile,
+                exile_instead_of_graveyard: cast.exile_instead_of_graveyard,
                 source_definition_id,
                 targets,
                 target_req_indices,
@@ -578,7 +664,7 @@ impl Game {
         let to_zone = if from == Some(ZoneType::Stack)
             && to_zone != ZoneType::Exile
             && self
-                .spell_on_stack(object_id)
+                .stack_spell(object_id)
                 .is_some_and(|spell| spell.flashback)
         {
             ZoneType::Exile
@@ -624,7 +710,7 @@ impl Game {
         let (owner, definition) = (prior.owner, prior.definition_id);
         let public_source = old_zone.is_some_and(|zone| {
             !matches!(zone, ZoneType::Hand | ZoneType::Library)
-                && !(zone == ZoneType::Exile && self.is_foretold(prior_object))
+                && !(zone == ZoneType::Exile && self.is_face_down_in_exile(prior_object))
         });
         let known_top = if old_zone == Some(ZoneType::Library) {
             self.state
@@ -691,6 +777,22 @@ impl Game {
         let object_id = self
             .state
             .mint_appearance(prior_object, holder, to_zone, entry.entry_copy);
+        match entry.profile {
+            crate::state::card::SpellProfile::BackFace => {
+                assert!(self.show_back_face(object_id), "offered back face")
+            }
+            profile => self.state[object_id].show_inset(profile),
+        }
+        if let Some(player) = entry.adventure_player {
+            if self.state[object_id].is_card() {
+                self.state
+                    .cast_permissions
+                    .grant(crate::flow::cast_permission::PlayGrant {
+                        on_adventure: true,
+                        ..crate::flow::cast_permission::PlayGrant::new(object_id, player)
+                    });
+            }
+        }
         let entered_definition = self.state[object_id].definition_id;
         if to_zone == ZoneType::Library {
             self.state.library_order_pins_mut(owner).insert(object_id);
@@ -711,6 +813,11 @@ impl Game {
         }
         if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
             self.state.turn.graveyard_from_battlefield.push(object_id);
+        }
+        if to_zone == ZoneType::Exile && !entry.counters.is_empty() {
+            self.state
+                .object_counters
+                .insert(object_id, entry.counters.clone());
         }
 
         let entered_permanent = (to_zone == ZoneType::Battlefield).then(|| {
@@ -737,6 +844,9 @@ impl Game {
                 self.state.turn.history[holder.0].land_entered = true;
             }
             self.state.object_to_permanent[object_id.slot()] = Some(permanent_id);
+            if entry.prepared {
+                self.prepare_inset(object_id);
+            }
             permanent_id
         });
 
@@ -961,7 +1071,7 @@ impl Game {
     /// A spell as it is on the stack now, or as it last existed there
     /// (CR 608.2h): countered, resolved, copied or stolen spells alike.
     pub(crate) fn spell_info(&self, object: ObjectId) -> Option<SpellLki> {
-        self.spell_on_stack(object)
+        self.stack_spell(object)
             .map(|spell| self.spell_lki(spell))
             .or_else(|| self.state.spell_lki.get(&object).cloned())
     }
@@ -992,12 +1102,13 @@ impl Game {
         Some(self.state.stack_objects[index].source_object())
     }
 
-    pub(crate) fn spell_on_stack(&self, object_id: ObjectId) -> Option<&SpellOnStack> {
+    /// The spell `object` is on the stack.
+    pub(crate) fn stack_spell(&self, object: ObjectId) -> Option<&SpellOnStack> {
         self.state
             .stack_objects
             .iter()
-            .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.object == object_id => Some(spell),
+            .find_map(|stacked| match stacked {
+                StackObject::Spell(spell) if spell.object == object => Some(spell),
                 _ => None,
             })
     }

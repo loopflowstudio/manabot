@@ -52,6 +52,7 @@ enum TriggerMember {
     Event,
     Attacker(PermanentId),
     CombatHit(CombatPlayerHit),
+    CombatTotal(ObjectId, u32),
 }
 
 /// Exact battlefield source facts used while matching one or more committed
@@ -114,6 +115,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::WasCast { condition }
         | TriggerCondition::OnceEachTurn { condition }
         | TriggerCondition::FromZone { condition, .. }
+        | TriggerCondition::Prepared { condition }
         | TriggerCondition::InGraveyard { condition }
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
@@ -136,10 +138,13 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             })
         }
         TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
-        TriggerCondition::DealsCombatDamage { .. } => {
+        TriggerCondition::DealsCombatDamage { to: Some(_), .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
         TriggerCondition::DealsDamage { .. } => EventKinds::of(EventKind::DamageDealt),
+        TriggerCondition::DealsCombatDamage { to: None, .. } => {
+            EventKinds::of(EventKind::CombatDamageTotals)
+        }
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
@@ -182,6 +187,7 @@ fn keyword_action_event(action: KeywordAction) -> EventKind {
         | KeywordAction::Earthbend
         | KeywordAction::Firebend
         | KeywordAction::Airbend => EventKind::Bent,
+        KeywordAction::Discard => EventKind::CardMoved,
     }
 }
 
@@ -200,6 +206,14 @@ fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
                 Bending::Air => KeywordAction::Airbend,
             },
         )),
+        // The engine discards by moving a card from hand to its owner's
+        // graveyard, the event's controller.
+        GameEvent::CardMoved {
+            from: Some(ZoneType::Hand),
+            to: ZoneType::Graveyard,
+            controller,
+            ..
+        } => Some((*controller, KeywordAction::Discard)),
         _ => None,
     }
 }
@@ -274,15 +288,14 @@ impl Game {
         Some(crate::state::ability::effect_target_requirements(&effects))
     }
 
-    /// Clause-wide mana-value budget; paid X belongs to this occurrence,
-    /// independent of its source's current state or later mana production.
-    fn within_trigger_mana_budget(
+    /// Check against earlier targets of this clause. Paid X belongs to the trigger.
+    fn fits_trigger_target_clause(
         &self,
         trigger: &PendingTrigger,
         requirement: &TargetRequirement,
         target: Target,
     ) -> bool {
-        self.within_target_mana_budget(
+        self.fits_target_clause(
             requirement,
             trigger.x,
             trigger.current_clause_targets(),
@@ -290,19 +303,31 @@ impl Game {
         )
     }
 
-    pub(crate) fn within_target_mana_budget(
+    pub(crate) fn fits_target_clause(
         &self,
         requirement: &TargetRequirement,
         x: u8,
-        chosen: impl Iterator<Item = Target>,
+        chosen: impl Iterator<Item = Target> + Clone,
         target: Target,
     ) -> bool {
-        !requirement.total_mana_value_x
-            || self.target_mana_value(target)
-                + chosen
-                    .map(|target| self.target_mana_value(target))
-                    .sum::<u32>()
-                <= u32::from(x)
+        // A graveyard card's owner fixes which graveyard it was targeted in,
+        // even if that appearance has left before a copied spell is retargeted.
+        let graveyard = |target| match target {
+            Target::GraveyardCard(id) => {
+                self.state.objects.get(id.slot()).map(|object| object.owner)
+            }
+            _ => None,
+        };
+        let same_graveyard = !requirement.same_graveyard
+            || graveyard(target)
+                .is_some_and(|owner| chosen.clone().all(|other| graveyard(other) == Some(owner)));
+        same_graveyard
+            && (!requirement.total_mana_value_x
+                || self.target_mana_value(target)
+                    + chosen
+                        .map(|other| self.target_mana_value(other))
+                        .sum::<u32>()
+                    <= u32::from(x))
     }
 
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
@@ -331,8 +356,10 @@ impl Game {
             .get(trigger.requirement_index)
             .ok_or_else(|| AgentError("no pending target requirement".into()))?;
         if trigger.controller != player
-            || trigger.current_clause_targets().any(|chosen| chosen == target)
-            || !self.within_trigger_mana_budget(trigger, requirement, target)
+            || trigger
+                .current_clause_targets()
+                .any(|chosen| chosen == target)
+            || !self.fits_trigger_target_clause(trigger, requirement, target)
             || !self.target_meets_requirement(target, requirement, player, trigger.source_identity)
         {
             return Err(AgentError("illegal trigger target".into()));
@@ -441,8 +468,10 @@ impl Game {
                 let legal: Vec<_> = self
                     .targets_for_source(requirement, trigger.controller, trigger.source_identity)
                     .filter(|target| {
-                        self.within_trigger_mana_budget(&trigger, requirement, *target)
-                            && !trigger.current_clause_targets().any(|chosen| chosen == *target)
+                        self.fits_trigger_target_clause(&trigger, requirement, *target)
+                            && !trigger
+                                .current_clause_targets()
+                                .any(|chosen| chosen == *target)
                     })
                     .collect();
                 if legal.is_empty() {
@@ -479,7 +508,10 @@ impl Game {
     }
 
     /// The modes of a placing trigger whose modes are not yet chosen.
-    pub(crate) fn unchosen_trigger_modes(&self, trigger: &PendingTrigger) -> Option<&[Vec<Effect>]> {
+    pub(crate) fn unchosen_trigger_modes(
+        &self,
+        trigger: &PendingTrigger,
+    ) -> Option<&[Vec<Effect>]> {
         self.unchosen_trigger_mode_rule(trigger)
             .map(|(modes, _, _)| modes)
     }
@@ -560,7 +592,9 @@ impl Game {
             .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
         let is_up_to = up_to.is_some();
         if trigger.controller != player
-            || !self.legal_trigger_modes(trigger, modes, unchosen).contains(&mode)
+            || !self
+                .legal_trigger_modes(trigger, modes, unchosen)
+                .contains(&mode)
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
@@ -900,6 +934,10 @@ impl Game {
                     // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
                     let count =
                         *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
+                    let total = match member {
+                        TriggerMember::CombatTotal(_, total) => Some(total as i32),
+                        _ => None,
+                    };
                     let hit = match member {
                         TriggerMember::CombatHit(hit) => Some(hit),
                         _ => None,
@@ -910,7 +948,7 @@ impl Game {
                             ability: origin,
                             context,
                             player: self.event_player(leaf, event, hit),
-                            amount: event_amount(event, hit),
+                            amount: total.unwrap_or_else(|| event_amount(event, hit)),
                             once,
                         },
                         count,
@@ -969,6 +1007,9 @@ impl Game {
             // X and the mana spent to cast it; a counters trigger's X is how
             // many were put ("that much").
             let (x, spent) = match event {
+                GameEvent::CombatDamageTotals { .. } => {
+                    (u8::try_from(amount).unwrap_or(u8::MAX), Default::default())
+                }
                 GameEvent::CountersPut { count, .. } => {
                     (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
                 }
@@ -1055,7 +1096,7 @@ impl Game {
             (
                 TriggerCondition::DealsCombatDamage {
                     subject,
-                    to,
+                    to: Some(to),
                     per: Per::Object,
                 },
                 GameEvent::CombatDamageToPlayers { hits },
@@ -1063,6 +1104,25 @@ impl Game {
                 for hit in hits {
                     if self.hit_matches(hit, subject, *to, lki.object, lki.controller) {
                         emit(TriggerMember::CombatHit(*hit));
+                    }
+                }
+            }
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: None,
+                    per: Per::Object,
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) => {
+                for &(dealer, amount) in dealt {
+                    if self.subject_matches_damage_source(
+                        subject,
+                        lki.object,
+                        lki.controller,
+                        dealer,
+                    ) {
+                        emit(TriggerMember::CombatTotal(dealer, amount));
                     }
                 }
             }
@@ -1101,6 +1161,9 @@ impl Game {
                 return self.permanent_or_lki(hit.source).map(Target::Permanent);
             }
             TriggerMember::CombatHit(_) => return None,
+            TriggerMember::CombatTotal(source, _) => {
+                return self.permanent_or_lki(source).map(Target::Permanent)
+            }
             TriggerMember::Event => {}
         }
         match event {
@@ -1137,6 +1200,11 @@ impl Game {
                 .departed_object()
                 .and_then(|object| self.object_lki(object))
                 .map(|lki| Target::Permanent(lki.permanent)),
+            GameEvent::CardMoved {
+                object_id,
+                to: ZoneType::Graveyard,
+                ..
+            } => Some(Target::GraveyardCard(*object_id)),
             GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
                 Some(Target::Permanent(attackers[0]))
             }
@@ -1441,7 +1509,7 @@ impl Game {
         }
         // "When that mana is spent to cast [a spell], copy that spell": one
         // trigger of the object that made each such unit.
-        let Some(spell) = self.spell_on_stack(object) else {
+        let Some(spell) = self.stack_spell(object) else {
             return;
         };
         let copy_sources: Vec<_> = spell.spent.copy_triggers().flatten().collect();
@@ -1625,13 +1693,13 @@ impl Game {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 TriggerSourceEntry {
                     object: permanent.object,
-                    kinds: view
-                        .triggered_abilities
-                        .iter()
-                        .fold(EventKinds::NONE, |kinds, grant| {
+                    kinds: view.triggered_abilities.iter().fold(
+                        EventKinds::NONE,
+                        |kinds, grant| {
                             let Ability::Triggered { condition, .. } = &grant.ability;
                             kinds | condition_event_kinds(condition)
-                        }),
+                        },
+                    ),
                 }
             })
             .collect();
@@ -1690,6 +1758,11 @@ impl Game {
                 TriggerCondition::FromZone { zone, condition } => {
                     (condition, self.event_origin(event) == Some(*zone))
                 }
+                TriggerCondition::Prepared { condition } => (
+                    condition,
+                    matches!(event, GameEvent::SpellCast { object_id, .. }
+                        if self.stack_spell(*object_id).is_some_and(|spell| spell.from_prepared)),
+                ),
                 TriggerCondition::WhileSourceAttacking { condition } => {
                     (condition, permanent().is_some_and(|p| p.attacking))
                 }
@@ -1805,11 +1878,28 @@ impl Game {
                     })
             }
             (
-                TriggerCondition::DealsCombatDamage { subject, to, .. },
+                TriggerCondition::DealsCombatDamage {
+                    subject,
+                    to: Some(to),
+                    ..
+                },
                 GameEvent::CombatDamageToPlayers { hits },
             ) => hits
                 .iter()
                 .any(|hit| self.hit_matches(hit, subject, *to, source_object, source_controller)),
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject, to: None, ..
+                },
+                GameEvent::CombatDamageTotals { dealt },
+            ) => dealt.iter().any(|(dealer, _)| {
+                self.subject_matches_damage_source(
+                    subject,
+                    source_object,
+                    source_controller,
+                    *dealer,
+                )
+            }),
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },
@@ -1951,7 +2041,7 @@ impl Game {
                     && nth.is_none_or(|n| {
                         self.state.turn.spells_cast[caster.0]
                             .iter()
-                            .position(|cast| cast == object)
+                            .position(|cast| cast.object == *object)
                             == Some(n as usize - 1)
                     })
             }
@@ -2039,7 +2129,7 @@ impl Game {
     fn event_origin(&self, event: &GameEvent) -> Option<ZoneType> {
         match event {
             GameEvent::SpellCast { object_id, .. } => {
-                self.spell_on_stack(*object_id).map(|spell| spell.cast_from)
+                self.stack_spell(*object_id).map(|spell| spell.cast_from)
             }
             GameEvent::CardMoved { from, .. } => *from,
             _ => None,

@@ -39,7 +39,7 @@ pub struct SpentMana {
 }
 
 /// What was done to an object to pay with it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum How {
     Tapped,
     Sacrificed,

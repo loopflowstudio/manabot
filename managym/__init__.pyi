@@ -995,6 +995,7 @@ class Player:
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     pooled_mana_classes: list[PooledManaClass]
+    spent_graveyard_types: list[tuple[int, str]]
     hand_only_until: Optional[int]
     # Continuous effects on this player, in timestamp order.
     effects: list[ContinuousEffect]
@@ -1046,6 +1047,14 @@ class CastPermission:
     any_mana: bool
     waterbend: bool
     foretold: bool
+    flashback: bool
+    follows_source_controller: bool
+    on_adventure: bool
+    prepared: bool
+    face_down: bool
+    # "You may play": a land face may be played; otherwise only spells are cast.
+    play_lands: bool
+    condition: Optional[str]
 
 class ObservationCharacteristics:
     """Viewer-safe characteristics. P/T and keywords are effective on the battlefield.
@@ -1095,10 +1104,13 @@ class Card:
     keywords: Keywords
     mana_cost: ManaCost
     face_down: bool
+    cast_permissions: list[CastPermission]
     cast_permission: Optional[CastPermission]
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
+    # Counters on the card off the battlefield ("with a stash counter on it").
+    counters: dict[str, int]
 
 class SideboardCard:
     candidate_id: int
@@ -1237,6 +1249,12 @@ class Action:
     pays_directly: bool
     # mode_index is an announced number (X, a replicate count, a payment's X)
     # rather than an option index.
+    # The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
+    spell_profile: int
+    route_mana_value: int | None
+    quota_type: int | None
+    # The permission a play uses (play_route_code); None for an ordinary hand play.
+    play_route: int | None
     announces_x: bool
 
 class ActionSpace:
@@ -1262,6 +1280,7 @@ class StackObject:
     object_id: int | None
     owner_id: int | None
     is_copy: bool | None
+    effective_mana_value: int | None
     announced_x: int | None
     description: str | None
     stack_object_id: int
@@ -1278,6 +1297,12 @@ class StackObject:
     granted_keywords: Keywords | None
     # Whether a spell's kicker cost was paid.
     kicked: bool
+    # A spell cast from a prepared copy; its stack copies are not.
+    @property
+    def from_prepared(self) -> bool: ...
+    # A spell cast with flashback (exiled as it leaves the stack).
+    @property
+    def flashback(self) -> bool: ...
     @property
     @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.3.0")
     def card(self) -> Card | None: ...
@@ -1363,6 +1388,8 @@ class ContinuationFrame:
     mode: int | None
     ability: int | None
     kicked: bool
+    # The printed spell an announcement casts: 0 front face, 1 Adventure, 2 Omen.
+    spell_profile: int
     active_clause: int | None
     targets: list[ClauseTarget]
     context: VisibleReference | None

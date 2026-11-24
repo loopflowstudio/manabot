@@ -927,3 +927,17 @@ pub fn counter_stacked_ability(s: &mut Scenario) {
     assert!(s.choose_target(top));
     settle(s);
 }
+
+/// Select a printed spell on the card's current appearance.
+pub fn cast_profile(
+    s: &mut Scenario,
+    object: ObjectId,
+    profile: managym::state::card::SpellProfile,
+) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let object = now(s, object);
+    choose(
+        s,
+        |action| matches!(action, Action::CastSpell { object: legal, profile: offered, .. } if *legal == object && *offered == profile),
+    );
+}

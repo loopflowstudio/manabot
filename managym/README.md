@@ -527,7 +527,13 @@ instrumentation attributes board, clone and dependency work without adding
 counters to ordinary wheels.
 
 A resolving spell remains on the stack until the zone-move authority commits
-its departure. That authority applies flashback exile replacement and captures
+its departure. A spell cast with flashback carries that choice onto the stack.
+A Zombie cast from the graveyard with Zul Ashur pays its normal cost, enters
+the battlefield on resolution and returns to the graveyard if countered.
+With Muldrotha in play, you can choose which permission casts the Zombie.
+Casting through Muldrotha spends its creature allowance for the turn, even
+if the spell is countered. Using Zul Ashur leaves that allowance available.
+The zone-move authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
 countering or finalization. Copied tokens detach immutable characteristics from
 the source definition, retain its semantic identity, and expose their actual
@@ -644,14 +650,15 @@ payment.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
-source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
-Every cost carries a `SpendingContext`: `Cast` with the spell's announced
-subtypes and types, `Activate` with the source's zone and subtypes, or
+source must have, `ExceptNonartifactSpells` is a Powerstone's exclusion and
+`ExceptSpellsFromHand` is Heartwood Crafter's. Every cost carries a
+`SpendingContext`: `Cast` with the spell's announced subtypes and types and
+the zone it is cast from, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
 Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
-mana); every encoder refuses other restricted mana (`unrepresentable_state`)
-rather than drop it.
+mana); every other restriction is a `pooled_mana_classes` class and a
+`PooledMana` fact program, never a player column.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v6: the schema-8 semantic Observation, shared native continuation frames, bound public card

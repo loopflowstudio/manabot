@@ -1,20 +1,21 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::ability::{
     Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind, DamageRecipientFilter,
-    Effect, EffectValue, ObjectProperty, ObjectSelector, PaymentCost, Per, PlayWindow,
-    PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-    TurnStep,
+    Effect, EffectValue, KeywordAction, ObjectProperty, ObjectSelector, PaymentCost, Per,
+    PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
+    TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
-    DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect, Restriction,
-    SacrificeCost, SpellCostReduction, StaticAbility, StaticRestriction, StaticScope,
+    ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
+    CardTypes, DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
+    Restriction, SacrificeCost, SpellCostReduction, StaticAbility, StaticRestriction, StaticScope,
     TargetCostReduction,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::{Color, ManaCost};
 use managym_state::permanent::CounterKind;
 use managym_state::predicate::CardPredicate;
+use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
@@ -117,6 +118,14 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         helpful_hunter(),
         lightshell_duo(),
         prideful_parent(),
+        high_fae_trickster(),
+        sphinx_of_forgotten_lore(),
+        suspicious_shambler(),
+        tinybones_bauble_burglar(),
+        loot_exuberant_explorer(),
+        quilled_greatwurm(),
+        redcap_gutter_dweller(),
+        zul_ashur_lich_lord(),
         twinflame_tyrant(),
         fleeting_flight(),
         grappling_kraken(),
@@ -220,7 +229,7 @@ fn revenge_of_the_rats() -> CardDefinition {
             // Counted as it resolves; cast with flashback, the spell is on
             // the stack and not among the creature cards (CR 702.34a).
             spell_effects: vec![Effect::CreateToken {
-                token: "token.rat".into(),
+                token: "token.black_rat".into(),
                 count: EffectValue::GraveyardMatching {
                     base: 0,
                     predicate: CardPredicate::creature(),
@@ -433,14 +442,14 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                                 Modification::GrantTriggered(Box::new(Ability::Triggered {
                                     condition: TriggerCondition::DealsCombatDamage {
                                         subject: TriggerSubject::This,
-                                        to: Actor::AnyPlayer,
+                                        to: Some(Actor::AnyPlayer),
                                         per: Per::Object,
                                     },
                                     intervening_if: None,
-                                    effects: vec![Effect::ExileTopCardsToPlay {
-                                        count: 1,
-                                        until: PlayWindow::ThisTurn,
-                                    }],
+                                    effects: vec![Effect::exile_top_to_play(
+                                        1,
+                                        PlayWindow::ThisTurn,
+                                    )],
                                 })),
                             ),
                         ],
@@ -514,7 +523,7 @@ fn drake_hatcher() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     effects: vec![Effect::put_counters(
@@ -1784,7 +1793,7 @@ fn archmage_of_runes() -> CardDefinition {
                 first_on_own_turn: false,
                 predicate: instant_or_sorcery(),
                 condition: Condition::Always,
-                generic: 1,
+                generic: 1.into(),
             })],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::casts(Actor::You, instant_or_sorcery()),
@@ -2280,7 +2289,7 @@ fn eager_trufflesnout() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::This,
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 effects: vec![Effect::create_tokens("token.food", 1)],
@@ -3279,6 +3288,296 @@ fn spinner_of_souls() -> CardDefinition {
                 }],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn zul_ashur_lich_lord() -> CardDefinition {
+    let text_box = "Ward—Pay 2 life. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays 2 life.)\n{T}: You may cast target Zombie creature card from your graveyard this turn.";
+    CardDefinition {
+        key: "fdn.zul_ashur_lich_lord",
+        scryfall_id: "34ad4fdb-9805-45b3-ba20-e47a15d6ff38",
+        printed: PrintedCharacteristics {
+            name: "Zul Ashur, Lich Lord".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Zombie".into(), "Warlock".into()],
+            power: Some(2),
+            toughness: Some(2),
+            statics: vec![StaticAbility::Ward(PaymentCost::Life(2))],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::GrantGraveyardCastThisTurn {
+                    flashback: false,
+                    target: TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            subtype: Some("Zombie".into()),
+                            ..CardPredicate::creature()
+                        },
+                    },
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn high_fae_trickster() -> CardDefinition {
+    let rules_text = "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nYou may cast spells as though they had flash.";
+    CardDefinition {
+        key: "fdn.high_fae_trickster",
+        scryfall_id: "7f1b93ea-1ec1-4010-9343-765742f5088b",
+        printed: PrintedCharacteristics {
+            name: "High Fae Trickster".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Faerie".into(), "Wizard".into()],
+            power: Some(4),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            statics: vec![StaticAbility::CastSpellsAsThoughFlash(
+                CardPredicate::default(),
+            )],
+            text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn suspicious_shambler() -> CardDefinition {
+    let rules_text = "{4}{B}{B}, Exile this card from your graveyard: Create two 2/2 black Zombie creature tokens. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fdn.suspicious_shambler",
+        scryfall_id: "3d2c5345-eb55-4bca-9183-b4e1404405f8",
+        printed: PrintedCharacteristics {
+            name: "Suspicious Shambler".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Zombie".into()],
+            power: Some(4),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Graveyard,
+                mana_cost: ManaCost::parse("{4}{B}{B}"),
+                sorcery_timing: true,
+                exile_source: true,
+                effects: vec![Effect::create_tokens("token.zombie", EffectValue::Fixed(2))],
+                ..Default::default()
+            }],
+            text_box: rules_text.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn quilled_greatwurm() -> CardDefinition {
+    let text_box = "Trample\nWhenever a creature you control deals combat damage during your turn, put that many +1/+1 counters on it. (It must survive to get the counters.)\nYou may cast this card from your graveyard by removing six counters from among creatures you control in addition to paying its other costs.";
+    CardDefinition {
+        key: "fdn.quilled_greatwurm",
+        scryfall_id: "31b60531-3d33-4e66-923a-29008716b15c",
+        printed: PrintedCharacteristics {
+            name: "Quilled Greatwurm".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wurm".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::YourTurn,
+                    condition: Box::new(TriggerCondition::DealsCombatDamage {
+                        subject: TriggerSubject::you_control(CardPredicate::creature()),
+                        to: None,
+                        per: Per::Object,
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Triggering,
+                    CounterKind::PlusOnePlusOne,
+                    EffectValue::X,
+                )],
+            }],
+            statics: vec![StaticAbility::CastFromGraveyardRemovingCounters(6)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn redcap_gutter_dweller() -> CardDefinition {
+    let text_box = "Menace\nWhen this creature enters, create two 1/1 black Rat creature tokens with \"This token can't block.\"\nAt the beginning of your upkeep, you may sacrifice another creature. If you do, put a +1/+1 counter on this creature and exile the top card of your library. You may play that card this turn.";
+    CardDefinition {
+        key: "fdn.redcap_gutter_dweller",
+        scryfall_id: "c6c7f55a-bcc7-4ca3-853d-fc6e260d9429",
+        printed: PrintedCharacteristics {
+            name: "Redcap Gutter-Dweller".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Warrior".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens("token.rat", 2)],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                    effects: vec![
+                        Effect::may_sacrifice(CardPredicate::creature(), true),
+                        Effect::if_you_do(vec![
+                            Effect::put_counters(
+                                ObjectSelector::This,
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            ),
+                            Effect::exile_top_to_play(1, PlayWindow::ThisTurn),
+                        ]),
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn loot_exuberant_explorer() -> CardDefinition {
+    let text_box = "You may play an additional land on each of your turns.\n{4}{G}{G}, {T}: Look at the top six cards of your library. You may reveal a creature card with mana value less than or equal to the number of lands you control from among them and put it onto the battlefield. Put the rest on the bottom in a random order.";
+    CardDefinition {
+        key: "fdn.loot_exuberant_explorer",
+        scryfall_id: "09980ce6-425b-4e03-94d0-0f02043cb361",
+        printed: PrintedCharacteristics {
+            name: "Loot, Exuberant Explorer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Beast".into(), "Noble".into()],
+            power: Some(1),
+            toughness: Some(4),
+            statics: vec![StaticAbility::AdditionalLandPlay],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}{G}{G}"),
+                tap_source: true,
+                effects: vec![Effect::LookAndSelect {
+                    random_order: true,
+                    reveal: true,
+                    to_battlefield: true,
+                    look: EffectValue::Fixed(6),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: CardPredicate::creature(),
+                    max_mana_value: Some(Box::new(EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        },
+                    })),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn tinybones_bauble_burglar() -> CardDefinition {
+    let text_box = "Whenever an opponent discards a card, exile it from their graveyard with a stash counter on it.\nDuring your turn, you may play cards you don't own with stash counters on them from exile, and mana of any type can be spent to cast those spells.\n{3}{B}, {T}: Each opponent discards a card. Activate only as a sorcery.";
+    CardDefinition {
+        key: "fdn.tinybones_bauble_burglar",
+        scryfall_id: "ff3d85bc-ef2d-4251-baf4-a14bd0cee61e",
+        printed: PrintedCharacteristics {
+            name: "Tinybones, Bauble Burglar".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Skeleton".into(), "Rogue".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Performs {
+                    who: Actor::Opponent,
+                    any_of: vec![KeywordAction::Discard],
+                },
+                effects: vec![Effect::Move {
+                    unrevealed: false,
+                    library_end: None,
+                    what: ObjectSelector::Triggering,
+                    to: ZoneType::Exile,
+                    tapped: false,
+                    transformed: false,
+                    under: None,
+                    with_counter: Some(CounterKind::Stash),
+                    linked: None,
+                }],
+            }],
+            statics: vec![StaticAbility::PlayUnownedExiledWithCounter(
+                CounterKind::Stash,
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{B}"),
+                tap_source: true,
+                sorcery_timing: true,
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    effects: vec![Effect::discard()],
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sphinx_of_forgotten_lore() -> CardDefinition {
+    let text = "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nWhenever this creature attacks, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to that card's mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)";
+    CardDefinition {
+        key: "fdn.sphinx_of_forgotten_lore",
+        scryfall_id: "af6e46b8-62ed-4bca-ba38-a821f225b59f",
+        printed: PrintedCharacteristics {
+            name: "Sphinx of Forgotten Lore".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Sphinx".into()],
+            power: Some(3),
+            toughness: Some(3),
+            text_box: text.into(),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::GrantGraveyardCastThisTurn {
+                    flashback: true,
+                    target: TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                            ..Default::default()
+                        },
+                    },
+                }],
+            }],
             ..Default::default()
         },
         ..Default::default()

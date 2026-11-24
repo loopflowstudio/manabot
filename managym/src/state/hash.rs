@@ -75,7 +75,7 @@ struct CanonicalTurn<'a> {
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
-    spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
+    spells_cast: [Vec<crate::flow::turn::RecordedCast>; 2],
     #[serde(skip_serializing_if = "crate::flow::turn::DamageHistory::is_empty")]
     damage_pairs: &'a crate::flow::turn::DamageHistory,
     #[serde(
@@ -211,11 +211,17 @@ struct CanonicalMatchState<'a> {
     trigger_placement: Option<&'a crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    /// Omitted when empty, keeping hashes of states without them unchanged.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    object_counters: Vec<(ObjectId, &'a crate::state::permanent::Counters)>,
     effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
     #[serde(skip_serializing_if = "crate::flow::cast_permission::CastPermissions::is_empty")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cast_caller: Option<&'a crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
@@ -251,9 +257,11 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            object_counters,
             effects,
             cast_permissions,
             suspended_decision,
+            cast_caller,
             trigger_enqueue_counter,
             rng,
             id_gen,
@@ -309,9 +317,14 @@ impl<'a> CanonicalMatchState<'a> {
             trigger_placement: trigger_placement.as_deref(),
             delayed_triggers,
             exile_links,
+            object_counters: object_counters
+                .iter()
+                .map(|(&id, counters)| (id, counters))
+                .collect(),
             effects: effects.as_slice(),
             cast_permissions,
             suspended_decision,
+            cast_caller: cast_caller.as_deref(),
             trigger_enqueue_counter: *trigger_enqueue_counter,
             rng_probe,
             allocation_watermark: id_gen.watermark(),

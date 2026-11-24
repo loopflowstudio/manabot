@@ -10,6 +10,8 @@ from unittest.mock import Mock
 from blake3 import blake3
 import pytest
 
+from manabot.env.observation import ObservationSpace, column, encode_observation
+from manabot.semantic.text_observation import capture_text_decision
 from manabot.sim import sim
 from manabot.verify.text_observation import reset_to_first_main
 import managym
@@ -35,6 +37,35 @@ def setup(decklists: Literal["open", "closed"] = "closed") -> managym.GameSetup:
         ],
         decklists=decklists,
     )
+
+
+def cold_restore(env: managym.Env) -> managym.Env:
+    replay = env.snapshot().to_replay_json()
+    return managym.GameSnapshot.from_replay_json(replay).restore()
+
+
+def assert_replayed_command(
+    env: managym.Env, restored: managym.Env, command: str
+) -> None:
+    transition = env.execute_semantic_command_json(command)
+    assert restored.execute_semantic_command_json(command) == transition
+
+
+def decision_frame(env: managym.Env) -> DecisionFrame:
+    return DecisionFrame.from_json(env.semantic_decision_frame_json())
+
+
+def replay_priority_until_stack_empty(env: managym.Env, restored: managym.Env) -> None:
+    for _ in range(2):
+        if not env.observation_for_player(0).stack_objects:
+            return
+        frame = decision_frame(env)
+        passed = next(o for o in frame.offers if o["verb"] == "pass_priority")
+        command = Command(
+            f"pass-{frame.revision}", frame.revision, passed["id"]
+        ).to_json()
+        assert_replayed_command(env, restored, command)
+    assert not env.observation_for_player(0).stack_objects
 
 
 def test_reseeded_replay_preserves_the_reset_seed_and_both_reseeds() -> None:
@@ -84,9 +115,7 @@ def test_snapshot_replays_commands_with_issued_object_bindings() -> None:
         assert isinstance(action, int)
         unissued.step(action)
     assert unissued.state_digest() == source.state_digest()
-    unissued_cold = managym.GameSnapshot.from_replay_json(
-        unissued.snapshot().to_replay_json()
-    ).restore()
+    unissued_cold = cold_restore(unissued)
     with pytest.raises(managym.AgentError, match="unknown_object_candidate"):
         unissued_cold.execute_semantic_command_json(command)
     # Execute the already-issued address without asking the branch for a frame.
@@ -374,7 +403,7 @@ def test_snapshot_walk_reissues_historical_command_precondition() -> None:
     previous, _ = record_until_object_candidate(env, capture)
     capture.close()
     env.step(0)
-    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    frame = decision_frame(env)
     env.execute_semantic_command_json(
         Command(
             "later",
@@ -643,6 +672,389 @@ def test_standalone_snapshot_replay_and_unterminated_journal_row(
         assert records_from_source(journal) == []
 
 
+def test_pending_cast_payment_command_survives_save_and_reload() -> None:
+    env = managym.Env(seed=42)
+    deck = {"Mountain": 16, "Forest": 16, "Gray Ogre": 16}
+    env.reset(
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    )
+    for _ in range(32):
+        actor = env.current_agent_index()
+        assert actor is not None
+        actions = env.observation_for_player(actor).action_space.actions
+        taps = [
+            i
+            for i, action in enumerate(actions)
+            if action.action_type == managym.ActionEnum.TAP_FOR_COST
+        ]
+        if taps:
+            break
+        index = next(
+            (
+                i
+                for kind in (
+                    managym.ActionEnum.PRIORITY_PLAY_LAND,
+                    managym.ActionEnum.PRIORITY_CAST_SPELL,
+                )
+                for i, action in enumerate(actions)
+                if action.action_type == kind
+            ),
+            0,
+        )
+        env.step(index)
+    else:
+        pytest.fail("Gray Ogre never reached manual mana payment")
+    frame = decision_frame(env)
+    command = Command(
+        "tap-source", frame.revision, frame.offers[taps[0]]["id"]
+    ).to_json()
+    restored = cold_restore(env)
+    for branch in (env, restored):
+        branch.execute_semantic_command_json(command)
+    assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_pending_adventure_target_command_survives_cold_restore() -> None:
+    env = managym.Env(seed=42)
+    deck = {
+        "Mountain": 24,
+        "Gray Ogre": 8,
+        "Lightning Bolt": 4,
+        "Smaug, the Great Calamity": 8,
+    }
+    env.reset(
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")])
+    )
+    for _ in range(320):
+        frame = decision_frame(env)
+        adventure = next(
+            (offer for offer in frame.offers if "Spew Flame" in offer["label"]), None
+        )
+        if adventure is not None:
+            obs = env.observation_for_player(frame.actor)
+            ogres = [
+                p
+                for p in [*obs.agent_permanents, *obs.opponent_permanents]
+                if p.characteristics.name == "Gray Ogre"
+            ]
+            if len(ogres) >= 2:
+                env.execute_semantic_command_json(
+                    Command("adventure", frame.revision, adventure["id"]).to_json()
+                )
+                target_frame = decision_frame(env)
+                assert all(
+                    offer["verb"] == "choose_target" for offer in target_frame.offers
+                )
+                break
+
+        def priority(index: int) -> int:
+            offer = frame.offers[index]
+            if offer["verb"] == "play_land":
+                return 0
+            if (offer.get("public_commitment") or {}).get("card") == "Gray Ogre":
+                return 1
+            if offer["verb"] == "pass_priority":
+                return 2
+            return 3
+
+        chosen = min(range(len(frame.offers)), key=priority)
+        env.step(chosen)
+    else:
+        pytest.fail("ordinary play never reached Spew Flame's target decision")
+
+    command = Command(
+        "target", target_frame.revision, target_frame.offers[0]["id"]
+    ).to_json()
+    restored = cold_restore(env)
+    assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+    before_payment = {
+        p.id
+        for p in env.observation_for_player(frame.actor).agent_permanents
+        if p.tapped
+    }
+    assert_replayed_command(env, restored, command)
+    for branch in (env, restored):
+        observation = branch.observation_for_player(frame.actor)
+        paid = [
+            p
+            for p in observation.agent_permanents
+            if p.tapped and p.id not in before_payment
+        ]
+        assert len(paid) == 5 and all(
+            p.characteristics.name == "Mountain" for p in paid
+        )
+        [spell] = observation.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Spew Flame"
+        assert spell.targets[0].permanent_id in {ogre.id for ogre in ogres}
+    assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_pending_exude_toxin_x_replays_payment_and_resolution_shuffle() -> None:
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Swamp": 24, "Scavenger Regent": 12}),
+                managym.PlayerConfig("b", {"Mountain": 24, "Lightning Bolt": 12}),
+            ]
+        )
+    )
+    for _ in range(160):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(0)
+        toxin = next((o for o in frame.offers if "Exude Toxin" in o["label"]), None)
+        if toxin and sum(not p.tapped for p in obs.agent_permanents) >= 3:
+            env.execute_semantic_command_json(
+                Command("omen", frame.revision, toxin["id"]).to_json()
+            )
+            break
+        index = next(
+            (
+                i
+                for verb in ("play_land", "pass_priority")
+                for i, offer in enumerate(frame.offers)
+                if offer["verb"] == verb
+            ),
+            0,
+        )
+        env.step(index)
+    else:
+        pytest.fail("ordinary play never offered the payable X spell")
+
+    pending_frame = env.semantic_decision_frame_json()
+    frame = DecisionFrame.from_json(pending_frame)
+    zero_branch = env.snapshot().restore()
+    zero = next(o for o in frame.offers if "X = 0" in o["label"])
+    zero_branch.execute_semantic_command_json(
+        Command("announce-zero", frame.revision, zero["id"]).to_json()
+    )
+    payment = decision_frame(zero_branch)
+    pay = next(offer for offer in payment.offers if offer["verb"] == "pay_cost")
+    zero_branch.execute_semantic_command_json(
+        Command("pay-two", payment.revision, pay["id"]).to_json()
+    )
+    [zero_spell] = zero_branch.observation_for_player(0).stack_objects
+    assert zero_spell.effective_mana_value == 2
+    assert (
+        sum(p.tapped for p in zero_branch.observation_for_player(0).agent_permanents)
+        == 2
+    )
+    assert env.semantic_decision_frame_json() == pending_frame
+
+    [one] = [offer for offer in frame.offers if "X = 1" in offer["label"]]
+    command = Command("announce-one", frame.revision, one["id"]).to_json()
+    restored = cold_restore(env)
+    assert_replayed_command(env, restored, command)
+    before = json.loads(env.search_witness_json())["rng_continuation"]
+    space = ObservationSpace()
+    for branch in (env, restored):
+        assert "cost {X}{B}{B}; mana value 3" in capture_text_decision(branch).text
+        for viewer in (0, 1):
+            obs = branch.observation_for_player(viewer)
+            row = encode_observation(space, obs)["stack"][0]
+            assert row[column("stack", "mana_value")] == pytest.approx(0.2)
+            assert row[column("stack", "effective_mana_value")] == pytest.approx(0.3)
+            [item] = obs.stack_objects
+            assert item.characteristics is not None
+            assert item.characteristics.name == "Exude Toxin"
+            assert item.characteristics.mana_cost.mana_value == 2
+            assert item.effective_mana_value == 3
+        assert (
+            sum(p.tapped for p in branch.observation_for_player(0).agent_permanents)
+            == 3
+        )
+    replay_priority_until_stack_empty(env, restored)
+    assert json.loads(env.search_witness_json())["rng_continuation"] != before
+    assert env.search_witness_json() == restored.search_witness_json()
+    assert env.state_digest() == restored.state_digest()
+
+
+def test_etali_resumes_once_from_a_cold_charring_bite_target() -> None:
+    etali = "Etali, Primal Storm"
+    env = managym.Env(seed=2)
+    env.enable_statistics()
+    env.enable_exposure_capture()
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig("a", {"Mountain": 28, etali: 8, "Gray Ogre": 12}),
+                managym.PlayerConfig(
+                    "b", {"Twinmaw Stormbrood": 24, "Lightning Bolt": 4, "Mountain": 10}
+                ),
+            ]
+        )
+    )
+
+    def completed() -> int:
+        stats = env.statistics()
+        assert stats is not None
+        count = next(row.resolutions for row in stats.cards if row.name == etali)
+        assert count is not None
+        return count
+
+    for _ in range(120):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(frame.actor)
+        bite = next(
+            (o for o in frame.offers if o["label"] == "Cast Charring Bite"), None
+        )
+        if bite and len(frame.offers) == 4:
+            before = completed()
+            env.execute_semantic_command_json(
+                Command("bite", frame.revision, bite["id"]).to_json()
+            )
+            break
+        etalis = {p.id for p in obs.agent_permanents if p.characteristics.name == etali}
+        if frame.offers[0]["verb"] == "declare_attacker":
+            index = next(
+                i
+                for i, a in enumerate(obs.action_space.actions)
+                if a.declared == bool(etalis.intersection(a.focus))
+            )
+        else:
+
+            def preference(index: int) -> int:
+                offer = frame.offers[index]
+                card = (offer.get("public_commitment") or {}).get("card")
+                if offer["verb"] == "play_land":
+                    return 0
+                if offer["verb"] == "cast" and card == etali and not etalis:
+                    return 1
+                if offer["verb"] == "cast" and card == "Gray Ogre":
+                    return 2
+                return 3 if offer["verb"] == "pass_priority" else 4
+
+            index = min(range(len(frame.offers)), key=preference)
+        env.step(index)
+    else:
+        pytest.fail("Etali never offered both exiled cards")
+
+    frame = decision_frame(env)
+    assert len(frame.offers) > 1 and all(
+        o["verb"] == "choose_target" for o in frame.offers
+    )
+    restored = cold_restore(env)
+    fork = env.snapshot().restore()
+    assert decision_frame(restored) == frame
+    target = frame.offers[0]["id"]
+    with pytest.raises(managym.AgentError, match="revision|stale"):
+        restored.execute_semantic_command_json(
+            Command("stale", frame.revision - 1, target).to_json()
+        )
+    assert restored.search_witness_json() == fork.search_witness_json()
+    command = Command("target", frame.revision, target).to_json()
+    assert_replayed_command(env, restored, command)
+    assert decision_frame(fork) == frame
+    remaining = decision_frame(env)
+    assert decision_frame(restored) == remaining
+    assert [o["verb"] for o in remaining.offers] == ["select_card", "decline"]
+    assert completed() == before
+    command = Command(
+        "cast-ogre", remaining.revision, remaining.offers[0]["id"]
+    ).to_json()
+    assert_replayed_command(env, restored, command)
+    assert completed() == before + 1
+    assert [
+        s.characteristics.name for s in env.observation_for_player(0).stack_objects
+    ] == ["Gray Ogre", "Charring Bite"]
+    assert restored.search_witness_json() == env.search_witness_json()
+
+
+def test_transferred_seed_suture_replays_payment_and_surviving_link() -> None:
+    angel = "Blossom-Blessed Angel"
+    medic = "Emergency Phytomedic"
+    thief = "Agent of Treachery"
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig(
+                    "owner",
+                    {
+                        "Plains": 20,
+                        "Island": 8,
+                        angel: 8,
+                        medic: 8,
+                        "Spectral Sailor": 8,
+                    },
+                ),
+                managym.PlayerConfig("caster", {"Island": 20, "Plains": 12, thief: 12}),
+            ]
+        )
+    )
+    for _ in range(400):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(0)
+        names = {p.characteristics.name for p in obs.agent_permanents}
+        suture = next(
+            (
+                o
+                for o in frame.offers
+                if o["verb"] == "cast" and "Seed Suture" in o["label"]
+            ),
+            None,
+        )
+        if frame.actor == 1 and suture:
+            break
+        acting = env.observation_for_player(frame.actor)
+        angels = {p.id for p in obs.agent_permanents if p.characteristics.name == angel}
+
+        def preference(index: int) -> int:
+            offer = frame.offers[index]
+            card = (offer.get("public_commitment") or {}).get("card")
+            if offer["verb"] == "play_land":
+                return 0
+            if offer["verb"] == "cast" and (
+                (card in (angel, medic) and card not in names)
+                or (card == thief and {angel, medic} <= names)
+            ):
+                return 1
+            if offer["verb"] == "choose_target" and angels.intersection(
+                acting.action_space.actions[index].focus
+            ):
+                return 2
+            return 3 if offer["verb"] == "pass_priority" else 4
+
+        env.step(min(range(len(frame.offers)), key=preference))
+    else:
+        pytest.fail("ordinary play never offered the transferred Angel's Seed Suture")
+
+    restored = cold_restore(env)
+    assert restored.semantic_decision_frame_json() == env.semantic_decision_frame_json()
+    before = env.observation_for_player(1)
+    untapped = {p.id for p in before.agent_permanents if not p.tapped}
+    command = Command("cast-suture", frame.revision, suture["id"]).to_json()
+    assert_replayed_command(env, restored, command)
+    target = decision_frame(env)
+    command = Command("target", target.revision, target.offers[0]["id"]).to_json()
+    assert_replayed_command(env, restored, command)
+    payment = decision_frame(env)
+    pay = next(o for o in payment.offers if o["verb"] == "pay_cost")
+    command = Command("pay", payment.revision, pay["id"]).to_json()
+    assert_replayed_command(env, restored, command)
+    for branch in (env, restored):
+        obs = branch.observation_for_player(1)
+        [paid] = [p for p in obs.agent_permanents if p.tapped and p.id in untapped]
+        assert paid.characteristics.name == "Plains"
+        [spell] = obs.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Seed Suture"
+        assert spell.controller_id == obs.agent.id
+        [source] = [
+            p for p in obs.opponent_permanents if p.characteristics.name == medic
+        ]
+        [copy] = [
+            c
+            for c in obs.opponent_cards
+            if c.cast_permissions and c.characteristics.name == "Seed Suture"
+        ]
+        assert copy.cast_permissions[0].follows_source_controller
+        assert copy.cast_permissions[0].source_permanent_id == source.id
+        assert copy.cast_permissions[0].player_id == obs.opponent.id
+    assert restored.search_witness_json() == env.search_witness_json()
+
+
 def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
     env = managym.Env(seed=23)
     decks = [
@@ -737,3 +1149,99 @@ def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
 def test_simulation_rejects_unknown_terminal_result(info: dict[str, object]) -> None:
     with pytest.raises(ValueError, match="native winner or draw"):
         sim.determine_outcome(True, info)
+
+
+def test_waypoint_target_replays_payment_and_new_prepared_copy() -> None:
+    waypoint = "Skycoach Waypoint"
+    creature = "Stingerquill Voxmancer"
+    env = managym.Env(seed=42)
+    env.reset(
+        managym.GameSetup(
+            [
+                managym.PlayerConfig(
+                    "caster", {waypoint: 12, "Swamp": 20, creature: 10}
+                ),
+                managym.PlayerConfig("opponent", {"Mountain": 20, "Wall of Stone": 10}),
+            ],
+            mana_payment=("auto", "auto"),
+        )
+    )
+    for _ in range(350):
+        frame = decision_frame(env)
+        obs = env.observation_for_player(frame.actor)
+        lands = {p.id for p in obs.agent_permanents if p.characteristics.name == waypoint}
+        linked = {
+            grant.source_permanent_id
+            for card in obs.agent_cards
+            for grant in card.cast_permissions
+        }
+        unprepared = {
+            p.id
+            for p in obs.agent_permanents
+            if p.characteristics.name == creature and p.id not in linked
+        }
+        activation = next(
+            (
+                i
+                for i, offer in enumerate(frame.offers)
+                if offer["verb"] == "activate_ability"
+                and lands.intersection(
+                    obs.action_space.actions[i].focus
+                )
+            ),
+            None,
+        )
+        if frame.actor == 0 and activation is not None and unprepared:
+            env.step(activation)
+            target = decision_frame(env)
+            choices = env.observation_for_player(0).action_space.actions
+            index, source = next(
+                (i, candidate)
+                for i, action in enumerate(choices)
+                for candidate in action.focus
+                if candidate in unprepared
+            )
+            ready = {p.id for p in obs.agent_permanents if not p.tapped}
+            break
+
+        def preference(index: int) -> int:
+            offer = frame.offers[index]
+            name = (offer.get("public_commitment") or {}).get("card")
+            if offer["verb"] == "play_land":
+                return 0 if (name == waypoint) == (not lands) else 1
+            if offer["verb"] == "cast" and name in {creature, "Wall of Stone"}:
+                return 2
+            if offer["verb"] == "cast" and name == "Vicious Verse":
+                return 3
+            return 4 if offer["verb"] == "pass_priority" else 5
+
+        env.step(min(range(len(frame.offers)), key=preference))
+    else:
+        pytest.fail("no Waypoint activation with an unprepared Voxmancer")
+
+    restored = cold_restore(env)
+    assert decision_frame(restored) == target
+    command = Command("prepare", target.revision, target.offers[index]["id"]).to_json()
+    assert_replayed_command(env, restored, command)
+    paid = [
+        p
+        for p in env.observation_for_player(0).agent_permanents
+        if p.id in ready and p.tapped
+    ]
+    assert len(paid) == 4
+    assert any(p.characteristics.name == waypoint for p in paid)
+
+    def linked_verse(branch: managym.Env, viewer: int) -> int:
+        obs = branch.observation_for_player(viewer)
+        [copy] = [
+            card
+            for card in [*obs.agent_cards, *obs.opponent_cards]
+            if any(g.source_permanent_id == source for g in card.cast_permissions)
+            and card.characteristics.name == "Vicious Verse"
+        ]
+        return copy.id
+
+    replay_priority_until_stack_empty(env, restored)
+    for viewer in (0, 1):
+        assert linked_verse(env, viewer) == linked_verse(restored, viewer)
+    assert env.search_witness_json() == restored.search_witness_json()

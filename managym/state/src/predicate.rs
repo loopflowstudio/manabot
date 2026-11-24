@@ -208,6 +208,17 @@ impl CardPredicate {
             .is_none_or(|named| !named.is_empty() && named == name)
     }
 
+    /// Match the selected spell's printed characteristics before it goes on the stack.
+    pub fn matches_printed_spell(&self, spell: &PrintedCharacteristics, kind: ObjectKind) -> bool {
+        self.matches_printing(
+            spell,
+            kind,
+            spell.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
+            spell.power.unwrap_or(0),
+            &[],
+        )
+    }
+
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
     pub fn matches_printing(

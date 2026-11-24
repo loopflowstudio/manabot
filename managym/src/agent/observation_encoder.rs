@@ -16,12 +16,12 @@ use std::{
 
 use crate::{
     agent::observation::{
-        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
-        RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
+        CardData, CastPermissionData, ContinuousEffectData, EventData, Observation, PermanentData,
+        PlayerData, RestrictedManaData, StackObjectData, StackObjectKindData, TurnData,
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
-    state::mana::ManaRestriction,
+    state::mana::{ManaCost, ManaRestriction},
 };
 
 // Feature widths. Column indices, names and value encodings live in
@@ -234,7 +234,14 @@ impl ObservationEncoderConfig {
     }
 
     pub fn relations_len(&self) -> usize {
-        super::continuation::RELATION_ROWS * super::continuation::RELATION_DIM
+        super::continuation::RELATION_ROWS * self.relation_dim()
+    }
+
+    pub fn relation_dim(&self) -> usize {
+        match self.layout {
+            InputLayout::Legacy => super::legacy_input::RELATION_DIM,
+            InputLayout::OneToken => super::continuation::RELATION_DIM,
+        }
     }
 
     /// Two seats of decklist rows.
@@ -1147,6 +1154,7 @@ pub fn encode_rows(
         &obs.continuation,
         obs.agent.player_index as usize,
         &objects,
+        config.relation_dim(),
         out,
     )?;
 
@@ -1305,7 +1313,7 @@ const RESTRICTED_SUBTYPE_COLUMNS: [&str; 3] = ["Lesson", "Shrine", "Ally"];
 /// overlapping Lesson and Shrine columns solve uniquely for these classes and
 /// no others: a Lesson-or-Ally class beside a Shrine class sums like a Lesson
 /// class beside a Shrine-or-Ally one. Powerstone mana has its own v10 columns.
-fn representable(restriction: &ManaRestriction) -> bool {
+pub(crate) fn representable(restriction: &ManaRestriction) -> bool {
     static REPRESENTABLE: LazyLock<[ManaRestriction; 4]> = LazyLock::new(|| {
         [
             ManaRestriction::spell(["Lesson"]),
@@ -1512,14 +1520,15 @@ fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, o
     out[card::IS_TOKEN] = flag(card.is_token);
     out[card::IS_ALLY] = flag(card.is_ally);
     out[card::IS_LESSON] = flag(card.is_lesson);
-    out[card::HAS_WARD] = flag(card.ward_cost > 0 || card.ward_life > 0);
+    out[card::HAS_WARD] =
+        flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
     out[card::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
     out[card::HAS_KICKER] = flag(card.kicker_cost > 0);
     out[card::KICKER_COST] = Scalar(card.kicker_cost as f32 / 10.0);
     out[card::HEXPROOF] = flag(card.keywords.hexproof);
     out[card::INDESTRUCTIBLE] = flag(card.keywords.indestructible);
     out[card::IS_LEGENDARY] = flag(card.is_legendary);
-    if let Some(permission) = &card.cast_permission {
+    if let Some(permission) = card.cast_permissions.first() {
         out[card::PERMISSION] = Integer(1);
         out[card::PERMISSION_IS_MINE] = flag(permission.player_id == context.viewer_id);
         if let Some(cost) = &permission.cost {
@@ -1610,7 +1619,8 @@ fn encode_permanent_features(
         out[permanent::IS_TOKEN] = flag(permanent.is_token);
         out[permanent::IS_ALLY] = flag(card.is_ally);
         out[permanent::IS_LESSON] = flag(card.is_lesson);
-        out[permanent::HAS_WARD] = flag(card.ward_cost > 0 || card.ward_life > 0);
+        out[permanent::HAS_WARD] =
+            flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
         out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
@@ -1645,7 +1655,12 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
         out[stack::HAS_X] = Integer(1);
         out[stack::X] = Scalar(x as f32 / 10.0);
     }
+    if let Some(value) = object.effective_mana_value() {
+        out[stack::EFFECTIVE_MANA_VALUE] = Scalar(f32::from(value) / 10.0);
+    }
     out[stack::KICKED] = flag(object.kicked);
+    out[stack::FROM_PREPARED] = flag(object.from_prepared);
+    out[stack::FLASHBACK] = flag(object.flashback);
     out[stack::MANA_SPENT] = Integer(i64::from(object.mana_spent));
     out[stack::SOURCE_POWER] = Scalar(object.source_power.unwrap_or_default() as f32 / 10.0);
     out[stack::PAID_AMOUNT] = Scalar(object.paid_amount.unwrap_or_default() as f32 / 10.0);
@@ -1681,6 +1696,11 @@ pub const POOLED_MANA: &str = "PooledMana";
 /// the `ward_cost` column cannot ("Ward—Pay 7 life.").
 pub const WARD: &str = "Ward";
 
+/// Effect program labels for overlapping grants and consumed type allowances.
+pub const PLAY_GRANT: &str = "CastPermission::Grant";
+pub const PLAY_GRANT_SOURCE: &str = "CastPermission::GrantSource";
+pub const SPENT_TYPE: &str = "CastPermission::SpentType";
+
 /// One fact row before its object join and timestamp rank are known.
 struct Fact {
     object: i32,
@@ -1691,8 +1711,9 @@ struct Fact {
     effect: Option<(i64, i32, Option<i32>)>,
 }
 
-/// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
-/// object order (agent, opponent, agent permanents, opponent permanents).
+/// The facts `PlayerData`, `CardData` and `PermanentData` state as open
+/// vocabularies, in object order (agent, opponent, agent cards, opponent
+/// cards, agent permanents, opponent permanents).
 fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: i64| {
@@ -1713,6 +1734,19 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
                 name_value(&format!("CounterKind::{kind}")),
                 i64::from(*count),
             );
+        }
+    }
+    // Counters on a visible card off the battlefield ("with a stash counter").
+    if layout == InputLayout::OneToken {
+        for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+            for (kind, count) in &card.counters {
+                push(
+                    card.id,
+                    FactKind::Counter,
+                    name_value(&format!("CounterKind::{kind}")),
+                    i64::from(*count),
+                );
+            }
         }
     }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
@@ -1875,6 +1909,9 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             });
         }
     }
+    if layout == InputLayout::OneToken {
+        permission_facts(obs, &mut out);
+    }
     // Spend effects and combat expiry: one program per pooled class on its player.
     for player in [&obs.agent, &obs.opponent] {
         for class in &player.pooled_mana_classes {
@@ -1891,6 +1928,168 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     out
+}
+
+/// One play grant's terms as learning tokens. The TLA terms are a fixed
+/// tuple; later terms follow it only when set, in a stable order (adventure,
+/// source-controller, flashback), and the named [`PlayGrantExtension`]
+/// closes the sequence, so a grant without later terms keeps the tokens it
+/// had when those terms did not exist.
+struct PlayGrantTerms<'a> {
+    terms: PlayGrantBase<'a>,
+    on_adventure: bool,
+    follows_source_controller: bool,
+    flashback: bool,
+    extension: Option<PlayGrantExtension<'a>>,
+}
+
+type PlayGrantBase<'a> = (
+    bool,
+    &'a Option<ManaCost>,
+    bool,
+    bool,
+    bool,
+    Option<u32>,
+    bool,
+    bool,
+    bool,
+    bool,
+    bool,
+);
+
+/// Grant terms added after the positional tuple, each omitted when unset.
+#[derive(serde::Serialize)]
+struct PlayGrantExtension<'a> {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    prepared: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    face_down: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    condition: Option<&'a str>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    play_lands: bool,
+}
+
+impl<'a> PlayGrantTerms<'a> {
+    fn of(grant: &'a CastPermissionData, viewer: i32) -> Self {
+        let extension =
+            (grant.prepared || grant.face_down || grant.condition.is_some() || grant.play_lands)
+                .then_some(PlayGrantExtension {
+                    prepared: grant.prepared,
+                    face_down: grant.face_down,
+                    condition: grant.condition.as_deref(),
+                    play_lands: grant.play_lands,
+                });
+        Self {
+            terms: (
+                grant.player_id == viewer,
+                &grant.cost,
+                grant.this_turn,
+                grant.through_next_turn,
+                grant.own_turn_only,
+                grant.after_turn,
+                grant.source_permanent_id.is_some(),
+                grant.flash,
+                grant.any_mana,
+                grant.waterbend,
+                grant.foretold,
+            ),
+            on_adventure: grant.on_adventure,
+            follows_source_controller: grant.follows_source_controller,
+            flashback: grant.flashback,
+            extension,
+        }
+    }
+
+    /// How many later terms follow the TLA tuple.
+    fn tail(&self) -> usize {
+        if self.extension.is_some() {
+            4
+        } else if self.flashback {
+            3
+        } else if self.follows_source_controller {
+            2
+        } else {
+            usize::from(self.on_adventure)
+        }
+    }
+
+    /// Whether the grant carries terms the card columns do not.
+    fn has_tail(&self) -> bool {
+        self.tail() > 0
+    }
+}
+
+impl serde::Serialize for PlayGrantTerms<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let tail = self.tail();
+        if tail == 0 {
+            return self.terms.serialize(serializer);
+        }
+        let mut tuple = serializer.serialize_tuple(tail + 1)?;
+        tuple.serialize_element(&self.terms)?;
+        for flag in [
+            self.on_adventure,
+            self.follows_source_controller,
+            self.flashback,
+        ]
+        .into_iter()
+        .take(tail.min(3))
+        {
+            tuple.serialize_element(&flag)?;
+        }
+        if let Some(extension) = &self.extension {
+            tuple.serialize_element(extension)?;
+        }
+        tuple.end()
+    }
+}
+
+fn permission_facts(obs: &Observation, out: &mut Vec<Fact>) {
+    // Each occurrence starts at ordinal zero. The owner join identifies the
+    // card or granting permanent; player terms are relative to this viewer.
+    let mut program = |object, label, tokens: &[(u16, i32)]| {
+        for (ordinal, &(kind, value)) in tokens.iter().enumerate() {
+            out.push(Fact {
+                object,
+                kind: FactKind::EffectProgram,
+                id: name_value(label),
+                detail: value,
+                values: [i64::from(kind), ordinal as i64],
+                effect: None,
+            });
+        }
+    };
+    let pack = crate::cards::content_pack::default_content_pack;
+    for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+        for grant in &card.cast_permissions {
+            let overlapping = card.cast_permissions.len() > 1;
+            let terms = PlayGrantTerms::of(grant, obs.agent.id);
+            if !overlapping && grant.source_permanent_id.is_none() && !terms.has_tail() {
+                continue;
+            }
+            let tokens =
+                crate::cards::tokens::rules_tokens(&terms, pack()).expect("public grant terms");
+            program(card.id, PLAY_GRANT, &tokens);
+            // Adjacent source and card programs describe the same occurrence.
+            // A singleton still carries its terms in the existing card columns.
+            if let Some(source) = grant.source_permanent_id {
+                program(source, PLAY_GRANT_SOURCE, &tokens);
+            }
+        }
+    }
+    for player in [&obs.agent, &obs.opponent] {
+        for &(source, kind) in &player.spent_graveyard_types {
+            let terms = (player.id == obs.agent.id, kind);
+            program(
+                source as i32,
+                SPENT_TYPE,
+                &crate::cards::tokens::rules_tokens(&terms, pack())
+                    .expect("public graveyard allowance"),
+            );
+        }
+    }
 }
 
 /// The rows of one copy exception; effect records themselves are
@@ -2060,6 +2259,19 @@ fn encode_actions(
         ) {
             *has_x = Integer(1);
             *value = Scalar(x as f32 / 10.0);
+        }
+        if let Some([has_cost, value, quota]) =
+            row.get_mut(action::HAS_ROUTE_COST..=action::QUOTA_TYPE)
+        {
+            *has_cost = flag(action.route_mana_value.is_some());
+            *value = Scalar(f32::from(action.route_mana_value.unwrap_or_default()) / 10.0);
+            *quota = Integer(i64::from(action.quota_type.unwrap_or_default()));
+        }
+        if let Some(profile) = row.get_mut(action::SPELL_PROFILE) {
+            *profile = Integer(i64::from(action.spell_profile));
+        }
+        if let Some(route) = row.get_mut(action::PLAY_ROUTE) {
+            *route = Integer(i64::from(action.play_route.unwrap_or_default()));
         }
         out.write(Table::Actions, 0, action_index, row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;
@@ -2288,6 +2500,10 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        spell_profile: 0,
+                        route_mana_value: None,
+                        quota_type: None,
+                        play_route: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
@@ -2302,6 +2518,10 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        spell_profile: 0,
+                        route_mana_value: None,
+                        quota_type: None,
+                        play_route: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
@@ -2316,6 +2536,10 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        spell_profile: 0,
+                        route_mana_value: None,
+                        quota_type: None,
+                        play_route: None,
                     },
                 ],
                 focus: Vec::new(),
@@ -2345,6 +2569,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                spent_graveyard_types: vec![],
                 counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
@@ -2384,6 +2609,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                spent_graveyard_types: vec![],
                 counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
@@ -2461,6 +2687,10 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                spell_profile: 0,
+                route_mana_value: None,
+                quota_type: None,
+                play_route: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();
@@ -2524,9 +2754,10 @@ mod tests {
             registry_key: id,
             is_token: false,
             face_down: false,
-            cast_permission: None,
+            cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            counters: Default::default(),
         }
     }
 
@@ -2645,6 +2876,8 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: true,
+                from_prepared: true,
+                flashback: false,
                 spell: Some(crate::agent::observation::SpellData::from_legacy_card(
                     spell,
                 )),
@@ -2667,6 +2900,8 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: false,
+                from_prepared: false,
+                flashback: false,
                 spell: None,
             },
         ];
@@ -2697,6 +2932,8 @@ mod tests {
         assert_eq!(spell_row[stack::DEFINITION], 556.0);
         assert_eq!(spell_row[stack::MODE], 2.0);
         assert_eq!(spell_row[stack::KICKED], 1.0);
+        assert_eq!(spell_row[stack::FROM_PREPARED], 1.0);
+        assert_eq!(spell_row[stack::FLASHBACK], 0.0);
         assert_eq!(spell_row[stack::IS_CREATURE], 1.0);
         let ability_row = &encoded.stack[super::STACK_DIM..2 * super::STACK_DIM];
         assert_eq!(ability_row[stack::IS_MINE], 1.0);
@@ -2773,6 +3010,10 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                spell_profile: 0,
+                route_mana_value: None,
+                quota_type: None,
+                play_route: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

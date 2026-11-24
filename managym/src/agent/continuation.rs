@@ -12,7 +12,7 @@ use crate::state::ability::LibraryEnd;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    agent::observation::{KeywordData, KEYWORD_COUNT},
+    agent::observation::{spell_profile_code, KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, PendingChoice},
@@ -141,6 +141,9 @@ pub struct ContinuationFrame {
     pub mode: Option<usize>,
     pub ability: Option<usize>,
     pub kicked: bool,
+    /// The printed spell an announcement casts, as `spell_profile_code`.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spell_profile: u8,
     pub active_clause: Option<usize>,
     pub targets: Vec<ClauseTarget>,
     pub context: Option<VisibleReference>,
@@ -290,8 +293,7 @@ impl Game {
                 && (self.searches_private_zones(viewer, record.owner)
                     || self.decision_reveals(object, viewer)))
             || self.pending_public_entries().contains(&object);
-        if !visible || (self.is_foretold(object) && !self.shares_information(viewer, record.owner))
-        {
+        if !visible || self.hides_face_down_exile(object, viewer) {
             return VisibleReference::default();
         }
         VisibleReference {
@@ -544,11 +546,19 @@ impl Game {
 
     /// The acting viewer's announcement, resolution and placement frames.
     fn append_private_frames(&self, viewer: PlayerId, frames: &mut Vec<ContinuationFrame>) {
+        let mut parent = None;
+        if let Some(caller) = &self.state.cast_caller {
+            self.append_suspended_frames(caller, viewer, frames, None);
+            parent = frames.len().checked_sub(1);
+        }
         if let Some(pending) = &self.pending_choice {
-            frames.push(self.announcement_frame(pending, viewer));
+            let mut announcement = self.announcement_frame(pending, viewer);
+            announcement.parent = parent;
+            frames.push(announcement);
+            parent = frames.len().checked_sub(1);
         }
         if let Some(suspended) = &self.state.suspended_decision {
-            self.append_suspended_frames(suspended, viewer, frames);
+            self.append_suspended_frames(suspended, viewer, frames, parent);
         }
         if let Some(placement) = &self.state.trigger_placement {
             let parent = frames.len();
@@ -743,19 +753,13 @@ impl Game {
                     }
                     _ => {}
                 }
-                // What this payment has already committed: mana as it was
-                // produced, and the objects that paid, as references. The
-                // source's own printed cost is paid as the payment completes.
-                if !payment.receipt.is_empty() {
-                    super::effect_execution::project_receipt(
-                        self,
-                        &payment.receipt,
-                        None,
-                        viewer,
-                        &mut frame,
-                        false,
-                    );
-                }
+                // What this payment still owes beyond its mana and has already
+                // committed: mana as it was produced, and the objects that
+                // paid, as references. The source's own printed cost is paid
+                // as the payment completes.
+                super::effect_execution::project_pending_payment(
+                    self, payment, viewer, &mut frame, false,
+                );
             }
             PendingChoice::ChooseTargets {
                 object,
@@ -768,6 +772,7 @@ impl Game {
             } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
@@ -776,11 +781,13 @@ impl Game {
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
             }
-            PendingChoice::KickerChoice { object, .. }
-            | PendingChoice::AnnounceX { object, .. } => {
-                frame.source = self.object_reference(*object, viewer)
+            PendingChoice::KickerChoice { object, cast, .. }
+            | PendingChoice::AnnounceX { object, cast, .. } => {
+                frame.source = self.object_reference(*object, viewer);
+                frame.spell_profile = spell_profile_code(cast.profile);
             }
             PendingChoice::ActivatedTarget {
                 source,
@@ -815,8 +822,8 @@ impl Game {
         suspended: &SuspendedResolution,
         viewer: PlayerId,
         frames: &mut Vec<ContinuationFrame>,
+        mut parent: Option<usize>,
     ) {
-        let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
         for part in suspended.continuation() {
             let mut frame = match part {
                 ResolutionRef::Frame(effect) => self.effect_frame(effect, viewer),
@@ -893,26 +900,19 @@ impl Game {
             return;
         }
         if let Some(PendingChoice::Pay { payment, .. }) = &self.pending_choice {
-            if !payment.receipt.is_empty() {
-                let frame = frames
-                    .iter_mut()
-                    .find(|frame| frame.kind == 4)
-                    .expect("the pending payment's announcement frame");
-                super::effect_execution::project_receipt(
-                    self,
-                    &payment.receipt,
-                    None,
-                    viewer,
-                    frame,
-                    true,
-                );
-            }
+            let frame = frames
+                .iter_mut()
+                .find(|frame| frame.kind == 4)
+                .expect("the pending payment's announcement frame");
+            super::effect_execution::project_pending_payment(self, payment, viewer, frame, true);
         }
-        let Some(suspended) = &self.state.suspended_decision else {
-            return;
-        };
-        // Kinds 5 and 6 come only from `append_suspended_frames`, in this order.
-        let mut parts = suspended.continuation().into_iter();
+        let mut parts = self
+            .state
+            .cast_caller
+            .as_deref()
+            .into_iter()
+            .chain(self.state.suspended_decision.as_ref())
+            .flat_map(SuspendedResolution::continuation);
         for frame in frames.iter_mut().filter(|f| matches!(f.kind, 5 | 6)) {
             match parts.next() {
                 Some(ResolutionRef::Frame(effect)) => {
@@ -1043,6 +1043,7 @@ impl Game {
             } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
+                frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = cast.x;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
@@ -1139,11 +1140,12 @@ pub(super) fn write_rows(
     frames: &[ContinuationFrame],
     viewer: usize,
     objects: &std::collections::HashMap<i32, i32>,
+    width: usize,
     out: &mut impl RowWriter,
 ) -> Result<usize, ObservationEncodeError> {
     let mut slot = 0;
     relation_rows(frames, viewer, objects, |row| {
-        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer))?;
+        out.write(Table::Relations, 0, slot, &row.map(Cell::Integer)[..width])?;
         slot += 1;
         Ok(())
     })
@@ -1214,6 +1216,7 @@ fn relation_rows(
             header[relation::FLYING + index] = i64::from(*granted);
         }
         header[relation::THIS_TURN] = i64::from(frame.this_turn);
+        header[relation::SPELL_PROFILE] = i64::from(frame.spell_profile);
         emit(&header)?;
         let mut reference_row = |kind: i64,
                                  reference: VisibleReference,

@@ -111,9 +111,9 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
-- Base new training and learnability trials on the current TLA frontier setup
-  (`experiments/tla_frontier.py`) rather than falling back to Elemental; TLA
-  does not have larger or longer games.
+- Base training, learnability and performance trials on
+  `experiments/tla_frontier.py` (including its model sizes) rather than
+  Elemental; TLA does not have larger or longer games.
 - Etude report curves average runs within a job. For a per-seed readout,
   select that seed's fixed checkpoint seatings in its own panel and declare
   `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
@@ -602,7 +602,10 @@ another `PrintedCharacteristics` on it. A static ability or additional cost is
 a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
-card-specific logic. Rebuild the extension after card changes.
+card-specific logic. Rebuild the extension after card changes. A new definition
+shifts the name-ordered definition ids: refresh Academy fixtures with
+`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
+the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -678,8 +681,9 @@ the layered characteristics, including static grants. `force_permanent_on_battle
 a permanent without an entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A forced creature starts summoning-sick. Use `clear_summoning_sickness` when
-a constructed position needs it to attack or pay a tap cost immediately. With exactly enough untapped lands a
+A forced creature starts summoning-sick. For a constructed position that
+needs an immediately available attacker or tap source, use
+`clear_summoning_sickness` or native `scenario_force_battlefield(..., ready=true)`. With exactly enough untapped lands a
 manual payment finishes itself after its last object choice; calling `pay_rest`
 then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds

@@ -195,6 +195,9 @@ impl Game {
         // The batch commits the gain: one source's damage dealt at the same
         // time is one life-gain event (CR 120.3f, 119.9).
         result.lifelink = lifelink;
+        result.combat_damage = source
+            .filter(|_| combat)
+            .map(|source| (source, amount as u32));
         result.committed = true;
         result
     }
@@ -253,7 +256,7 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return lki.keywords;
         }
-        if let Some(spell) = self.spell_on_stack(source) {
+        if let Some(spell) = self.stack_spell(source) {
             return self.spell_keywords(source, spell.controller);
         }
         self.state.source_base(source).1.keywords
@@ -274,9 +277,14 @@ impl Game {
             ));
         }
         if let Some(controller) = self
-            .spell_on_stack(source)
+            .stack_spell(source)
             .map(|spell| spell.controller)
-            .or_else(|| self.state.spell_lki.get(&source).map(|spell| spell.controller))
+            .or_else(|| {
+                self.state
+                    .spell_lki
+                    .get(&source)
+                    .map(|spell| spell.controller)
+            })
         {
             return Some((
                 controller,

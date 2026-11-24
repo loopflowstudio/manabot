@@ -4,8 +4,8 @@ use managym_state::ability::{
     TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-    PrintedCharacteristics,
+    ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+    Keywords, PrintedCharacteristics,
 };
 use managym_state::mana::{Color, Mana, ManaCost, SpendEffect};
 use managym_state::predicate::CardPredicate;
@@ -16,6 +16,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         dwynens_elite(),
         boggart_brute(),
         demonic_pact(),
+        harbinger_of_the_tides(),
         elemental_bond(),
         pyromancers_goggles(),
         skyraker_giant(),
@@ -175,6 +176,49 @@ fn skyraker_giant() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Reach]),
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn harbinger_of_the_tides() -> CardDefinition {
+    let text = "You may cast this spell as though it had flash if you pay {2} more to cast it. (You may cast it any time you could cast an instant.)\nWhen this creature enters, you may return target tapped creature an opponent controls to its owner's hand.";
+    let target = TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate {
+            tapped: true,
+            ..CardPredicate::creature()
+        },
+    };
+    CardDefinition {
+        key: "ori.harbinger_of_the_tides",
+        scryfall_id: "94ca53de-cffb-4740-b318-a4ebfb3a31af",
+        printed: PrintedCharacteristics {
+            name: "Harbinger of the Tides".into(),
+            mana_cost: Some(ManaCost::parse("{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Merfolk".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(2),
+            text_box: text.into(),
+            additional_costs: vec![AdditionalCost::FlashSurcharge(ManaCost::parse("{2}"))],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: managym_state::ability::TargetRequirement::one(target.clone()),
+                    effects: vec![Effect::SelectCards {
+                        from: ObjectSelector::Target(target),
+                        predicate: CardPredicate::default(),
+                        min: 0,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        if_declined: vec![],
+                    }],
+                }],
+            }],
             ..Default::default()
         },
         ..Default::default()

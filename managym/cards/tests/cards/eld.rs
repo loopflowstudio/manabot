@@ -174,6 +174,35 @@ fn the_great_henge_adds_gg_and_gains_two_life_once_per_activation() {
     assert_eq!(s.life(0), 24);
 }
 
+/// Wildborn Preserver's trigger chooses X only as it resolves (CR 107.3),
+/// so its stacked text keeps X symbolic rather than reading an unbound 0.
+#[test]
+fn wildborn_preserver_trigger_keeps_x_unchosen_on_the_stack() {
+    use managym::agent::observation::Observation;
+    let mut s = five_color_setup(&["Wildborn Preserver", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Wildborn Preserver");
+    crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.advance_until(
+        |sc| !sc.game().state.stack_objects.is_empty(),
+        "the Preserver's trigger is stacked".into(),
+    );
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let obs = Observation::for_player(s.game(), viewer);
+        let [entry] = obs.stack_objects.as_slice() else {
+            panic!("one trigger: {:?}", obs.stack_objects);
+        };
+        let text = entry.description.clone().unwrap();
+        assert!(
+            text.contains("Choose X. You may pay {X}")
+                && text.contains("the announced value of X")
+                && !text.contains("(0)")
+                && !text.contains("that many"),
+            "{text}"
+        );
+    }
+}
+
 /// Wildborn Preserver's trigger asks for X as it resolves; paying puts X
 /// counters on it through the reflexive trigger. A Human does not trigger it.
 #[test]

@@ -13,7 +13,7 @@ from typing import Any, Iterable, Mapping
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from conformance.authored_match_receipt import FIXED_TIME, OPENING_RECEIPT_PATH
+from conformance.authored_match_receipt import CASTING_RECEIPT_PATH, FIXED_TIME
 import managym
 from managym.academy import server, trace as trace_store
 from managym.academy.curated_pack import load_curated_pack
@@ -31,10 +31,10 @@ from managym.decision import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-opening.json"
+    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-casting-history.json"
 )
-AUTHORITY_SHA256 = "75734703321f395db2ab6aa66fcb401bd98e08414809fcdcb3b506a7097c0d2b"
-TERMINAL_STATE = "383531aaa4dc622eec8dade633bcb0b3baccd8fc8c47e7b4b40dc5d053116c5b"
+AUTHORITY_SHA256 = "c11509ac3dd2ad40c90caaa683a314e8404737073a7e27c117c54df38aca97a7"
+TERMINAL_STATE = "70999c89be608ddf045f135a5c724622e76f163577ca3182ee52b145efd13c20"
 
 COMMAND_COUNT = 174
 
@@ -80,7 +80,7 @@ def _equal(
 
 
 def _load_authority() -> dict[str, Any]:
-    raw = OPENING_RECEIPT_PATH.read_bytes()
+    raw = CASTING_RECEIPT_PATH.read_bytes()
     _equal("input", 0, "authority_sha256", AUTHORITY_SHA256, _sha256(raw))
     receipt = json.loads(raw)
     decisions = receipt["decisions"]
@@ -630,7 +630,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        OPENING_RECEIPT_PATH.relative_to(ROOT).as_posix(),
+        CASTING_RECEIPT_PATH.relative_to(ROOT).as_posix(),
         "content/semantic/current/setups.json",
         "managym/academy/curated_pack.py",
         "conformance/authored_match_parity.py",

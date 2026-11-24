@@ -144,3 +144,20 @@ Lumen-Class Frigate already encodes its station amount as
 `EffectValue::PowerTappedToPay` in released definitions. I kept that token
 and its nonnegative contribution per tapped creature. The existing receipt
 and stack amount field hold everything the pending ability needs.
+
+## Sync onto main at `610370233c`
+
+Keep main’s effective mana value, prepared-cast and flashback stack columns at
+37–39. Append MTG-418’s six history columns at 40–45 so stored column prefixes
+continue to bind by name.
+
+Quilled Greatwurm reads one committed combat total per exact source through
+the shared trigger occurrence path. The plain black Rat keeps its own
+`token.black_rat` key for Revenge of the Rats, and `token.rat` keeps the
+Redcap Gutter-Dweller printing that cannot block.
+
+The combined replay corpus retained all 14 main cases and 3,150 Commands,
+with identical per-case counts and outcomes. The Academy authority tape
+retained all 174 Commands, offer counts and winning seat. Academy's four
+demo prefixes and five navigation prefixes replayed to their recorded
+decision kinds.

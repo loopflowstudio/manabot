@@ -10,7 +10,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![crusader_of_odric(), krenko_mob_boss()]
+    vec![crusader_of_odric(), krenko_mob_boss(), omniscience()]
 }
 
 fn crusader_of_odric() -> CardDefinition {
@@ -55,6 +55,23 @@ fn krenko_mob_boss() -> CardDefinition {
                 ..Default::default()
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn omniscience() -> CardDefinition {
+    let rules_text = "You may cast spells from your hand without paying their mana costs.";
+    CardDefinition {
+        key: "m13.omniscience",
+        scryfall_id: "1088f33e-cb5f-4248-ae8e-280c4e41f291",
+        printed: PrintedCharacteristics {
+            name: "Omniscience".into(),
+            mana_cost: Some(ManaCost::parse("{7}{U}{U}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::CastFromHandWithoutManaCost],
+            text_box: rules_text.into(),
             ..Default::default()
         },
         ..Default::default()

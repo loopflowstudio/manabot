@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import cached_property
 from hashlib import sha256
+from typing import Literal, get_args
 
 import numpy as np
 
@@ -69,7 +70,12 @@ from manabot.env.shared_effects import (
     PROGRAM_TOKEN_KIND,
     effect_span_rows,
 )
-from manabot.policy.buckets import BucketedObservation, has_history_events, object_map
+from manabot.policy.buckets import (
+    BucketedObservation,
+    bucket,
+    has_history_events,
+    object_map,
+)
 from manabot.policy.decision_memory import MemoryRows, prepare_memory
 from manabot.policy.readings import (
     DURATION_FLAGS,
@@ -597,6 +603,47 @@ def pack_attention(
     return PackedAttention(tuple(groups), restore)
 
 
+# Object attention layout. `padded` attends the whole object table;
+# `used_columns` only the columns valid in some row; `bucketed_columns` pads
+# those with empty columns to a `bucket` size, bounding distinct device shapes;
+# `packed_groups` packs rows sorted by live length when that beats used columns;
+# `live_tokens` emits jagged `live_index` / `live_offsets`.
+type AttentionLayout = Literal[
+    "padded", "used_columns", "bucketed_columns", "packed_groups", "live_tokens"
+]
+ATTENTION_LAYOUTS: tuple[AttentionLayout, ...] = get_args(AttentionLayout.__value__)
+# Fact layout. `used_columns` drops fact columns invalid in every row;
+# `live_rows` routes live facts as one `[1,R]` row; `bucketed_live_rows`
+# pads that row with unlinked facts to bound distinct device shapes.
+type FactLayout = Literal["padded", "used_columns", "live_rows", "bucketed_live_rows"]
+FACT_LAYOUTS: tuple[FactLayout, ...] = get_args(FactLayout.__value__)
+
+
+def select_attention_columns(
+    used: np.ndarray, width: int, *, bucketed: bool
+) -> np.ndarray | None:
+    """Ascending object columns to attend, or None to attend all `width`.
+
+    `used` lists every column valid in some row, ascending. Bucketed selection
+    adds the lowest unused columns until the count reaches `bucket(len(used))`;
+    those are invalid in every row, so attention masks them as keys and zeroes
+    them as outputs, and the forward is unchanged up to summation order.
+    """
+    if len(used) == 0 or len(used) >= width:
+        return None
+    if not bucketed:
+        return used
+    target = bucket(len(used), width)
+    if target >= width:
+        return None
+    if target == len(used):
+        return used
+    keep = np.zeros(width, dtype=bool)
+    keep[used] = True
+    keep[np.flatnonzero(~keep)[: target - len(used)]] = True
+    return np.flatnonzero(keep)
+
+
 @dataclass(frozen=True)
 class Prepared[A]:
     """One admitted observation batch, ready for a backend policy."""
@@ -703,33 +750,28 @@ def prepare(
     obs: ObservationBuffers | BucketedObservation | ObservationSpans,
     tables: Tables,
     *,
-    inference: bool = False,
-    bucketed: bool = False,
-    live_tokens: bool = False,
+    attention: AttentionLayout = "padded",
+    facts: FactLayout = "padded",
     value_token: bool = False,
     memory_summaries: int = 0,
     memory_fold: bool = False,
     memory_roots: Mapping[str, int] | None = None,
     binding: str = "",
     select_programs: bool = False,
-    compact_learner: bool = False,
-    live_facts: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
-    `inference` enables CPU inference compaction: unused fact columns are
-    dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. `compact_learner` gives learner batches the same column
-    selection, or packs rows by live length when that is smaller, and routes
-    only live fact rows. Torch never sets it: it keeps padded shapes for
-    gradient reduction order.
-    `live_facts` routes only live fact rows, for inference and learning alike,
-    padded to a power-of-two count so a shape-compiling device (Torch on MPS)
-    sees few distinct shapes; it changes nothing else.
+    `attention` and `facts` choose the object-attention and fact layouts
+    (`AttentionLayout`, `FactLayout`); a backend picks them from its device
+    and purpose. Unknown layouts raise `ValueError`.
     Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
+    if attention not in ATTENTION_LAYOUTS:
+        raise ValueError(f"unknown attention layout {attention!r}")
+    if facts not in FACT_LAYOUTS:
+        raise ValueError(f"unknown fact layout {facts!r}")
     action_capacity = None
     bucket_needs = object_remap = None
     # Dense `ObservationBuffers` / `BucketedObservation` inputs are deprecated and
@@ -737,7 +779,6 @@ def prepare(
     native = obs if isinstance(obs, ObservationSpans) else None
     if isinstance(obs, ObservationSpans):
         if obs.buckets is not None:
-            bucketed = True
             bucket_needs = obs.needs
             object_remap = object_map(obs.buckets)
             action_capacity = obs.buckets.capacities["actions"]
@@ -766,7 +807,6 @@ def prepare(
             dense[key + "_valid"] = obs.dense(key + "_valid")
         obs = dense
     elif isinstance(obs, BucketedObservation):
-        bucketed = True
         bucket_needs = obs.needs
         object_remap = object_map(obs.buckets)
         action_capacity = obs.buckets.capacities["actions"]
@@ -791,17 +831,19 @@ def prepare(
         span = native.tables["facts"]
         stop = (
             int(span.counts.max(initial=0))
-            if inference and not bucketed
+            if facts == "used_columns"
             else native.capacities["facts"]
         )
         fact_valid = span.mask(stop)
         fact_rows = span.integers[:, : tables.layout.widths["facts"]]
     else:
-        facts = obs["facts"]
-        if inference and not bucketed:
-            facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
-        fact_valid = facts[..., FACT_VALID_INDEX] == 1
-        fact_rows = facts[fact_valid]
+        dense_facts = obs["facts"]
+        if facts == "used_columns":
+            dense_facts = dense_facts[
+                :, (dense_facts[..., FACT_VALID_INDEX] == 1).any(0)
+            ]
+        fact_valid = dense_facts[..., FACT_VALID_INDEX] == 1
+        fact_rows = dense_facts[fact_valid]
     stack = obs.get("stack")
     validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
@@ -812,12 +854,11 @@ def prepare(
             (belief.validity, np.ones((len(belief.validity), 1), np.float32))
         )
     validity = np.concatenate(validity_rows, 1)
-    compact = compact_learner and not inference
     columns = None
     packed_attention = None
-    if (inference or compact) and not live_tokens:
-        valid = validity != 0
+    if attention in ("used_columns", "bucketed_columns", "packed_groups"):
         if native is None:
+            valid = validity != 0
             used = np.flatnonzero(valid.any(0))
         else:
             start = 0
@@ -829,10 +870,14 @@ def prepare(
                 start += native.capacities[key]
             used = np.concatenate(segments)
         # Row groups carry no per-row value token or memory summaries.
-        if compact and not value_token and not memory_summaries:
-            packed_attention = pack_attention(valid, len(used))
-        if packed_attention is None and 0 < len(used) < validity.shape[1]:
-            columns = used
+        if attention == "packed_groups" and not value_token and not memory_summaries:
+            packed_attention = pack_attention(
+                valid if native is None else validity != 0, len(used)
+            )
+        if packed_attention is None:
+            columns = select_attention_columns(
+                used, validity.shape[1], bucketed=attention == "bucketed_columns"
+            )
     layout = tables.layout
     batch = obs["actions_valid"].shape[0]
     objects = validity.shape[1]
@@ -956,7 +1001,7 @@ def prepare(
     if belief is not None:
         ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
     live_index = live_offsets = compact_attention = None
-    if live_tokens:
+    if attention == "live_tokens":
         if native is None:
             present = validity != 0
             if value_token:
@@ -1024,8 +1069,7 @@ def prepare(
             objects,
             object_remap,
             native=native,
-            compact=compact or live_facts,
-            bucket_rows=live_facts,
+            layout=facts,
         ),
         effects=_effects(obs, tables, objects, object_remap, native=native),
         relation_features=relation_features,
@@ -1120,7 +1164,7 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
-# The smallest live fact route `prepare(live_facts=True)` emits.
+# The smallest fact route `bucketed_live_rows` emits.
 MIN_LIVE_FACT_ROWS = 64
 
 
@@ -1132,16 +1176,14 @@ def _facts(
     object_remap: Array | None = None,
     *,
     native: ObservationSpans | None = None,
-    compact: bool = False,
-    bucket_rows: bool = False,
+    layout: FactLayout = "padded",
 ) -> FactRoutes[Array]:
     """Route live fact rows; `valid` places them in their padded slots.
 
     Only live facts are indexed on the host. By default padding is restored to
     `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
-    `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
-    with targets from each row's own observation; a padded row changes no
-    output or gradient, so the encoder skips that work. `bucket_rows` pads
+    `live_rows` emits the `R` live rows in row-major order as `[1,R]`,
+    with targets from each row's own observation. `bucketed_live_rows` pads
     `R` with zero (unlinked) rows to a power of two, at least
     `MIN_LIVE_FACT_ROWS`.
     """
@@ -1152,8 +1194,9 @@ def _facts(
         valid[valid] = known
         live = live[known]
     word = record_word if native is None else full_word
+    compact = layout in ("live_rows", "bucketed_live_rows")
     owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]
-    if compact and bucket_rows:
+    if layout == "bucketed_live_rows":
         size = max(MIN_LIVE_FACT_ROWS, 1 << max(len(live) - 1, 0).bit_length())
         live = np.concatenate(
             [live, np.zeros((size - len(live), *live.shape[1:]), live.dtype)]

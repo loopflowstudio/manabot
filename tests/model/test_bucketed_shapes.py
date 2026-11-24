@@ -527,5 +527,10 @@ def test_mps_live_fact_routes_match_padded_outputs_and_gradients(
     with torch.no_grad(), PolicyInference(reference) as scope:
         served = scope.prepare(host_inputs(obs))
         assert served.facts.compact
-        served_logits, _ = reference.forward_distribution(served)
-    torch.testing.assert_close(served_logits, outputs[0][0], atol=1e-5, rtol=1e-5)
+        if not bucketed:
+            assert served.attention_columns is not None
+            assert len(served.attention_columns) == bucket(
+                int(served.validity.bool().any(0).sum()), served.validity.shape[1]
+            )
+        served_outputs = reference.forward_distribution(served)
+    torch.testing.assert_close(served_outputs, outputs[0], atol=1e-5, rtol=1e-5)

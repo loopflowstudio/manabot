@@ -39,7 +39,7 @@ fn gateway_sneak() -> CardDefinition {
                 Ability::Triggered {
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     intervening_if: None,

@@ -33,22 +33,27 @@ impl crate::flow::game::Game {
             trigger.ability_index,
             trigger.inline_effects.as_deref(),
             chosen.then_some(trigger.chosen_modes.as_slice()),
+            trigger.x,
         ))
     }
 }
 
+/// A triggered ability's text with its X filled in where its event binds
+/// one (`bound_x`). A trigger announces no X (CR 107.3); an entering
+/// permanent's own trigger reads its spell's X (CR 107.3m).
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
 pub(crate) fn trigger_description(
     object: &crate::state::card::PrintedCharacteristics,
     index: usize,
     inline: Option<&[Effect]>,
     chosen_modes: Option<&[usize]>,
+    x: u8,
 ) -> String {
     if let Some(effects) = inline {
         return format!(
             "{} — delayed ability: {}",
             object.name,
-            effects_description(effects)
+            with_trigger_x(effects_description(effects), "that many", x)
         );
     }
     let Ability::Triggered {
@@ -84,6 +89,10 @@ pub(crate) fn trigger_description(
         }
         _ => effects_description_in(triggering, effects),
     };
+    let program = match bound_x(condition) {
+        Some(amount) => with_trigger_x(program, amount, x),
+        None => program,
+    };
     format!(
         "{} — {}{intervening}: {program}",
         object.name,
@@ -99,6 +108,7 @@ fn triggering_noun(condition: &TriggerCondition) -> &'static str {
         | TriggerCondition::OnceEachTurn { condition }
         | TriggerCondition::FromZone { condition, .. }
         | TriggerCondition::InGraveyard { condition }
+        | TriggerCondition::Prepared { condition }
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => triggering_noun(condition),
         TriggerCondition::Casts { .. }
@@ -109,6 +119,52 @@ fn triggering_noun(condition: &TriggerCondition) -> &'static str {
     }
 }
 
+fn with_trigger_x(text: String, amount: &str, x: u8) -> String {
+    text.replace(
+        &value_description("permanent", &EffectValue::X),
+        &format!("{amount} ({x})"),
+    )
+}
+
+/// How the text names the X the trigger's event binds, as `flow/triggers.rs`
+/// assigns it: the source's own entering reads its spell's "X", counters put
+/// and one creature's combat damage total read "that many". `None` keeps X
+/// symbolic until the trigger chooses it while resolving.
+fn bound_x(condition: &TriggerCondition) -> Option<&'static str> {
+    match condition {
+        // The per-creature occurrence binds beneath a gate only.
+        TriggerCondition::ActiveIf { condition, .. } => bound_x(condition),
+        TriggerCondition::DealsCombatDamage {
+            per: Per::Object,
+            to: None,
+            ..
+        } => Some("that many"),
+        condition => wrapped_bound_x(condition),
+    }
+}
+
+/// `bound_x` for the events that bind X beneath any wrapper.
+fn wrapped_bound_x(condition: &TriggerCondition) -> Option<&'static str> {
+    match condition {
+        TriggerCondition::EntersTheBattlefield {
+            subject: TriggerSubject::This,
+        } => Some("X"),
+        TriggerCondition::PutsCounters { .. }
+        | TriggerCondition::NthCounter { .. }
+        | TriggerCondition::Chapter { .. } => Some("that many"),
+        TriggerCondition::WasCast { condition }
+        | TriggerCondition::OnceEachTurn { condition }
+        | TriggerCondition::WhileSourceAttacking { condition }
+        | TriggerCondition::FromZone { condition, .. }
+        | TriggerCondition::Prepared { condition }
+        | TriggerCondition::InGraveyard { condition }
+        | TriggerCondition::ActiveIf { condition, .. } => wrapped_bound_x(condition),
+        _ => None,
+    }
+}
+
+/// `attached` names the object an attached source watches ("enchanted
+/// creature" for an Aura, "equipped creature" for Equipment).
 fn condition_description(condition: &TriggerCondition, attached: &str) -> String {
     match condition {
         TriggerCondition::WasCast { condition } => {
@@ -168,6 +224,9 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
             condition_description(condition, attached),
             format!("{zone:?}").to_lowercase()
         ),
+        TriggerCondition::Prepared { condition } => {
+            format!("{} (a prepared spell)", condition_description(condition, attached))
+        }
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject, attached))
         }
@@ -274,14 +333,16 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
             }
         ),
         TriggerCondition::DealsCombatDamage { subject, to, per } => {
-            let to = actor_noun(*to);
+            let to = to
+                .map(|to| format!(" to {}", actor_noun(to)))
+                .unwrap_or_default();
             match per {
                 Per::Object => format!(
-                    "Whenever {} deals combat damage to {to}",
+                    "Whenever {} deals combat damage{to}",
                     subject_description(subject, attached)
                 ),
                 Per::Batch => format!(
-                    "Whenever {} deal combat damage to {to}",
+                    "Whenever {} deal combat damage{to}",
                     one_or_more(subject, "creatures", attached)
                 ),
             }
@@ -413,6 +474,7 @@ fn keyword_action_text(who: Actor, action: KeywordAction) -> String {
         KeywordAction::Earthbend => ("earthbend", "earthbends"),
         KeywordAction::Firebend => ("firebend", "firebends"),
         KeywordAction::Airbend => ("airbend", "airbends"),
+        KeywordAction::Discard => ("discard a card", "discards a card"),
     };
     agree(who, plain, third_person).into()
 }
@@ -439,7 +501,7 @@ fn ordinal(n: u32) -> String {
     }
 }
 
-fn condition_text(triggering: &'static str, condition: &Condition) -> String {
+pub(crate) fn condition_text(triggering: &'static str, condition: &Condition) -> String {
     match condition {
         Condition::YourTurn => "it is your turn".into(),
         Condition::Always => "always".into(),
@@ -474,12 +536,18 @@ fn condition_text(triggering: &'static str, condition: &Condition) -> String {
                 ""
             }
         ),
+        Condition::OpponentControlsMoreCreatures => {
+            "an opponent controls more creatures than you".into()
+        }
         Condition::BattlefieldAtLeast { count, predicate } => format!(
             "there are {count} or more {}s on the battlefield",
             predicate_description(predicate, "permanent")
         ),
         Condition::ControlsUnownedAtLeast { count } => {
             format!("you control {count} or more permanents you don't own")
+        }
+        Condition::OpponentHasMoreCardsInHand => {
+            "an opponent has more cards in hand than you".into()
         }
         Condition::CardsInHandAtLeast { count } => {
             format!("you have {count} or more cards in hand")
@@ -489,6 +557,15 @@ fn condition_text(triggering: &'static str, condition: &Condition) -> String {
             format!("you have {count} or more unspent mana")
         }
         Condition::AttackedThisTurn => "you attacked this turn".into(),
+        Condition::CastThisTurn(predicate) => {
+            let spell = predicate_description(predicate, "spell");
+            let article = if spell.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            };
+            format!("you've cast {article} {spell} this turn")
+        }
         Condition::BentAllFourThisTurn => {
             "you've waterbent, earthbent, firebent and airbent this turn".into()
         }
@@ -543,6 +620,7 @@ fn condition_text(triggering: &'static str, condition: &Condition) -> String {
         Condition::SourceMatches(predicate) => {
             format!("this is {}", predicate_description(predicate, "permanent"))
         }
+        Condition::SourceUnprepared => "this is unprepared".into(),
         Condition::SourceTapped => "this is tapped".into(),
         Condition::SourceSaddled => "this is saddled".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
@@ -838,6 +916,11 @@ fn selector_description(triggering: &'static str, selector: &ObjectSelector) -> 
         ObjectSelector::Paid(how) => {
             format!("the permanent {} to pay", format!("{how:?}").to_lowercase())
         }
+        ObjectSelector::Matching { of, predicate } => format!(
+            "all {} among {}",
+            predicate_description(predicate, "card"),
+            selector_description(triggering, of)
+        ),
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
         ObjectSelector::TargetPlayersZone { spec, zone } => format!(
             "{}'s {}",
@@ -964,6 +1047,7 @@ fn move_description(
 fn value_description(triggering: &'static str, value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
+        EffectValue::NegativeX => "minus the announced value of X".into(),
         EffectValue::X => "the announced value of X".into(),
         EffectValue::Property {
             of,
@@ -1095,11 +1179,13 @@ fn value_description(triggering: &'static str, value: &EffectValue) -> String {
         }
         EffectValue::LifeLostThisWay => "the life lost this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
+        EffectValue::AttachedCreaturePower => "equipped creature's power".into(),
         EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
         EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),
         EffectValue::PowerTappedToPay => "the power of the creatures tapped to pay".into(),
         EffectValue::TriggeringManaValue => "that spell's mana value".into(),
+        EffectValue::TargetPower => "its power".into(),
         EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",
@@ -1130,7 +1216,13 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
             text.push_str(" (expires at end of combat)");
         }
         if let Some(restriction) = &class.restriction {
-            text.push_str(&format!(" ({} only)", restriction.describe()));
+            let spend = restriction.describe();
+            // An exclusion already limits the mana: "(anything but spells from hand)".
+            if matches!(restriction, crate::state::mana::ManaRestriction::Only(_)) {
+                text.push_str(&format!(" ({spend} only)"));
+            } else {
+                text.push_str(&format!(" ({spend})"));
+            }
         }
         if let Some(effect) = &class.effect {
             text.push_str(&format!(" (puts {})", spend_effect_description(effect)));
@@ -1144,6 +1236,7 @@ fn payment_description(cost: &PaymentCost) -> String {
         PaymentCost::Mana(cost) => cost_description(cost),
         PaymentCost::Waterbend { generic } => format!("waterbend {generic}"),
         // Read after "pays" and "You may pay": the amount only.
+        PaymentCost::Discard => "a discarded card".into(),
         PaymentCost::Life(life) => format!("{life} life"),
     }
 }
@@ -1228,6 +1321,8 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
             else if *unrevealed && *to == ZoneType::Hand { format!("Put {} into its owner's hand without revealing it", selector_description(triggering, what)) }
             else { move_description(triggering, what, *to, *tapped, *transformed, under.as_ref(), *with_counter, *linked) }
         },
+        Prepare { what } => format!("Prepare {}", selector_description(triggering, what)),
+        Unprepare { what } => format!("Unprepare {}", selector_description(triggering, what)),
         Tap { what } => format!("Tap {}", selector_description(triggering, what)),
         Untap { what } => format!("Untap {}", selector_description(triggering, what)),
         RemoveAllCounters { from } => format!("Remove all counters from {}", selector_description(triggering, from)),
@@ -1246,24 +1341,34 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
         MillCards { count, target: Some(target), .. } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
         MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
-        TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description_in(triggering, effects)),
+        TargetClause { requirement, effects } => format!("Choose {}–{} {}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },effects_description_in(triggering, effects)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(triggering, what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(triggering, what)),
         Airbend { what: what @ ObjectSelector::Each { .. } } => format!("Airbend {}. Their owners may cast them from exile for {{2}}", selector_description(triggering, what)),
         Airbend { what } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",selector_description(triggering, what)),
+        GrantGraveyardCastThisTurn { target, flashback } => if *flashback {
+            format!("{} gains flashback at its mana cost until end of turn", target_description(target))
+        } else { format!("You may cast {} this turn", target_description(target)) },
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileTopCardsToPlay { count, until } => format!(
-            "Exile the top {} of your library. You may play {} {}",
-            if *count == 1 { "card".to_string() } else { format!("{count} cards") },
-            if *count == 1 { "that card" } else { "those cards" },
-            match until {
+        ExileTopCardsToPlay { count, until, face_down, condition } => {
+            let them = if *count == 1 { "that card" } else { "those cards" };
+            let window = match until {
                 crate::state::ability::PlayWindow::ThisTurn => "this turn",
                 crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
+                crate::state::ability::PlayWindow::WhileExiled => "for as long as they remain exiled",
+            };
+            let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
+            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text(triggering, condition))).unwrap_or_default();
+            if *face_down {
+                format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
+            } else {
+                format!("Exile the top {cards} of your library. You may play {them} {window}{condition}")
             }
-        ),
+        }
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         CumulativeUpkeep { each } => format!("Sacrifice this unless you pay {} for each age counter on it", cost_description(each)),
+        ExileEachLibraryTopCastFree => "Exile the top card of each library. You may cast any number of spells from among those cards without paying their mana costs".into(),
         Cascade => "Cascade: exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order".into(),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(triggering, below)),
         TriggerModes { modes, up_to, unchosen } => format!(
@@ -1304,6 +1409,7 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
         GainControl { player, what, duration } => format!("{} gains control of {}{}", player_description(player), selector_description(triggering, what), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
         CopyTriggeringSpellForEach { each } => format!("Copy that spell for {} it could target. Each copy targets a different one of them", selector_description(triggering, each)),
+        CastFromGraveyard { predicate, exile_instants_and_sorceries } => format!("You may cast a {} from your graveyard.{}", predicate_description(predicate, "spell"), if *exile_instants_and_sorceries { " Exile an instant or sorcery cast this way if it would go to your graveyard." } else { "" }),
         CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         WhenYouDo { effects } => format!("When you do: {}", effects_description_in(triggering, effects)),
@@ -1370,7 +1476,7 @@ fn effect_description(triggering: &'static str, effect: &Effect) -> Option<Strin
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         Surveil { count } => format!("Surveil {count}"),
-        LookAndSelect { random_order, reveal, to_battlefield, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them {} and the rest on the bottom in {} order",if *reveal { "Reveal" } else { "Look at" },value_description(triggering, look),predicate_description(predicate,"cards"), if *to_battlefield { "onto the battlefield" } else { "into your hand" }, if *random_order { "a random" } else { "your chosen" }),
+        LookAndSelect { random_order, reveal, to_battlefield, look, min_select, max_select, predicate, max_mana_value } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {}{} from among them {} and the rest on the bottom in {} order",if *reveal { "Reveal" } else { "Look at" },value_description(triggering, look),predicate_description(predicate,"cards"), max_mana_value.as_ref().map(|value| format!(" with mana value at most {}", value_description(triggering, value))).unwrap_or_default(), if *to_battlefield { "onto the battlefield" } else { "into your hand" }, if *random_order { "a random" } else { "your chosen" }),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description_in(triggering, m))).collect::<Vec<_>>().join("; ")),
@@ -1576,6 +1682,7 @@ fn continuous_description_in(
             "{subject} don't lose unspent {} mana as steps and phases end{until}",
             format!("{color:?}").to_lowercase()
         ),
+        Modification::AdditionalLandPlay => format!("{subject} may play an additional land{until}"),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
         Modification::NextCreatureCastFlash => {
             let this_turn = match duration {
@@ -1623,6 +1730,21 @@ fn roman(chapter: u8) -> &'static str {
 mod tests {
     use super::*;
     use crate::state::ability::TargetRequirement;
+
+    #[test]
+    fn restricted_mana_says_only_for_a_positive_class_and_not_an_exclusion() {
+        use crate::state::mana::{ManaRestriction, ManaRestriction::ExceptSpellsFromHand};
+        let colorless = [0, 0, 0, 0, 0, 1];
+        assert_eq!(
+            mana_description(&Mana::restricted_to(ExceptSpellsFromHand, colorless)),
+            "{C} (anything but spells from hand)"
+        );
+        assert!(mana_description(&Mana::restricted_to(
+            ManaRestriction::spell(["Lesson"]),
+            colorless
+        ))
+        .ends_with(" only)"));
+    }
 
     #[test]
     fn distinct_name_threshold_describes_the_required_permanents() {
@@ -1688,7 +1810,7 @@ mod tests {
             (
                 TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::you_control(CardPredicate::subtype("Ally")),
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Batch,
                 },
                 "Whenever one or more Ally creatures you control deal combat damage to a player",
@@ -1696,7 +1818,7 @@ mod tests {
             (
                 TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::any(CardPredicate::creature()),
-                    to: Actor::You,
+                    to: Some(Actor::You),
                     per: Per::Object,
                 },
                 "Whenever a creature deals combat damage to you",
@@ -1844,7 +1966,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let text = trigger_description(&object, 0, None, None);
+        let text = trigger_description(&object, 0, None, None, 0);
         assert!(text.contains("Exile that spell"), "{text}");
         assert!(
             text.contains("Return that permanent to its owner's hand"),

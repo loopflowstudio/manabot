@@ -19,7 +19,8 @@ use crate::support::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
         library, library_card, library_top, offered_cards, offered_targets, permanent,
-        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, zone_of,
+        permanent_named, pt_modifications, stack_spell_card, tapped, top_activation, top_spell,
+        zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -43,7 +44,7 @@ use managym::{
     possible_worlds::{viewer_observation, PossibleWorldSpace},
     search_state::witness,
     state::{
-        card::{Keyword, Keywords, StaticAbility},
+        card::{Keyword, Keywords, SpellProfile, StaticAbility},
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
@@ -358,6 +359,52 @@ fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
     s.set_player_mana_pool(0, "2");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_cast(&s, idle_card));
+}
+
+/// An earthbent land is a creature, so Airbender's Reversal may airbend it.
+/// Airbend grants "you may cast", and a land can't be cast (CR 305.9): while
+/// earthbend's return trigger waits, the Mountain in exile carries a
+/// cast-only grant, which never plays a land
+/// (`flow::action::identity_tests::an_airbent_land_cannot_be_played`).
+#[test]
+fn airbending_an_earthbent_land_grants_no_land_play() {
+    let mut s = five_color_setup(&["Airbender's Reversal", "Earthbending Lesson"]);
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let land = card_of(&s, mountain);
+    cast(&mut s, "Earthbending Lesson");
+    assert!(s.choose_target(Target::Permanent(mountain)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, mountain));
+    s.set_player_mana_pool(0, "20WWWW");
+    cast(&mut s, "Airbender's Reversal");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(mountain)));
+    // Settle only until the Reversal exiles it.
+    for _ in 0..20 {
+        if zone_of(&s, land) == Some(ZoneType::Exile) {
+            break;
+        }
+        let index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        s.step_action(index);
+    }
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Exile));
+    let exiled = now(&s, land);
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let card = observation
+        .agent_cards
+        .iter()
+        .find(|card| card.id == s.game().state[exiled].id.0 as i32)
+        .unwrap();
+    let permission = &card.cast_permissions[0];
+    assert!(!permission.play_lands && permission.cost.is_none());
+    // Earthbend returns it to the battlefield, ending the grant.
+    settle(&mut s);
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Battlefield));
 }
 
 /// Airbend exiles the target and lets its owner, and only its owner, cast
@@ -978,6 +1025,79 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .state
         .zones
         .contains(now(&s, ogre_card), ZoneType::Graveyard, PlayerId(1)));
+}
+
+/// Azula's any-type spending applies to the total cost (CR 601.2h), after
+/// reductions and additional costs settle it (CR 601.2f): an exiled
+/// Lightning Strike ({1}{R}) under Glamdring on a 2/2 costs {R}, so one mana
+/// of any type, never nothing; a kicked Into the Roil ({1}{U} + {1}{U})
+/// takes four colorless.
+#[test]
+fn azula_spends_any_mana_on_the_cost_after_reductions_and_kicker() {
+    use managym::state::player::ManaPayment;
+    let exiled_by_azula = |spell: &str| {
+        let mut s = five_color_setup(&[
+            "Azula, Cunning Usurper",
+            "Lightning Strike",
+            "Into the Roil",
+            "Gray Ogre",
+            "Glamdring, Foe-hammer",
+        ]);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let ogre_card = s.game().state.permanents[ogre].as_ref().unwrap().object;
+        let card = library_card(&s, 1, spell);
+        let card = move_card(&mut s, card, ZoneType::Graveyard);
+        cast(&mut s, "Azula, Cunning Usurper");
+        spend_colorless(&mut s);
+        advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == ogre_card),
+        );
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { object, .. } if *object == card),
+        );
+        settle(&mut s);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        (s, card)
+    };
+
+    let (mut s, strike) = exiled_by_azula("Lightning Strike");
+    let glamdring = s
+        .game_mut()
+        .scenario_force_battlefield(PlayerId(0), "Glamdring, Foe-hammer", true)
+        .unwrap();
+    let bearer = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, glamdring, 0);
+    assert!(s.choose_target(Target::Permanent(bearer)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, strike), "{{R}} remains to pay");
+    s.set_player_mana_pool(0, "1");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, strike));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    s.assert_life(1, 17);
+
+    let (mut s, roil) = exiled_by_azula("Into the Roil");
+    let target = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "4");
+    cast_card(&mut s, roil);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.choose_target(Target::Permanent(target)));
+    assert!(top_spell(&s).kicked);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    let drawn = hand(&s, 0).len();
+    settle(&mut s);
+    assert!(s.game().state.permanents[target].is_none());
+    assert_eq!(hand(&s, 0).len(), drawn + 1, "kicked: draw a card");
 }
 
 /// Badgermole Cub earthbends 1 on entering; tapping a creature for mana adds
@@ -2453,11 +2573,13 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
         &mut s,
         |a| matches!(a, Action::SelectCard { object, .. } if *object == strike),
     );
-    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Graveyard));
+    // CR 608.2: Solstice finishes resolving only after Strike is cast.
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Stack));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
+    assert_eq!(zone_of(&s, solstice), Some(ZoneType::Graveyard));
     settle(&mut s);
     s.assert_life(1, 17);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Graveyard));
@@ -2470,6 +2592,45 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
     assert_eq!(zone_of(&s, solstice), Some(ZoneType::Exile));
+}
+
+#[test]
+fn solstice_revelations_offers_charring_bite_from_exile() {
+    let mut s = five_color_setup(&["Solstice Revelations", "Twinmaw Stormbrood", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let target = card_of(&s, ogre);
+    let dragon = library_card(&s, 0, "Twinmaw Stormbrood");
+    put_on_top(&mut s, dragon);
+    force_lands(&mut s, 0, "Mountain", 3);
+    cast(&mut s, "Solstice Revelations");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    let exiled = now(&s, dragon);
+    assert_eq!(zone_of(&s, dragon), Some(ZoneType::Exile));
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == exiled)
+    ));
+    let mut decline =
+        crate::support::play::fork_choosing(&s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut decline);
+    assert_eq!(zone_of(&decline, dragon), Some(ZoneType::Hand));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Omen, .. } if *object == exiled),
+    );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "targets");
+    assert_eq!(context.source.0.unwrap().label, "Charring Bite");
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(0))
+        .iter()
+        .any(|frame| frame.kind == 4 && frame.spell_profile == 2));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, dragon), Some(ZoneType::Library));
 }
 
 /// ...nor when an opponent's Ally enters...
@@ -4254,6 +4415,45 @@ fn gather_creates_per_plains_and_scry_can_reverse_top_cards_privately() {
 }
 
 #[test]
+fn vizier_library_top_cast_preserves_the_private_scry_order() {
+    let mut s = five_color_setup(&[
+        "Gather the White Lotus",
+        "Vizier of the Menagerie",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Vizier of the Menagerie");
+    let ogre = force_new_card_in_hand(&mut s, 0, "Gray Ogre");
+    let cards = pin_top(&mut s, &["Forest", "Island"]);
+    cast(&mut s, "Gather the White Lotus");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    for card in &cards {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::ScryCard {object, to_bottom: false, ..} if object == card),
+        );
+    }
+    settle(&mut s);
+    let ogre = move_card(&mut s, ogre, ZoneType::Library);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let forest = s.game().state[cards[0]].definition_id.0;
+    let island = s.game().state[cards[1]].definition_id.0;
+    let before = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(before.agent.known_library.get(&1), Some(&forest));
+    assert_eq!(before.agent.known_library.get(&2), Some(&island));
+
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(owner.agent.known_library.get(&0), Some(&forest));
+    // Vizier shows the new top. Only memory can supply the next position.
+    assert_eq!(owner.agent.known_library.get(&1), Some(&island));
+    let other = Observation::for_player(s.game(), PlayerId(1));
+    assert!(other.opponent.known_library.is_empty());
+}
+
+#[test]
 fn scry_possible_world_materialization_preserves_inspected_cards_and_order_choices() {
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
     let mut s = five_color_setup(&["Gather the White Lotus"]);
@@ -4725,7 +4925,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
             .zone_objects(ZoneType::Exile, PlayerId(0))
             .to_vec();
         assert_eq!(foretold.len(), 2);
-        let grants = &game.state.cast_permissions.exile_grants;
+        let grants = &game.state.cast_permissions.grants;
         assert_eq!(grants.iter().filter(|grant| grant.foretold).count(), 2);
         for object_id in &foretold {
             assert_eq!(game.state[*object_id].name, "Sozin's Comet");
@@ -7028,7 +7228,7 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
         assert_eq!(exiled.len(), 1);
         let foretold = exiled[0];
         assert_eq!(branch.state[foretold].name, "Sozin's Comet");
-        let grant = &branch.state.cast_permissions.exile_grants[0];
+        let grant = &branch.state.cast_permissions.grants[0];
         assert_eq!(Some(grant.object), branch.state.live(foretold));
         resampled |= foretold != comet;
     }
@@ -7517,6 +7717,58 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         }
         assert_eq!(zone_of(&s, lesson), Some(ZoneType::Exile));
     }
+}
+
+#[test]
+fn iroh_leaves_graveyard_permanents_to_muldrothas_permission() {
+    use managym::flow::cast_permission::PlayRoute;
+
+    let permanents = [
+        "Gray Ogre",
+        "Prophetic Prism",
+        "Omniscience",
+        "Smaug, the Great Calamity",
+    ];
+    let mut deck = vec!["Iroh, Grand Lotus", "Muldrotha, the Gravetide"];
+    deck.extend(permanents);
+    let mut s = five_color_setup(&deck);
+    s.force_permanent_on_battlefield(0, "Iroh, Grand Lotus");
+    let cards = permanents.map(|name| plant_in_graveyard(&mut s, 0, name));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for (card, name) in cards.into_iter().zip(permanents) {
+        assert!(!can_cast(&s, card), "Iroh offered {name}");
+    }
+
+    let ogre = cards[0];
+    s.force_permanent_on_battlefield(0, "Muldrotha, the Gravetide");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let casts: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter(|a| matches!(a, Action::CastSpell {object, ..} if *object == ogre))
+        .collect();
+    assert!(matches!(
+        casts.as_slice(),
+        [Action::CastSpell { route: None, .. }]
+    ));
+
+    let mut forged = s.game().clone();
+    let actions = &mut forged.current_action_space.as_mut().unwrap().actions;
+    let index = actions.len();
+    actions.push(Action::CastSpell {
+        player: PlayerId(0),
+        object: ogre,
+        route: Some(PlayRoute::GrantedFlashback),
+        profile: SpellProfile::Front,
+    });
+    let before = witness(&forged);
+    assert!(forged.step(index).is_err());
+    assert_eq!(witness(&forged), before);
+
+    cast_card(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
 }
 
 #[test]
@@ -8205,6 +8457,37 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
         .actions
         .iter()
         .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == next)));
+}
+
+/// An Omen sorcery is not Momo's first flying creature spell, even once it
+/// has shuffled back into the library as the flying Dragon it shows there.
+#[test]
+fn momo_still_discounts_the_first_flier_after_a_resolved_omen() {
+    use crate::support::play::cast_profile;
+    use managym::state::{card::SpellProfile, game_object::Target};
+    let mut s = five_color_setup(&[
+        "Momo, Friendly Flier",
+        "Twinmaw Stormbrood",
+        "Messenger Hawk",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Momo, Friendly Flier");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let twinmaw = library_card(&s, 0, "Twinmaw Stormbrood");
+    let twinmaw = move_card(&mut s, twinmaw, ZoneType::Hand);
+    s.set_player_mana_pool(0, "1R");
+    cast_profile(&mut s, twinmaw, SpellProfile::Omen);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let hawk = library_card(&s, 0, "Messenger Hawk");
+    let hawk = move_card(&mut s, hawk, ZoneType::Hand);
+    s.set_player_mana_pool(0, "1U");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::CastSpell { object, .. } if *object == hawk)));
 }
 
 #[test]
@@ -10710,6 +10993,52 @@ fn yue_casts_a_noncreature_spell_from_hand_for_free() {
 }
 
 #[test]
+fn yue_offers_spew_flame_from_hand() {
+    let mut s = five_color_setup(&[
+        "Yue, the Moon Spirit",
+        "Smaug, the Great Calamity",
+        "Gray Ogre",
+    ]);
+    let yue = s.force_permanent_on_battlefield(0, "Yue, the Moon Spirit");
+    clear_summoning_sickness(&mut s, yue);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let target = card_of(&s, ogre);
+    let smaug = move_from_library(&mut s, 0, "Smaug, the Great Calamity", ZoneType::Hand);
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, yue, 0);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    resolve_top(&mut s);
+    assert!(!has_action(
+        &s,
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == smaug)
+    ));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, profile: SpellProfile::Adventure, .. } if *object == smaug),
+    );
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert_eq!(context.stage, "targets");
+    assert_eq!(context.source.0.unwrap().label, "Spew Flame");
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(0))
+        .iter()
+        .any(|frame| frame.kind == 4 && frame.spell_profile == 1));
+    assert!(s
+        .game()
+        .continuation_frames(PlayerId(1))
+        .iter()
+        .all(|frame| frame.spell_profile == 0));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, target), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, smaug), Some(ZoneType::Exile));
+    s.set_player_mana_pool(0, "5RR");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, smaug));
+}
+
+#[test]
 fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
     for discard in [false, true] {
         let mut s = five_color_setup(&["Yuyan Archers", "Gray Ogre"]);
@@ -10798,6 +11127,61 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     assert_eq!(zone_of(&s, ogre), Some(ZoneType::Exile));
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_cast(&s, ogre));
+}
+
+/// Zuko exiles the known top card after a scry kept two on top: the rest
+/// of its owner's known order shifts up one rather than being forgotten,
+/// and determinizing for the owner keeps the next card in place. Debug
+/// builds check every library fact after each move.
+#[test]
+fn zuko_exiling_a_scried_top_card_keeps_the_next_known_position() {
+    use crate::support::play::cast_profile;
+    use managym::state::card::SpellProfile;
+    let mut s = five_color_setup(&["Zuko, Exiled Prince", "Bilbo Baggins, Burglar", "Gray Ogre"]);
+    let zuko = s.force_permanent_on_battlefield(0, "Zuko, Exiled Prince");
+    let glance = move_from_library(&mut s, 0, "Bilbo Baggins, Burglar", ZoneType::Hand);
+    let top = pin_top(&mut s, &["Mountain", "Gray Ogre"]);
+    cast_profile(&mut s, glance, SpellProfile::Adventure);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    while s.action_space().kind == ActionSpaceKind::Scry {
+        choose(&mut s, |a| {
+            matches!(
+                a,
+                Action::ScryCard {
+                    to_bottom: false,
+                    ..
+                }
+            )
+        });
+    }
+    settle(&mut s);
+    let definition =
+        |s: &Scenario, object: ObjectId| s.game().state[now(s, object)].definition_id.0;
+    let known = |s: &Scenario| {
+        Observation::for_player(s.game(), PlayerId(0))
+            .agent
+            .known_library
+    };
+    assert_eq!(
+        known(&s),
+        BTreeMap::from([(0, definition(&s, top[0])), (1, definition(&s, top[1]))])
+    );
+
+    activate(&mut s, zuko, 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Exile));
+    assert_eq!(known(&s), BTreeMap::from([(0, definition(&s, top[1]))]));
+    for seed in 0..8 {
+        let mut game = s.game().clone();
+        game.determinize(PlayerId(0), seed).unwrap();
+        assert_eq!(
+            game.state
+                .zones
+                .top(ZoneType::Library, PlayerId(0))
+                .map(|top| game.state[top].definition_id.0),
+            Some(definition(&s, top[1]))
+        );
+    }
 }
 
 /// Zuko's Conviction returns a creature card from your graveyard to hand, or,
@@ -12567,9 +12951,9 @@ fn planetarium_scry(s: &mut Scenario, planetarium: PermanentId) {
 /// on top offers nothing and spends nothing, and declining keeps the option.
 #[test]
 fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
-    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre"]);
+    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre", "Hill Giant"]);
     let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
-    let top = pin_top(&mut s, &["Gray Ogre", "Gray Ogre", "Gray Ogre"]);
+    let top = pin_top(&mut s, &["Gray Ogre", "Hill Giant", "Gray Ogre"]);
     planetarium_scry(&mut s, planetarium);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(offered_cards(&s), vec![top[0]]);
@@ -12584,8 +12968,15 @@ fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
         .tapped = false;
     planetarium_scry(&mut s, planetarium);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let giant = s.game().state[top[1]].definition_id.0;
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(owner.agent.known_library.get(&1), Some(&giant));
     select_card(&mut s, top[0]);
     settle(&mut s);
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    let opponent = Observation::for_player(s.game(), PlayerId(1));
+    assert_eq!(owner.agent.known_library.get(&0), Some(&giant));
+    assert!(opponent.opponent.known_library.is_empty());
     assert_eq!(
         zone_of(&s, top[0]),
         Some(ZoneType::Battlefield),
@@ -14310,7 +14701,7 @@ fn may_play_exiled(s: &Scenario, object_id: ObjectId) -> bool {
     s.game()
         .state
         .cast_permissions
-        .exile_grants
+        .grants
         .iter()
         .any(|grant| Some(grant.object) == object)
 }

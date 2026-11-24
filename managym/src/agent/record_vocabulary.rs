@@ -16,12 +16,14 @@
 //!
 //! Entry point: [`record_names`].
 
+#[cfg(test)]
+use crate::state::card::SpellProfile;
 use crate::{
     agent::{
-        ability_description::predicate_description,
+        ability_description::{condition_text, predicate_description},
         effect_execution::EXECUTION_TEXT,
         observation::MODIFICATION_NAMES,
-        observation_encoder::{POOLED_MANA, WARD},
+        observation_encoder::{PLAY_GRANT, PLAY_GRANT_SOURCE, POOLED_MANA, SPENT_TYPE, WARD},
     },
     cards::{
         content_pack::default_content_pack,
@@ -120,6 +122,9 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
     out.push(record(Token, WARD, None));
+    out.push(record(Token, PLAY_GRANT, None));
+    out.push(record(Token, PLAY_GRANT_SOURCE, None));
+    out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
@@ -157,6 +162,15 @@ fn execution_names(out: &mut Vec<RecordName>) {
     for name in EXECUTION_TEXT {
         add(TokenKind::Text, name);
     }
+    // A play grant's condition reaches its fact program as rules text.
+    for (_, definition) in default_content_pack().definition_entries() {
+        let json = serde_json::to_value(definition).expect("serializable definition");
+        for condition in play_grant_conditions(&json) {
+            add(TokenKind::Text, &condition_text("permanent", &condition));
+        }
+    }
+    add(TokenKind::Structure, "PlayGrantExtension");
+    add(TokenKind::Structure, "/PlayGrantExtension");
     for name in [
         "PlayerId",
         "CardDefId",
@@ -175,6 +189,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
             "GameEvent",
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
+        ("SpellProfile", &["Omen", "BackFace"][..]),
         ("LibraryEnd", &["Top", "Bottom"][..]),
         // Supported stack-ability targeting has no printed card program yet.
         ("TargetSpec", &["Ability"][..]),
@@ -183,7 +198,14 @@ fn execution_names(out: &mut Vec<RecordName>) {
         ("ZoneType", &["Stack"][..]),
         ("DamageTransform", &["Prevent"][..]),
         // Offered only by a resolved shield record, never printed.
-        ("ReplacementEffect", &["PreventCombatDamage"][..]),
+        (
+            "ReplacementEffect",
+            &[
+                "PreventCombatDamage",
+                "AdventureExile",
+                "ExileInsteadOfGraveyard",
+            ][..],
+        ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
             "EventBinding",
@@ -256,6 +278,10 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "kind",
         "attacking",
         "kicked",
+        "flash_surcharge",
+        "flashback",
+        "from_prepared",
+        "exile_instead_of_graveyard",
         "x",
         "free",
         "resolving",
@@ -271,9 +297,24 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "cost",
         "help",
         "waterbend",
+        "prepared",
+        "face_down",
+        "play_lands",
+        "condition",
     ] {
         add(TokenKind::Field, field);
     }
+}
+
+/// Every condition a serialized definition puts on the cards it lets you
+/// play (Flameshape's "you control a Wizard"), wherever the effect sits:
+/// a spell, an inset, a trigger, an activation or an `If` branch.
+fn play_grant_conditions(value: &serde_json::Value) -> Vec<crate::state::ability::Condition> {
+    objects(value)
+        .into_iter()
+        .filter_map(|map| map.get("ExileTopCardsToPlay")?.get("condition"))
+        .map(|condition| serde_json::from_value(condition.clone()).expect("serialized condition"))
+        .collect()
 }
 
 /// Every JSON object nested in a serialized definition.
@@ -323,6 +364,28 @@ fn combat_restrictions(value: &serde_json::Value) -> Vec<CardPredicate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn play_grant_conditions_are_found_at_any_depth() {
+        use crate::state::ability::{Condition, Effect, PlayWindow};
+        let wizard = Condition::ControlsAtLeast {
+            distinct_names: false,
+            count: 1,
+            predicate: CardPredicate::default(),
+        };
+        let nested = Effect::If {
+            condition: Condition::YourTurn,
+            then: vec![Effect::ExileTopCardsToPlay {
+                count: 2,
+                until: PlayWindow::WhileExiled,
+                face_down: true,
+                condition: Some(wizard.clone()),
+            }],
+            otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
+        };
+        let json = serde_json::json!({ "abilities": [{ "effects": [nested] }] });
+        assert_eq!(play_grant_conditions(&json), [wizard]);
+    }
 
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {
@@ -389,7 +452,13 @@ mod tests {
         tokens.extend(
             rules_tokens(
                 &CastChoices {
+                    profile: SpellProfile::Adventure,
+                    exile_instead_of_graveyard: true,
+                    route: None,
                     kicked: true,
+                    flash_surcharge: true,
+                    flashback: true,
+                    from_prepared: true,
                     x: 1,
                     free: true,
                     resolving: true,
@@ -398,6 +467,18 @@ mod tests {
             )
             .unwrap(),
         );
+        for profile in [SpellProfile::Omen, SpellProfile::BackFace] {
+            tokens.extend(
+                rules_tokens(
+                    &CastChoices {
+                        profile,
+                        ..Default::default()
+                    },
+                    pack,
+                )
+                .unwrap(),
+            );
+        }
         for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
             tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
         }

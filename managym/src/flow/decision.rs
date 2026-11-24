@@ -4,9 +4,10 @@
 // action arrives. The suspended state (remaining effects + the pending
 // decision) lives on GameState so clones/forks carry it.
 
+use crate::state::card::SpellProfile;
 #[cfg(test)]
 use crate::state::player::ManaFloats;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use rand::seq::SliceRandom;
 
@@ -17,8 +18,9 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::{
         event::GameEvent,
-        game::{CastChoices, Game},
+        game::Game,
         payment::{CostComponent, Payment, PaymentProgress},
+        play::CastAuthority,
         proposed_event::{
             BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
         },
@@ -372,6 +374,10 @@ impl EffectFrame {
 /// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ResolutionCastOffer {
+    Graveyard {
+        predicate: CardPredicate,
+        exile_instants_and_sorceries: bool,
+    },
     /// Spells in the deciding player's hand matching `predicate`, read when
     /// offered (Yue, the Moon Spirit).
     Hand { predicate: CardPredicate },
@@ -380,6 +386,7 @@ pub enum ResolutionCastOffer {
     Exiled {
         #[serde(rename = "card")]
         object: ObjectId,
+        below: i32,
     },
     /// The top card of the deciding player's library, which they have looked
     /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
@@ -394,12 +401,15 @@ pub enum ResolutionCastOffer {
         source: ObjectId,
         predicate: CardPredicate,
     },
+    /// Exact appearances exiled together, cast in the chooser's order.
+    AmongExiled { objects: Vec<ObjectId> },
     /// Cascade's hit `card`, among every card the cascade `exiled`; those not
     /// cast go on the bottom of the library in a random order.
     Cascade {
         #[serde(rename = "card")]
         object: ObjectId,
         exiled: Vec<ObjectId>,
+        below: u8,
     },
 }
 
@@ -1370,6 +1380,30 @@ impl Game {
                     }
                     FrameCompletion::Paid { player, payment } => {
                         self.commit_spell_payment(player, payment);
+                        if let Some(caller) = self.state.cast_caller_mut().take() {
+                            let caller = *caller;
+                            match &caller.decision {
+                                Decision::CastDuringResolution {
+                                    offer: ResolutionCastOffer::AmongExiled { .. },
+                                    ..
+                                } if !self
+                                    .resolution_cast_candidates(&caller.decision)
+                                    .is_empty() =>
+                                {
+                                    *self.state.suspended_decision_mut() = Some(caller);
+                                    return;
+                                }
+                                Decision::CastDuringResolution {
+                                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                                    ..
+                                } => {
+                                    self.put_exiled_on_bottom_in_random_order(exiled.clone());
+                                }
+                                _ => {}
+                            }
+                            frame = caller.frame;
+                            continue;
+                        }
                     }
                     FrameCompletion::Activated {
                         mut ability,
@@ -1397,11 +1431,21 @@ impl Game {
                         // has already left the stack (CR 608.2n); the entry
                         // batch always moves a card still on it.
                         if self.state.zones.zone_of(object) == Some(ZoneType::Stack) {
+                            let index = self
+                                .stack_index_of(Target::StackSpell(object))
+                                .expect("resolving spell on stack");
+                            let crate::state::stack_object::StackObject::Spell(spell) =
+                                &self.state.stack_objects[index]
+                            else {
+                                unreachable!()
+                            };
+                            let profile = spell.profile;
                             let (to, entry) = if self.state[object].types.is_permanent() {
                                 (
                                     ZoneType::Battlefield,
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
+                                        transformed: profile == SpellProfile::BackFace,
                                         x: frame.x,
                                         // Spend effects that applied to
                                         // this spell as it was cast.
@@ -1418,10 +1462,28 @@ impl Game {
                                     },
                                 )
                             } else {
-                                (ZoneType::Graveyard, Default::default())
+                                (
+                                    if profile == SpellProfile::Omen {
+                                        ZoneType::Library
+                                    } else {
+                                        ZoneType::Graveyard
+                                    },
+                                    crate::flow::proposed_event::ZoneEntry {
+                                        resolving_adventure: (profile == SpellProfile::Adventure)
+                                            .then_some(frame.controller),
+                                        ..Default::default()
+                                    },
+                                )
+                            };
+                            let binding = if profile == SpellProfile::Omen {
+                                EventBinding::Shuffle {
+                                    player: self.state[object].owner,
+                                }
+                            } else {
+                                EventBinding::None
                             };
                             frame.batch = Some(self.event_batch(
-                                EventBinding::None,
+                                binding,
                                 [self.zone_move_proposal(object, to, entry)],
                             ));
                             frame.completion = FrameCompletion::Spell { object, attach_to };
@@ -1700,6 +1762,20 @@ impl Game {
             Decision::Payment(payment) => {
                 let player = payment.player;
                 let (cost, help) = match &payment.owed {
+                    CostComponent::Discard => {
+                        let mut actions: Vec<_> = self
+                            .discard_candidates(player, None)
+                            .into_iter()
+                            .map(|object| Action::SelectCard { player, object })
+                            .collect();
+                        actions.push(Action::Decline { player });
+                        return Some(ActionSpace {
+                            player: Some(player),
+                            kind: ActionSpaceKind::Discard,
+                            actions,
+                            focus: source_focus,
+                        });
+                    }
                     // Paying life is one action under manual and automatic
                     // payment alike.
                     CostComponent::Life(life) => {
@@ -1716,7 +1792,7 @@ impl Game {
                         });
                     }
                     CostComponent::Mana { cost, help } => (cost, *help),
-                    _ => unreachable!("a resolution payment owes mana or life"),
+                    _ => unreachable!("unexpected resolution payment component"),
                 };
                 let waterbend = help.waterbend_left(cost, &payment.receipt);
                 if self.automatic_mana_payment(player) && payment.can_decline() {
@@ -1896,12 +1972,36 @@ impl Game {
                 }
             }
             Decision::CastDuringResolution { player, .. } => {
-                let cards = self.card_objects(self.resolution_cast_candidates(&suspended.decision));
+                let candidates = self.resolution_cast_candidates(&suspended.decision);
+                let cards: Vec<_> = candidates
+                    .iter()
+                    .map(|(card, _)| self.state.object_of(*card))
+                    .collect();
+                let actions = candidates
+                    .into_iter()
+                    .map(|(card, profile)| {
+                        let object = self.state.object_of(card);
+                        if !profile.is_front() {
+                            Action::CastSpell {
+                                player: *player,
+                                object,
+                                profile,
+                                route: None,
+                            }
+                        } else {
+                            Action::SelectCard {
+                                player: *player,
+                                object,
+                            }
+                        }
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect();
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
                     focus: self.object_focus(&cards),
-                    actions: select_objects(*player, cards, true),
+                    actions,
                 }
             }
             Decision::OpponentSplitsRevealed {
@@ -2250,6 +2350,21 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::Payment(payment), Action::SelectCard { object, .. })
+                if matches!(payment.owed, CostComponent::Discard) =>
+            {
+                if let Err(error) =
+                    self.pay_discard_cost(payment.player, None, *object, &mut payment.receipt)
+                {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(error);
+                }
+                let Decision::Payment(payment) = suspended.decision else {
+                    unreachable!()
+                };
+                self.finish_resolution_payment(payment, suspended.frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
                 let tapped = match &mut payment.owed {
                     CostComponent::Mana { cost, help } => self.resolution_help_tap(
@@ -2280,7 +2395,7 @@ impl Game {
                         return Ok(());
                     }
                     CostComponent::Mana { cost, .. } => cost.clone(),
-                    _ => unreachable!("a resolution payment owes mana or life"),
+                    _ => unreachable!("unexpected resolution payment component"),
                 };
                 if self.automatic_mana_payment(payment.player) && payment.can_decline() {
                     payment.committed = true;
@@ -2844,14 +2959,23 @@ impl Game {
             }
             (
                 Decision::CastDuringResolution { .. },
-                Action::SelectCard {
+                Action::CastSpell {
+                    object: object_id,
+                    profile: SpellProfile::Adventure | SpellProfile::Omen | SpellProfile::BackFace,
+                    route: None,
+                    ..
+                }
+                | Action::SelectCard {
                     object: object_id, ..
                 },
             ) => {
+                let profile = action.spell_profile();
                 if !self
                     .resolution_cast_candidates(&suspended.decision)
                     .iter()
-                    .any(|card| self.state.object_of(*card) == *object_id)
+                    .any(|(card, inset)| {
+                        self.state.object_of(*card) == *object_id && *inset == profile
+                    })
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
@@ -2862,27 +2986,21 @@ impl Game {
                 {
                     self.spend_once_each_turn(key);
                 }
-                // The cast is the effect's last instruction: finish the
-                // resolution, then cast the chosen card onto the stack.
                 let (player, object_id) = (suspended.decision.player(), *object_id);
-                let paid = matches!(
-                    suspended.decision,
-                    Decision::CastDuringResolution { paid: true, .. }
-                );
+                let cast = suspended
+                    .decision
+                    .cast_authority()
+                    .and_then(|authority| self.cast_choices(player, object_id, profile, authority))
+                    .expect("cast decision");
                 if let Decision::CastDuringResolution {
-                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                    offer: ResolutionCastOffer::AmongExiled { objects },
                     ..
-                } = &suspended.decision
+                } = &mut suspended.decision
                 {
-                    let rest = exiled.iter().copied().filter(|other| other != &object_id);
-                    self.put_exiled_on_bottom_in_random_order(rest.collect());
+                    objects.retain(|object| *object != object_id);
                 }
-                self.run_frame(suspended.frame);
-                debug_assert!(
-                    self.state.suspended_decision.is_none(),
-                    "a cast during resolution ends its resolving effect"
-                );
-                self.begin_resolution_cast(player, object_id, paid)
+                *self.state.cast_caller_mut() = Some(Box::new(suspended));
+                self.begin_cast(player, object_id, cast)
             }
             (
                 Decision::ExileLinked {
@@ -2914,7 +3032,9 @@ impl Game {
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
-                    ResolutionCastOffer::Exiled { object: object_id } => {
+                    ResolutionCastOffer::Exiled {
+                        object: object_id, ..
+                    } => {
                         self.reveal_object_to_hand(*object_id, *player, ZoneEntry::default());
                     }
                     ResolutionCastOffer::Cascade { exiled, .. } => {
@@ -3232,10 +3352,12 @@ impl Game {
         }
     }
 
-    /// The cards a `CastDuringResolution` decision offers: hand spells matching
-    /// its predicate (one per definition, so resampled copies stay
-    /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+    /// Playable card and profile pairs. Graveyard choices bind each public
+    /// object. Existing free-hand offers group interchangeable copies by definition.
+    pub(crate) fn resolution_cast_candidates(
+        &self,
+        decision: &Decision,
+    ) -> Vec<(CardId, SpellProfile)> {
         let Decision::CastDuringResolution {
             player,
             offer,
@@ -3251,57 +3373,108 @@ impl Game {
         {
             return Vec::new();
         }
-        let free = CastChoices {
-            free: !paid,
-            resolving: *paid,
-            ..Default::default()
-        };
         let mut cards: Vec<CardId> = match offer {
-            ResolutionCastOffer::Hand { predicate } => self
+            ResolutionCastOffer::Graveyard { .. } => self
                 .state
-                .zone_cards(ZoneType::Hand, *player)
-                .filter(|card| {
-                    self.state[self.state.object_of(*card)].types.is_castable()
-                        && self.object_matches_predicate(self.state.object_of(*card), predicate)
-                })
+                .zone_cards(ZoneType::Graveyard, *player)
                 .collect(),
-            ResolutionCastOffer::Exiled { object }
+            ResolutionCastOffer::Hand { .. } => {
+                self.state.zone_cards(ZoneType::Hand, *player).collect()
+            }
+            ResolutionCastOffer::AmongExiled { objects } => objects
+                .iter()
+                .filter(|object| self.state.zones.zone_of(**object) == Some(ZoneType::Exile))
+                .filter_map(|object| self.state.card_of(*object))
+                .collect(),
+            ResolutionCastOffer::Exiled { object, .. }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
                 .card_of(*object)
                 .filter(|_| self.state.zones.contains(*object, ZoneType::Exile, *player))
                 .into_iter()
                 .collect(),
-            ResolutionCastOffer::ExiledWith { source, predicate } => self
+            ResolutionCastOffer::ExiledWith { source, .. } => self
                 .state
                 .exile_links
                 .iter()
-                .filter(|link| link.source == *source)
-                .filter_map(|link| self.state.card_of(link.exiled_object))
-                .filter(|card| {
-                    let definition = &self.state[self.state.object_of(*card)];
-                    self.state
-                        .zones
-                        .contains(self.state.object_of(*card), ZoneType::Exile, *player)
-                        && definition.types.is_castable()
-                        && self.object_matches_predicate(self.state.object_of(*card), predicate)
+                .filter(|link| {
+                    link.source == *source
+                        && self
+                            .state
+                            .zones
+                            .contains(link.exiled_object, ZoneType::Exile, *player)
                 })
+                .filter_map(|link| self.state.card_of(link.exiled_object))
                 .collect(),
             ResolutionCastOffer::LibraryTop { object } => self
                 .library_top_card(*player)
-                .filter(|card| {
-                    self.state.object_of(*card) == *object
-                        && self.state[self.state.object_of(*card)].types.is_castable()
-                })
+                .filter(|card| self.state.object_of(*card) == *object)
                 .into_iter()
                 .collect(),
         };
-        cards.retain(|card| self.castable_mana_value(*player, *card, free).is_some());
+
         cards.sort_unstable_by_key(|card| {
             (self.state[self.state.object_of(*card)].definition_id, *card)
         });
-        cards.dedup_by_key(|card| self.state[self.state.object_of(*card)].definition_id);
-        cards
+        let mut candidates = Vec::new();
+        for card in cards {
+            let object = self.state.object_of(card);
+            let definition = &self.state[object];
+            for profile in definition.spell_profiles() {
+                let cast = self
+                    .cast_choices(
+                        *player,
+                        object,
+                        profile,
+                        CastAuthority::Resolution { offer, paid: *paid },
+                    )
+                    .expect("an offered card's own profile");
+                let spell = cast.spell(definition);
+                if !spell.types.is_castable() {
+                    continue;
+                }
+                let eligible = match offer {
+                    ResolutionCastOffer::Graveyard { predicate, .. }
+                    | ResolutionCastOffer::Hand { predicate }
+                    | ResolutionCastOffer::ExiledWith { predicate, .. } => {
+                        cast.matches_spell(self, object, predicate)
+                    }
+                    ResolutionCastOffer::Exiled { below, .. } => {
+                        i32::from(
+                            spell
+                                .mana_cost
+                                .as_ref()
+                                .map_or(0, |cost| cost.mana_value_at(0)),
+                        ) < *below
+                    }
+                    ResolutionCastOffer::Cascade { below, .. } => {
+                        spell
+                            .mana_cost
+                            .as_ref()
+                            .map_or(0, |cost| cost.mana_value_at(0))
+                            < *below
+                    }
+                    ResolutionCastOffer::AmongExiled { .. }
+                    | ResolutionCastOffer::LibraryTop { .. } => true,
+                };
+                if eligible && self.castable_mana_value(*player, object, cast).is_some() {
+                    candidates.push((card, profile));
+                }
+            }
+        }
+        if !matches!(
+            offer,
+            ResolutionCastOffer::Graveyard { .. } | ResolutionCastOffer::AmongExiled { .. }
+        ) {
+            let mut offered = HashSet::new();
+            candidates.retain(|(card, profile)| {
+                offered.insert((
+                    self.state[self.state.object_of(*card)].definition_id,
+                    *profile,
+                ))
+            });
+        }
+        candidates
     }
 
     /// One hand card per matching definition for `DiscardFromRevealedHand`.

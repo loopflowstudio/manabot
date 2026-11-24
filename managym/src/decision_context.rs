@@ -11,6 +11,7 @@ use crate::{
     agent::{
         continuation::ContinuationFrame,
         effect_execution::{contribution_phrase, spent_mana_phrase},
+        observation::spell_profile_code,
     },
     experience::{
         DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
@@ -343,17 +344,41 @@ impl Game {
             .or_else(|| frames.iter().find(|frame| frame.kind == 4))
             .or_else(|| frames.iter().find(|frame| frame.kind == 5))
         {
-            let object = |reference: crate::agent::continuation::VisibleReference| {
-                if let Some(player) = reference.player {
-                    return self.decision_target(&Target::Player(PlayerId(player)));
-                }
+            let live = |reference: crate::agent::continuation::VisibleReference| {
                 let display_id = reference.object? as u32;
                 self.state.latest_objects().find_map(|(object, _)| {
                     self.decision_object(object)
                         .filter(|view| view.display_id == display_id)
+                        .map(|view| (object, view))
                 })
             };
-            view.source = RequiredNullable(object(frame.source));
+            let object = |reference: crate::agent::continuation::VisibleReference| {
+                if let Some(player) = reference.player {
+                    return self.decision_target(&Target::Player(PlayerId(player)));
+                }
+                live(reference).map(|(_, view)| view)
+            };
+            view.source = RequiredNullable(
+                live(frame.source)
+                    .map(|(source, mut view)| {
+                        // An announced inset spell is named for itself, not its card.
+                        if let Some(spell) = self.state[source]
+                            .spell_profiles()
+                            .find(|profile| {
+                                !profile.is_front()
+                                    && spell_profile_code(*profile) == frame.spell_profile
+                            })
+                            .and_then(|profile| {
+                                crate::cards::content_pack::default_content_pack()
+                                    .spell_definition(&self.state[source], profile)
+                            })
+                        {
+                            view.label = spell.name.clone();
+                        }
+                        view
+                    })
+                    .or_else(|| object(frame.source)),
+            );
             view.targets = frame
                 .targets
                 .iter()
@@ -423,7 +448,8 @@ impl Game {
         // The one yes-or-no cost choice of a cast, named for what the card
         // offers: `KickerChoice` asks bargain and alternative costs too.
         let cast_option = match &self.pending_choice {
-            Some(PendingChoice::KickerChoice { object, .. }) => match self.state[*object].cast_option() {
+            Some(PendingChoice::KickerChoice { object, cast, .. }) => match cast.spell(&self.state[*object]).cast_option() {
+                Some(CastOption::FlashSurcharge(cost)) => format!("Choose whether to pay {} more to cast as though it had flash.", cost_label(cost)),
                 Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
                 Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
                 Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),
@@ -451,9 +477,13 @@ impl Game {
                     ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
                 CostComponent::Forage { .. } =>
                     ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
+                CostComponent::RemoveCounters { choosing_from: None, .. } =>
+                    ("additional_cost", "Choose a creature you control to remove a counter from. Each removal commits immediately; the cost completes once the stated number of counters, of any kinds, are removed from among your creatures."),
+                CostComponent::RemoveCounters { .. } =>
+                    ("additional_cost", "Choose which kind of counter to remove from the chosen creature. Each mode is one counter kind on it."),
                 CostComponent::TapPays { .. } =>
                     ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
-                CostComponent::Life(_) | CostComponent::RemoveCounters(..) | CostComponent::AddCounters(..) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) | CostComponent::TapGrantor(_) =>
+                CostComponent::Life(_) | CostComponent::RemoveSourceCounters(..) | CostComponent::AddCounters(..) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) | CostComponent::TapGrantor(_) =>
                     unreachable!("paid as the payment completes, after its mana"),
                 CostComponent::TapPower { toward: Toward::Saddle, .. } =>
                     ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),
@@ -465,7 +495,7 @@ impl Game {
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
-            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
+            Some(PendingChoice::AnnounceX { object: object_id, cast, .. }) if cast.spell(&self.state[*object_id]).replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -494,6 +524,7 @@ impl Game {
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Discard, .. }) => ("resolution_payment", "Choose a card from your hand to discard, or decline."),
                 Decision::Payment(PaymentProgress { owed: CostComponent::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),

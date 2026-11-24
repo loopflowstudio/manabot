@@ -1248,3 +1248,42 @@ fn graveyard_target_rechecks_live_source_power_for_retarget_and_resolution() {
     game.resolve_top_of_stack();
     assert_eq!(game.state.zones.zone_of(first), Some(ZoneType::Graveyard));
 }
+
+#[test]
+fn exude_toxin_target_threshold_uses_the_announced_x() {
+    use crate::{flow::game::CastChoices, state::card::SpellProfile};
+    let deck = BTreeMap::from([("Scavenger Regent".to_string(), 20)]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("a", deck.clone()),
+            PlayerConfig::new("b", deck),
+        ],
+        42,
+        false,
+    );
+    for x in [0, 1] {
+        let card = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))[0];
+        let spell = game.push_spell_to_stack(
+            card,
+            PlayerId(0),
+            vec![],
+            vec![],
+            CastChoices {
+                profile: SpellProfile::Omen,
+                x,
+                ..Default::default()
+            },
+        );
+        let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
+        let target = Target::StackSpell(spell);
+        assert_eq!(
+            game.legal_targets_for_spec(&spec, PlayerId(1))
+                .contains(&target),
+            x == 1
+        );
+        assert_eq!(game.target_is_legal(target, &spec, PlayerId(1)), x == 1);
+    }
+}

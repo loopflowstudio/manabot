@@ -20,8 +20,8 @@ use crate::{
     flow::{
         decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
-        game::{ActivationSource, Game},
-        payment::{Operation, Payment},
+        game::{ActivationSource, CastChoices, Game},
+        payment::{CostComponent, Operation, Payment},
         proposed_event::{
             EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
@@ -51,9 +51,14 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "caller frame",
     "captured activation",
     "cascade exiled",
+    "cascade mana value limit",
+    "spell mana value limit",
     "cast choices",
+    "quota type",
     "cast from exile",
     "cast from hand",
+    "cast from graveyard",
+    "exile instants and sorceries",
     "cast from library",
     "cast predicate",
     "choice",
@@ -555,7 +560,25 @@ impl<'a> Projection<'a> {
                 target_req_indices,
             } => {
                 self.object_id("paid spell", *object);
-                self.field("cast choices", cast);
+                // Storage keys identify the chosen permission only within the game.
+                // The payment already gives its cost. Project a quota source as a
+                // viewer-safe object reference, including when it left to pay a cost.
+                self.field(
+                    "cast choices",
+                    &CastChoices {
+                        route: None,
+                        ..*cast
+                    },
+                );
+                if let Some(crate::flow::cast_permission::PlayRoute::GraveyardType {
+                    source,
+                    kind,
+                    ..
+                }) = cast.route
+                {
+                    self.object("grantor", source);
+                    self.field("quota type", &kind);
+                }
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
                 for target in targets {
@@ -1126,18 +1149,32 @@ pub(crate) fn receipt_matters(
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }
 
-/// Project the receipt of a stack spell or ability, or of the payment in
-/// progress, onto the frame of `source`.
-pub(crate) fn project_receipt(
+/// Project the payment in progress onto its announcement frame: how many
+/// counters a removal cost still owes (Quilled Greatwurm), then what the
+/// payment has already committed. Writes nothing when neither applies.
+pub(crate) fn project_pending_payment(
     game: &Game,
-    spent: &PaymentReceipt,
-    source: Option<ObjectId>,
+    payment: &Payment,
     viewer: PlayerId,
     frame: &mut ContinuationFrame,
     text: bool,
 ) {
+    let remaining = match payment.owed.first() {
+        Some(CostComponent::RemoveCounters { remaining, .. }) => Some(*remaining),
+        _ => None,
+    };
+    if remaining.is_none() && payment.receipt.is_empty() {
+        return;
+    }
     let mut out = Projection::new(game, viewer, text);
-    out.receipt(spent, source);
+    if let Some(remaining) = remaining {
+        out.field("counters remaining", &remaining);
+        out.summary(|| match remaining {
+            1 => "1 counter left to remove.".into(),
+            n => format!("{n} counters left to remove."),
+        });
+    }
+    out.receipt(&payment.receipt, None);
     out.finish(frame);
 }
 
@@ -1612,14 +1649,32 @@ pub(crate) fn project_decision(
             use crate::flow::decision::ResolutionCastOffer;
             out.field("pay casting costs", paid);
             match offer {
+                ResolutionCastOffer::Graveyard {
+                    predicate,
+                    exile_instants_and_sorceries,
+                } => {
+                    out.field("cast from graveyard", predicate);
+                    out.field("exile instants and sorceries", exile_instants_and_sorceries);
+                }
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { object: object_id } => {
+                ResolutionCastOffer::Exiled {
+                    object: object_id,
+                    below,
+                } => {
+                    out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
+                }
+                ResolutionCastOffer::AmongExiled { objects } => {
+                    for object in objects {
+                        out.object_id("cast from exile", *object);
+                    }
                 }
                 ResolutionCastOffer::Cascade {
                     object: object_id,
                     exiled,
+                    below,
                 } => {
+                    out.field("cascade mana value limit", below);
                     out.object_id("cast from exile", *object_id);
                     for exiled in exiled {
                         out.object_id("cascade exiled", *exiled);

@@ -329,6 +329,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
                         subject: TriggerSubject::This,
                     },
                     effects: vec![Effect::LookAndSelect {
+                        max_mana_value: None,
                         random_order: true,
                         reveal: false,
                         to_battlefield: true,
@@ -700,6 +701,7 @@ fn accumulate_wisdom() -> CardDefinition {
                 },
                 then: vec![Effect::PutTopCardsInHand { count: 3 }],
                 otherwise: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: false,
                     reveal: false,
@@ -2104,7 +2106,7 @@ fn bumi_unleashed() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     effects: vec![
@@ -4636,7 +4638,7 @@ fn gran_gran() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -4712,6 +4714,7 @@ fn guru_pathik() -> CardDefinition {
                     },
                     intervening_if: None,
                     effects: vec![Effect::LookAndSelect {
+                        max_mana_value: None,
                         to_battlefield: false,
                         random_order: true,
                         reveal: true,
@@ -5273,7 +5276,7 @@ fn invasion_tactics() -> CardDefinition {
                             subtype: Some("Ally".into()),
                             ..Default::default()
                         }),
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Batch,
                     },
                     intervening_if: None,
@@ -6416,6 +6419,7 @@ fn master_piandao() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: true,
                     reveal: true,
@@ -6627,7 +6631,7 @@ fn momo_friendly_flier() -> CardDefinition {
                     ..Default::default()
                 },
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -8253,6 +8257,7 @@ fn seismic_sense() -> CardDefinition {
             types: CardTypes::new([CardType::Sorcery]),
             subtypes: vec!["Lesson".into()],
             spell_effects: vec![Effect::LookAndSelect {
+                max_mana_value: None,
                 to_battlefield: false,
                 random_order: true,
                 reveal: true,
@@ -9458,10 +9463,10 @@ fn the_legend_of_roku() -> CardDefinition {
             abilities: vec![
                 chapter(
                     1,
-                    vec![Effect::ExileTopCardsToPlay {
-                        count: 3,
-                        until: PlayWindow::ThroughYourNextTurn,
-                    }],
+                    vec![Effect::exile_top_to_play(
+                        3,
+                        PlayWindow::ThroughYourNextTurn,
+                    )],
                 ),
                 chapter(2, vec![one_mana_of_any_color(None)]),
                 chapter(3, return_transformed()),
@@ -9768,7 +9773,7 @@ fn the_rise_of_sozin() -> CardDefinition {
                     intervening_if: None,
                     condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
-                        to: Actor::AnyPlayer,
+                        to: Some(Actor::AnyPlayer),
                         per: Per::Object,
                     },
                     effects: vec![Effect::OptionalManaPaymentX {
@@ -10481,7 +10486,7 @@ fn uncle_iroh() -> CardDefinition {
                     ..Default::default()
                 },
                 condition: Condition::Always,
-                generic: 1,
+                generic: EffectValue::Fixed(1),
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -10925,6 +10930,7 @@ fn water_tribe_rallier() -> CardDefinition {
                 mana_cost: ManaCost::parse("{5}"),
                 waterbend: true,
                 effects: vec![Effect::LookAndSelect {
+                    max_mana_value: None,
                     to_battlefield: false,
                     random_order: true,
                     reveal: true,
@@ -10959,7 +10965,7 @@ fn waterbender_ascension() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
-                    to: Actor::AnyPlayer,
+                    to: Some(Actor::AnyPlayer),
                     per: Per::Object,
                 },
                 intervening_if: None,
@@ -11493,10 +11499,7 @@ fn zuko_exiled_prince() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
-                effects: vec![Effect::ExileTopCardsToPlay {
-                    count: 1,
-                    until: PlayWindow::ThisTurn,
-                }],
+                effects: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
                 ..Default::default()
             }],
             text_box: text_box.into(),
