@@ -738,9 +738,11 @@ class MLXActorCritic(nn.Module):
     def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
         with self.forward_precision():
-            return self._forward(batch)
+            logits, values = self.forward_heads(batch)
+            return logits, values.astype(mx.float32)
 
-    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+    def forward_heads(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
+        """Within forward_precision, return logits and the compute-dtype critic."""
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
@@ -915,7 +917,7 @@ class MLXActorCritic(nn.Module):
         value = self.value_head.layers
         projected = value[1](value[0](encoded_objects)) * keep
         pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
-        values = value[5](value[4](value[3](pooled_value))).astype(mx.float32)
+        values = value[5](value[4](value[3](pooled_value)))
         # A horizon bootstrap can contain only non-acting viewers.
         if not batch.legal_batches.size:
             return mx.full(batch.legal.shape, -1e8, dtype=mx.float32), values
