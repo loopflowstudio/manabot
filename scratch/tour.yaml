@@ -1,23 +1,19 @@
-at: 80ec1d98338670fbf6c077772ca1d5f189398a04
+at: b5ff828c0aafed2316ec5646fa808f65ece88c3a
 first:
   - path: docs/engine.md
-    why: Compare Cascade and Etali at the table
-  - path: managym/state/src/card.rs
-    why: Distinguish printed insets from castable profiles
-  - path: managym/src/flow/resolution.rs
-    why: Follow Torrent to its physical hit
-  - path: managym/src/flow/decision.rs
-    why: Check each resulting spell against Torrent’s threshold
-  - path: managym/src/agent/effect_execution.rs
-    why: Inspect the pending threshold
-  - path: managym/cards/tests/cards/cmr.rs
-    why: Check both profiles, decline, bottoming and countering
-  - path: managym/src/flow/action.rs
-    why: Follow exact exiled objects through priority
-  - path: managym/src/flow/play.rs
-    why: Validate the selected appearance before announcement
+    why: Follow the linked copy from entry through casting
+  - path: managym/cards/src/fra.rs
+    why: See both creatures share Seed Suture
+  - path: managym/src/flow/proposed_event.rs
+    why: Apply preparation when battlefield entry succeeds
+  - path: managym/src/flow/zones.rs
+    why: Create the exile object and its source grant
+  - path: managym/src/flow/cast_permission.rs
+    why: Derive casting entitlement from the live source
+  - path: managym/src/flow/sba.rs
+    why: Keep only linked copies in exile
+  - path: managym/src/agent/observation.rs
+    why: Join each cast offer to its source
   - path: managym/src/flow/resolution_tests.rs
-    why: Fork between two copies of one spell
-hide:
-  - path: managym/academy/fixtures/choice-navigation-w17-smart-payment.json
-    why: Regenerated catalog references and verified position hashes
+    why: Counter either copy and resolve the other
+hide: []
