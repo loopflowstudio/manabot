@@ -73,3 +73,8 @@ Concept-review (`49cc87c7`) choices folded into Batch 5g:
 - A resolved shield's `ReplacementId` carries the record's timestamp in an optional `effect` field (skipped when absent, so printed identities serialize unchanged); `8068a268d7` replaced the first form that overloaded `static_ability: true`.
 - Fleeting Flight's effect description reads "Prevent all combat damage that would be dealt to target creature until end of turn" (the shared `until` suffix), where the Oracle says "this turn".
 - The curated decision-memory witness moved from seed 197 to 208, the only seed in 190–259 still live at step 600 with more than 250 distinct contexts; it is a fixture choice, not a property of the seed.
+
+## Post-build concept-review (`6a572f60`) choices
+
+- Combat damage assignment numeric encoding: reuse existing `announces_x` → `action::HAS_X` / `action::X` (no v11 layout change) so amounts ≥ 15 stay distinct instead of collapsing into `one_hot:15`'s `"above 15"` bucket, while keeping `AssignCombatDamage`'s custom description ahead of `"X = {mode}"`.
+- Academy placement of `assign_combat_damage` offers once `Observation::action_focus` carries `[attacker, blocker]`: keep them as rail buttons via `view.ts:isButton` and highlight `[attacker, blocker]` via `askedObjects` rather than anchoring 2..N damage choices inside a popup menu on the attacker card.
