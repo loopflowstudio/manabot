@@ -212,8 +212,8 @@ def test_game_reaching_step_limit_records_timeout() -> None:
             return 0
 
     player = cast(sim.Player, Player())
-    outcome, steps, _, _ = sim._simulate_game(
+    record = sim._simulate_game(
         cast(sim.Env, LimitedEnv()), player, player, 1
     )
-    assert outcome == sim.GameOutcome.TIMEOUT
-    assert steps == 1
+    assert record.outcome == sim.GameOutcome.TIMEOUT
+    assert record.steps == 1

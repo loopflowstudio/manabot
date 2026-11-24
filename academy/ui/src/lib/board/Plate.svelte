@@ -41,7 +41,8 @@
     ...(player.restricted_mana ?? []).map(part => `${manaText(part.mana)} only for ${spendingText(part)}`),
     ...(player.pooled_mana_classes ?? []).map(pooledManaText),
   ]);
-  const label = $derived(`${name}, ${player.life} life${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
+  const counters = $derived(Object.entries(player.counters ?? {}).map(([kind, count]) => `${count} ${kind}`).join(', '));
+  const label = $derived(`${name}, ${player.life} life${counters ? `, ${counters}` : ''}${offers.length ? ` — ${offers.map(placed => `${placed.offer.label} (${placed.number})`).join('; ')}` : ''}`);
 </script>
 
 <section class="plate" aria-label={`${name}'s plate`} data-testid="player-plate" data-player-index={player.player_index} data-plate-side={side}>
@@ -60,6 +61,7 @@
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
       {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
+    {#if counters}<span class="type-caption">{counters}</span>{/if}
   </button>
   <ul class="zones">
     {#each zones as zone (zone.key)}

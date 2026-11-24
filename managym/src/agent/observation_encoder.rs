@@ -1668,6 +1668,7 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::ENTERED_THIS_TURN] = bool_to_f32(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
         out[permanent::IS_LAND] = bool_to_f32(card.card_types.is_land);
         out[permanent::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
@@ -1795,6 +1796,16 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             effect: None,
         })
     };
+    for player in [&obs.agent, &obs.opponent] {
+        for (kind, count) in &player.counters {
+            push(
+                player.id,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
+            );
+        }
+    }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
     for permanent in permanents() {
         let object = permanent.id;
@@ -2206,9 +2217,9 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
-        PLAYER_DIM, ZONE_DIM,
+        action, encode, encode_into, fact, permanent, EncodedObservationMut,
+        ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
+        FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
@@ -2368,6 +2379,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2406,6 +2418,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
+                counters: Default::default(),
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },

@@ -1,6 +1,10 @@
-use managym::{agent::action::ActionType, flow::turn::StepKind};
+use managym::{
+    agent::action::{ActionSpaceKind, ActionType},
+    flow::turn::StepKind,
+    state::effect::Modification,
+};
 
-use crate::support::game::*;
+use crate::support::{game::*, play::resolve_top};
 
 /// Gray Ogre (2/2) with 1 non-lethal damage, positioned before cleanup.
 /// Needs 3 Mountains (2R cost), so we play one land per turn for 3 turns.
@@ -53,7 +57,7 @@ fn cr_514_2_cleanup_clears_marked_damage() {
     s.pass_priority();
     s.pass_priority();
     // CR 514.1 precedes 514.2: excess cards are discarded before damage clears.
-    while s.action_space().kind == managym::agent::action::ActionSpaceKind::Discard {
+    while s.action_space().kind == ActionSpaceKind::Discard {
         assert_eq!(
             s.game().state.permanents[ogre_id].as_ref().unwrap().damage,
             1
@@ -78,4 +82,21 @@ fn cr_514_negative_damage_not_cleared_before_cleanup() {
         .expect("ogre should still exist")
         .damage;
     assert_eq!(damage_before, 1);
+}
+
+/// A required legend choice alone opens priority, even with no death trigger.
+#[test]
+fn cr_514_3a_cleanup_grants_priority_after_a_legend_choice() {
+    let mut s = five_color_unfunded_setup(&["Rhys the Redeemed"]);
+    s.force_permanent_on_battlefield(0, "Rhys the Redeemed");
+    let other = s.force_permanent_on_battlefield(0, "Rhys the Redeemed");
+    until_end_of_turn(&mut s, other, Modification::Nonlegendary);
+    s.advance_to_active_step(0, StepKind::End);
+    resolve_top(&mut s);
+    assert_eq!(s.current_step(), StepKind::Cleanup);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LegendRule);
+    s.step_action(0);
+    assert_eq!(s.current_step(), StepKind::Cleanup);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert!(s.game().state.stack_objects.is_empty());
 }

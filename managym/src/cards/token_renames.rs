@@ -56,6 +56,7 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Structure, "/TriggerSubject::AnotherYouControl", None),
     (Structure, "/TriggerSubject::AnyYouControl", None),
     (Structure, "ManaUse", None),
+    (Variant, "Effect::WinWithDistinctGates", None),
     (Variant, "Effect::SearchLandsOpponentSplits", None),
     (Variant, "TriggerCondition::AttacksAlone", None),
     (Variant, "TriggerCondition::AttacksWithAnother", None),

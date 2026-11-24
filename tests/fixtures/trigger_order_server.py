@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
+from manabot.verify.text_observation import keep_opening_hands
 from manabot.verify.trigger_order import DECK, SEED, configure_root
 import managym
 from managym.academy import server
@@ -53,7 +54,8 @@ def new_game(
                 "mana_floats": "usable",
             },
         )
-        assert self.env is not None
+        assert self.env is not None and self.obs is not None
+        keep_opening_hands(self.env, self.obs)
         self.env.scenario_set_life(1, 3)
         self.env.scenario_clear_hand(0)
         self.env.scenario_force_card_in_hand(0, "Lightning Strike")

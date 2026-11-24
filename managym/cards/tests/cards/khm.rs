@@ -101,3 +101,77 @@ fn foundations_spell_snakeskin_veil() {
         .keywords
         .has(Keyword::Hexproof));
 }
+
+#[test]
+fn fynn_poison_and_herald_loss_protection() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, pass_until},
+    };
+    use managym::{
+        agent::{action::ActionSpaceKind, observation::Observation},
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    for protected in [false, true] {
+        let mut s = five_color_setup(&["Fynn, the Fangbearer", "Herald of Eternal Dawn"]);
+        let fynn = s.force_permanent_on_battlefield(0, "Fynn, the Fangbearer");
+        clear_summoning_sickness(&mut s, fynn);
+        s.game_mut().state.players[1]
+            .counters
+            .change(CounterKind::Poison, 8);
+        let herald =
+            protected.then(|| s.force_permanent_on_battlefield(1, "Herald of Eternal Dawn"));
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, fynn);
+        while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+            s.decline_block();
+        }
+        s.advance_to_step(StepKind::EndOfCombat);
+        for viewer in [0, 1] {
+            let obs = Observation::for_player(s.game(), PlayerId(viewer));
+            let poisoned = if viewer == 1 {
+                &obs.agent
+            } else {
+                &obs.opponent
+            };
+            assert_eq!(poisoned.counters["poison"], 10);
+        }
+        assert_eq!(s.game().is_game_over(), !protected);
+        if let Some(herald) = herald {
+            s.game_mut().state.players[1].drew_when_empty = true;
+            s.pass_priority();
+            assert!(!s.game().state.players[1].drew_when_empty);
+            let object = s.game().state.permanents[herald].as_ref().unwrap().object;
+            s.game_mut().move_object(object, ZoneType::Exile);
+            s.pass_priority();
+        }
+        s.assert_winner(0);
+        assert_eq!(s.game().state.loss(1).unwrap().reason(), Some("poison"));
+    }
+}
+
+#[test]
+fn axe_equipped_fynn_poisons_in_both_damage_steps() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{attack_with, pass_until},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::permanent::CounterKind};
+
+    let mut s = five_color_setup(&["Leyline Axe", "Fynn, the Fangbearer"]);
+    let axe = s.force_permanent_on_battlefield(0, "Leyline Axe");
+    let fynn = s.force_permanent_on_battlefield(0, "Fynn, the Fangbearer");
+    clear_summoning_sickness(&mut s, fynn);
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, axe, 0);
+    assert!(s.choose_target(Target::Permanent(fynn)));
+    settle(&mut s);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, fynn);
+    s.advance_to_step(StepKind::EndOfCombat);
+    assert_eq!(
+        s.game().state.players[1].counters.get(CounterKind::Poison),
+        4
+    );
+    s.assert_life(1, 16);
+}

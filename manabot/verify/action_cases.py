@@ -13,6 +13,7 @@ import torch
 
 from manabot.env import observation as observation_schema
 from manabot.verify import choice_inputs
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 
@@ -36,7 +37,8 @@ def initial(
             for i in range(2)
         ]
     )
-    env.reset(configs)
+    raw, _ = env.reset(configs)
+    keep_opening_hands(env, raw)
     for seat in range(2):
         env.scenario_clear_hand(seat)
     return env

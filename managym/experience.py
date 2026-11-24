@@ -438,6 +438,7 @@ class LegacyPermanentView(ProtocolModel):
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    entered_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
@@ -496,6 +497,9 @@ class LegacyPlayerView(ProtocolModel):
     id: UInt32
     is_active: bool
     is_agent: bool
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     life: Int32
     zone_counts: dict[str, UInt32]
     library_count: UInt32

@@ -113,32 +113,31 @@ test('a pinned local model link selects the model and both Elemental decks', asy
 });
 
 test('priority automation advances into a real choice and remains visible in the game log', async ({ page }) => {
-  // Seed 0 gives the hero castable instants once lands are down, so priority
-  // windows outside the configured stops become real choices that automation
-  // passes; earlier windows hold only Pass priority and native skipping takes them.
+  // One land makes Lightning Bolt legal. A manual pass into a window with
+  // no stop then produces real automatic priority passes.
   await page.routeWebSocket('**/ws/play', socket => {
     const server = socket.connectToServer();
     socket.onMessage(message => {
       if (typeof message !== 'string') { server.send(message); return; }
       const payload = JSON.parse(message);
-      if (payload.type === 'new_game') payload.config.seed = 0;
+      if (payload.type === 'new_game') {
+        payload.config.seed = 1;
+        payload.config.hero_deck = { Mountain: 32, 'Lightning Bolt': 8 };
+        payload.config.villain_deck = { Forest: 40 };
+        payload.config.auto_pass = true;
+      }
       server.send(JSON.stringify(payload));
     });
   });
   await page.goto('/?hero=elemental_ur&villain=elemental_gw');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
-  await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
-  // Automated passes are their own actor in the move list's quiet pass runs.
-  const automated = page.locator('[data-testid=pass-run] [data-testid=log-entry][data-actor=auto]');
-  for (let input = 0; input < 6 && await automated.count() === 0; input++) {
+  for (const label of ['Keep hand', 'Play Mountain', 'Pass priority']) {
     const revision = Number(await page.locator('main').getAttribute('data-frame-revision'));
-    const labels = await page.getByTestId('action-option').allTextContents();
-    const land = labels.findIndex(label => /Play (Island|Mountain)/.test(label));
-    await page.getByTestId('action-option').nth(land === -1 ? labels.findIndex(label => label.includes('Pass priority')) : land).click();
+    await page.getByTestId('action-option').and(page.getByRole('button', { name: label, exact: true })).first().click();
     await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision'))).toBeGreaterThan(revision);
-    await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
   }
+  const automated = page.locator('[data-testid=pass-run] [data-testid=log-entry][data-actor=auto]');
   await expect(automated.first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
   // The game's own address returns to it; the setup address it began from opens setup.

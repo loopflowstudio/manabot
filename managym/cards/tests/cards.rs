@@ -42,6 +42,8 @@ mod csp;
 mod definitions;
 #[path = "cards/dft.rs"]
 mod dft;
+#[path = "cards/dgm.rs"]
+mod dgm;
 #[path = "cards/dka.rs"]
 mod dka;
 #[path = "cards/dmu.rs"]

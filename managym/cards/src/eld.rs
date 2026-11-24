@@ -75,6 +75,7 @@ fn fabled_passage() -> CardDefinition {
                         Effect::ShuffleLibrary,
                         Effect::If {
                             condition: Condition::ControlsAtLeast {
+                                distinct_names: false,
                                 count: 4,
                                 predicate: CardPredicate {
                                     card_type: Some(CardType::Land),

@@ -483,6 +483,8 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     scalar = managym.Env(seed=213, skip_trivial=True)
     players = [managym.PlayerConfig(name, {"Mountain": 100}) for name in ("a", "b")]
     scalar.reset(players)
+    scalar.step(0)
+    scalar.step(0)
     scalar.scenario_clear_hand(0)
     for _ in range(70):
         scalar.scenario_force_card_in_hand(0, "Mountain")
@@ -566,6 +568,8 @@ def test_captured_vector_records_native_support_before_policy_step(
         vector.reset_all_into_buffers(
             [managym.PlayerConfig(name, {"Mountain": 30}) for name in ("a", "b")]
         )
+        vector.step_into_buffers([0])
+        vector.step_into_buffers([0])
         count, kind = vector.native.current_action_summaries()[0]
         assert count > 2
         vector.step_into_buffers([0])
@@ -578,7 +582,7 @@ def test_captured_vector_records_native_support_before_policy_step(
         sample["retained_count"],
         sample["decision_kind"],
     ) == (count, 2, kind)
-    assert sample["game"]["seed"] == 213 and sample["game"]["actions"] == []
+    assert sample["game"]["seed"] == 213 and sample["game"]["actions"] == [0, 0]
     assert sample["game"]["frame"] and sample["game"]["players"]
 
 

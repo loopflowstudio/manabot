@@ -48,6 +48,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dog_1_1_w(),
         beast_3_3_g(),
         beast_4_4_g(),
+        villain(),
         zeppelin(),
     ]
 }
@@ -569,5 +570,16 @@ fn beast_3_3_g() -> TokenDefinition {
             3,
             [Color::Green],
         ),
+    )
+}
+fn villain() -> TokenDefinition {
+    let base = face("Villain", [CardType::Creature], &["Villain"], "Menace");
+    token(
+        "token.villain",
+        "cd76092f-0f5e-4890-996c-33f4f47c659c",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Menace]),
+            ..creature(base, 2, 1, [Color::Black])
+        },
     )
 }

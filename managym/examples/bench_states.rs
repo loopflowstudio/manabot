@@ -33,6 +33,8 @@ const STATES: &[(&str, &str)] = &[
     ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap scans stop once a single use is funded. Residual rollout replanning spans changing tapped resources and saved callers; sharing answers across steps needs a separate cache/invalidation design"),
     ("waterbend-x", "Forest, Katara, Bender's Waterskin, Herbalist; one payment per X"),
     ("duplicate-creatures", "Gray Ogre on both sides; attack, block and damage checkpoints"),
+    ("herald-healthy", "Same battlefield as herald-statics, with both seats at starting life"),
+    ("herald-statics", "One Herald of Eternal Dawn per seat among a growing cycle of static abilities; protection checks during combat"),
     ("duplicate-tokens", "Ally tokens on both sides; observation and combat rows"),
     ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven. Avoids counted-tap scans on ordinary activations; residual nested-filter branches need an exact bound accounting for upfront spending purposes and saved outputs"),
     ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
@@ -265,6 +267,8 @@ fn recipe(name: &str, size: usize) -> Recipe {
             ]);
         }
         "duplicate-creatures"
+        | "herald-statics"
+        | "herald-healthy"
         | "duplicate-tokens"
         | "diverse-statics"
         | "attachments"
@@ -274,9 +278,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
             for seat in &mut seats {
                 match name {
                     "duplicate-tokens" => seat.tokens = vec!["token.ally".into(); size],
-                    "diverse-statics" => {
+                    "diverse-statics" | "herald-statics" | "herald-healthy" => {
                         for i in 0..size {
                             seat.add(STATICS[i % STATICS.len()], 1);
+                        }
+                        if name != "diverse-statics" {
+                            seat.add("Herald of Eternal Dawn", 1);
                         }
                     }
                     "triggers" => {
@@ -360,6 +367,13 @@ fn build(recipe: &Recipe) -> Env {
     }
     let mut env = Env::new(7, true, false, false);
     env.reset(setup).unwrap();
+    for _ in 0..2 {
+        let keep = actions(&mut env)
+            .iter()
+            .position(|action| matches!(action, Action::ChooseMode { mode: 0, .. }))
+            .expect("opening hand offers keep");
+        env.step(keep as i64).unwrap();
+    }
     for (i, seat) in recipe.seats.iter().enumerate() {
         env.scenario_clear_hand(i).unwrap();
         for name in &seat.battlefield {
@@ -454,6 +468,9 @@ fn build(recipe: &Recipe) -> Env {
             .as_mut()
             .unwrap()
             .change_counters(CounterKind::Lore, 1);
+    }
+    if recipe.state == "herald-statics" {
+        env.benchmark_game_mut().state.players[0].life = 0;
     }
     env.scenario_refresh().unwrap();
     env
