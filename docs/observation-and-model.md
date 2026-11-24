@@ -212,7 +212,7 @@ checkpoint therefore computes what it did. The field cannot be changed on a
 trained model, since it adds parameters and moves the norms. The `baseline`
 and Elemental self-play recipes set it; frozen recipes and experiment files
 are unchanged. [MLX](../manabot/backends/mlx.md#what-the-backend-covers)
-refuses a checkpoint with `stream_norm` or `focus_film`, naming the field.
+supports both `stream_norm` and `focus_film` with matching weights and outputs.
 
 ### Bucketed padding
 
@@ -266,13 +266,16 @@ The baseline recipe does this when its `device` is `cuda` and
 `padded_shapes` is false; to compare the paths on CUDA, run it with
 `--config '{"device": "cuda", "padded_shapes": true}'`
 ([run training](training.md#run-training)). Nothing resolves the switches
-from the device: `live_tokens=True` off CUDA fails validation, and bucketed
-shapes may be written explicitly on CPU or MPS, where they are slower to
-learn, as described above.
+from the device: self-play checks `live_tokens` per backend at run admission
+(CUDA-only on Torch; `mps` and `cpu` on MLX), and bucketed shapes may be
+written explicitly on CPU or MPS, where they are slower to learn on Torch CPU,
+as described above.
 
 The loop's collection and learner policies use the settings' layout. Code
-that builds a policy outside a loop chooses it itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
-off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
+that builds a policy outside a loop chooses it itself: `ActorCritic(...)`,
+`MLXActorCritic(...)`, `load_checkpoint(...)` and `backend.load_policy(...)`
+default both switches to off; pass `bucketed_shapes=True` or `live_tokens=True`
+to enable them.
 [Served evaluation](evaluation.md#shared-inference) accepts both switches and
 leaves them off: its batches are small, and the padded forward was the faster
 one there. Search players load their policies padded.
@@ -316,15 +319,20 @@ names. The catalog encoder, shared-effect routing, fact programs and the action
 head run as they do without the setting; with `bucketed_shapes=True` their axes
 are still trimmed to buckets.
 
-Attention within each observation uses `scaled_dot_product_attention` on
-jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
-CPU it falls back to one attention call per observation, which is correct but
-slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
-padded on a laptop CPU
-([measurement](../experiments/reports/eval_forward_layout.md)). A stage therefore uses
-live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
-`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
-as a reduced precision does.
+On Torch, attention within each observation uses `scaled_dot_product_attention`
+on jagged nested tensors. On CUDA that runs the fused variable-length kernels;
+on CPU it falls back to one attention call per observation, which is correct
+but slow: at w160l8 a 256-row collection forward took about 0.86 s against
+0.46 s padded on a laptop CPU
+([measurement](../experiments/reports/eval_forward_layout.md)). On MLX, every
+per-object layer runs on packed `[L, D]` tokens and, around
+`mx.fast.scaled_dot_product_attention` only, Q/K/V are compacted to
+`[B, H, max_live, d]` using host-derived offsets (complexity `O(B * max_live^2)`,
+zero device sync). Self-play therefore admits `live_tokens` per backend in
+`backend.runtime.admit_execution` before opening a run, rather than in
+`SelfPlay` settings validation: Torch refuses `live_tokens=True` when
+`device != "cuda"` (`live tokens require CUDA on the torch backend`), while
+MLX accepts `live_tokens=True` on both `mps` and `cpu`.
 
 Packing needs one host read per forward, the batch's total number of valid
 objects, to size the packed sequence. The policy's `prepare` measures it on the
@@ -334,8 +342,10 @@ learning alike, so the device forward reads nothing back.
 The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either
 may be on without the other. Code that builds a policy directly passes
-`ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
-which allow it on any device so CPU tests can compare the layouts. Like
+`ActorCritic(..., live_tokens=True)`, `MLXActorCritic(..., live_tokens=True)`,
+`load_checkpoint(..., live_tokens=True)` or
+`backend.load_policy(..., live_tokens=True)`, which allow it on CPU so tests
+and `.to("cuda")` callers can compare or move the layouts. Like
 bucketed shapes, it changes no model, checkpoint or input contract. Action
 probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
@@ -954,10 +964,10 @@ positions represented once). Deprecated inputs v9/v10 omit these facts and prese
 so their checkpoints never read them.
 
 The encoder writes definition joins and one-based positions. Prepared resolves definitions once and weights each by the
-reciprocal of its one-based position. Torch projects this separate pooled
-vector, divided by 60, before adding it to hand and decklist knowledge, so a
-known top card and a known hand card have distinct representations. MLX currently admits only input v9 and continues to refuse v11;
-these rows do not extend the deprecated layout. It is a minimal live
+reciprocal of its one-based position. Both Torch and MLX project this separate
+pooled vector, divided by 60, before adding it to hand and decklist knowledge,
+so a known top card and a known hand card have distinct representations;
+these rows do not extend the deprecated v9/v10 layout. It is a minimal live
 read, with no measured claim about learning or an ability to infer joint
 constraints. The text observation states each exact position in words.
 
@@ -983,8 +993,8 @@ complete decision history, and no training benefit has been measured.
 
 ## Whole-game decision memory
 
-**Unreleased.** Whole-game native logs, shared immutable prefixes and Torch
-encoders are implemented with bounded execution rows. Memory stays opt-in.
+**Unreleased.** Whole-game native logs, shared immutable prefixes, and Torch
+and MLX encoders are implemented with bounded execution rows. Memory stays opt-in.
 The [cost report](../experiments/opponent_memory.md) records the current
 suffix A40 calibration: control costs 1.105× incumbent time and GRU-K1 1.201×. These are exploratory cost measurements;
 matched training and paired strength evaluation have not run. These CUDA receipts
@@ -1014,7 +1024,7 @@ capture even for a log-only control. Direct native callers opt in with
 `decision_memory_include_own=True` also enables it. Search clones retain existing
 facts and never append hypothetical decisions.
 
-To let a Torch policy use the opponent's earlier choices, select an encoder and
+To let a policy use the opponent's earlier choices, select an encoder and
 one or four summaries in its model configuration:
 
 ```python
@@ -1118,8 +1128,9 @@ width 64 and projects its final valid state to the selected summaries. Both
 return zero summaries for an empty history. Record embeddings use absolute
 ordinal and span features. The GRU reads their chronological order; the
 transformer adds a learned projection of prefix-relative recency (rank / 128)
-as a sequence position signal, outside the shared record embedding. Memory
-requires the Torch backend; MLX raises `UnsupportedPolicy` for a memory-enabled configuration.
+as a sequence position signal, outside the shared record embedding. Both the
+Torch and MLX backends support both decision-memory encoders (`gru` and
+`transformer`, 1 or 4 summaries) and control-trunk branching.
 
 ### What a record means
 

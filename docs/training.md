@@ -172,10 +172,11 @@ message naming both versions. An unavailable device fails explicitly. Float64
 loss and diagnostic arithmetic runs on the host with gradients preserved; no
 automatic operator fallback is enabled. Precision follows the
 [one rule for every GPU backend](#reduced-precision); TF32 is CUDA-only. Belief
-inputs and frozen opponents are unsupported on MPS. Evaluation and search stay on CPU. On Apple Silicon, the baseline, local and
-Elemental recipes accept `backend="mlx"` for tracked scalar damped self-play.
-They read and write the same portable policies, preserve live streams and RNGs
-across stops between updates in an
+inputs and frozen opponents are unsupported on MPS. Evaluation and search stay on CPU. On Apple Silicon, the local, baseline, Elemental, `belief_policy` and
+`belief_sampler` recipes accept `backend="mlx"` for tracked damped and PPO
+self-play and belief sampler fitting. They read and write the same portable
+policy (`.safetensors`) and belief sampler (`belief.safetensors`) containers,
+preserve live streams and RNGs across stops between updates in an
 [MLX training save](../manabot/backends/mlx.md#tracked-training-and-recovery),
 and verify baseline runs through the selected backend in explicit CPU float32.
 
@@ -489,19 +490,22 @@ the sampler reads it with `run.input("start")`.
 
 `belief_policy.py` is an ordinary self-play recipe: PPO self-play on the Gray
 Ogre match, whose rates follow the horizon the recipe states
-(`gray_ogre_self_play(horizon=config.updates)`).
+(`gray_ogre_self_play(horizon=config.updates)`). Both `PolicyConfig` and
+`BeliefConfig` accept `backend="mlx"` (default `"torch"`) on Apple Silicon.
 
 ```bash
 uv run etude launch experiments/belief.py --rent l4   # the policy; again once it finishes, the sampler
 uv run etude train experiments/belief.py              # the same jobs on this computer
+uv run --extra mlx etude train manabot/recipes/belief_policy.py --config '{"backend":"mlx","device":"mps"}' --until updates=1
 ```
 
-On this computer the first `etude train` trains the policy; the second reports
-it finished and trains the sampler from its final checkpoint, delivered as the
-input `start`; a third trains nothing. `--job sampler` selects that job
-alone, and refuses an address already taken unless given `--resume`. A
-checkpoint is handed down by `start=`, not as one of the policy run's stored
-files (`out.matching(...)`): the checkpoint record carries its lineage.
+On this computer the first `etude train experiments/belief.py` trains the
+policy; the second reports it finished and trains the sampler from its final
+checkpoint, delivered as the input `start`; a third trains nothing. `--job
+sampler` selects that job alone, and refuses an address already taken unless
+given `--resume`. A checkpoint is handed down by `start=`, not as one of the
+policy run's stored files (`out.matching(...)`): the checkpoint record carries
+its lineage.
 
 The defaults are a pilot's: one policy update, three games and a small
 sampler. Each job's files are in its own run:
@@ -509,8 +513,14 @@ sampler. Each job's files are in its own run:
 ```text
 ~/.etude/track/belief/policy@0/out/policies/00000001-raw.safetensors
 ~/.etude/track/belief/sampler@0/out/histories.json
-~/.etude/track/belief/sampler@0/out/belief.pt
+~/.etude/track/belief/sampler@0/out/belief.safetensors
 ```
+
+`belief.safetensors` is a portable safetensors container written by both Torch
+and MLX (`manabot.belief.checkpoint`), validated by exact bytes, schema,
+dataset, policy and world identities. A sampler saved by one backend loads on
+the other with matching `log_prob`. Torch retains a legacy `.pt` (`PK\x03\x04`)
+read fallback by magic bytes; MLX refuses legacy `.pt` samplers naming Torch.
 
 A policy run taken further publishes later checkpoints beside the one a
 sampler read. Use a new sampler experiment label for a sampler trained from
@@ -518,10 +528,11 @@ the later checkpoint; its earlier evidence stays unchanged.
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
 frozen policy and writes each viewer's history with its private hand label;
-`train_belief` (`manabot.belief.train`) fits the sampler on them. Neither
-changes the policy, and neither keeps state: an interrupted sampler run
-collects and fits again when resumed. `load_checkpoint` checks that the start
-policy belongs to this world and these model and observation configs.
+`train_belief` (`manabot.belief.train`) fits the sampler on them through
+`backend.belief_fit` and admits the written container through `backend.belief`.
+Neither changes the policy, and neither keeps state: an interrupted sampler run
+collects and fits again when resumed. Loading the start policy checks that it
+belongs to this world and these model and observation configs.
 
 Phases that share one run and each keep state of their own pass `name=` to
 `run.resume` and `run.save`. No current recipe needs it.
@@ -550,7 +561,9 @@ A collector opened directly with `open_collector` must be closed with `close_col
 selects [bucketed padding](observation-and-model.md#bucketed-padding)
 and `live_tokens` selects
 [live-token attention](observation-and-model.md#live-token-attention)
-for the collection and learner policies; both are off by default.
+for the collection and learner policies; both are off by default. `live_tokens`
+is admitted per backend when a run starts (CUDA-only on Torch; `mps` and `cpu`
+on MLX).
 
 The policy reads only the acting viewer's tensors; private labels are never
 model inputs. Learner and behavior weights are raw; EMA is a separately named
