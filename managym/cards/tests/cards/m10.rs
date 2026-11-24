@@ -1,20 +1,15 @@
 //! Tests for cards filed in `src/m10.rs`, in card order.
-
-use crate::support::{
-    game::{clear_summoning_sickness, five_color_setup, force_new_card_in_hand, until_end_of_turn},
-    inspect::counters_of,
-    play::{cast_card, pass_until, settle, tap_for_mana},
+use crate::support::game::{
+    clear_summoning_sickness, five_color_setup, force_new_card_in_hand, until_end_of_turn,
 };
-use managym::{
-    agent::action::{ActionSpaceKind, ActionType},
-    flow::turn::StepKind,
-    state::{
-        effect::Modification,
-        game_object::{PlayerId, Target},
-        permanent::CounterKind,
-        player::ManaPayment,
-    },
-};
+use crate::support::inspect::counters_of;
+use crate::support::play::{cast_card, pass_until, settle, tap_for_mana};
+use managym::agent::action::{ActionSpaceKind, ActionType};
+use managym::flow::turn::StepKind;
+use managym::state::effect::Modification;
+use managym::state::game_object::{PlayerId, Target};
+use managym::state::permanent::CounterKind;
+use managym::state::player::ManaPayment;
 
 /// Elvish Archdruid's mana ability counts the Elves its controller controls
 /// as it is activated, itself included, and resolves at once (CR 605.3a).
@@ -35,7 +30,7 @@ fn elvish_archdruid_adds_green_for_each_elf_off_the_stack() {
         let elves: Vec<_> = (0..2)
             .map(|_| {
                 s.game_mut()
-                    .create_token("token.green_elf_warrior", PlayerId(0), false)
+                    .create_token("token.elf_warrior_1_1_g", PlayerId(0), false)
                     .unwrap()
             })
             .collect();
@@ -123,4 +118,9 @@ fn mold_adder_may_grow_when_an_opponent_casts_a_blue_or_black_spell() {
     assert!(s.choose_target(Target::Player(PlayerId(0))));
     assert_eq!(s.game().state.stack_objects.len(), 1);
     settle(&mut s);
+}
+
+#[test]
+fn foundations_spell_essence_scatter() {
+    crate::check_counterspell("Essence Scatter", "Gray Ogre", "Sol Ring");
 }

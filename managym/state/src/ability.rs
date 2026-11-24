@@ -1,3 +1,4 @@
+use super::card::{Keyword, Keywords};
 use super::effect::{EffectDuration, Modification};
 use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
@@ -20,6 +21,25 @@ pub enum Ability {
 }
 
 impl Ability {
+    pub fn when_enters(subject: TriggerSubject, effects: Vec<Effect>) -> Self {
+        Self::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield { subject },
+            intervening_if: None,
+            effects,
+        }
+    }
+
+    pub fn when_you_gain_life(effect: Effect) -> Self {
+        Self::Triggered {
+            condition: TriggerCondition::GainsLife {
+                who: Actor::You,
+                nth: None,
+            },
+            intervening_if: None,
+            effects: vec![effect],
+        }
+    }
+
     /// The triggered rule represented by printed or granted ward (CR 702.21).
     pub fn ward(cost: PaymentCost) -> Self {
         Self::Triggered {
@@ -28,6 +48,18 @@ impl Ability {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::CounterUnlessPays { cost }],
+        }
+    }
+
+    /// Prowess (CR 702.108) is the same triggered ability on a card, token or grant.
+    pub fn prowess() -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::casts(Actor::You, CardPredicate::noncreature()),
+            effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::This,
+                Modification::pump(1, 1),
+            )],
         }
     }
 
@@ -350,6 +382,10 @@ pub enum Condition {
     CardsInHandAtLeast {
         count: usize,
     },
+    /// "as long as you have `amount` or more life".
+    LifeAtLeast {
+        amount: i32,
+    },
     /// "as long as you have `count` or more unspent mana" (both pools).
     UnspentManaAtLeast {
         count: u32,
@@ -591,6 +627,16 @@ impl Condition {
         }
     }
 
+    /// Whether answering reads a player's life total, so a static ability
+    /// with this condition follows the `life` revision.
+    pub fn reads_life(&self) -> bool {
+        match self {
+            Condition::LifeAtLeast { .. } => true,
+            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_life),
+            _ => false,
+        }
+    }
+
     /// Whether answering needs a resolving spell or ability, so the
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
@@ -625,6 +671,7 @@ impl Condition {
             | Condition::BattlefieldAtLeast { .. }
             | Condition::ControlsUnownedAtLeast { .. }
             | Condition::CardsInHandAtLeast { .. }
+            | Condition::LifeAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::CreatureDiedThisTurn
             | Condition::GainedLifeThisTurn
@@ -753,12 +800,13 @@ impl AttackSize {
 /// Which game objects an event-based trigger condition watches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerSubject {
+    /// The source itself (even a token copy), or another matching subject.
+    ThisOr(Box<TriggerSubject>),
     /// The permanent this ability is on.
     This,
-    /// "enchanted creature": the object the source Aura is attached to.
-    EnchantedCreature,
-    /// "equipped creature": the object the source Equipment is attached to.
-    EquippedCreature,
+    /// "enchanted creature" or "equipped creature": the object the source
+    /// Aura or Equipment is attached to.
+    Attached,
     /// A creature dealt damage by this exact source this turn.
     CreatureDamagedByThis,
     /// "a/another [predicate] [controlled_by controls]": an object whose
@@ -1035,6 +1083,8 @@ pub enum ObjectSelector {
     /// card it became in the graveyard or exile it went to (CR 400.7,
     /// 603.10a: "return this card", "exile it"); never a later object.
     This,
+    /// The bound source object only while that incarnation is live.
+    ExactSource,
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
@@ -1208,6 +1258,7 @@ impl ObjectSelector {
                 ..
             } => Some(&TARGET_PLAYER),
             Self::This
+            | Self::ExactSource
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
@@ -1313,6 +1364,9 @@ pub enum Effect {
     /// objects become [`ObjectSelector::Moved`] and answer
     /// [`Condition::Moved`].
     Move {
+        /// Move a hidden card into hand without revealing its identity.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        unrevealed: bool,
         /// A stated end replaces the usual shuffle-into-library movement.
         #[serde(skip_serializing_if = "Option::is_none")]
         library_end: Option<LibraryEnd>,
@@ -1540,10 +1594,27 @@ pub enum Effect {
     },
     /// Shuffle your graveyard into your library.
     ShuffleGraveyardIntoLibrary,
-    /// The target's owner chooses second from the top of their library or
-    /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
+    /// The target's owner chooses where in their library it goes: second
+    /// from the top or the bottom (modes of [`Effect::PlaceTargetInLibrary`]),
+    /// or with `top`, the top or the bottom.
     OwnerPutsIntoLibrary {
         target: TargetSpec,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        top: bool,
+    },
+    /// Reveal each object `what` names (CR 701.20): its definition becomes
+    /// public, and a later library placement in this resolution keeps that
+    /// knowledge ("reveal it, then shuffle and put that card on top").
+    Reveal {
+        what: ObjectSelector,
+    },
+    /// "Reveal cards from the top of your library until you reveal a
+    /// [predicate] card. Put that card into your hand and the rest on the
+    /// bottom of your library in a random order." The cards stay in the
+    /// library while revealed; with no match, every card is revealed and the
+    /// library is put back in a random order.
+    RevealUntilToHand {
+        predicate: CardPredicate,
     },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
@@ -1880,14 +1951,6 @@ pub enum DelayedExpiry {
 }
 
 impl Modification<EffectValue> {
-    /// "+power/+toughness".
-    pub fn pump(power: i32, toughness: i32) -> Self {
-        Modification::ModifyPt {
-            power: EffectValue::Fixed(power),
-            toughness: EffectValue::Fixed(toughness),
-        }
-    }
-
     /// Fixed base power and/or toughness (layer 7b).
     pub fn base_pt(power: Option<i32>, toughness: Option<i32>) -> Self {
         Modification::SetBasePt {
@@ -1930,6 +1993,8 @@ pub enum TargetSpec {
     Creature,
     /// Creature, player, planeswalker or battle (CR 115.4).
     AnyTarget,
+    /// "target player or planeswalker".
+    PlayerOrPlaneswalker,
     Spell,
     /// "target spell or ability with a single target".
     SpellOrAbilityWithSingleTarget,
@@ -2241,7 +2306,8 @@ impl Effect {
             | Effect::CounterAbility { what }
             | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
-            | Effect::Discard { what, .. } => vec![what],
+            | Effect::Discard { what, .. }
+            | Effect::Reveal { what } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
                 vec![from]
             }
@@ -2277,6 +2343,21 @@ impl Effect {
         Self::mana_choice(["W", "U", "B", "R", "G"].map(Mana::parse))
     }
 
+    /// "another target [spec]": one target other than the source, which
+    /// `effects` read through the spec they are given.
+    pub fn another_target(
+        spec: TargetSpec,
+        effects: impl FnOnce(TargetSpec) -> Vec<Effect>,
+    ) -> Self {
+        Effect::TargetClause {
+            requirement: TargetRequirement {
+                another: true,
+                ..TargetRequirement::one(spec.clone())
+            },
+            effects: effects(spec),
+        }
+    }
+
     /// "[affected] [modification] until end of turn."
     pub fn until_end_of_turn(
         affected: ObjectSelector,
@@ -2287,6 +2368,22 @@ impl Effect {
             modification,
             duration: EffectDuration::EndOfTurn,
         }
+    }
+
+    /// "[Affected] gets +P/+T and gains [keyword] until end of turn."
+    pub fn pump_and_grant_until_end_of_turn(
+        affected: ObjectSelector,
+        power: i32,
+        toughness: i32,
+        keyword: Keyword,
+    ) -> Vec<Self> {
+        vec![
+            Self::until_end_of_turn(affected.clone(), Modification::pump(power, toughness)),
+            Self::until_end_of_turn(
+                affected,
+                Modification::AddKeywords(Keywords::of(&[keyword])),
+            ),
+        ]
     }
 
     /// A continuous effect with no stated duration.
@@ -2323,7 +2420,7 @@ impl Effect {
             | Effect::MillUntil { player, .. } => player.target_spec(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
-            | Effect::OwnerPutsIntoLibrary { target }
+            | Effect::OwnerPutsIntoLibrary { target, .. }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
@@ -2365,6 +2462,8 @@ impl Effect {
             | Effect::CounterAbility { .. }
             | Effect::Earthbend { .. }
             | Effect::Discard { .. }
+            | Effect::Reveal { .. }
+            | Effect::RevealUntilToHand { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
             | Effect::ApplyContinuous { .. }
@@ -2491,13 +2590,36 @@ impl Effect {
     pub fn search_library(
         predicate: CardPredicate,
         max: EffectValue,
+        effects: Vec<Effect>,
+    ) -> Self {
+        Self::library_search(predicate, 0, max, effects)
+    }
+
+    /// A search for an unrestricted card must find one in a nonempty library.
+    pub fn search_for_card(destination: ZoneType) -> Self {
+        Self::library_search(
+            CardPredicate::default(),
+            1,
+            1.into(),
+            vec![Self::zone_move(
+                ObjectSelector::Selected,
+                destination,
+                destination == ZoneType::Hand,
+            )],
+        )
+    }
+
+    fn library_search(
+        predicate: CardPredicate,
+        min: usize,
+        max: EffectValue,
         mut effects: Vec<Effect>,
     ) -> Self {
         effects.push(Effect::ShuffleLibrary);
         Effect::SelectCards {
             from: ObjectSelector::Zone(ZoneType::Library),
             predicate,
-            min: 0,
+            min,
             max,
             effects,
             if_declined: vec![Effect::ShuffleLibrary],
@@ -2561,7 +2683,12 @@ impl Effect {
 
     /// "Put [what] into [zone]" with no further terms.
     pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
+        Self::zone_move(what, to, false)
+    }
+
+    fn zone_move(what: ObjectSelector, to: ZoneType, unrevealed: bool) -> Self {
         Effect::Move {
+            unrevealed,
             library_end: None,
             what,
             to,
@@ -2577,6 +2704,7 @@ impl Effect {
     /// with the move, before linked returns can ask a subsequent question.
     pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: Some(end),
             what,
             to: ZoneType::Library,
@@ -2602,6 +2730,7 @@ impl Effect {
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: None,
             what,
             to: ZoneType::Battlefield,
@@ -2616,6 +2745,7 @@ impl Effect {
     /// "Exile [what] with this" or "until this leaves the battlefield".
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
+            unrevealed: false,
             library_end: None,
             what,
             to: ZoneType::Exile,
@@ -2629,6 +2759,15 @@ impl Effect {
 
     pub fn tap(what: ObjectSelector) -> Self {
         Effect::Tap { what }
+    }
+
+    /// An Aura spell's "Enchant [spec]" (CR 702.5): it resolves attached to
+    /// one target matching `spec`. `Object::enchant` reads the spec back, so
+    /// the cast target and the CR 704.5m recheck come from this one clause.
+    pub fn enchant(spec: TargetSpec) -> Self {
+        Effect::AttachSourceTo {
+            what: ObjectSelector::Target(spec),
+        }
     }
 
     pub fn untap(what: ObjectSelector) -> Self {

@@ -20,7 +20,7 @@ use crate::{
         game::{CastChoices, Game},
         payment::{CostComponent, Payment, PaymentProgress},
         proposed_event::{
-            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate,
+            BatchProgress, EventBatch, EventBinding, EventResult, ReplacementCandidate, ZoneEntry,
         },
         sba::SbaProgress,
         turn::OnceEachTurnKey,
@@ -28,6 +28,7 @@ use crate::{
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
+        knowledge::LibraryKnowledge,
         mana::ManaCost,
         payment::PaymentReceipt,
         permanent::CounterKind,
@@ -48,7 +49,6 @@ pub enum FrameCompletion {
     StateBased {
         next: Box<FrameCompletion>,
     },
-    CombatNormal,
     /// After stack exile, finish state-based actions before starting cleanup.
     EndTurn,
     /// The spell's whole cost is paid; `payment.receipt` is what it actually
@@ -175,6 +175,12 @@ pub struct EffectFrame {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub moved: Vec<ObjectId>,
+    /// Whether `Effect::Reveal` revealed the `selected` objects; a later
+    /// placement of one on top of its library keeps it public ("reveal it,
+    /// then shuffle and put that card on top"). Inline as a flag: the frame
+    /// is part of `GameState`'s size budget.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub selected_revealed: bool,
     /// The permanent the resolving player chose for the instruction now
     /// running over a `Chosen` selector; cleared once it has run.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -262,6 +268,7 @@ impl EffectFrame {
             life_lost: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
+            selected_revealed: false,
             selected_from: None,
             moved: Vec::new(),
             chosen: None,
@@ -282,6 +289,7 @@ impl EffectFrame {
         Self {
             program: self.program.clone(),
             selected: self.selected.clone(),
+            selected_revealed: self.selected_revealed,
             selected_from: self.selected_from.clone(),
             remembered: self.remembered.clone(),
             inherited_from: self.inherited_from,
@@ -311,6 +319,7 @@ impl EffectFrame {
     ) {
         let mut child = self.child_scope(effects);
         child.selected = selected;
+        child.selected_revealed = false;
         child.selected_from = from;
         let parent = std::mem::replace(self, child);
         self.completion = FrameCompletion::Frame(Box::new(parent));
@@ -469,6 +478,16 @@ pub enum SelectionOrigin {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    AssignCombatDamage {
+        player: PlayerId,
+        attacker: ObjectId,
+        blocker: ObjectId,
+        minimum: i32,
+        remaining: i32,
+        last: bool,
+        pass: crate::flow::game::CombatDamagePass,
+        assigned: Vec<i32>,
+    },
     OrderReplacement {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
@@ -731,7 +750,8 @@ impl Decision {
     pub fn player(&self) -> PlayerId {
         match self {
             Decision::Payment(payment) => payment.player,
-            Decision::OrderReplacement { player, .. }
+            Decision::AssignCombatDamage { player, .. }
+            | Decision::OrderReplacement { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -834,7 +854,8 @@ impl Decision {
                 offer: ResolutionCastOffer::LibraryTop { object },
                 ..
             } => std::slice::from_ref(object),
-            Decision::OrderReplacement { .. }
+            Decision::AssignCombatDamage { .. }
+            | Decision::OrderReplacement { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -891,7 +912,6 @@ impl SuspendedResolution {
                 FrameCompletion::Paid { .. }
                 | FrameCompletion::Activated { .. }
                 | FrameCompletion::EndTurn
-                | FrameCompletion::CombatNormal
                 | FrameCompletion::Priority
                 | FrameCompletion::Continue
                 | FrameCompletion::Spell { .. } => {}
@@ -1348,16 +1368,6 @@ impl Game {
                         }
                         return;
                     }
-                    FrameCompletion::CombatNormal => {
-                        if !self.finish_sbas_before(FrameCompletion::CombatNormal) {
-                            return;
-                        }
-                        frame.batch = self.combat_damage_batch(
-                            crate::flow::game::CombatDamagePass::NormalWithFirstStrike,
-                        );
-                        frame.completion = FrameCompletion::Continue;
-                        continue;
-                    }
                     FrameCompletion::Paid { player, payment } => {
                         self.commit_spell_payment(player, payment);
                     }
@@ -1583,6 +1593,24 @@ impl Game {
             })
             .unwrap_or_default();
         let space = match &suspended.decision {
+            Decision::AssignCombatDamage {
+                player,
+                attacker,
+                blocker,
+                minimum,
+                remaining,
+                ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: (*minimum..=*remaining)
+                    .map(|amount| Action::ChooseMode {
+                        player: *player,
+                        mode: amount as usize,
+                    })
+                    .collect(),
+                focus: vec![self.state[*attacker].id, self.state[*blocker].id],
+            },
             Decision::OrderReplacement { player, candidates } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -2125,6 +2153,28 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (
+                Decision::AssignCombatDamage {
+                    pass,
+                    minimum,
+                    remaining,
+                    assigned,
+                    ..
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                let Some(amount) = i32::try_from(*mode)
+                    .ok()
+                    .filter(|v| (*minimum..=*remaining).contains(v))
+                else {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("illegal combat damage assignment".into()));
+                };
+                let mut amounts = assigned.clone();
+                amounts.push(amount);
+                self.assign_combat_damage(suspended.frame, *pass, amounts);
+                Ok(())
+            }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
                 let Some(candidate) = candidates.get(*mode) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2651,7 +2701,7 @@ impl Game {
                     ))
                 } else {
                     if *reveal {
-                        self.reveal_object_to_hand(*object_id, player);
+                        self.reveal_object_to_hand(*object_id, player, ZoneEntry::default());
                     } else {
                         self.move_object(*object_id, ZoneType::Hand);
                     }
@@ -2865,7 +2915,7 @@ impl Game {
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
                     ResolutionCastOffer::Exiled { object: object_id } => {
-                        self.reveal_object_to_hand(*object_id, *player);
+                        self.reveal_object_to_hand(*object_id, *player, ZoneEntry::default());
                     }
                     ResolutionCastOffer::Cascade { exiled, .. } => {
                         self.put_exiled_on_bottom_in_random_order(exiled.clone());
@@ -3096,7 +3146,7 @@ impl Game {
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
                 }
-                self.reveal_object_to_hand(*object_id, *player);
+                self.reveal_object_to_hand(*object_id, *player, ZoneEntry::default());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3344,7 +3394,7 @@ impl Game {
             }
             _ => {
                 for object in std::mem::take(selected) {
-                    self.reveal_object_to_hand(object, player);
+                    self.reveal_object_to_hand(object, player, ZoneEntry::default());
                 }
                 self.shuffle_library(player);
                 self.run_frame(suspended.frame);
@@ -3421,13 +3471,34 @@ impl Game {
         else {
             unreachable!("surveil selection");
         };
+        // A private selection can change any position in the inspected prefix.
+        // The public suffix still shifts predictably with each actual departure.
+        if !graveyard.is_empty() {
+            self.state
+                .known_library_mut(*player)
+                .public
+                .retain(|position, _| *position >= looked.len());
+        }
         let events = graveyard.iter().map(|object| {
-            self.zone_move_proposal(*object, ZoneType::Graveyard, Default::default())
+            self.zone_move_proposal(
+                *object,
+                ZoneType::Graveyard,
+                ZoneEntry {
+                    inspected_library_departure: true,
+                    ..Default::default()
+                },
+            )
         });
         let batch = self.event_batch(EventBinding::None, events);
         looked.retain(|object| !graveyard.contains(object));
-        let next =
-            self.library_order_decision(*player, std::mem::take(looked), LibraryEnd::Top, false);
+        // A single kept card is already in order. The batch shifts its known
+        // position when the selected cards actually leave the library.
+        let next = (looked.len() > 1).then(|| Decision::OrderLibrary {
+            player: *player,
+            object_ids: std::mem::take(looked),
+            next: 0,
+            end: LibraryEnd::Top,
+        });
         suspended.frame.batch = Some(batch);
         self.continue_resolution(suspended.frame, next);
     }
@@ -3435,9 +3506,14 @@ impl Game {
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
-        self.state.known_library_mut(player).forget_order();
+        let knowledge = self.state.known_library_mut(player);
+        knowledge
+            .public
+            .retain(|position, _| *position >= objects.len());
         for object in objects.iter().rev() {
-            self.reposition_library_object(player, *object, usize::MAX);
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, *object, usize::MAX);
         }
         self.remember_library_objects(player, objects);
         self.assert_library_knowledge();
@@ -3470,6 +3546,86 @@ impl Game {
             LibraryEnd::Top => usize::MAX,
         };
         self.reposition_library_object(owner, object, index);
+    }
+
+    /// A card the resolution put on top of its owner's library: the
+    /// resolving player saw it, and a revealed one (Campus Guide) is public.
+    pub(crate) fn remember_placed_top(&mut self, object: ObjectId, frame: &EffectFrame) {
+        let owner = self.state[object].owner;
+        let definition = self.state[object].definition_id;
+        let public = frame.selected_revealed && frame.selected.contains(&object);
+        let knowledge = self.state.known_library_mut(owner);
+        if public {
+            knowledge.public.insert(0, definition);
+            LibraryKnowledge::bound(&mut knowledge.public);
+        }
+        if public || frame.controller == owner {
+            knowledge.own.insert(0, definition);
+            LibraryKnowledge::bound(&mut knowledge.own);
+        }
+        self.assert_library_knowledge();
+    }
+
+    /// Reveal cards from the top of `player`'s library until one matches
+    /// `predicate`; it goes to their hand and the cards revealed before it to
+    /// the bottom in a random order. The cards never leave the library while
+    /// revealed, so the match leaves a public position and a single passed
+    /// card keeps every fact below it and is publicly known on the bottom.
+    pub(crate) fn reveal_until_to_hand(&mut self, player: PlayerId, predicate: &CardPredicate) {
+        let from_top: Vec<ObjectId> = self.library_from_top(player).collect();
+        let hit = from_top
+            .iter()
+            .position(|object| self.object_matches_predicate(*object, predicate));
+        let passed = from_top[..hit.unwrap_or(from_top.len())].to_vec();
+        for object in &passed {
+            self.emit(GameEvent::CardRevealed {
+                owner: player,
+                definition: self.state[*object].definition_id,
+            });
+        }
+        if let Some(index) = hit {
+            self.reveal_object_to_hand(
+                from_top[index],
+                player,
+                ZoneEntry {
+                    inspected_library_departure: true,
+                    ..ZoneEntry::default()
+                },
+            );
+        }
+        match passed.as_slice() {
+            [] => {}
+            [top] => {
+                let definition = self.state[*top].definition_id;
+                let knowledge = self.state.known_library_mut(player);
+                for view in [&mut knowledge.public, &mut knowledge.own] {
+                    view.insert(0, definition);
+                    LibraryKnowledge::bound(view);
+                }
+                self.place_entrant_on_bottom(*top);
+            }
+            _ => {
+                let mut rest = passed;
+                rest.shuffle(self.state.rng_mut());
+                for object in rest {
+                    self.reposition_library_object(player, object, 0);
+                }
+            }
+        }
+    }
+
+    /// Put the top card of its owner's library on the bottom ("on the bottom
+    /// of its owner's library"), as a card that has just entered on top. Its
+    /// position is public, so this is no private permutation: facts about the
+    /// cards above it keep their places from the top.
+    pub(crate) fn place_entrant_on_bottom(&mut self, object: ObjectId) {
+        let owner = self.state[object].owner;
+        let bottom = self.state.zones.size(ZoneType::Library, owner) - 1;
+        self.state.known_library_mut(owner).move_top_to(bottom);
+        self.state
+            .zones
+            .reposition(ZoneType::Library, owner, object, 0);
+        self.assert_library_knowledge();
     }
 
     /// Arbitrary reorders invalidate positional facts at the mutation boundary.

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
@@ -29,6 +30,7 @@ from manabot.policy.buckets import bucket_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS, Layout, Tables, prepare
 from manabot.policy.readings import fresh_readings, legacy_readings, read_numeric
 from manabot.verify.representation import shared_effect_root
+from manabot.verify.text_observation import priority_root
 import managym
 from tests.model.prepared_routes import device_input
 
@@ -200,6 +202,40 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     assert prepared.binding == spec.binding
 
 
+def test_compact_attention_places_live_objects_and_masks_shorter_boards() -> None:
+    space = ObservationSpace()
+    rows = [
+        encode_observation(
+            space, priority_root(("Lightning Bolt",), lands).scenario_refresh()
+        )
+        for lands in (("Mountain",), ("Mountain", "Gray Ogre"))
+    ]
+    obs = {key: np.stack([row[key] for row in rows]) for key in rows[0]}
+    tables = _tables(
+        ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    )
+    prepared = prepare(obs, tables, live_tokens=True, value_token=True)
+    compact = prepared.compact_attention
+    assert compact is not None and prepared.live_index is not None
+
+    # A value token follows the last object slot, even on the shorter board.
+    present = np.pad(prepared.validity, ((0, 0), (0, 1)), constant_values=1)
+    expected = [np.flatnonzero(row) + b * len(row) for b, row in enumerate(present)]
+    longest = max(map(len, expected))
+    assert len(expected[0]) < longest
+    slots = np.full((len(rows), longest), -1)
+    slots[compact.batches, compact.slots] = prepared.live_index
+    np.testing.assert_array_equal(
+        slots,
+        [np.pad(row, (0, longest - len(row)), constant_values=-1) for row in expected],
+    )
+    np.testing.assert_array_equal(
+        compact.key_mask, np.where(slots >= 0, 0.0, -np.inf)[:, None, None, :]
+    )
+    assert on_device(prepared, "cpu").compact_attention is compact
+    assert prepare(obs, tables).compact_attention is None
+
+
 def test_padded_numeric_features_match_dense_readings_at_each_slot() -> None:
     space, original = _observations(11, False)
     obs = {key: rows.copy() for key, rows in original.items()}
@@ -345,6 +381,7 @@ def test_bucketed_prepare_translates_only_extracted_joins(legacy: bool) -> None:
         bucketed=True,
         binding=actual.binding,
         value_token=agent.value_token is not None,
+        select_programs=True,
     )
     expected = replace(expected, bucket_needs=measured.needs)
     np.testing.assert_equal(asdict(actual), asdict(expected))

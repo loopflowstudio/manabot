@@ -14,6 +14,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from manabot.backends.torch.packed_gru import packed_gru
 from manabot.policy.catalog import CatalogTables, catalog_tables
 from manabot.policy.prepare import CatalogPrograms, Prepared
 
@@ -151,26 +152,29 @@ class SemanticCardEncoder(nn.Module):
         Packing sorts programs by length. Within each chunk, completed programs
         occupy the hidden state's suffix; only the active prefix continues.
         """
-        # Packed GRU backward creates a packed-input-sized slice gradient at
-        # each time step. Bound that copying to 64 steps per call. This is full
-        # backpropagation through time: hidden states keep their gradients at
-        # every chunk boundary. The same GRU encodes every real token once.
-        batches = torch.tensor(programs.schedule.sizes, dtype=torch.long).split(64)
-        sizes = [int(batch.sum()) for batch in batches]
-        chunks = self.token_embedding(programs.tokens).split(sizes)
+        # nn.GRU's packed backward creates a packed-input-sized slice gradient
+        # at each time step. Bound that copying to 64 steps per call. This is
+        # full backpropagation through time: hidden states keep their gradients
+        # at every chunk boundary. The same GRU encodes every real token once.
+        # MPS runs the hand-written recurrence, which has no such cost, in one call.
+        tokens = self.token_embedding(programs.tokens)
+        steps = programs.schedule.sizes
+        chunk = len(steps) if tokens.device.type == "mps" else 64
         state: torch.Tensor | None = None
         finished: list[torch.Tensor] = []
-        for index, (data, batch) in enumerate(zip(chunks, batches, strict=True)):
-            active = int(batch[0])
-            _, state = self.encoder(
-                nn.utils.rnn.PackedSequence(data, batch),
-                None if state is None else state[:, :active],
+        offset = 0
+        for start in range(0, len(steps), chunk):
+            batch = steps[start : start + chunk]
+            data = tokens[offset : offset + sum(batch)]
+            offset += sum(batch)
+            _, state = packed_gru(
+                self.encoder, data, batch, None if state is None else state[: batch[0]]
             )
-            remaining = int(batches[index + 1][0]) if index + 1 < len(batches) else 0
-            finished.append(state[:, remaining:])
+            remaining = steps[start + chunk] if start + chunk < len(steps) else 0
+            finished.append(state[remaining:])
         # Packed sequences end shortest first. Reverse their completed suffixes
         # to restore descending-length order, then undo the original sorting.
-        encoded = torch.cat(finished[::-1], dim=1)[0]
+        encoded = torch.cat(finished[::-1])
         return encoded[programs.schedule.restore]
 
     @staticmethod

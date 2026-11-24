@@ -29,7 +29,7 @@ fn dread_summons() -> CardDefinition {
                 // A milled card a replacement exiled was not put into a
                 // graveyard this way.
                 Effect::CreateToken {
-                    token: "token.zombie".into(),
+                    token: "token.zombie_2_2_b".into(),
                     count: EffectValue::Objects {
                         of: Box::new(ObjectSelector::CardsThisWay),
                         predicate: Some(CardPredicate::creature()),

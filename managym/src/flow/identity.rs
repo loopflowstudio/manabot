@@ -54,6 +54,7 @@ impl Game {
                     copy: definition.copy.clone(),
                 })
             }),
+            attached_to: permanent.attached_to,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics

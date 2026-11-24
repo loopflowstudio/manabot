@@ -1,17 +1,17 @@
 //! Magic 2010.
-use managym_state::{
-    ability::{Ability, Actor, Effect, EffectValue, ObjectSelector, PaymentCost, TriggerCondition},
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        StaticAbility, StaticPtBuff, StaticScope,
-    },
-    mana::{Color, Mana, ManaCost},
-    permanent::CounterKind,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Effect, EffectValue, ObjectSelector, PaymentCost, TargetSpec, TriggerCondition,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+    StaticAbility, StaticPtBuff, StaticScope,
+};
+use managym_state::mana::{Color, Mana, ManaCost};
+use managym_state::permanent::CounterKind;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![elvish_archdruid(), mold_adder()]
+    vec![elvish_archdruid(), mold_adder(), essence_scatter()]
 }
 
 fn elvish_archdruid() -> CardDefinition {
@@ -93,6 +93,27 @@ fn mold_adder() -> CardDefinition {
                 }],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn essence_scatter() -> CardDefinition {
+    CardDefinition {
+        key: "m10.essence_scatter",
+        scryfall_id: "c231101e-6620-46fc-a0ad-a53291d12dc2",
+        printed: PrintedCharacteristics {
+            name: "Essence Scatter".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::CounterSpell {
+                what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                    predicate: CardPredicate::creature(),
+                }),
+                exile: false,
+            }],
+            text_box: "Counter target creature spell.".into(),
             ..Default::default()
         },
         ..Default::default()

@@ -1,18 +1,15 @@
 //! Magic Origins.
-use std::sync::Arc;
-
-use managym_state::{
-    ability::{
-        Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
-    },
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        PrintedCharacteristics,
-    },
-    mana::{Color, Mana, ManaCost, SpendEffect},
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
+    TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics,
+};
+use managym_state::mana::{Color, Mana, ManaCost, SpendEffect};
+use managym_state::predicate::CardPredicate;
+use std::sync::Arc;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
@@ -21,6 +18,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         demonic_pact(),
         elemental_bond(),
         pyromancers_goggles(),
+        skyraker_giant(),
     ]
 }
 
@@ -78,8 +76,7 @@ fn pyromancers_goggles() -> CardDefinition {
     let effect = SpendEffect::CopySpell {
         spell: Arc::new(CardPredicate {
             colors_any: vec![Color::Red],
-            card_types_any: vec![CardType::Instant, CardType::Sorcery],
-            ..Default::default()
+            ..CardPredicate::instant_or_sorcery()
         }),
     };
     CardDefinition {
@@ -155,8 +152,28 @@ fn dwynens_elite() -> CardDefinition {
                     CompareOp::Ge,
                     1,
                 )),
-                effects: vec![Effect::create_tokens("token.green_elf_warrior", 1)],
+                effects: vec![Effect::create_tokens("token.elf_warrior_1_1_g", 1)],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn skyraker_giant() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)";
+    CardDefinition {
+        key: "ori.skyraker_giant",
+        scryfall_id: "c5f0d87a-8f37-4598-9106-c3545dadf6fd",
+        printed: PrintedCharacteristics {
+            name: "Skyraker Giant".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Giant".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach]),
             text_box: text_box.into(),
             ..Default::default()
         },

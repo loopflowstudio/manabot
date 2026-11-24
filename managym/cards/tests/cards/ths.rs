@@ -187,3 +187,26 @@ fn burnished_hart_sacrifices_itself_for_two_tapped_basic_lands() {
         assert!(tapped(&s, entered), "{name}");
     }
 }
+
+#[test]
+fn foundations_5e_heros_downfall() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, offered_targets, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Hero's Downfall", "Gray Ogre", "Sol Ring"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ring = s.force_permanent_on_battlefield(1, "Sol Ring");
+    let walker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    crate::make_planeswalker(&mut s, walker);
+    let card = card_of(&s, walker);
+    cast(&mut s, "Hero's Downfall");
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::Permanent(ogre)));
+    assert!(offers.contains(&Target::Permanent(walker)));
+    assert!(!offers.contains(&Target::Permanent(ring)));
+    assert!(s.choose_target(Target::Permanent(walker)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
+}

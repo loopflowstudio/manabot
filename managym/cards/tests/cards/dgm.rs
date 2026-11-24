@@ -90,3 +90,14 @@ fn mazes_end_counts_distinct_gate_names_after_the_search() {
         assert_eq!(s.game().winner_index(), wins.then_some(0));
     }
 }
+
+#[test]
+fn foundations_grant_unflinching_courage() {
+    use managym::state::card::Keyword;
+    crate::check_attachment_grant(
+        "Unflinching Courage",
+        None,
+        (4, 4),
+        &[Keyword::Trample, Keyword::Lifelink],
+    );
+}

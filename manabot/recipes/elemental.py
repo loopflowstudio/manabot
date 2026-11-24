@@ -67,11 +67,13 @@ def train(config: ElementalConfig) -> None:
 
     # Resolve before opening the run: a missing framework leaves no failed run.
     backend = resolve(config.backend)
+    inputs = settings(config)
+    backend.runtime.admit_execution(inputs.device, live_tokens=inputs.live_tokens)
     with track(clocks=CLOCKS, config=config) as run:
         if config.validate_numerics:
             gate(run.out / "numerics")
         self_play(
-            settings(config),
+            inputs,
             run,
             updates=config.updates,
             backend=backend,

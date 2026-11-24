@@ -49,13 +49,15 @@ describe('promptLine', () => {
     expect(committed(pay)).toEqual([]);
   });
 
-  it('names a tap-pays choice by the payment, other modal choices as modes', () => {
+  it('names a tap-pays choice, combat damage and replacement order by what they ask, other modal choices as modes', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
     const modal = (stage: string): ExperienceFrame => ({ ...pay, action_space: 'MODAL', projection: { ...pay.projection,
       decision_context: { ...pay.projection.decision_context!, stage, source: { ...pay.projection.decision_context!.source!, label: 'Appeal to Eirdu' } } } });
     const line = (frame: ExperienceFrame): string => promptLine(frame, boardView(frame, PLAYERS));
     expect(line(modal('payment'))).toBe('Choose what the tap pays for Appeal to Eirdu');
     expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
+    expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
+    expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
@@ -100,6 +102,14 @@ describe('primaryLabel', () => {
     frame.projection.opponent.stack = [];
     return frame;
   }
+
+  it('names the next damage step while the stack is empty', () => {
+    const frame = emptyStack();
+    frame.projection.turn.step = 'COMBAT_FIRST_STRIKE_DAMAGE';
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To regular damage');
+    frame.projection.turn.step = 'COMBAT_DAMAGE';
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To end of combat');
+  });
 
   it('names the stack top while something waits to resolve', () => {
     const frame = emptyStack();

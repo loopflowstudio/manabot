@@ -1,7 +1,7 @@
 // damage.rs
 // Damage application, life changes, and cleanup.
 
-use crate::state::card::Keyword;
+use crate::state::card::{Keyword, Keywords};
 use crate::{
     flow::{
         event::{CombatPlayerHit, DamageTarget, EventSubject, GameEvent},
@@ -34,7 +34,7 @@ impl Game {
         let mut totals: Vec<LifelinkGain> = Vec::new();
         for gain in gains {
             match totals.iter_mut().find(|total| total.source == gain.source) {
-                Some(total) => total.amount += gain.amount,
+                Some(total) => total.amount = total.amount.saturating_add(gain.amount),
                 None => totals.push(gain),
             }
         }
@@ -59,10 +59,8 @@ impl Game {
             return 0;
         }
         let remaining = (characteristics.toughness - permanent.damage).max(0);
-        let deathtouch = source.is_some_and(|object| {
-            self.source_keywords(object)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
+        let deathtouch =
+            source.is_some_and(|object| self.source_keywords(object).has(Keyword::Deathtouch));
         let lethal = if deathtouch {
             remaining.min(1)
         } else {
@@ -82,21 +80,20 @@ impl Game {
         if amount <= 0 {
             return result;
         }
-        let source_has_deathtouch = source.is_some_and(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
-        });
-        let lifelink = source.and_then(|object_ref| {
-            self.source_keywords(object_ref)
-                .is_some_and(|keywords| keywords.has(Keyword::Lifelink))
-                .then(|| self.source_controller(object_ref))
-                .flatten()
-                .map(|controller| LifelinkGain {
-                    source: object_ref,
-                    controller,
-                    amount,
-                })
-        });
+        let keywords = source
+            .map(|object| self.source_keywords(object))
+            .unwrap_or_default();
+        let source_has_deathtouch = keywords.has(Keyword::Deathtouch);
+        let lifelink = source
+            .filter(|_| keywords.has(Keyword::Lifelink))
+            .and_then(|source| {
+                self.source_controller(source)
+                    .map(|controller| LifelinkGain {
+                        source,
+                        controller,
+                        amount,
+                    })
+            });
         let combat_source = combat
             .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
             .flatten();
@@ -246,42 +243,50 @@ impl Game {
     /// Damage-source keywords include until-EOT grants while the source is
     /// on the battlefield (Enter the Avatar State's lifelink), and static
     /// grants to a resolving spell (Lo and Li's Lesson spells).
-    fn source_keywords(&self, source: ObjectId) -> Option<crate::state::card::Keywords> {
+    fn source_keywords(&self, source: ObjectId) -> Keywords {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return Some(self.characteristics(permanent_id).keywords);
+            return self.characteristics(permanent_id).keywords;
         }
         if let Some(lki) = self.object_lki(source) {
-            return Some(lki.keywords);
+            return lki.keywords;
         }
         if let Some(spell) = self.spell_on_stack(source) {
-            return Some(self.spell_keywords(source, spell.controller));
+            return self.spell_keywords(source, spell.controller);
         }
-        Some(self.state.source_base(source).1.keywords)
+        self.state.source_base(source).1.keywords
     }
 
-    /// Who controls a damage source: a permanent's controller, the
-    /// controller it had when it left, or a live or departed spell's
-    /// controller (a stolen spell's damage is its new controller's); owner
-    /// provenance only for anything else.
     pub(crate) fn source_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return self.state.permanents[permanent_id]
-                .as_ref()
-                .map(|permanent| permanent.controller);
+        self.damage_source_facts(source)
+            .map(|(controller, _)| controller)
+    }
+
+    /// Read controller and creature status from the same incarnation of the source.
+    pub(crate) fn damage_source_facts(&self, source: ObjectId) -> Option<(PlayerId, bool)> {
+        if let Ok(id) = self.lookup_current_permanent(source) {
+            let permanent = self.state.permanents[id].as_ref()?;
+            return Some((
+                permanent.controller,
+                self.permanent_is_battlefield_creature(id),
+            ));
         }
-        if let Some(lki) = self.object_lki(source) {
-            return Some(lki.controller);
-        }
-        if let Some(spell) = self.spell_on_stack(source) {
-            return Some(spell.controller);
+        if self.state.live(source).is_some() {
+            if let Some(spell) = self.spell_on_stack(source) {
+                return Some((spell.controller, self.state[source].types.is_creature()));
+            }
         }
         if let Some(spell) = self.state.spell_lki.get(&source) {
-            return Some(spell.controller);
+            return Some((
+                spell.controller,
+                self.state.source_base(source).1.types.is_creature(),
+            ));
         }
-        self.state
-            .objects
-            .provenance(source)
-            .map(|(_, owner, _)| owner)
+        self.object_lki(source)
+            .map(|lki| (lki.controller, lki.was_creature()))
+            .or_else(|| {
+                let (_, owner, _) = self.state.objects.provenance(source)?;
+                Some((owner, self.state.source_base(source).1.types.is_creature()))
+            })
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

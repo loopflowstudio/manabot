@@ -17,6 +17,15 @@ use super::{
     shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
 };
 
+impl InputLayout {
+    pub fn player_columns(self) -> &'static [Column] {
+        match self {
+            Self::OneToken => player::COLUMNS,
+            Self::Legacy => &player::COLUMNS[..player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
+        }
+    }
+}
+
 /// A permanent row's columns: input v11 writes every `permanent` column; the
 /// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
 /// (`legacy_input`).
@@ -278,6 +287,7 @@ columns! { player {
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
+    74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).
@@ -418,9 +428,10 @@ columns! { permanent {
     49: WARD_COST => ("ward_cost", ValueLayout::COUNT_TENTHS),
     50: VALID => ("valid", ValueLayout::FLAG),
     51: ENTERED_THIS_TURN => ("entered_this_turn", ValueLayout::FLAG),
-    52: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
-    53: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
-    54: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
+    52: FIRST_STRIKE_PARTICIPANT => ("first_strike_participant", ValueLayout::FLAG),
+    53: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
+    54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
+    55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -993,7 +1004,7 @@ pub fn observation_layout(
     let mut layout = BTreeMap::new();
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
-            ("player", "player", Some(1), player::COLUMNS),
+            ("player", "player", Some(1), layout_kind.player_columns()),
             ("cards", "card", None, card::COLUMNS),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
@@ -1220,12 +1231,16 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                ("agent_player", player::WIDTH, 74),
+                (
+                    "agent_player",
+                    config.player_dim(),
+                    if one_token { 75 } else { 74 },
+                ),
                 ("agent_cards", card::WIDTH, 56),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 55 } else { 38 },
+                    if one_token { 56 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1271,13 +1286,13 @@ mod tests {
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
+            let permanent_valid = if one_token {
+                permanent::VALID
+            } else {
+                super::super::legacy_input::PERMANENT_VALID
+            };
             assert_eq!(
-                layout["agent_permanents"].columns[if one_token {
-                    permanent::VALID
-                } else {
-                    super::super::legacy_input::PERMANENT_VALID
-                }]
-                .name,
+                layout["agent_permanents"].columns[permanent_valid].name,
                 "valid"
             );
             for key in ["agent_cards", "facts", "effects"] {

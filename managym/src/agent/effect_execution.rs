@@ -45,7 +45,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "after selection",
     "applied replacements",
     "attach to",
-    "attached at activation",
     "batch",
     "bind moved",
     "bind result",
@@ -119,6 +118,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "last known in combat",
     "last known land",
     "last known tapped",
+    "last known attachment",
     "last known definition",
     "last known spell",
     "legend group",
@@ -155,6 +155,12 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "placed on bottom",
     "placement",
     "pre-event object",
+    "combat damage source",
+    "another damage step",
+    "first-strike participant",
+    "minimum assignment",
+    "last blocker",
+    "assigned combat damage",
     "remaining",
     "remaining instructions",
     "remaining iteration subjects",
@@ -467,10 +473,6 @@ impl<'a> Projection<'a> {
                 });
                 self.field("return", &"end the turn");
             }
-            FrameCompletion::CombatNormal => {
-                self.summary(|| "Normal combat damage follows these choices.".into());
-                self.field("return", &"normal combat damage");
-            }
             FrameCompletion::StateBased { next } => {
                 self.summary(|| "Finish the pending state-based actions before priority.".into());
                 self.field("return", &"finish state-based actions");
@@ -532,9 +534,6 @@ impl<'a> Projection<'a> {
                 self.effects("captured activation", &ability.effects);
                 for target in &ability.targets {
                     self.target("target", *target);
-                }
-                if let Some(object) = ability.attached {
-                    self.object("attached at activation", object);
                 }
                 if let Some(grant) = ability.granted_by {
                     self.object("grantor", grant.grantor);
@@ -698,6 +697,7 @@ impl<'a> Projection<'a> {
         });
         let ObjectLki {
             copiable,
+            attached_to,
             transforms,
             inherited_from,
             granted_abilities,
@@ -753,6 +753,12 @@ impl<'a> Projection<'a> {
         }
         if *was_tapped {
             self.field("last known tapped", &true);
+        }
+        if let Some(attached) = attached_to {
+            self.reference(
+                "last known attachment",
+                game.visible_reference(*attached, viewer),
+            );
         }
         self.field("last known definition", definition_id);
         let counter_values: Vec<_> = counters.iter().collect();
@@ -1356,6 +1362,34 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
+        }
+        Decision::AssignCombatDamage {
+            attacker,
+            blocker,
+            pass,
+            minimum,
+            remaining,
+            last,
+            assigned,
+            ..
+        } => {
+            out.object("combat damage source", *attacker);
+            out.object("target", *blocker);
+            out.field(
+                "another damage step",
+                &matches!(pass, crate::flow::game::CombatDamagePass::FirstStrike),
+            );
+            if let Some(combat) = &game.state.combat {
+                for &id in &combat.first_strikers {
+                    if let Some(object) = game.permanent_object(id) {
+                        out.object("first-strike participant", object);
+                    }
+                }
+            }
+            out.field("minimum assignment", minimum);
+            out.field("remaining", remaining);
+            out.field("last blocker", last);
+            out.field("assigned combat damage", assigned);
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

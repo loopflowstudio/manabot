@@ -172,11 +172,15 @@ fn encoded_to_dict<'py>(
         &encoded.relations,
         &[continuation::RELATION_ROWS, continuation::RELATION_DIM],
     )?;
-    put("agent_player", &encoded.agent_player, &[1, enc::PLAYER_DIM])?;
+    put(
+        "agent_player",
+        &encoded.agent_player,
+        &[1, config.player_dim()],
+    )?;
     put(
         "opponent_player",
         &encoded.opponent_player,
-        &[1, enc::PLAYER_DIM],
+        &[1, config.player_dim()],
     )?;
     let cards = [config.max_cards_per_player, enc::CARD_DIM];
     put("agent_cards", &encoded.agent_cards, &cards)?;
@@ -454,6 +458,8 @@ pub enum StepEnum {
     PostcombatMainStep = 9,
     EndingEnd = 10,
     EndingCleanup = 11,
+    // Appended as 12 to preserve Observation JSON discriminants; reorder before CombatDamage in 0.3.0.
+    CombatFirstStrikeDamage = 12,
 }
 
 #[cfg(feature = "python")]
@@ -483,6 +489,8 @@ impl StepEnum {
     const ENDING_END: Self = Self::EndingEnd;
     #[classattr]
     const ENDING_CLEANUP: Self = Self::EndingCleanup;
+    #[classattr]
+    const COMBAT_FIRST_STRIKE_DAMAGE: Self = Self::CombatFirstStrikeDamage;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -509,6 +517,7 @@ impl From<StepKind> for StepEnum {
             StepKind::PostcombatMain => Self::PostcombatMainStep,
             StepKind::End => Self::EndingEnd,
             StepKind::Cleanup => Self::EndingCleanup,
+            StepKind::FirstStrikeCombatDamage => Self::CombatFirstStrikeDamage,
         }
     }
 }
@@ -529,6 +538,7 @@ impl From<StepEnum> for StepKind {
             StepEnum::PostcombatMainStep => Self::PostcombatMain,
             StepEnum::EndingEnd => Self::End,
             StepEnum::EndingCleanup => Self::Cleanup,
+            StepEnum::CombatFirstStrikeDamage => Self::FirstStrikeCombatDamage,
         }
     }
 }
@@ -2248,6 +2258,10 @@ impl PyPermanent {
     #[setter]
     fn set_exile_if_dies_this_turn(&mut self, value: bool) {
         self.data.exile_if_dies_this_turn = value;
+    }
+    #[getter]
+    fn first_strike_participant(&self) -> bool {
+        self.data.first_strike_participant
     }
     #[getter]
     fn attacking(&self) -> bool {

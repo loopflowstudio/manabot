@@ -78,11 +78,6 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
-    /// The exact object the source Aura or Equipment was attached to when
-    /// the ability was activated, before costs such as sacrificing it.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(serialize_with = "crate::game_object::exact")]
-    pub attached: Option<ObjectId>,
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,

@@ -1,17 +1,15 @@
 //! Dragons of Tarkir.
-use managym_state::{
-    ability::{
-        Ability, Actor, Aggregate, CompareOp, Condition, Effect, ObjectProperty, ObjectSelector,
-        Scope, TargetSpec, TriggerCondition, TurnStep,
-    },
-    card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        SpellCostReduction, StaticAbility,
-    },
-    effect::Modification,
-    mana::{Color, ManaCost},
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Aggregate, CompareOp, Condition, Effect, ObjectProperty, ObjectSelector,
+    PlayerSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
 };
+use managym_state::card::{
+    CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+    SpellCostReduction, StaticAbility,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::{Color, ManaCost};
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
@@ -20,6 +18,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         clone_legion(),
         dragonlords_servant(),
         rending_volley(),
+        seismic_rupture(),
+        impact_tremors(),
     ]
 }
 
@@ -155,6 +155,51 @@ fn inspiring_call() -> CardDefinition {
                     Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
                 ),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn impact_tremors() -> CardDefinition {
+    CardDefinition {
+        key: "dtk.impact_tremors",
+        scryfall_id: "56fb4035-197b-4d28-9bf7-bb62c304067e",
+        printed: PrintedCharacteristics {
+            name: "Impact Tremors".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::matching(Actor::You, CardPredicate::creature(), false),
+                vec![Effect::DealDamageToPlayer { player: PlayerSelector::EachOpponent, amount: 1.into() }],
+            )],
+            text_box: "Whenever a creature you control enters, this enchantment deals 1 damage to each opponent.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn seismic_rupture() -> CardDefinition {
+    let text_box = "Seismic Rupture deals 2 damage to each creature without flying.";
+    CardDefinition {
+        key: "dtk.seismic_rupture",
+        scryfall_id: "9b952e4e-c1ed-4455-90d5-46b56478e6b0",
+        printed: PrintedCharacteristics {
+            name: "Seismic Rupture".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::deal_damage(
+                2,
+                ObjectSelector::each(
+                    Scope::Battlefield,
+                    CardPredicate {
+                        not_flying: true,
+                        ..CardPredicate::creature()
+                    },
+                ),
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

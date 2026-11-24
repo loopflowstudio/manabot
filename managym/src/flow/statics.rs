@@ -54,9 +54,11 @@ pub struct Characteristics {
     pub triggered_abilities: Vec<crate::state::ability::EffectiveTrigger>,
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
     pub name: String,
-    /// Whether a characteristic-setting Aura replaced its name, creature
-    /// types and base power/toughness.
-    pub characteristics_set: bool,
+    /// Whether a layer 1 effect replaced its name ("named Humble Merchant").
+    pub name_set: bool,
+    /// Whether a layer 4 effect replaced its creature types ("is a black
+    /// Skeleton creature").
+    pub creature_types_set: bool,
     /// Every subtype it has: printed (creature types replaced by a
     /// characteristic-setting Aura's), then added by records.
     pub subtypes: Vec<String>,
@@ -188,6 +190,7 @@ struct LayerBoard {
     library_top_visibility: [bool; 2],
     reads_mana: bool,
     reads_tapped: bool,
+    reads_life: bool,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across pool/tap writes.
     dynamic_activations: bool,
@@ -209,6 +212,7 @@ impl DerivedCache {
     fn invalidate(&mut self, revisions: Revisions) {
         let mana_changed = self.revisions.mana_pools != revisions.mana_pools;
         let tapped_changed = self.revisions.tapped != revisions.tapped;
+        let life_changed = self.revisions.life != revisions.life;
         #[cfg(feature = "benchmark")]
         if mana_changed {
             crate::benchmark_layers::record(|m| m.mana_invalidations += 1);
@@ -216,7 +220,8 @@ impl DerivedCache {
         let characteristics_changed = self.revisions.characteristics != revisions.characteristics;
         let board_changed = characteristics_changed
             || (mana_changed && self.board.as_ref().is_some_and(|board| board.reads_mana))
-            || (tapped_changed && self.board.as_ref().is_some_and(|board| board.reads_tapped));
+            || (tapped_changed && self.board.as_ref().is_some_and(|board| board.reads_tapped))
+            || (life_changed && self.board.as_ref().is_some_and(|board| board.reads_life));
         if board_changed
             || ((mana_changed || tapped_changed)
                 && self
@@ -259,6 +264,7 @@ impl Game {
         LayerBoard {
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
+            reads_life: context.reads_life,
             dynamic_activations,
             objects,
             library_top_visibility,
@@ -776,6 +782,13 @@ impl Game {
             })
         })
     }
+
+    /// "attacks each combat if able" (CR 508.1d): the declaration offers it
+    /// no choice to stay home.
+    pub(crate) fn must_attack(&self, attacker: PermanentId) -> bool {
+        self.has_restriction(attacker, Restriction::AttacksEachCombat)
+    }
+
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
@@ -937,6 +950,7 @@ impl Game {
             Condition::CardsInHandAtLeast { count } => {
                 self.state.zones.size(ZoneType::Hand, controller) >= *count
             }
+            Condition::LifeAtLeast { amount } => self.state.players[controller.0].life >= *amount,
             Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
@@ -1171,6 +1185,7 @@ mod cache_tests {
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,
+            reads_life: board.reads_life,
             dynamic_activations: board.dynamic_activations,
         }));
     }

@@ -81,6 +81,7 @@ pub(super) struct Context<'a> {
     /// condition short-circuits or a dependency later removes their source.
     pub reads_mana: bool,
     pub reads_tapped: bool,
+    pub reads_life: bool,
 }
 
 /// An effect keeps one identity across layers. `targets` is populated on its
@@ -129,6 +130,7 @@ struct ReadSet {
     fields: u8,
     mana: bool,
     tapped: bool,
+    life: bool,
 }
 
 impl ReadSet {
@@ -148,10 +150,10 @@ impl ReadSet {
         if !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
-        if p.flying || p.deathtouch {
+        if p.flying || p.not_flying || p.deathtouch {
             self.fields |= KEYWORDS;
         }
-        if p.min_power.is_some() || p.max_power.is_some() {
+        if p.min_power.is_some() || p.max_power.is_some() || p.min_toughness.is_some() {
             self.fields |= POWER;
         }
         self.tapped |= p.tapped;
@@ -236,7 +238,10 @@ impl ReadSet {
             }
             Condition::Not(condition) => self.condition(condition),
             Condition::SourceTapped => self.tapped = true,
-            _ => self.mana |= condition.reads_mana_pools(),
+            _ => {
+                self.mana |= condition.reads_mana_pools();
+                self.life |= condition.reads_life();
+            }
         }
     }
 }
@@ -317,7 +322,6 @@ impl Node {
 enum Operation {
     Modify(Modification<LayerValue>),
     LandType(String),
-    Name(String),
     // Expressions resolve before becoming per-target instructions. Indirection
     // keeps their large predicates out of every small resolved modification.
     /// A characteristic-defining count; `sets_toughness` sets toughness to
@@ -345,11 +349,11 @@ const ABILITIES: u8 = 128;
 impl Operation {
     fn writes(&self) -> u8 {
         match self {
-            Self::Name(_) => NAME,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Cda { .. } | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
+                Modification::SetName(_) => NAME,
                 Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
                 Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
@@ -382,6 +386,7 @@ struct Instruction {
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
+        Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
         | Modification::AddTypes(_)
@@ -422,6 +427,7 @@ impl<'a> Context<'a> {
             objects: BTreeMap::new(),
             reads_mana: false,
             reads_tapped: false,
+            reads_life: false,
         };
         let mut nodes = Vec::new();
         let mut known = BTreeSet::new();
@@ -450,6 +456,7 @@ impl<'a> Context<'a> {
                 for node in &seed.nodes {
                     context.reads_mana |= node.reads.mana;
                     context.reads_tapped |= node.reads.tapped;
+                    context.reads_life |= node.reads.life;
                     nodes.push(node.clone());
                 }
             }
@@ -671,6 +678,7 @@ impl<'a> Context<'a> {
                     if let Some(node) = self.node(id, entry) {
                         self.reads_mana |= node.reads.mana;
                         self.reads_tapped |= node.reads.tapped;
+                        self.reads_life |= node.reads.life;
                         nodes.push(node);
                     }
                 }
@@ -1150,6 +1158,13 @@ impl<'a> Context<'a> {
                 plan.condition = effect.condition.clone();
                 plan.cda = effect.characteristic_defining;
                 for m in &effect.modifications {
+                    // A modification outside the layer system (a prohibition
+                    // or prevention) has no reader here; a printed static
+                    // spelling it would silently do nothing.
+                    debug_assert!(
+                        layer(m).is_some(),
+                        "continuous static modification {m:?} has no layer"
+                    );
                     if let Some(l) = layer(m) {
                         let layer = if plan.cda && l == Layer::BasePower {
                             Layer::CharacteristicPower
@@ -1196,7 +1211,10 @@ impl<'a> Context<'a> {
             StaticAbility::AttachedSetsCharacteristics(set) => {
                 plan.scope = StaticScope::Attached;
                 plan.parts = vec![
-                    (Layer::Name, Operation::Name(set.named.clone())),
+                    (
+                        Layer::Name,
+                        Operation::Modify(Modification::SetName(set.named.clone())),
+                    ),
                     (
                         Layer::Type,
                         Operation::Modify(Modification::SetCreatureTypes(
@@ -1272,9 +1290,9 @@ impl<'a> Context<'a> {
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
-                Operation::Name(name) => {
+                Operation::Modify(Modification::SetName(name)) => {
                     view.name = name.clone();
-                    view.characteristics_set = true;
+                    view.name_set = true;
                 }
                 Operation::LandType(subtype) => {
                     if !view.is_land() {
@@ -1312,6 +1330,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::Modify(modification) => match modification {
                     Modification::SetCreatureTypes(types) => {
+                        view.creature_types_set = true;
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
                         view.added_subtypes.retain(|s| !is_creature_type(s));
@@ -1334,6 +1353,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::AddTypes(types) => view.types.types.extend(types.iter().copied()),
                     Modification::SetTypes { types, subtypes } => {
+                        view.creature_types_set = true;
                         view.types.types = types.iter().copied().collect();
                         view.subtypes = subtypes.clone();
                         view.added_subtypes = subtypes.clone();
@@ -1475,6 +1495,7 @@ pub(crate) struct PermanentFacts<'a> {
     pub colors: &'a crate::state::mana::Colors,
     pub is_legendary: bool,
     pub power: i32,
+    pub toughness: i32,
     pub supertypes: &'a [String],
     pub mana_value: u8,
     pub token: bool,
@@ -1501,6 +1522,7 @@ impl<'a> PermanentFacts<'a> {
             colors: &view.colors,
             is_legendary: view.is_legendary,
             power: view.power,
+            toughness: view.toughness,
             supertypes: &object.supertypes,
             mana_value: object.mana_value_cost().map_or(0, |m| m.mana_value),
             token: object.kind() == ObjectKind::Token,
@@ -1529,6 +1551,7 @@ impl<'a> PermanentFacts<'a> {
             colors: &lki.colors,
             is_legendary: lki.is_legendary,
             power: lki.power,
+            toughness: lki.toughness,
             supertypes: &face.supertypes,
             mana_value: mana.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
             token: kind == ObjectKind::Token,
@@ -1554,6 +1577,7 @@ pub(crate) fn matches_permanent_facts(
         && p.accepts_name(facts.name)
         && (!p.deathtouch || facts.keywords.has(Keyword::Deathtouch))
         && (!p.flying || facts.keywords.has(Keyword::Flying))
+        && (!p.not_flying || !facts.keywords.has(Keyword::Flying))
         && (!p.no_counters || facts.counters.is_empty())
         && (!p.in_combat || facts.in_combat)
         && (!p.with_counter || facts.counters.get(CounterKind::PlusOnePlusOne) > 0)
@@ -1592,6 +1616,7 @@ pub(crate) fn matches_permanent_facts(
         && p.not_subtypes.iter().all(|s| !facts.subtypes.contains(s))
         && p.min_power.is_none_or(|min| facts.power >= min)
         && p.max_power.is_none_or(|max| facts.power <= max)
+        && p.min_toughness.is_none_or(|min| facts.toughness >= i32::from(min))
         && p.min_mana_value.is_none_or(|min| facts.mana_value >= min)
         && p.max_mana_value.is_none_or(|max| facts.mana_value <= max)
 }

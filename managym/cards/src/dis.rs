@@ -1,16 +1,16 @@
 //! Dissension.
-use managym_state::{
-    ability::{
-        Ability, Actor, Effect, ObjectSelector, PaymentCost, Per, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
-    },
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    mana::ManaCost,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Effect, ObjectSelector, PaymentCost, Per, TargetRequirement, TargetSpec,
+    TriggerCondition, TriggerSubject,
 };
+use managym_state::card::{
+    CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+};
+use managym_state::mana::ManaCost;
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![trygon_predator()]
+    vec![trygon_predator(), macabre_waltz()]
 }
 
 fn trygon_predator() -> CardDefinition {
@@ -51,6 +51,30 @@ fn trygon_predator() -> CardDefinition {
                     }],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn macabre_waltz() -> CardDefinition {
+    let spec = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate::creature(),
+    };
+    let text_box = "Return up to two target creature cards from your graveyard to your hand, then discard a card.";
+    CardDefinition {
+        key: "dis.macabre_waltz",
+        scryfall_id: "d9cd7bc3-73ba-4364-84b2-9954648cd8a9",
+        printed: PrintedCharacteristics {
+            name: "Macabre Waltz".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::return_to_hand(ObjectSelector::Targets(spec.clone())),
+                Effect::discard(),
+            ],
+            targeting: vec![TargetRequirement::up_to(2, spec)],
             text_box: text_box.into(),
             ..Default::default()
         },

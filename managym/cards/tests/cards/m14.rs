@@ -1,16 +1,13 @@
 //! Tests for cards filed in `src/m14.rs`, in card order.
-
-use crate::support::{
-    game::{five_color_setup, force_new_card_in_hand, Scenario},
-    play::{cast_card, settle},
+use crate::support::game::{five_color_setup, force_new_card_in_hand, Scenario};
+use crate::support::inspect::{counters, offered_targets, permanent_named};
+use crate::support::play::{
+    cast_card, cast_owned, enter_and_settle, pass_until, play_and_settle, settle, spend_colorless,
 };
-use managym::{
-    flow::turn::StepKind,
-    state::{
-        game_object::{PlayerId, Target},
-        player::ManaPayment,
-    },
-};
+use managym::agent::action::ActionSpaceKind;
+use managym::flow::turn::StepKind;
+use managym::state::game_object::{PlayerId, Target};
+use managym::state::player::ManaPayment;
 
 /// Mindsparker deals 2 damage to an opponent who casts a white or blue
 /// instant or sorcery; a red instant, a blue creature and its controller's
@@ -51,4 +48,28 @@ fn mindsparker_burns_opponents_casting_white_or_blue_instants_and_sorceries() {
     cast_by(&mut s, 1, "Spectral Sailor", None);
     s.assert_life(1, 16);
     s.assert_life(0, 17);
+}
+
+#[test]
+fn token_producer_primeval_bounty() {
+    let mut s = five_color_setup(&["Primeval Bounty", "Gray Ogre", "Sol Ring"]);
+    enter_and_settle(&mut s, "Primeval Bounty");
+    play_and_settle(&mut s, "Gray Ogre");
+    let beast = permanent_named(&s, "Beast");
+    assert_eq!(s.game().characteristics(beast).pt(), (3, 3));
+    let ogre = permanent_named(&s, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast_owned(&mut s, "Sol Ring");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let targets = offered_targets(&s);
+    assert_eq!(targets.len(), 2);
+    assert!(targets.contains(&Target::Permanent(beast)));
+    assert!(targets.contains(&Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(beast)));
+    settle(&mut s);
+    assert_eq!(counters(&s, beast), 3);
+    enter_and_settle(&mut s, "Forest");
+    s.assert_life(0, 23);
+    assert_eq!(s.battlefield_permanents_named(0, "Beast"), [beast]);
 }

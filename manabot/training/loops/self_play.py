@@ -119,7 +119,6 @@ from manabot.training.update_metrics import (
     phase_seconds,
     time_since,
 )
-from manabot.training.updates.backend import ppo_rl
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
@@ -224,8 +223,6 @@ class SelfPlay(BaseModel):
             raise ValueError("precision tf32 requires CUDA")
         if self.precision == "bf16" and self.device == "cpu":
             raise ValueError("precision bf16 requires CUDA or MPS")
-        if self.live_tokens and self.device != "cuda":
-            raise ValueError("live tokens require CUDA")
         if self.workers > self.streams:
             raise ValueError("producer count cannot exceed streams")
         if self.snapshot is not None and self.learning_seats != "both":
@@ -510,8 +507,6 @@ def create(
 ) -> tuple[SelfPlayLearner, BackendPolicy | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     backend = backend or default_backend()
-    if isinstance(settings.learning, Learning):
-        ppo_rl(backend.rl)
     space = ObservationSpace(settings.observation)
     published = (
         pretrained_policy(settings, space, backend)
@@ -1102,6 +1097,7 @@ def self_play(
     backend = backend or default_backend()
     state = require_continuation(backend)
     settings = SelfPlay.model_validate(settings.model_dump())
+    backend.runtime.admit_execution(settings.device, live_tokens=settings.live_tokens)
     if updates < 1:
         raise ValueError("updates must be positive")
     with device_settings(settings, backend=backend):
@@ -1208,6 +1204,7 @@ def fresh_iteration(
 ) -> FreshIteration:
     """Run one ordinary collect/update iteration and export it into a new directory."""
     settings = SelfPlay.model_validate(settings.model_dump())
+    backend.runtime.admit_execution(settings.device, live_tokens=settings.live_tokens)
     out.mkdir(parents=True, exist_ok=False)
     run = FreshRun(out, seed)
     counts = Counts()

@@ -562,6 +562,7 @@ _BACKEND_ENTRYPOINTS = {
     "manabot/recipes/elemental.py": {"train"},
     "manabot/recipes/local.py": {"train"},
     "manabot/training/loops/self_play.py": {"default_backend"},
+    "manabot/recipes/belief_policy.py": {"train"},
     "manabot/recipes/belief_sampler.py": {"train"},
     "manabot/reports/belief.py": {"main"},
     "manabot/verify/checkpoint_scenarios.py": {"main"},

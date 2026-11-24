@@ -79,7 +79,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
-        "manabot/backends/torch/_facts.py",
+        "manabot/backends/torch/facts.py",
         "manabot/backends/torch/belief.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",

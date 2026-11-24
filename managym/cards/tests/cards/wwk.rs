@@ -1,14 +1,11 @@
 //! Tests for cards filed in `src/wwk.rs`, in card order.
-
-use crate::support::{
-    game::{five_color_setup, until_end_of_turn},
-    inspect::card_of,
-    play::{bolt, settle},
-};
-use managym::{
-    agent::action::{Action, ActionSpaceKind, ActionType},
-    state::{effect::Modification, game_object::PlayerId, target::Target},
-};
+use crate::support::game::{five_color_setup, until_end_of_turn};
+use crate::support::inspect::card_of;
+use crate::support::play::{bolt, settle};
+use managym::agent::action::{Action, ActionSpaceKind, ActionType};
+use managym::state::effect::Modification;
+use managym::state::game_object::PlayerId;
+use managym::state::target::Target;
 
 /// Place every Kalastria trigger, targeting the opponent; return how many.
 fn place_targeting_opponent(s: &mut crate::support::game::Scenario) -> usize {
@@ -118,4 +115,24 @@ fn dragonmaster_outcast_makes_a_dragon_with_six_lands() {
             assert!(view.keywords.has(Keyword::Flying));
         }
     }
+}
+
+#[test]
+fn foundations_grant_basilisk_collar() {
+    use managym::state::card::Keyword;
+    crate::check_attachment_grant(
+        "Basilisk Collar",
+        Some("2"),
+        (2, 2),
+        &[Keyword::Deathtouch, Keyword::Lifelink],
+    );
+}
+
+#[test]
+fn foundations_5f_pulse_tracker() {
+    use managym::flow::turn::StepKind;
+    let (mut s, ..) = crate::attack_and_resolve("Pulse Tracker");
+    assert_eq!((s.life(0), s.life(1)), (20, 19));
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!((s.life(0), s.life(1)), (20, 18));
 }

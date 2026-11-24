@@ -119,3 +119,14 @@ fn proft_has_no_effect_if_its_only_target_leaves() {
     resolve_top(&mut s);
     assert_eq!(counters(&s, new), 0);
 }
+
+#[test]
+fn foundations_spell_make_your_move() {
+    use managym::state::zone::ZoneType;
+    crate::check_targeted_removal(
+        "Make Your Move",
+        "Craw Wurm",
+        "Gray Ogre",
+        ZoneType::Graveyard,
+    );
+}

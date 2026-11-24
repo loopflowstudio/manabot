@@ -32,6 +32,7 @@
   const facts = $derived(permanent ? [
     permanent.tapped ? 'Tapped' : 'Untapped',
     permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
+    permanent.first_strike_participant ? 'first-strike participant' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
     ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),

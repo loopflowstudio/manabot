@@ -1,16 +1,23 @@
 //! Future Sight.
-use managym_state::effect::Modification;
 use managym_state::{
     ability::{
         Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
         TurnStep,
     },
-    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility,
+    },
+    effect::Modification,
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![rites_of_flourishing(), scout_s_warning()]
+    vec![
+        thornweald_archer(),
+        rites_of_flourishing(),
+        scout_s_warning(),
+    ]
 }
 
 fn scout_s_warning() -> CardDefinition {
@@ -56,6 +63,26 @@ fn rites_of_flourishing() -> CardDefinition {
                 }],
             }],
             statics: vec![StaticAbility::AdditionalLandPlayEachPlayer],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn thornweald_archer() -> CardDefinition {
+    let text_box = "Reach (This creature can block creatures with flying.)\nDeathtouch (Any amount of damage this deals to a creature is enough to destroy it.)";
+    CardDefinition {
+        key: "fut.thornweald_archer",
+        scryfall_id: "783a50a0-9394-4d97-856f-21eb126a0018",
+        printed: PrintedCharacteristics {
+            name: "Thornweald Archer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Archer".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
             text_box: text_box.into(),
             ..Default::default()
         },

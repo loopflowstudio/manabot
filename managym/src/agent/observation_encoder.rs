@@ -280,6 +280,10 @@ impl ObservationEncoderConfig {
         self.max_cards_per_player * CARD_DIM
     }
 
+    pub fn player_dim(&self) -> usize {
+        self.layout.player_columns().len()
+    }
+
     /// Permanent row width: v11's, or the deprecated v9/v10 rows'.
     pub fn permanent_dim(&self) -> usize {
         match self.layout {
@@ -542,8 +546,8 @@ pub fn allocate(config: &ObservationEncoderConfig) -> EncodedObservation {
         decklists: vec![0.0; config.decklists_len()],
         player_turn_state: vec![0.0; config.player_turn_state_len()],
         card_turn_state: vec![0.0; config.card_turn_state_len()],
-        agent_player: vec![0.0; PLAYER_DIM],
-        opponent_player: vec![0.0; PLAYER_DIM],
+        agent_player: vec![0.0; config.player_dim()],
+        opponent_player: vec![0.0; config.player_dim()],
         agent_cards: vec![0.0; config.cards_len()],
         opponent_cards: vec![0.0; config.cards_len()],
         agent_permanents: vec![0.0; config.permanents_len()],
@@ -637,8 +641,12 @@ fn encode_into_memory(
         out.card_turn_state.len(),
         config.card_turn_state_len(),
     )?;
-    validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
-    validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
+    validate_buffer_len("agent_player", out.agent_player.len(), config.player_dim())?;
+    validate_buffer_len(
+        "opponent_player",
+        out.opponent_player.len(),
+        config.player_dim(),
+    )?;
     validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
     validate_buffer_len(
         "opponent_cards",
@@ -1009,7 +1017,8 @@ pub fn encode_rows(
         let mut row = [Cell::ZERO; PLAYER_DIM];
         encode_player_features(player, &obs.turn, &mut row);
         row[player::DECKLISTS_OPEN] = flag(!obs.decklists_closed);
-        out.write(player_table, 0, 0, &row)?;
+        // The deprecated v9/v10 rows end before the first-strike step flag.
+        out.write(player_table, 0, 0, &row[..config.player_dim()])?;
         if config.turn_state {
             let width = super::observation_layout::turn_state_columns(config.layout).len();
             let row = turn_state_row(player, config.layout);
@@ -1445,6 +1454,8 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
     }
     out[player::HAND_ONLY] = flag(player.hand_only_until.is_some());
     out[player::NO_MAXIMUM_HAND_SIZE] = flag(player.no_maximum_hand_size);
+    out[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE] =
+        flag(turn.step == StepKind::FirstStrikeCombatDamage);
     out[player::TURN] = Scalar(turn.turn_number as f32 / 20.0);
     // Seat 0 is on the play.
     out[player::SEAT] = Integer(player.player_index as i64);
@@ -1598,8 +1609,9 @@ fn encode_permanent_features(
         out[permanent::HAS_WARD] = flag(card.ward_cost > 0 || card.ward_life > 0);
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
+        out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
     } else {
-        out[out.len() - 1] = Integer(1);
+        out[super::legacy_input::PERMANENT_VALID] = Integer(1);
     }
 }
 
@@ -2111,7 +2123,7 @@ fn step_index(step: StepKind) -> usize {
         StepKind::BeginningOfCombat => 4,
         StepKind::DeclareAttackers => 5,
         StepKind::DeclareBlockers => 6,
-        StepKind::CombatDamage => 7,
+        StepKind::CombatDamage | StepKind::FirstStrikeCombatDamage => 7,
         StepKind::EndOfCombat => 8,
         StepKind::PostcombatMain => 9,
         StepKind::End => 10,
@@ -2608,11 +2620,11 @@ mod tests {
         assert_eq!(encoded.events[EVENT_DIM], 2.0);
         // The battlefield card's characteristics are its permanent row's.
         assert_eq!(
-            encoded.agent_permanents[super::permanent::MANA_VALUE],
+            encoded.agent_permanents[permanent::MANA_VALUE],
             0.2,
             "mana value / 10"
         );
-        assert_eq!(encoded.agent_permanents[super::permanent::IS_CREATURE], 1.0);
+        assert_eq!(encoded.agent_permanents[permanent::IS_CREATURE], 1.0);
     }
 
     #[test]

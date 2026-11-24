@@ -38,13 +38,13 @@ fn lathril_makes_elves_from_combat_damage_and_drains_by_tapping_ten() {
     s.advance_to_active_step(0, StepKind::Main);
     for _ in 0..7 {
         s.game_mut()
-            .create_token("token.green_elf_warrior", PlayerId(0), false)
+            .create_token("token.elf_warrior_1_1_g", PlayerId(0), false)
             .unwrap();
     }
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_activate(&s, lathril), "nine other Elves");
     s.game_mut()
-        .create_token("token.green_elf_warrior", PlayerId(0), false)
+        .create_token("token.elf_warrior_1_1_g", PlayerId(0), false)
         .unwrap();
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(can_activate(&s, lathril));

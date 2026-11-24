@@ -318,6 +318,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         controller: PlayerId(0),
         source_identity: managym::state::game_object::AbilitySource::new(object, Some(old_ref)),
         effects: vec![Effect::Move {
+            unrevealed: false,
             library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,

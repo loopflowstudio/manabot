@@ -2756,6 +2756,9 @@
           "title": "Exile If Dies This Turn",
           "type": "boolean"
         },
+        "first_strike_participant": {
+          "type": "boolean"
+        },
         "granted_firebending": {
           "default": 0,
           "maximum": 4294967295,

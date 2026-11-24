@@ -293,6 +293,9 @@ pub struct ChangedCopiableValues {
 pub struct ObjectLki {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub copiable: Option<Arc<ChangedCopiableValues>>,
+    /// The exact object this permanent was attached to immediately before departure.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
+    pub attached_to: Option<ObjectId>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]

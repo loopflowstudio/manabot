@@ -83,12 +83,12 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                     // A state trigger (CR 603.8) asks its condition of its source.
                     ("State", _) => walk(field, child, Place::SourceStatic, found),
                     (
-                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant",
+                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant" | "Continuous",
                         Value::Object(ability),
                     ) => {
                         // Layers ask a battlefield grant's condition of its
                         // source; a grant to spells has no source permanent.
-                        let to_spells = key == "KeywordGrant"
+                        let to_spells = matches!(key.as_str(), "KeywordGrant" | "Continuous")
                             && ability
                                 .get("scope")
                                 .and_then(Value::as_object)

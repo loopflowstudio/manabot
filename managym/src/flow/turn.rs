@@ -36,6 +36,12 @@ pub enum StepKind {
     PostcombatMain = 9,
     End = 10,
     Cleanup = 11,
+    /// CR 510.4 — Additional combat damage step for creatures with first
+    /// strike or double strike; precedes `CombatDamage` when present.
+    /// Appended as 12 while `Observation.toJSON()` serializes steps as ints;
+    /// switch `Observation.toJSON()` to string step names and reorder before
+    /// `CombatDamage` in 0.3.0.
+    FirstStrikeCombatDamage = 12,
 }
 
 pub const PHASE_STEPS: [&[StepKind]; 5] = [

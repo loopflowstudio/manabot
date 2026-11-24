@@ -803,6 +803,13 @@ this information when its source leaves. V11 encodes each seat relative to
 the viewer on the permanent and stack rows. Steel Hellkite checks those
 players’ current nonlands and their mana values when its ability resolves.
 Each Hellkite can activate once per turn, including for X=0 before any hit.
+Arcanis uses `ObjectSelector::ExactSource` to return the battlefield object
+that activated its ability. A zone change ends that identity. Avatar Destiny
+uses `ObjectSelector::This` to return the Aura from the graveyard after the
+enchanted creature dies.
+An effect on the enchanted or equipped permanent uses `ObjectSelector::Attached`.
+It reads the attachment at resolution. If the source left in response, its last
+known attachment identifies the exact permanent it last enchanted or equipped.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with
@@ -810,6 +817,9 @@ cardinality across choices, and runs the chosen effects in a child scope with
 result independently of a later `Move`; the caller keeps those results while
 selection effects run. Mill, optional discard/draw and basic/tutor searches use
 ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+An unrestricted `Effect::search_for_card` requires a choice while the library
+contains cards. Rune-Scarred Demon uses an unrevealed move into hand. Micromancer
+reveals the chosen card, which gives both viewers knowledge of it in hand.
 `ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
 materializers refresh unknown selected subsets throughout saved callers and child
 scopes, preserving cardinality and exact viewer-known choices. Restricted partial
@@ -1049,6 +1059,19 @@ Extra combats preserve raid and each creature’s history until the turn ends.
 The same address rules as payment previews apply, and the
 call is read-only in the same way.
 
+At the combat damage step, the attacking player assigns damage among the
+remaining blockers. Each choice names the attacker, the current blocker and
+the amount. A trampler can assign damage to the defending player once every
+blocker has been assigned lethal damage. For example, a 5-power trampler
+blocked by an undamaged 2/2 can assign 2, 3, 4 or 5 to it. The defender takes
+the rest. Without trample, that sole blocker takes all 5. The engine deals
+the assignments together after the final choice.
+
+When a combatant has first strike or double strike (CR 510.4), the first damage
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
+followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
+permanent's `first_strike_participant` remembers whether it had first strike or
+double strike when the first step began, including after its abilities change.
 ### Reading power during combat
 
 Courageous Goblin and Ruby, Daring Tracker check for a creature with power

@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "a451f8f5960db80cc861e0fdda81860c9516a38e",
-    "date": "2026-11-23",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45289204258",
+    "commit": "f299750a45c3d7183a7ed889090fa26e885e8754",
+    "date": "2026-11-24",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/45433601964",
     "runner": "GitHub-hosted ubuntu-24.04, Intel(R) Xeon(R) 6975P-C (4 vCPU), release",
-    "reason": "Native opening-hand choices change the legal decision stream in both benchmark workloads. The paired run passes all timing limits."
+    "reason": "Foundations cards, combat damage assignment, prevention shields, and first-strike timing"
   },
   "bench_search": {
-    "worst_s": 3.0937932185,
-    "total_s": 120.097,
+    "worst_s": 2.8107935250000002,
+    "total_s": 117.205,
     "seeds": {
       "1": {
-        "worst_s": 3.0937932185,
-        "total_s": 38.153207392,
-        "digest": 9802435900664878732
+        "worst_s": 2.801099598,
+        "total_s": 37.6837941015,
+        "digest": 13638875039089371439
       },
       "2": {
-        "worst_s": 2.377878399,
-        "total_s": 44.751872356499995,
-        "digest": 16681168173759266580
+        "worst_s": 2.8107935250000002,
+        "total_s": 45.2203466835,
+        "digest": 5466143068363283977
       },
       "3": {
-        "worst_s": 2.4137772885,
-        "total_s": 37.19217464799999,
-        "digest": 10971803445708699009
+        "worst_s": 2.543827267,
+        "total_s": 34.3010955765,
+        "digest": 9998925852575961750
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 25270.17810789741,
-    "steps": 118255,
+    "steps_per_s": 25163.34530111193,
+    "steps": 118559,
     "games": 512,
-    "digest": 17942664948341206392
+    "digest": 10601622128491155944
   }
 }

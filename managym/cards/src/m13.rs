@@ -49,7 +49,7 @@ fn krenko_mob_boss() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::create_tokens(
-                    "token.goblin",
+                    "token.goblin_1_1_r",
                     ObjectSelector::each_you_control(CardPredicate::subtype("Goblin")).count(),
                 )],
                 ..Default::default()

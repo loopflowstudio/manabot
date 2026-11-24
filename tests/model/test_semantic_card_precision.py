@@ -16,12 +16,12 @@ import pytest
 import torch
 from torch import nn
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.collection import (
     CollectionSession as TorchCollectionSession,
 )
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (

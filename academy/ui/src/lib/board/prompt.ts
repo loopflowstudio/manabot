@@ -62,9 +62,10 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
       return `Choose from the revealed cards${source ? ` (${source})` : ''}`;
     case 'MODAL':
       // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
-      return context?.stage === 'payment'
-        ? `Choose what the tap pays${source ? ` for ${source}` : ''}`
-        : `Choose a mode${source ? ` for ${source}` : ''}`;
+      if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
+      if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
+      if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';
+      return `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
       return 'Choose which legendary permanent to keep';
     default:
@@ -95,7 +96,7 @@ const NEXT_STEP: Record<string, string> = {
   BEGINNING_UNTAP: 'To draw', BEGINNING_UPKEEP: 'To draw', BEGINNING_DRAW: 'To main',
   PRECOMBAT_MAIN_STEP: 'To combat', COMBAT_BEGIN: 'To attackers', COMBAT_DECLARE_ATTACKERS: 'To blockers',
   DECLARE_ATTACKERS_STEP: 'To blockers', COMBAT_DECLARE_BLOCKERS: 'To damage', DECLARE_BLOCKERS_STEP: 'To damage',
-  COMBAT_FIRST_STRIKE_DAMAGE: 'To damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
+  COMBAT_FIRST_STRIKE_DAMAGE: 'To regular damage', COMBAT_DAMAGE: 'To end of combat', COMBAT_END: 'To main 2',
   POSTCOMBAT_MAIN_STEP: 'To end step', ENDING_END: 'To cleanup', END_STEP: 'To cleanup', ENDING_CLEANUP: 'To next turn',
 };
 
@@ -130,9 +131,11 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
   // A card name is never cut: when it does not fit beside the verb, the
   // button says the verb and the prompt line above names what resolves.
   if (top) return { text: `Resolve ${top}`.length <= PRIMARY_CHARS ? `Resolve ${top}` : 'Resolve', description: `${offer}: let ${top} resolve` };
-  const { turn } = frame.projection;
-  const attackers = [frame.projection.agent, frame.projection.opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
-  const declaring = turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP';
-  const next = declaring && !attackers ? 'To end of combat' : NEXT_STEP[turn.step];
+  const { turn, agent, opponent } = frame.projection;
+  let next = NEXT_STEP[turn.step];
+  if (turn.step === 'COMBAT_DECLARE_ATTACKERS' || turn.step === 'DECLARE_ATTACKERS_STEP') {
+    const attacking = [agent, opponent].some(player => player.battlefield.some(permanent => permanent.attacking));
+    if (!attacking) next = 'To end of combat';
+  }
   return next ? { text: next, description: `${offer}: ${next.toLowerCase()}` } : { text: offer, description: offer };
 }

@@ -807,7 +807,10 @@ impl Game {
                     .map(Target::GraveyardCard)
                     .collect()
             }
-            TargetSpec::Player | TargetSpec::Opponent | TargetSpec::AnyTarget => {
+            TargetSpec::Player
+            | TargetSpec::Opponent
+            | TargetSpec::AnyTarget
+            | TargetSpec::PlayerOrPlaneswalker => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
@@ -849,6 +852,7 @@ impl Game {
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget
+                | TargetSpec::PlayerOrPlaneswalker
                 | TargetSpec::CreatureYouControl
                 | TargetSpec::CreatureOpponentControls
                 | TargetSpec::LandYouControl
@@ -2285,6 +2289,16 @@ impl Game {
                         |lki| lki.was_creature(),
                     )
             }
+            TriggerSubject::ThisOr(other) => {
+                is_source
+                    || self.subject_matches_moved_object(
+                        other,
+                        source_object,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             TriggerSubject::This => is_source,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2298,7 +2312,7 @@ impl Game {
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => self
+            TriggerSubject::Attached => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
@@ -2322,6 +2336,15 @@ impl Game {
         damage_source: ObjectId,
     ) -> bool {
         match subject {
+            TriggerSubject::ThisOr(other) => {
+                damage_source == source_object
+                    || self.subject_matches_damage_source(
+                        other,
+                        source_object,
+                        source_controller,
+                        damage_source,
+                    )
+            }
             TriggerSubject::This => damage_source == source_object,
             TriggerSubject::Matching {
                 controlled_by,
@@ -2342,9 +2365,7 @@ impl Game {
                         self.recorded_object_matches_predicate(damage_source, predicate)
                     }
             }
-            TriggerSubject::EnchantedCreature
-            | TriggerSubject::EquippedCreature
-            | TriggerSubject::CreatureDamagedByThis => self
+            TriggerSubject::Attached | TriggerSubject::CreatureDamagedByThis => self
                 .state
                 .permanent_of(damage_source)
                 .is_some_and(|permanent| {
@@ -2376,9 +2397,21 @@ impl Game {
                     .contains(source_object, permanent.object)
                     && self.characteristics(permanent_id).is_creature()
             }
+            TriggerSubject::ThisOr(other) => {
+                permanent.object == source_object
+                    || self.subject_matches_permanent(
+                        other,
+                        source_object,
+                        source_controller,
+                        permanent_id,
+                    )
+            }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => {
-                self.is_attached_by(permanent_id, source_object)
+            TriggerSubject::Attached => {
+                self.state
+                    .permanent_of(source_object)
+                    .and_then(|source| self.attached_permanent(source))
+                    == Some(permanent_id)
             }
             TriggerSubject::Matching {
                 controlled_by,
@@ -2390,15 +2423,6 @@ impl Game {
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
-    }
-
-    /// Whether the Aura card `aura` is on the battlefield attached to the
-    /// permanent.
-    fn is_attached_by(&self, permanent_id: PermanentId, attachment: ObjectId) -> bool {
-        self.state
-            .permanent_of(attachment)
-            .and_then(|aura| self.attached_permanent(aura))
-            == Some(permanent_id)
     }
 }
 

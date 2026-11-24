@@ -93,6 +93,13 @@ class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
 
 
+def memory_parameter(name: str) -> bool:
+    """The new weights in a memory branch, in either backend's parameter layout."""
+    return name.startswith("decision_memory.") or name.endswith(
+        (".memory_gate", ".memory_projection.weight")
+    )
+
+
 def pretrained_memory_branch(
     source: ModelConfig, target: ModelConfig, observation: ObservationConfig
 ) -> bool:
@@ -604,6 +611,20 @@ _CODES = {np.dtype(dtype): code for code, dtype in _DTYPES.items()}
 def write_safetensors(
     path: Path, arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
 ) -> None:
+    parts = safetensor_parts(arrays, metadata)
+    with path.open("wb") as file:
+        file.writelines(parts)
+
+
+def encode_safetensors(
+    arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
+) -> bytes:
+    return b"".join(safetensor_parts(arrays, metadata))
+
+
+def safetensor_parts(
+    arrays: Mapping[str, np.ndarray], metadata: Mapping[str, str]
+) -> Iterable[bytes]:
     header: dict[str, Any] = {"__metadata__": dict(metadata)}
     blobs: list[bytes] = []
     offset = 0
@@ -624,15 +645,14 @@ def write_safetensors(
         offset += len(blob)
     encoded = json.dumps(header, separators=(",", ":")).encode()
     encoded += b" " * (-len(encoded) % 8)
-    with path.open("wb") as file:
-        file.write(struct.pack("<Q", len(encoded)))
-        file.write(encoded)
-        for blob in blobs:
-            file.write(blob)
+    return (struct.pack("<Q", len(encoded)), encoded, *blobs)
 
 
 def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]:
-    data = path.read_bytes()
+    return decode_safetensors(path.read_bytes())
+
+
+def decode_safetensors(data: bytes) -> tuple[dict[str, np.ndarray], dict[str, str]]:
     (length,) = struct.unpack("<Q", data[:8])
     header = json.loads(data[8 : 8 + length])
     metadata = header.pop("__metadata__", None) or {}

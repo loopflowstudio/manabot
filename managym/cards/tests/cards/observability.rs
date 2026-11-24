@@ -261,6 +261,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
 /// here and given a witness in [`modification_witnesses`].
 fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) {
     match modification {
+        Modification::SetName(_) => ("Modification::SetName", Seen::Fact(FactKind::SetName)),
         Modification::SetCreatureTypes(_) => (
             "Modification::SetCreatureTypes",
             Seen::Fact(FactKind::AddedSubtype),
@@ -350,6 +351,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::ExileIfWouldDie",
             Seen::Permanent(permanent::EXILE_IF_DIES_THIS_TURN),
         ),
+        Modification::PreventCombatDamage => (
+            "Modification::PreventCombatDamage",
+            Seen::Via("its shared-effect row (modification id); OrderReplacement focuses the protected permanent"),
+        ),
         Modification::ExileIfWouldLeave => (
             "Modification::ExileIfWouldLeave",
             Seen::Via("its shared-effect row (modification id)"),
@@ -415,6 +420,7 @@ fn resolved(modification: &Modification<EffectValue>) -> Modification {
 fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
+        permanent(Modification::SetName("Legitimate Businessperson".into())),
         permanent(Modification::SetCreatureTypes(vec!["Bear".into()])),
         permanent(Modification::AddTypes(vec![CardType::Artifact])),
         permanent(Modification::SetTypes {
@@ -454,6 +460,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
             Keyword::Hexproof,
         ]))),
         permanent(Modification::ExileIfWouldDie),
+        permanent(Modification::PreventCombatDamage),
         permanent(Modification::ExileIfWouldLeave),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
@@ -470,7 +477,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 37;
+const MODIFICATION_VARIANTS: usize = 39;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -485,6 +492,7 @@ fn duration_code(duration: EffectDuration) -> f32 {
 /// The token each `ObjectSelector` contributes; no wildcard.
 fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
+        ObjectSelector::ExactSource => "ObjectSelector::ExactSource",
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
         ObjectSelector::Targets(_) => "ObjectSelector::Targets",
@@ -506,8 +514,9 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 18] {
+fn selector_witnesses() -> [ObjectSelector; 19] {
     [
+        ObjectSelector::ExactSource,
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Targets(TargetSpec::Creature),
@@ -766,6 +775,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
+        Effect::Reveal { .. } => "Effect::Reveal",
+        Effect::RevealUntilToHand { .. } => "Effect::RevealUntilToHand",
         Effect::If { .. } => "Effect::If",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
@@ -834,7 +845,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 87;
+const EFFECT_VARIANTS: usize = 89;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -916,6 +927,12 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
             count: 2,
+        },
+        Effect::Reveal {
+            what: ObjectSelector::Selected,
+        },
+        Effect::RevealUntilToHand {
+            predicate: CardPredicate::creature(),
         },
         Effect::If {
             condition: Condition::YourTurn,
@@ -1016,6 +1033,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::ShuffleLibrary,
         Effect::ShuffleGraveyardIntoLibrary,
         Effect::OwnerPutsIntoLibrary {
+            top: false,
             target: TargetSpec::Permanent {
                 predicate: CardPredicate {
                     card_types_any: vec![CardType::Creature, CardType::Enchantment],
@@ -1234,7 +1252,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::attacks(this(), Per::Object),
         TriggerCondition::BecomesTapped { subject: this() },
         TriggerCondition::BecomesUntapped {
-            subject: TriggerSubject::EquippedCreature,
+            subject: TriggerSubject::Attached,
         },
         TriggerCondition::TappedForMana { subject: this() },
         TriggerCondition::BecomesTargeted { subject: this() },
@@ -1305,6 +1323,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::BattlefieldAtLeast { .. } => "Condition::BattlefieldAtLeast",
         Condition::ControlsUnownedAtLeast { .. } => "Condition::ControlsUnownedAtLeast",
         Condition::CardsInHandAtLeast { .. } => "Condition::CardsInHandAtLeast",
+        Condition::LifeAtLeast { .. } => "Condition::LifeAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
@@ -1361,6 +1380,7 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::ControlsUnownedAtLeast { count: 3 },
         Condition::CardsInHandAtLeast { count: 4 },
+        Condition::LifeAtLeast { amount: 25 },
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
@@ -1721,6 +1741,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "katara_the_fearless_makes_ally_triggers_trigger_an_additional_time",
         ),
+        StaticAbility::OpponentsEnterTapped(_) => witnessed(
+            "StaticAbility::OpponentsEnterTapped",
+            Seen::Via("the entering permanent's tapped column"),
+            "Authority of the Consuls",
+            "kld",
+            "authority_checks_entering_control",
+        ),
         StaticAbility::EntersTapped(_) => witnessed(
             "StaticAbility::EntersTapped",
             Seen::Via("the entering permanent's tapped column"),
@@ -1963,6 +1990,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         }),
         StaticAbility::AttacksDespiteDefender(Condition::YourTurn),
         StaticAbility::TriggersAdditionalTime(CardPredicate::subtype("Ally")),
+        StaticAbility::OpponentsEnterTapped(CardPredicate::creature()),
         StaticAbility::EntersTapped(CardPredicate::creature()),
         StaticAbility::SetsLandType(StaticLandType {
             predicate: CardPredicate::creature(),
@@ -2322,6 +2350,14 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             .iter()
             .map(|action| format!("KeywordAction::{action:?}")),
     );
+    for subject in [TriggerSubject::Attached] {
+        expected.push(format!("TriggerSubject::{subject:?}"));
+        conditions.push(TriggerCondition::DealsCombatDamage {
+            subject,
+            to: Actor::AnyPlayer,
+            per: Per::Object,
+        });
+    }
     for per in [Per::Object, Per::Batch] {
         conditions.push(TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::This,
@@ -2562,6 +2598,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     for player in player_selector_witnesses() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
+            unrevealed: false,
             library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
@@ -3308,7 +3345,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         creature_died_this_turn => [column(PlayerTurnState, turn_state::CREATURES_DIED)],
         turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
-        step => [Columns(Player, player::STEP_UNTAP, 12)],
+        step => [
+            Columns(Player, player::STEP_UNTAP, 12),
+            column(Player, player::STEP_FIRST_STRIKE_COMBAT_DAMAGE),
+        ],
         active_player_id => [column(Player, player::IS_ACTIVE)],
         agent_player_id => [Side],
     }));
@@ -3496,6 +3536,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_animated => [column(Permanent, permanent::ANIMATED)],
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
+        first_strike_participant => [column(Permanent, permanent::FIRST_STRIKE_PARTICIPANT)],
         attacking => [column(Permanent, permanent::ATTACKING)],
         exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],
         once_each_turn_used => [column(Permanent, permanent::ONCE_EACH_TURN_USED)],
@@ -4404,6 +4445,41 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
         permanent_value(&s, 0, work, permanent::ATTACHED_TO),
         (object_index(&s, 0, drake) + 1) as f32
     );
+}
+
+/// A layer 1 name and a layer 4 creature type reach their own fact rows:
+/// Witness Protection sets both, Eaten by Piranhas only the creature type.
+#[test]
+fn set_name_and_set_creature_types_reach_independent_fact_rows() {
+    for (aura, name, subtype) in [
+        (
+            "Witness Protection",
+            Some("Legitimate Businessperson"),
+            "Citizen",
+        ),
+        ("Eaten by Piranhas", None, "Skeleton"),
+    ] {
+        let mut s = five_color_setup(&[aura, "Juggernaut"]);
+        let juggernaut = s.force_permanent_on_battlefield(1, "Juggernaut");
+        cast(&mut s, aura);
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(managym::state::game_object::Target::Permanent(juggernaut)));
+        settle(&mut s);
+        let rows = facts_about(&s, 0, object_index(&s, 0, juggernaut));
+        let of_kind = |kind: FactKind| {
+            rows.iter()
+                .filter(|row| row[fact::KIND] == kind as u8 as f32)
+                .count()
+        };
+        fact_row(&rows, FactKind::SetCreatureType, name_value(subtype));
+        assert_eq!(of_kind(FactKind::SetCreatureType), 1, "{aura}");
+        match name {
+            Some(name) => {
+                fact_row(&rows, FactKind::SetName, name_value(name));
+            }
+            None => assert_eq!(of_kind(FactKind::SetName), 0, "{aura} keeps its name"),
+        }
+    }
 }
 
 /// Card and permanent keyword columns are checked by
@@ -6214,6 +6290,28 @@ fn drake_hatcher_catalog_tokens_bind_damage_and_price_the_drake() {
 }
 
 #[test]
+fn self_entry_adds_to_the_learning_tokens_for_another_nontoken_cat() {
+    let another = TriggerSubject::another_you_control(CardPredicate {
+        token: Some(false),
+        ..CardPredicate::subtype("Cat")
+    });
+    let encode = |subject| {
+        tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield { subject },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.cat_1_1_w", 1)],
+            }],
+            ..Default::default()
+        }))
+    };
+    assert_ne!(
+        encode(another.clone()),
+        encode(TriggerSubject::ThisOr(Box::new(another)))
+    );
+}
+
+#[test]
 fn player_control_card_costs_and_trigger_threshold_reach_learning_tokens() {
     let bracelet = tokens_of(&card_definition("The Dominion Bracelet"));
     for field in ["exile_grantor", "reduce_by_source_power"] {
@@ -6278,7 +6376,7 @@ fn counter_costs_state_and_untap_triggers_and_counter_counts_reach_the_tokens() 
     assert!(pole.contains(&(TokenKind::Field, name_value("tap_grantor"))));
     for variant in [
         "TriggerCondition::BecomesUntapped",
-        "TriggerSubject::EquippedCreature",
+        "TriggerSubject::Attached",
     ] {
         assert!(
             pole.contains(&(TokenKind::Variant, name_value(variant))),
@@ -6293,6 +6391,92 @@ fn counter_costs_state_and_untap_triggers_and_counter_counts_reach_the_tokens() 
         assert!(
             tokens.contains(&(TokenKind::Variant, name_value(kind))),
             "{kind}"
+        );
+    }
+}
+
+/// A 17/3 trampling War Mammoth blocked by Llanowar Elves, paused on the
+/// first combat damage assignment (1 through 17 to the Elves).
+fn trample_assignment() -> (Scenario, PermanentId, PermanentId) {
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("War Mammoth", 16)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        70213,
+    );
+    let mammoth = s.force_permanent_on_battlefield(0, "War Mammoth");
+    let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    clear_summoning_sickness(&mut s, mammoth);
+    until_end_of_turn(&mut s, mammoth, Modification::pump(14, 0));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    s.declare_block();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    (s, mammoth, elves)
+}
+
+/// Combat damage is an announced amount: each offer writes its number in
+/// `has_x`/`x`, so 15 and 16 stay distinct where the mode index saturates,
+/// keeps its "assigns" wording, and focuses the attacker and the blocker.
+#[test]
+fn combat_damage_amounts_carry_their_value_and_focus_attacker_and_blocker() {
+    let (s, mammoth, elves) = trample_assignment();
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let offers = &observation.action_space.actions;
+    assert_eq!(offers.len(), 17);
+    let rows = encoded(&s, 0);
+    let combatants = [mammoth, elves];
+    let public_ids =
+        combatants.map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32);
+    let focus_rows = combatants.map(|id| object_index(&s, 0, id) as i32);
+    let slots = ObservationEncoderConfig::default().max_focus_objects;
+    for (index, offer) in offers.iter().enumerate() {
+        let amount = index + 1;
+        assert!(offer.announces_x);
+        assert_eq!(offer.mode_index, Some(amount));
+        assert_eq!(
+            offer.description,
+            Some(format!(
+                "War Mammoth assigns {amount} to Llanowar Elves, {} to defending player",
+                17 - amount
+            ))
+        );
+        let start = index * action::WIDTH;
+        assert_eq!(rows.actions[start + action::HAS_X], 1.0);
+        assert_eq!(rows.actions[start + action::X], amount as f32 / 10.0);
+        assert_eq!(offer.focus, public_ids);
+        assert_eq!(
+            rows.action_focus[index * slots..index * slots + 2],
+            focus_rows
+        );
+    }
+}
+
+/// The attacker, blocker and assigned damage are public battlefield state, so
+/// a defender's possible world keeps the attacker's pending assignment.
+#[test]
+fn a_possible_world_keeps_a_pending_combat_damage_assignment() {
+    use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
+    let (s, ..) = trample_assignment();
+    let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
+    assert!(!space.worlds().is_empty());
+    let expected = Observation::for_player(s.game(), PlayerId(0)).action_space;
+    for index in 0..space.worlds().len().min(4) {
+        let branch = space
+            .materialize_index(
+                s.game(),
+                index,
+                17,
+                MaterializeMode::RefreshOpponentCommitment,
+            )
+            .expect("an assignment is a supported acting prompt");
+        assert_eq!(
+            branch.action_space().unwrap().actions,
+            s.game().action_space().unwrap().actions
+        );
+        assert_eq!(
+            Observation::for_player(&branch, PlayerId(0)).action_space,
+            expected
         );
     }
 }

@@ -19,8 +19,10 @@ VARIANTS = [
     ("June, Bounty Hunter", "StaticAbility::CantBeBlockedIf"),
     ("Giant Cindermaw", "StaticAbility::PlayersCantGainLife"),
     ("Tiger-Dillo", "StaticAbility::CantAttackOrBlockUnlessYouControlAnother"),
-    ("Spirit", "BlockRestriction::CantBlock"),
-    ("Spirit", "BlockRestriction::CantBeBlockedBy"),
+    # Two tokens are named Spirit; the TLA face carries the restrictions.
+    ("token.spirit", "BlockRestriction::CantBlock"),
+    ("token.spirit", "BlockRestriction::CantBeBlockedBy"),
+    ("Juggernaut", "Restriction::AttacksEachCombat"),
     ("Gran-Gran", "StaticAbility::SpellsCostLess"),
     ("Allies at Last", "StaticAbility::CostsLessPerPermanent"),
     ("Proft's Eidetic Memory", "StaticAbility::NoMaximumHandSize"),
@@ -35,7 +37,11 @@ VARIANTS = [
 def _characteristics(
     catalog: managym.CatalogTokens, name: str
 ) -> list[tuple[int, int]]:
-    row = catalog["registry_names"].index(name)
+    """The characteristics span of the row with this key, or else this name."""
+    if name in catalog["keys"]:
+        row = catalog["keys"].index(name)
+    else:
+        row = catalog["registry_names"].index(name)
     start, end = catalog["definition_offsets"][row : row + 2]
     return list(
         zip(

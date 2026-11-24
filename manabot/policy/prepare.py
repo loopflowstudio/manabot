@@ -536,6 +536,15 @@ class EventRows[A]:
 
 
 @dataclass(frozen=True)
+class CompactAttention[A]:
+    """Place packed tokens into [batch, longest live sequence] for batched SDPA."""
+
+    batches: A
+    slots: A
+    key_mask: A  # [B,1,1,max_live], additive zero for a live key, -inf for padding
+
+
+@dataclass(frozen=True)
 class PackedAttention[A]:
     """Flat object indexes per group (-1 pads), and inverse gather for the heads."""
 
@@ -643,8 +652,11 @@ class Prepared[A]:
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
     memory: MemoryRows[A] | None = None
-    live_index: A | None = None  # flat valid slots, including memory/value tokens
+    live_index: A | None = None  # flat valid slots, including the optional value token
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
+    compact_attention: CompactAttention[Array] | None = field(
+        default=None, metadata={"host_only": True}
+    )
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
@@ -701,6 +713,7 @@ def prepare(
     binding: str = "",
     select_programs: bool = False,
     compact_learner: bool = False,
+    live_facts: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
@@ -710,6 +723,9 @@ def prepare(
     selection, or packs rows by live length when that is smaller, and routes
     only live fact rows. Torch never sets it: it keeps padded shapes for
     gradient reduction order.
+    `live_facts` routes only live fact rows, for inference and learning alike,
+    padded to a power-of-two count so a shape-compiling device (Torch on MPS)
+    sees few distinct shapes; it changes nothing else.
     Bucketed observations retain their original action capacity.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
@@ -779,13 +795,13 @@ def prepare(
             else native.capacities["facts"]
         )
         fact_valid = span.mask(stop)
-        live_facts = span.integers[:, : tables.layout.widths["facts"]]
+        fact_rows = span.integers[:, : tables.layout.widths["facts"]]
     else:
         facts = obs["facts"]
         if inference and not bucketed:
             facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
         fact_valid = facts[..., FACT_VALID_INDEX] == 1
-        live_facts = facts[fact_valid]
+        fact_rows = facts[fact_valid]
     stack = obs.get("stack")
     validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
@@ -812,7 +828,8 @@ def prepare(
                 )
                 start += native.capacities[key]
             used = np.concatenate(segments)
-        if compact:
+        # Row groups carry no per-row value token or memory summaries.
+        if compact and not value_token and not memory_summaries:
             packed_attention = pack_attention(valid, len(used))
         if packed_attention is None and 0 < len(used) < validity.shape[1]:
             columns = used
@@ -938,7 +955,7 @@ def prepare(
         ownership.append(stack[..., STACK_IS_MINE_INDEX] > 0)
     if belief is not None:
         ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
-    live_index = live_offsets = None
+    live_index = live_offsets = compact_attention = None
     if live_tokens:
         if native is None:
             present = validity != 0
@@ -960,6 +977,10 @@ def prepare(
             lengths = counts.sum(1)
             live_index = np.arange(lengths.sum()) + np.repeat(skipped, counts.ravel())
         live_offsets = np.concatenate(([0], lengths.cumsum()))
+        live_keys = np.arange(lengths.max(initial=0)) < lengths[:, None]
+        batches, slots = np.nonzero(live_keys)
+        mask = np.where(live_keys, f32(0), f32(-np.inf))
+        compact_attention = CompactAttention(batches, slots, mask[:, None, None, :])
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -997,13 +1018,14 @@ def prepare(
         link_targets=tuple(link_targets),
         link_masks=tuple(link_masks),
         facts=_facts(
-            live_facts,
+            fact_rows,
             fact_valid,
             tables,
             objects,
             object_remap,
             native=native,
-            compact=compact,
+            compact=compact or live_facts,
+            bucket_rows=live_facts,
         ),
         effects=_effects(obs, tables, objects, object_remap, native=native),
         relation_features=relation_features,
@@ -1049,6 +1071,7 @@ def prepare(
         memory=memory,
         live_index=live_index,
         live_offsets=live_offsets,
+        compact_attention=compact_attention,
     )
 
 
@@ -1097,6 +1120,10 @@ def _referenced_definitions(
     return referenced[referenced > 0]
 
 
+# The smallest live fact route `prepare(live_facts=True)` emits.
+MIN_LIVE_FACT_ROWS = 64
+
+
 def _facts(
     live: Array,
     valid: Array,
@@ -1106,6 +1133,7 @@ def _facts(
     *,
     native: ObservationSpans | None = None,
     compact: bool = False,
+    bucket_rows: bool = False,
 ) -> FactRoutes[Array]:
     """Route live fact rows; `valid` places them in their padded slots.
 
@@ -1113,7 +1141,9 @@ def _facts(
     `[B,F]`, so Torch keeps its matrix shapes and gradient reduction order.
     `compact` emits the `R` live rows in row-major order as `[1,R]` instead,
     with targets from each row's own observation; a padded row changes no
-    output or gradient, so the encoder skips that work.
+    output or gradient, so the encoder skips that work. `bucket_rows` pads
+    `R` with zero (unlinked) rows to a power of two, at least
+    `MIN_LIVE_FACT_ROWS`.
     """
     # A checkpoint with fewer fact kinds reads none of the kinds added after it.
     known = live[..., FACT_KIND_INDEX] <= tables.fact_kinds
@@ -1122,6 +1152,13 @@ def _facts(
         valid[valid] = known
         live = live[known]
     word = record_word if native is None else full_word
+    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]
+    if compact and bucket_rows:
+        size = max(MIN_LIVE_FACT_ROWS, 1 << max(len(live) - 1, 0).bit_length())
+        live = np.concatenate(
+            [live, np.zeros((size - len(live), *live.shape[1:]), live.dtype)]
+        )
+        owners = np.pad(owners, ((0, 0), (0, size - owners.shape[1])))
     routed = (1, len(live)) if compact else valid.shape
 
     def padded(values: Array) -> Array:
@@ -1188,7 +1225,6 @@ def _facts(
         id_mask = np.ones(routed, np.float32)
         detail_mask = np.ones(routed, np.float32)
     links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
-    owners = np.nonzero(valid)[0][None] if compact else np.arange(len(valid))[:, None]
     all_programs = padded(program)
     return FactRoutes(
         kinds=padded(kinds),

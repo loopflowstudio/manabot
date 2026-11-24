@@ -5,14 +5,14 @@ use crate::state::card::Keyword;
 use crate::{
     agent::action::AgentError,
     flow::{
-        combat::CombatState,
-        decision::{EffectFrame, FrameCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SuspendedResolution},
         game::{CombatDamagePass, Game},
         proposed_event::{EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent},
     },
     state::{
         card::{BlockRestriction, Restriction, StaticAbility},
         game_object::{PermanentId, PlayerId},
+        predicate::CardPredicate,
     },
 };
 
@@ -42,6 +42,11 @@ impl Game {
         attack: bool,
     ) -> Result<(), AgentError> {
         if !attack {
+            if self.permanent_can_attack(permanent_id) && self.must_attack(permanent_id) {
+                return Err(AgentError(
+                    "creature attacks each combat if able".to_string(),
+                ));
+            }
             return Ok(());
         }
 
@@ -103,20 +108,49 @@ impl Game {
         let Some(combat) = &self.state.combat else {
             return;
         };
-        let first_strike = self.combat_has_first_or_double_strike(combat);
-        let pass = if first_strike {
-            CombatDamagePass::FirstStrike
+        let pass = if combat.regular_damage_step {
+            CombatDamagePass::NormalWithFirstStrike
         } else {
-            CombatDamagePass::Normal
+            let first_strikers: Vec<_> = combat
+                .attackers
+                .iter()
+                .chain(combat.attacker_to_blockers.values().flatten())
+                .copied()
+                .filter(|id| {
+                    self.still_in_combat(*id)
+                        && self.creature_deals_damage_in_pass(*id, CombatDamagePass::FirstStrike)
+                })
+                .collect();
+            if first_strikers.is_empty() {
+                CombatDamagePass::Normal
+            } else {
+                self.state.combat.as_mut().unwrap().first_strikers = first_strikers;
+                CombatDamagePass::FirstStrike
+            }
         };
         let mut frame = EffectFrame::new(self.active_player(), Vec::new());
-        frame.batch = self.combat_damage_batch(pass);
-        frame.completion = if first_strike {
-            FrameCompletion::CombatNormal
-        } else {
-            FrameCompletion::Continue
-        };
-        self.run_frame(frame);
+        frame.completion = FrameCompletion::Continue;
+        self.assign_combat_damage(frame, pass, Vec::new());
+    }
+
+    pub(crate) fn assign_combat_damage(
+        &mut self,
+        mut frame: EffectFrame,
+        pass: CombatDamagePass,
+        assigned: Vec<i32>,
+    ) {
+        match self.combat_damage_batch(pass, &assigned) {
+            Ok(batch) => {
+                frame.batch = Some(batch);
+                self.run_frame(frame);
+            }
+            Err(decision) => {
+                *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame,
+                    decision: *decision,
+                });
+            }
+        }
     }
 
     /// Whether a creature recorded in combat still takes part: one that
@@ -126,35 +160,16 @@ impl Game {
         self.state.permanents[permanent_id].is_some() && !self.is_phased_out(permanent_id)
     }
 
-    fn combat_has_first_or_double_strike(&self, combat: &CombatState) -> bool {
-        for attacker_id in &combat.attackers {
-            if !self.still_in_combat(*attacker_id) {
-                continue;
-            }
-            let keywords = self.characteristics(*attacker_id).keywords;
-            if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
-                return true;
-            }
-        }
-        for blockers in combat.attacker_to_blockers.values() {
-            for blocker_id in blockers {
-                if !self.still_in_combat(*blocker_id) {
-                    continue;
-                }
-                let keywords = self.characteristics(*blocker_id).keywords;
-                if keywords.has(Keyword::FirstStrike) || keywords.has(Keyword::DoubleStrike) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     /// One combat damage step (CR 510.2): every assignment is dealt, then
     /// the creatures that dealt damage to a player are announced together
     /// for "deals combat damage to a player" triggers.
-    pub(crate) fn combat_damage_batch(&self, pass: CombatDamagePass) -> Option<EventBatch> {
-        let combat = self.state.combat.as_ref()?;
+    fn combat_damage_batch(
+        &self,
+        pass: CombatDamagePass,
+        assignments: &[i32],
+    ) -> Result<EventBatch, Box<Decision>> {
+        let combat = self.state.combat.as_ref().expect("combat damage step");
+        let mut choices = assignments.iter().copied();
         let defender = self.non_active_player();
         let mut events = Vec::new();
 
@@ -163,19 +178,18 @@ impl Game {
                 continue;
             }
             let attacker_ref = self.permanent_object(attacker_id);
-            if !self.creature_deals_damage_in_pass(attacker_id, pass) {
-                continue;
-            }
+            let attacker_deals = self.creature_deals_damage_in_pass(attacker_id, pass);
 
-            let attacker_power = self.characteristics(attacker_id).power.max(0);
-            let attacker_keywords = self.characteristics(attacker_id).keywords;
+            let characteristics = self.characteristics(attacker_id);
+            let attacker_power = characteristics.power.max(0);
+            let attacker_keywords = characteristics.keywords;
             let attacker_has_trample = attacker_keywords.has(Keyword::Trample);
             let attacker_has_deathtouch = attacker_keywords.has(Keyword::Deathtouch);
 
             let declared_blockers = combat
                 .attacker_to_blockers
                 .get(&attacker_id)
-                .cloned()
+                .map(Vec::as_slice)
                 .unwrap_or_default();
             let was_blocked = !declared_blockers.is_empty();
             let blockers: Vec<PermanentId> = declared_blockers
@@ -184,20 +198,7 @@ impl Game {
                 .filter(|blocker_id| self.still_in_combat(*blocker_id))
                 .collect();
 
-            if !was_blocked {
-                events.push(ProposedEvent::Damage {
-                    source: attacker_ref,
-                    target: ProposedDamageTarget::Player(defender),
-                    amount: attacker_power,
-                    combat: true,
-                });
-                continue;
-            }
-
             for blocker_id in &blockers {
-                if !self.still_in_combat(*blocker_id) {
-                    continue;
-                }
                 let blocker_ref = self.permanent_object(*blocker_id);
                 if !self.creature_deals_damage_in_pass(*blocker_id, pass) {
                     continue;
@@ -213,8 +214,12 @@ impl Game {
                 }
             }
 
+            if !attacker_deals {
+                continue;
+            }
             let mut remaining_damage = attacker_power;
-            for blocker_id in blockers {
+            let mut can_trample = attacker_has_trample;
+            for (index, &blocker_id) in blockers.iter().enumerate() {
                 if remaining_damage <= 0 {
                     break;
                 }
@@ -230,19 +235,43 @@ impl Game {
                 } else {
                     needed_damage
                 };
-                let assigned = remaining_damage.min(lethal);
-                if let Some(target) = self.permanent_object(blocker_id) {
-                    events.push(ProposedEvent::Damage {
-                        source: attacker_ref,
-                        target: ProposedDamageTarget::Object(target),
-                        amount: assigned,
-                        combat: true,
-                    });
-                }
+                // CR 510.1c and 702.19b: damage can be divided freely among
+                // blockers. Only assigning damage to the defender requires lethal.
+                let last = index + 1 == blockers.len();
+                let minimum = if !last {
+                    0
+                } else if can_trample {
+                    lethal.min(remaining_damage)
+                } else {
+                    remaining_damage
+                };
+                let assigned = if minimum == remaining_damage {
+                    minimum
+                } else if let Some(amount) = choices.next() {
+                    amount
+                } else {
+                    return Err(Box::new(Decision::AssignCombatDamage {
+                        player: self.active_player(),
+                        attacker: attacker_ref.unwrap(),
+                        blocker: blocker.object,
+                        minimum,
+                        remaining: remaining_damage,
+                        last,
+                        pass,
+                        assigned: assignments.to_vec(),
+                    }));
+                };
+                can_trample &= assigned >= lethal;
+                events.push(ProposedEvent::Damage {
+                    source: attacker_ref,
+                    target: ProposedDamageTarget::Object(blocker.object),
+                    amount: assigned,
+                    combat: true,
+                });
                 remaining_damage -= assigned;
             }
 
-            if attacker_has_trample && remaining_damage > 0 {
+            if !was_blocked || (can_trample && remaining_damage > 0) {
                 events.push(ProposedEvent::Damage {
                     source: attacker_ref,
                     target: ProposedDamageTarget::Player(defender),
@@ -251,7 +280,7 @@ impl Game {
                 });
             }
         }
-        Some(self.event_batch(EventBinding::Combat, events))
+        Ok(self.event_batch(EventBinding::Combat, events))
     }
 
     fn creature_deals_damage_in_pass(
@@ -264,19 +293,24 @@ impl Game {
         let has_double = keywords.has(Keyword::DoubleStrike);
         match pass {
             CombatDamagePass::FirstStrike => has_first || has_double,
-            CombatDamagePass::NormalWithFirstStrike => !has_first || has_double,
+            CombatDamagePass::NormalWithFirstStrike => {
+                has_double
+                    || !self
+                        .state
+                        .combat
+                        .as_ref()
+                        .unwrap()
+                        .first_strikers
+                        .contains(&permanent_id)
+            }
             CombatDamagePass::Normal => true,
         }
     }
 
     pub(crate) fn eligible_attackers(&self, player: PlayerId) -> Vec<PermanentId> {
-        let mut out = Vec::new();
-        for permanent_id in self.battlefield_permanents(player) {
-            if self.permanent_can_attack(permanent_id) {
-                out.push(permanent_id);
-            }
-        }
-        out
+        self.iter_battlefield_permanents(player)
+            .filter(|&permanent_id| self.permanent_can_attack(permanent_id))
+            .collect()
     }
 
     /// Whether a permanent can be declared as an attacker (CR 508.1a):
@@ -303,19 +337,31 @@ impl Game {
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
-        let mut out = Vec::new();
-        for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                continue;
-            };
-            if !permanent.tapped
-                && self.characteristics(permanent_id).is_creature()
-                && self.combat_condition_met(permanent_id)
-            {
-                out.push(permanent_id);
-            }
-        }
-        out
+        self.iter_battlefield_permanents(player)
+            .filter(|&permanent_id| self.can_block(permanent_id))
+            .collect()
+    }
+
+    /// Whether the permanent may be declared as a blocker at all (CR
+    /// 509.1a-b): an untapped creature that no prohibition keeps from
+    /// blocking every attacker. Pairwise restrictions are
+    /// [`Self::blocker_can_block_attacker`]'s.
+    fn can_block(&self, id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
+            return false;
+        };
+        let view = self.characteristics(id);
+        !permanent.tapped
+            && view.is_creature()
+            && self.combat_condition_met(id)
+            && !self.cant_block(id)
+            && !view.static_abilities.iter().any(|ability| {
+                matches!(
+                    ability,
+                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
+                        if *predicate == CardPredicate::default()
+                )
+            })
     }
 
     pub(crate) fn blocker_can_block_attacker(
@@ -323,22 +369,14 @@ impl Game {
         blocker_id: PermanentId,
         attacker_id: PermanentId,
     ) -> bool {
-        let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
-            return false;
-        };
         let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
             return false;
         };
-        let blocker_view = self.characteristics(blocker_id);
-        let attacker_view = self.characteristics(attacker_id);
-
-        if blocker.tapped
-            || !blocker_view.is_creature()
-            || !self.combat_condition_met(blocker_id)
-            || self.cant_block(blocker_id)
-        {
+        if !self.can_block(blocker_id) {
             return false;
         }
+        let blocker_view = self.characteristics(blocker_id);
+        let attacker_view = self.characteristics(attacker_id);
 
         if blocker_view.static_abilities.iter().any(|ability| {
             matches!(

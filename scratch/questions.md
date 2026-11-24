@@ -116,3 +116,17 @@ Finding 17 verification (`31a2d7dbd3`, rebuilt cp313 extension): `test_authored_
 For the post-Finding-17 full-branch concept review at `b817943ea0` (`scratch/concept-review.html`): move `end_mandatory_loop()` in `tick_priority()` after `stabilize_before_priority()` and `is_game_over()` (simplifying its empty check to `self.stack_is_empty()`) so CR 603.8 state-trigger loops, non-batch `emit()` loops (`PermanentUntapped`), and SBA-death loops are counted instead of clearing `loop_watch` every cycle, and terminal SBAs take precedence over `CAP`; unify all watch/owed-flag clearing in `PriorityState::clear_loop_watch()` so real multi-option choices and non-pass actions clear `resolution_owed` alongside `loop_watch`; and keep `resolution_owed` as `#[serde(skip)]` on hash contract v31 (it is always `false` at priority and multi-option decisions, and `Clone` preserves it across forks and snapshots).
 
 Finding 18 fixture choice: keep Lightning Bolt castable during both new trigger loops and pass every offered priority with forced decisions skipped. This bounds a regression by the number of passes even if the engine never starts its watch. The untap fixture starts with the Ogre's ordinary untap step.
+
+## Sync onto main at `912f8e622a`
+
+Main and this branch both added v11 permanent columns at position 52. The
+merge keeps main's first-strike participant at 52 and puts the three
+branch history columns after it. The legacy permanent layouts keep their
+existing widths.
+
+Both catalogs defined the same Cat, Goblin, Faerie, 5/5 Dragon, green Elf
+Warrior and Zombie printings. The merge keeps main's keys for those
+printings and updates the branch's card definitions to use them. Main's
+attachment subject also covers the Fishing Pole untap trigger. Life-gain
+listeners share the branch's ordinal-bearing trigger, with no ordinal
+restriction for listeners that run on every gain.

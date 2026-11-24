@@ -35,7 +35,7 @@ fn lathril_blade_of_the_elves() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::create_tokens(
-                    "token.green_elf_warrior",
+                    "token.elf_warrior_1_1_g",
                     EffectValue::TriggeringAmount,
                 )],
             }],

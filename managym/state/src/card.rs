@@ -2,8 +2,8 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, EffectValue, ObjectSelector,
+        PaymentCost, TargetRequirement, TargetSpec,
     },
     game_object::ObjectId,
     mana::{Color, Colors, Mana, ManaCost},
@@ -480,6 +480,15 @@ pub enum Restriction {
     DoesntUntap,
     /// "Can't be blocked by more than one creature" (CR 509.1b).
     CantBeBlockedByMoreThanOne,
+    /// "Attacks each combat if able" (CR 508.1d): a requirement on the
+    /// attack declaration, obeyed whenever the creature can attack.
+    AttacksEachCombat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DamageTransform {
+    Double,
+    Prevent(u32),
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -489,17 +498,25 @@ pub enum Restriction {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
-    /// Prevent `amount` damage that would be dealt to this permanent's
-    /// controller or a permanent they control.
-    PreventDamageToController { amount: i32 },
-    /// Double damage that would be dealt to this permanent's controller or a
-    /// permanent they control. This driver makes ordering observable.
-    DoubleDamageToController,
+    PreventCombatDamageToOrFromSelf,
+    /// Combat damage that would be dealt to the protected permanent is
+    /// prevented (CR 615.1a). Only a resolved `Modification::PreventCombatDamage`
+    /// record offers it; no definition prints it.
+    PreventCombatDamage,
+    ModifyDamage {
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        creature_source: bool,
+        source_by: super::ability::Actor,
+        recipient_by: super::ability::Actor,
+        transform: DamageTransform,
+    },
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
     /// This object enters tapped unless its entering controller already
     /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
-    EntersTappedUnlessControls { predicate: CardPredicate },
+    EntersTappedUnlessControls {
+        predicate: CardPredicate,
+    },
     /// This object enters with +1/+1 counters already present (CR 614.1c),
     /// if `condition` holds for its entering controller as it enters
     /// ("enters with a +1/+1 counter on it if you attacked this turn").
@@ -510,13 +527,20 @@ pub enum ReplacementEffect {
     },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
-    EntersWithXCounters { kind: CounterKind },
+    EntersWithXCounters {
+        kind: CounterKind,
+    },
     /// This object enters with `count` counters of `kind` (CR 614.1c).
-    EntersWithCounters { kind: CounterKind, count: i32 },
+    EntersWithCounters {
+        kind: CounterKind,
+        count: i32,
+    },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).
-    OpponentDamagePlusCounters { kind: CounterKind },
+    OpponentDamagePlusCounters {
+        kind: CounterKind,
+    },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
@@ -535,7 +559,9 @@ pub enum ReplacementEffect {
     },
     /// Replace a logical creation under your control, before any token enters
     /// (CR 616.1g). Entry and copy terms belong to every resulting token.
-    MultiplyTokens { multiplier: i32 },
+    MultiplyTokens {
+        multiplier: i32,
+    },
     /// "You may have this creature enter as a copy of [a creature in
     /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
     /// controller chooses before the move commits, and the copy's own entry
@@ -592,6 +618,18 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
+    pub fn equip(mana_cost: ManaCost) -> Self {
+        Self {
+            sorcery_timing: true,
+            mana_cost,
+            effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            }],
+            ..Default::default()
+        }
+    }
+
     /// Whether this is a mana ability (CR 605.1a): an untargeted activation
     /// whose leading effect could add mana, optionally followed by the
     /// untargeted non-mana instructions of [`Self::mana_suffix`]. Its output
@@ -929,6 +967,12 @@ pub enum LayerValue {
     },
 }
 
+impl From<i32> for LayerValue {
+    fn from(value: i32) -> Self {
+        Self::Fixed(value)
+    }
+}
+
 /// One static effect: once its first part applies, later layers retain its
 /// affected objects even if its generating ability disappears (CR 613.6).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -1057,6 +1101,8 @@ pub enum StaticAbility {
     /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
     /// nonbasic lands), for every player (CR 614.1c).
     EntersTapped(CardPredicate),
+    /// Matching permanents entering under an opponent’s control enter tapped.
+    OpponentsEnterTapped(CardPredicate),
     /// "As long as this has [threshold], [predicate] lands are [subtype]"
     /// (CR 305.7): they lose all other land types and abilities and have
     /// that basic land type's mana ability.
@@ -1081,6 +1127,22 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+}
+
+impl StaticAbility {
+    /// A battlefield effect applying its modifications together across layers (CR 613.6).
+    pub fn continuous(
+        scope: StaticScope,
+        condition: Option<Condition>,
+        modifications: Vec<crate::effect::Modification<LayerValue>>,
+    ) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope,
+            condition,
+            characteristic_defining: false,
+            modifications,
+        })
+    }
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
