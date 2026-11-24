@@ -113,6 +113,7 @@ pub enum CostComponent {
     /// functions from hand, "discard this card" (`Discarded`).
     Source(How),
     ExileGrantor(ObjectId),
+    TapGrantor(ObjectId),
 }
 
 impl CostComponent {
@@ -561,6 +562,11 @@ impl Game {
                         ability.granted_by.expect("attached ability grant").grantor,
                     ));
                 }
+                if ability.tap_grantor {
+                    owed.push(CostComponent::TapGrantor(
+                        ability.granted_by.expect("attached ability grant").grantor,
+                    ));
+                }
                 for (owes, how) in [
                     (ability.tap_source, How::Tapped),
                     (ability.sacrifice_source, How::Sacrificed),
@@ -912,7 +918,8 @@ impl Game {
             | CostComponent::RemoveCounters(..)
             | CostComponent::AddCounters(..)
             | CostComponent::Source(_)
-            | CostComponent::ExileGrantor(_) => {
+            | CostComponent::ExileGrantor(_)
+            | CostComponent::TapGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         }
@@ -1080,6 +1087,16 @@ impl Game {
                             delta: -i32::from(count),
                             by: Some(player),
                         });
+                        continue;
+                    }
+                    if let CostComponent::TapGrantor(object) = *component {
+                        let grantor = self
+                            .state
+                            .permanent_of(object)
+                            .ok_or_else(|| AgentError("the grantor has left".into()))?;
+                        if !self.tap_permanent(grantor, false) {
+                            return Err(AgentError("cannot tap the grantor".into()));
+                        }
                         continue;
                     }
                     if let CostComponent::AddCounters(kind, count) = *component {

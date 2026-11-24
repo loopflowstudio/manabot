@@ -1196,6 +1196,9 @@ impl Game {
         if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
         }
+        if !self.can_tap_grantor(&ability) {
+            return Err(AgentError("grantor cannot tap".into()));
+        }
         if ability.mana_cost.x > 0 {
             if self
                 .legal_activation_x_values(player, permanent_id, ability_index)

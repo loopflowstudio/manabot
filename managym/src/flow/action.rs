@@ -271,7 +271,8 @@ impl Game {
                     | CostComponent::RemoveCounters(..)
                     | CostComponent::AddCounters(..)
                     | CostComponent::Source(_)
-                    | CostComponent::ExileGrantor(_) => None,
+                    | CostComponent::ExileGrantor(_)
+                    | CostComponent::TapGrantor(_) => None,
                 });
                 if paying.is_some() {
                     paying
@@ -506,7 +507,9 @@ impl Game {
                         continue;
                     }
                 }
-                if ability.tap_source && !self.permanent_can_tap(permanent_id) {
+                if (ability.tap_source && !self.permanent_can_tap(permanent_id))
+                    || !self.can_tap_grantor(ability)
+                {
                     continue;
                 }
                 if ability.tap_power().is_some_and(|(power, _)| {
@@ -958,7 +961,8 @@ impl Game {
             | CostComponent::RemoveCounters(..)
             | CostComponent::AddCounters(..)
             | CostComponent::Source(_)
-            | CostComponent::ExileGrantor(_) => {
+            | CostComponent::ExileGrantor(_)
+            | CostComponent::TapGrantor(_) => {
                 unreachable!("paid as the payment completes, after its mana")
             }
         };

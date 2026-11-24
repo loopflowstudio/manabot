@@ -159,6 +159,12 @@ pub enum TriggerCondition {
     BecomesTapped {
         subject: TriggerSubject,
     },
+    /// "Whenever [subject] becomes untapped": a tapped permanent untaps,
+    /// in its untap step or otherwise; a stun counter removed instead
+    /// (CR 122.1d) is no untapping.
+    BecomesUntapped {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] is tapped for mana."
     TappedForMana {
         subject: TriggerSubject,
@@ -751,6 +757,8 @@ pub enum TriggerSubject {
     This,
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// "equipped creature": the object the source Equipment is attached to.
+    EquippedCreature,
     /// A creature dealt damage by this exact source this turn.
     CreatureDamagedByThis,
     /// "a/another [predicate] [controlled_by controls]": an object whose

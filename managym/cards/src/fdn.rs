@@ -19,6 +19,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fishing_pole(),
         ravenous_amulet(),
         hare_apparent(),
         ingenious_leonin(),
@@ -478,6 +479,66 @@ fn drake_hatcher() -> CardDefinition {
                 remove_counters: Some((CounterKind::Incubation, 3)),
                 effects: vec![Effect::create_tokens("token.drake", 1)],
                 ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fishing_pole() -> CardDefinition {
+    let text_box = "Equipped creature has \"{1}, {T}, Tap Fishing Pole: Put a bait counter on Fishing Pole.\"\nWhenever equipped creature becomes untapped, remove a bait counter from this Equipment. If you do, create a 1/1 blue Fish creature token.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+    CardDefinition {
+        key: "fdn.fishing_pole",
+        scryfall_id: "c95ab836-3277-4223-9aaa-ef2c77256b65",
+        printed: PrintedCharacteristics {
+            name: "Fishing Pole".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                tap_grantor: true,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Grantor,
+                    CounterKind::Bait,
+                    1,
+                )],
+                ..Default::default()
+            })],
+            // "Remove a bait counter. If you do, ...": with no effect that
+            // replaces counter removal, removing one happens exactly when
+            // the Pole still has one.
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BecomesUntapped {
+                    subject: TriggerSubject::EquippedCreature,
+                },
+                effects: vec![Effect::If {
+                    condition: Condition::SourceCountersAtLeast {
+                        kind: CounterKind::Bait,
+                        count: 1,
+                    },
+                    then: vec![
+                        Effect::RemoveCounters {
+                            from: ObjectSelector::This,
+                            up_to: 1,
+                            chosen: Some(CounterKind::Bait),
+                        },
+                        Effect::create_tokens("token.fish", 1),
+                    ],
+                    otherwise: Vec::new(),
+                }],
             }],
             text_box: text_box.into(),
             ..Default::default()

@@ -135,6 +135,10 @@ pub enum GameEvent {
         permanent: PermanentId,
         for_mana: bool,
     },
+    /// A permanent transitioned from tapped to untapped.
+    PermanentUntapped {
+        permanent: PermanentId,
+    },
     /// A permanent became the target of a spell or ability (ward, CR
     /// 702.21): `by` is a `Target::StackSpell` or `Target::StackAbility`.
     PermanentTargeted {
@@ -238,6 +242,7 @@ pub enum EventKind {
     TurnStarted,
     StepStarted,
     Surveilled,
+    PermanentUntapped,
 }
 
 impl GameEvent {
@@ -264,6 +269,7 @@ impl GameEvent {
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
+            GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,
             GameEvent::PermanentTargeted { .. } => EventKind::PermanentTargeted,
             GameEvent::AttackersDeclared { .. } => EventKind::AttackersDeclared,
             GameEvent::CombatAttackersDeclared { .. } => EventKind::CombatAttackersDeclared,

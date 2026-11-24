@@ -2090,6 +2090,7 @@ impl Observation {
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
+            | GameEvent::PermanentUntapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CombatDamageToPlayers { .. }
             | GameEvent::LibrarySearched { .. }

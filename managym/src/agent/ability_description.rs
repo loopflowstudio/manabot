@@ -166,6 +166,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
         }
+        TriggerCondition::BecomesUntapped { subject } => {
+            format!("When {} becomes untapped", subject_description(subject))
+        }
         TriggerCondition::TappedForMana { subject } => {
             format!("When {} is tapped for mana", subject_description(subject))
         }
@@ -322,6 +325,7 @@ fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) 
             "a creature dealt damage by this creature this turn".into()
         }
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
+        TriggerSubject::EquippedCreature => "equipped creature".into(),
         TriggerSubject::Matching {
             controlled_by,
             predicate,

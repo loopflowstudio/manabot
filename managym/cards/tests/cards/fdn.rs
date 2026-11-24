@@ -3508,3 +3508,67 @@ fn ravenous_amulet_drains_by_the_soul_counters_it_had_when_sacrificed() {
     settle(&mut s);
     assert_eq!(s.life(1), life - 3);
 }
+
+#[test]
+fn fishing_pole_baits_by_tapping_itself_and_fishes_when_its_creature_untaps() {
+    use crate::support::inspect::permanent;
+    use crate::support::{
+        game::set_counters,
+        inspect::{counters_of, tapped},
+        play::offers_ability,
+    };
+    use managym::state::{
+        game_object::Target,
+        permanent::CounterKind::{Bait, Stun},
+    };
+
+    let mut s = five_color_setup(&["Fishing Pole", "Gray Ogre"]);
+    let pole = s.force_permanent_on_battlefield(0, "Fishing Pole");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    crate::support::game::clear_summoning_sickness(&mut s, ogre);
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, pole, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
+    settle(&mut s);
+    assert_eq!(permanent(&s, pole).attached_to, Some(card_of(&s, ogre)));
+
+    // The granted ability taps the Pole as well as the creature.
+    s.game_mut().state.permanents[pole].as_mut().unwrap().tapped = true;
+    assert!(!offers_ability(&mut s, ogre, 0), "the Pole must be untapped");
+    s.game_mut().state.permanents[pole].as_mut().unwrap().tapped = false;
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, ogre, 0);
+    spend_colorless(&mut s);
+    assert!(tapped(&s, ogre) && tapped(&s, pole));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, pole, Bait), 1);
+
+    // Untapping in the untap step triggers, and the Fish arrives in upkeep.
+    let pending = s.game().clone();
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(s.battlefield_permanents_named(0, "Fish").is_empty());
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    settle(&mut s);
+    let fish = s.battlefield_permanents_named(0, "Fish");
+    assert_eq!(fish.len(), 1);
+    assert_eq!(s.game().characteristics(fish[0]).pt(), (1, 1));
+    assert_eq!(counters_of(&s, pole, Bait), 0);
+
+    // A stun counter removed instead of untapping is no untapping.
+    *s.game_mut() = pending.clone();
+    set_counters(&mut s, ogre, Stun, 1);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    settle(&mut s);
+    assert!(tapped(&s, ogre));
+    assert!(s.battlefield_permanents_named(0, "Fish").is_empty());
+    assert_eq!(counters_of(&s, pole, Bait), 1);
+
+    // Without bait, untapping catches nothing.
+    *s.game_mut() = pending;
+    set_counters(&mut s, pole, Bait, 0);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    settle(&mut s);
+    assert!(!tapped(&s, ogre));
+    assert!(s.battlefield_permanents_named(0, "Fish").is_empty());
+}

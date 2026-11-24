@@ -1103,6 +1103,18 @@ impl Game {
     /// turn began or with haste, as its characteristics report it. A
     /// temporary grant must not erase the restriction that applies again when
     /// the grant expires (CR 702.10).
+    /// Whether an ability's "tap [its grantor]" cost can be paid: the
+    /// granting permanent is untapped. Summoning sickness doesn't matter
+    /// (CR 302.6). True for an ability without that cost.
+    pub(crate) fn can_tap_grantor(&self, ability: &ActivatedAbilityDefinition) -> bool {
+        !ability.tap_grantor
+            || ability
+                .granted_by
+                .and_then(|grant| self.state.permanent_of(grant.grantor))
+                .and_then(|id| self.state.permanents[id].as_ref())
+                .is_some_and(|grantor| !grantor.tapped)
+    }
+
     pub(crate) fn permanent_can_tap(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;

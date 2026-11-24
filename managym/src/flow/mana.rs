@@ -1902,11 +1902,11 @@ impl Game {
         } = operation
         {
             let ability = self.activation_ability(*source, *ability_index)?;
-            if ability.exile_grantor {
+            if ability.exile_grantor || ability.tap_grantor {
                 model.reserve(SourceReservation {
                     permanent: self.state.permanent_of(ability.granted_by?.grantor)?,
-                    tap: false,
-                    sacrifice: true,
+                    tap: ability.tap_grantor,
+                    sacrifice: ability.exile_grantor,
                 });
             }
             model.life = model.life.checked_sub(ability.life_cost)?;

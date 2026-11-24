@@ -1138,6 +1138,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
         TriggerCondition::BecomesTapped { .. } => "TriggerCondition::BecomesTapped",
+        TriggerCondition::BecomesUntapped { .. } => "TriggerCondition::BecomesUntapped",
         TriggerCondition::TappedForMana { .. } => "TriggerCondition::TappedForMana",
         TriggerCondition::BecomesTargeted { .. } => "TriggerCondition::BecomesTargeted",
         TriggerCondition::PutsCounters { .. } => "TriggerCondition::PutsCounters",
@@ -1232,6 +1233,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::Dies { subject: this() },
         TriggerCondition::attacks(this(), Per::Object),
         TriggerCondition::BecomesTapped { subject: this() },
+        TriggerCondition::BecomesUntapped {
+            subject: TriggerSubject::EquippedCreature,
+        },
         TriggerCondition::TappedForMana { subject: this() },
         TriggerCondition::BecomesTargeted { subject: this() },
         TriggerCondition::PutsCounters {
@@ -6260,7 +6264,7 @@ fn power_batch_catalog_tokens_distinguish_source_target_and_total() {
 }
 
 #[test]
-fn counter_costs_state_triggers_and_counter_counts_reach_the_tokens() {
+fn counter_costs_state_and_untap_triggers_and_counter_counts_reach_the_tokens() {
     let tome = tokens_of(&card_definition("Mazemind Tome"));
     let amulet = tokens_of(&card_definition("Ravenous Amulet"));
     assert!(tome.contains(&(TokenKind::Field, name_value("add_counters"))));
@@ -6270,7 +6274,19 @@ fn counter_costs_state_triggers_and_counter_counts_reach_the_tokens() {
         name_value("Condition::SourceCountersAtLeast")
     )));
     assert!(amulet.contains(&(TokenKind::Variant, name_value("ObjectProperty::Counters"))));
-    for (tokens, kind) in [(&tome, "CounterKind::page"), (&amulet, "CounterKind::soul")] {
+    let pole = tokens_of(&card_definition("Fishing Pole"));
+    assert!(pole.contains(&(TokenKind::Field, name_value("tap_grantor"))));
+    for variant in [
+        "TriggerCondition::BecomesUntapped",
+        "TriggerSubject::EquippedCreature",
+    ] {
+        assert!(pole.contains(&(TokenKind::Variant, name_value(variant))), "{variant}");
+    }
+    for (tokens, kind) in [
+        (&tome, "CounterKind::page"),
+        (&amulet, "CounterKind::soul"),
+        (&pole, "CounterKind::bait"),
+    ] {
         assert!(tokens.contains(&(TokenKind::Variant, name_value(kind))), "{kind}");
     }
 }

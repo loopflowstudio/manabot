@@ -144,6 +144,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
+        TriggerCondition::BecomesUntapped { .. } => EventKinds::of(EventKind::PermanentUntapped),
         TriggerCondition::BecomesTargeted { .. } => EventKinds::of(EventKind::PermanentTargeted),
         TriggerCondition::BeginningOf { .. } => EventKinds::of(EventKind::StepStarted),
         TriggerCondition::YourAttackingCreatureTriggers => {
@@ -1961,6 +1962,15 @@ impl Game {
                 *permanent,
             ),
             (
+                TriggerCondition::BecomesUntapped { subject },
+                GameEvent::PermanentUntapped { permanent },
+            ) => self.subject_matches_permanent(
+                subject,
+                source_object,
+                source_controller,
+                *permanent,
+            ),
+            (
                 TriggerCondition::TappedForMana { subject },
                 GameEvent::PermanentTapped {
                     permanent,
@@ -2283,7 +2293,7 @@ impl Game {
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
-            TriggerSubject::EnchantedCreature => self
+            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => self
                 .state
                 .permanent_of(source_object)
                 .and_then(|aura| self.state.permanents[aura].as_ref())
@@ -2327,7 +2337,9 @@ impl Game {
                         self.recorded_object_matches_predicate(damage_source, predicate)
                     }
             }
-            TriggerSubject::EnchantedCreature | TriggerSubject::CreatureDamagedByThis => self
+            TriggerSubject::EnchantedCreature
+            | TriggerSubject::EquippedCreature
+            | TriggerSubject::CreatureDamagedByThis => self
                 .state
                 .permanent_of(damage_source)
                 .is_some_and(|permanent| {
@@ -2360,7 +2372,9 @@ impl Game {
                     && self.characteristics(permanent_id).is_creature()
             }
             TriggerSubject::This => permanent.object == source_object,
-            TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_object),
+            TriggerSubject::EnchantedCreature | TriggerSubject::EquippedCreature => {
+                self.is_attached_by(permanent_id, source_object)
+            }
             TriggerSubject::Matching {
                 controlled_by,
                 predicate,
@@ -2375,9 +2389,9 @@ impl Game {
 
     /// Whether the Aura card `aura` is on the battlefield attached to the
     /// permanent.
-    fn is_enchanted_by(&self, permanent_id: PermanentId, aura: ObjectId) -> bool {
+    fn is_attached_by(&self, permanent_id: PermanentId, attachment: ObjectId) -> bool {
         self.state
-            .permanent_of(aura)
+            .permanent_of(attachment)
             .and_then(|aura| self.attached_permanent(aura))
             == Some(permanent_id)
     }

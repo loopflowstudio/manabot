@@ -687,6 +687,7 @@ impl ActivatedAbilityDefinition {
             || self.tap_cost.is_some()
             || self.tap_power().is_some()
             || self.station
+            || self.tap_grantor
             || self.effects.len() > 1
     }
 
@@ -838,6 +839,11 @@ pub struct ActivatedAbilityDefinition {
     pub reduce_by_source_power: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exile_grantor: bool,
+    /// "Tap [the permanent granting this ability]" as an activation cost
+    /// (Fishing Pole). Not a {T} cost, so summoning sickness doesn't matter
+    /// (CR 302.6); the grantor must be untapped.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tap_grantor: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

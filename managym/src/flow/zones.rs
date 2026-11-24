@@ -228,9 +228,8 @@ impl Game {
             {
                 continue;
             }
-            self.state.untap(permanent_id);
+            self.untap_permanent(permanent_id);
         }
-        self.invalidate_mana_cache(player);
     }
 
     /// Untap the other players' permanents that untap during each other
@@ -245,10 +244,7 @@ impl Game {
                 .iter()
                 .any(|ability| matches!(ability, StaticAbility::UntapsDuringOtherUntapSteps));
             if untaps {
-                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.untap();
-                }
-                self.invalidate_mana_cache(other);
+                self.untap_permanent(permanent_id);
             }
         }
     }
@@ -308,12 +304,23 @@ impl Game {
         true
     }
 
-    /// Untap a permanent; its controller's producible mana changes.
-    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) {
-        if let Some(controller) = self.permanent_controller(permanent_id) {
-            self.state.untap(permanent_id);
-            self.invalidate_mana_cache(controller);
+    /// Untap a permanent, emitting `PermanentUntapped` on the tapped-to-
+    /// untapped transition ("becomes untapped"); a stun counter removed
+    /// instead (CR 122.1d) or an untapped permanent emits nothing. Every
+    /// untap, the untap step's included, comes through here. Returns whether
+    /// the permanent transitioned.
+    pub(crate) fn untap_permanent(&mut self, permanent_id: PermanentId) -> bool {
+        let Some(controller) = self.permanent_controller(permanent_id) else {
+            return false;
+        };
+        let untapped = self.state.untap(permanent_id);
+        self.invalidate_mana_cache(controller);
+        if untapped {
+            self.emit(GameEvent::PermanentUntapped {
+                permanent: permanent_id,
+            });
         }
+        untapped
     }
 
     fn permanent_controller(&self, permanent_id: PermanentId) -> Option<PlayerId> {

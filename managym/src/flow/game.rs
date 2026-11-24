@@ -593,16 +593,18 @@ impl TrackedState {
     }
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
-    pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+    /// Returns whether the permanent went from tapped to untapped.
+    pub(crate) fn untap(&mut self, permanent_id: PermanentId) -> bool {
         self.revisions.tapped += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
-            return;
+            return false;
         };
         let removes_stun = permanent.tapped && permanent.counter_count(CounterKind::Stun) > 0;
-        permanent.untap();
+        let untapped = permanent.untap();
         if removes_stun {
             self.revisions.characteristics += 1;
         }
+        untapped
     }
 
     pub(crate) fn mark_damage(&mut self, permanent_id: PermanentId, amount: i32, deathtouch: bool) {
