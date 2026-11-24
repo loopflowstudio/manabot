@@ -779,11 +779,12 @@ impl Game {
             None
         };
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen = (to_zone != ZoneType::Library && !entry.face_down && !entry.manifested)
-                .then_some(definition);
+            let seen =
+                (to_zone != ZoneType::Library && !entry.is_face_down()).then_some(definition);
             self.forget_hand_card(owner, seen);
         }
 
+        let entry_face_down = entry.is_face_down();
         let mut event_controller = owner;
 
         if old_zone == Some(ZoneType::Battlefield) {
@@ -884,7 +885,7 @@ impl Game {
             from: old_zone,
             to: to_zone,
             controller: event_controller,
-            face_down: entry.face_down || entry.manifested,
+            face_down: entry_face_down,
         };
         self.emit(event);
         if to_zone == ZoneType::Battlefield {

@@ -70,6 +70,12 @@ fn entry_x<S: serde::Serializer>(
 }
 
 impl ZoneEntry {
+    /// The entering object shows no printing: a foretold exile or a manifest
+    /// (CR 406.3, 708.2).
+    pub(crate) fn is_face_down(&self) -> bool {
+        self.face_down || self.manifested
+    }
+
     /// Apply entry counters granted by the mana spent to cast this spell.
     pub(crate) fn from_spell(controller: PlayerId, spell: SpellEntry) -> Self {
         let mut counters = Counters::default();
@@ -373,20 +379,29 @@ pub(crate) struct EventBatch {
 }
 
 impl EventBatch {
-    /// Choosing replacements for an entry exposes the entering objects. Their
-    /// current hidden-zone membership remains fixed until the batch commits.
-    pub(crate) fn public_entries(&self, out: &mut Vec<ObjectId>) {
-        for pending in &self.events {
-            if let ProposedEvent::ZoneMove {
-                object_id: object,
-                from: Some(_),
-                to: ZoneType::Battlefield,
-                ..
-            } = pending.event
-            {
-                out.push(object);
-            }
-        }
+    /// Every object a pending move takes out of a zone, with its destination
+    /// and entry. Its current zone membership stays fixed until the batch
+    /// commits.
+    pub(crate) fn pending_movers(&self) -> impl Iterator<Item = (ObjectId, ZoneType, &ZoneEntry)> {
+        self.events
+            .iter()
+            .filter_map(|pending| match &pending.event {
+                ProposedEvent::ZoneMove {
+                    object_id,
+                    from: Some(_),
+                    to,
+                    entry,
+                } => Some((*object_id, *to, entry)),
+                _ => None,
+            })
+    }
+
+    /// Choosing replacements for a face-up battlefield entry exposes the
+    /// entering object; a face-down entry stays hidden (CR 708.2).
+    pub(crate) fn public_entries(&self) -> impl Iterator<Item = ObjectId> + '_ {
+        self.pending_movers()
+            .filter(|(_, to, entry)| *to == ZoneType::Battlefield && !entry.is_face_down())
+            .map(|(object, ..)| object)
     }
 }
 

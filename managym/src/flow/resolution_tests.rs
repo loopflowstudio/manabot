@@ -5219,3 +5219,73 @@ fn a_departed_manifests_token_copy_captures_through_replacement_pauses() {
         assert_eq!((characteristics.power, characteristics.toughness), (2, 2));
     }
 }
+
+/// Two roots differ only in which library card a retained manifest entry
+/// holds while two counter replacements suspend it on `OrderReplacement`.
+/// The opponent's observation and unseen pool cannot tell them apart; the
+/// owner sees its own entering card (CR 708.2, 616.1).
+#[test]
+fn a_pending_manifest_entry_stays_hidden_while_replacements_are_ordered() {
+    use crate::{
+        agent::observation::Observation,
+        flow::{
+            decision::{Decision, EffectFrame},
+            proposed_event::ZoneEntry,
+        },
+    };
+    let player = PlayerId(0);
+    let viewer = PlayerId(1);
+    let root = |hidden: &str| {
+        let (mut game, _, _) = fixture(player);
+        counter_replacement_drivers(&mut game, player);
+        let library = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, player)
+            .to_vec();
+        let ogre = *library
+            .iter()
+            .find(|object| game.state[**object].name == "Gray Ogre")
+            .unwrap();
+        let bolt = *library
+            .iter()
+            .find(|object| game.state[**object].name == "Lightning Bolt")
+            .unwrap();
+        let entering = if hidden == "Gray Ogre" { ogre } else { bolt };
+        let mut counters = crate::state::permanent::Counters::default();
+        counters.change(CounterKind::PlusOnePlusOne, 1);
+        let entry = ZoneEntry {
+            manifested: true,
+            controller: Some(player),
+            counters,
+            ..Default::default()
+        };
+        let mut frame = EffectFrame::new(player, vec![Effect::gain_life(3)]);
+        frame.batch = Some(game.event_batch(vec![game.zone_move_proposal(
+            entering,
+            ZoneType::Battlefield,
+            entry,
+        )]));
+        game.run_frame(frame);
+        assert!(matches!(
+            game.state.suspended_decision.as_ref().unwrap().decision,
+            Decision::OrderReplacement { .. }
+        ));
+        game.publish_action_space(game.suspended_decision_action_space().unwrap());
+        let opponent = Observation::for_player(&game, viewer);
+        assert!(opponent
+            .opponent_cards
+            .iter()
+            .all(|card| card.id != game.state[entering].id.0 as i32));
+        assert!(game.pending_public_entries().is_empty());
+        assert_eq!(game.pending_movers(), vec![entering]);
+        assert!(game.pinned_objects(player).contains(&entering));
+        assert!(!game.pinned_objects(viewer).contains(&entering));
+        (
+            serde_json::to_value(&opponent.opponent_cards).unwrap(),
+            serde_json::to_value(&opponent.opponent.unseen_counts).unwrap(),
+            game.unseen_objects(player, viewer).len(),
+        )
+    };
+    assert_eq!(root("Gray Ogre"), root("Lightning Bolt"));
+}

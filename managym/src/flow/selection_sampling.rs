@@ -18,6 +18,7 @@ use crate::{
             SuspendedResolution,
         },
         game::{Game, GameState},
+        proposed_event::EventBatch,
     },
     state::{
         ability::ObjectSelector,
@@ -439,7 +440,18 @@ impl Game {
     /// Exact objects already known to this viewer must not be exchanged for a
     /// same-definition copy. Departed incarnations impose no current-zone slot.
     pub(crate) fn pinned_objects(&self, viewer: PlayerId) -> Vec<ObjectId> {
-        let mut pinned = self.pending_public_entries();
+        // A viewer who may see a face-down entry knows which card it is.
+        let mut pinned: Vec<_> = self
+            .pending_batches()
+            .flat_map(EventBatch::pending_movers)
+            .filter(|(object, to, entry)| {
+                *to == ZoneType::Battlefield
+                    && self.state.live(*object).is_some()
+                    && (!entry.is_face_down()
+                        || self.shares_information(viewer, self.state[*object].owner))
+            })
+            .map(|(object, ..)| object)
+            .collect();
         pinned.extend(
             self.captured_bindings()
                 .filter(|binding| {
@@ -475,23 +487,42 @@ impl Game {
         unseen_objects(self, owner, viewer, &self.pinned_objects(viewer))
     }
 
-    /// Prospective battlefield entries are public even while their move awaits
-    /// replacement choices. Neither sampler may exchange their exact objects.
+    /// The event batches of the suspended continuation, outermost first.
+    fn pending_batches(&self) -> impl Iterator<Item = &EventBatch> {
+        self.state
+            .suspended_decision
+            .iter()
+            .flat_map(|suspended| suspended.continuation())
+            .filter_map(|part| match part {
+                ResolutionRef::Frame(frame) => frame.batch.as_ref(),
+                ResolutionRef::Decision(_) => None,
+            })
+    }
+
+    /// Prospective face-up battlefield entries are public even while their
+    /// move awaits replacement choices. Neither sampler may exchange their
+    /// exact objects.
     pub(crate) fn pending_public_entries(&self) -> Vec<ObjectId> {
-        let mut entries = Vec::new();
-        if let Some(suspended) = &self.state.suspended_decision {
-            for part in suspended.continuation() {
-                if let ResolutionRef::Frame(frame) = part {
-                    if let Some(batch) = &frame.batch {
-                        batch.public_entries(&mut entries);
-                    }
-                }
-            }
-        }
-        entries.retain(|object| self.state.live(*object).is_some());
-        entries.sort_unstable();
-        entries.dedup();
-        entries
+        let entries = self.pending_batches().flat_map(EventBatch::public_entries);
+        self.live_sorted(entries)
+    }
+
+    /// Every object a pending move holds, hidden or not: the authoritative
+    /// game must keep each in place until its batch commits.
+    pub(crate) fn pending_movers(&self) -> Vec<ObjectId> {
+        let movers = self
+            .pending_batches()
+            .flat_map(|batch| batch.pending_movers().map(|(object, ..)| object));
+        self.live_sorted(movers)
+    }
+
+    fn live_sorted(&self, objects: impl Iterator<Item = ObjectId>) -> Vec<ObjectId> {
+        let mut objects: Vec<_> = objects
+            .filter(|object| self.state.live(*object).is_some())
+            .collect();
+        objects.sort_unstable();
+        objects.dedup();
+        objects
     }
 
     /// Read every retained commitment for `viewer` from this root. Slots are

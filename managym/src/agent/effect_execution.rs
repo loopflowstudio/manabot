@@ -720,7 +720,7 @@ impl<'a> Projection<'a> {
         if let Some(controller) = entry.controller {
             self.field("entry controller", &controller);
         }
-        if entry.face_down {
+        if entry.is_face_down() {
             self.field("enters face down", &true);
         }
         if entry.transformed {

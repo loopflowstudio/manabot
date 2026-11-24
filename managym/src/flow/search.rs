@@ -72,7 +72,7 @@ impl Game {
     /// Pending instructions retain exact objects. A search over a library
     /// also retains the entire order presented to its chooser.
     fn pending_library_objects(&self) -> BTreeSet<ObjectId> {
-        let mut fixed: BTreeSet<_> = self.pending_public_entries().into_iter().collect();
+        let mut fixed: BTreeSet<_> = self.pending_movers().into_iter().collect();
         fixed.extend(self.captured_bindings().map(|binding| binding.object));
         if let Some(suspended) = &self.state.suspended_decision {
             for part in suspended.continuation() {
