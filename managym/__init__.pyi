@@ -1217,6 +1217,12 @@ class StackObject:
     granted_keywords: Keywords | None
     # Whether a spell's kicker cost was paid.
     kicked: bool
+    # A spell cast from a prepared copy; its stack copies are not.
+    @property
+    def from_prepared(self) -> bool: ...
+    # A spell cast with flashback (exiled as it leaves the stack).
+    @property
+    def flashback(self) -> bool: ...
     @property
     @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.4.0")
     def card(self) -> Card | None: ...

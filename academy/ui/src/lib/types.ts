@@ -261,6 +261,10 @@ export interface StackEntryView {
   chosen_mode?: number;
   /** The announced value of X, when above zero. */
   x?: number;
+  /** A spell cast from a prepared copy; its stack copies are not. */
+  from_prepared?: boolean;
+  /** A spell cast with flashback, exiled as it leaves the stack. */
+  flashback?: boolean;
 }
 
 export interface PlayerControlView {

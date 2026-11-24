@@ -584,6 +584,10 @@ class StackEntryView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    # A spell cast from a prepared copy; its stack copies are not.
+    from_prepared: bool = Field(default=False, exclude_if=lambda value: not value)
+    # A spell cast with flashback, exiled as it leaves the stack.
+    flashback: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class PlayerControlView(ProtocolModel):

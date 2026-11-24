@@ -2919,6 +2919,14 @@ impl PyStackObject {
         self.data.kicked = value;
     }
     #[getter]
+    fn from_prepared(&self) -> bool {
+        self.data.from_prepared
+    }
+    #[getter]
+    fn flashback(&self) -> bool {
+        self.data.flashback
+    }
+    #[getter]
     fn characteristics(&self) -> Option<PyObservationCharacteristics> {
         self.data
             .spell

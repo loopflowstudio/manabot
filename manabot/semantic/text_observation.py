@@ -1255,6 +1255,10 @@ class _Renderer:
                 details.append(f"granted keywords {granted}")
             if item.kicked:
                 details.append(self.taken_cost(item.source_card_registry_key).taken)
+            if item.from_prepared:
+                details.append("cast from a prepared copy")
+            if item.flashback:
+                details.append("cast with flashback (exiled as it leaves the stack)")
             if targets:
                 details.append("targets " + ", ".join(targets))
             spell = ""

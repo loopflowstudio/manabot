@@ -427,6 +427,18 @@ impl Game {
         }
     }
 
+    /// The zone `object` is cast from: where it is while its costs are
+    /// paid (CR 601.2h precedes the move of CR 601.2i), or the zone a spell
+    /// already on the stack left.
+    fn casting_zone(&self, object: ObjectId) -> ZoneType {
+        match self.state.zones.zone_of(object) {
+            Some(ZoneType::Stack) | None => self
+                .stack_spell(object)
+                .map_or(ZoneType::Stack, |spell| spell.cast_from),
+            Some(zone) => zone,
+        }
+    }
+
     /// The total cost to cast `card` right now with the announced `cast`
     /// choices: its mana cost (none when cast free) with X fixed, plus the
     /// kicker, less affinity-style reductions (CR 601.2f). `targets` are the
@@ -441,7 +453,10 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = cast.spell(&self.state[object]);
         let mut cost = self.casting_mana_cost(object, cast)?.with_x(cast.x);
-        cost.purpose = SpendingContext::Cast(SpellSnapshot(Arc::clone(card_ref)));
+        cost.purpose = SpendingContext::Cast {
+            spell: SpellSnapshot(Arc::clone(card_ref)),
+            from: self.casting_zone(object),
+        };
         if cast.flash_surcharge {
             cost = cost.plus(card_ref.flash_surcharge()?);
         }

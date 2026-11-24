@@ -3472,6 +3472,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
             Columns(Relation, relation::FLYING, KEYWORD_COUNT),
         ],
         kicked => [column(Stack, stack::KICKED), column(Relation, relation::KICKED)],
+        from_prepared => [column(Stack, stack::FROM_PREPARED)],
+        flashback => [column(Stack, stack::FLASHBACK)],
         spell => [Identity, Rows("SpellData below")],
     }));
     fields.extend(encoding!(SpellData {

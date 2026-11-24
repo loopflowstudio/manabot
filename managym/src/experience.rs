@@ -630,6 +630,12 @@ pub struct StackEntryView {
     /// The announced value of X, when one was announced above zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u32>,
+    /// A spell cast from a prepared copy; its stack copies are not.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub from_prepared: bool,
+    /// A spell cast with flashback, exiled as it leaves the stack.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flashback: bool,
 }
 
 /// Read-only explanation of the current native continuation. This adds no

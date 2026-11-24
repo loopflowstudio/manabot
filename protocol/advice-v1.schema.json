@@ -4182,6 +4182,14 @@
           "title": "Controller",
           "type": "integer"
         },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
+        },
         "id": {
           "maximum": 18446744073709551615,
           "minimum": 0,

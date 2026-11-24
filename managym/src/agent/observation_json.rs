@@ -329,6 +329,12 @@ impl Serialize for StackObjectJson<'_> {
         if let Some(keywords) = &value.granted_keywords {
             map.serialize_entry("granted_keywords", &sorted_record(keywords))?;
         }
+        if value.flashback {
+            map.serialize_entry("flashback", &true)?;
+        }
+        if value.from_prepared {
+            map.serialize_entry("from_prepared", &true)?;
+        }
         if value.kicked {
             map.serialize_entry("kicked", &true)?;
         }
@@ -864,6 +870,10 @@ pub(super) struct WireStackObjectData {
     /// Whether a spell's kicker cost was paid (CR 702.33).
     #[serde(default)]
     pub kicked: bool,
+    #[serde(default)]
+    pub from_prepared: bool,
+    #[serde(default)]
+    pub flashback: bool,
     /// A spell's card record (zone stack, with its announced X); absent for
     /// abilities and in historical captures, whose card lists held spells.
     #[serde(default)]
@@ -1034,6 +1044,8 @@ impl From<WireStackObjectData> for StackObjectData {
             x: w.x,
             granted_keywords: w.granted_keywords,
             kicked: w.kicked,
+            from_prepared: w.from_prepared,
+            flashback: w.flashback,
             spell: w.card.map(|mut card| {
                 card.characteristics.mana_cost.x = w.x_symbols;
                 SpellData::from_legacy_card(card)

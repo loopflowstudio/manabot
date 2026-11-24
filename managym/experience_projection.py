@@ -543,6 +543,8 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
             "x": int(entry.x) or None,
+            "from_prepared": entry.from_prepared,
+            "flashback": entry.flashback,
         }
         for entry in observation.stack_objects
     ]

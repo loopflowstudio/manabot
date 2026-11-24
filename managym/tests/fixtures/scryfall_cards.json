@@ -8064,5 +8064,30 @@
     ],
     "oracle_text": "Whenever you cast a prepared spell, copy it. You may choose new targets for the copy.\n{W}{U}{B}{R}{G}, {T}: Each creature you control becomes prepared. (Only creatures with prepare spells can become prepared.)",
     "colors": []
+  },
+  "Heartwood Crafter": {
+    "name": "Heartwood Crafter",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Elf Artificer",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Prepared"
+    ],
+    "oracle_text": "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Add {C}. This mana can't be spent to cast spells from your hand.",
+    "colors": null
+  },
+  "Sanar, Unfinished Genius": {
+    "name": "Sanar, Unfinished Genius",
+    "mana_cost": "{U}{R}",
+    "type_line": "Legendary Creature — Goblin Sorcerer",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Treasure",
+      "Prepared"
+    ],
+    "oracle_text": "Sanar enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Create a Treasure token. Activate only if you've cast an instant or sorcery spell this turn.",
+    "colors": null
   }
 }

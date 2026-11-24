@@ -3076,7 +3076,7 @@ impl Game {
         model: &PaymentModel,
     ) -> autotapper::PaymentProbe {
         let mut paying = match &cost.purpose {
-            SpendingContext::Cast(spell) => Some(spell.clone()),
+            SpendingContext::Cast { spell, .. } => Some(spell.clone()),
             _ => None,
         };
         let mut probe = autotapper::PaymentProbe::default();

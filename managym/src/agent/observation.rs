@@ -3,6 +3,7 @@ use crate::state::card::SpellProfile;
 use crate::state::card::{Keyword, Keywords};
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
+    agent::observation_encoder::representable,
     cards::content_pack::default_content_pack,
     flow::{
         decision::Decision,
@@ -56,14 +57,17 @@ pub struct PlayerData {
     pub mana: [i32; 6],
     /// Spend-restricted mana by color, whatever its restriction (CR 106.6).
     /// The name predates restrictions other than Herbalist's Lesson-only mana;
-    /// `restricted_mana` splits this total by restriction.
+    /// `restricted_mana` and `pooled_mana_classes` split this total by
+    /// restriction.
     pub lesson_mana: [i32; 6],
-    /// Restricted mana by restriction class, in class order.
+    /// Restricted mana by restriction class, in class order, for the
+    /// restrictions with player columns.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
-    /// Pooled mana with a spend effect or combat expiry, by class and expiry.
-    /// Its amounts are also counted in `mana` when
-    /// unrestricted and in `restricted_mana` when restricted.
+    /// Pooled mana with a spend effect, combat expiry or a restriction
+    /// without player columns, by class and expiry. Its amounts are also
+    /// counted in `mana` when unrestricted, in `restricted_mana` when its
+    /// restriction has columns and in `lesson_mana` when restricted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pooled_mana_classes: Vec<PooledManaClassData>,
     /// While set, this player can cast spells only from their hand until the
@@ -490,6 +494,12 @@ pub struct StackObjectData {
     pub granted_keywords: Option<KeywordData>,
     /// Whether a spell's kicker cost was paid (CR 702.33).
     pub kicked: bool,
+    /// A spell cast from a prepared copy (a "prepared spell"); its stack
+    /// copies are not.
+    pub from_prepared: bool,
+    /// A spell cast with flashback, exiled when it leaves the stack
+    /// (CR 702.34a); its stack copies are not.
+    pub flashback: bool,
     /// A spell owns identity and characteristics; abilities do not.
     #[serde(default)]
     pub spell: Option<SpellData>,
@@ -1318,14 +1328,21 @@ impl Observation {
                 .iter()
                 .filter_map(|(class, amounts)| {
                     let restriction = class.restriction.as_ref()?;
-                    Some(RestrictedManaData::new(restriction, *amounts))
+                    representable(restriction)
+                        .then(|| RestrictedManaData::new(restriction, *amounts))
                 })
                 .collect(),
+            // Restrictions without player columns are fact rows, as is mana
+            // with a spend effect or combat expiry.
             pooled_mana_classes: pool
                 .classes()
                 .iter()
                 .filter_map(|(class, amounts)| {
-                    if class.effect.is_none() && !class.combat {
+                    let unrepresentable = class
+                        .restriction
+                        .as_ref()
+                        .is_some_and(|restriction| !representable(restriction));
+                    if class.effect.is_none() && !class.combat && !unrepresentable {
                         return None;
                     }
                     Some(PooledManaClassData {
@@ -1816,6 +1833,8 @@ impl Observation {
                 _ => None,
             },
             kicked: matches!(stack_object, StackObject::Spell(spell) if spell.kicked),
+            from_prepared: matches!(stack_object, StackObject::Spell(spell) if spell.from_prepared),
+            flashback: matches!(stack_object, StackObject::Spell(spell) if spell.flashback),
             spell: match stack_object {
                 StackObject::Spell(spell) => Some(Self::spell_data(game, spell)),
                 _ => None,

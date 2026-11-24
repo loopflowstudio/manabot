@@ -11,7 +11,7 @@ use managym_state::{
         StaticRestriction, StaticScope,
     },
     effect::Modification,
-    mana::ManaCost,
+    mana::{Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -58,6 +58,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fatehold_chronologist(),
         hallway_heckler(),
         konstrari_improviser(),
+        heartwood_crafter(),
         codie_ravenous_codex(),
         pompous_battlemage(),
         semester_foreseer(),
@@ -280,6 +281,32 @@ fn konstrari_improviser() -> CardDefinition {
             subtypes: vec!["Human".into(), "Artificer".into()],
             power: Some(2),
             toughness: Some(2),
+            ..enters_prepared(soul_tether())
+        },
+        ..Default::default()
+    }
+}
+
+fn heartwood_crafter() -> CardDefinition {
+    let text_box = "This creature enters prepared. (While it's prepared, you may cast a copy of its spell. Doing so unprepares it.)\n{T}: Add {C}. This mana can't be spent to cast spells from your hand.";
+    CardDefinition {
+        key: "fra.heartwood_crafter",
+        scryfall_id: "910a1f41-17fd-4ab0-9597-7151e79dc760",
+        printed: PrintedCharacteristics {
+            name: "Heartwood Crafter".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            text_box: text_box.into(),
+            subtypes: vec!["Elf".into(), "Artificer".into()],
+            power: Some(1),
+            toughness: Some(1),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::add_mana(Mana::restricted_to(
+                    ManaRestriction::ExceptSpellsFromHand,
+                    [0, 0, 0, 0, 0, 1],
+                ))],
+                ..Default::default()
+            }],
             ..enters_prepared(soul_tether())
         },
         ..Default::default()

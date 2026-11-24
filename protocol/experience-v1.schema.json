@@ -2667,6 +2667,14 @@
           "maximum": 255,
           "minimum": 0
         },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
+        },
         "id": {
           "type": "integer",
           "format": "uint64",

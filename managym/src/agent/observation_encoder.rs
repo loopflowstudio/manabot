@@ -1304,7 +1304,7 @@ const RESTRICTED_SUBTYPE_COLUMNS: [&str; 3] = ["Lesson", "Shrine", "Ally"];
 /// overlapping Lesson and Shrine columns solve uniquely for these classes and
 /// no others: a Lesson-or-Ally class beside a Shrine class sums like a Lesson
 /// class beside a Shrine-or-Ally one. Powerstone mana has its own v10 columns.
-fn representable(restriction: &ManaRestriction) -> bool {
+pub(crate) fn representable(restriction: &ManaRestriction) -> bool {
     static REPRESENTABLE: LazyLock<[ManaRestriction; 4]> = LazyLock::new(|| {
         [
             ManaRestriction::spell(["Lesson"]),
@@ -1734,6 +1734,8 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [f3
         out[stack::EFFECTIVE_MANA_VALUE] = f32::from(value) / 10.0;
     }
     out[stack::KICKED] = bool_to_f32(object.kicked);
+    out[stack::FROM_PREPARED] = bool_to_f32(object.from_prepared);
+    out[stack::FLASHBACK] = bool_to_f32(object.flashback);
     if let Some(card) = &object.spell {
         out[stack::IS_COPY] = bool_to_f32(card.is_copy);
         out[stack::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
@@ -2777,6 +2779,8 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: true,
+                from_prepared: true,
+                flashback: false,
                 spell: Some(crate::agent::observation::SpellData::from_legacy_card(
                     spell,
                 )),
@@ -2794,6 +2798,8 @@ mod tests {
                 x: 0,
                 granted_keywords: None,
                 kicked: false,
+                from_prepared: false,
+                flashback: false,
                 spell: None,
             },
         ];
@@ -2824,6 +2830,8 @@ mod tests {
         assert_eq!(spell_row[stack::DEFINITION], 556.0);
         assert_eq!(spell_row[stack::MODE], 2.0);
         assert_eq!(spell_row[stack::KICKED], 1.0);
+        assert_eq!(spell_row[stack::FROM_PREPARED], 1.0);
+        assert_eq!(spell_row[stack::FLASHBACK], 0.0);
         assert_eq!(spell_row[stack::IS_CREATURE], 1.0);
         let ability_row = &encoded.stack[super::STACK_DIM..2 * super::STACK_DIM];
         assert_eq!(ability_row[stack::IS_MINE], 1.0);
