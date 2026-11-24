@@ -606,12 +606,15 @@ def prepare(
     action_capacity: int | None = None,
     bucket_needs: np.ndarray | None = None,
     select_programs: bool = False,
+    compact_attention: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
     `inference` enables CPU inference compaction: unused fact columns are
     dropped unless bucketed, and unused attention columns unless live tokens
-    are packed. `action_capacity` retains full logit coordinates after trimming.
+    are packed. `compact_attention` also selects live attention columns for
+    dense learner batches. `action_capacity` retains full logit coordinates
+    after trimming.
     Counts and signed integers stay raw where backend arithmetic determines
     rounding. The input belongs to `binding`, not to a particular model instance.
     """
@@ -638,7 +641,7 @@ def prepare(
             (validity, belief.validity, np.ones((len(validity), 1), np.float32)), 1
         )
     columns = None
-    if inference and not live_tokens:
+    if (inference or compact_attention) and not live_tokens:
         used = np.nonzero((validity != 0).any(0))[0]
         if 0 < len(used) < validity.shape[1]:
             columns = used

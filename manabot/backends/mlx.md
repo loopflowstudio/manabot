@@ -122,7 +122,9 @@ path in MLX names the same component as in the torch state dict:
 
 The MLX learner encodes the catalog definitions referenced by each prepared
 batch. With bucketed shapes it selects those definitions after trimming the
-observation. Inference can cache the full catalog while the weights are fixed.
+observation and runs attention over the object columns used by at least one
+row. It restores the bucket's object coordinates before the critic and action
+focus lookups. Inference can cache the full catalog while the weights are fixed.
 
 The clipped surrogate computes its likelihood ratio in float32 on MLX and
 float64 on PyTorch. The Apple GPU lacks float64. Ordinary ratios can differ

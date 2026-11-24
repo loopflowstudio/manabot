@@ -76,7 +76,6 @@ from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
 )
-from manabot.policy.buckets import bucket_sizes, trim_observation
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     canonical_parameters,
@@ -785,8 +784,10 @@ def test_mlx_inference_checks_master_and_cast_weights(tmp_path: Path) -> None:
             scope.cache_programs()
 
 
-def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
-    """Remapped opponent joins and ownership survive changes in object capacity."""
+def test_bucket_trim_preserves_mlx_logits_values_and_gradients(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bucketed attention skips empty columns and preserves opponent focus."""
 
     _, _, agent = _converted(tmp_path)
     space = agent.observation_space
@@ -795,7 +796,8 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     }
     obs["agent_player_valid"][:] = 1
     obs["opponent_player_valid"][:] = 1
-    obs["agent_cards_valid"][:, 1] = 1
+    obs["agent_cards_valid"][0, 1] = 1
+    obs["agent_cards_valid"][1, 0] = 1
     obs["opponent_permanents_valid"][:, 0] = 1
     obs["actions_valid"][:, :2] = 1
     obs["action_focus"].fill(-1)
@@ -803,18 +805,30 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     obs["action_focus"][:, 1, 0] = (
         2 + 2 * space.shapes["agent_cards"][0] + space.shapes["agent_permanents"][0]
     )
-    sizes = bucket_sizes(obs, space, objects=True)
-    assert sizes is not None and sizes.trims_objects
-    trimmed = trim_observation(obs, sizes)
-    policy = assemble(policy_weights(agent))
-    learner = MLXLearner(policy, minibatch_rows=2)
+    checkpoint = policy_weights(agent)
+    widths: list[int] = []
+    table_widths: list[int] = []
+    attend_objects = ObjectAttention.__call__
+
+    def record_width(
+        layer: ObjectAttention, objects: mx.array, *args: mx.array
+    ) -> mx.array:
+        widths.append(objects.shape[1])
+        return attend_objects(layer, objects, *args)
+
+    monkeypatch.setattr(ObjectAttention, "__call__", record_width)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
-    policy.check_observation(obs)
     results = []
-    for tensors in (obs, trimmed):
-        prepared = policy.prepare_admitted(tensors)
+    for bucketed in (False, True):
+        policy = assemble(checkpoint, bucketed_shapes=bucketed)
+        learner = MLXLearner(policy, minibatch_rows=2)
+        prepared = policy.prepare(obs)
         assert prepared.is_agent.shape == prepared.validity.shape
+        table_widths.append(prepared.validity.shape[1])
+        widths.clear()
         logits, values = policy.evaluate(prepared)
+        # Both players, both card slots and the focused opponent permanent.
+        assert set(widths) == {5 if bucketed else prepared.validity.shape[1]}
         legal = prepared.legal
         logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
         reference = np.where(legal, 0.5, 0).astype(np.float32)
@@ -829,6 +843,8 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         loss = minibatch_loss(mlx_backend, policy, learner, prepared, targets, settings)
         gradients = learner.gradients(loss)
         results.append((logits[:, :2], values, float(loss), gradients))
+    padded_width, bucket_width = table_widths
+    assert 5 < bucket_width < padded_width
     expected, actual = results
     for a, b in zip(actual[:3], expected[:3], strict=True):
         np.testing.assert_allclose(a, b, atol=2e-6)

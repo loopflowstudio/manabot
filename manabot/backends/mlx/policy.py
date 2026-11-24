@@ -708,6 +708,7 @@ class MLXActorCritic(nn.Module):
             self._static.tables,
             inference=inference,
             select_programs=not inference,
+            compact_attention=self.bucketed_shapes,
             bucketed=self.bucketed_shapes,
             binding=admission.binding(
                 self.config,
