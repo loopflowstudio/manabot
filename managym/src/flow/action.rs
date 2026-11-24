@@ -55,10 +55,14 @@ impl Game {
                 object,
                 route: None,
                 ..
-            } if let Some(source) = self.preparation_source(*object) => Some(format!(
-                "Cast {} from {} (object {})",
-                self.state[*object].name, self.state[source].name, self.state[source].id.0
-            )),
+            } if self.state.suspended_decision.is_none()
+                && let Some(source) = self.preparation_source(*object) =>
+            {
+                Some(format!(
+                    "Cast {} from {} (object {})",
+                    self.state[*object].name, self.state[source].name, self.state[source].id.0
+                ))
+            }
             Action::CastSpell { object, .. } | Action::PlayLand { object, .. }
                 if let Some(route) = self.resolved_play_route(action) =>
             {
@@ -1542,5 +1546,100 @@ mod identity_tests {
             })
             .is_ok());
         assert!(game.state[game.state.object_of(card)].is_transformed());
+    }
+
+    /// A resolution cast (CR 608.2g) is authorized by the resolving
+    /// instruction alone: an Adventure offered by a resolving effect never
+    /// names the airbend grant the same exiled card holds at priority.
+    #[test]
+    fn a_resolution_cast_never_inherits_a_priority_route() {
+        use crate::{
+            agent::observation::Observation,
+            flow::decision::{Decision, EffectFrame, ResolutionCastOffer, SuspendedResolution},
+            state::card::SpellProfile,
+        };
+        let deck = BTreeMap::from([
+            ("Plains".into(), 36),
+            ("Bofur, Reliable Guardian".into(), 4),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            608_2,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        let target = game
+            .scenario_force_battlefield(player, "Bofur, Reliable Guardian", true)
+            .unwrap();
+        let bofur = game
+            .scenario_force_battlefield(player, "Bofur, Reliable Guardian", true)
+            .unwrap();
+        let bofur = game.state.permanents[bofur].as_ref().unwrap().object;
+        game.airbend(bofur);
+        let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
+        assert!(game.live_grants(player, exiled).next().is_some());
+        let cast = Action::CastSpell {
+            player,
+            object: exiled,
+            route: None,
+            profile: SpellProfile::Adventure,
+        };
+        game.state.suspended_decision = Some(SuspendedResolution {
+            frame: EffectFrame::new(player, vec![]),
+            decision: Decision::CastDuringResolution {
+                player,
+                paid: false,
+                spends: None,
+                offer: ResolutionCastOffer::AmongExiled {
+                    objects: vec![exiled],
+                },
+            },
+        });
+        let space = game.suspended_decision_action_space().unwrap();
+        assert!(space.actions.contains(&cast));
+        game.publish_action_space(space);
+        assert_eq!(game.resolved_play_route(&cast), None);
+        let observation = Observation::for_player(&game, player);
+        let option = observation
+            .action_space
+            .actions
+            .iter()
+            .find(|option| option.description.as_deref() == Some("Cast Concerted Care"))
+            .expect("the resolution offer names only its face");
+        assert_eq!(option.play_route, None);
+        assert_eq!(option.route_mana_value, None);
+        assert_eq!(option.quota_type, None);
+        let index = |game: &Game, action: &Action| {
+            game.current_action_space
+                .as_ref()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|offered| offered == action)
+                .unwrap()
+        };
+        game.step(index(&game, &cast)).unwrap();
+        // Concerted Care's only legal target is the Bofur on the battlefield.
+        if game.state.stack_objects.is_empty() {
+            let choose = Action::ChooseTarget {
+                player,
+                target: crate::state::game_object::Target::Permanent(target),
+            };
+            game.step(index(&game, &choose)).unwrap();
+        }
+        let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+            game.state.stack_objects.last()
+        else {
+            panic!("the resolution cast puts Concerted Care on the stack");
+        };
+        assert_eq!(spell.profile, SpellProfile::Adventure);
+        assert!(game.live_grants(player, spell.object).next().is_none());
     }
 }

@@ -450,6 +450,11 @@ impl Game {
         if route.is_some() {
             return *route;
         }
+        // A resolution cast (CR 608.2g) is authorized by the resolving
+        // instruction, never by a priority route the object also holds.
+        if self.state.suspended_decision.is_some() {
+            return None;
+        }
         // A lone hand route is the ordinary play; overlap always names a route.
         if self.state.zones.zone_of(*object) == Some(ZoneType::Hand)
             && self.state[*object].owner == *player
