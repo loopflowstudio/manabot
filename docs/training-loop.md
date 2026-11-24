@@ -206,9 +206,9 @@ A `SnapshotBank` stores decisions that self-play can revisit. Use both learning
 seats, complete-game closure and a self-play behavior policy. Snapshot collection
 and adaptive matchup sampling each own the episode schedule.
 
-Save this recipe as `snapshot_recipe.py`. Setting `SelfPlay.snapshot` enables
-deferred reset across native workers (`1 <= workers <= streams`). With one worker
-you may also supply a buffered `SnapshotVector` or a factory accepting
+Save this recipe as `snapshot_recipe.py`. Plain and snapshot collection support
+`1 <= workers <= streams`. Adaptive collection uses one worker. Single-worker
+snapshot collection also accepts a buffered `SnapshotVector` or a factory taking
 `(observation_space, match, num_envs, seed)`. The deprecated
 `InMemorySnapshotVector.factory` alias will be removed in 0.4.0.
 
@@ -218,6 +218,7 @@ from typing import Literal
 from etude.train.tracking import track
 from pydantic import Field
 
+from manabot.backends import resolve
 from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import CLOCKS, self_play
 from manabot.training.rollout.snapshots import CapturePolicy, SnapshotConfig
@@ -247,8 +248,9 @@ def train(config: SnapshotRecipeConfig) -> None:
     inputs = settings(config).model_copy(
         update={"snapshot": snapshot, "workers": config.workers}
     )
+    backend = resolve(config.backend)
     with track(clocks=CLOCKS, config=config) as run:
-        self_play(inputs, run, updates=config.updates)
+        self_play(inputs, run, updates=config.updates, backend=backend)
 ```
 
 ```bash
@@ -405,14 +407,19 @@ those live streams and restores the host RNGs from `continuation.json`. Policy
 sampling RNGs restore within the same sampling domain and reseed when it
 changes. A legacy Torch `.pt` save starts fresh games and sampling streams.
 
-Deferred reset (`auto_reset=False`) leaves finished and failed slots idle until
-the next allocation round, avoiding unused replacement games. Fresh slots keep
-their own seed sequence and recording; overwriting an untouched fresh root with
-a branch rewinds its fresh seed without writing an interrupted record or
-partial statistics. When a branch fails, its `GameAttempt` and `RecordedVectorEnv`
-failure record materialize branch `interventions` lazily so
-`manabot.training.state.game_errors` and `managym.replay` reproduce the failure
-cold after hot handles are closed. [Recovery](training.md#recovery)
+Native vectors leave finished and failed slots parked until the collector
+refills active streams via `load_slots_into_buffers`, avoiding unused
+replacement games at batch boundaries. Adaptive collection assigns the next
+batch's roots when the learner commits its target errors. The lethal-target
+practice vector accepts fresh loads of its configured match. Each fresh slot
+keeps its own seed sequence and recording. Replacing an untouched fresh root
+with a branch rewinds its seed without writing an interrupted game record or
+partial statistics. Saving a collector opens any fresh roots it needs for
+replay. A later snapshot allocation can reuse or replace those openings.
+When a branch fails, its `GameAttempt` and `RecordedVectorEnv` failure record
+materialize branch `interventions` lazily so `manabot.training.state.game_errors`
+and `managym.replay` reproduce the failure cold after hot handles are closed.
+[Recovery](training.md#recovery)
 
 ## Write your own loop
 

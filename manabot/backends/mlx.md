@@ -232,12 +232,20 @@ path in MLX names the same component as in the torch state dict:
 - the attention stack;
 - action heads, name candidates and the critic.
 
-Two departures from the PyTorch forward are exact up to float rounding. The
-catalog GRU always encodes every definition, where PyTorch learning encodes
-only the rows a batch references; the others never reach the loss either way.
-And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
-float64 (the GPU has none). Ordinary values can differ by rounding; a
-float32 ratio can also overflow sooner, which the numerical checks refuse.
+The MLX learner encodes the catalog definitions referenced by each prepared
+batch. With bucketed shapes it selects those definitions after trimming the
+observation. For attention it sorts observations by live object count and packs
+equal groups separately when that saves dense slots: two groups below 192 rows,
+three below 256 and four from 256. Otherwise it uses the object columns present
+anywhere in the batch. It restores the
+bucket's object coordinates before the critic and action focus lookups.
+Bucketed learner batches also encode only live fact rows, scattering each into
+its own observation's objects.
+Inference can cache the full catalog while the weights are fixed.
+
+The clipped surrogate computes its likelihood ratio in float32 on MLX and
+float64 on PyTorch. The Apple GPU lacks float64. Ordinary ratios can differ
+by rounding, and the numerical checks reject a float32 ratio that overflows.
 
 ## Layout mapping
 
@@ -296,8 +304,33 @@ Disabling sampling preserves the collected actions and learned weights.
 
 The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. Collection samples once per group across execution chunks.
+and its reverse are compiled. Each `PackedGRU` gathers and projects its tokens
+once, and its recurrence is an `mx.custom_function` with a hand-written VJP:
+autograd never traces the per-step slices, whose whole-input zero cotangents
+would make the backward quadratic in the number of steps. Collection samples
+once per group across execution chunks.
 Portable exports contain the policy’s float32 parameters and lookup buffers.
+
+### Profile captured learner minibatches
+
+Replay the learner arrays and initial policy from a Torch capture (`CAPTURE`, a
+`torch.capture` directory) on the Apple GPU.
+The first minibatch warms the path. Each subsequent batch contributes one sample
+to the reported medians.
+
+```sh
+uv run --extra mlx python -m scripts.profile_mlx_learner CAPTURE --bucketed --precision bfloat16 --out profile.json
+```
+
+Omit `--bucketed` for padded shapes. Precision defaults to float32. The output
+records admission and host preparation, full loss and gradients, and clipping
+plus Adam. Two controls replay the same loss at the same weights. The first
+reuses the catalog table. The second also reuses the attention and MLP outputs,
+passing gradients through to the object inputs. Differences between controls
+estimate the cost of the skipped work. Each sample records its maximum control
+loss difference. Repeated bfloat16 forwards can vary at fixed weights, so the
+bfloat16 controls use the existing 1% relative loss tolerance. Only the full
+gradient advances Adam.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/reports/mlx_pilot.md).
@@ -345,15 +378,21 @@ reuses its encoded catalog. Leaving collection restores the master weights
 and clears the catalog before learning. Custom inference loops can use the
 same context manager while their weights are fixed.
 
-Check a checkpoint and real capture with the selected dtype:
+Check a checkpoint and real capture with the selected dtype (add `--bucketed`,
+`--device` or `--threads` as needed; `--backend torch --device mps --precision bfloat16`
+uses the same half-precision gates, see [parity check](README.md#parity-check)):
 
 ```sh
-uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16
+uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16 --bucketed
 ```
 
 | Precision | Legal logits, max absolute | Values, max absolute | Loss, relative | Full-gradient cosine |
 |---|---:|---:|---:|---:|
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
+
+`MLXBackend.load` accepts optional `device`, `precision` and `bucketed_shapes`
+(defaulting to `mps`, the backend's configured precision and padded) and places
+the policy on that device with no silent fallback.
 
 The bound was calibrated on the retained real-input w384/w768 checks in
 the [MPS retest](../../experiments/reports/mps_retest.md), source `140eec28d`. It

@@ -322,13 +322,23 @@ class MLXBackend:
         self,
         checkpoint: PolicyCheckpoint,
         *,
+        device: str | None = None,
+        precision: Precision | None = None,
+        bucketed_shapes: bool = False,
         minibatch_rows: int = 1,
         execution_rows: int | None = None,
         bootstrap_rows: int | None = None,
     ) -> tuple[MLXActorCritic, "Learner"]:
-        policy = assemble(checkpoint, precision=self.precision)
+        device = "mps" if device is None else device
+        with mx.stream(arrays.mlx_device(device)):
+            policy = assemble(
+                checkpoint,
+                precision=self.precision if precision is None else precision,
+                bucketed_shapes=bucketed_shapes,
+            ).to(device)
         return policy, self.learner.Learner(
             policy,
+            device,
             minibatch_rows=minibatch_rows,
             execution_rows=execution_rows,
             bootstrap_rows=bootstrap_rows,

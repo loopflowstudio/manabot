@@ -90,3 +90,17 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
   raw engine and reads `decision_memory_json()`, decision-record buffers or the
   LLM text history sees an empty log otherwise, with no error. Grep new raw
   constructions when memory consumers change.
+- Buffered slot lifecycle: install the candidate engine wheel in an isolated
+  venv and run the [batched slots example](../../docs/engine-python.md#batched-slot-loading-and-snapshots)
+  outside the checkout. With its decks and seed 42, stepping only slot 0 with
+  `Random(42).randrange(current_action_summaries()[0][0])` ended in 39
+  decisions. Use `RecordedVectorEnv` with `games_path` and `statistics_path`
+  to verify the winner and final digest are already readable before any load.
+  Compare live `rows()` from `CardPerformance` and `Behaviour` with offline
+  `reduce` on the completed record to check terminal exposure.
+  In an isolated step, action 999 poisons one slot while a legal action
+  advances its neighbor. With `journal_path` enabled, submit a load for that
+  poisoned slot and one out-of-range slot. Reopen the cursor with
+  `read_record` before retrying. Its phase should be `ready`, with both
+  pre-call prefixes intact. Correcting the batch should spend the same fresh
+  seed as a first successful load.
