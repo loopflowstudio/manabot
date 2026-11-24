@@ -416,7 +416,7 @@ impl Game {
         }
         inspection
             .definition
-            .is_none_or(|definition| self.state[object].definition_id == definition)
+            .is_none_or(|definition| self.state[object].retained_base().0 == definition)
     }
 
     /// Every retained capture: trigger occurrences first, then the frames of
@@ -814,9 +814,11 @@ impl Game {
                                         condition, *zone, *object, *position,
                                     )
                                 })
-                            }) && constraints
-                                .iter()
-                                .all(|source| matches_slot(self, source, owner, *zone, *object))
+                            }) && constraints.iter().all(|source| {
+                                source.owner == owner
+                                    && source.zone == *zone
+                                    && self.printing_matches_predicate(*object, &source.predicate)
+                            })
                         })
                         .map(|(index, _)| index)
                         .collect()
@@ -834,7 +836,7 @@ impl Game {
                     .enumerate()
                     .filter(|(_, (zone, object, _))| {
                         source.zone == *zone
-                            && self.object_matches_predicate(*object, &source.predicate)
+                            && self.printing_matches_predicate(*object, &source.predicate)
                     })
                     .map(|(index, _)| index)
                     .collect();

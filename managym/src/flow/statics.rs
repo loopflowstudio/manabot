@@ -549,7 +549,22 @@ impl Game {
         if let Some(lki) = self.object_lki(object) {
             return super::layers::matches_departure(lki, predicate);
         }
-        let (_, printing) = self.state.source_base(object);
+        self.printing_matches_predicate(object, predicate)
+    }
+
+    /// Match the printing an object's card retains, not its current
+    /// appearance: a face-down manifest's hidden card, or a departed object
+    /// without last known information. Sampling reads a hidden slot this way.
+    pub(crate) fn printing_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let (_, printing) = self
+            .state
+            .objects
+            .retained_base(object)
+            .expect("retained printing");
         let (_, owner, kind) = self
             .state
             .objects

@@ -4968,6 +4968,131 @@ fn hidden_selection_manifest_fill_leaves_the_committed_library_cards() {
     }
 }
 
+/// `player` holds `library` (in hidden order) after manifesting its sole
+/// Forest, then selects two cards of `card_type` from it and has picked one
+/// `picked` so far.
+fn sole_forest_manifest_selecting(card_type: CardType, library: &[&str], picked: &str) -> Game {
+    use crate::flow::decision::EffectFrame;
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Gray Ogre".into(), 12),
+        ("Forest".into(), 4),
+        ("Mountain".into(), 24),
+    ]);
+    let mut root = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        608_2028,
+        false,
+    );
+    root.keep_opening_hands();
+    let objects: Vec<_> = root
+        .state
+        .latest_objects()
+        .filter(|(_, object)| object.owner == player)
+        .map(|(id, _)| id)
+        .collect();
+    let objects: Vec<_> = objects
+        .into_iter()
+        .map(|object| root.move_object(object, ZoneType::Graveyard))
+        .collect();
+    let mut taken = Vec::new();
+    for name in library.iter().copied().chain(["Forest"]) {
+        let object = objects
+            .iter()
+            .copied()
+            .find(|object| root.state[*object].name == name && !taken.contains(object))
+            .unwrap();
+        taken.push(object);
+    }
+    let moved: Vec<_> = taken
+        .iter()
+        .map(|object| root.move_object(*object, ZoneType::Library))
+        .collect();
+    root.manifest(*moved.last().unwrap(), player);
+    root.state.players[player.0].known_library.forget_order();
+    root.run_frame(EffectFrame::new(
+        player,
+        vec![Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate: CardPredicate {
+                card_type: Some(card_type),
+                ..Default::default()
+            },
+            min: 2,
+            max: EffectValue::Fixed(2),
+            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+            if_declined: vec![],
+        }],
+    ));
+    root.publish_action_space(root.suspended_decision_action_space().unwrap());
+    let object = moved[library.iter().position(|name| *name == picked).unwrap()];
+    checked_command(&mut root, Action::SelectCard { player, object });
+    root
+}
+
+/// Every printing that backs the manifest in some sampled branch. Each draw
+/// must realize its world on the first attempt.
+fn sampled_manifest_printings(root: &Game) -> std::collections::BTreeSet<String> {
+    use crate::possible_worlds::{MaterializeMode, PossibleWorldSpace};
+    let viewer = PlayerId(1);
+    let space = PossibleWorldSpace::for_viewer(root, viewer);
+    let mut printings = std::collections::BTreeSet::new();
+    for seed in 0..24 {
+        let exact = space
+            .materialize_index(root, 0, seed, MaterializeMode::RefreshOpponentCommitment)
+            .expect("a positive-weight world materializes on the first draw");
+        let mut sampled = root.clone();
+        sampled.determinize(viewer, seed).unwrap();
+        for branch in [exact, sampled] {
+            printings.insert(manifest_printing(&branch, PlayerId(0)));
+        }
+    }
+    printings
+}
+
+/// A hidden slot is judged by its card's printing, not by the face-down 2/2
+/// the sole Forest currently is: an Ogre cannot back the manifest while the
+/// selection still needs a second library creature.
+#[test]
+fn a_manifested_forest_slot_is_not_a_library_creature() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    let root = sole_forest_manifest_selecting(
+        CardType::Creature,
+        &["Gray Ogre", "Gray Ogre", "Mountain"],
+        "Gray Ogre",
+    );
+    // The Forest or the Mountain backs the manifest; an Ogre fill would
+    // leave only the Forest and Mountain beside the picked Ogre.
+    let space = PossibleWorldSpace::for_viewer(&root, PlayerId(1));
+    assert_eq!(space.total_weight(), 2);
+    assert_eq!(
+        sampled_manifest_printings(&root),
+        ["Forest", "Mountain"].map(String::from).into()
+    );
+}
+
+/// The same slot is a land: a Mountain may back the manifest because the
+/// Forest's slot still offers the second library land.
+#[test]
+fn a_manifested_forest_slot_is_a_library_land() {
+    use crate::possible_worlds::PossibleWorldSpace;
+    let root = sole_forest_manifest_selecting(
+        CardType::Land,
+        &["Mountain", "Mountain", "Gray Ogre"],
+        "Mountain",
+    );
+    // Forest 1, Ogre 1, and either Mountain copy 2: every fill is feasible.
+    let space = PossibleWorldSpace::for_viewer(&root, PlayerId(1));
+    assert_eq!(space.total_weight(), 4);
+    assert_eq!(
+        sampled_manifest_printings(&root),
+        ["Forest", "Gray Ogre", "Mountain"].map(String::from).into()
+    );
+}
+
 /// With one foretold slot over two foretell cards and one manifest, the
 /// manifest is a uniform draw from the cards foretell left: the Ogre backs it
 /// half the time, never the two thirds a shared shuffled prefix gives it.
