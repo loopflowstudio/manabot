@@ -1,9 +1,11 @@
-at: 30db47c5c18760569c95f15b3c2d49aca69d9ec1
+at: c98aa96bab43eddcb50d185da43f4932c8936127
 first:
   - path: docs/training.md
     why: Continue a saved run on another backend
   - path: manabot/backends/README.md
     why: Four-file save contract and sampling domains
+  - path: pyproject.toml
+    why: Released Etude SDK supplying save and restore callbacks
   - path: manabot/training/state/optimizer.py
     why: Canonical Adam moments and per-parameter clocks
   - path: manabot/training/state/continuation.py
@@ -28,4 +30,4 @@ first:
     why: Compare the next optimizer update after transfer
 hide:
   - path: uv.lock
-    why: Generated from the pinned Etude revision in pyproject.toml
+    why: Generated PyPI artifact hashes and dependency metadata
