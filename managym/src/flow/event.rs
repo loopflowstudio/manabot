@@ -20,6 +20,15 @@ pub struct ObjectEventRef {
     pub incarnation: u32,
 }
 
+impl From<ObjectEventRef> for crate::experience::ObjectRenderId {
+    fn from(event: ObjectEventRef) -> Self {
+        Self {
+            entity: event.entity.0,
+            incarnation: event.incarnation,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventSubject {
     Object(ObjectEventRef),

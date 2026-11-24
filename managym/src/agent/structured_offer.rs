@@ -1176,19 +1176,12 @@ impl Game {
         let mut candidates = Vec::with_capacity(declaration_order.len());
         let mut attacker_by_candidate = BTreeMap::new();
         for attacker in &declaration_order {
-            self.state
-                .permanents
-                .get(attacker.0)
-                .and_then(|permanent| permanent.as_ref())
-                .ok_or_else(|| {
-                    StructuredOfferError::Invariant(
-                        "legacy attacker prompt names a missing permanent".to_string(),
-                    )
-                })?;
+            let object_ref = self.permanent_object(*attacker).ok_or_else(|| {
+                StructuredOfferError::Invariant(
+                    "legacy attacker prompt names a missing permanent".to_string(),
+                )
+            })?;
             let candidate_id = next_candidate_id(candidates.len())?;
-            let object_ref = self
-                .permanent_object(*attacker)
-                .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
             candidates.push(Candidate {
                 id: candidate_id,
                 value: CandidateValue::Subject {

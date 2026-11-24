@@ -42,12 +42,7 @@ impl Game {
             } else {
                 object.slot() as u32
             },
-            subject: SubjectRef::Object {
-                id: ObjectRenderId {
-                    entity: display_id,
-                    incarnation: event.incarnation,
-                },
-            },
+            subject: SubjectRef::Object { id: event.into() },
             display_id,
             label: self.observed_object_name(object),
         })
@@ -198,12 +193,7 @@ impl Game {
             {
                 subjects.insert(
                     format!("permanent:{index}"),
-                    SubjectRef::Object {
-                        id: ObjectRenderId {
-                            entity: event.entity.0,
-                            incarnation: event.incarnation,
-                        },
-                    },
+                    SubjectRef::Object { id: event.into() },
                 );
             }
         }

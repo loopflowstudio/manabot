@@ -2,7 +2,7 @@
 //! output or mana unit is committed by this query.
 use super::*;
 use crate::agent::ability_description::cost_description;
-use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
+use crate::experience::{PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
 use crate::flow::payment::CostComponent;
 
@@ -385,16 +385,14 @@ impl Game {
     /// pool delta includes triggered production, spend riders and expiry.
     fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> PaymentSourcePreview {
         let permanent = tap.permanent;
-        let card = self.state.permanents[permanent]
-            .as_ref()
-            .expect("planned source");
+        let object = self.permanent_object(permanent).expect("planned source");
         let source = SubjectRef::Object {
-            id: ObjectRenderId {
-                entity: card.id.0,
-                incarnation: card.object.generation(),
-            },
+            id: self
+                .object_event_ref(object)
+                .expect("planned source")
+                .into(),
         };
-        let label = self.characteristics(permanent).name.clone();
+        let label = self.observed_object_name(object);
         let before = self.pooled_mana(player);
         self.perform_automatic_tap(player, tap);
         let after = self.pooled_mana(player);
