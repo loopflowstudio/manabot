@@ -408,3 +408,30 @@ fn printed_creature_vampire_nighthawk() {
         &[Keyword::Deathtouch, Keyword::Flying, Keyword::Lifelink],
     );
 }
+
+#[test]
+fn foundations_spell_day_of_judgment() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, counters_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::permanent::CounterKind;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&[
+        "Day of Judgment",
+        "Gray Ogre",
+        "Hill Giant",
+        "Beifong's Bounty Hunters",
+    ]);
+    let hunters = s.force_permanent_on_battlefield(0, "Beifong's Bounty Hunters");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let victims = [card_of(&s, hunters), card_of(&s, mine), card_of(&s, theirs)];
+    cast(&mut s, "Day of Judgment");
+    settle(&mut s);
+    // The dying Hunters see both their own four power and the Ogre's two.
+    assert_eq!(counters_of(&s, forest, CounterKind::PlusOnePlusOne), 6);
+    for victim in victims {
+        assert_eq!(zone_of(&s, victim), Some(ZoneType::Graveyard));
+    }
+}

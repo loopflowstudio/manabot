@@ -1,10 +1,13 @@
 //! Oath of the Gatewatch.
 use managym_state::{
+    ability::{Effect, ObjectSelector, Scope},
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    effect::Modification,
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![tajuru_pathwarden()]
+    vec![make_a_stand(), tajuru_pathwarden()]
 }
 
 fn tajuru_pathwarden() -> CardDefinition {
@@ -20,6 +23,32 @@ fn tajuru_pathwarden() -> CardDefinition {
             power: Some(5),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Vigilance, Keyword::Trample]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn make_a_stand() -> CardDefinition {
+    let text_box = "Creatures you control get +1/+0 and gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)";
+    CardDefinition {
+        key: "ogw.make_a_stand",
+        scryfall_id: "30cace63-91ca-493c-b67f-740fbbf06370",
+        printed: PrintedCharacteristics {
+            name: "Make a Stand".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
+                    Modification::pump(1, 0),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

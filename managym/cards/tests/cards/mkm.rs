@@ -119,3 +119,21 @@ fn proft_has_no_effect_if_its_only_target_leaves() {
     resolve_top(&mut s);
     assert_eq!(counters(&s, new), 0);
 }
+
+#[test]
+fn foundations_spell_make_your_move() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Make Your Move", "Craw Wurm", "Gray Ogre"]);
+    let subject = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let object = card_of(&s, subject);
+    let ineligible = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Make Your Move");
+    assert!(!s.choose_target(Target::Permanent(ineligible)));
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+}

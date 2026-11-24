@@ -1,16 +1,17 @@
 //! Coldsnap.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TriggerCondition},
+    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
         ReplacementEffect,
     },
-    mana::ManaCost,
+    mana::{Color, ManaCost},
     permanent::CounterKind,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![dark_depths()]
+    vec![flashfreeze(), dark_depths()]
 }
 
 fn dark_depths() -> CardDefinition {
@@ -46,6 +47,30 @@ fn dark_depths() -> CardDefinition {
                 ],
             }],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn flashfreeze() -> CardDefinition {
+    CardDefinition {
+        key: "csp.flashfreeze",
+        scryfall_id: "cefd9955-a195-4855-a00e-3809b96ca92b",
+        printed: PrintedCharacteristics {
+            name: "Flashfreeze".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::CounterSpell {
+                what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                    predicate: CardPredicate {
+                        colors_any: vec![Color::Red, Color::Green],
+                        ..Default::default()
+                    },
+                }),
+                exile: false,
+            }],
+            text_box: "Counter target red or green spell.".into(),
             ..Default::default()
         },
         ..Default::default()

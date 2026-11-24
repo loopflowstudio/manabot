@@ -12,6 +12,8 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        giant_growth(),
+        disenchant(),
         fire_elemental(),
         ancestral_recall(),
         clone(),
@@ -474,6 +476,48 @@ fn fire_elemental() -> CardDefinition {
             subtypes: vec!["Elemental".into()],
             power: Some(5),
             toughness: Some(4),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn disenchant() -> CardDefinition {
+    CardDefinition {
+        key: "lea.disenchant",
+        scryfall_id: "2722d7e2-61c6-4934-9c21-875ee78fd06c",
+        printed: PrintedCharacteristics {
+            name: "Disenchant".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target artifact or enchantment.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn giant_growth() -> CardDefinition {
+    CardDefinition {
+        key: "lea.giant_growth",
+        scryfall_id: "367dbefe-3366-408e-9fcf-7dc00f8cc201",
+        printed: PrintedCharacteristics {
+            name: "Giant Growth".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::pump(3, 3),
+            )],
+            text_box: "Target creature gets +3/+3 until end of turn.".into(),
             ..Default::default()
         },
         ..Default::default()

@@ -1,12 +1,14 @@
 //! Zendikar Rising.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, PlayerSelector},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        broken_wings(),
         highborn_vampire(),
         CardDefinition {
             key: "znr.marauding_blight_priest",
@@ -41,6 +43,38 @@ fn highborn_vampire() -> CardDefinition {
             subtypes: vec!["Vampire".into(), "Warrior".into()],
             power: Some(4),
             toughness: Some(3),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn broken_wings() -> CardDefinition {
+    CardDefinition {
+        key: "znr.broken_wings",
+        scryfall_id: "c0fc2dfd-85b0-4add-be18-b39549235921",
+        printed: PrintedCharacteristics {
+            name: "Broken Wings".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        any_of: vec![
+                            CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
+                            CardPredicate {
+                                flying: true,
+                                ..CardPredicate::creature()
+                            },
+                        ],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target artifact, enchantment, or creature with flying.".into(),
             ..Default::default()
         },
         ..Default::default()

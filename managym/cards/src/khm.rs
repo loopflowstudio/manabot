@@ -9,11 +9,12 @@ use managym_state::{
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![koma_cosmos_serpent(), seize_the_spoils()]
+    vec![snakeskin_veil(), koma_cosmos_serpent(), seize_the_spoils()]
 }
 
 fn koma_cosmos_serpent() -> CardDefinition {
@@ -90,6 +91,33 @@ fn seize_the_spoils() -> CardDefinition {
                     count: EffectValue::Fixed(2),
                 },
                 Effect::create_tokens("token.treasure", 1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn snakeskin_veil() -> CardDefinition {
+    let text_box = "Put a +1/+1 counter on target creature you control. It gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)";
+    CardDefinition {
+        key: "khm.snakeskin_veil",
+        scryfall_id: "e692c208-c171-4964-9207-43c2cbc62845",
+        printed: PrintedCharacteristics {
+            name: "Snakeskin Veil".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
+                ),
             ],
             text_box: text_box.into(),
             ..Default::default()

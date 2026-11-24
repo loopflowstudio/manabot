@@ -74,3 +74,30 @@ fn seize_the_spoils_discards_a_chosen_card_then_draws_two_and_makes_a_treasure()
         assert_eq!(s.battlefield_permanents_named(0, "Treasure").len(), 1);
     }
 }
+
+#[test]
+fn foundations_spell_snakeskin_veil() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::card::Keyword;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Snakeskin Veil", "Hill Giant"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    cast(&mut s, "Snakeskin Veil");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (4, 4));
+    assert!(!s
+        .game()
+        .characteristics(subject)
+        .keywords
+        .has(Keyword::Hexproof));
+}

@@ -7403,5 +7403,270 @@
     "colors": [
       "G"
     ]
+  },
+  "Stab": {
+    "name": "Stab",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets -2/-2 until end of turn.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Day of Judgment": {
+    "name": "Day of Judgment",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy all creatures.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Abrade": {
+    "name": "Abrade",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Abrade deals 3 damage to target creature.\n• Destroy target artifact.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Cancel": {
+    "name": "Cancel",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Negate": {
+    "name": "Negate",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target noncreature spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Essence Scatter": {
+    "name": "Essence Scatter",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target creature spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Flashfreeze": {
+    "name": "Flashfreeze",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target red or green spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Disenchant": {
+    "name": "Disenchant",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target artifact or enchantment.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Mortify": {
+    "name": "Mortify",
+    "mana_cost": "{1}{W}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target creature or enchantment.",
+    "colors": [
+      "B",
+      "W"
+    ]
+  },
+  "Angelic Edict": {
+    "name": "Angelic Edict",
+    "mana_cost": "{4}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Exile target creature or enchantment.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Make Your Move": {
+    "name": "Make Your Move",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target artifact, enchantment, or creature with power 4 or greater.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Broken Wings": {
+    "name": "Broken Wings",
+    "mana_cost": "{2}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target artifact, enchantment, or creature with flying.",
+    "colors": [
+      "G"
+    ]
+  },
+  "River's Rebuke": {
+    "name": "River's Rebuke",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return all nonland permanents target player controls to their owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Aetherize": {
+    "name": "Aetherize",
+    "mana_cost": "{3}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Return all attacking creatures to their owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Overrun": {
+    "name": "Overrun",
+    "mana_cost": "{2}{G}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Giant Growth": {
+    "name": "Giant Growth",
+    "mana_cost": "{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +3/+3 until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Snakeskin Veil": {
+    "name": "Snakeskin Veil",
+    "mana_cost": "{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put a +1/+1 counter on target creature you control. It gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dive Down": {
+    "name": "Dive Down",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature you control gets +0/+3 and gains hexproof until end of turn. (It can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Make a Stand": {
+    "name": "Make a Stand",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +1/+0 and gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Goblin Surprise": {
+    "name": "Goblin Surprise",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Creatures you control get +2/+0 until end of turn.\n• Create two 1/1 red Goblin creature tokens.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Seeker's Folly": {
+    "name": "Seeker's Folly",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Target opponent discards two cards.\n• Creatures your opponents control get -1/-1 until end of turn.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Deadly Plot": {
+    "name": "Deadly Plot",
+    "mana_cost": "{3}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Destroy target creature or planeswalker.\n• Return target Zombie creature card from your graveyard to the battlefield tapped.",
+    "colors": [
+      "B"
+    ]
   }
 }

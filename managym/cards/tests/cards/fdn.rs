@@ -994,3 +994,71 @@ fn token_producer_eager_trufflesnout() {
 fn printed_creature_quakestrider_ceratops() {
     crate::printed_creature_combat("Quakestrider Ceratops", 12, 8, &[]);
 }
+
+#[test]
+fn foundations_spell_stab() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Stab", "Hill Giant", "Gray Ogre"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let dead = card_of(&s, victim);
+    cast(&mut s, "Stab");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (1, 1));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (3, 3));
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "B");
+    cast(&mut s, "Stab");
+    assert!(s.choose_target(Target::Permanent(victim)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, dead), Some(ZoneType::Graveyard));
+}
+
+#[test]
+fn foundations_spell_goblin_surprise() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, choose_mode, settle};
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Goblin Surprise", "Hill Giant"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    cast(&mut s, "Goblin Surprise");
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (5, 3));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (3, 3));
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "2R");
+    cast(&mut s, "Goblin Surprise");
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Goblin").len(), 2);
+}
+
+#[test]
+fn foundations_spell_seekers_folly() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, choose_mode, settle};
+    use managym::state::game_object::{PlayerId, Target};
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Seeker's Folly", "Gray Ogre"]);
+    s.force_card_in_hand(1, "Forest");
+    s.force_card_in_hand(1, "Island");
+    let creature = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Seeker's Folly");
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(s.zone_size(1, ZoneType::Hand), 0);
+    cast(&mut s, "Seeker's Folly");
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(creature).pt(), (1, 1));
+}

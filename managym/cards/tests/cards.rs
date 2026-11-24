@@ -72,6 +72,8 @@ mod grn;
 mod gtc;
 #[path = "cards/hob.rs"]
 mod hob;
+#[path = "cards/hou.rs"]
+mod hou;
 #[path = "cards/ice.rs"]
 mod ice;
 #[path = "cards/iko.rs"]
@@ -96,6 +98,8 @@ mod ktk;
 mod lea;
 #[path = "cards/lrw.rs"]
 mod lrw;
+#[path = "cards/m10.rs"]
+mod m10;
 #[path = "cards/m12.rs"]
 mod m12;
 #[path = "cards/m14.rs"]
@@ -116,6 +120,8 @@ mod mid;
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/mor.rs"]
+mod mor;
 #[path = "cards/mrd.rs"]
 mod mrd;
 #[path = "cards/msh.rs"]
@@ -170,6 +176,10 @@ mod ths;
 mod tla;
 #[path = "cards/tle.rs"]
 mod tle;
+#[path = "cards/tmp.rs"]
+mod tmp;
+#[path = "cards/tsp.rs"]
+mod tsp;
 #[path = "cards/ulg.rs"]
 mod ulg;
 #[path = "cards/usg.rs"]

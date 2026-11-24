@@ -345,3 +345,35 @@ fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
 fn printed_creature_fire_elemental() {
     crate::printed_creature_combat("Fire Elemental", 5, 4, &[]);
 }
+
+#[test]
+fn foundations_spell_disenchant() {
+    use crate::support::game::five_color_setup;
+    use crate::support::inspect::{card_of, zone_of};
+    use crate::support::play::{cast, settle};
+    use managym::state::game_object::Target;
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Disenchant", "Sol Ring"]);
+    let subject = s.force_permanent_on_battlefield(1, "Sol Ring");
+    let object = card_of(&s, subject);
+    cast(&mut s, "Disenchant");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
+}
+
+#[test]
+fn foundations_spell_giant_growth() {
+    use crate::support::game::five_color_setup;
+    use crate::support::play::{cast, settle};
+    use managym::flow::turn::StepKind;
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Giant Growth", "Hill Giant"]);
+    let subject = s.force_permanent_on_battlefield(0, "Hill Giant");
+    cast(&mut s, "Giant Growth");
+    assert!(s.choose_target(Target::Permanent(subject)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(subject).pt(), (6, 6));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(subject).pt(), (3, 3));
+}

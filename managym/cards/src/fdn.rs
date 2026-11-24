@@ -2,7 +2,7 @@
 use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
-        PlayWindow, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        PlayWindow, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
@@ -17,6 +17,9 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        seekers_folly(),
+        goblin_surprise(),
+        stab(),
         quakestrider_ceratops(),
         eager_trufflesnout(),
         infestation_sage(),
@@ -584,6 +587,78 @@ fn quakestrider_ceratops() -> CardDefinition {
             subtypes: vec!["Dinosaur".into()],
             power: Some(12),
             toughness: Some(8),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn stab() -> CardDefinition {
+    CardDefinition {
+        key: "fdn.stab",
+        scryfall_id: "6859a5ba-1c1c-4631-bba8-f9900b827178",
+        printed: PrintedCharacteristics {
+            name: "Stab".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::pump(-2, -2),
+            )],
+            text_box: "Target creature gets -2/-2 until end of turn.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_surprise() -> CardDefinition {
+    let text_box = "Choose one —\n• Creatures you control get +2/+0 until end of turn.\n• Create two 1/1 red Goblin creature tokens.";
+    CardDefinition {
+        key: "fdn.goblin_surprise",
+        scryfall_id: "527dd5d4-5f72-40bb-8a9d-1f5ac3f81e2e",
+        printed: PrintedCharacteristics {
+            name: "Goblin Surprise".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::each(Scope::YouControl, CardPredicate::creature()),
+                        Modification::pump(2, 0),
+                    )],
+                    vec![Effect::create_tokens("token.goblin_1_1_r", 2)],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn seekers_folly() -> CardDefinition {
+    let text_box = "Choose one —\n• Target opponent discards two cards.\n• Creatures your opponents control get -1/-1 until end of turn.";
+    CardDefinition {
+        key: "fdn.seekers_folly",
+        scryfall_id: "bc359da6-8b7f-45ec-b530-ce159fc35953",
+        printed: PrintedCharacteristics {
+            name: "Seeker's Folly".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::Discard {
+                        what: ObjectSelector::Target(TargetSpec::Opponent),
+                        count: 2,
+                    }],
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::each(Scope::OpponentsControl, CardPredicate::creature()),
+                        Modification::pump(-1, -1),
+                    )],
+                ],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

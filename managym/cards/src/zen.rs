@@ -2,7 +2,8 @@
 use managym_state::{
     ability::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
-        PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
@@ -16,6 +17,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        day_of_judgment(),
         vampire_nighthawk(),
         rampaging_baloths(),
         beastmaster_ascension(),
@@ -327,6 +329,25 @@ fn vampire_nighthawk() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Deathtouch, Keyword::Flying, Keyword::Lifelink]),
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn day_of_judgment() -> CardDefinition {
+    CardDefinition {
+        key: "zen.day_of_judgment",
+        scryfall_id: "2aa98fca-972b-46c2-bdec-6ace35c988d5",
+        printed: PrintedCharacteristics {
+            name: "Day of Judgment".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::each(
+                Scope::Battlefield,
+                CardPredicate::creature(),
+            ))],
+            text_box: "Destroy all creatures.".into(),
             ..Default::default()
         },
         ..Default::default()

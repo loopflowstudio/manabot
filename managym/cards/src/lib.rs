@@ -45,6 +45,7 @@ mod gpt;
 mod grn;
 mod gtc;
 mod hob;
+mod hou;
 mod ice;
 mod iko;
 mod inv;
@@ -57,6 +58,7 @@ mod kld;
 mod ktk;
 mod lea;
 mod lrw;
+mod m10;
 mod m11;
 mod m12;
 mod m14;
@@ -69,6 +71,7 @@ mod mh2;
 mod mid;
 mod mkm;
 mod mmq;
+mod mor;
 mod mrd;
 mod msh;
 mod nec;
@@ -94,7 +97,9 @@ mod tdm;
 mod ths;
 mod tla;
 mod tle;
+mod tmp;
 mod tokens;
+mod tsp;
 mod ulg;
 mod usg;
 mod vis;
@@ -167,6 +172,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     grn::cards,
     gtc::cards,
     hob::cards,
+    hou::cards,
     ice::cards,
     iko::cards,
     inv::cards,
@@ -179,6 +185,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ktk::cards,
     lea::cards,
     lrw::cards,
+    m10::cards,
     m11::cards,
     m12::cards,
     m14::cards,
@@ -191,6 +198,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     mid::cards,
     mkm::cards,
     mmq::cards,
+    mor::cards,
     mrd::cards,
     msh::cards,
     nec::cards,
@@ -216,6 +224,8 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     ths::cards,
     tla::cards,
     tle::cards,
+    tmp::cards,
+    tsp::cards,
     ulg::cards,
     usg::cards,
     vis::cards,
