@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-418 Concept Review · Full-Branch Audit at HEAD 7efb2bd6ce</title>
+<title>MTG-418 Concept Review · Full-Branch Audit at HEAD b817943ea0</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -77,10 +77,10 @@
     padding: 1rem 1.1rem;
     background: var(--card);
   }
-  .panel.yes-box { border-color: var(--yes-fg); }
-  .panel.existing-box { border-color: var(--ex-fg); }
+  .panel.no-box { border-color: var(--no-fg); }
+  .panel.prop-box { border-color: var(--prop-fg); }
   .callout {
-    border-inline-start: 4px solid var(--yes-fg);
+    border-inline-start: 4px solid var(--no-fg);
     background: var(--card);
     padding: .9rem 1.1rem;
     border-radius: 0 8px 8px 0;
@@ -95,150 +95,152 @@
 </head>
 <body>
 <header>
-  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Full-Branch Concept Review · HEAD 7efb2bd6ce</div>
-  <h1>Do MTG-418’s event-history, query, state-trigger, grantor-cost, draw, and CR 104.4b loop models line up?</h1>
+  <div class="eyebrow">Managym &amp; Academy · MTG-418 · Full-Branch Concept Review · HEAD b817943ea0</div>
+  <h1>Do MTG-418’s event-history, query, state-trigger, untap, draw, and CR 104.4b loop models line up?</h1>
   <p>
     <strong>Area reviewed:</strong> The entire built MTG-418 surface across <code>managym</code>,
-    <code>manabot</code>, and <code>managym.academy</code> / <code>academy/ui</code> against branch base
-    <code>5d85077748</code> (83 non-card core engine/Python/UI files plus card modules and fixtures;
-    <strong>81/81 primary FDN rows</strong>, <strong>15/17 cost-primary rows</strong> with explicit blockers
-    on <em>Quilled Greatwurm</em> and <em>Ovika</em>, and all 5 cross-set query families on hash contract
-    <strong>v31</strong>):
+    <code>manabot</code>, and <code>managym.academy</code> / <code>academy/ui</code> against merged base
+    <code>a40a5ee146</code> (including the Finding 17 <code>resolution_owed</code> pass in
+    <code>31a2d7dbd3</code> / <code>0b592982ee</code> and the <code>1633beec4d</code> packed v11
+    <code>ObservationBatch</code> merge; <strong>81/81 primary FDN rows</strong>, <strong>15/17 cost-primary
+    rows</strong>, all 5 cross-set query families on hash contract <strong>v31</strong>):
     <code>state/src/{ability,card,game_object,permanent,stack_object}.rs</code>,
-    <code>src/flow/{action,damage,decision,game,layers,mana,payment,play,priority,proposed_event,resolution,statics,tick,triggers,turn,zones}.rs</code>,
-    <code>src/agent/{ability_description,effect_execution,env,observation,observation_encoder,observation_layout}.rs</code>,
+    <code>src/flow/{action,damage,decision,game,layers,mana,payment,play,priority,proposed_event,resolution,sba,stabilization,statics,tick,triggers,turn,zones}.rs</code>,
+    <code>src/agent/{ability_description,continuation,effect_execution,env,observation,observation_encoder,observation_layout,observation_rows}.rs</code>,
     <code>src/state/{hash,loop_fingerprint_tests,player}.rs</code>,
+    <code>manabot/policy/{prepare,readings}.py</code>,
     <code>managym/academy/{recording,server,trace}.py</code>, and
     <code>academy/ui/src/lib/recording.ts</code>.
   </p>
   <p class="small">
-    <strong>Outcome: Nothing to change.</strong> Commits <code>c36ed44f43</code> and
-    <code>c36a622534</code> closed both mismatches flagged at <code>31c81eda80</code> (the four CR 104.4b
-    loop-watch/fingerprint seams and the split tap-grantor sacrifice reservation) without bumping hash
-    contract <strong>v31</strong> or drifting conformance evidence. Every product/rules concept across the
-    full branch now maps to one clear owner in the code. Ready for <code>gate</code>.
+    <strong>Outcome: The plan changed.</strong> Six of seven product/rules concepts line up cleanly (including
+    the newly merged packed v11 CSR observation path). One concept does <strong>not</strong> line up:
+    <strong>CR 104.4b mandatory-loop detection</strong> still counts a finished resolution <em>before</em>
+    CR 117.5 / 704.3 / 603.8 post-resolution stabilization runs, and clears <code>loop_watch</code> in three
+    places without clearing <code>resolution_owed</code>. As a result, mandatory loops driven by the very
+    mechanisms MTG-418 just built — <strong>CR 603.8 state triggers</strong>, <strong><code>BecomesUntapped</code>
+    / non-batch <code>emit()</code> events</strong>, and <strong>SBA deaths</strong> — clear the watch to
+    <code>None</code> on every single cycle and hang forever without even reaching <code>CAP</code>.
+    The fix moves <code>end_mandatory_loop()</code> after <code>stabilize_before_priority()</code> and unifies
+    clearing behind <code>PriorityState::clear_loop_watch()</code>, staying on hash contract <strong>v31</strong>.
   </p>
 </header>
 
 <section>
-  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at 7efb2bd6ce vs. Base 5d85077748</span></h2>
+  <h2>1. Concept Alignment Matrix <span class="badge existing">Existing at b817943ea0 vs. Base a40a5ee146</span></h2>
   <table>
     <thead>
       <tr>
         <th style="width:21%">Product / Rules Concept</th>
-        <th style="width:43%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>7efb2bd6ce</code>)</th>
+        <th style="width:42%">Code Concept (<code>managym</code>, <code>manabot</code> &amp; <code>academy</code> at <code>b817943ea0</code>)</th>
         <th style="width:9%">Line up?</th>
-        <th style="width:27%">Notes &amp; Verification</th>
+        <th style="width:28%">What Works or What Is Wrong</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Turn-scoped player &amp; exact-object history</strong><br><span class="small">CR 119.9, 400.7, 508.1, 603.2d: what happened this turn, to whom, how often</span></td>
+        <td><strong>Turn-scoped player &amp; exact-object history</strong><br><span class="small">CR 119.9, 400.7, 508.1, 603.2d</span></td>
         <td>
-          <code>TurnState</code> owns <code>PlayerTurnHistory</code> (13 per-seat counters projected to v11
-          <code>player_turn_state</code> + LLM text), <code>DamageHistory</code> (sorted exact
-          source&rarr;permanent &amp; combat-player pairs, v11 relation kind 11 + viewer-relative seat flags),
+          <code>TurnState</code> owns <code>PlayerTurnHistory</code> (13 per-seat counters),
+          <code>DamageHistory</code> (sorted exact source&rarr;permanent &amp; combat-player pairs),
           <code>attacks_this_turn</code>, <code>ability_triggers_this_turn</code>,
           <code>used_trigger_grants</code>, and <code>ability_resolutions_this_turn</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Single owner, single turn reset, exact CR 400.7 object identity, canonical hash v31, and
-          viewer-safe projections across all 81/81 primary FDN rows and 5 cross-set query families.
+          Single owner, single turn reset, exact CR 400.7 identity, viewer-safe v11 projections and LLM text.
         </td>
       </tr>
       <tr>
-        <td><strong>Instruction results, permanent/spell LKI, queries, CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
+        <td><strong>Instruction results, LKI, queries, CDAs &amp; mana-ability split</strong><br><span class="small">CR 201.2a, 400.7, 604.3, 605.1a, 608.2h</span></td>
         <td>
-          <code>EventBinding</code> + <code>EffectFrame</code> committed results; <code>ObjectLki.renamed</code>
-          + <code>lki_face_printing</code> / <code>lki_mana_printing</code> + unified
-          <code>matches_permanent_facts</code>; <code>SpellLki</code> + <code>Game::spell_info</code>;
-          <code>ObjectProperty::{Power, Toughness, ManaValue, Colors, Counters}</code>;
-          <code>ContextRead::{SourcePower, SourceLki, TriggeringObject, PaidCost}</code>;
-          <code>ActivatedAbilityDefinition::is_mana_ability</code> vs. finalized <code>mana_choices</code>;
-          all-zone <code>Game::object_pt</code>; unified <code>TriggerCondition::DealsDamage</code>,
+          <code>EventBinding</code> + <code>EffectFrame</code>; <code>ObjectLki.renamed</code> +
+          <code>lki_face_printing</code> / <code>lki_mana_printing</code> + <code>matches_permanent_facts</code>;
+          <code>SpellLki</code> + <code>Game::spell_info</code>; <code>ObjectProperty</code>;
+          <code>ContextRead</code>; <code>is_mana_ability</code> vs. <code>mana_choices</code>;
+          all-zone <code>Game::object_pt</code>; unified <code>DealsDamage</code>,
           <code>triggering_amount</code>, and threaded <code>triggering_noun</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Aligned across rules, hash v31, v11 tensors, LLM text, and pinned pilots. Legacy serialized
-          variants (<code>PutsCounters</code>, <code>DealsCombatDamage</code>,
-          <code>TriggeringHadCounters</code>, <code>NoCounters</code>, <code>MillCards.target</code>,
-          <code>CharacteristicPower</code>) stay intentionally for TLA pinned-pilot token stability while
-          delegating to shared runtime readers.
+          Aligned across rules, hash v31, v11 tensors, text, and pinned pilots (legacy serialized variants stay
+          for TLA token stability and route through shared readers).
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Packed &amp; dense v11 observation projection</strong><br><span class="small">Merged <code>ObservationBatch</code> CSR + checkpoint compatibility</span></td>
+        <td>
+          <code>observation_encoder.rs::encode_rows</code> emits <code>Cell</code> rows into both dense
+          buffers and <code>observation_rows.rs::PackedRows</code>; <code>FactKind::payload_divisor</code>
+          maps <code>AbilityResolution</code> and <code>TriggeringAmount</code> to divisor 1;
+          <code>manabot/policy/prepare.py::_facts</code> filters <code>&lt;= tables.fact_kinds</code>
+          synchronously on <code>valid</code> and <code>live</code>.
+        </td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>
+          Post-merge audit of <code>1633beec4d</code> confirms dense, packed CSR, compact routing, and older
+          checkpoint fact-kind filtering all align on the same layout metadata.
         </td>
       </tr>
       <tr>
         <td><strong>Untap transitions &amp; CR 603.8 state triggers</strong><br><span class="small">CR 122.1d, 502.3, 603.3a, 603.8</span></td>
         <td>
           Single <code>Game::untap_permanent</code> emits <code>PermanentUntapped</code> (respecting stun
-          counter replacement); <code>TriggerCondition::State(Condition)</code> + legacy
-          <code>NoCounters</code> share <code>EventKinds::STATE_TRIGGER</code> (<code>1 &lt;&lt; 31</code>)
-          and <code>state_trigger_waiting</code> (requiring <code>inline_effects.is_none()</code> across
-          <code>pending_triggers</code>, <code>trigger_placement</code>, and <code>stack_objects</code>).
+          counters); <code>TriggerCondition::State(Condition)</code> + <code>NoCounters</code> share
+          <code>EventKinds::STATE_TRIGGER</code> and <code>state_trigger_waiting</code> (requiring
+          <code>inline_effects.is_none()</code> across pending, placement, and stack).
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Granted/delayed triggers at ability index 0 cannot suppress printed state triggers; stun counters
-          prevent false untap triggers.
+          Trigger semantics and waiting checks line up — <em>except</em> when either mechanism feeds a
+          mandatory loop (see CR 104.4b row below).
         </td>
       </tr>
       <tr>
-        <td><strong>Draw outcome projection across consumers</strong><br><span class="small">In a draw (<code>winner = None</code>), neither player won in Env, live play, Watch, or traces</span></td>
+        <td><strong>Draw outcome projection across consumers</strong><br><span class="small">In a draw (<code>winner = None</code>), neither player won</span></td>
         <td>
-          <code>GameOutcome::Draw { mandatory_loop }</code> flows through <code>env.rs</code>
-          (<code>draw_reason: "mandatory_loop"</code>, <code>winner_index() = None</code>),
-          <code>academy/ui/src/lib/recording.ts::orientBoard</code>,
-          <code>managym/academy/server.py::viewer_view</code>,
-          <code>managym/academy/trace.py::normalize_observation_to_hero</code>, and
-          <code>managym/academy/recording.py::person_board</code> — all taking explicit
-          <code>winner: int | None</code>.
+          <code>GameOutcome::Draw { mandatory_loop }</code> flows through <code>env.rs</code>,
+          <code>recording.ts::orientBoard</code>, <code>server.py::viewer_view</code>,
+          <code>trace.py::normalize_observation_to_hero</code>, and <code>recording.py::person_board</code>
+          with explicit <code>winner: int | None</code>.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Draw stays unwon for both seats across native observations, Python Academy, Svelte UI, and saved
-          traces without churning <code>experience-v1</code>.
+          Neither seat flips to <code>won: true</code> in native observations, live play, Watch, or saved traces.
         </td>
       </tr>
       <tr>
-        <td><strong>CR 104.4b mandatory-loop watch &amp; state fingerprint</strong><br><span class="small">Rejected actions never mutate state; repeating loop states match tracked progress; only finished resolutions count</span></td>
+        <td><strong>Grantor-cost activated abilities &amp; owed source reservations</strong><br><span class="small">CR 302.6, 602.2b</span></td>
         <td>
-          <code>PriorityState.loop_watch: Option&lt;Box&lt;MandatoryLoopWatch&gt;&gt;</code> with lazy
-          sampling past <code>UNWATCHED = 64</code> (<code>CAP = 10_000</code>);
-          <code>action.rs::execute_action</code> clears <code>loop_watch</code> only after
-          <code>dispatch_action(action)?</code> succeeds for a non-pass priority action;
-          <code>tick.rs::tick_priority</code> skips <code>watch_for_mandatory_loop()</code> when
-          <code>suspended_decision.is_some()</code>; <code>hash.rs::loop_fingerprint()</code> masks
-          <code>players[*].life</code> and only <code>players[*].counters["poison"]</code> (dropping empty
-          <code>"counters"</code>), strips <code>"id"</code> across <code>pending_triggers</code>,
-          <code>trigger_placement</code>, and <code>stack_objects[*].{variant}</code>, and saturates only
-          <code>turn.history</code> plus <code>entry[2]</code> of
-          <code>ability_{triggers,resolutions}_this_turn</code>.
+          <code>ActivatedAbilityDefinition::has_grantor_cost()</code> unifies focus, descriptions, and
+          <code>announced_model</code>; <code>SourceReservation::owed(p, tap, leaves)</code> is the single
+          constructor across all eight owed-source sites.
         </td>
         <td><span class="badge yes">Yes</span></td>
         <td>
-          Closed in <code>c36ed44f43</code> on hash v31 with zero digest drift. Directed checks verify
-          rejected-action witness invariance, prompt poison-vs-Herald draws, suspended-resolution exclusion,
-          non-poison counter preservation, stack-id stripping, and exact source identity under count
-          saturation.
+          Single owner for both tap and exile grantors across offer, reservation, and description.
         </td>
       </tr>
       <tr>
-        <td><strong>Grantor-cost activated abilities &amp; owed source reservations</strong><br><span class="small">CR 302.6, 602.2b: paying an activation cost by exiling or tapping the attaching Aura/Equipment</span></td>
+        <td><strong>CR 104.4b mandatory-loop watch lifecycle</strong><br><span class="small">A mandatory loop step ends only after resolution <em>and</em> CR 117.5 / 704.3 / 603.8 stabilization settle; any real choice breaks both the watch and the owed count</span></td>
         <td>
-          <code>ActivatedAbilityDefinition::has_grantor_cost()</code> unifies action focus
-          (<code>observation.rs:2208</code>), descriptions (<code>action.rs:58</code>), and
-          <code>announced_model</code> (<code>mana.rs:1911</code>).
-          <code>SourceReservation::owed(permanent, tap, leaves)</code> (<code>mana.rs:193</code>,
-          setting <code>sacrifice: tap || leaves</code>) is the sole constructor across all eight
-          owed-source reservation sites (<code>owed_reservation</code>,
-          <code>reserve_announced_payment</code>, <code>announced_model</code>,
-          <code>payment_reservation</code>, and upfront mana costs).
+          <code>PriorityState.{loop_watch, resolution_owed}</code>;
+          <code>tick_priority()</code> runs <code>end_mandatory_loop()</code> at lines <code>479&ndash;487</code>
+          <em>before</em> <code>stabilize_before_priority()</code> at line <code>490</code>;
+          <code>tick.rs:114</code>, <code>action.rs:1005</code>, and <code>priority.rs:63</code> clear
+          <code>loop_watch = None</code> without clearing <code>resolution_owed</code>.
         </td>
-        <td><span class="badge yes">Yes</span></td>
+        <td><span class="badge no">No</span></td>
         <td>
-          Closed in <code>c36ed44f43</code> + compressed into one constructor in <code>c36a622534</code>.
-          Both tap and exile grantors hold against sacrifice uniformly with every other owed tap/leave cost.
+          <strong>Two mismatches:</strong>
+          (1) <em>Wrong lifecycle point:</em> checking &ldquo;empty stack &amp; no pending triggers&rdquo; before
+          <code>stabilize_before_priority()</code> clears <code>loop_watch</code> every cycle on state-trigger,
+          non-batch <code>emit()</code> (<code>PermanentUntapped</code>), and SBA-death loops (infinite hang!),
+          and can declare a <code>CAP</code> draw before a terminal SBA loss (life &le; 0, poison &ge; 10, empty
+          library draw).
+          (2) <em>No single clear owner:</em> a real choice clears <code>loop_watch</code> while leaving
+          <code>resolution_owed = true</code>, immediately seeding a fresh watch at 1 for a player-chosen
+          resolution.
         </td>
       </tr>
     </tbody>
@@ -246,74 +248,124 @@
 </section>
 
 <section>
-  <h2>2. Previously Flagged Mismatches &mdash; Verified Closed at <code>7efb2bd6ce</code></h2>
+  <h2>2. Biggest Mismatch &mdash; Watch Lifecycle Runs Before Stabilization &amp; Splits Its Clear</h2>
   <div class="callout">
-    <strong>Resolution summary:</strong> At <code>31c81eda80</code>, the only remaining mismatches on the
-    branch were the four CR 104.4b loop-watch/fingerprint seams and the split tap-grantor sacrifice
-    reservation. All five are now fixed in the code (<code>c36ed44f43</code>, <code>c36a622534</code>),
-    exercised by directed tests, and confirmed free of hash-v31 drift. No new conceptual mismatch was found
-    across the full 83-file core diff.
+    <strong>Why the code diverges from Magic&rsquo;s rules:</strong>
+    Under CR 117.5, 608.2m, 704.3, 603.3b, and 603.8, one cycle of a stack chain is not done when
+    <code>resolve_top_of_stack()</code> finishes (or its suspended decision resumes). State-based actions run,
+    <code>pending_events</code> (including <code>PermanentUntapped</code> from <code>untap_permanent</code>) are
+    matched into triggers, CR 603.8 state triggers (<code>check_state_triggers</code>) are evaluated, and waiting
+    triggers are placed on the stack &mdash; all inside <code>stabilize_before_priority()</code>.
+    Because <code>tick_priority()</code> calls <code>end_mandatory_loop()</code> <em>before</em>
+    <code>stabilize_before_priority()</code>, the watch judges the game at an unfinished, pre-SBA, pre-trigger
+    snapshot. Whenever the next trigger in a mandatory loop comes from a state trigger, a non-batch
+    <code>emit()</code> event, or an SBA death, <code>stack_is_empty() &amp;&amp; pending_triggers.is_empty()</code>
+    is temporarily true, so <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> every single
+    cycle.
   </div>
 
   <div class="grid">
-    <div class="panel existing-box">
-      <h3>Before <span class="badge existing">31c81eda80 (Findings 11&ndash;16)</span></h3>
-      <pre>// action.rs: cleared loop_watch before dispatch (mutated hash on Err)
-// tick.rs: counted watch_for_mandatory_loop while suspended_decision.is_some()
-// hash.rs: left players[*].counters["poison"] and stack_objects[*].id;
-//          saturated ObjectId/CardDefId inside ability_*_this_turn
-// mana.rs: 8 struct literals; TapGrantor used sacrifice: !tap (false)</pre>
+    <div class="panel no-box">
+      <h3>Before <span class="badge existing">Existing at b817943ea0</span></h3>
+      <pre>// tick.rs:479-513 (WRONG ORDER)
+if self.state.priority.resolution_owed {
+    self.state.priority_mut().resolution_owed = false;
+    // Runs BEFORE SBAs, process_game_events(), check_state_triggers()!
+    if self.end_mandatory_loop() {
+        return None;
+    }
+    stabilized = false;
+}
+if !stabilized {
+    if let Some(space) = self.stabilize_before_priority() {
+        return Some(space);
+    }
+    ...
+    stabilized = true;
+}
+// tick.rs:112-115 (LEAVES resolution_owed = true!)
+if space.kind != ActionSpaceKind::Priority &amp;&amp; space.actions.len() &gt; 1 {
+    self.state.priority_mut().loop_watch = None;
+}
+// action.rs:1005 &amp; priority.rs:63 also clear only loop_watch.</pre>
     </div>
-    <div class="panel yes-box">
-      <h3>After <span class="badge yes">Existing at 7efb2bd6ce (Still Hash v31)</span></h3>
-      <pre>// action.rs:994 — self.dispatch_action(action)?; then clear loop_watch
-// tick.rs:500   — if self.state.suspended_decision.is_some() { continue; }
-// hash.rs:401   — mask only counters["poison"], strip stack_objects[*].id,
-//                 saturate only entry[2] on ability_{triggers,resolutions}
-// mana.rs:193   — single SourceReservation::owed(p, tap, leaves) with
-//                 sacrifice: tap || leaves across all 8 call sites</pre>
+    <div class="panel prop-box">
+      <h3>After <span class="badge proposed">Proposed (Still Hash Contract v31)</span></h3>
+      <pre>// priority.rs — one owner for clearing the watch + owed count
+pub fn clear_loop_watch(&amp;mut self) {
+    self.loop_watch = None;
+    self.resolution_owed = false;
+}
+
+// tick.rs::tick_priority() — count AFTER stabilization settles
+if !stabilized {
+    if let Some(space) = self.stabilize_before_priority() {
+        return Some(space);
+    }
+    if !TurnState::step_has_priority(step) &amp;&amp; !self.state.turn.cleanup_priority {
+        return None;
+    }
+    stabilized = true;
+}
+if self.is_game_over() {
+    return None; // Terminal SBAs always win before any CAP draw
+}
+if self.state.priority.resolution_owed {
+    self.state.priority_mut().resolution_owed = false;
+    if self.end_mandatory_loop() { // Only needs `if self.stack_is_empty()`!
+        return None;
+    }
+}
+// At resolve_top_of_stack(): set resolution_owed = true; stabilized = false;
+// At tick.rs:114, action.rs:1005, priority.rs:{50,63}, on_step_start:
+// call priority.clear_loop_watch().</pre>
     </div>
   </div>
 
-  <h3>Counterexample stress tests verified at <code>7efb2bd6ce</code></h3>
+  <h3>Concrete Counterexamples Tested Against the Proposal</h3>
   <table>
     <thead>
       <tr>
-        <th style="width:30%">Counterexample</th>
-        <th style="width:42%">Behavior at <code>7efb2bd6ce</code></th>
-        <th style="width:28%">Witness / Owner</th>
+        <th style="width:27%">Scenario / Counterexample</th>
+        <th style="width:35%">Behavior at <code>b817943ea0</code> <span class="badge existing">Existing</span></th>
+        <th style="width:38%">Behavior After Fix <span class="badge proposed">Proposed</span></th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Rejected priority action while <code>loop_watch.is_some()</code></strong></td>
-        <td><code>dispatch_action(action)?</code> returns <code>Err</code> before <code>loop_watch</code> is touched; <code>witness(&amp;game)</code> is byte-identical.</td>
-        <td><code>fdn::a_rejected_action_leaves_the_loop_watch</code></td>
+        <td><strong>CR 603.8 state-trigger loop</strong><br><span class="small">Permanent with 4 page counters and <code>State(SourceCountersAtLeast(Page, 4))</code> &rarr; <code>gain_life(1)</code></span></td>
+        <td><span class="badge no">Hangs forever</span><br>After trigger resolves, stack &amp; pending triggers are empty &rarr; <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> &rarr; <code>check_state_triggers()</code> re-stacks it. Never even hits <code>CAP</code>.</td>
+        <td><span class="badge yes">Draws &le; <code>LOOP_RECOGNIZED_WITHIN</code></span><br><code>stabilize_before_priority()</code> re-stacks the state trigger first; <code>end_mandatory_loop()</code> sees non-empty stack, counts &amp; fingerprints the stabilized state, draws at resolution ~66.</td>
       </tr>
       <tr>
-        <td><strong>Mandatory poison loop vs. <em>Herald of Eternal Dawn</em></strong></td>
-        <td><code>loop_fingerprint()</code> masks <code>counters["poison"]</code> (keeping other player counters); draws within <code>UNWATCHED + 64</code> instead of 10,000.</td>
-        <td><code>fdn::a_poison_loop_against_a_protected_player_draws_promptly</code> &amp; <code>loop_fingerprint_tests</code></td>
+        <td><strong><code>BecomesUntapped</code> / non-batch <code>emit()</code> loop</strong><br><span class="small"><code>BecomesUntapped</code> &rarr; <code>Tap(This)</code>, <code>Untap(This)</code></span></td>
+        <td><span class="badge no">Hangs forever</span><br><code>untap_permanent()</code> pushes <code>PermanentUntapped</code> to <code>pending_events</code> (not <code>pending_triggers</code>); <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> before <code>process_game_events()</code> runs.</td>
+        <td><span class="badge yes">Draws &le; <code>LOOP_RECOGNIZED_WITHIN</code></span><br><code>stabilize_before_priority()</code> converts <code>pending_events</code> to the stacked trigger first; <code>end_mandatory_loop()</code> counts, fingerprints, and draws promptly.</td>
       </tr>
       <tr>
-        <td><strong>Loop with stacked object IDs &amp; large source IDs</strong></td>
-        <td><code>stack_objects[*].{variant}.id</code> stripped; only <code>entry[2]</code> saturates in <code>ability_{triggers,resolutions}_this_turn</code>, keeping sources distinct.</td>
-        <td><code>state/loop_fingerprint_tests.rs</code> (3 units)</td>
+        <td><strong>SBA-death reanimation loop</strong><br><span class="small">0/0 creature enters &rarr; CR 704.5f dies &rarr; death trigger returns it</span></td>
+        <td><span class="badge no">Hangs forever</span><br>When reanimation resolves, 0/0 is still alive on battlefield; <code>end_mandatory_loop()</code> wipes <code>loop_watch = None</code> before SBA kills it.</td>
+        <td><span class="badge yes">Draws</span><br><code>stabilize_before_priority()</code> kills 0/0 and stacks its death trigger first; watch counts every cycle (reaches <code>CAP</code> since incarnations grow).</td>
       </tr>
       <tr>
-        <td><strong>Suspending spell/trigger (CR 608.2m)</strong></td>
-        <td><code>tick_priority</code> skips <code>watch_for_mandatory_loop()</code> while <code>suspended_decision.is_some()</code>; count stays at finished resolutions only.</td>
-        <td><code>fdn::a_suspended_resolution_is_not_counted_toward_a_loop</code></td>
+        <td><strong>Terminal SBA loss on the <code>CAP</code> resolution</strong><br><span class="small">Life &le; 0, poison &ge; 10, or empty-library draw on resolution 10,000</span></td>
+        <td><span class="badge no">False Draw</span><br><code>end_mandatory_loop()</code> declares <code>Draw { mandatory_loop: true }</code> before <code>commit_state_based_losses()</code> runs.</td>
+        <td><span class="badge yes">Correct Win/Loss</span><br><code>stabilize_before_priority()</code> runs SBAs and sets <code>GameOutcome::Losses</code>; <code>is_game_over()</code> returns before <code>end_mandatory_loop()</code>.</td>
       </tr>
       <tr>
-        <td><strong>Finite 100-counter chain &amp; player intervention</strong></td>
-        <td>Counter chain runs to completion (0 counters left, not a draw); casting Bolt mid-loop clears <code>loop_watch</code> and unwinds cleanly.</td>
-        <td><code>fdn::a_finite_chain_over_counters_is_no_mandatory_loop</code> &amp; <code>..._kills_the_drain</code></td>
+        <td><strong>Real 2-option mid-resolution choice with another object on stack</strong><br><span class="small">Trigger suspends on 2 legal choices while another spell/trigger sits below it</span></td>
+        <td><span class="badge no">False watch = 1</span><br><code>tick.rs:114</code> clears <code>loop_watch = None</code>, but leaves <code>resolution_owed = true</code>; once player chooses, watch immediately allocates at <code>resolutions = 1</code>.</td>
+        <td><span class="badge yes"><code>loop_watch</code> stays <code>None</code></span><br><code>clear_loop_watch()</code> clears both <code>loop_watch</code> and <code>resolution_owed</code> on any real choice; finishing the player-steered resolution starts no watch.</td>
       </tr>
       <tr>
-        <td><strong>Two <em>Fishing Poles</em> on one creature &amp; owed tap-grantor lock</strong></td>
-        <td>Action focus and descriptions name each Pole; <code>SourceReservation::owed</code> locks both tap and sacrifice on all owed tap/exile costs.</td>
-        <td><code>fdn::two_fishing_poles_...</code> &amp; <code>mana.rs::SourceReservation::owed</code></td>
+        <td><strong>All-suspending forced 1-choice loop (Finding 17) &amp; suspension check (d)</strong><br><span class="small">Conqueror + Ogre tap-chosen-Ogre + gain 1; Ogre 1-card discard</span></td>
+        <td><span class="badge yes">Passing</span><br>Suspension check sees count 2; all-suspending forced loop draws within <code>LOOP_RECOGNIZED_WITHIN</code>.</td>
+        <td><span class="badge yes">Preserved</span><br><code>suspended_decision_action_space()</code> still returns before stabilization/counting (count stays 2 while suspended); forced 1-action completion stabilizes and counts once.</td>
+      </tr>
+      <tr>
+        <td><strong>Forced 1-target trigger placement (<code>skip_trivial = false</code>)</strong><br><span class="small">Trigger with 1 legal target pauses stabilization for <code>ChooseTarget</code></span></td>
+        <td>Counted <em>before</em> target placement; watch survives the 1-action prompt.</td>
+        <td><span class="badge yes">Counted once placed</span><br>1-action prompt does not clear <code>clear_loop_watch()</code>; once submitted, stabilization finishes and counts the resolution. (2+ target options clear both watch and <code>resolution_owed</code>.)</td>
       </tr>
     </tbody>
   </table>
@@ -322,32 +374,50 @@
 <section>
   <h2>3. Intentional Boundaries Kept Outside This Change</h2>
   <ul>
-    <li><strong>Single-trigger self-suspending forced loops:</strong> <code>watch_for_mandatory_loop()</code> stays owned by <code>tick_priority()</code> rather than moving into <code>run_frame()</code>. Any realistic mandatory loop with a forced 1-option choice (e.g. sacrifice/discard + reanimation) includes a non-suspending trigger that hits <code>tick_priority()</code> every cycle; moving loop detection into <code>run_frame()</code> would entangle sub-frames, SBA batches, and direct unit-test calls to <code>resolve_top_of_stack()</code>.</li>
-    <li><strong>Pinned-pilot serialized compatibility:</strong> Legacy serialized shapes (<code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>PutsCounters</code>, <code>DealsCombatDamage</code>, <code>TriggeringHadCounters</code>, <code>NoCounters</code>) stay intact so <code>tests/model/test_pinned_pilot.py</code> remains unbroken; all runtime logic already routes through the unified readers.</li>
-    <li><strong>Pre-existing <code>TurnState::graveyard_from_battlefield</code> omission in <code>CanonicalTurn</code>:</strong> Predates MTG-418 (<em>Brought Back</em>) and is untouched here; fixing it is a separate hash-contract task, not MTG-418 scope.</li>
-    <li><strong>Two blocked cost-primary FDN rows:</strong> <em>Quilled Greatwurm</em> (needs <code>play_permissions</code> + distributed counter removal) and <em>Ovika, Enigma Goliath</em> (needs composite mana-and-life ward) remain explicitly documented in <code>fdn.jsonl</code>.</li>
+    <li><strong><code>resolution_owed</code> stays <code>#[serde(skip)]</code> on hash contract v31:</strong> At every priority action space and every multi-option decision, <code>resolution_owed</code> is guaranteed <code>false</code>. It is <code>true</code> only while a forced 1-action <code>suspended_decision</code> or <code>trigger_placement</code> (both hashed in <code>CanonicalMatchState</code>) waits, and is preserved by <code>Clone</code> across all <code>GameSnapshot</code> forks. Hashing it would force a v32 contract bump with no replay or fork soundness gain.</li>
+    <li><strong>Pinned-pilot serialized compatibility:</strong> Legacy serialized shapes (<code>Effect::MillCards.target</code>, <code>StaticAbility::CharacteristicPower</code>, <code>PutsCounters</code>, <code>DealsCombatDamage</code>, <code>TriggeringHadCounters</code>, <code>NoCounters</code>) stay intact so <code>tests/model/test_pinned_pilot.py</code> remains unbroken; runtime logic shares the unified readers.</li>
+    <li><strong>Pre-existing <code>TurnState::graveyard_from_battlefield</code> omission in <code>CanonicalTurn</code>:</strong> Predates MTG-418 and stays outside this Task.</li>
+    <li><strong>Two blocked cost-primary FDN rows:</strong> <em>Quilled Greatwurm</em> and <em>Ovika, Enigma Goliath</em> remain explicitly documented in <code>fdn.jsonl</code>.</li>
   </ul>
 </section>
 
 <section>
   <h2>4. Review Decisions (Reply with e.g. &ldquo;1a&rdquo;)</h2>
   <p class="small">
-    Running headless in a Graph step: no plan changes are needed and the branch proceeds to <code>gate</code>.
-    Any reviewer reading this page afterward can override the boundary choices below if desired.
+    Running headless in a Graph step: the selected choices below are written directly into
+    <code>scratch/plan.md</code> as Finding 18 for the next <code>implement</code> pass.
   </p>
   <ol class="questions">
     <li>
-      <strong>Proceed directly to <code>gate</code> on hash contract v31 with no further model changes?</strong>
+      <strong>Move <code>end_mandatory_loop()</code> after <code>stabilize_before_priority()</code> and unify clearing in <code>PriorityState::clear_loop_watch()</code> before <code>gate</code>?</strong>
       <div class="choice">
-        <span class="selected">1a (Selected):</span> Proceed to <code>gate</code> (full CI workspace,
-        rebuilt Python extension check, Engine Budget comparison, and verification of the four pre-existing
-        Academy failures noted in <code>scratch/questions.md</code>).
+        <span class="selected">1a (Selected):</span> Yes &mdash; run <code>end_mandatory_loop()</code> at
+        the stabilized CR 117.5 / 704.3 pre-priority boundary (simplifying its empty check to
+        <code>self.stack_is_empty()</code>), route all watch-clearing sites through
+        <code>PriorityState::clear_loop_watch()</code>, add directed tests for a state-trigger loop, an
+        untap-event loop, and a real mid-resolution choice cancelling <code>resolution_owed</code>, and
+        re-record any moved <code>semantic-kernel-w17-v6</code> trace hashes on v31 before <code>gate</code>.
       </div>
       <div class="choice">
-        1b: Hold <code>gate</code> to also route completed single-action suspended resolutions through
-        <code>watch_for_mandatory_loop()</code> or fold <code>graveyard_from_battlefield</code> into a new
-        hash contract v32. (Passed over: no catalog card triggers a self-suspending 1-trigger loop, and
-        <code>graveyard_from_battlefield</code> predates MTG-418.)
+        1b: Ship <code>b817943ea0</code> directly to <code>gate</code> without moving
+        <code>end_mandatory_loop()</code>. (Passed over: state-trigger and untap-event loops &mdash; two
+        mechanisms introduced in MTG-418 itself &mdash; hang forever without even hitting <code>CAP</code>.)
+      </div>
+    </li>
+    <li>
+      <strong>Keep <code>PriorityState.resolution_owed</code> as <code>#[serde(skip)]</code> on hash contract v31, or hash it and bump to v32?</strong>
+      <div class="choice">
+        <span class="selected">2a (Selected):</span> Keep <code>#[serde(skip)]</code> on hash contract
+        <strong>v31</strong>. <code>resolution_owed</code> is always <code>false</code> at every priority or
+        multi-option decision, appears only beside hashed <code>suspended_decision</code> or
+        <code>trigger_placement</code> on forced 1-action stops, and is preserved by <code>Clone</code> on
+        every fork and <code>GameSnapshot</code>.
+      </div>
+      <div class="choice">
+        2b: Serialize <code>resolution_owed</code> (with <code>skip_serializing_if = "Not::not"</code>) and
+        bump <code>MATCH_STATE_HASH_VERSION</code> to <strong>v32</strong>, refreshing all hash-v31 receipts
+        and Academy fixtures. (Passed over: high churn across all v31 fixtures for a transient flag already
+        witnessed by the hashed suspension/placement state.)
       </div>
     </li>
   </ol>
