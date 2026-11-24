@@ -677,11 +677,15 @@ def test_pending_pact_upkeep_restores_and_replays_its_loss_command() -> None:
             branch = snapshot.restore()
             assert branch.search_witness_json() == before
             if semantic:
-                _, _, reward, terminated, truncated, info = branch.step_semantic_command(command)
+                _, _, reward, terminated, truncated, info = (
+                    branch.step_semantic_command(command)
+                )
             else:
                 _, reward, terminated, truncated, info = branch.step(3)
             assert (reward, terminated, truncated) == (-1.0, True, False)
-            assert sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
+            assert (
+                sim.determine_outcome(terminated, info) == sim.GameOutcome.VILLAIN_WIN
+            )
             assert info["winner_index"] == 1
             assert info["winner_name"] == "Opponent"
             assert info["p0_loss_reason"] == "instructed_loss"
@@ -701,9 +705,12 @@ def test_simulation_counts_native_outcomes_on_last_allowed_step() -> None:
         ((0,), True, sim.GameOutcome.TIMEOUT),
     ):
         native = managym.Env(seed=23)
-        reset_to_first_main(native, managym.GameSetup([
-            managym.PlayerConfig(str(seat), deck) for seat in (0, 1)
-        ]))
+        reset_to_first_main(
+            native,
+            managym.GameSetup(
+                [managym.PlayerConfig(str(seat), deck) for seat in (0, 1)]
+            ),
+        )
         if protected:
             native.scenario_force_battlefield(0, "Herald of Eternal Dawn")
         for seat in losses:
