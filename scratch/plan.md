@@ -86,6 +86,15 @@ hits; no `benchmark`-feature instrumentation keys):
   `changeling-anthems --sizes 4,8` (exercising `fixed_sufficient`,
   `useful_payment_taps`, `mana_ability_actions`, and layer dirty-bit debug
   oracles) all pass.
+- **Pre-publish validation:** full workspace debug `nextest` (`2,179/2,179`,
+  0 failures), `cargo fmt --all --check`, rebuilt release `_managym` extension,
+  fixed `tests/verify/test_native_observation_contract.py` (`card::VALID` vs
+  appended column 56), `197 passed` across native observation contract,
+  `test_pinned_pilot.py`, Elemental/evaluation/mirror/monitor/separability
+  admission and `test_text_observation.py`, `52 passed` Academy protocol &
+  launcher tests, `56 passed` package boundaries & public API contract,
+  `scripts/public_api.py check`, `scripts/check_loopflow_workflows.py`, and
+  `academy/ui` (`660/660` Vitest + `svelte-check` 0 errors/warnings).
 
 Review note for gate: Slice 16 + compress (`7c75706ef1`) grew
 `managym/src/flow/mana.rs` by ~720 net lines (`fixed_sufficient` constructive
