@@ -144,15 +144,6 @@ enum PaymentTaps<'a> {
     Choose(Vec<Action>),
 }
 
-impl PaymentTaps<'_> {
-    fn offers(self) -> Vec<Action> {
-        match self {
-            Self::Determined(_) => Vec::new(),
-            Self::Choose(actions) => actions,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ManaActivation {
     /// An unrestricted-use tap with no other costs, effects or triggered output choice.
@@ -2324,14 +2315,15 @@ impl Game {
         let can_pay = self.can_pay_mana_cost(player, cost);
         if !payment.waterbends() {
             let model = self.payment_model(player, None);
-            let taps = self.useful_payment_taps(
+            if let PaymentTaps::Choose(taps) = self.useful_payment_taps(
                 &model,
                 player,
                 cost,
                 payment.help(),
                 !actions.is_empty() || !help.is_empty() || !can_pay,
-            );
-            actions.extend(taps.offers());
+            ) {
+                actions.extend(taps);
+            }
         }
         actions.extend(help);
         if can_pay {

@@ -267,7 +267,8 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `data-turn`) is the last log entry, not reliably the current turn; to cast
   "the turn after the last land", drive `GameSession.new_game`/`hero_command`
   by offer labels in Python and read `projection.turn.turn_number` and each
-  permanent's `entered_this_turn`. A land played this turn is a distinct
-  payment source, so same-turn casts keep stops that older identical lands skip.
+  permanent's `entered_this_turn`. Plain non-creature, non-animating lands
+  played this turn are interchangeable with earlier copies; creatures,
+  non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
   Mid-payment color choices are MODAL frames with
   `decision_context.stage == "mana_color"`.

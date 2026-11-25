@@ -61,6 +61,8 @@ fn cast(game: &mut Game) {
 }
 
 fn play_land(game: &mut Game, land: &str) {
+    game.scenario_force_card_in_hand(PlayerId(0), land).unwrap();
+    game.scenario_refresh_priority().unwrap();
     let space = game.action_space().expect("priority").clone();
     let index = space
         .actions
@@ -288,13 +290,8 @@ fn choosing_village_keeps_two_plains_and_skips_the_color_choice() {
 
 #[test]
 fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
-    let player = PlayerId(0);
     // 4th Mountain played this turn still skips Gray Ogre {2}{R}.
     let mut mountains = payment_position("Gray Ogre", &["Mountain"; 3]);
-    mountains
-        .scenario_force_card_in_hand(player, "Mountain")
-        .unwrap();
-    mountains.scenario_refresh_priority().unwrap();
     play_land(&mut mountains, "Mountain");
     assert!(mountains
         .state
@@ -310,10 +307,6 @@ fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
 
     // 2nd Plains played this turn beside Kyoshi Village still skips Badgermole Cub {1}{G}.
     let mut village_pair = payment_position("Badgermole Cub", &["Plains", "Kyoshi Village"]);
-    village_pair
-        .scenario_force_card_in_hand(player, "Plains")
-        .unwrap();
-    village_pair.scenario_refresh_priority().unwrap();
     play_land(&mut village_pair, "Plains");
     cast(&mut village_pair);
     assert!(village_pair.pending_choice.is_none());
@@ -331,10 +324,6 @@ fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
     // skips the color modal and finishes directly.
     let mut village_three =
         payment_position("Youthful Knight", &["Kyoshi Village", "Plains", "Plains"]);
-    village_three
-        .scenario_force_card_in_hand(player, "Plains")
-        .unwrap();
-    village_three.scenario_refresh_priority().unwrap();
     play_land(&mut village_three, "Plains");
     cast(&mut village_three);
     assert_eq!(
@@ -363,11 +352,7 @@ fn playing_a_plain_land_for_turn_stays_interchangeable_for_manual_payment() {
 
 #[test]
 fn self_animating_land_played_this_turn_stays_distinct() {
-    let player = PlayerId(0);
     let mut game = payment_position("Sol Ring", &["Soulstone Sanctuary"]);
-    game.scenario_force_card_in_hand(player, "Soulstone Sanctuary")
-        .unwrap();
-    game.scenario_refresh_priority().unwrap();
     play_land(&mut game, "Soulstone Sanctuary");
     cast(&mut game);
     // One Soulstone Sanctuary can animate and attack this turn; the newly

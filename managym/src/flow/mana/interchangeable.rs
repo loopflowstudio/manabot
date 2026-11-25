@@ -6,7 +6,7 @@ use super::{Game, Mana, ManaSource, Obligation, PaymentModel, UsefulTap};
 use crate::{
     flow::{statics::Characteristics, trigger::DelayedTriggerEvent},
     state::{
-        ability::{Ability, Effect},
+        ability::Effect,
         card::{CardType, StaticAbility},
         effect::Modification,
         game_object::Target,
@@ -102,17 +102,17 @@ impl Game {
         // grants haste (CR 702.182a) and no catalog card animates another
         // land without haste, so plain lands played this turn are
         // interchangeable with earlier copies.
-        if (view.is_creature() || !view.is_land() || can_become_creature(&view))
-            && left.summoning_sick != right.summoning_sick
+        if left.summoning_sick != right.summoning_sick
+            && (view.is_creature() || !view.is_land() || can_become_creature(&view))
         {
             return false;
         }
         let turn = self.state.turn.turn_number;
-        if view
-            .activated_abilities
-            .iter()
-            .any(|ability| ability.power_up)
-            && left.entered_this_turn(turn) != right.entered_this_turn(turn)
+        if left.entered_this_turn(turn) != right.entered_this_turn(turn)
+            && view
+                .activated_abilities
+                .iter()
+                .any(|ability| ability.power_up)
         {
             return false;
         }
@@ -236,14 +236,13 @@ fn can_become_creature(view: &Characteristics) -> bool {
     view.activated_abilities
         .iter()
         .any(|ability| ability.effects.iter().any(Effect::may_become_creature))
-        || view
-            .triggered_abilities
-            .iter()
-            .any(|trigger| match &trigger.ability {
-                Ability::Triggered { effects, .. } => {
-                    effects.iter().any(Effect::may_become_creature)
-                }
-            })
+        || view.triggered_abilities.iter().any(|trigger| {
+            trigger
+                .ability
+                .effects()
+                .iter()
+                .any(Effect::may_become_creature)
+        })
         || view.static_abilities.iter().any(|ability| match ability {
             StaticAbility::Continuous(continuous) => continuous
                 .modifications
