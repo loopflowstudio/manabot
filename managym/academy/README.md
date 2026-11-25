@@ -343,7 +343,7 @@ daemon thread; `GET` lists the game's analyses with their decisions so far,
 reading only their rows, so Review follows a running analysis with it.
 `GET /api/traces/{id}/analyses/policies`, read once when Review opens,
 re-executes the game to list the eligible policies, the default (the
-opponent's own policy), why none may run and the events an analysis of the
+opponent's own policy, else the recommended one), why none may run and the events an analysis of the
 person's seat reads. Eligible means registered, admitted for the game's decks, with an
 artifact and no Search composition: Search plays out from the walk's real
 hidden cards. Admission takes seconds with many checkpoints and reads only the

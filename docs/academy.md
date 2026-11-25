@@ -1128,8 +1128,9 @@ An analysis reads a game you played against a policy: at each of your
 decisions with more than one legal action, what that policy would have done
 in your seat. Academy replays the game with the policy in your seat; it sees
 only what your seat saw, and the game follows the moves you made. Opening
-Review of your own game starts an analysis by your opponent's policy when it
-is a registered trained policy and the game has none yet. Review is usable at
+Review of your own game starts an analysis when the game has none yet: by your
+opponent's policy when it is a registered trained policy, otherwise by
+Academy's recommended policy, the one Setup offers first. Review is usable at
 once; **Analysing 34 of 81** counts up while the marks fill in.
 
 At one of your choices the heading reads **Analysis by** the policy, and every
@@ -1190,7 +1191,7 @@ finished game see its saved analyses; only you can start one.
 
 | You see | Why | What to do |
 |---|---|---|
-| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search. | Choose a policy under **Analyse with…**. |
+| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
 | **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
 | **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
 | A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
@@ -1204,7 +1205,7 @@ analysed up to its last recorded position.
 **Show analysis**, at the top of the rail during your game, reads your
 decisions as you play. It is off at the start of every game. Turned on, it
 reads with your opponent's policy when that is a registered trained policy,
-otherwise with the first that can read the game; with more than one, a menu
+otherwise with Academy's recommended policy; with more than one, a menu
 beside the switch changes it. The reading is the same as Review's: the
 heading reads **Analysis by** the policy, and each option on its card and row
 carries the policy's probability and its estimate after it. Nothing is

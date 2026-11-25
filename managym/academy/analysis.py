@@ -374,14 +374,17 @@ def analysing_policies(
 ) -> AnalysisChoices:
     """The registered policies that can read `config`'s game: admitted for its
     decks and giving probabilities, without search. The default is the
-    opponent's own policy when it is one of them."""
+    opponent's own policy when it is one of them, otherwise Academy's
+    recommended policy (the one Setup offers first) when it is."""
+    admitted = admissions.admitted(config.to_rust())
     policies = [
         {"sha256": descriptor.id, "name": Opponent(descriptor).name}
-        for descriptor in admissions.admitted(config.to_rust())
+        for descriptor in admitted
     ]
     opponent = (config.opponent or {}) if config.villain_type == "policy" else {}
     key = opponent.get("base_sha256", opponent.get("sha256"))
-    default = key if any(p["sha256"] == key for p in policies) else None
+    recommended = next((d.id for d in admitted if d.recommended), None)
+    default = key if any(p["sha256"] == key for p in policies) else recommended
     return AnalysisChoices(policies, default, None)
 
 

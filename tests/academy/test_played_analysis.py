@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator, Sequence
 from concurrent.futures import Future
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path
 import random
@@ -15,7 +15,13 @@ import pytest
 
 import managym
 from managym.academy import analysis as analysis_module, server, trace
-from managym.academy.analysis import AnalysisStop, analyse_game, analysed_events
+from managym.academy.analysis import (
+    AnalysisStop,
+    analyse_game,
+    analysed_events,
+    analysing_policies,
+    policy_admissions,
+)
 from managym.academy.attempts import AttemptStore, RetainedAttempt, participant_id
 from managym.academy.opponent import set_policy_registry
 from managym.academy.recording import record_of
@@ -95,6 +101,14 @@ class ReadingFactory:
         session = ReadingSession(seat, self.fail_after)
         self.sessions.append(session)
         return session
+
+
+@dataclass
+class RecommendedFactory(ReadingFactory):
+    name: str = "Recommended"
+
+    def describe(self) -> PolicyDescriptor:
+        return replace(super().describe(), recommended=True)
 
 
 @dataclass
@@ -204,6 +218,19 @@ def wait_complete(client: TestClient, trace_id: str) -> dict[str, Any]:
             return body
         time.sleep(0.05)
     raise AssertionError("analysis did not finish")
+
+
+def test_a_game_against_a_scripted_opponent_defaults_to_the_recommended_policy(
+    tmp_path: Path, registry: PolicyRegistry
+) -> None:
+    registry.register(ReadingFactory())
+    recommended = registry.register(RecommendedFactory())
+    attempt = finished(tmp_path)
+    choices = analysing_policies(
+        trace.GameConfig(**attempt.trace["config"]), policy_admissions()
+    )
+    assert [policy["name"] for policy in choices.policies] == ["Reader", "Recommended"]
+    assert choices.default == recommended
 
 
 def test_review_analyses_a_game_and_saves_it_beside_the_game(
