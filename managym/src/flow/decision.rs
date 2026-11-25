@@ -145,6 +145,9 @@ pub struct EffectFrame {
     pub source_identity: Option<crate::state::game_object::AbilitySource>,
     /// The player the effects resolve for ("you").
     pub controller: PlayerId,
+    /// The spell or ability's controller when an instruction acts for a different player.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolving_controller: Option<PlayerId>,
     /// For triggered abilities: how many times this ability has resolved
     /// this turn, counting this resolution. Zero for spells and activated
     /// abilities.
@@ -247,6 +250,12 @@ impl EffectFrame {
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.and_then(|source| source.reference())
     }
+    pub(crate) fn resolve_for(&mut self, player: PlayerId) {
+        let controller = self.resolving_controller.unwrap_or(self.controller);
+        self.controller = player;
+        self.resolving_controller = (player != controller).then_some(controller);
+    }
+
     pub(crate) fn bind_source(&mut self, source: Option<ObjectId>, reference: Option<ObjectId>) {
         self.source_identity =
             crate::state::game_object::AbilitySource::optional(source, reference);
@@ -275,6 +284,7 @@ impl EffectFrame {
             source_transforms: 0,
             source_identity: None,
             controller,
+            resolving_controller: None,
             resolutions_this_turn: 0,
             triggering_amount: 0,
             kicked: false,
@@ -304,6 +314,7 @@ impl EffectFrame {
 
     fn child_scope(&self, effects: Vec<Effect>) -> Self {
         Self {
+            resolving_controller: self.resolving_controller,
             program: self.program.clone(),
             selected: self.selected.clone(),
             selected_revealed: self.selected_revealed,

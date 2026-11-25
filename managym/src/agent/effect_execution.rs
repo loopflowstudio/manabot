@@ -163,6 +163,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "resume discard payment",
     "discard cause",
     "discard controller",
+    "resolving controller",
     "discard source",
     "shuffle library after move",
     "countered by",
@@ -1366,6 +1367,9 @@ pub(crate) fn project_frame(
     text: bool,
 ) {
     let mut out = Projection::new(game, viewer, text);
+    if let Some(controller) = effect.resolving_controller {
+        out.field("resolving controller", &controller);
+    }
     // Source/trigger quantities can read departed characteristics after another
     // instruction has suspended. Their definition join alone cannot carry LKI.
     if let Some(source) = effect.source_ref() {

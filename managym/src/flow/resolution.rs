@@ -2197,12 +2197,12 @@ impl Game {
                         .queue
                         .push_front(Effect::RestoreController(frame.controller));
                     frame.prepend_effects(effects.iter().cloned());
-                    frame.controller = player;
+                    frame.resolve_for(player);
                 }
                 None
             }
             Effect::RestoreController(player) => {
-                frame.controller = *player;
+                frame.resolve_for(*player);
                 None
             }
             Effect::MayExileTriggeringWithSource => {

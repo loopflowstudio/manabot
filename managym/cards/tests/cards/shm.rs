@@ -55,6 +55,7 @@ fn wilt_leaf_liege_enters_on_opposing_discard_and_both_anthems_apply() {
     activate(&mut s, tiny, 0);
     pass_until(&mut s, ActionSpaceKind::Discard);
     select_card(&mut s, liege);
+    assert_eq!(zone_of(&s, liege), Some(ZoneType::Battlefield));
     assert_eq!(
         s.game().state.stack_objects.len(),
         1,

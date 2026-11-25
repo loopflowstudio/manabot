@@ -43,7 +43,7 @@ pub(crate) enum DiscardCause {
 impl DiscardCause {
     pub(crate) fn effect(frame: &super::decision::EffectFrame) -> Self {
         Self::Effect {
-            controller: frame.controller,
+            controller: frame.resolving_controller.unwrap_or(frame.controller),
             source: frame.source_ref(),
         }
     }

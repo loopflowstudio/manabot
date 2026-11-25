@@ -881,7 +881,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 98;
+const EFFECT_VARIANTS: usize = 99;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
