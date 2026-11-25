@@ -26,3 +26,8 @@
   checkpoints read the same card-program tokens after the Rust type changes.
 - Changeling uses the creature types in CR 205.3m (2026-11-06), including
   types without a card in the catalog, such as Time Lord.
+- CR 701.20b and 701.20d distinguish a zone change from a new object.
+  A milled Colossus stays in the library, reveals, and gets a fresh
+  appearance when shuffled. The old reference expires without a move event.
+- The existing benchmark name `graveyard-routes` measures casting permissions.
+  The slice 5 milling position is named `militant-mill`.

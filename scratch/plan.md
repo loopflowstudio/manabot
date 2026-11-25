@@ -97,8 +97,8 @@ declaration (4,096-case matching oracle against enumeration).
 
 **3 · Built** (same commits): the Knights, Elenda, Sphinx, Progenitus' protection and
 Crystal Barricade's player hexproof, via source characteristics (with LKI) on
-announcement and resolution. Progenitus still needs slice 5's graveyard
-replacement; Barricade slice 8's noncombat prevention.
+announcement and resolution. Slice 5 completes Progenitus's graveyard
+replacement. Barricade's noncombat prevention is planned for slice 8.
 
 Pass 2's directed, pinned-pilot, LLM, Academy (192 Commands) and schema checks
 passed on the rebuilt extension; the full debug nextest suite and Engine Budget
@@ -130,54 +130,35 @@ and 21.46 µs with 16 buffs. Across priority, attack and block the respective
 ranges were 11.17–14.62 and 21.38–51.13 µs (median of three per position).
 `diverse-statics` took 9.42–10.21 and 23.25–28.08 µs at the same sizes.
 
-### 5 · Graveyard moves from anywhere consult replacements (Progenitus, Darksteel Colossus, Dryad Militant)
+**5 · Built** (`dac0dd6d57`). Graveyard replacements apply from every origin.
 
-**Pass 3 counterexample from code inspection.** Discarding an instant to pay a
-cost goes through `pay_discard_cost → move_object → complete_immediate_batch`.
-Under the proposed design, two Dryad Militants would produce two candidates.
-The batch would return `OrderReplacement`, which panics in
-`advance_immediate_batch`. A resolving spell whose targets all became illegal takes the same
-immediate route. Cleanup and several discard decisions also move directly.
-A mill redirected back to the same library is rejected by
-`proposal_is_current` before its reveal and shuffle can happen.
+Two Dryad Militants reproduced the immediate-batch panic when paying a discard
+cost and when resolving a spell with no legal targets. Both paths now keep
+their caller while the affected player chooses. The card stays in its original
+zone until the batch commits. Both orders pay the discard cost exactly once.
 
-First exercise a discard payment and a fizzled spell with two
-Militants. Retain the payment/decision/resolution continuation across the
-affected player's ordering choice and commit its receipt or consequences once.
-Audit direct graveyard callers, the upfront death/flashback rewrites, and
-the affected permanent or spell's controller when it differs from its owner.
-Represent revealing and shuffling a card already in its library without a
-spurious zone change. Build the three cards together on that proven route.
+Progenitus, Darksteel Colossus and Dryad Militant use the same graveyard
+replacement from every origin. Flashback, Adventure, finality and continuous
+exile effects participate in ordering. A milled Colossus reveals and shuffles
+in its current library. CR 701.20d gives it a fresh identity without a
+zone-change event and the shuffle clears known positions for both viewers.
 
-- `ReplacementEffect::GraveyardInstead { what: GraveyardMover, to: Redirect }`.
-  `GraveyardMover` is `This` (the moving card's own text, read from any origin
-  zone) or `Matching(predicate)` (a battlefield source's text about other
-  cards). `Redirect` is `Exile`, or `OwnerLibraryShuffled { reveal: bool }`.
-- `collect_replacements` gains a `ZoneMove { to: Graveyard }` arm for every
-  origin: resolving and countered spells, discard, mill, destroy, sacrifice,
-  SBA and costs. It reads the moving object's abilities (layered on the
-  battlefield, so a creature that lost all abilities dies normally; printed
-  elsewhere) and battlefield sources. When more than one applies, the affected
-  object's controller (owner if uncontrolled) chooses through CR 616.1 ordering.
-- Reveal is a public reveal event. The shuffle clears positional knowledge
-  (constructed-position rule) and draws from the game rng, so replay and forks
-  hold.
-- Obsolete: `ReplacementEffect::ExileInsteadOfGraveyard` becomes
-  `GraveyardInstead{This, Exile}` attached by the CastFromGraveyard flag, so
-  there is one redirect type.
-- Checks: `con:: dst:: prtr::` and the existing flashback/CastFromGraveyard tests.
-  Interactions:
-  - Darksteel Colossus discarded, milled, or destroyed while indestructible is
-    lost: each time it is revealed and shuffled.
-  - Dryad Militant with a resolving instant, a countered sorcery, and a discarded
-    or milled instant: each goes to exile, for both players' cards.
-  - A Colossus milled with Dryad out: the redirects don't conflict (Colossus isn't
-    an instant).
-  - Progenitus wrathed: it shuffles in.
-  - The flashback redirect still exiles.
-  - The viewer's library knowledge is cleared after the shuffle.
-- Stress: `graveyard-routes` with 8/16 Dryad Militants out while milling 16
-  cards; `step:resolve`.
+Directed card, ordering and observability checks passed, including ward's
+discard and decline paths, finality against Progenitus, flashback, Adventure,
+cleanup and the existing discard decisions. Scryfall conformance passed.
+Academy replayed 192 recorded Commands and all five retained navigation
+positions. The pinned v9 and v11 games replayed. The optional frontier
+checkpoint was unavailable.
+
+A separate search reproduction determinized the discard from the opposing
+seat with seed 0. It moved the discarded card out of hand and left the payment
+without a receipt. The sampler now keeps the announced spell and binds the
+private discard to a matching hand card. Both compatible hand-count worlds
+paid successfully, one with an instant and the other with a sorcery.
+
+Release `bench_states militant-mill --sizes 8,16 --layers step:resolve`
+took 106.58 µs and 142.58 µs respectively to step Dread Summons at X=8
+(median of three, eight cards per library).
 
 ### 6 · Discards know their cause; whole-hand discard (Wilt-Leaf Liege, Myojin's discard)
 
@@ -188,6 +169,9 @@ spurious zone change. Build the three cards together on that proven route.
   discarded card's own text (Wilt-Leaf: `by: Opponent, to: Battlefield`),
   consulted in slice 5's graveyard arm. The battlefield entry uses the ordinary
   entry pipeline.
+- Exercise hidden-world sampling across the whole-hand batch as well as its
+  exact forks. Slice 5 sampled the single chosen discard and tested simultaneous
+  mill on exact game state.
 - `Effect::DiscardHand { who: PlayerSelector }`: each selected player discards
   their entire hand in one simultaneous batch (Myojin's `EachOpponent`;
   MTG-431's Dragon Mage uses `EachPlayer`).
@@ -301,13 +285,8 @@ except `EntersAsCopy`.
 
 ## Passes
 
-Passes 1–3 built slices 1–4. Pass 3 also set out to build slice 5 but stopped at
-the counterexample above; no slice 5 code exists.
+Passes 1–4 built slices 1–5.
 
-- **Pass 4 · graveyard routes (slice 5):** first the two-Militant discard-payment
-  and fizzled-spell reproductions, then the continuation across the ordering
-  choice and the in-library reveal/shuffle, then the three cards. Teaches whether
-  immediate batches can suspend on a replacement-order decision.
 - **Pass 5 · proposed-event replacements:** slices 6, 7 and 8 (6 reuses slice 5's
   graveyard arm).
 - **Pass 6 · integration:** the cross-slice synergies below, ledger rows, Engine
