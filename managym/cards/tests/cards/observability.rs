@@ -514,6 +514,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
         ObjectSelector::LibraryTop => "ObjectSelector::LibraryTop",
+        ObjectSelector::LibraryExceptBottom => "ObjectSelector::LibraryExceptBottom",
         ObjectSelector::ExiledWithSource => "ObjectSelector::ExiledWithSource",
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
@@ -532,7 +533,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 24] {
+fn selector_witnesses() -> [ObjectSelector; 25] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -544,6 +545,7 @@ fn selector_witnesses() -> [ObjectSelector; 24] {
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Remembered,
         ObjectSelector::LibraryTop,
+        ObjectSelector::LibraryExceptBottom,
         ObjectSelector::ExiledWithSource,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
@@ -589,10 +591,12 @@ fn scope_token(scope: Scope) -> &'static str {
 }
 
 /// The token each `Except` contributes; no wildcard.
-fn except_token(except: Except) -> &'static str {
+fn except_token(except: &Except) -> &'static str {
     match except {
         Except::This => "Except::This",
         Except::Target => "Except::Target",
+        Except::Remembered => "Except::Remembered",
+        Except::Matching { .. } => "Except::Matching",
     }
 }
 
@@ -886,11 +890,13 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
+        Effect::GrantPlay { .. } => "Effect::GrantPlay",
+        Effect::Remember { .. } => "Effect::Remember",
     }
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 100;
+const EFFECT_VARIANTS: usize = 102;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -1074,6 +1080,16 @@ fn effect_witnesses() -> Vec<Effect> {
                 count: 1,
                 predicate: CardPredicate::subtype("Wizard"),
             }),
+            choose: None,
+        },
+        Effect::GrantPlay {
+            what: ObjectSelector::Selected,
+            until: PlayWindow::ThisTurn,
+            face_down: false,
+            condition: None,
+        },
+        Effect::Remember {
+            what: ObjectSelector::chosen(CardPredicate::creature()),
         },
         Effect::ExileLinked {
             chooser: LinkedChooser::TargetPlayer,
@@ -2740,12 +2756,24 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         Scope::TargetPlayerControls,
         Scope::DamagedBySourceInCombat,
     ];
-    let excepts = [None, Some(Except::This), Some(Except::Target)];
+    let excepts = [
+        None,
+        Some(Except::This),
+        Some(Except::Target),
+        Some(Except::Remembered),
+        Some(Except::Matching {
+            controlled_by: Actor::You,
+            predicate: Box::new(CardPredicate {
+                token: Some(true),
+                ..Default::default()
+            }),
+        }),
+    ];
     for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
         let affected = ObjectSelector::Each {
             of: scope,
             predicate: CardPredicate::creature(),
-            except,
+            except: except.clone(),
             max_mana_value: None,
             exact_mana_value: None,
         };
@@ -2760,7 +2788,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
             tokens.contains(&(TokenKind::Variant, name_value(name))),
             "{name}"
         );
-        if let Some(except) = except {
+        if let Some(except) = except.as_ref() {
             let name = except_token(except);
             assert!(
                 tokens.contains(&(TokenKind::Variant, name_value(name))),
@@ -3910,12 +3938,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         x => [column(Relation, relation::X)],
         granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
         this_turn => [column(Relation, relation::THIS_TURN)],
+        until_next_turn => [column(Relation, relation::UNTIL_NEXT_TURN)],
         delayed_frequency => [Rows("v5/v6 delayed frequency relation kind 9, code in column 28")],
     }));
     fields.extend(encoding!(ClauseTarget {
         reference => [Rows("VisibleReference below")],
         clause => [column(Relation, relation::CLAUSE)],
         legal_at_resolution_start => [column(Relation, relation::LEGAL_AT_RESOLUTION_START)],
+        division => [column(Relation, relation::DIVISION)],
     }));
     fields.extend(encoding!(VisibleReference {
         object => [Join(Relation, relation::REFERENCE)],
@@ -4791,6 +4821,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
         DelayedTriggerEvent::EndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
         DelayedTriggerEvent::Upkeep => (6, false),
+        DelayedTriggerEvent::Attacks { .. } => (8, false),
     }
 }
 
@@ -4811,6 +4842,11 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
         DelayedTriggerEvent::EndStep { your_turn: true },
         DelayedTriggerEvent::YouCastSpell(Box::new(CardPredicate::subtype("Lesson"))),
         DelayedTriggerEvent::Upkeep,
+        DelayedTriggerEvent::Attacks {
+            subject: TriggerSubject::any(CardPredicate::creature()),
+            per: Per::Batch,
+            attacked: managym::state::ability::AttackedSubject::Player(Actor::Opponent),
+        },
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
     assert_eq!(codes.len(), events.len());
@@ -6216,7 +6252,11 @@ fn secret_of_bloodbending_control_reaches_tokens_and_native_policy_relations() {
 #[test]
 fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
     for frequency in [DelayedFrequency::Once, DelayedFrequency::EachMatch] {
-        for expiry in [DelayedExpiry::ThisTurn, DelayedExpiry::Never] {
+        for expiry in [
+            DelayedExpiry::ThisTurn,
+            DelayedExpiry::UntilYourNextTurn,
+            DelayedExpiry::Never,
+        ] {
             let tokens = tokens_of(&spell(vec![Effect::CreateDelayedTrigger {
                 event: DelayedEvent::Upkeep,
                 frequency,
@@ -6235,6 +6275,7 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 TokenKind::Variant,
                 name_value(match expiry {
                     DelayedExpiry::ThisTurn => "DelayedExpiry::ThisTurn",
+                    DelayedExpiry::UntilYourNextTurn => "DelayedExpiry::UntilYourNextTurn",
                     DelayedExpiry::Never => "DelayedExpiry::Never",
                 })
             )));
@@ -6248,6 +6289,7 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 decision: 6,
                 delayed_frequency: Some(code),
                 this_turn: expiry == DelayedExpiry::ThisTurn,
+                until_next_turn: expiry == DelayedExpiry::UntilYourNextTurn,
                 ..Default::default()
             };
             let mut rows = vec![0.0; 64 * RELATION_DIM];
@@ -6259,6 +6301,10 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
             assert_eq!(
                 rows[RELATION_DIM + relation::THIS_TURN],
                 f32::from(expiry == DelayedExpiry::ThisTurn)
+            );
+            assert_eq!(
+                rows[RELATION_DIM + relation::UNTIL_NEXT_TURN],
+                f32::from(expiry == DelayedExpiry::UntilYourNextTurn)
             );
         }
     }

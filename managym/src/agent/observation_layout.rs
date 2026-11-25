@@ -800,6 +800,8 @@ columns! { relation {
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
     49: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell an announcement frame casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
+    50: UNTIL_NEXT_TURN => ("until_next_turn", ValueLayout::FLAG),
+    51: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 #[derive(Clone, Debug)]

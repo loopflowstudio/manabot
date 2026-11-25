@@ -354,11 +354,21 @@ impl Game {
         });
     }
 
-    /// `player`'s turn begins: their "until your next turn" records end.
+    /// `player`'s turn begins: their "until your next turn" records and
+    /// delayed triggers end.
     pub(crate) fn end_until_your_next_turn_effects(&mut self, player: PlayerId) {
         self.end_effects(|effect| {
             effect.duration == EffectDuration::UntilYourNextTurn && effect.controller == player
         });
+        if self.state.delayed_triggers.iter().any(|trigger| {
+            trigger.expiry == crate::state::ability::DelayedExpiry::UntilYourNextTurn
+                && trigger.controller == player
+        }) {
+            self.state.delayed_triggers_mut().retain(|trigger| {
+                !(trigger.expiry == crate::state::ability::DelayedExpiry::UntilYourNextTurn
+                    && trigger.controller == player)
+            });
+        }
     }
 
     /// CR 514.2: "until end of turn" effects end in the cleanup step.

@@ -70,6 +70,9 @@ pub struct ClauseTarget {
     /// Retained CR 608.2b result, not current presence. Missing historical data is unknown.
     #[serde(default)]
     pub legal_at_resolution_start: Option<bool>,
+    /// Announced divided share (CR 601.2d, 602.2b); zero when undivided.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub division: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,14 +180,17 @@ pub struct ContinuationFrame {
     /// A waiting delayed trigger that ends in this turn's cleanup step.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// A waiting delayed trigger that ends as its controller's next turn begins.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub until_next_turn: bool,
 }
 
-pub const MAX_DELAYED_EVENT_CODE: u8 = 7;
+pub const MAX_DELAYED_EVENT_CODE: u8 = 8;
 
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
 /// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the end
 /// step, 5 its controller casts a matching spell, 6 upkeep,
-/// 7 its controller's end step. Frequency is projected separately.
+/// 7 its controller's end step, 8 creatures attack. Frequency is projected separately.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -202,6 +208,7 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
         } => 7,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
         DelayedTriggerEvent::Upkeep => 6,
+        DelayedTriggerEvent::Attacks { .. } => 8,
     }
 }
 
@@ -436,6 +443,7 @@ impl Game {
         &self,
         targets: &[Target],
         clauses: &[usize],
+        divisions: &[i32],
         viewer: PlayerId,
     ) -> Vec<ClauseTarget> {
         targets
@@ -445,6 +453,7 @@ impl Game {
                 reference: self.target_reference(*target, viewer),
                 clause: clauses.get(index).copied().unwrap_or(0),
                 legal_at_resolution_start: None,
+                division: divisions.get(index).copied().unwrap_or(0),
             })
             .collect()
     }
@@ -571,7 +580,8 @@ impl Game {
             DelayedTriggerEvent::EndStep { .. }
             | DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::YouCastSpell(_)
-            | DelayedTriggerEvent::Upkeep => None,
+            | DelayedTriggerEvent::Upkeep
+            | DelayedTriggerEvent::Attacks { .. } => None,
         };
         let mut frame = ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),
@@ -585,6 +595,7 @@ impl Game {
                 DelayedFrequency::EachMatch => 2,
             }),
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
+            until_next_turn: trigger.expiry == DelayedExpiry::UntilYourNextTurn,
             ..ContinuationFrame::default()
         };
         let program = trigger.effects.projection();
@@ -673,6 +684,7 @@ impl Game {
                     targets: self.clause_targets(
                         &trigger.targets,
                         &trigger.target_req_indices,
+                        &[],
                         viewer,
                     ),
                     remembered: self.remembered_references(&trigger.remembered, viewer),
@@ -778,7 +790,12 @@ impl Game {
         if let Some(definition) = object.source_definition_id().catalog_id() {
             frame.source.definition = Some(definition.0);
         }
-        frame.targets = self.clause_targets(object.targets(), object.target_req_indices(), viewer);
+        frame.targets = self.clause_targets(
+            object.targets(),
+            object.target_req_indices(),
+            object.target_divisions(),
+            viewer,
+        );
         super::effect_execution::project_stack_object(self, object, viewer, &mut frame, false);
         frame
     }
@@ -835,6 +852,7 @@ impl Game {
                 requirement_index,
                 chosen,
                 chosen_req_indices,
+                target_divisions,
                 ..
             } => {
                 frame.source = self.object_reference(*object, viewer);
@@ -843,7 +861,58 @@ impl Game {
                 frame.x = i32::from(cast.x);
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
-                frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
+                frame.targets =
+                    self.clause_targets(chosen, chosen_req_indices, target_divisions, viewer);
+            }
+            PendingChoice::DivideAmount {
+                slots,
+                next,
+                remaining,
+                parent,
+                ..
+            } => {
+                frame.x = *remaining;
+                match parent.as_ref() {
+                    crate::flow::game::DivisionParent::Spell {
+                        object,
+                        cast,
+                        mode,
+                        requirement_index,
+                        chosen,
+                        chosen_req_indices,
+                        target_divisions,
+                    } => {
+                        frame.source = self.object_reference(*object, viewer);
+                        frame.kicked = cast.kicked;
+                        frame.spell_profile = spell_profile_code(cast.profile);
+                        frame.mode = *mode;
+                        frame.active_clause = Some(*requirement_index);
+                        frame.targets = self.clause_targets(
+                            chosen,
+                            chosen_req_indices,
+                            target_divisions,
+                            viewer,
+                        );
+                        frame.context = chosen
+                            .get(slots[*next])
+                            .map(|t| self.target_reference(*t, viewer));
+                    }
+                    crate::flow::game::DivisionParent::Activation(targeting) => {
+                        frame.source = self.activation_reference(targeting.source, viewer);
+                        frame.ability = Some(targeting.ability_index);
+                        frame.active_clause = Some(targeting.requirement);
+                        frame.targets = self.clause_targets(
+                            &targeting.chosen,
+                            &targeting.target_req_indices,
+                            &targeting.target_divisions,
+                            viewer,
+                        );
+                        frame.context = targeting
+                            .chosen
+                            .get(slots[*next])
+                            .map(|t| self.target_reference(*t, viewer));
+                    }
+                }
             }
             PendingChoice::SpellMode { object, cast, .. } => {
                 frame.source = self.object_reference(*object, viewer);
@@ -862,6 +931,7 @@ impl Game {
                 ability_index,
                 chosen,
                 target_req_indices,
+                target_divisions,
                 requirement,
                 x,
             }) => {
@@ -869,7 +939,8 @@ impl Game {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.active_clause = Some(*requirement);
-                frame.targets = self.clause_targets(chosen, target_req_indices, viewer);
+                frame.targets =
+                    self.clause_targets(chosen, target_req_indices, target_divisions, viewer);
             }
             PendingChoice::ActivationX {
                 permanent,
@@ -933,6 +1004,7 @@ impl Game {
                     reference: self.target_reference(slot.target, viewer),
                     clause: slot.requirement,
                     legal_at_resolution_start: Some(slot.legal),
+                    division: slot.division,
                 })
                 .collect(),
             remembered: self.remembered_references(&effect.remembered, viewer),
@@ -1105,26 +1177,29 @@ impl Game {
                 mode,
                 targets,
                 target_req_indices,
-                ..
+                target_divisions,
             } => {
                 frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.spell_profile = spell_profile_code(cast.profile);
                 frame.x = i32::from(cast.x);
                 frame.mode = *mode;
-                frame.targets = self.clause_targets(targets, target_req_indices, viewer);
+                frame.targets =
+                    self.clause_targets(targets, target_req_indices, target_divisions, viewer);
             }
             Operation::Activation {
                 source,
                 ability_index,
                 targets,
                 target_req_indices,
+                target_divisions,
                 x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.x = *x;
-                frame.targets = self.clause_targets(targets, target_req_indices, viewer);
+                frame.targets =
+                    self.clause_targets(targets, target_req_indices, target_divisions, viewer);
             }
         }
     }
@@ -1287,12 +1362,14 @@ fn relation_rows(
         }
         header[relation::THIS_TURN] = i64::from(frame.this_turn);
         header[relation::SPELL_PROFILE] = i64::from(frame.spell_profile);
+        header[relation::UNTIL_NEXT_TURN] = i64::from(frame.until_next_turn);
         emit(&header)?;
         let mut reference_row = |kind: i64,
                                  reference: VisibleReference,
                                  clause: usize,
                                  ordinal: usize,
-                                 legal: Option<bool>| {
+                                 legal: Option<bool>,
+                                 division: i32| {
             let mut row = header;
             row[relation::KIND] = kind;
             row[relation::LEGAL_AT_RESOLUTION_START] =
@@ -1305,6 +1382,7 @@ fn relation_rows(
                 reference
                     .player
                     .map_or(0, |p| if p == viewer { 1 } else { 2 });
+            row[relation::DIVISION] = i64::from(division);
             if let Some(player) = reference.player {
                 row[relation::REFERENCE] = if player == viewer { 1 } else { 2 };
             }
@@ -1317,22 +1395,23 @@ fn relation_rows(
                 target.clause,
                 ordinal,
                 target.legal_at_resolution_start,
+                target.division,
             )?;
         }
         if let Some(target) = frame.context {
-            reference_row(3, target, 0, 0, None)?;
+            reference_row(3, target, 0, 0, None, 0)?;
         }
         if let Some(target) = frame.sacrifice {
-            reference_row(4, target, 0, 0, None)?;
+            reference_row(4, target, 0, 0, None, 0)?;
         }
         for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
-            reference_row(10, *reference, 0, ordinal, None)?;
+            reference_row(10, *reference, 0, ordinal, None, 0)?;
         }
         if let Some(definition) = frame.inherited_from {
-            reference_row(7, definition, 0, 0, None)?;
+            reference_row(7, definition, 0, 0, None, 0)?;
         }
         for (ordinal, reference) in frame.remembered.iter().enumerate() {
-            reference_row(8, *reference, 0, ordinal, None)?;
+            reference_row(8, *reference, 0, ordinal, None, 0)?;
         }
         if let Some(frequency) = frame.delayed_frequency {
             let mut row = header;
@@ -1702,6 +1781,7 @@ mod tests {
                     },
                     clause: 0,
                     legal_at_resolution_start: None,
+                    division: 0,
                 },
                 ClauseTarget {
                     reference: VisibleReference {
@@ -1710,6 +1790,7 @@ mod tests {
                     },
                     clause: 1,
                     legal_at_resolution_start: None,
+                    division: 0,
                 },
             ],
             ..ContinuationFrame::default()

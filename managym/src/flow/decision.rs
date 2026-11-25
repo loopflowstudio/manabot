@@ -111,6 +111,9 @@ pub struct ResolutionTarget {
     pub target: Target,
     pub requirement: usize,
     pub legal: bool,
+    /// Announced divided share for this slot (CR 601.2d, 602.2b); 0 when undivided.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub division: i32,
 }
 
 /// Everything a resolving spell/ability needs while its effects execute,
@@ -1186,7 +1189,7 @@ impl Game {
             .filter(|id| self.characteristics(*id).is_creature() && !kept.contains(id))
             .filter_map(|id| self.permanent_object(id))
             .map(|target| crate::flow::proposed_event::ProposedEvent::Sacrifice { target });
-        frame.batch = Some(self.event_batch(EventBinding::None, events));
+        frame.batch = Some(self.event_batch(EventBinding::SacrificedBy(frame.controller), events));
         None
     }
 
@@ -1607,6 +1610,15 @@ impl Game {
                 }
             }
             EventBinding::Created { .. } => frame.created = moved.collect(),
+            EventBinding::SacrificedBy(player) => {
+                frame.moved = batch
+                    .events
+                    .iter()
+                    .zip(results)
+                    .filter(|(pending, _)| pending.sacrifice.is_some_and(|(_, by)| by == player))
+                    .flat_map(|(_, result)| result.arrivals())
+                    .collect();
+            }
             EventBinding::Damage { result: measured } => {
                 // Each damage instruction measures its own excess: prevented
                 // or redirected damage leaves none, never an earlier one's.

@@ -680,6 +680,7 @@ impl Game {
         }
         let requirements = self.stack_target_requirements(stacked);
         let indices = stacked.target_req_indices();
+        let divisions = stacked.target_divisions();
         let controller = stacked.controller();
         let mut slots: Vec<_> = stacked
             .targets()
@@ -693,6 +694,7 @@ impl Game {
                     legal: requirements.get(requirement).is_some_and(|req| {
                         self.target_fits_clause(*target, req, controller, source)
                     }),
+                    division: divisions.get(index).copied().unwrap_or(0),
                 }
             })
             .collect();
@@ -1790,14 +1792,77 @@ impl Game {
                 until,
                 face_down,
                 condition,
+                choose,
             } => {
-                self.exile_top_cards_to_play(
-                    frame.controller,
-                    *count,
-                    *until,
-                    *face_down,
-                    condition.as_ref(),
-                );
+                if let Some(choose) = *choose {
+                    let exiled = self.exile_top_cards(frame.controller, *count, *face_down);
+                    if exiled.len() <= choose {
+                        for object in exiled {
+                            self.grant_play_from_exile(
+                                frame.controller,
+                                object,
+                                *until,
+                                *face_down,
+                                condition.as_ref(),
+                            );
+                        }
+                        None
+                    } else {
+                        Some(Decision::SelectCards {
+                            origin: crate::flow::decision::SelectionOrigin::Other,
+                            player: frame.controller,
+                            from: None,
+                            candidates: exiled,
+                            selected: Vec::new(),
+                            min: choose,
+                            max: choose,
+                            effects: vec![Effect::GrantPlay {
+                                what: ObjectSelector::Selected,
+                                until: *until,
+                                face_down: *face_down,
+                                condition: condition.clone(),
+                            }],
+                            if_declined: Vec::new(),
+                        })
+                    }
+                } else {
+                    self.exile_top_cards_to_play(
+                        frame.controller,
+                        *count,
+                        *until,
+                        *face_down,
+                        condition.as_ref(),
+                    );
+                    None
+                }
+            }
+            Effect::GrantPlay {
+                what,
+                until,
+                face_down,
+                condition,
+            } => {
+                for object in self.select(what, frame) {
+                    self.grant_play_from_exile(
+                        frame.controller,
+                        object,
+                        *until,
+                        *face_down,
+                        condition.as_ref(),
+                    );
+                }
+                None
+            }
+            Effect::Remember { what } => {
+                for binding in self.capture_bindings(what, frame) {
+                    if !frame
+                        .remembered
+                        .iter()
+                        .any(|existing| existing.object == binding.object)
+                    {
+                        frame.remembered.push(binding);
+                    }
+                }
                 None
             }
             Effect::ShuffleGraveyardIntoLibrary => {
@@ -1814,26 +1879,47 @@ impl Game {
                 None
             }
             Effect::DealDamage { amount, what, by } => {
-                let amount = self.effect_value(amount, frame);
                 let source = match by {
                     Some(by) => self.damage_source(by, frame),
                     None => frame.source_ref(),
                 };
-                let events = self
-                    .resolve_affected(what, frame)
-                    .into_iter()
-                    .map(|affected| ProposedEvent::Damage {
-                        source,
-                        target: match affected {
-                            Affected::NextSpell(_) => {
-                                unreachable!("damage selects only present recipients")
-                            }
-                            Affected::Player(player) => ProposedDamageTarget::Player(player),
-                            Affected::Object(object) => ProposedDamageTarget::Object(object),
-                        },
-                        amount,
-                        combat: false,
-                    });
+                let events: Vec<ProposedEvent> = if matches!(what, ObjectSelector::Targets(_))
+                    && frame.active_targets().any(|slot| slot.division > 0)
+                {
+                    frame
+                        .active_targets()
+                        .filter(|slot| self.target_is_present(slot.target))
+                        .filter_map(|slot| {
+                            let target = match slot.target {
+                                Target::Player(player) => ProposedDamageTarget::Player(player),
+                                _ => ProposedDamageTarget::Object(self.target_object(slot.target)?),
+                            };
+                            Some(ProposedEvent::Damage {
+                                source,
+                                target,
+                                amount: slot.division,
+                                combat: false,
+                            })
+                        })
+                        .collect()
+                } else {
+                    let amount = self.effect_value(amount, frame);
+                    self.resolve_affected(what, frame)
+                        .into_iter()
+                        .map(|affected| ProposedEvent::Damage {
+                            source,
+                            target: match affected {
+                                Affected::NextSpell(_) => {
+                                    unreachable!("damage selects only present recipients")
+                                }
+                                Affected::Player(player) => ProposedDamageTarget::Player(player),
+                                Affected::Object(object) => ProposedDamageTarget::Object(object),
+                            },
+                            amount,
+                            combat: false,
+                        })
+                        .collect()
+                };
                 frame.batch = Some(self.event_batch(EventBinding::Damage { result: None }, events));
                 None
             }
@@ -2262,6 +2348,15 @@ impl Game {
                         vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())]
                     }
                     DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
+                    DelayedEvent::Attacks {
+                        subject,
+                        per,
+                        attacked,
+                    } => vec![DelayedTriggerEvent::Attacks {
+                        subject: subject.clone(),
+                        per: *per,
+                        attacked: *attacked,
+                    }],
                 };
                 // A death count is already fixed by the departed appearance.
                 // Store its literal in the scheduled return so every viewer and
@@ -2662,6 +2757,15 @@ impl Game {
                 .top(ZoneType::Library, frame.controller)
                 .into_iter()
                 .collect(),
+            ObjectSelector::LibraryExceptBottom => {
+                let objects = self
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Library, frame.controller);
+                let mut out: Vec<ObjectId> = objects.iter().skip(1).copied().collect();
+                out.reverse();
+                out
+            }
             ObjectSelector::ExiledWithSource => frame
                 .source_ref()
                 .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),
@@ -2736,7 +2840,6 @@ impl Game {
                     frame.source(),
                     self.present_primary_target(frame),
                 );
-                let excepted = self.excepted_permanent(*except, frame);
                 let source = self.source_permanent_id(frame);
                 let exact = exact_mana_value
                     .as_ref()
@@ -2747,7 +2850,7 @@ impl Game {
                 players
                     .into_iter()
                     .flat_map(|player| self.iter_battlefield_permanents(player))
-                    .filter(|id| Some(*id) != excepted)
+                    .filter(|id| !self.permanent_is_excepted(*id, except.as_ref(), frame))
                     .filter(|id| self.permanent_matches_with_source(*id, predicate, source))
                     .filter(|id| {
                         exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
@@ -2803,11 +2906,10 @@ impl Game {
         }
     }
 
-    /// The permanent an `Except` leaves out: the source, or the clause's
-    /// chosen target while it is a permanent.
+    /// The single permanent an `Except` leaves out for `Decision::ChooseObject`.
     pub(crate) fn excepted_permanent(
         &self,
-        except: Option<Except>,
+        except: Option<&Except>,
         frame: &EffectFrame,
     ) -> Option<PermanentId> {
         match except? {
@@ -2816,6 +2918,38 @@ impl Game {
                 Some(Target::Permanent(id)) => Some(id),
                 _ => None,
             },
+            Except::Remembered | Except::Matching { .. } => None,
+        }
+    }
+
+    /// Whether `id` is excluded by `except` in `frame`.
+    pub(crate) fn permanent_is_excepted(
+        &self,
+        id: PermanentId,
+        except: Option<&Except>,
+        frame: &EffectFrame,
+    ) -> bool {
+        match except {
+            None => false,
+            Some(Except::This) => self.source_permanent_id(frame) == Some(id),
+            Some(Except::Target) => {
+                matches!(self.present_primary_target(frame), Some(Target::Permanent(target)) if target == id)
+            }
+            Some(Except::Remembered) => self
+                .permanent_object(id)
+                .is_some_and(|object| frame.remembered.iter().any(|b| b.object == object)),
+            Some(Except::Matching {
+                controlled_by,
+                predicate,
+            }) => {
+                self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                    controlled_by.includes(frame.controller, permanent.controller)
+                }) && self.permanent_matches_with_source(
+                    id,
+                    predicate,
+                    self.source_permanent_id(frame),
+                )
+            }
         }
     }
 

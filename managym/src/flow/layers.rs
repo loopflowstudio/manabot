@@ -1034,7 +1034,15 @@ impl<'a> Context<'a> {
                                 _ => false,
                             }
                             && !(self.game.live_permanent(id).object == source
-                                && *except == Some(Except::This))
+                                && matches!(except, Some(Except::This)))
+                            && !matches!(
+                                except,
+                                Some(Except::Matching {
+                                    controlled_by,
+                                    predicate: excluded,
+                                }) if controlled_by.includes(controller, self.controller(id))
+                                    && self.matches(id, excluded, Some(source))
+                            )
                             && self.matches(id, predicate, Some(source))
                             && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
                             && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)

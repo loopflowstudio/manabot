@@ -1416,20 +1416,28 @@ impl Game {
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
-            let context = match (&trigger.event, event) {
-                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => dead_creature,
+            let mut occurrences: Vec<(Option<Target>, Vec<crate::state::binding::ObjectBinding>)> =
+                Vec::new();
+            match (&trigger.event, event) {
+                (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => {
+                    occurrences.push((dead_creature, Vec::new()));
+                }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
                     GameEvent::StepStarted {
                         step: StepKind::End,
                     },
-                ) if !your_turn || self.active_player() == trigger.controller => None,
+                ) if !your_turn || self.active_player() == trigger.controller => {
+                    occurrences.push((None, Vec::new()));
+                }
                 (
                     DelayedTriggerEvent::Upkeep,
                     GameEvent::StepStarted {
                         step: StepKind::Upkeep,
                     },
-                ) => None,
+                ) => {
+                    occurrences.push((None, Vec::new()));
+                }
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast {
@@ -1440,19 +1448,77 @@ impl Game {
                 ) if *caster == trigger.controller
                     && self.object_matches_predicate(*object, predicate) =>
                 {
-                    Some(Target::StackSpell(*object))
+                    occurrences.push((Some(Target::StackSpell(*object)), Vec::new()));
+                }
+                (
+                    DelayedTriggerEvent::Attacks {
+                        subject,
+                        per,
+                        attacked,
+                    },
+                    GameEvent::AttackersDeclared {
+                        attackers,
+                        player,
+                        permanent_defenders,
+                    },
+                ) => {
+                    let matching: Vec<PermanentId> = attackers
+                        .iter()
+                        .copied()
+                        .filter(|&id| {
+                            self.attack_matches(
+                                subject,
+                                None,
+                                trigger.source_object(),
+                                trigger.controller,
+                                id,
+                            ) && self.attacked_subject_matches(
+                                *attacked,
+                                trigger.controller,
+                                *player,
+                                permanent_defenders.iter().any(|(a, _)| *a == id),
+                            )
+                        })
+                        .collect();
+                    if matching.is_empty() {
+                        continue;
+                    }
+                    match per {
+                        Per::Object => {
+                            for id in matching {
+                                occurrences.push((Some(Target::Permanent(id)), Vec::new()));
+                            }
+                        }
+                        Per::Batch => {
+                            let bindings: Vec<_> = matching
+                                .into_iter()
+                                .filter_map(|id| self.permanent_object(id))
+                                .map(|object| crate::state::binding::ObjectBinding {
+                                    object,
+                                    selection: None,
+                                    known_to: [true, true],
+                                })
+                                .collect();
+                            occurrences.push((None, bindings));
+                        }
+                    }
                 }
                 _ => continue,
-            };
+            }
             if trigger.frequency == DelayedFrequency::Once {
                 spent.push(index);
             }
-            fired.push((trigger.clone(), context));
+            for (context, extra_remembered) in occurrences {
+                fired.push((trigger.clone(), context, extra_remembered));
+            }
         }
         for index in spent.into_iter().rev() {
             self.state.delayed_triggers_mut().remove(index);
         }
-        for (trigger, context) in fired {
+        for (mut trigger, context, extra_remembered) in fired {
+            if !extra_remembered.is_empty() {
+                trigger.remembered.extend(extra_remembered);
+            }
             self.fire_delayed_trigger(&trigger, context);
         }
     }

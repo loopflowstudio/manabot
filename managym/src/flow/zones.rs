@@ -684,6 +684,7 @@ impl Game {
                 source_definition_id,
                 targets,
                 target_req_indices,
+                target_divisions: Vec::new(),
                 kicked: cast.kicked,
                 x: cast.x,
                 mode: None,

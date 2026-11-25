@@ -109,6 +109,20 @@ pub struct CardPredicate {
 }
 
 impl CardPredicate {
+    pub fn card_type(card_type: CardType) -> Self {
+        Self {
+            card_type: Some(card_type),
+            ..Self::default()
+        }
+    }
+
+    pub fn nonland() -> Self {
+        Self {
+            not_card_types: vec![CardType::Land],
+            ..Self::default()
+        }
+    }
+
     pub fn creature() -> Self {
         Self {
             card_type: Some(CardType::Creature),

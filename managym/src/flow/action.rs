@@ -33,7 +33,11 @@ impl Game {
     pub(crate) fn announces_x(&self) -> bool {
         matches!(
             self.pending_choice,
-            Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
+            Some(
+                PendingChoice::AnnounceX { .. }
+                    | PendingChoice::ActivationX { .. }
+                    | PendingChoice::DivideAmount { .. }
+            )
         ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
             matches!(
                 s.decision,
@@ -428,6 +432,33 @@ impl Game {
                     self.observed_object_name(*blocker)
                 ))
             }
+            _ if let Some(PendingChoice::DivideAmount {
+                slots,
+                next,
+                remaining,
+                parent,
+                ..
+            }) = &self.pending_choice =>
+            {
+                let target = match parent.as_ref() {
+                    super::game::DivisionParent::Spell { chosen, .. } => chosen.get(slots[*next]),
+                    super::game::DivisionParent::Activation(targeting) => {
+                        targeting.chosen.get(slots[*next])
+                    }
+                };
+                let target_name = match target {
+                    Some(Target::Player(seat)) => format!("Seat {}", seat.0 + 1),
+                    Some(Target::Permanent(id)) => self
+                        .permanent_object(*id)
+                        .map_or_else(|| "target".into(), |obj| self.observed_object_name(obj)),
+                    Some(Target::StackSpell(obj) | Target::GraveyardCard(obj)) => {
+                        self.observed_object_name(*obj)
+                    }
+                    _ => "target".into(),
+                };
+                let rest = remaining - mode as i32;
+                Some(format!("Assign {mode} to {target_name} ({rest} remaining)"))
+            }
             _ if self.announces_x() => Some(format!("X = {mode}")),
             Some(Decision::OrderMeldedCards { cards, .. }) => {
                 let card = self.state.cards[*cards.get(mode)?];
@@ -726,6 +757,7 @@ impl Game {
                     ability_index,
                     targets: Vec::new(),
                     target_req_indices: Vec::new(),
+                    target_divisions: Vec::new(),
                     x: 0,
                 };
                 if let Some(cost) = &ability.sacrifice {
@@ -827,6 +859,7 @@ impl Game {
                         ability_index,
                         targets: Vec::new(),
                         target_req_indices: Vec::new(),
+                        target_divisions: Vec::new(),
                         x: 0,
                     };
                     if self.can_pay_announced_activation(
@@ -950,6 +983,7 @@ impl Game {
             mode: None,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
         };
         (self
             .payment_candidates(player, &operation, additional)
@@ -1048,6 +1082,45 @@ impl Game {
                 ],
                 focus: vec![self.state[object].id],
             }),
+            PendingChoice::DivideAmount {
+                player,
+                slots,
+                next,
+                remaining,
+                parent,
+            } => {
+                let rem_targets = (slots.len() - *next) as i32;
+                let max_amt = (*remaining - (rem_targets - 1)).max(1);
+                let target = match parent.as_ref() {
+                    super::game::DivisionParent::Spell { chosen, .. } => {
+                        chosen.get(slots[*next]).copied()
+                    }
+                    super::game::DivisionParent::Activation(targeting) => {
+                        targeting.chosen.get(slots[*next]).copied()
+                    }
+                };
+                let focus = match target {
+                    Some(Target::Permanent(id)) => self.state.permanents[id]
+                        .as_ref()
+                        .map(|perm| vec![perm.id])
+                        .unwrap_or_default(),
+                    Some(Target::StackSpell(obj) | Target::GraveyardCard(obj)) => {
+                        vec![self.state[obj].id]
+                    }
+                    _ => Vec::new(),
+                };
+                Some(ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::Modal,
+                    actions: (1..=max_amt)
+                        .map(|amt| Action::ChooseMode {
+                            player: *player,
+                            mode: amt as usize,
+                        })
+                        .collect(),
+                    focus,
+                })
+            }
             PendingChoice::ChooseTargets {
                 player,
                 object,
@@ -1437,6 +1510,14 @@ impl Game {
                 if matches!(self.pending_choice, Some(PendingChoice::ActivationX { .. })) =>
             {
                 self.choose_activation_x_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::DivideAmount { .. })
+                ) =>
+            {
+                self.choose_division_amount(*player, *mode)
             }
             Action::SelectCard { player, object }
                 if self.state.suspended_decision.is_none() && self.paying().is_some() =>

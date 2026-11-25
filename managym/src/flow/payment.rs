@@ -38,6 +38,8 @@ pub enum Operation {
         mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_divisions: Vec<i32>,
     },
     Activation {
         source: ActivationSource,
@@ -46,6 +48,9 @@ pub enum Operation {
         /// The clause of each target (`ActivatedTargeting::target_req_indices`).
         #[serde(skip_serializing_if = "Vec::is_empty")]
         target_req_indices: Vec<usize>,
+        /// Announced divided amounts aligned with `targets` (CR 602.2b).
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_divisions: Vec<i32>,
         /// The announced value of X (CR 602.2b, 601.2b).
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: i32,
@@ -1222,6 +1227,7 @@ impl Game {
                 ability_index,
                 targets,
                 target_req_indices,
+                target_divisions,
                 x,
             } => {
                 let mut ability = match *source {
@@ -1241,6 +1247,7 @@ impl Game {
                     )?,
                 };
                 ability.target_req_indices = target_req_indices.clone();
+                ability.target_divisions = target_divisions.clone();
                 let source_object = ability.source_object;
                 let counter_cost = |kind, delta| ProposedEvent::CounterChange {
                     provenance: CounterProvenance::new(EventCause::Cost),

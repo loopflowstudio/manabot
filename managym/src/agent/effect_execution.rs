@@ -555,6 +555,7 @@ impl<'a> Projection<'a> {
                 mode,
                 targets,
                 target_req_indices,
+                target_divisions,
             } => {
                 self.object_id("paid spell", *object);
                 // Storage keys identify the chosen permission only within the game.
@@ -578,6 +579,9 @@ impl<'a> Projection<'a> {
                 }
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
+                if !target_divisions.is_empty() {
+                    self.field("target divisions", target_divisions);
+                }
                 for target in targets {
                     self.target("target", *target);
                 }

@@ -2432,6 +2432,7 @@ impl Game {
             ability_index,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
             x: i32::from(x),
         };
         let Some(model) = self.announced_model(player, &operation) else {

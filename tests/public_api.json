@@ -1703,6 +1703,9 @@
           "clause": {
             "kind": "attribute"
           },
+          "division": {
+            "kind": "attribute"
+          },
           "legal_at_resolution_start": {
             "kind": "attribute"
           },
@@ -1827,6 +1830,9 @@
             "kind": "attribute"
           },
           "triggering_amount": {
+            "kind": "attribute"
+          },
+          "until_next_turn": {
             "kind": "attribute"
           },
           "waterbend": {

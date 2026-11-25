@@ -238,6 +238,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         source_definition_id: CardDefId(7),
         targets: Vec::new(),
         target_req_indices: Vec::new(),
+        target_divisions: Vec::new(),
         kicked: false,
         x: 0,
         spent: Default::default(),

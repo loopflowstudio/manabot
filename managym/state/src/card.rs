@@ -44,6 +44,18 @@ pub enum CardType {
     Battle,
 }
 
+impl CardType {
+    /// Permanent types (CR 205.2a), in alphabetical order.
+    pub const PERMANENT_TYPES: [CardType; 6] = [
+        CardType::Artifact,
+        CardType::Battle,
+        CardType::Creature,
+        CardType::Enchantment,
+        CardType::Land,
+        CardType::Planeswalker,
+    ];
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardTypes {
     pub types: BTreeSet<CardType>,
@@ -513,6 +525,12 @@ pub enum DamageTransform {
 pub enum ReplacementEffect {
     AdventureExile,
     ExileInsteadOfGraveyard,
+    /// "If a [predicate] [controlled_by] controls would die, exile it instead"
+    /// (CR 614.6): applies while this permanent is on the battlefield.
+    ExileIfWouldDie {
+        controlled_by: super::ability::Actor,
+        predicate: CardPredicate,
+    },
     EntersPrepared,
     PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is

@@ -473,6 +473,8 @@ impl Game {
             },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget(_)) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::DivideAmount { .. }) =>
+                ("divide", "Assign damage to this target; each target receives at least 1, and the last target receives the remainder."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),

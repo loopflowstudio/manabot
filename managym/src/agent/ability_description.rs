@@ -978,6 +978,7 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
         ObjectSelector::Attached => "the permanent this is attached to".into(),
         ObjectSelector::CreatedThisWay => "that token".into(),
         ObjectSelector::LibraryTop => "the top card of your library".into(),
+        ObjectSelector::LibraryExceptBottom => "all but the bottom card of your library".into(),
         ObjectSelector::ExiledWithSource => "the cards exiled with this permanent".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
         ObjectSelector::Grantor => "the permanent granting this ability".into(),
@@ -1483,8 +1484,8 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
             format!("{} gains flashback at its mana cost until end of turn", target_description(target))
         } else { format!("You may cast {} this turn", target_description(target)) },
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
-        ExileTopCardsToPlay { count, until, face_down, condition } => {
-            let them = if *count == 1 { "that card" } else { "those cards" };
+        ExileTopCardsToPlay { count, until, face_down, condition, choose } => {
+            let them = if *count == 1 || *choose == Some(1) { "that card" } else { "those cards" };
             let window = match until {
                 crate::state::ability::PlayWindow::ThisTurn => "this turn",
                 crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
@@ -1492,12 +1493,27 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
             };
             let cards = if *count == 1 { "card".to_string() } else { format!("{count} cards") };
             let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text_in(triggering, condition))).unwrap_or_default();
+            let choose_text = match choose {
+                Some(1) => " Choose one.".to_string(),
+                Some(n) => format!(" Choose {n}."),
+                None => String::new(),
+            };
             if *face_down {
-                format!("Look at the top {cards} of your library and exile {} face down. You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
+                format!("Look at the top {cards} of your library and exile {} face down.{choose_text} You may play {them} {window}{condition}", if *count == 1 { "it" } else { "them" })
             } else {
-                format!("Exile the top {cards} of your library. You may play {them} {window}{condition}")
+                format!("Exile the top {cards} of your library.{choose_text} You may play {them} {window}{condition}")
             }
         }
+        GrantPlay { what, until, condition, .. } => {
+            let window = match until {
+                crate::state::ability::PlayWindow::ThisTurn => "this turn",
+                crate::state::ability::PlayWindow::ThroughYourNextTurn => "until the end of your next turn",
+                crate::state::ability::PlayWindow::WhileExiled => "for as long as they remain exiled",
+            };
+            let condition = condition.as_ref().map(|condition| format!(" if {}", condition_text_in(triggering, condition))).unwrap_or_default();
+            format!("You may play {} {window}{condition}", selector_description(triggering, what))
+        }
+        Remember { what } => format!("Choose {}", selector_description(triggering, what)),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         CumulativeUpkeep { each } => format!("Sacrifice this unless you pay {} for each age counter on it", cost_description(each)),
         ExileEachLibraryTopCastFree => "Exile the top card of each library. You may cast any number of spells from among those cards without paying their mana costs".into(),
@@ -1557,8 +1573,35 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
                 DelayedEvent::EndStep { your_turn: true } => "your end step begins".into(),
                 DelayedEvent::Upkeep => "upkeep begins".into(),
                 DelayedEvent::YouCastSpell(predicate) => format!("you cast a {}", predicate_description(predicate, "spell")),
+                DelayedEvent::Attacks { subject, per, attacked } => {
+                    let who = match per {
+                        Per::Batch => format!("one or more {} attack", subject_description(subject, "")),
+                        Per::Object => format!("{} attacks", subject_description(subject, "")),
+                    };
+                    let actor_text = |actor: Actor| match actor {
+                        Actor::You => "you",
+                        Actor::Opponent => "an opponent",
+                        Actor::AnyPlayer => "a player",
+                    };
+                    match attacked {
+                        crate::state::ability::AttackedSubject::Any => who,
+                        crate::state::ability::AttackedSubject::Player(actor) => {
+                            format!("{who} {}", actor_text(*actor))
+                        }
+                        crate::state::ability::AttackedSubject::PlaneswalkerControlledBy(actor) => {
+                            format!("{who} a planeswalker {} controls", actor_text(*actor))
+                        }
+                        crate::state::ability::AttackedSubject::YouOrYourPlaneswalker => {
+                            format!("{who} you or a planeswalker you control")
+                        }
+                    }
+                }
             },
-            match expiry { DelayedExpiry::ThisTurn => " this turn", DelayedExpiry::Never => "" },
+            match expiry {
+                DelayedExpiry::ThisTurn => " this turn",
+                DelayedExpiry::UntilYourNextTurn => " until your next turn",
+                DelayedExpiry::Never => "",
+            },
             match frequency { DelayedFrequency::Once => "once", DelayedFrequency::EachMatch => "each time" },
             effects_description_in(triggering, effects)
         ),

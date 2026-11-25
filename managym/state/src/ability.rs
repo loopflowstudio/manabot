@@ -1210,6 +1210,8 @@ pub enum ObjectSelector {
     ExiledWithSource,
     /// The top object of the resolving player's library.
     LibraryTop,
+    /// Every card in the resolving player's library except its bottom card.
+    LibraryExceptBottom,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -1303,13 +1305,21 @@ pub enum Scope {
     DamagedBySourceInCombat,
 }
 
-/// The one permanent a `Chosen` or `Each` selector leaves out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// What a `Chosen` or `Each` selector leaves out.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Except {
     /// "another": the source permanent.
     This,
     /// "all other": the clause's chosen target (Avatar's Wrath).
     Target,
+    /// Permanents bound in `frame.remembered` during this resolution.
+    Remembered,
+    /// Permanents matching `predicate` controlled by `controlled_by` relative
+    /// to the resolving player ("except for tokens you control").
+    Matching {
+        controlled_by: Actor,
+        predicate: Box<CardPredicate>,
+    },
 }
 
 impl ObjectSelector {
@@ -1389,6 +1399,7 @@ impl ObjectSelector {
             | Self::CreatedThisWay
             | Self::Remembered
             | Self::LibraryTop
+            | Self::LibraryExceptBottom
             | Self::ExiledWithSource
             | Self::Grantor
             | Self::Moved
@@ -1707,10 +1718,12 @@ pub enum Effect {
         flashback: bool,
         target: TargetSpec,
     },
-    /// "Exile the top `count` cards of your library [face down]. You may
-    /// play them [`until`] [if `condition`]." A face-down card is hidden
-    /// from everyone, its exiler included, while the condition fails
-    /// (Flameshape).
+    /// "Exile the top `count` cards of your library [face down]. [Choose
+    /// `choose`.] You may play them [`until`] [if `condition`]." A face-down
+    /// card is hidden from everyone, its exiler included, while the condition
+    /// fails (Flameshape). With `choose: Some(k)`, the controller selects `k`
+    /// of the exiled cards to receive the play permission and the rest stay
+    /// exiled.
     ExileTopCardsToPlay {
         count: usize,
         until: PlayWindow,
@@ -1718,6 +1731,23 @@ pub enum Effect {
         face_down: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         condition: Option<Condition>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        choose: Option<usize>,
+    },
+    /// Grant the resolving player permission to play each exiled object `what`
+    /// names [`until`] [if `condition`].
+    GrantPlay {
+        what: ObjectSelector,
+        until: PlayWindow,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        face_down: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<Condition>,
+    },
+    /// Append the live objects `what` names to this frame's `remembered`
+    /// bindings (deduplicated by exact object), for later exclusion or use.
+    Remember {
+        what: ObjectSelector,
     },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
@@ -2114,6 +2144,15 @@ pub enum DelayedEvent {
     /// The matching spell supplies event context, separate from captured subjects.
     YouCastSpell(Box<CardPredicate>),
     Upkeep,
+    /// "Whenever [a creature / one or more creatures] attack [attacked]".
+    /// `Per::Object` triggers once per matching attacker with it as context;
+    /// `Per::Batch` triggers once with the matching attackers remembered.
+    Attacks {
+        subject: TriggerSubject,
+        per: Per,
+        #[serde(skip_serializing_if = "AttackedSubject::is_any")]
+        attacked: AttackedSubject,
+    },
 }
 
 /// Whether a matching event consumes the watcher, independently of resolution.
@@ -2127,6 +2166,9 @@ pub enum DelayedFrequency {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedExpiry {
     ThisTurn,
+    /// "Until your next turn": ends as the watcher's controller's next turn
+    /// begins (CR 502.1).
+    UntilYourNextTurn,
     /// No stated expiry; exact-object watchers still retire when that object leaves.
     Never,
 }
@@ -2234,6 +2276,10 @@ pub struct TargetRequirement {
     /// is still from the controller's side (CR 115.4).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub opponent_chooses: bool,
+    /// CR 601.2d / 602.2b: total amount divided among this clause's chosen
+    /// targets during announcement (at least 1 per target).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub division: Option<EffectValue>,
 }
 
 impl ObjectSelector {
@@ -2268,6 +2314,10 @@ impl TargetSpec {
 impl TargetRequirement {
     pub fn reads_source_power(&self) -> bool {
         self.spec.reads_source_power()
+            || self
+                .division
+                .as_ref()
+                .is_some_and(|value| value.reads(ContextRead::SourcePower))
     }
 
     /// `max` for "any number of targets" (CR 601.2c): the legal candidates
@@ -2285,6 +2335,7 @@ impl TargetRequirement {
             total_mana_value_x: false,
             same_graveyard: false,
             opponent_chooses: false,
+            division: None,
         }
     }
 
@@ -2515,6 +2566,8 @@ impl Effect {
             | Effect::Earthbend { what: selector, .. }
             | Effect::Discard { what: selector, .. }
             | Effect::Reveal { what: selector }
+            | Effect::Remember { what: selector }
+            | Effect::GrantPlay { what: selector, .. }
             | Effect::RemoveCounters { from: selector, .. }
             | Effect::RemoveAllCounters { from: selector } => f(selector),
             _ => None,
@@ -2523,9 +2576,9 @@ impl Effect {
 
     /// The choice a `Chosen` selector asks of the resolving player, if the
     /// verb has one; only `Sacrifice` may let them decline.
-    pub fn chosen(&self) -> Option<(&CardPredicate, Option<Except>, bool)> {
+    pub fn chosen(&self) -> Option<(&CardPredicate, Option<&Except>, bool)> {
         let (predicate, except) = self.find_selector(|selector| match selector {
-            ObjectSelector::Chosen { predicate, except } => Some((predicate, *except)),
+            ObjectSelector::Chosen { predicate, except } => Some((predicate, except.as_ref())),
             _ => None,
         })?;
         let optional = matches!(self, Effect::Sacrifice { optional: true, .. });
@@ -2672,6 +2725,8 @@ impl Effect {
             | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
+            | Effect::GrantPlay { .. }
+            | Effect::Remember { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::ExileEachLibraryTopCastFree
             | Effect::Cascade
@@ -2796,6 +2851,27 @@ impl Effect {
             until,
             face_down: false,
             condition: None,
+            choose: None,
+        }
+    }
+
+    /// "Exile the top `count` cards of your library. Choose `choose`. You may
+    /// play that card [`until`]."
+    pub fn exile_top_choose_to_play(count: usize, choose: usize, until: PlayWindow) -> Self {
+        Effect::ExileTopCardsToPlay {
+            count,
+            until,
+            face_down: false,
+            condition: None,
+            choose: Some(choose),
+        }
+    }
+
+    /// Choose a permanent you control matching `predicate` and record it in
+    /// this frame's `remembered` set.
+    pub fn remember_chosen(predicate: CardPredicate) -> Self {
+        Effect::Remember {
+            what: ObjectSelector::chosen(predicate),
         }
     }
 
@@ -3148,7 +3224,8 @@ impl EffectValue {
                     max_mana_value,
                     ..
                 } => {
-                    *except == Some(Except::This)
+                    matches!(except, Some(Except::This))
+                        || matches!(except, Some(Except::Matching { predicate, .. }) if predicate.reads_source())
                         || predicate.reads_source()
                         || [exact_mana_value, max_mana_value]
                             .into_iter()
@@ -3181,7 +3258,7 @@ impl EffectValue {
                     max_mana_value,
                     ..
                 } => {
-                    *except == Some(Except::Target)
+                    matches!(except, Some(Except::Target | Except::Remembered))
                         || [exact_mana_value, max_mana_value]
                             .into_iter()
                             .flatten()

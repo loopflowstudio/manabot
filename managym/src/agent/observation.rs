@@ -2591,6 +2591,30 @@ impl Observation {
                             object: object_id,
                             ..
                         }) => Some(*object_id),
+                        Some(crate::flow::game::PendingChoice::DivideAmount {
+                            slots,
+                            next,
+                            parent,
+                            ..
+                        }) => {
+                            let target = match parent.as_ref() {
+                                crate::flow::game::DivisionParent::Spell { chosen, .. } => {
+                                    chosen.get(slots[*next]).copied()
+                                }
+                                crate::flow::game::DivisionParent::Activation(targeting) => {
+                                    targeting.chosen.get(slots[*next]).copied()
+                                }
+                            };
+                            match target {
+                                Some(Target::Permanent(id)) => {
+                                    game.state.permanents[id].as_ref().map(|perm| perm.object)
+                                }
+                                Some(
+                                    Target::StackSpell(object) | Target::GraveyardCard(object),
+                                ) => Some(object),
+                                _ => None,
+                            }
+                        }
                         Some(crate::flow::game::PendingChoice::ActivatedTarget(
                             crate::flow::game::ActivatedTargeting {
                                 source: crate::flow::game::ActivationSource::Card(card),

@@ -248,6 +248,7 @@ _DELAYED_EVENTS = (
     "its controller's matching spell",
     "the upkeep",
     "its controller's end step",
+    "creatures to attack",
 )
 
 
@@ -783,6 +784,8 @@ class _Renderer:
             details.append(
                 "waiting ends at this turn's cleanup"
                 if relation.this_turn
+                else "waiting ends at your next turn"
+                if getattr(relation, "until_next_turn", False)
                 else "no stated expiry"
             )
         if relation.cost is not None:
@@ -803,8 +806,10 @@ class _Renderer:
         for ordinal, target in enumerate(relation.targets, 1):
             legal = target.legal_at_resolution_start
             eligibility = "unknown" if legal is None else _yes(legal)
+            division = getattr(target, "division", 0)
+            share = f"; assigned {division}" if division else ""
             details.append(
-                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}{share}; "
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:

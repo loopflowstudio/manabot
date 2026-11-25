@@ -408,10 +408,31 @@ pub struct ActivatedTargeting {
     /// empty, so a target's position does not name its clause.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `chosen` (CR 602.2b); empty while undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub requirement: usize,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: i32,
+}
+
+/// The spell or activation awaiting sequential target-division assignment (CR 601.2d, 602.2b).
+#[derive(Clone, Debug, serde::Serialize)]
+pub enum DivisionParent {
+    Spell {
+        #[serde(rename = "card")]
+        object: ObjectId,
+        #[serde(flatten)]
+        cast: CastChoices,
+        mode: Option<usize>,
+        requirement_index: usize,
+        chosen: Vec<Target>,
+        chosen_req_indices: Vec<usize>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_divisions: Vec<i32>,
+    },
+    Activation(ActivatedTargeting),
 }
 
 impl ActivatedTargeting {
@@ -493,8 +514,22 @@ pub enum PendingChoice {
         requirement_index: usize,
         chosen: Vec<Target>,
         chosen_req_indices: Vec<usize>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_divisions: Vec<i32>,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
+    },
+    /// Sequential assignment of a divided total across a clause's chosen
+    /// targets (CR 601.2d, 602.2b). Each target receives at least 1.
+    DivideAmount {
+        player: PlayerId,
+        /// Indices into the parent's `chosen` targets belonging to this clause.
+        slots: Vec<usize>,
+        /// Next index within `slots` to assign (`next + 1 < slots.len()`).
+        next: usize,
+        /// Remaining amount to divide across `slots[next..]`.
+        remaining: i32,
+        parent: Box<DivisionParent>,
     },
 }
 

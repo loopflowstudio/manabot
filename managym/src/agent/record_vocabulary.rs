@@ -394,6 +394,7 @@ mod tests {
                 until: PlayWindow::WhileExiled,
                 face_down: true,
                 condition: Some(wizard.clone()),
+                choose: None,
             }],
             otherwise: vec![Effect::exile_top_to_play(1, PlayWindow::ThisTurn)],
         };

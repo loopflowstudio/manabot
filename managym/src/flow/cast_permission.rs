@@ -236,6 +236,53 @@ impl Game {
         });
     }
 
+    /// Grant `player` permission to play `object_id` from exile under `until`
+    /// and `condition`, when `object_id` is currently in exile.
+    pub(crate) fn grant_play_from_exile(
+        &mut self,
+        player: PlayerId,
+        object_id: ObjectId,
+        until: PlayWindow,
+        face_down: bool,
+        condition: Option<&crate::state::ability::Condition>,
+    ) {
+        let turn = self.state.turn.turn_number;
+        self.grant_if_exiled(object_id, |object| PlayGrant {
+            this_turn: until == PlayWindow::ThisTurn,
+            through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
+            face_down,
+            condition: condition.cloned(),
+            play_lands: true,
+            ..PlayGrant::new(object, player)
+        });
+    }
+
+    /// Exile the top `count` cards of `player`'s library and return the exiled
+    /// objects in exile order (without granting play permissions yet).
+    pub(crate) fn exile_top_cards(
+        &mut self,
+        player: PlayerId,
+        count: usize,
+        face_down: bool,
+    ) -> Vec<ObjectId> {
+        let mut exiled = Vec::new();
+        for _ in 0..count {
+            let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
+                break;
+            };
+            let entry = ZoneEntry {
+                face_down,
+                library_top_departure: true,
+                ..ZoneEntry::default()
+            };
+            let arrived = self.move_object_with_entry(object_id, ZoneType::Exile, entry);
+            if self.state.zones.zone_of(arrived) == Some(ZoneType::Exile) {
+                exiled.push(arrived);
+            }
+        }
+        exiled
+    }
+
     /// "Exile the top `count` cards of your library [face down]. You may
     /// play them [this turn | until the end of your next turn | for as long
     /// as they remain exiled] [if `condition`]."
@@ -247,25 +294,8 @@ impl Game {
         face_down: bool,
         condition: Option<&crate::state::ability::Condition>,
     ) {
-        let turn = self.state.turn.turn_number;
-        for _ in 0..count {
-            let Some(object_id) = self.state.zones.top(ZoneType::Library, player) else {
-                return;
-            };
-            // The known order of the rest of the library shifts up by one.
-            let entry = ZoneEntry {
-                face_down,
-                library_top_departure: true,
-                ..ZoneEntry::default()
-            };
-            self.exile_with_play_grant(object_id, entry, |object| PlayGrant {
-                this_turn: until == PlayWindow::ThisTurn,
-                through_next_turn: (until == PlayWindow::ThroughYourNextTurn).then_some(turn),
-                face_down,
-                condition: condition.cloned(),
-                play_lands: true,
-                ..PlayGrant::new(object, player)
-            });
+        for exiled in self.exile_top_cards(player, count, face_down) {
+            self.grant_play_from_exile(player, exiled, until, face_down, condition);
         }
     }
 

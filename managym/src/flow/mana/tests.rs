@@ -103,6 +103,8 @@ fn announced_payment_reserves_life_across_nested_callers() {
         source: ActivationSource::Permanent(source),
         ability_index: 0,
         targets: vec![],
+        target_req_indices: vec![],
+        target_divisions: vec![],
         x: 0,
     };
     let payment = Payment {

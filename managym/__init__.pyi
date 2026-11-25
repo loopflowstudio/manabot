@@ -1378,6 +1378,7 @@ class ClauseTarget:
     legal_at_resolution_start: bool | None
     reference: VisibleReference
     clause: int
+    division: int
 
 class ContinuationFrame:
     effect_execution: list[tuple[int, int]]
@@ -1417,6 +1418,7 @@ class ContinuationFrame:
     granted_keywords: list[bool]
     delayed_frequency: int | None
     this_turn: bool
+    until_next_turn: bool
 
 def validate_observation_json(text: str, *, schema_version: int = 8) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

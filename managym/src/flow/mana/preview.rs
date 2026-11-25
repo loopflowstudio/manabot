@@ -124,6 +124,7 @@ impl Game {
                 mode: None,
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
+                target_divisions: Vec::new(),
             },
         )
     }
@@ -322,6 +323,7 @@ impl Game {
                     ability_index: *ability_index,
                     targets: Vec::new(),
                     target_req_indices: Vec::new(),
+                    target_divisions: Vec::new(),
                     x: 0,
                 };
                 let owed = self.cost_components(player, &operation);

@@ -28,6 +28,9 @@ pub struct SpellOnStack {
     /// Which targeting requirement (index into the card's
     /// `target_requirements()`) each entry of `targets` was chosen for.
     pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `targets` (CR 601.2d); empty when undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
     /// The value of X announced while casting (CR 107.3); its mana value
@@ -88,6 +91,9 @@ pub struct ActivatedAbilityOnStack {
     /// every target is clause 0.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub target_req_indices: Vec<usize>,
+    /// Announced divided amounts aligned with `targets` (CR 602.2b); empty when undivided.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
     /// Exact object attached to the source when the ability was activated.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(serialize_with = "crate::game_object::exact")]
@@ -270,6 +276,14 @@ impl StackObject {
             Self::Spell(spell) => &spell.target_req_indices,
             Self::ActivatedAbility(ability) => &ability.target_req_indices,
             Self::TriggeredAbility(trigger) => &trigger.target_req_indices,
+        }
+    }
+
+    pub fn target_divisions(&self) -> &[i32] {
+        match self {
+            Self::Spell(spell) => &spell.target_divisions,
+            Self::ActivatedAbility(ability) => &ability.target_divisions,
+            Self::TriggeredAbility(_) => &[],
         }
     }
 

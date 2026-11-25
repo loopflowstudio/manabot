@@ -461,6 +461,7 @@ impl ReplacementCandidate {
             ReplacementEffect::ExileInsteadOfGraveyard => {
                 "Exile without Adventure permission".into()
             }
+            ReplacementEffect::ExileIfWouldDie { .. } => "Exile instead of dying".into(),
             ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::EntersPrepared => "Enter prepared".into(),
             ReplacementEffect::PreventCombatDamageToOrFromSelf
@@ -593,6 +594,8 @@ pub(crate) enum EventBinding {
     Created {
         attacking: bool,
     },
+    /// Records the objects sacrificed by `player` in `frame.moved`.
+    SacrificedBy(PlayerId),
     /// A linked exile (Hama, Azula): `actor` exiles, so orders a melded pair
     /// (CR 713.8); `grantee` may cast each exiled arrival as `grant` allows
     /// while controlling `source`. Without a source the cards are only exiled.
@@ -1289,6 +1292,56 @@ impl Game {
         let mut candidates = match event {
             ProposedEvent::ZoneMove {
                 object_id,
+                from: Some(ZoneType::Battlefield),
+                to: ZoneType::Graveyard,
+                ..
+            } => {
+                let Ok(dying_id) = self.lookup_current_permanent(*object_id) else {
+                    return Vec::new();
+                };
+                let Some(dying_controller) = self.state.permanents[dying_id]
+                    .as_ref()
+                    .map(|p| p.controller)
+                else {
+                    return Vec::new();
+                };
+                let mut out = Vec::new();
+                let ids: Vec<PermanentId> = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|seat| self.iter_battlefield_permanents(seat))
+                    .collect();
+                for (id, view) in self.layer_views(ids.into_iter()) {
+                    if view.abilities_lost {
+                        continue;
+                    }
+                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
+                    let source_controller = permanent.controller;
+                    for (definition_index, effect) in self.state[permanent.object]
+                        .replacement_effects
+                        .iter()
+                        .enumerate()
+                    {
+                        if let ReplacementEffect::ExileIfWouldDie {
+                            controlled_by,
+                            predicate,
+                        } = effect
+                        {
+                            if controlled_by.includes(source_controller, dying_controller)
+                                && self.permanent_matches_predicate(dying_id, predicate)
+                            {
+                                out.push(ReplacementCandidate::printed(
+                                    self.permanent_object(id).expect("battlefield"),
+                                    definition_index,
+                                    effect.clone(),
+                                ));
+                            }
+                        }
+                    }
+                }
+                out
+            }
+            ProposedEvent::ZoneMove {
+                object_id,
                 from: Some(ZoneType::Stack),
                 to: ZoneType::Graveyard,
                 entry,
@@ -1359,7 +1412,7 @@ impl Game {
                         .filter_map(|(index, permanent)| {
                             permanent.as_ref().map(|_| PermanentId(index))
                         });
-                for (id, view) in self.layer_views(ids) {
+                for (id, view) in self.layer_views(ids.into_iter()) {
                     if view.abilities_lost {
                         continue;
                     }
@@ -1504,7 +1557,7 @@ impl Game {
                 let ids = [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.iter_battlefield_permanents(player));
-                for (id, view) in self.layer_views(ids) {
+                for (id, view) in self.layer_views(ids.into_iter()) {
                     let Some(source) = self.permanent_object(id) else {
                         continue;
                     };
@@ -1637,7 +1690,8 @@ impl Game {
         match (&mut pending.event, &candidate.effect) {
             (
                 ProposedEvent::ZoneMove { to, entry, .. },
-                ReplacementEffect::ExileInsteadOfGraveyard,
+                ReplacementEffect::ExileInsteadOfGraveyard
+                | ReplacementEffect::ExileIfWouldDie { .. },
             ) => {
                 *to = ZoneType::Exile;
                 *entry = ZoneEntry::default();

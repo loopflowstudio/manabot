@@ -112,6 +112,7 @@ fn stack(
                 targets,
                 attached: None,
                 target_req_indices: Vec::new(),
+                target_divisions: Vec::new(),
                 x: 0,
                 loyalty_change: None,
                 granted_by: None,
@@ -4049,6 +4050,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                             target: Target::Permanent(subject),
                             requirement: 0,
                             legal: true,
+                            division: 0,
                         }]
                         .into(),
                         effects: vec![Effect::Tap {
@@ -5574,6 +5576,7 @@ fn power_properties_keep_target_lki_and_filter_aggregates_by_source_name() {
         target: Target::Permanent(other),
         requirement: 0,
         legal: true,
+        division: 0,
     }];
     game.apply_continuous(
         None,
@@ -6188,6 +6191,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                             mode: None,
                             targets: Vec::new(),
                             target_req_indices: Vec::new(),
+                            target_divisions: Vec::new(),
                         },
                         owed: Vec::new(),
                         receipt: Default::default(),
