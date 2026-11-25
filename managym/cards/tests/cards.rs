@@ -95,6 +95,8 @@ mod dom;
 mod drk;
 #[path = "cards/dsk.rs"]
 mod dsk;
+#[path = "cards/dst.rs"]
+mod dst;
 #[path = "cards/dtk.rs"]
 mod dtk;
 #[path = "cards/ecl.rs"]
@@ -213,6 +215,8 @@ mod pls;
 mod pm15;
 #[path = "cards/por.rs"]
 mod por;
+#[path = "cards/prtr.rs"]
+mod prtr;
 #[path = "cards/psal.rs"]
 mod psal;
 #[path = "cards/ptk.rs"]

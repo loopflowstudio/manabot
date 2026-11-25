@@ -18,12 +18,12 @@ use crate::{
             SuspendedResolution,
         },
         game::{Game, GameState},
-        proposed_event::EventBatch,
+        proposed_event::{EventBatch, ProposedEvent},
     },
     state::{
         ability::ObjectSelector,
         binding::{ObjectBinding, ZoneSelection},
-        card::CardDefId,
+        card::{CardDefId, GraveyardMover, ReplacementEffect},
         game_object::{ObjectId, PlayerId},
         stack_object::StackObject,
         zone::ZoneType,
@@ -459,6 +459,15 @@ impl Game {
                 .map(|binding| binding.object),
         );
         if let Some(suspended) = &self.state.suspended_decision {
+            // The announced spell is public and already committed to its cost.
+            // Its hand slot cannot become another sampled card while paying.
+            for part in suspended.continuation() {
+                if let ResolutionRef::Frame(frame) = part {
+                    if let FrameCompletion::DiscardPayment(payment) = &frame.completion {
+                        pinned.extend(payment.operation.spell());
+                    }
+                }
+            }
             for (owner, object_ids) in suspended
                 .decisions()
                 .filter_map(Decision::inspected_library_objects)
@@ -577,6 +586,37 @@ impl Game {
                         }
                     }
                     ResolutionRef::Decision(_) => {}
+                }
+            }
+            // An ordering choice commits a hidden discard to the offered
+            // replacements' predicates. Either sampler may substitute another
+            // matching hand card, including a different printing.
+            if let (Decision::OrderReplacement { candidates, .. }, Some(batch)) =
+                (&suspended.decision, &suspended.frame.batch)
+            {
+                let pending = &batch.events[batch.cursor];
+                if let ProposedEvent::ZoneMove {
+                    from: Some(ZoneType::Hand),
+                    object_id,
+                    ..
+                } = &pending.event
+                {
+                    for candidate in candidates {
+                        if let ReplacementEffect::GraveyardInstead {
+                            what: GraveyardMover::Matching(predicate),
+                            ..
+                        } = &candidate.effect
+                        {
+                            retain(
+                                &Some(ZoneSelection {
+                                    owner: self.state[*object_id].owner,
+                                    zone: ZoneType::Hand,
+                                    predicate: predicate.clone(),
+                                }),
+                                std::slice::from_ref(object_id),
+                            );
+                        }
+                    }
                 }
             }
             for decision in suspended.decisions() {
@@ -971,6 +1011,13 @@ impl Game {
         // A selection from Remembered has no zone marker of its own, and a
         // child may remember or otherwise alias a selected exact object.
         let objects = &rebinding.objects;
+        if let Some(batch) = &mut frame.batch {
+            for pending in &mut batch.events {
+                if let ProposedEvent::ZoneMove { object_id, .. } = &mut pending.event {
+                    rebind(std::iter::once(object_id), objects);
+                }
+            }
+        }
         rebind(frame.selected.iter_mut(), objects);
         rebind(
             frame
@@ -990,7 +1037,10 @@ impl Game {
             FrameCompletion::Frame(parent) | FrameCompletion::Event { frame: parent, .. } => {
                 self.rebind_frame_selection(parent, rebinding)
             }
-            FrameCompletion::Decision(parent) => self.rebind_suspended_selection(parent, rebinding),
+            FrameCompletion::Decision(parent)
+            | FrameCompletion::DiscardDuringResolution(parent) => {
+                self.rebind_suspended_selection(parent, rebinding)
+            }
             FrameCompletion::StateBased { next } => {
                 self.rebind_completion_selection(next, rebinding)
             }

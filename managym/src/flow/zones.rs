@@ -822,16 +822,6 @@ impl Game {
         mut entry: ZoneEntry,
     ) -> ProposedEvent {
         let from = self.state.zones.zone_of(object_id);
-        let to_zone = if from == Some(ZoneType::Stack)
-            && to_zone != ZoneType::Exile
-            && self
-                .spell_on_stack(object_id)
-                .is_some_and(|spell| spell.flashback)
-        {
-            ZoneType::Exile
-        } else {
-            to_zone
-        };
         entry = entry.for_zone(to_zone);
         if to_zone == ZoneType::Battlefield
             && self
@@ -924,8 +914,9 @@ impl Game {
             None
         };
         if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
-            let seen =
-                (to_zone != ZoneType::Library && !entry.is_face_down()).then_some(definition);
+            let seen = ((to_zone != ZoneType::Library || entry.shuffle_library == Some(true))
+                && !entry.is_face_down())
+            .then_some(definition);
             self.forget_hand_card(owner, seen);
         }
 

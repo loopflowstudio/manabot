@@ -33,7 +33,7 @@ use crate::{
         game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
         knowledge::LibraryKnowledge,
         mana::ManaCost,
-        payment::PaymentReceipt,
+        payment::{How, PaymentReceipt, Toward},
         permanent::{CounterKind, SpellEntry},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -56,6 +56,10 @@ pub enum FrameCompletion {
     },
     /// After stack exile, finish state-based actions before starting cleanup.
     EndTurn,
+    /// Resume the interrupted announced cost with the discarded arrival.
+    DiscardPayment(Box<Payment>),
+    /// A discard paid during resolution belongs to this saved caller.
+    DiscardDuringResolution(Box<SuspendedResolution>),
     /// The spell's whole cost is paid; `payment.receipt` is what it actually
     /// took (CR 601.2h).
     Paid {
@@ -940,12 +944,14 @@ impl SuspendedResolution {
                 FrameCompletion::Frame(parent) | FrameCompletion::Event { frame: parent, .. } => {
                     frame_chain(parent, out)
                 }
-                FrameCompletion::Decision(caller) => {
+                FrameCompletion::Decision(caller)
+                | FrameCompletion::DiscardDuringResolution(caller) => {
                     frame_chain(&caller.frame, out);
                     decision_chain(&caller.decision, out);
                 }
                 FrameCompletion::StateBased { next } => completion_chain(next, out),
-                FrameCompletion::Paid { .. }
+                FrameCompletion::DiscardPayment(_)
+                | FrameCompletion::Paid { .. }
                 | FrameCompletion::Activated { .. }
                 | FrameCompletion::EndTurn
                 | FrameCompletion::Priority
@@ -1337,7 +1343,12 @@ impl Game {
 
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
-    pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
+    pub(crate) fn run_frame(&mut self, frame: EffectFrame) {
+        self.run_payment_frame(frame)
+            .expect("only a discard payment resumes an announced cost");
+    }
+
+    pub(crate) fn run_payment_frame(&mut self, mut frame: EffectFrame) -> Result<(), AgentError> {
         while !self.is_game_over() {
             self.refresh_control();
             if let Some(mut batch) = frame.batch.take() {
@@ -1349,7 +1360,7 @@ impl Game {
                             frame,
                             decision: *decision,
                         });
-                        return;
+                        return Ok(());
                     }
                     BatchProgress::Complete { results, followups } => {
                         self.bind_event_results(&mut frame, &batch, &results);
@@ -1358,6 +1369,23 @@ impl Game {
                         // results are already its own.
                         if !followups.is_empty() {
                             frame.batch = Some(self.event_batch(EventBinding::None, followups));
+                        }
+                        if let EventBinding::Discard { player, remaining } = batch.binding {
+                            if remaining > 0
+                                && self
+                                    .state
+                                    .zone_cards(ZoneType::Hand, player)
+                                    .next()
+                                    .is_some()
+                            {
+                                self.continue_resolution(
+                                    frame,
+                                    Some(Decision::Discard { player, remaining }),
+                                );
+                                return Ok(());
+                            }
+                        }
+                        if frame.batch.is_some() {
                             continue;
                         }
                     }
@@ -1387,7 +1415,7 @@ impl Game {
                     }
                     FrameCompletion::Decision(caller) => {
                         *self.state.suspended_decision_mut() = Some(*caller);
-                        return;
+                        return Ok(());
                     }
                     FrameCompletion::StateBased { next } => {
                         self.finish_state_based_batch();
@@ -1398,7 +1426,27 @@ impl Game {
                         if self.finish_sbas_before(FrameCompletion::EndTurn) {
                             self.end_step_for_cleanup();
                         }
-                        return;
+                        return Ok(());
+                    }
+                    FrameCompletion::DiscardPayment(mut payment) => {
+                        payment.receipt.contribute(
+                            frame.this_way[0],
+                            How::Discarded,
+                            Toward::Printed,
+                        );
+                        return self.advance_payment(frame.controller, *payment);
+                    }
+                    FrameCompletion::DiscardDuringResolution(caller) => {
+                        let Decision::Payment(mut payment) = caller.decision else {
+                            unreachable!("discard payment")
+                        };
+                        payment.receipt.contribute(
+                            frame.this_way[0],
+                            How::Discarded,
+                            Toward::Printed,
+                        );
+                        self.finish_resolution_payment(payment, caller.frame);
+                        return Ok(());
                     }
                     FrameCompletion::Paid { player, payment } => {
                         self.commit_spell_payment(player, payment);
@@ -1413,7 +1461,7 @@ impl Game {
                                     .is_empty() =>
                                 {
                                     *self.state.suspended_decision_mut() = Some(caller);
-                                    return;
+                                    return Ok(());
                                 }
                                 Decision::CastDuringResolution {
                                     offer: ResolutionCastOffer::Cascade { exiled, .. },
@@ -1452,9 +1500,9 @@ impl Game {
                             self.turn_over(object, super::zones::FormTransition::TurnFaceUp);
                         }
                         self.state.priority_mut().start_round(frame.controller);
-                        return;
+                        return Ok(());
                     }
-                    FrameCompletion::Continue => return,
+                    FrameCompletion::Continue => return Ok(()),
                     FrameCompletion::Spell { object, attach_to } => {
                         // A spell that exiled itself ("Exile Avatar's Wrath")
                         // has already left the stack (CR 608.2n); the entry
@@ -1540,16 +1588,17 @@ impl Game {
                     FrameCompletion::Priority => self.capture_resolution(&frame),
                 }
                 self.restart_priority_round();
-                return;
+                return Ok(());
             };
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
                 *self.state.suspended_decision_mut() =
                     Some(SuspendedResolution { frame, decision });
-                return;
+                return Ok(());
             }
             // A chosen permanent belongs to the one instruction that ran.
             frame.chosen = None;
         }
+        Ok(())
     }
 
     /// Consume the instruction's results once its whole batch has committed.
@@ -1563,6 +1612,18 @@ impl Game {
         let moved = results.iter().flat_map(|result| result.arrivals());
         match batch.binding {
             EventBinding::None | EventBinding::Deaths | EventBinding::Combat => {}
+            EventBinding::Countered { by } => {
+                for (event, result) in batch.events.iter().zip(results) {
+                    if let super::proposed_event::ProposedEvent::ZoneMove { object_id, .. } =
+                        event.event
+                    {
+                        if result.committed {
+                            self.emit(GameEvent::SpellCountered { object_id, by });
+                        }
+                    }
+                }
+            }
+            EventBinding::Discard { .. } => frame.this_way.extend(moved),
             EventBinding::Destroyed => frame.moved = moved.collect(),
             EventBinding::LifeLost => {
                 frame.life_lost = results.iter().fold(0_i32, |lost, result| {
@@ -1602,21 +1663,11 @@ impl Game {
                     .unwrap_or(0);
             }
             EventBinding::Moved { shuffle, .. } => {
-                let is_discard = |event: &crate::flow::proposed_event::PendingEvent| {
-                    matches!(
-                        event.event,
-                        crate::flow::proposed_event::ProposedEvent::ZoneMove {
-                            from: Some(ZoneType::Hand),
-                            to: ZoneType::Graveyard,
-                            ..
-                        }
-                    )
-                };
-                if batch.events.iter().any(is_discard) {
+                if batch.events.iter().any(|event| event.discard) {
                     frame.this_way = results
                         .iter()
                         .zip(&batch.events)
-                        .filter(|(_, event)| is_discard(event))
+                        .filter(|(_, event)| event.discard)
                         .flat_map(|(result, _)| result.arrivals())
                         .collect();
                 }
@@ -2327,8 +2378,7 @@ impl Game {
                         .expect("retained event batch"),
                     candidate,
                 );
-                self.run_frame(suspended.frame);
-                Ok(())
+                self.run_payment_frame(suspended.frame)
             }
             (Decision::ChoosePaymentX { player, if_paid }, Action::ChooseMode { mode, .. }) => {
                 let x = u8::try_from(*mode).ok();
@@ -2392,17 +2442,17 @@ impl Game {
             (Decision::Payment(payment), Action::SelectCard { object, .. })
                 if matches!(payment.owed, CostComponent::Discard) =>
             {
-                if let Err(error) =
-                    self.pay_discard_cost(payment.player, None, *object, &mut payment.receipt)
-                {
+                let player = payment.player;
+                let object = *object;
+                if !self.discard_candidates(player, None).contains(&object) {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(error);
+                    return Err(AgentError("discard cost must be a card in hand".into()));
                 }
-                let Decision::Payment(payment) = suspended.decision else {
-                    unreachable!()
-                };
-                self.finish_resolution_payment(payment, suspended.frame);
-                Ok(())
+                self.pay_discard_cost(
+                    player,
+                    object,
+                    FrameCompletion::DiscardDuringResolution(Box::new(suspended)),
+                )
             }
             (Decision::Payment(payment), Action::WaterbendTap { permanent, .. }) => {
                 let tapped = match &mut payment.owed {
@@ -2462,7 +2512,11 @@ impl Game {
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
                 match payment.counters_on_decline {
                     Some(Target::StackSpell(object_id)) => {
-                        self.counter_spell(object_id, suspended.frame.source(), ZoneType::Graveyard)
+                        suspended.frame.batch = Some(self.counter_spells(
+                            [object_id],
+                            suspended.frame.source(),
+                            ZoneType::Graveyard,
+                        ));
                     }
                     Some(Target::StackAbility(id)) => {
                         self.counter_ability(id, suspended.frame.source())
@@ -2757,22 +2811,14 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
-                let discarded = self.move_object(*object_id, ZoneType::Graveyard);
-                if self.state.live(discarded).is_some() {
-                    suspended.frame.this_way.push(discarded);
-                }
-                *remaining -= 1;
-                if *remaining == 0
-                    || self
-                        .state
-                        .zone_cards(ZoneType::Hand, *player)
-                        .next()
-                        .is_none()
-                {
-                    self.run_frame(suspended.frame);
-                } else {
-                    *self.state.suspended_decision_mut() = Some(suspended);
-                }
+                suspended.frame.batch = Some(self.graveyard_batch(
+                    EventBinding::Discard {
+                        player: *player,
+                        remaining: *remaining - 1,
+                    },
+                    [*object_id],
+                ));
+                self.run_frame(suspended.frame);
                 Ok(())
             }
 
@@ -2819,9 +2865,10 @@ impl Game {
                 if looked.contains(object) =>
             {
                 self.manifest(*object, *player);
-                for other in looked.iter().filter(|other| *other != object) {
-                    self.move_object(*other, ZoneType::Graveyard);
-                }
+                suspended.frame.batch = Some(self.graveyard_batch(
+                    EventBinding::None,
+                    looked.iter().copied().filter(|other| other != object),
+                ));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -2998,7 +3045,8 @@ impl Game {
                         "not a matching card in the revealed hand".into(),
                     ));
                 }
-                self.move_object(*object_id, ZoneType::Graveyard);
+                suspended.frame.batch =
+                    Some(self.graveyard_batch(EventBinding::None, [*object_id]));
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3120,10 +3168,11 @@ impl Game {
                     return Err(AgentError("not a revealed card".into()));
                 };
                 revealed.remove(index);
-                self.move_object(*object_id, ZoneType::Graveyard);
+                let chosen = self.graveyard_batch(EventBinding::None, [*object_id]);
                 *remaining -= 1;
                 if *remaining > 0 && !revealed.is_empty() {
-                    *self.state.suspended_decision_mut() = Some(suspended);
+                    suspended.frame.batch = Some(chosen);
+                    self.continue_resolution(suspended.frame, Some(suspended.decision));
                     return Ok(());
                 }
                 let owner = *owner;
@@ -3139,7 +3188,11 @@ impl Game {
                 });
                 suspended.frame.batch =
                     Some(self.event_batch(EventBinding::Shuffle { player: owner }, events));
-                self.run_frame(suspended.frame);
+                self.run_frame(EffectFrame {
+                    batch: Some(chosen),
+                    completion: FrameCompletion::Frame(Box::new(suspended.frame)),
+                    ..EffectFrame::new(owner, Vec::new())
+                });
                 Ok(())
             }
             (
@@ -3300,9 +3353,11 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(err);
                 }
-                self.move_object(*object_id, ZoneType::Graveyard);
-                self.draw_cards(player, 1);
-                self.run_frame(suspended.frame);
+                self.run_frame(EffectFrame {
+                    batch: Some(self.graveyard_batch(EventBinding::None, [*object_id])),
+                    completion: FrameCompletion::Frame(Box::new(suspended.frame)),
+                    ..EffectFrame::new(player, vec![Effect::DrawCards { count: 1.into() }])
+                });
                 Ok(())
             }
             (

@@ -51,6 +51,7 @@ mod fdn;
 mod fin;
 pub use fin::ragnarok;
 mod dsk;
+mod dst;
 mod fra;
 mod frf;
 mod fut;
@@ -105,6 +106,7 @@ mod p02;
 mod pls;
 mod pm15;
 mod por;
+mod prtr;
 mod psal;
 mod ptk;
 mod rav;
@@ -216,6 +218,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     dom::cards,
     drk::cards,
     dsk::cards,
+    dst::cards,
     dtk::cards,
     ecl::cards,
     eld::cards,
@@ -276,6 +279,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     p02::cards,
     pls::cards,
     pm15::cards,
+    prtr::cards,
     por::cards,
     psal::cards,
     ptk::cards,

@@ -483,10 +483,12 @@ impl Game {
         let source = stacked.effect_source();
         let Some(targets) = self.resolution_targets(&stacked, source) else {
             if let StackObject::Spell(spell) = stacked {
-                self.move_object(spell.object, ZoneType::Graveyard);
-                self.emit(GameEvent::SpellCountered {
-                    object_id: spell.object,
-                    by: None,
+                self.run_frame(EffectFrame {
+                    batch: Some(
+                        self.graveyard_batch(EventBinding::Countered { by: None }, [spell.object]),
+                    ),
+                    completion: FrameCompletion::Continue,
+                    ..EffectFrame::new(spell.controller, Vec::new())
                 });
             }
             return;
@@ -563,15 +565,19 @@ impl Game {
     /// Counter a spell by an effect (CR 701.6a), putting it into `to` (its
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
-    pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        if !self.spell_can_be_countered(object) {
-            return;
-        }
-        self.move_object(object, to);
-        self.emit(GameEvent::SpellCountered {
-            object_id: object,
-            by,
-        });
+    pub(crate) fn counter_spells(
+        &self,
+        spells: impl IntoIterator<Item = ObjectId>,
+        by: Option<ObjectId>,
+        to: ZoneType,
+    ) -> EventBatch {
+        self.event_batch(
+            EventBinding::Countered { by },
+            spells
+                .into_iter()
+                .filter(|object| self.spell_can_be_countered(*object))
+                .map(|object| self.zone_move_proposal(object, to, ZoneEntry::default())),
+        )
     }
 
     fn spell_can_be_countered(&self, object: ObjectId) -> bool {
@@ -857,13 +863,7 @@ impl Game {
     /// move (CR 701.17a), bound as the frame's `CardsThisWay`.
     fn mill_objects(&mut self, frame: &mut EffectFrame, object_ids: Vec<ObjectId>) {
         frame.this_way.clear();
-        let events: Vec<_> = object_ids
-            .into_iter()
-            .map(|object_id| {
-                self.zone_move_proposal(object_id, ZoneType::Graveyard, ZoneEntry::default())
-            })
-            .collect();
-        frame.batch = Some(self.event_batch(EventBinding::ThisWay, events));
+        frame.batch = Some(self.graveyard_batch(EventBinding::ThisWay, object_ids));
     }
 
     /// The players a selector names as the effect resolves; a target player
@@ -1999,19 +1999,13 @@ impl Game {
             }
             Effect::CounterSpell { what, exile } => {
                 // Spells only: countering an ability is a different effect.
-                let spells: Vec<_> = self
-                    .select(what, frame)
-                    .into_iter()
-                    .filter(|object_id| self.spell_on_stack(*object_id).is_some())
-                    .collect();
-                for spell in spells {
-                    let to = if *exile {
-                        ZoneType::Exile
-                    } else {
-                        ZoneType::Graveyard
-                    };
-                    self.counter_spell(spell, frame.source(), to);
-                }
+                let to = if *exile {
+                    ZoneType::Exile
+                } else {
+                    ZoneType::Graveyard
+                };
+                frame.batch =
+                    Some(self.counter_spells(self.select(what, frame), frame.source(), to));
                 None
             }
             Effect::CounterAbility { what } => {

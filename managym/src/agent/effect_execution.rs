@@ -157,6 +157,9 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "ordered prefix",
     "paid activation",
     "paid announcement",
+    "resume discard payment",
+    "shuffle library after move",
+    "countered by",
     "paid by",
     "paid source",
     "turn face up",
@@ -509,6 +512,14 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
+            FrameCompletion::DiscardDuringResolution(_) => {
+                self.field("return", &"resume discard payment")
+            }
+            FrameCompletion::DiscardPayment(payment) => {
+                self.field("return", &"resume discard payment");
+                self.receipt(&payment.receipt, None);
+                self.payment(payment);
+            }
             FrameCompletion::Paid { player, payment } => {
                 self.paid_summary();
                 // Unfinished: the source's own printed cost is paid last.
@@ -809,6 +820,9 @@ impl<'a> Projection<'a> {
         // ZoneEntry's default terms have no effect. Encode only present terms,
         // preserving the same defaults instead of repeating six zero values
         // for every member of a simultaneous token group.
+        if let Some(reveal) = entry.shuffle_library {
+            self.field("shuffle library after move", &reveal);
+        }
         if entry.tapped {
             self.field("enters tapped", &true);
         }
@@ -1012,6 +1026,12 @@ impl<'a> Projection<'a> {
             }
         }
         match &batch.binding {
+            EventBinding::Countered { by } => {
+                self.field("bind result", &EventBinding::Countered { by: None });
+                if let Some(source) = by {
+                    self.object("countered by", *source);
+                }
+            }
             EventBinding::Moved {
                 linked,
                 shuffle,

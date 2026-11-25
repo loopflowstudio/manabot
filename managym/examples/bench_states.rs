@@ -65,6 +65,7 @@ const STATES: &[(&str, &str)] = &[
     ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
     ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
     ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
+    ("militant-mill", "Dread Summons mills eight cards from each library with N Dryad Militants on the battlefield"),
     ("graveyard-routes", "Muldrotha and Zul Ashur over N graveyard cards cycling artifact, creature, Zombie and land kinds; the granted checkpoint overlaps Zul's exact-object grant with Muldrotha's type routes on one Zombie"),
     ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
     ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
@@ -294,6 +295,11 @@ fn recipe(name: &str, size: usize) -> Recipe {
         "venom-team" => {
             seats[0].add("Venom Connoisseur", 1);
             seats[0].add("Gray Ogre", size);
+        }
+        "militant-mill" => {
+            seats[0].add("Swamp", 10);
+            seats[0].hand.push("Dread Summons".into());
+            seats[1].add("Dryad Militant", size);
         }
         "blast-discard" => {
             seats[0].add("Mountain", 5);
@@ -553,7 +559,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
     // A real response keeps the opponent's final priority pass visible.
     if matches!(
         name,
-        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+        "collector-food"
+            | "mixed-life-gain"
+            | "fumigate-panda"
+            | "venom-team"
+            | "blast-discard"
+            | "militant-mill"
     ) {
         seats[1].add("Mountain", 1);
         seats[1].hand.push("Lightning Bolt".into());
@@ -1015,8 +1026,9 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             return result;
         }
         "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
-        | "blast-discard" | "control-auras" => {
+        | "blast-discard" | "control-auras" | "militant-mill" => {
             let env = match recipe.state.as_str() {
+                "militant-mill" => follow(root, &[("cast", 0), ("choice", 8)]),
                 "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
                 "venom-team" => {
                     let mut env = root.fork().unwrap();

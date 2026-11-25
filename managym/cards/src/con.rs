@@ -1,7 +1,8 @@
 //! Conflux.
 use managym_state::{
     card::{
-        CardDefinition, CardType, CardTypes, PrintedCharacteristics, SourceQuality, StaticAbility,
+        CardDefinition, CardType, CardTypes, GraveyardMover, PrintedCharacteristics, Redirect,
+        ReplacementEffect, SourceQuality, StaticAbility,
     },
     mana::ManaCost,
 };
@@ -23,6 +24,10 @@ fn progenitus() -> CardDefinition {
             subtypes: vec!["Hydra".into(), "Avatar".into()],
             power: Some(10),
             toughness: Some(10),
+            replacement_effects: vec![ReplacementEffect::GraveyardInstead {
+                what: GraveyardMover::This,
+                to: Redirect::OwnerLibraryShuffled { reveal: true },
+            }],
             statics: vec![StaticAbility::Protection(SourceQuality::Everything)],
             text_box: text_box.into(),
             ..Default::default()

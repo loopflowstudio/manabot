@@ -51,6 +51,7 @@ fn progenitus_protection_covers_targets_blocks_damage_and_attachments() {
     cast(&mut wrath, "Fumigate");
     settle(&mut wrath);
     assert!(wrath.game().state.permanents[hydra].is_none());
+    assert_eq!(zone_of(&wrath, object), Some(ZoneType::Library));
     clear_summoning_sickness(&mut s, hydra);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     attack_with(&mut s, hydra);
@@ -62,4 +63,40 @@ fn progenitus_protection_covers_targets_blocks_damage_and_attachments() {
             ..
         }
     )));
+}
+
+#[test]
+fn finality_competes_with_progenitus_own_replacement() {
+    use crate::support::{
+        game::set_counters,
+        inspect::offer_labels,
+        play::{choose_mode, pass_until, spend_colorless},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{game_object::PlayerId, permanent::CounterKind},
+    };
+    let mut s = five_color_setup(&["Progenitus", "Fumigate"]);
+    let hydra = s.force_permanent_on_battlefield(1, "Progenitus");
+    let card = card_of(&s, hydra);
+    set_counters(&mut s, hydra, CounterKind::Finality, 1);
+    cast(&mut s, "Fumigate");
+    spend_colorless(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let labels = offer_labels(&s);
+    assert_eq!(labels.len(), 2);
+    for (word, zone) in [
+        ("Exile instead", ZoneType::Exile),
+        ("Reveal and shuffle", ZoneType::Library),
+    ] {
+        let mut branch = s.clone();
+        let mode = labels
+            .iter()
+            .position(|label| label.contains(word))
+            .unwrap();
+        choose_mode(&mut branch, mode);
+        settle(&mut branch);
+        assert_eq!(zone_of(&branch, card), Some(zone));
+    }
 }

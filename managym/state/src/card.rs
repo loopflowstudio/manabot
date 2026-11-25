@@ -535,6 +535,19 @@ pub enum DamageTransform {
     PreventAll,
 }
 
+/// Which object a graveyard replacement applies to (CR 400.6).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum GraveyardMover {
+    This,
+    Matching(CardPredicate),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Redirect {
+    Exile,
+    OwnerLibraryShuffled { reveal: bool },
+}
+
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
@@ -543,7 +556,10 @@ pub enum DamageTransform {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
     AdventureExile,
-    ExileInsteadOfGraveyard,
+    GraveyardInstead {
+        what: GraveyardMover,
+        to: Redirect,
+    },
     EntersPrepared,
     PreventCombatDamageToOrFromSelf,
     /// Combat damage that would be dealt to the protected permanent is

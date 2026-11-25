@@ -13039,5 +13039,31 @@
     "colors": [
       "U"
     ]
+  },
+  "Darksteel Colossus": {
+    "name": "Darksteel Colossus",
+    "mana_cost": "{11}",
+    "type_line": "Artifact Creature — Golem",
+    "power": "11",
+    "toughness": "11",
+    "keywords": [
+      "Indestructible",
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nIndestructible (Damage and effects that say \"destroy\" don't destroy this creature.)\nIf Darksteel Colossus would be put into a graveyard from anywhere, reveal Darksteel Colossus and shuffle it into its owner's library instead.",
+    "colors": []
+  },
+  "Dryad Militant": {
+    "name": "Dryad Militant",
+    "mana_cost": "{G/W}",
+    "type_line": "Creature — Dryad Soldier",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "({G/W} can be paid with either {G} or {W}.)\nIf an instant or sorcery card would be put into a graveyard from anywhere, exile it instead.",
+    "colors": [
+      "G",
+      "W"
+    ]
   }
 }

@@ -1149,3 +1149,18 @@ card returns. Bulk Up similarly reads the target's power at resolution. A
 creature at −2 power goes to −4, and flashback uses the same calculation.
 Bite Down uses the power of the creature dealing damage at resolution.
 If either target leaves and returns first, it deals no damage.
+
+### Ordering graveyard replacements
+
+With two Dryad Militants on the battlefield, discarding Lightning Bolt to pay
+for Seize the Spoils pauses before the card leaves the hand. Choose which
+Militant applies. The Bolt goes to exile and the same payment continues.
+A spell whose targets have all become illegal stays on the stack until its
+controller chooses the replacement. For a card in hand or library, its owner
+makes that choice.
+
+Progenitus and Darksteel Colossus reveal and shuffle into their owner's
+library when they would go to a graveyard. A milled Colossus stays in its
+library, and both viewers lose their knowledge of its position when the
+library is shuffled. Its old object reference expires. On the battlefield,
+losing all abilities removes the replacement.

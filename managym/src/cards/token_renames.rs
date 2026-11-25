@@ -5,6 +5,12 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "ReplacementEffect::ExileInsteadOfGraveyard", None),
+    (
+        Structure,
+        "/ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
     (Variant, "Modification::ControlChanged", None),
     (Variant, "AttackSize::WithAnother", None),
     (
@@ -118,6 +124,16 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "token",
+        "execution/1//ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
+    (
+        "token",
+        "execution/3/ReplacementEffect::ExileInsteadOfGraveyard",
+        None,
+    ),
     ("token", "Modification::ControlChanged", None),
     (
         "token",

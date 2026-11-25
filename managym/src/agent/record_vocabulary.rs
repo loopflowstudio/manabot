@@ -219,11 +219,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",
-            &[
-                "PreventCombatDamage",
-                "AdventureExile",
-                "ExileInsteadOfGraveyard",
-            ][..],
+            &["PreventCombatDamage", "AdventureExile"][..],
         ),
         ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
         (
@@ -231,6 +227,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &[
                 "None",
                 "ThisWay",
+                "Discard",
+                "Countered",
                 "Destroyed",
                 "LifeLost",
                 "Damage",
@@ -294,6 +292,8 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "replaced",
         "result",
         "second_from_top",
+        "remaining",
+        "by",
         "index",
         "kind",
         "attacking",

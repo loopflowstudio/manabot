@@ -779,7 +779,12 @@ mod tests {
             let source = game.state.live(object_id).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
-                game.counter_spell(object_id, None, ZoneType::Graveyard);
+                let batch = game.counter_spells([object_id], None, ZoneType::Graveyard);
+                game.run_frame(crate::flow::decision::EffectFrame {
+                    batch: Some(batch),
+                    completion: crate::flow::decision::FrameCompletion::Continue,
+                    ..crate::flow::decision::EffectFrame::new(PlayerId(0), vec![])
+                });
             }
             if outcome == "completed" {
                 game.resolve_top_of_stack();

@@ -6771,3 +6771,27 @@ fn counted_bonuses_read_counters_on_the_source() {
         );
     }
 }
+
+#[test]
+fn graveyard_replacements_encode_the_mover_destination_and_reveal_instruction() {
+    for (name, mover, redirect) in [
+        ("Progenitus", "This", "OwnerLibraryShuffled"),
+        ("Darksteel Colossus", "This", "OwnerLibraryShuffled"),
+        ("Dryad Militant", "Matching", "Exile"),
+    ] {
+        let tokens = tokens_of(&card_definition(name));
+        for variant in [
+            "ReplacementEffect::GraveyardInstead".to_owned(),
+            format!("GraveyardMover::{mover}"),
+            format!("Redirect::{redirect}"),
+        ] {
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(&variant))),
+                "{name}: {variant}"
+            );
+        }
+        if mover == "This" {
+            assert!(tokens.contains(&(TokenKind::Field, name_value("reveal"))));
+        }
+    }
+}

@@ -2742,3 +2742,59 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
         opponent = decision_surface_view(branch, 1)
         assert not opponent["opponent"]["hand"]
         assert "Gray Ogre" not in opponent["definition_names"].values()
+
+
+def _pending_militant_discard() -> managym.Env:
+    env = priority_root(
+        ("Seize the Spoils", "Lightning Bolt"),
+        ("Mountain",) * 3 + ("Dryad Militant",),
+        opponent=("Dryad Militant",),
+    )
+    _choose(env, "Seize the Spoils")
+    _choose(env, "Lightning Bolt")
+    return env
+
+
+def test_discard_payment_replays_both_militant_replacement_commands() -> None:
+    env = _pending_militant_discard()
+    decision = capture_text_decision(env)
+    _assert_policy_input_holds_the_decision(env, decision)
+    assert len(decision.actions) == 2
+    for action in decision.actions:
+        assert "Dryad Militant" in action.description
+        assert "Exile instead" in action.description
+        branch = _replay_text_choice(env, action.reference)
+        cards = branch.observation_for_player(0).agent_cards
+        assert any(
+            card.characteristics.name == "Lightning Bolt"
+            and card.zone == managym.ZoneEnum.EXILE
+            for card in cards
+        )
+
+
+def test_sampled_opponent_can_finish_a_discard_payment_with_either_spell_type() -> None:
+    env = _pending_militant_discard()
+    sample = env.clone_env()
+    sample.determinize(0, 1)
+    space = json.loads(env.possible_world_space_json(1))
+    assert len(space["worlds"]) == 2
+    branches = [sample] + [
+        env.materialize_possible_world(1, space["identity"], index, 0, True)
+        for index in range(len(space["worlds"]))
+    ]
+    discarded = set()
+    for index, sample in enumerate(branches):
+        decision = capture_text_decision(sample)
+        assert len(decision.actions) == 2
+        submit_response(sample, decision, decision.actions[index % 2].reference)
+        observation = sample.observation_for_player(0)
+        [spell] = observation.stack_objects
+        assert spell.characteristics is not None
+        assert spell.characteristics.name == "Seize the Spoils"
+        [exiled] = [
+            card
+            for card in observation.agent_cards
+            if card.zone == managym.ZoneEnum.EXILE
+        ]
+        discarded.add(exiled.characteristics.name)
+    assert discarded == {"Lightning Bolt", "Seize the Spoils"}

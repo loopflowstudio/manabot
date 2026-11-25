@@ -885,16 +885,14 @@ impl Game {
     pub(crate) fn pay_discard_cost(
         &mut self,
         player: PlayerId,
-        casting: Option<ObjectId>,
         object: ObjectId,
-        receipt: &mut PaymentReceipt,
+        completion: FrameCompletion,
     ) -> Result<(), AgentError> {
-        if !self.discard_candidates(player, casting).contains(&object) {
-            return Err(AgentError("discard cost must be a card in hand".into()));
-        }
-        let discarded = self.move_object(object, ZoneType::Graveyard);
-        receipt.contribute(discarded, How::Discarded, Toward::Printed);
-        Ok(())
+        self.run_payment_frame(EffectFrame {
+            batch: Some(self.graveyard_batch(EventBinding::ThisWay, [object])),
+            completion,
+            ..EffectFrame::new(player, Vec::new())
+        })
     }
 
     /// Pay the component being paid with `object`: tap it, discard it, exile
@@ -960,14 +958,19 @@ impl Game {
                 }
             }
             CostComponent::Discard => {
-                self.pay_discard_cost(
-                    player,
-                    payment.operation.spell(),
-                    object,
-                    &mut payment.receipt,
-                )?;
+                if !self
+                    .discard_candidates(player, payment.operation.spell())
+                    .contains(&object)
+                {
+                    return Err(AgentError("discard cost must be a card in hand".into()));
+                }
                 self.pending_choice = None;
                 payment.owed.remove(0);
+                return self.pay_discard_cost(
+                    player,
+                    object,
+                    FrameCompletion::DiscardPayment(Box::new(payment)),
+                );
             }
             CostComponent::ExileFromHand => {
                 if !self

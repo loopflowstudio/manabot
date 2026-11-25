@@ -11,7 +11,7 @@ use std::sync::Arc;
 use super::decision::Decision;
 use crate::state::{
     ability::Actor,
-    card::{DamageTransform, SpellProfile},
+    card::{DamageTransform, GraveyardMover, Redirect, SpellProfile},
 };
 use crate::{
     flow::{event::GameEvent, game::Game},
@@ -40,6 +40,10 @@ pub(crate) struct ZoneEntry {
     pub profile: SpellProfile,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
+    /// Shuffle the owner's library after the batch, revealing this card first
+    /// when requested. A replaced mill can shuffle without a zone change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shuffle_library: Option<bool>,
     /// Battlefield: enters tapped.
     pub tapped: bool,
     /// Battlefield or exile: enters with these counters ("exile it with a
@@ -194,6 +198,7 @@ impl ZoneEntry {
             },
             _ => Self::default(),
         };
+        entry.shuffle_library = self.shuffle_library;
         entry.inspected_library_departure = self.inspected_library_departure;
         entry.library_top_departure = self.library_top_departure;
         entry
@@ -458,9 +463,19 @@ impl ReplacementCandidate {
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
-            ReplacementEffect::ExileInsteadOfGraveyard => {
-                "Exile without Adventure permission".into()
+            ReplacementEffect::GraveyardInstead {
+                to: Redirect::Exile,
+                ..
+            } => "Exile instead".into(),
+            ReplacementEffect::GraveyardInstead {
+                to: Redirect::OwnerLibraryShuffled { reveal },
+                ..
+            } => if *reveal {
+                "Reveal and shuffle into owner's library"
+            } else {
+                "Shuffle into owner's library"
             }
+            .into(),
             ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::EntersPrepared => "Enter prepared".into(),
             ReplacementEffect::PreventCombatDamageToOrFromSelf
@@ -513,6 +528,9 @@ pub(crate) struct PendingEvent {
     /// Index of the original proposal; a creation's token entries keep its ordinal.
     pub(crate) ordinal: usize,
     pub(crate) sacrifice: Option<(ObjectId, PlayerId)>,
+    /// A discard remains a discard after its destination changes (CR 701.9).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) discard: bool,
     pub(crate) applied: Vec<ReplacementId>,
     /// Its "enter as a copy" choice has been made (or had no candidate).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -574,6 +592,14 @@ pub(crate) enum EventBinding {
         reveal: bool,
     },
     ThisWay,
+    Discard {
+        player: PlayerId,
+        remaining: usize,
+    },
+    Countered {
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        by: Option<ObjectId>,
+    },
     /// A Destroy instruction, including when its zone moves end in exile.
     Destroyed,
     LifeLost,
@@ -651,6 +677,19 @@ pub(crate) enum BatchProgress {
 }
 
 impl Game {
+    pub(crate) fn graveyard_batch(
+        &self,
+        binding: EventBinding,
+        objects: impl IntoIterator<Item = ObjectId>,
+    ) -> EventBatch {
+        self.event_batch(
+            binding,
+            objects.into_iter().map(|object| {
+                self.zone_move_proposal(object, ZoneType::Graveyard, ZoneEntry::default())
+            }),
+        )
+    }
+
     pub(crate) fn event_batch(
         &self,
         binding: EventBinding,
@@ -669,7 +708,7 @@ impl Game {
 
     /// A current proposal ready for replacement. Destruction and sacrifice
     /// become the graveyard move they cause (an indestructible permanent is
-    /// not destroyed), and a death the rules redirect is proposed as exile.
+    /// not destroyed). Their destination is still open to replacement.
     fn pending_event(&self, ordinal: usize, mut event: ProposedEvent) -> Option<PendingEvent> {
         if !self.proposal_is_current(&event) {
             return None;
@@ -696,8 +735,16 @@ impl Game {
                 entry: ZoneEntry::default(),
             };
         }
-        self.normalize_proposal(&mut event);
+        let discard = matches!(
+            event,
+            ProposedEvent::ZoneMove {
+                from: Some(ZoneType::Hand),
+                to: ZoneType::Graveyard,
+                ..
+            }
+        );
         Some(PendingEvent {
+            discard,
             event,
             ordinal,
             sacrifice,
@@ -705,44 +752,6 @@ impl Game {
             copy_chosen: false,
             second_card_first: None,
         })
-    }
-
-    fn normalize_proposal(&self, event: &mut ProposedEvent) {
-        // CR 614.1a: replace any death of the exact affected incarnation,
-        // including sacrifice and zero toughness, not only lethal damage.
-        if let ProposedEvent::ZoneMove {
-            object_id: object,
-            from: Some(ZoneType::Battlefield),
-            to,
-            ..
-        } = event
-        {
-            // CR 702.84a: an unearthed permanent leaving for anywhere but
-            // exile is exiled instead.
-            if *to != ZoneType::Exile
-                && *to != ZoneType::Battlefield
-                && self
-                    .lookup_current_permanent(*object)
-                    .is_ok_and(|id| self.exiled_if_it_would_leave(id))
-            {
-                *to = ZoneType::Exile;
-                return;
-            }
-            if *to == ZoneType::Graveyard
-                && self
-                    .lookup_current_permanent(*object)
-                    .ok()
-                    .is_some_and(|id| {
-                        // A finality counter (CR 122.1h) or an effect.
-                        self.exiled_if_it_would_die(id)
-                            || self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                                permanent.counter_count(CounterKind::Finality) > 0
-                            })
-                    })
-            {
-                *to = ZoneType::Exile;
-            }
-        }
     }
 
     pub(crate) fn advance_event_batch(
@@ -847,6 +856,7 @@ impl Game {
         let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
+        let mut shuffles = Vec::new();
         let mut hits = Vec::new();
         let mut totals: Vec<(ObjectId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
@@ -927,6 +937,26 @@ impl Game {
                 }
                 _ => None,
             };
+            if let ProposedEvent::ZoneMove {
+                object_id,
+                from,
+                to,
+                entry,
+            } = event
+            {
+                if let Some(reveal) = entry.shuffle_library {
+                    let card = self.state.entry_object(*object_id);
+                    let revealed_in_library =
+                        reveal && *from == Some(ZoneType::Library) && *to == ZoneType::Library;
+                    shuffles.push((card.owner, revealed_in_library.then_some(*object_id)));
+                    if reveal {
+                        self.emit(GameEvent::CardRevealed {
+                            owner: card.owner,
+                            definition: card.definition_id,
+                        });
+                    }
+                }
+            }
             let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
             if let Some(second_first) = pending.second_card_first {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
@@ -956,6 +986,16 @@ impl Game {
                 }
             }
             results.push(result);
+        }
+        // CR 701.20d: a revealed library card becomes a new object when
+        // shuffled. Renew it after all simultaneous moves have used the
+        // pre-shuffle ordering. No zone-change event or arrival is produced.
+        for (owner, revealed) in shuffles {
+            if let Some(object) = revealed {
+                self.state
+                    .mint_appearance(object, owner, ZoneType::Library, false);
+            }
+            self.shuffle_library(owner);
         }
         // Derive control once all simultaneous moves are visible. An Aura
         // departing with its host cannot transfer the departing host back.
@@ -1145,8 +1185,12 @@ impl Game {
                 object_id: object,
                 entry,
                 ..
-            } => entry
-                .controller
+            } => self
+                .state
+                .permanent_of(*object)
+                .and_then(|id| self.state.permanents[id].as_ref().map(|p| p.controller))
+                .or_else(|| self.spell_on_stack(*object).map(|s| s.controller))
+                .or(entry.controller)
                 .unwrap_or(self.state.entry_object(*object).owner),
         }
     }
@@ -1230,7 +1274,8 @@ impl Game {
             } => {
                 if self.state.objects.get(object_id.slot()).is_none()
                     || self.state.zones.zone_of(*object_id) != *from
-                    || *from == Some(*to)
+                    || (*from == Some(*to)
+                        && !(*to == ZoneType::Library && entry.shuffle_library.is_some()))
                     || *entry != entry.for_zone(*to)
                 {
                     return false;
@@ -1256,32 +1301,107 @@ impl Game {
                 .is_some_and(|current| source.generation() < current)
     }
 
+    /// CR 614.1, 616.1: start with the proposed destination. An effect on
+    /// the departing object competes with printed battlefield replacements.
+    fn departure_replacements(
+        &self,
+        object: ObjectId,
+        from: Option<ZoneType>,
+        to: ZoneType,
+        entry: &ZoneEntry,
+    ) -> Vec<ReplacementCandidate> {
+        let mut out = Vec::new();
+        let graveyard = to == ZoneType::Graveyard;
+        let face = self.state.entry_object(object);
+        let first_rule = face.replacement_effects.len();
+        let exile = ReplacementEffect::GraveyardInstead {
+            what: GraveyardMover::This,
+            to: Redirect::Exile,
+        };
+        if from == Some(ZoneType::Stack) {
+            let spell = self.spell_on_stack(object);
+            if graveyard && entry.resolving_adventure.is_some() {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule,
+                    ReplacementEffect::AdventureExile,
+                ));
+            }
+            if spell.is_some_and(|s| s.flashback || graveyard && s.exile_instead_of_graveyard) {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule + 1,
+                    exile.clone(),
+                ));
+            }
+        }
+        if let Some(id) = self.state.permanent_of(object) {
+            if graveyard
+                && self.state.permanents[id]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::Finality)
+                    > 0
+            {
+                out.push(ReplacementCandidate::printed(
+                    object,
+                    first_rule,
+                    exile.clone(),
+                ));
+            }
+            for record in self.effects_on(id).filter(|r| {
+                r.modification == Modification::ExileIfWouldLeave
+                    || graveyard && r.modification == Modification::ExileIfWouldDie
+            }) {
+                let mut candidate = ReplacementCandidate::printed(object, 0, exile.clone());
+                candidate.identity.effect = Some(record.timestamp);
+                candidate.source_definition = record.source;
+                out.push(candidate);
+            }
+        }
+        if !graveyard || self.is_face_down_in_exile(object) {
+            return out;
+        }
+        // An object's own text can function outside the battlefield. On the
+        // battlefield both scopes read the active face and ability layer.
+        if from != Some(ZoneType::Battlefield) {
+            for (index, effect) in face.replacement_effects.iter().enumerate() {
+                if matches!(
+                    effect,
+                    ReplacementEffect::GraveyardInstead {
+                        what: GraveyardMover::This,
+                        ..
+                    }
+                ) {
+                    out.push(ReplacementCandidate::printed(object, index, effect.clone()));
+                }
+            }
+        }
+        for id in [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|p| self.iter_battlefield_permanents(p))
+        {
+            let source = self.permanent_object(id).expect("battlefield");
+            for (index, effect) in self.state[source].replacement_effects.iter().enumerate() {
+                let ReplacementEffect::GraveyardInstead { what, .. } = effect else {
+                    continue;
+                };
+                let applies = match what {
+                    GraveyardMover::This => source == object,
+                    GraveyardMover::Matching(predicate) => {
+                        face.is_card() && self.object_matches_predicate(object, predicate)
+                    }
+                };
+                if applies && !self.layer_view(id).abilities_lost {
+                    out.push(ReplacementCandidate::printed(source, index, effect.clone()));
+                }
+            }
+        }
+        out
+    }
+
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
-            ProposedEvent::ZoneMove {
-                object_id,
-                from: Some(ZoneType::Stack),
-                to: ZoneType::Graveyard,
-                entry,
-            } => {
-                let mut choices = Vec::new();
-                for (index, replacement) in [
-                    entry
-                        .resolving_adventure
-                        .map(|_| ReplacementEffect::AdventureExile),
-                    self.spell_on_stack(*object_id)
-                        .is_some_and(|spell| spell.exile_instead_of_graveyard)
-                        .then_some(ReplacementEffect::ExileInsteadOfGraveyard),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if let Some(effect) = replacement {
-                        choices.push(ReplacementCandidate::printed(*object_id, index, effect));
-                    }
-                }
-                choices
-            }
             ProposedEvent::CreateTokens {
                 controller, count, ..
             } if *count > 0 => {
@@ -1516,6 +1636,17 @@ impl Game {
             }
             _ => Vec::new(),
         };
+        if let ProposedEvent::ZoneMove {
+            object_id,
+            from,
+            to,
+            entry,
+        } = event
+        {
+            if *to != ZoneType::Exile {
+                candidates.extend(self.departure_replacements(*object_id, *from, *to, entry));
+            }
+        }
         // Positive placements, including prospective entry counters. This is
         // deliberately recomputed after each transformation: an own-entry
         // replacement may create the first counters another effect can modify.
@@ -1621,10 +1752,16 @@ impl Game {
         match (&mut pending.event, &candidate.effect) {
             (
                 ProposedEvent::ZoneMove { to, entry, .. },
-                ReplacementEffect::ExileInsteadOfGraveyard,
+                ReplacementEffect::GraveyardInstead { to: redirect, .. },
             ) => {
-                *to = ZoneType::Exile;
-                *entry = ZoneEntry::default();
+                *to = match *redirect {
+                    Redirect::Exile => ZoneType::Exile,
+                    Redirect::OwnerLibraryShuffled { reveal } => {
+                        entry.shuffle_library = Some(reveal);
+                        ZoneType::Library
+                    }
+                };
+                *entry = entry.for_zone(*to);
             }
             (ProposedEvent::ZoneMove { to, entry, .. }, ReplacementEffect::AdventureExile) => {
                 *to = ZoneType::Exile;
@@ -1785,6 +1922,13 @@ impl Game {
                 to,
                 ref entry,
             } => {
+                if from == Some(to) {
+                    debug_assert!(to == ZoneType::Library && entry.shuffle_library.is_some());
+                    return EventResult {
+                        committed: true,
+                        ..Default::default()
+                    };
+                }
                 return self.commit_zone_move(
                     object_id,
                     from,
@@ -1792,7 +1936,7 @@ impl Game {
                     entry.for_zone(to),
                     lki,
                     followups,
-                )
+                );
             }
         };
         result
