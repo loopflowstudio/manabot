@@ -1,4 +1,4 @@
-at: 7c75706ef1e67385909684d24dd53f7b17b03375
+at: fd3596f4091ec18b4fe1208462e2964dd8943ced
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -11,7 +11,7 @@ first:
   - path: managym/state/src/permanent.rs
     why: EntryChoice stored per battlefield incarnation; Wish counters
   - path: managym/state/src/mana.rs
-    why: Unified ManaExpiry classes and digest-cached SpendPredicates restrictions
+    why: ManaExpiry, EmptyDisposition, ManaTypeSet, pop_next_pip, SpendPredicates digests
   - path: managym/src/state/player.rs
     why: Single unified mana_pool replacing separate combat_mana_pool
   - path: managym/src/state/hash.rs
@@ -31,7 +31,7 @@ first:
   - path: managym/src/flow/play.rs
     why: Kicker target bounds, target division, and Spyglass checks
   - path: managym/src/flow/payment.rs
-    why: Multi-component resolution payments for composite ward costs
+    why: Composite resolution payments and CostPermissionContext help plumbing
   - path: managym/src/flow/decision.rs
     why: Entry choices, Modal pile splits, shared sacrifices, and retargets
   - path: managym/src/flow/resolution.rs
@@ -41,7 +41,9 @@ first:
   - path: managym/src/flow/statics.rs
     why: Guarded source-relative predicates, graveyard arrivals, Spyglass bans
   - path: managym/src/flow/mana.rs
-    why: Chosen-value mana, expiry, fixed fast-paths, source-class cache, search pruning
+    why: Unified feasibility projection, fixed fast-paths, search pruning, step-end emptying
+  - path: managym/src/flow/mana/help.rs
+    why: Convoke/improvise/waterbend tap eligibility via CostPermissionContext and ManaTypeSet
   - path: managym/src/flow/turn.rs
     why: Unified graveyard arrivals and casts-before-triggering lookup
   - path: managym/src/flow/zones.rs
@@ -72,6 +74,10 @@ first:
     why: Display step, end-of-combat, and end-of-turn mana expiry wording
   - path: academy/ui/src/lib/board/prompt.ts
     why: Plain prompt lines for shares, entry choices, and pile stages
+  - path: academy/ui/src/lib/board/partition.ts
+    why: Holistic Curator pile-partition draft state and per-card offer matching
+  - path: academy/ui/src/lib/board/Board.svelte
+    why: Foldable pile-partition panel and sequential authority submission
   - path: academy/ui/src/lib/board/Plate.svelte
     why: Display private known-hand counts and chosen labels
   - path: managym/cards/src/fdn.rs
@@ -89,9 +95,9 @@ first:
   - path: managym/src/flow/target_authority_tests.rs
     why: Whole-assignment target swaps vs single-slot retargeting
   - path: managym/src/flow/mana/tests.rs
-    why: Fixed fast-paths, tap dedup, sibling pruning, equivalence, bound tests
+    why: Feasibility projection, mixed-expiry parity, fixed fast-paths, tap dedup
   - path: managym/examples/bench_states.rs
-    why: Entry-choice, Changeling, Genesis Wave, and Ventmaw stress states
+    why: Entry-choice, Changeling, Genesis Wave, Ventmaw, and mixed-pools stress states
   - path: managym/cards/tests/cards/fdn.rs
     why: Directed tests for Curator, Harvester, keep_permanents, and FDN tail
   - path: managym/cards/tests/cards/rna.rs
@@ -102,6 +108,10 @@ first:
     why: Spyglass private look timing, order, and simultaneous entries
   - path: managym/cards/tests/cards/neo.rs
     why: Entry-choice mana restrictions and Zhao land-type suppression
+  - path: academy/ui/src/lib/board/partition.test.ts
+    why: Unit tests for holistic pile-partition drafting and offer matching
+  - path: academy/ui/e2e/partition-piles.spec.ts
+    why: Playwright E2E for Curator pile partition and mid-stream interruption
   - path: tests/semantic/test_text_observation.py
     why: Text play and Academy replay for choices, piles, shares, retarget, expiry
 hide:
