@@ -103,13 +103,6 @@ hits use an `--accent` outline; the drop zone and marquee use a dashed
 `--accent` edge (softening to `--border-strong` when outside the drop zone),
 with an opaque `--bg-surface` label pill.
 
-### Where the remaining code goes
-
-- `board/drag.ts` and its test add the marquee gesture and rectangle intersection.
-- `board/combat.ts` and its test add the union of selected attackers and the block-draft wording.
-- `board/Board.svelte` and `Field.svelte` apply the existing drop highlight to every declarable creature intersecting the box. The rows accept touch drags during attack drafts. Update the block-draft caption and the keys sheet.
-- `e2e/drag-play.spec.ts` exercises live marquee highlights, row boundaries, confirmation and motion preferences.
-
 ## Acceptance check at gate
 
 From `academy/ui`, with frontend generation finished first:
@@ -209,8 +202,12 @@ No earlier drag attempt exists in the tree.
    unchanged. `mana-payment.spec.ts` fails its pile-title check
    (`.title:visible` count 0) on the base commit too: pre-existing, unrelated.
 2. **Block and target drags — built in `4dcf306764`.** All 12 drag browser cases and 21 focused drag/combat unit cases passed. Svelte reported zero errors or warnings. The drag spec covers assignment, reassignment, Escape restoring the armed blocker, previewless blocking, spell and ability sources, all three recipient types, payment preview, multi-offer choice and Study click parity.
-3. **Next: attack marquee, wording and visual checks.** Add live hit selection and `addAttackers`, update the draft caption, "No blocks" wording and shortcut sheet, check light/dark at 1280×800, and exercise motion preferences. The full release run belongs to gate.
-   Review note from pass 2: `Endpoint` now has both `stack` (a spell's card id) and `stack-entry` (a stack object id, abilities included) in `board/recent.ts`; fold them into one stack endpoint if the line measurement allows, otherwise say why both exist beside the type. Docs (`docs/academy.md`) already describe the marquee; adjust only if the build differs.
+3. **Attack marquee and interaction wording — built in `86c6a5f792`.** Release adds the highlighted attackers. Edge contact counts, including individual fanned copies. A scrolling row clips the sweep to its visible area. The empty block plan, block caption and shortcuts sheet describe dragging.
+   The two stack endpoints have distinct lifetimes. Live ability entries can lack a card, and a resolved spell thumbnail can outlive its stack object. The type in `board/recent.ts` documents both.
+
+Pass 3 checks covered 23 drag/combat unit cases and eight focused browser cases, including pointer and keyboard combat, block reassignment and five marquee cases. Svelte reported zero errors or warnings. The 1280×800 screenshots show the selection box and both card outlines in light mode with normal motion and dark mode with reduced motion.
+
+**Next:** Gate runs the acceptance commands above, including the full release proof. All three implementation passes are complete.
 
 ## Done when
 
