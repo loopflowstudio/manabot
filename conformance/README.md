@@ -19,9 +19,10 @@ Current-world (w17) corpora with executable consumers:
   (`scripts/verify-public-commitment-parity`).
 
 The current catalog binds `evidence-battlefield-history-v1.json` and the
-authored-match authority and parity receipts ending in
-`-battlefield-history.json`. The battlefield-forms, casting-history, casting
-and opening-hand receipts retain their recording revisions.
+authored-match authority receipt ending in `-battlefield-history.json`. The
+`-named-turns.json` parity receipt covers the same 174 Commands with step and
+phase names in viewer JSON. Earlier parity receipts retain their recording
+revisions.
 The authored trace
 takes two explicit keep Commands, then follows the seeded priority line.
 Generate its authority with `scripts/generate_authored_match_receipt.py`
