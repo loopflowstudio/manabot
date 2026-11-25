@@ -128,7 +128,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     });
     await page.mouse.move(x, y);
     await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
     await clickCard(page.locator(`[data-object-id="${ownId}"]`));
     await waitForRevision(page, before);

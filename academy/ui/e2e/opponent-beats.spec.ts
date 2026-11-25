@@ -86,8 +86,6 @@ test('the opponent\'s moves are read out before the decision, and the first pres
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  // The slow pace leaves time to read a beat before it ends by itself.
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
   const main = page.locator('main');
@@ -132,7 +130,6 @@ test('pressing the board or activating a choice ends the reading without acting'
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
   const board = page.getByTestId('game-board');
