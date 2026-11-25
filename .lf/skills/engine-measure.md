@@ -5,23 +5,22 @@ action_style: procedural
 ---
 Measure where the engine spends time on this change's workloads, and plan only improvements backed by a profile.
 
-1. Run ordinary training, play and search workloads and the engine budget
-   harness. Ordinary play rarely builds a big board, so name the states where
-   the changed code's cost could grow badly (large duplicative boards, large
-   diverse ones) and run them with
-   `cargo run --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml`
-   ([stress states](../../docs/development.md#stress-states)); add a state
-   when none has the shape. A large constructed board run once is a workload;
-   never induce resource pressure or run a stress loop.
-2. Fix hardware, build, workload identity and limits before comparing. Record
-   baseline time, throughput, memory or allocation counts and behavior
-   digests in `scratch/plan.md`. Profile before planning; pick bottlenecks
-   from the profile, not from reading code.
-3. Write each improvement into `scratch/plan.md` as a slice: its hypothesis,
-   what it deletes and its focused check. Complete choices, observation
-   capacity semantics, native skipping and cache and debug invariants must
-   hold. Speed claims require same-machine numbers.
-4. If the implementation is already efficient, record the numbers and plan no
-   slices; passing the 10% regression allowance alone doesn't prove that.
-   Leave measurements needing unavailable hardware as an exact deferred
-   command and make no speed claim.
+1. Compare candidate and base on the same build CI times: uninstrumented
+   release `bench_steps` and `bench_search` (without `--features benchmark`),
+   recording behavior digests and wall time. On a contended host, wall time
+   is noise—measure load-invariant instructions retired (`/usr/bin/time -l`
+   or `perf stat`) and take a CPU sampling profile (`sample` or `perf`)
+   instead of deferring speed to CI.
+2. Run `cargo run --release --features benchmark --example bench_states
+   --manifest-path managym/Cargo.toml`
+   ([stress states](../../docs/development.md#stress-states)) on the
+   large-board shapes the change touches, adding one when none fits. Never
+   induce resource pressure or run a stress loop. Matching `bench_states`
+   counters alone never clears per-step speed.
+3. Profile before planning; pick bottlenecks from the profile, not from
+   reading code. Write each improvement into `scratch/plan.md` as a slice:
+   its hypothesis, what it deletes and its focused check, preserving complete
+   choices, observation capacities, native skipping and cache/debug invariants.
+4. If the profile leaves no bottleneck worth attacking, record the numbers
+   and plan no slices; passing the 10% budget floor alone doesn't prove that.
+   Leave unavailable hardware as an exact deferred command with no speed claim.

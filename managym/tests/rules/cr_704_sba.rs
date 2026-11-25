@@ -317,7 +317,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         },
         controller: PlayerId(0),
         source_identity: managym::state::game_object::AbilitySource::new(object, Some(old_ref)),
-        effects: vec![Effect::Move {
+        effects: managym::flow::trigger::DelayedEffects::new(vec![Effect::Move {
             unrevealed: false,
             library_end: None,
             what: ObjectSelector::This,
@@ -327,7 +327,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             under: Some(PlayerSelector::Owner),
             with_counter: None,
             linked: None,
-        }],
+        }]),
         frequency: managym::state::ability::DelayedFrequency::Once,
         expiry: managym::state::ability::DelayedExpiry::Never,
     });
@@ -427,4 +427,101 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
             }
         }
     }
+}
+
+/// Witness Protection on a Gray Ogre equipped with Leyline Axe.
+fn enchanted_and_equipped_ogre() -> (Scenario, [managym::state::game_object::PermanentId; 3]) {
+    use crate::support::play::{activate, cast, settle};
+    use managym::state::target::Target;
+
+    let mut s = five_color_setup(&["Witness Protection", "Leyline Axe", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let aura = cast(&mut s, "Witness Protection");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let aura = permanent_of(&s, aura).expect("aura entered");
+    let axe = enters_battlefield_with_triggers(&mut s, 0, "Leyline Axe");
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, axe, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    (s, [ogre, aura, axe])
+}
+
+/// CR 704.5m, 704.5n, 704.5p and 301.5c read layered characteristics: an
+/// Aura that loses its abilities goes to the graveyard, an Aura that stops
+/// being an Aura detaches and stays, and an Equipment that becomes a
+/// creature detaches and stays; an Aura that becomes a creature goes to the
+/// graveyard. Unchanged, both stay attached.
+#[test]
+fn cr_704_5m_n_p_attachment_legality_reads_layered_characteristics() {
+    use crate::support::inspect::card_of;
+    use managym::state::{card::CardType, game_object::PermanentId};
+
+    let attached = |s: &Scenario, id: PermanentId| {
+        s.game().state.permanents[id]
+            .as_ref()
+            .and_then(|permanent| permanent.attached_to)
+    };
+    let (mut s, [ogre, aura, axe]) = enchanted_and_equipped_ogre();
+    let ogre_object = s.game().permanent_object(ogre);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(attached(&s, aura), ogre_object, "control: still legal");
+    assert_eq!(attached(&s, axe), ogre_object, "control: still legal");
+
+    let (mut s, [_, aura, _]) = enchanted_and_equipped_ogre();
+    let aura_card = card_of(&s, aura);
+    until_end_of_turn(&mut s, aura, Modification::LoseAllAbilities);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(
+        zone_of(&s, aura_card),
+        Some(ZoneType::Graveyard),
+        "an Aura without enchant (704.5m)"
+    );
+
+    let (mut s, [_, aura, _]) = enchanted_and_equipped_ogre();
+    let aura_card = card_of(&s, aura);
+    until_end_of_turn(
+        &mut s,
+        aura,
+        Modification::SetTypes {
+            types: vec![CardType::Artifact],
+            subtypes: vec![],
+        },
+    );
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(attached(&s, aura), None, "no longer an Aura (704.5p)");
+    assert_eq!(zone_of(&s, aura_card), Some(ZoneType::Battlefield));
+
+    let (mut s, [_, _, axe]) = enchanted_and_equipped_ogre();
+    until_end_of_turn(&mut s, axe, Modification::BecomeCreature);
+    until_end_of_turn(
+        &mut s,
+        axe,
+        Modification::SetBasePt {
+            power: Some(2),
+            toughness: Some(2),
+        },
+    );
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(attached(&s, axe), None, "an equipment creature (301.5c)");
+    assert!(s.game().state.permanents[axe].is_some());
+
+    let (mut s, [_, aura, _]) = enchanted_and_equipped_ogre();
+    let aura_card = card_of(&s, aura);
+    until_end_of_turn(&mut s, aura, Modification::BecomeCreature);
+    until_end_of_turn(
+        &mut s,
+        aura,
+        Modification::SetBasePt {
+            power: Some(2),
+            toughness: Some(2),
+        },
+    );
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert_eq!(
+        zone_of(&s, aura_card),
+        Some(ZoneType::Graveyard),
+        "an Aura creature can't enchant anything (303.4d, 704.5m)"
+    );
 }

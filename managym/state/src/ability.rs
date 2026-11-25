@@ -1,5 +1,5 @@
 use super::card::{Keyword, Keywords};
-use super::effect::{EffectDuration, Modification};
+use super::effect::{CopyException, EffectDuration, Modification};
 use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
 use super::payment::How;
@@ -21,10 +21,23 @@ pub enum Ability {
 }
 
 impl Ability {
+    pub fn enters(effects: Vec<Effect>) -> Self {
+        Self::when_enters(TriggerSubject::This, effects)
+    }
+
     pub fn when_enters(subject: TriggerSubject, effects: Vec<Effect>) -> Self {
         Self::Triggered {
             condition: TriggerCondition::EntersTheBattlefield { subject },
             intervening_if: None,
+            effects,
+        }
+    }
+
+    /// A Saga's chapter ability (CR 714.2).
+    pub fn chapter(chapter: u8, effects: Vec<Effect>) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::Chapter { chapter },
             effects,
         }
     }
@@ -297,6 +310,13 @@ pub enum TriggerCondition {
         whose: Actor,
         predicate: CardPredicate,
     },
+    /// One or more physical cards leave the controller’s graveyard in one event.
+    CardsLeaveYourGraveyard,
+    /// Whenever this source deals damage to any recipient.
+    SourceDealsDamage,
+    /// "When this creature deals combat damage" (CR 510.2) to any recipient,
+    /// creature or player: once per combat damage step it deals any.
+    SourceDealsCombatDamage,
     /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
     /// prevented damage excluded. `to` is a player matching that actor, or
     /// `None` for any recipient ("deals combat damage"); then each creature
@@ -350,6 +370,10 @@ pub enum Condition {
         left: Box<EffectValue>,
         op: CompareOp,
         right: Box<EffectValue>,
+    },
+    AtMostHalfStartingLife,
+    OwnsMeldPair {
+        partner: String,
     },
     YourTurn,
     OpponentControlsMoreCreatures,
@@ -441,8 +465,10 @@ pub enum Condition {
     /// `YourTurn`).
     Not(Box<Condition>),
     CreatureDiedThisTurn,
-    /// Resolution only: the resolving spell was kicked (CR 702.33).
+    /// The spell or the spell that became this permanent was kicked (CR 702.33).
     Kicked,
+    /// The resolving spell was cast from a graveyard. A spell copy was never cast.
+    CastFromGraveyard,
     /// Resolution only: the frame's primary target is still a permanent and
     /// matches [predicate] ("if that creature is an Ally").
     TargetMatches(CardPredicate),
@@ -453,6 +479,14 @@ pub enum Condition {
     /// Source question: the ability's source permanent has `count` or more
     /// `kind` counters ("Then if it has four or more quest counters on it").
     SourceCountersAtLeast {
+        kind: CounterKind,
+        count: i32,
+    },
+    /// Resolution only: the permanent the resolving Aura or Equipment ability's
+    /// source is (or, once the source has left, was) attached to has `count`
+    /// or more `kind` counters ("Then if that creature has three or more
+    /// +1/+1 counters on it"). False once that permanent has left.
+    AttachedCountersAtLeast {
         kind: CounterKind,
         count: i32,
     },
@@ -472,7 +506,7 @@ pub enum Condition {
     /// matches [predicate] now, or, once it has left, matched it as it last
     /// existed ("if it was attacking", CR 603.10a).
     TriggeringMatches(CardPredicate),
-    /// Resolution only: a card the scope's latest mill or discard moved matches
+    /// Resolution only: a card the scope's latest mill, discard or reveal found matches
     /// [predicate] ("When you discard a nonland card this way").
     CardsThisWayMatch(CardPredicate),
     /// Resolution only: the spell whose casting triggered the ability
@@ -607,7 +641,9 @@ impl Condition {
     pub fn reads_source(&self) -> bool {
         match self {
             Condition::Compare { left, right, .. } => left.reads_source() || right.reads_source(),
-            Condition::SourceCountersAtLeast { .. }
+            Condition::Kicked
+            | Condition::OwnsMeldPair { .. }
+            | Condition::SourceCountersAtLeast { .. }
             | Condition::SourceUnprepared
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -631,19 +667,23 @@ impl Condition {
             Condition::Compare { left, right, .. } => {
                 left.is_resolution_only() || right.is_resolution_only()
             }
-            Condition::Kicked
+            Condition::CastFromGraveyard
             | Condition::TargetMatches(_)
+            | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
             | Condition::CardsThisWayMatch(_)
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
-            | Condition::TargetControlledByYou => true,
+            | Condition::TargetControlledByYou
+            | Condition::AttachedCountersAtLeast { .. } => true,
             Condition::AllOf(conditions) | Condition::AnyOf(conditions) => {
                 conditions.iter().any(Condition::is_resolution_only)
             }
             Condition::Not(condition) => condition.is_resolution_only(),
-            Condition::SourceCountersAtLeast { .. }
+            Condition::Kicked
+            | Condition::OwnsMeldPair { .. }
+            | Condition::SourceCountersAtLeast { .. }
             | Condition::SourceUnprepared
             | Condition::SourceTapped
             | Condition::SourceSaddled
@@ -952,6 +992,8 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
+    /// Actual amount of the damage event that triggered this ability.
+    TriggerDamage,
     /// Amount from the event that triggered this ability (damage dealt or life lost).
     TriggeringAmount,
     /// Total life actually lost to this scope's latest LoseLife instruction.
@@ -959,6 +1001,11 @@ pub enum EffectValue {
     /// The source permanent's current power ("where X is this creature's
     /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
+    /// The counters on the source as it died, less a stated amount.
+    DeathCountersMinus {
+        kind: CounterKind,
+        subtract: i32,
+    },
     /// The power of the creature the source is attached to ("where X is
     /// equipped creature's power"), at least 0; 0 when it is attached to none.
     AttachedCreaturePower,
@@ -1062,6 +1109,33 @@ pub enum DistinctSearchEnd {
     Hand,
 }
 
+/// Counters a zone move puts on the entering permanent. A single counter
+/// retains its original bare-kind representation in card learning programs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntryCounters {
+    pub kind: CounterKind,
+    pub count: EffectValue,
+}
+
+impl From<CounterKind> for EntryCounters {
+    fn from(kind: CounterKind) -> Self {
+        Self {
+            kind,
+            count: EffectValue::Fixed(1),
+        }
+    }
+}
+
+impl serde::Serialize for EntryCounters {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        if self.count == EffectValue::Fixed(1) {
+            self.kind.serialize(serializer)
+        } else {
+            (&self.kind, &self.count).serialize(serializer)
+        }
+    }
+}
+
 /// Which end of a library receives a moved or ordered card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LibraryEnd {
@@ -1101,6 +1175,8 @@ pub enum ObjectSelector {
     /// Objects captured when a delayed trigger was created, still in the same
     /// incarnation; separate from the object supplied by its triggering event.
     Remembered,
+    /// Cards in exile linked to the exact ability source (CR 607.2a).
+    ExiledWithSource,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -1163,6 +1239,16 @@ pub enum ObjectSelector {
         max_mana_value: Option<Box<EffectValue>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         exact_mana_value: Option<Box<EffectValue>>,
+    },
+    /// Every card matching [predicate] in a public card zone owned by
+    /// `owner`, fixed as the instruction resolves, in seat order ("all
+    /// creature cards from all graveyards"). Ranges over physical cards by
+    /// owner, unlike `Each`'s permanents by controller; a hidden zone is
+    /// `Zone`, whose selection keeps sampling provenance.
+    ZoneMatching {
+        zone: ZoneType,
+        owner: Actor,
+        predicate: CardPredicate,
     },
 }
 
@@ -1267,6 +1353,7 @@ impl ObjectSelector {
             | Self::Attached
             | Self::CreatedThisWay
             | Self::Remembered
+            | Self::ExiledWithSource
             | Self::Grantor
             | Self::Moved
             | Self::CardsThisWay
@@ -1275,7 +1362,8 @@ impl ObjectSelector {
             | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
-            | Self::Each { .. } => None,
+            | Self::Each { .. }
+            | Self::ZoneMatching { .. } => None,
         }
     }
 
@@ -1384,7 +1472,7 @@ pub enum Effect {
         #[serde(skip_serializing_if = "Option::is_none")]
         under: Option<PlayerSelector>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        with_counter: Option<CounterKind>,
+        with_counter: Option<EntryCounters>,
         #[serde(skip_serializing_if = "Option::is_none")]
         linked: Option<LinkedExile>,
     },
@@ -1420,8 +1508,10 @@ pub enum Effect {
     /// the token's own copiable values (CR 707.9b), so a copy of it inherits
     /// them.
     CreateTokenCopy {
+        #[serde(skip_serializing_if = "is_fixed_one")]
+        count: EffectValue,
         of: ObjectSelector,
-        exceptions: Vec<Modification<EffectValue>>,
+        exceptions: Vec<CopyException<EffectValue>>,
     },
     OptionalPayment {
         cost: PaymentCost,
@@ -1558,6 +1648,13 @@ pub enum Effect {
     /// stays the same object (CR 701.27a). Nothing happens to a permanent that
     /// isn't a double-faced card (CR 701.27c).
     TransformSource,
+    ExileMeldPair {
+        partner: String,
+    },
+    MeldExiled {
+        fronts: [String; 2],
+        result: String,
+    },
     /// "[player] gains control of [what]" for `duration` (CR 613.1b).
     GainControl {
         player: PlayerSelector,
@@ -1808,6 +1905,7 @@ pub enum Effect {
     Scry {
         count: usize,
     },
+    ManifestDread,
     /// Surveil `count` (CR 701.25): look at the top cards and put any
     /// number of them into the graveyard, then order the kept cards on top.
     Surveil {
@@ -1835,6 +1933,8 @@ pub enum Effect {
         #[serde(skip_serializing_if = "Option::is_none")]
         max_mana_value: Option<Box<EffectValue>>,
     },
+    /// Reveal the top card and bind it as a card revealed this way.
+    RevealLibraryTop,
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
     PutTopCardsInHand {
@@ -2241,7 +2341,14 @@ impl Effect {
             | Self::CopyTriggeringObject
             | Self::CopyTriggeringSpellForEach { .. } => read == ContextRead::TriggeringObject,
             Self::ApplyContinuous { modification, .. } => modification_reads(modification),
-            Self::CreateTokenCopy { exceptions, .. } => exceptions.iter().any(modification_reads),
+            Self::CreateTokenCopy {
+                count, exceptions, ..
+            } => {
+                count.reads(read)
+                    || exceptions
+                        .iter()
+                        .any(|exception| modification_reads(&exception.modification()))
+            }
             Self::If { condition, .. } if condition.reads(read) => true,
             Self::SelectCards { max, .. } if max.reads(read) => true,
             Self::TriggerModes {
@@ -2527,6 +2634,8 @@ impl Effect {
             | Effect::SearchDistinctNames { .. }
             | Effect::DrawCards { .. }
             | Effect::CreateToken { .. }
+            | Effect::ExileMeldPair { .. }
+            | Effect::MeldExiled { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
             | Effect::WinGame
@@ -2552,8 +2661,10 @@ impl Effect {
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
             | Effect::Scry { .. }
+            | Effect::ManifestDread
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
+            | Effect::RevealLibraryTop
             | Effect::PutTopCardsInHand { .. }
             | Effect::Learn
             | Effect::Modal { .. }
@@ -2728,6 +2839,15 @@ impl Effect {
         }
     }
 
+    /// Create token copies of each selected object with its copiable values.
+    pub fn create_token_copies(of: ObjectSelector, count: impl Into<EffectValue>) -> Self {
+        Effect::CreateTokenCopy {
+            of,
+            count: count.into(),
+            exceptions: Vec::new(),
+        }
+    }
+
     /// "Add [mana]."
     pub fn add_mana(mana: Mana) -> Self {
         Effect::AddMana {
@@ -2782,6 +2902,57 @@ impl Effect {
         Self::move_to(what, ZoneType::Hand)
     }
 
+    /// The second move follows the appearance produced by exile.
+    pub fn exile_and_return_transformed(
+        under: Option<PlayerSelector>,
+        with_counter: Option<CounterKind>,
+    ) -> Vec<Effect> {
+        vec![
+            Effect::exile(ObjectSelector::This),
+            Effect::Move {
+                unrevealed: false,
+                library_end: None,
+                what: ObjectSelector::Moved,
+                to: ZoneType::Battlefield,
+                tapped: false,
+                transformed: true,
+                under,
+                with_counter: with_counter.map(Into::into),
+                linked: None,
+            },
+        ]
+    }
+
+    /// Return the named cards under their owners' control, with the stated entry terms.
+    pub fn return_to_owner(
+        what: ObjectSelector,
+        tapped: bool,
+        with_counter: Option<EntryCounters>,
+    ) -> Self {
+        Self::Move {
+            unrevealed: false,
+            what,
+            to: ZoneType::Battlefield,
+            tapped,
+            with_counter,
+            under: Some(PlayerSelector::Owner),
+            transformed: false,
+            linked: None,
+            library_end: None,
+        }
+    }
+
+    /// Capture exact objects for one occurrence at the next end step.
+    pub fn at_next_end_step(remember: ObjectSelector, effects: Vec<Effect>) -> Self {
+        Self::CreateDelayedTrigger {
+            event: DelayedEvent::EndStep { your_turn: false },
+            remember: Some(remember),
+            effects,
+            frequency: DelayedFrequency::Once,
+            expiry: DelayedExpiry::Never,
+        }
+    }
+
     /// "Return [what] to the battlefield [tapped]" under the resolving
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
@@ -2795,6 +2966,20 @@ impl Effect {
             under: None,
             with_counter: None,
             linked: None,
+        }
+    }
+
+    /// Exile a stated number of opposing permanents until the source leaves.
+    pub fn exile_until_source_leaves(spec: TargetSpec, min: usize) -> Self {
+        Self::TargetClause {
+            requirement: TargetRequirement {
+                min,
+                ..TargetRequirement::one(spec.clone())
+            },
+            effects: vec![Self::exile_linked(
+                ObjectSelector::Target(spec),
+                LinkedExile::UntilSourceLeaves,
+            )],
         }
     }
 
@@ -2926,6 +3111,7 @@ impl EffectValue {
             | Self::SpellManaValue(_)
             | Self::X
             | Self::NegativeX
+            | Self::TriggerDamage
             | Self::TriggeringAmount
             | Self::ExcessDamage
             | Self::LifeLostThisWay
@@ -2947,27 +3133,23 @@ impl From<i32> for EffectValue {
     }
 }
 
-/// The effects a printed triggered ability runs: a modal trigger's chosen
-/// modes in printed order (CR 700.2d), else its effects unchanged. The
-/// stacked ability keeps its printed identity and only its mode choice.
-pub fn with_chosen_modes<'a>(
-    effects: &'a [Effect],
+/// The effects a printed triggered ability runs once its modes are chosen
+/// (CR 700.2b): a modal rule (`[Effect::TriggerModes]`) runs the chosen
+/// modes in printed order, possibly none under "up to"; any other program
+/// runs as printed.
+pub fn chosen_trigger_effects<'a>(
+    printed: &'a [Effect],
     chosen_modes: &[usize],
 ) -> std::borrow::Cow<'a, [Effect]> {
-    match effects {
-        [Effect::TriggerModes { modes, .. }] => {
-            let mut chosen = chosen_modes.to_vec();
-            chosen.sort_unstable();
-            std::borrow::Cow::Owned(
-                chosen
-                    .into_iter()
-                    .filter_map(|mode| modes.get(mode))
-                    .flatten()
-                    .cloned()
-                    .collect(),
-            )
-        }
-        _ => std::borrow::Cow::Borrowed(effects),
+    match printed {
+        [Effect::TriggerModes { modes, .. }] => modes
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| chosen_modes.contains(index))
+            .flat_map(|(_, effects)| effects.iter().cloned())
+            .collect::<Vec<_>>()
+            .into(),
+        _ => printed.into(),
     }
 }
 
@@ -2985,22 +3167,7 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
         effects
             .iter()
             .find_map(Effect::target_spec)
-            .map(|spec| {
-                // The implicit exile-link clause is "up to one target".
-                let optional = effects.iter().any(|effect| {
-                    matches!(
-                        effect,
-                        Effect::Move {
-                            linked: Some(LinkedExile::UntilSourceLeaves),
-                            ..
-                        }
-                    )
-                });
-                vec![TargetRequirement {
-                    min: usize::from(!optional),
-                    ..TargetRequirement::one(spec.clone())
-                }]
-            })
+            .map(|spec| vec![TargetRequirement::one(spec.clone())])
             .unwrap_or_default()
     } else {
         clauses
@@ -3082,6 +3249,9 @@ impl TriggerCondition {
             | Self::Performs { .. }
             | Self::PutIntoGraveyard { .. }
             | Self::DealsCombatDamage { .. }
+            | Self::CardsLeaveYourGraveyard
+            | Self::SourceDealsDamage
+            | Self::SourceDealsCombatDamage
             | Self::DealsDamage { .. } => None,
         }
     }

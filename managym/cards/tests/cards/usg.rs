@@ -26,7 +26,7 @@ fn fog_bank_blocks_a_lifelinker_in_both_replacement_orders() {
     assert_eq!(s.action_space().actions.len(), 2);
     for mode in 0..2 {
         let mut branch = s.clone();
-        let mut replay = command(
+        let (mut replay, _) = command(
             &mut branch,
             |action| matches!(action, Action::ChooseMode {mode: choice, ..} if *choice == mode),
         );

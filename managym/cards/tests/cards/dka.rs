@@ -88,7 +88,7 @@ fn drogskol_reaver_draws_once_in_each_damage_step() {
         assert!(s.game().state.stack_objects.is_empty());
         assert_eq!(hand(&s, 0).len(), opening_hand + hit as usize);
         if hit == 1 {
-            let mut removed = command(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+            let (mut removed, _) = command(&mut s, |a| matches!(a, Action::PassPriority { .. }));
             let projected =
                 |game: &managym::flow::game::Game| Observation::for_player(game, PlayerId(0));
             assert_eq!(projected(s.game()), projected(removed.game()));

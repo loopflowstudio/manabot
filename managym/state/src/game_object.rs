@@ -255,6 +255,11 @@ impl CardVec {
         Self(cards.into())
     }
 
+    /// A private world's physical roster follows its assigned printings.
+    pub fn assign_printing(&mut self, card: CardId, definition: CardDefId) {
+        Arc::make_mut(&mut self.0)[card.index()].definition = definition;
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -282,63 +287,72 @@ pub enum ObjectLookupError {
     WrongZone,
 }
 
-/// Copiable values changed by a copy effect or by turning a back face up.
+/// The values copied from one exact appearance, before new exceptions apply.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct ChangedCopiableValues {
-    pub printed: Arc<PrintedCharacteristics>,
-    pub front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
+pub struct CopiableValues {
+    pub definition_id: Option<CardDefId>,
+    pub definition: crate::card::ObjectDefinition,
+    /// A transforming source's raw faces; a token copy of it is a
+    /// transforming token (CR 707.8a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub faces: Option<TransformingFaces>,
     pub copy: Option<crate::effect::CopyEffect>,
+}
+
+/// Effective characteristics and permanent status used by battlefield predicates.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct BattlefieldFacts {
+    pub types: crate::card::CardTypes,
+    pub subtypes: Vec<String>,
+    pub supertypes: Vec<String>,
+    pub colors: crate::mana::Colors,
+    pub name: String,
+    pub mana_value: u8,
+    pub is_legendary: bool,
+    pub token: bool,
+    pub attacking: bool,
+    pub in_combat: bool,
+    pub tapped: bool,
+    /// It entered as a manifest (CR 701.40), so references to it keep the
+    /// permanent alias after it was turned face up and left.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub manifested: bool,
+    /// It was face down when it left (CR 708.2). Distinct from lacking a
+    /// catalog definition: a face-up copy of a manifest has none either.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
 }
 
 /// Battlefield facts retained for a departed exact object.
 ///
-/// This deliberately stores identity and mutable facts, not a cloned card
-/// definition. `definition_id` resolves through the match's immutable
-/// `ContentPack` and does not clone card semantics into mutable state.
+/// Ordinary copiable values resolve through the immutable catalog. A departure
+/// with a distinct form retains its shared definition and copy exceptions.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
+    /// Ordinary appearances use their immutable catalog row directly.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub copiable: Option<Arc<ChangedCopiableValues>>,
-    /// The exact object this permanent was attached to immediately before departure.
-    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
-    pub attached_to: Option<ObjectId>,
+    pub copiable: Option<Arc<CopiableValues>>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<crate::card::CardDefId>,
     /// Effective grants retained at the event boundary, including after ability loss.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub granted_abilities: Vec<crate::ability::EffectiveTrigger>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub granted_abilities: Box<[crate::ability::EffectiveTrigger]>,
     pub keywords: crate::card::Keywords,
-    /// Its layered name when an effect changed it from its copiable values
-    /// (a face-down permanent's empty name, an effect that names it);
-    /// otherwise its name is its copiable printing's
-    /// (`Game::lki_face_printing`). Its card types, subtypes, colors and
-    /// legendary supertype are as it last existed (CR 603.10a, 608.2h): the
-    /// same view a live permanent's predicates read.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub renamed: Option<String>,
-    pub types: crate::card::CardTypes,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub subtypes: Vec<String>,
-    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
-    pub colors: crate::mana::Colors,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub is_legendary: bool,
+    /// Its creature types as it last existed (CR 608.2h), sorted; read when
+    /// a departed target's partners must share one (Secret Tunnel).
+    #[serde(skip_serializing_if = "crate::subtype::CreatureTypes::is_empty")]
+    pub creature_types: crate::subtype::CreatureTypes,
     /// The battlefield slot it occupied, so a departed `Target::Permanent`
     /// finds its last known information.
     pub permanent: PermanentId,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub animated_creature: bool,
-    /// Combat and tap status immediately before departure: an attacking
-    /// creature that dies "was attacking" (Garna, Bloodfist of Keld).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub was_attacking: bool,
-    /// Attacking or blocking (CR 506.4).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub was_in_combat: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub was_tapped: bool,
+    pub battlefield: Arc<BattlefieldFacts>,
+    #[serde(serialize_with = "exact")]
+    pub attached_to: Option<ObjectId>,
+    /// Second component's slot appearance immediately before the meld separates.
+    #[serde(skip_serializing_if = "Option::is_none", serialize_with = "exact")]
+    pub meld_partner: Option<ObjectId>,
     /// The object had lost all abilities, so it triggers nothing as it leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
@@ -367,28 +381,11 @@ pub struct ObjectLki {
 impl ObjectLki {
     /// Whether it was a creature immediately before departure (CR 603.10a).
     pub fn was_creature(&self) -> bool {
-        self.types.is_creature()
+        self.battlefield.types.is_creature()
     }
 
     pub fn was_land(&self) -> bool {
-        self.types.is_land()
-    }
-
-    /// Its distinct creature types as it last existed (CR 205.3m), sorted;
-    /// read when a departed target's partners must share one (Secret Tunnel).
-    pub fn creature_types(&self) -> Vec<String> {
-        if !self.was_creature() {
-            return Vec::new();
-        }
-        let mut types: Vec<String> = self
-            .subtypes
-            .iter()
-            .filter(|subtype| crate::subtype::is_creature_type(subtype))
-            .cloned()
-            .collect();
-        types.sort();
-        types.dedup();
-        types
+        self.battlefield.types.is_land()
     }
 }
 
@@ -410,6 +407,13 @@ fn serialize_lki_object<S: serde::Serializer>(
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ObjectLkiLog {
     by_object: BTreeMap<ObjectId, ObjectLki>,
+    indexes: Box<DepartureIndexes>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct DepartureIndexes {
+    /// Departures still carrying extra copiable values.
+    forms: std::collections::BTreeSet<ObjectId>,
     /// The departed object that occupied each battlefield slot, by
     /// `PermanentId`; a slot is never reused.
     by_permanent: Vec<Option<ObjectId>>,
@@ -419,11 +423,29 @@ impl ObjectLkiLog {
     pub fn insert(&mut self, lki: ObjectLki) {
         let object = lki.object;
         let slot = lki.permanent.0;
-        if self.by_permanent.len() <= slot {
-            self.by_permanent.resize(slot + 1, None);
+        if self.indexes.by_permanent.len() <= slot {
+            self.indexes.by_permanent.resize(slot + 1, None);
         }
-        self.by_permanent[slot].get_or_insert(object);
+        self.indexes.by_permanent[slot].get_or_insert(object);
+        if lki.copiable.is_some() {
+            self.indexes.forms.insert(object);
+        }
         self.by_object.insert(object, lki);
+    }
+
+    /// Release extra values once no resolution can read the departed form.
+    /// Only visits departures that still own a snapshot.
+    pub fn retain_forms(&mut self, mut keep: impl FnMut(ObjectId) -> bool) {
+        self.indexes.forms.retain(|object| {
+            if keep(*object) {
+                return true;
+            }
+            self.by_object
+                .get_mut(object)
+                .expect("indexed departure")
+                .copiable = None;
+            false
+        });
     }
 
     pub fn get(&self, object: ObjectId) -> Option<&ObjectLki> {
@@ -436,7 +458,8 @@ impl ObjectLkiLog {
 
     /// The departed object that occupied a battlefield slot.
     pub fn for_permanent(&self, permanent: PermanentId) -> Option<&ObjectLki> {
-        self.by_permanent
+        self.indexes
+            .by_permanent
             .get(permanent.0)
             .copied()
             .flatten()
@@ -493,17 +516,6 @@ impl ObjectVec<Object> {
     /// This is definition provenance, never a lookup of a departed object.
     pub fn retained_base(&self, object: ObjectId) -> Option<(CardDefId, &PrintedCharacteristics)> {
         self.get(object.slot()).map(Object::retained_base)
-    }
-
-    /// [`ObjectVec::retained_base`] as the shared row, with the slot's kind.
-    pub fn retained_definition(
-        &self,
-        object: ObjectId,
-    ) -> Option<(CardDefId, &Arc<PrintedCharacteristics>, ObjectKind)> {
-        self.get(object.slot()).map(|row| {
-            let (id, printed) = row.retained_definition();
-            (id, printed, row.kind())
-        })
     }
 
     /// Viewer identity and ownership are stable across appearances.
@@ -594,9 +606,69 @@ pub enum ObjectKind {
     SpellCopy,
 }
 
+/// A raw face: a catalog row id and its printed characteristics, before any
+/// copy exception.
+pub type Face = (CardDefId, Arc<PrintedCharacteristics>);
+
+/// Both raw faces of a transforming double-faced object (CR 712.1): a
+/// transforming double-faced card, or a transforming token made as a copy of
+/// one (CR 707.8a). Copy exceptions are never written into these faces; each
+/// face transition applies them to the face it shows (CR 707.9b).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TransformingFaces {
+    pub front: Face,
+    pub back: Face,
+    /// The back face is up (CR 712.8).
+    pub back_up: bool,
+}
+
+impl TransformingFaces {
+    /// The face that is up.
+    pub fn shown(&self) -> &Face {
+        if self.back_up {
+            &self.back
+        } else {
+            &self.front
+        }
+    }
+
+    /// The same faces turned over (CR 701.27a).
+    pub fn turned_over(&self) -> Self {
+        Self {
+            back_up: !self.back_up,
+            ..self.clone()
+        }
+    }
+}
+
+/// What an object is beyond its shown printed face, in any zone, when that
+/// differs from an ordinary card or token resting on its own printing: the
+/// physical printing behind a face-down, melded or entry-copy permanent, an
+/// inset Adventure, Omen or prepared spell being cast or a modal back face
+/// cast or played (CR 715.3, 712.11), a transforming object's raw faces, and
+/// the copy effect behind its copiable values.
+///
+/// Boxed on [`Object::form`] so ordinary objects allocate nothing. Melded zone
+/// membership belongs to `ZoneManager`, not here.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ObjectForm {
+    /// The object's own printing while it shows another face (a manifest's
+    /// 2/2, a meld result, an entry copy, an inset spell, a modal back face),
+    /// restored by its next zone move (CR 400.7, 707.5, 708.9, 712.4c).
+    backing: Option<Face>,
+    /// A transforming object's raw faces. A double-faced card that has not
+    /// transformed reads them from the catalog instead.
+    faces: Option<TransformingFaces>,
+    /// Face down (CR 708.2): `backing` holds the hidden printing.
+    face_down: bool,
+    /// The copy effect that made this object a copy (CR 707.2); the shown
+    /// face is then the copiable values that effect produced.
+    copy: Option<crate::effect::CopyEffect>,
+}
+
 /// One object in a game: a card, a token or a copy of a spell, told apart
-/// by [`Object::kind`]. Its characteristics are its definition's, read
-/// through `Deref`; zone state (a `Permanent`, a stack entry) lives beside it.
+/// by [`Object::kind`]. Its shown characteristics are read through `Deref`;
+/// zone state (a `Permanent`, a stack entry) lives beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Object {
     pub id: PublicId,
@@ -606,16 +678,12 @@ pub struct Object {
     /// the numeric representation of `definition_id`.
     pub registry_key: PublicId,
     pub owner: PlayerId,
-    /// The copy effect that made this object a copy (CR 707.2); its
-    /// definition is then the copiable values that effect produced.
-    pub copy: Option<crate::effect::CopyEffect>,
+    /// The face it shows, with any copy exceptions applied.
     definition: Arc<PrintedCharacteristics>,
-    /// The front face's row while the back face is up (CR 712.8): set by
-    /// [`Object::turn_back_face_up`], cleared by [`Object::turn_front_face_up`].
-    front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
-    /// The printed card while it is a copy it entered as (CR 707.5), restored
-    /// by [`Object::mint_appearance`] at the next zone change.
-    printed: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
+    /// Physical backing, raw faces, orientation and copy effect, when they
+    /// differ from an ordinary object on its own printing. Fixtures may take
+    /// and restore it; rules code changes it only through `Object` methods.
+    pub form: Option<Box<ObjectForm>>,
 }
 
 impl Object {
@@ -638,36 +706,89 @@ impl Object {
             definition_id,
             registry_key: PublicId(definition_id.0),
             owner,
-            copy: None,
             definition,
-            front: None,
-            printed: None,
+            form: None,
         }
     }
 
-    /// Enter as a copy of `source` (CR 707.5): take its copiable values,
-    /// face and copy chain, then `exceptions` (CR 707.9b). Token status is
-    /// not copiable, so the object stays a card or token as it was; its
-    /// printed row is kept for [`Object::mint_appearance`].
-    pub fn become_copy_of(&mut self, source: &Object, exceptions: &[crate::effect::Modification]) {
-        let printed = self
-            .printed
-            .take()
-            .unwrap_or_else(|| (self.definition_id, Arc::clone(&self.definition)));
+    /// A token with copiable values (CR 707.2, 111.1): the shown face
+    /// `definition`, the raw `faces` of a transforming source (CR 707.8a) and
+    /// the source's copy effect. `exceptions` then apply after the source's
+    /// own (CR 707.9b). Token status is not copiable; it is this object's kind.
+    pub fn token_with_copiable_values(
+        id: PublicId,
+        owner: PlayerId,
+        (definition_id, definition): Face,
+        faces: Option<TransformingFaces>,
+        copy: Option<crate::effect::CopyEffect>,
+        exceptions: &[crate::effect::CopyException],
+    ) -> Self {
+        let mut token = Self::from_definition(id, owner, definition_id, definition, true);
+        token.form = Some(Box::new(ObjectForm {
+            faces,
+            copy,
+            ..Default::default()
+        }));
+        token.apply_copy_exceptions(exceptions);
+        token
+    }
+
+    /// Enter as a copy of `source` (CR 707.5): take its shown copiable values
+    /// and copy chain, then `exceptions` (CR 707.9b). The copy is backed by
+    /// this object's own single printing, so it cannot transform and its mana
+    /// value is the copied face's (CR 712.8e, 712.9). Token status is not
+    /// copiable. The printing returns at [`Object::mint_appearance`].
+    pub fn become_copy_of(&mut self, source: &Object, exceptions: &[crate::effect::CopyException]) {
+        let (id, row) = self.retained_definition();
+        let backing = (id, Arc::clone(row));
         self.definition_id = source.definition_id;
         self.registry_key = PublicId(source.definition_id.0);
         self.definition = source.copiable_definition();
-        self.front = source.front.clone();
+        self.form = Some(Box::new(ObjectForm {
+            backing: Some(backing),
+            copy: source.copy().cloned(),
+            ..Default::default()
+        }));
+        self.apply_copy_exceptions(exceptions);
+    }
+
+    /// Record the copy's root and apply new exceptions after inherited ones.
+    pub fn apply_copy_exceptions(&mut self, exceptions: &[crate::effect::CopyException]) {
         for exception in exceptions {
-            exception.apply_copiable(self);
+            exception.apply(self);
         }
-        let mut copy = source.copy.clone().unwrap_or(crate::effect::CopyEffect {
-            of: source.definition_id,
-            exceptions: Vec::new(),
-        });
-        copy.exceptions.extend(exceptions.iter().cloned());
-        self.copy = Some(copy);
-        self.printed = Some(printed);
+        let of = self.definition_id;
+        self.form
+            .get_or_insert_with(Default::default)
+            .copy
+            .get_or_insert_with(|| crate::effect::CopyEffect {
+                of,
+                exceptions: Vec::new(),
+            })
+            .exceptions
+            .extend_from_slice(exceptions);
+    }
+
+    /// The copy effect that made this object a copy (CR 707.2).
+    pub fn copy(&self) -> Option<&crate::effect::CopyEffect> {
+        self.form.as_deref()?.copy.as_ref()
+    }
+
+    /// The printing behind a face-down, melded or entry-copy form.
+    pub fn backing(&self) -> Option<&Face> {
+        self.form.as_deref()?.backing.as_ref()
+    }
+
+    /// Raw faces held by the form: a transformed card or a transforming token.
+    /// A double-faced card on its front face has none here; whether an object
+    /// can transform is `ContentPack::transforming_faces`.
+    pub fn form_faces(&self) -> Option<&TransformingFaces> {
+        self.form.as_deref()?.faces.as_ref()
+    }
+
+    /// Face down (CR 708.2).
+    pub fn is_face_down(&self) -> bool {
+        self.form.as_deref().is_some_and(|form| form.face_down)
     }
 
     /// The base that a zone move restores, including fixture edits. It never
@@ -677,12 +798,21 @@ impl Object {
         (id, &**row)
     }
 
-    /// [`Object::retained_base`] as the shared row, for consumers that build a
-    /// new object from it (a token copy of a departed source).
+    /// Assign a printing in a sampled world while preserving its current appearance.
+    pub fn assign_hidden_printing(&mut self, id: CardDefId, row: Arc<PrintedCharacteristics>) {
+        match self
+            .form
+            .as_deref_mut()
+            .and_then(|form| form.backing.as_mut())
+        {
+            Some(backing) => *backing = (id, row),
+            None => self.show(id, row),
+        }
+    }
+
     pub fn retained_definition(&self) -> (CardDefId, &Arc<PrintedCharacteristics>) {
-        self.printed
-            .as_ref()
-            .or(self.front.as_ref())
+        self.backing()
+            .or(self.form_faces().map(|faces| &faces.front))
             .map_or((self.definition_id, &self.definition), |(id, row)| {
                 (*id, row)
             })
@@ -694,35 +824,30 @@ impl Object {
     ///
     /// `entry_copy` assigns the prospective values already installed by an
     /// enters-as-copy replacement to the new entry (CR 614.1c, 614.12).
-    /// Otherwise the old appearance's copy/face is discarded. A token or
-    /// spell copy starts with its own copiable base, not a physical printing.
+    /// Otherwise the old appearance's backing (the printing behind a face-down,
+    /// melded, entry-copy, inset-spell or modal-back form) or front face
+    /// returns. A token or spell copy starts with its own copiable base, not a
+    /// physical printing.
     pub fn mint_appearance(&mut self, from: Option<ZoneType>, to: ZoneType, entry_copy: bool) {
-        debug_assert!(!entry_copy || (to == ZoneType::Battlefield && self.copy.is_some()));
+        debug_assert!(!entry_copy || (to == ZoneType::Battlefield && self.copy().is_some()));
         if !entry_copy && (self.is_card() || from == Some(ZoneType::Battlefield)) {
-            if let Some((id, definition)) = self.printed.take() {
-                // An entry copy ends with its appearance (CR 707.5).
-                self.copy = None;
-                self.front = None;
-                self.show(id, definition);
-            } else {
-                // CR 712.8a. A token made as a copy keeps its inherent copy
-                // exceptions on its front face, just as on a transform.
-                self.turn_front_face_up();
+            if let Some(form) = self.form.as_deref_mut() {
+                if let Some((id, definition)) = form.backing.take() {
+                    // An entry copy, meld or face-down form ends with its
+                    // appearance (CR 707.5, 708.9, 712.4c).
+                    self.form = None;
+                    self.show(id, definition);
+                } else if let Some(faces) = form.faces.as_ref().filter(|faces| faces.back_up) {
+                    // CR 712.8a. A token made as a copy keeps its inherent
+                    // copy exceptions on its front face, just as on a transform.
+                    let front = faces.turned_over();
+                    self.show_transforming_face(front);
+                }
             }
         }
         // CR 111.12, 608.3f: the resolving copy's successor is a token.
         if to == ZoneType::Battlefield && self.kind == ObjectKind::SpellCopy {
             self.kind = ObjectKind::Token;
-        }
-    }
-
-    /// A fresh token with the source's copiable values (CR 707.2, 111.1).
-    pub fn token_copy(source: Self, id: PublicId, owner: PlayerId) -> Self {
-        Self {
-            id,
-            owner,
-            kind: ObjectKind::Token,
-            ..source
         }
     }
 
@@ -748,11 +873,13 @@ impl Object {
         self.kind == ObjectKind::Card
     }
 
-    /// Its mana cost for mana value: a transformed permanent's is its front
-    /// face's (CR 712.8e).
+    /// Mana value uses the front face of a nonmodal double-faced permanent
+    /// (CR 712.8e). A modal permanent uses its showing face.
     pub fn mana_value_cost(&self) -> Option<&ManaCost> {
-        match &self.front {
-            Some((_, front)) if !front.modal_back => front.mana_cost.as_ref(),
+        match self.form_faces() {
+            Some(faces) if faces.back_up && !faces.front.1.modal_back => {
+                faces.front.1.mana_cost.as_ref()
+            }
             _ => self.mana_cost.as_ref(),
         }
     }
@@ -765,59 +892,89 @@ impl Object {
 
     /// Whether its back face is up (CR 712.8).
     pub fn is_transformed(&self) -> bool {
-        self.front.is_some()
+        self.form_faces().is_some_and(|faces| faces.back_up)
     }
 
-    /// The front face's row while the back face is up.
-    pub fn front_face(&self) -> Option<&(CardDefId, Arc<PrintedCharacteristics>)> {
-        self.front.as_ref()
+    /// Show the up face of `faces`, applying the copy effect's exceptions
+    /// once to that raw face (CR 707.8a, 707.9b, 712.8). Whether the object
+    /// may transform at all is the caller's question (CR 712.9, 712.10).
+    pub fn show_transforming_face(&mut self, faces: TransformingFaces) {
+        let (id, row) = faces.shown().clone();
+        self.form.get_or_insert_with(Default::default).faces = Some(faces);
+        self.show(id, row);
+        self.settle_form();
     }
 
-    /// Carry a copied object's front face, keeping its mana value (CR 712.8).
-    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<PrintedCharacteristics>)>) {
-        self.front = front;
+    /// Show a meld result (CR 712.4c), keeping the primary card's printing
+    /// for its next zone move.
+    pub fn show_melded(&mut self, id: CardDefId, definition: Arc<PrintedCharacteristics>) {
+        self.show_over_backing(id, definition);
     }
 
-    /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
-    pub fn turn_back_face_up(
-        &mut self,
-        (id, definition): (CardDefId, Arc<PrintedCharacteristics>),
-    ) {
-        let front = (self.definition_id, Arc::clone(&self.definition));
-        self.show(id, definition);
-        self.front = Some(front);
+    /// Turn face down as `definition`, the face-down characteristics
+    /// (CR 708.2), hiding this object's printing behind it.
+    pub fn turn_face_down(&mut self, definition: Arc<PrintedCharacteristics>) {
+        self.show_over_backing(CardDefId::ANONYMOUS, definition);
+        self.form.as_deref_mut().expect("backed form").face_down = true;
     }
 
-    /// Show the selected spell while retaining the physical card's definition.
+    /// Show an inset spell while keeping the underlying card for its next move.
     pub fn show_inset(&mut self, profile: SpellProfile) {
-        if profile.is_front() {
-            return;
+        if !profile.is_front() {
+            let spell = Arc::clone(self.inset_definition(profile).expect("offered inset spell"));
+            self.show_over_backing(self.definition_id, spell);
         }
-        let spell = Arc::clone(self.inset_definition(profile).expect("offered inset spell"));
-        self.printed = Some((self.definition_id, Arc::clone(&self.definition)));
-        self.definition = spell;
     }
 
-    /// Show the front face, if the back face is up.
-    pub fn turn_front_face_up(&mut self) {
-        if let Some((id, definition)) = self.front.take() {
-            self.show(id, definition);
+    /// Turn a face-down object face up in place, showing its hidden printing
+    /// (CR 708.8). False when it is not face down.
+    pub fn turn_face_up(&mut self) -> bool {
+        if !self.is_face_down() {
+            return false;
         }
+        let form = self.form.as_deref_mut().expect("face-down form");
+        let (id, definition) = form.backing.take().expect("face down over a printing");
+        form.face_down = false;
+        self.show(id, definition);
+        self.settle_form();
+        true
+    }
+
+    fn show_over_backing(&mut self, id: CardDefId, definition: Arc<PrintedCharacteristics>) {
+        let backing = (self.definition_id, Arc::clone(&self.definition));
+        self.form.get_or_insert_with(Default::default).backing = Some(backing);
+        self.show(id, definition);
     }
 
     /// Show one face. Its kind stays (a double-faced token is a token on
-    /// either face), and a copy's exceptions are in the copiable values of
-    /// each (CR 707.8a, 707.9b).
+    /// either face), and the copy effect's exceptions apply to it once,
+    /// keeping the copy's root (CR 707.8a, 707.9b).
     fn show(&mut self, id: CardDefId, definition: Arc<PrintedCharacteristics>) {
         self.definition_id = id;
         self.registry_key = PublicId(id.0);
         self.definition = definition;
-        if let Some(mut copy) = self.copy.take() {
-            copy.of = id;
+        if let Some(copy) = self.form.as_deref_mut().and_then(|form| form.copy.take()) {
             for exception in &copy.exceptions {
-                exception.apply_copiable(self);
+                exception.apply(self);
             }
-            self.copy = Some(copy);
+            self.form.as_deref_mut().expect("copy form").copy = Some(copy);
+        }
+    }
+
+    /// Drop a form that says nothing the catalog does not: a double-faced
+    /// card back on its front face with no copy, backing or orientation.
+    fn settle_form(&mut self) {
+        let ordinary = self.form.as_deref().is_some_and(|form| {
+            form.backing.is_none()
+                && !form.face_down
+                && form.copy.is_none()
+                && form
+                    .faces
+                    .as_ref()
+                    .is_none_or(|faces| !faces.back_up && self.kind == ObjectKind::Card)
+        });
+        if ordinary {
+            self.form = None;
         }
     }
 
@@ -832,7 +989,11 @@ impl Object {
 
     /// Snapshot the current copiable face without copying its ability programs.
     pub fn copiable_definition(&self) -> Arc<PrintedCharacteristics> {
-        Arc::clone(&self.definition)
+        Arc::clone(self.copiable_face())
+    }
+
+    pub fn copiable_face(&self) -> &Arc<PrintedCharacteristics> {
+        &self.definition
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {

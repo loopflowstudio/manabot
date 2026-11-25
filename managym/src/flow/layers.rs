@@ -10,15 +10,18 @@ use crate::{
             ObjectProperty, ObjectSelector, Scope,
         },
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, CardType, Keyword, Keywords, LayerValue,
-            PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
+            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
-        game_object::{Object, ObjectKind, PermanentId, PlayerId, PublicId},
-        mana::{Mana, SpendingContext, SpendingObject},
-        permanent::{CounterKind, Permanent},
+        game_object::{
+            BattlefieldFacts, Object, ObjectId, ObjectKind, ObjectLki, PermanentId, PlayerId,
+            PublicId,
+        },
+        mana::{Colors, Mana, SpendingContext, SpendingObject},
+        permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
-        subtype::is_creature_type,
+        subtype::{is_creature_type, subtype_category, subtype_corresponds_to, CreatureTypes},
         zone::ZoneType,
     },
 };
@@ -358,7 +361,9 @@ impl Operation {
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetName(_) => NAME,
-                Modification::SetCreatureTypes(_) | Modification::AddSubtypes(_) => SUBTYPES,
+                Modification::SetCreatureTypes(_)
+                | Modification::AddSubtypes(_)
+                | Modification::AllCreatureTypes => SUBTYPES,
                 Modification::AddTypes(_) | Modification::BecomeCreature => CARD_TYPES,
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
                 Modification::Nonlegendary => SUPERTYPES,
@@ -393,6 +398,7 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
         Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
+        | Modification::AllCreatureTypes
         | Modification::AddTypes(_)
         | Modification::SetTypes { .. }
         | Modification::BecomeCreature
@@ -628,17 +634,15 @@ impl<'a> Context<'a> {
     fn finish_object(object: &mut LayerObject, record: &Object) {
         let view = Arc::make_mut(&mut object.view);
         view.is_animated = view.is_creature() && !record.types.is_creature();
-        view.creature_types = if view.is_creature() {
-            view.subtypes
-                .iter()
-                .filter(|s| is_creature_type(s))
-                .cloned()
-                .collect()
+        // During the pass `CreatureTypes::All` marks a record granting all
+        // creature types; a listed set is derived from the final subtypes.
+        view.creature_types = if !view.is_creature() {
+            CreatureTypes::default()
+        } else if view.creature_types.is_all() {
+            CreatureTypes::All
         } else {
-            Vec::new()
+            CreatureTypes::among(&view.subtypes)
         };
-        view.creature_types.sort();
-        view.creature_types.dedup();
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
@@ -651,12 +655,15 @@ impl<'a> Context<'a> {
                     matches!(purpose, SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes))
+                    } if source.describes(&view.subtypes, view.creature_types.is_all()))
                 })
                 .cloned();
             let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
                 zone: ZoneType::Battlefield,
-                source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
+                source: SpendingObject::new(
+                    view.subtypes.iter().map(String::as_str),
+                    view.creature_types.is_all(),
+                ),
             });
             for ability in &mut view.activated_abilities {
                 if ability.mana_cost.purpose != purpose {
@@ -856,13 +863,12 @@ impl<'a> Context<'a> {
     }
     fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
-            (self.objects[&id]
-                .view
-                .subtypes
-                .iter()
-                .filter(|s| is_creature_type(s))
-                .count() as i32)
-                .min(max)
+            let view = &self.objects[&id].view;
+            if view.has_all_creature_types() {
+                max
+            } else {
+                (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
+            }
         });
         let controller = self.controller(source);
         let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
@@ -891,7 +897,10 @@ impl<'a> Context<'a> {
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => self.game.permanent_mana_value(id),
+            LayerValue::ManaValue => i32::from(
+                self.game
+                    .object_mana_value(self.game.live_permanent(id).object),
+            ),
             LayerValue::GraveyardCardTypes { offset } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
@@ -1294,10 +1303,6 @@ impl<'a> Context<'a> {
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
-                Operation::Modify(Modification::SetName(name)) => {
-                    view.name = name.clone();
-                    view.name_set = true;
-                }
                 Operation::LandType(subtype) => {
                     if !view.is_land() {
                         continue;
@@ -1333,12 +1338,21 @@ impl<'a> Context<'a> {
                     })
                 }
                 Operation::Modify(modification) => match modification {
+                    Modification::SetName(name) => {
+                        view.name = name.clone();
+                        view.name_set = true;
+                    }
+                    Modification::AllCreatureTypes => {
+                        // A later grant of every type overrides an earlier set list.
+                        view.creature_types = CreatureTypes::All;
+                        view.creature_types_set = false;
+                    }
                     Modification::SetCreatureTypes(types) => {
+                        view.creature_types = CreatureTypes::default();
                         view.creature_types_set = true;
                         view.subtypes.retain(|s| !is_creature_type(s));
                         view.subtypes.extend(types.iter().cloned());
                         view.added_subtypes.retain(|s| !is_creature_type(s));
-                        view.added_subtypes.extend(types.iter().cloned());
                     }
                     Modification::AddSubtypes(types) => {
                         if view.is_land() {
@@ -1357,10 +1371,35 @@ impl<'a> Context<'a> {
                     }
                     Modification::AddTypes(types) => view.types.types.extend(types.iter().copied()),
                     Modification::SetTypes { types, subtypes } => {
-                        view.creature_types_set = true;
+                        // CR 205.1a, 205.3d: a subtype survives while it
+                        // corresponds to a remaining type and the effect sets
+                        // no subtype of its kind (a basic land imprisoned as a
+                        // land stays a Forest; a Citizen loses other creature
+                        // types).
+                        let keeps = |subtype: &String| {
+                            types.iter().any(|t| subtype_corresponds_to(subtype, *t))
+                                && !subtypes
+                                    .iter()
+                                    .any(|set| subtype_category(set) == subtype_category(subtype))
+                        };
+                        let sets_creature_types = subtypes.iter().any(|s| is_creature_type(s));
+                        if !types.contains(&CardType::Creature) || sets_creature_types {
+                            view.creature_types_set |= sets_creature_types
+                                || view.creature_types.is_all()
+                                || view.subtypes.iter().any(|s| is_creature_type(s));
+                            view.creature_types = CreatureTypes::default();
+                        }
                         view.types.types = types.iter().copied().collect();
-                        view.subtypes = subtypes.clone();
-                        view.added_subtypes = subtypes.clone();
+                        view.subtypes.retain(keeps);
+                        view.added_subtypes.retain(keeps);
+                        for subtype in subtypes {
+                            if !view.subtypes.contains(subtype) {
+                                view.subtypes.push(subtype.clone());
+                                if !is_creature_type(subtype) {
+                                    view.added_subtypes.push(subtype.clone());
+                                }
+                            }
+                        }
                     }
                     Modification::BecomeCreature => {
                         view.types.types.insert(CardType::Creature);
@@ -1512,145 +1551,6 @@ pub(super) fn matches_static_scope(
     matches(predicate)
 }
 
-/// What a battlefield predicate reads of one permanent: its layered view,
-/// the printed facts layers leave alone (mana value, token status, other
-/// supertypes) and its battlefield status. A live permanent and a departed
-/// one's last known information (CR 603.10a) supply the same facts, so one
-/// matcher answers both.
-pub(crate) struct PermanentFacts<'a> {
-    pub name: &'a str,
-    pub keywords: Keywords,
-    pub types: &'a crate::state::card::CardTypes,
-    pub subtypes: &'a [String],
-    pub colors: &'a crate::state::mana::Colors,
-    pub is_legendary: bool,
-    pub power: i32,
-    pub toughness: i32,
-    pub supertypes: &'a [String],
-    pub mana_value: u8,
-    pub token: bool,
-    pub counters: &'a crate::state::permanent::Counters,
-    pub attacking: bool,
-    pub tapped: bool,
-    pub in_combat: bool,
-}
-
-impl<'a> PermanentFacts<'a> {
-    /// A live permanent's facts under `view`, its current layered view.
-    fn live(
-        game: &Game,
-        id: PermanentId,
-        permanent: &'a Permanent,
-        object: &'a Object,
-        view: &'a Characteristics,
-    ) -> Self {
-        Self {
-            name: &view.name,
-            keywords: view.keywords,
-            types: &view.types,
-            subtypes: &view.subtypes,
-            colors: &view.colors,
-            is_legendary: view.is_legendary,
-            power: view.power,
-            toughness: view.toughness,
-            supertypes: &object.supertypes,
-            mana_value: object.mana_value_cost().map_or(0, |m| m.mana_value),
-            token: object.kind() == ObjectKind::Token,
-            counters: &permanent.counters,
-            attacking: permanent.attacking,
-            tapped: permanent.tapped,
-            in_combat: game.permanent_in_combat(id),
-        }
-    }
-
-    /// A departed permanent's facts: its last known view and status, with
-    /// name and supertypes from its copiable face and mana value from its
-    /// front face (CR 712.8e), as `Game::lki_face_printing` and
-    /// `Game::lki_mana_printing` read them.
-    pub(crate) fn departed(
-        lki: &'a crate::state::game_object::ObjectLki,
-        face: &'a crate::state::card::PrintedCharacteristics,
-        mana: &'a crate::state::card::PrintedCharacteristics,
-        kind: ObjectKind,
-    ) -> Self {
-        Self {
-            name: lki.renamed.as_deref().unwrap_or(&face.name),
-            keywords: lki.keywords,
-            types: &lki.types,
-            subtypes: &lki.subtypes,
-            colors: &lki.colors,
-            is_legendary: lki.is_legendary,
-            power: lki.power,
-            toughness: lki.toughness,
-            supertypes: &face.supertypes,
-            mana_value: mana.mana_cost.as_ref().map_or(0, |cost| cost.mana_value),
-            token: kind == ObjectKind::Token,
-            counters: &lki.counters,
-            attacking: lki.was_attacking,
-            tapped: lki.was_tapped,
-            in_combat: lki.was_in_combat,
-        }
-    }
-}
-
-/// Shared predicate semantics for live permanents, intermediate layer
-/// contexts and departed permanents' last known information.
-pub(crate) fn matches_permanent_facts(
-    p: &CardPredicate,
-    facts: &PermanentFacts,
-    source_name: Option<&str>,
-) -> bool {
-    // A permanent is on the battlefield, never a graveyard card.
-    !p.from_battlefield_this_turn
-        // CR 201.2a: an empty name (a face-down permanent's) names nothing.
-        && (!p.namesake || source_name.is_some_and(|name| !name.is_empty() && name == facts.name))
-        && p.accepts_name(facts.name)
-        && (!p.deathtouch || facts.keywords.has(Keyword::Deathtouch))
-        && (!p.flying || facts.keywords.has(Keyword::Flying))
-        && (!p.not_flying || !facts.keywords.has(Keyword::Flying))
-        && (!p.no_counters || facts.counters.is_empty())
-        && (!p.in_combat || facts.in_combat)
-        && (!p.with_counter || facts.counters.get(CounterKind::PlusOnePlusOne) > 0)
-        && (!p.attacking || facts.attacking)
-        && (!p.tapped || facts.tapped)
-        && p.token.is_none_or(|token| token == facts.token)
-        && (p.any_of.is_empty()
-            || p.any_of
-                .iter()
-                .any(|alternative| matches_permanent_facts(alternative, facts, source_name)))
-        && p.supertype.as_ref().is_none_or(|s| {
-            if s.eq_ignore_ascii_case("legendary") {
-                facts.is_legendary
-            } else {
-                facts.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
-            }
-        })
-        && (!p.nonbasic
-            || !facts
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("basic")))
-        && p.card_type.is_none_or(|t| facts.types.types.contains(&t))
-        && (p.card_types_any.is_empty()
-            || p.card_types_any
-                .iter()
-                .any(|t| facts.types.types.contains(t)))
-        && p.not_card_types
-            .iter()
-            .all(|t| !facts.types.types.contains(t))
-        && p.subtype
-            .as_ref()
-            .is_none_or(|s| facts.subtypes.contains(s))
-        && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| facts.subtypes.contains(s)))
-        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| facts.colors.contains(c)))
-        && p.not_subtypes.iter().all(|s| !facts.subtypes.contains(s))
-        && p.min_power.is_none_or(|min| facts.power >= min)
-        && p.max_power.is_none_or(|max| facts.power <= max)
-        && p.min_toughness.is_none_or(|min| facts.toughness >= i32::from(min))
-        && p.min_mana_value.is_none_or(|min| facts.mana_value >= min)
-        && p.max_mana_value.is_none_or(|max| facts.mana_value <= max)
-}
-
 /// A live permanent under `view` (an intermediate layer context or its
 /// final view).
 pub(super) fn matches_view(
@@ -1664,9 +1564,159 @@ pub(super) fn matches_view(
         return false;
     };
     let object = &game.state[permanent.object];
-    matches_permanent_facts(
-        p,
-        &PermanentFacts::live(game, id, permanent, object, view),
-        source_name,
-    )
+    CharacteristicView {
+        types: &view.types,
+        subtypes: &view.subtypes,
+        all_creature_types: view.has_all_creature_types(),
+        supertypes: &object.supertypes,
+        colors: &view.colors,
+        name: &view.name,
+        keywords: view.keywords,
+        power: view.power,
+        toughness: view.toughness,
+        is_legendary: view.is_legendary,
+        token: object.kind() == ObjectKind::Token,
+        attacking: permanent.attacking,
+        tapped: permanent.tapped,
+        derived: DerivedStatus::Live {
+            game,
+            id,
+            object: permanent.object,
+        },
+        counters: &permanent.counters,
+    }
+    .matches(p, source_name)
+}
+
+/// The characteristics and permanent status a battlefield predicate reads,
+/// borrowed from a live permanent or a departed object's last known facts.
+struct CharacteristicView<'a> {
+    types: &'a CardTypes,
+    subtypes: &'a [String],
+    all_creature_types: bool,
+    supertypes: &'a [String],
+    colors: &'a Colors,
+    name: &'a str,
+    keywords: Keywords,
+    power: i32,
+    toughness: i32,
+    is_legendary: bool,
+    token: bool,
+    attacking: bool,
+    tapped: bool,
+    derived: DerivedStatus<'a>,
+    counters: &'a Counters,
+}
+
+/// Mana value and combat status, which few predicates read: a live
+/// permanent computes them only when asked, a departure recorded them.
+enum DerivedStatus<'a> {
+    Live {
+        game: &'a Game,
+        id: PermanentId,
+        object: ObjectId,
+    },
+    Departed(&'a BattlefieldFacts),
+}
+
+impl DerivedStatus<'_> {
+    fn mana_value(&self) -> u8 {
+        match self {
+            Self::Live { game, object, .. } => game.object_mana_value(*object),
+            Self::Departed(facts) => facts.mana_value,
+        }
+    }
+
+    fn in_combat(&self) -> bool {
+        match self {
+            Self::Live { game, id, .. } => game.permanent_in_combat(*id),
+            Self::Departed(facts) => facts.in_combat,
+        }
+    }
+}
+
+/// A departed object's predicate match against its last battlefield
+/// characteristics (CR 603.10a), never the card it became. Namesake
+/// predicates name a live source, so a departure has none.
+pub(super) fn matches_departure(lki: &ObjectLki, p: &CardPredicate) -> bool {
+    let facts = &lki.battlefield;
+    CharacteristicView {
+        types: &facts.types,
+        subtypes: &facts.subtypes,
+        all_creature_types: lki.creature_types.is_all(),
+        supertypes: &facts.supertypes,
+        colors: &facts.colors,
+        name: &facts.name,
+        keywords: lki.keywords,
+        power: lki.power,
+        toughness: lki.toughness,
+        is_legendary: facts.is_legendary,
+        token: facts.token,
+        attacking: facts.attacking,
+        tapped: facts.tapped,
+        derived: DerivedStatus::Departed(facts),
+        counters: &lki.counters,
+    }
+    .matches(p, None)
+}
+
+impl CharacteristicView<'_> {
+    fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|s| s == subtype)
+            || (self.all_creature_types && is_creature_type(subtype))
+    }
+
+    fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
+        // A permanent is on the battlefield, never a graveyard card.
+        !p.from_battlefield_this_turn
+            && p.accepts_name(self.name)
+            && (!p.namesake || source_name == Some(self.name))
+            && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
+            && (!p.flying || self.keywords.has(Keyword::Flying))
+            && (!p.not_flying || !self.keywords.has(Keyword::Flying))
+            && (!p.no_counters || self.counters.is_empty())
+            && (!p.in_combat || self.derived.in_combat())
+            && (!p.with_counter || self.counters.get(CounterKind::PlusOnePlusOne) > 0)
+            && (!p.attacking || self.attacking)
+            && (!p.tapped || self.tapped)
+            && p.token.is_none_or(|token| token == self.token)
+            && (p.any_of.is_empty()
+                || p.any_of
+                    .iter()
+                    .any(|alternative| self.matches(alternative, source_name)))
+            && p.supertype.as_ref().is_none_or(|s| {
+                if s.eq_ignore_ascii_case("legendary") {
+                    self.is_legendary
+                } else {
+                    self.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
+                }
+            })
+            && (!p.nonlegendary || !self.is_legendary)
+            && (!p.nonbasic
+                || !self
+                    .supertypes
+                    .iter()
+                    .any(|s| s.eq_ignore_ascii_case("basic")))
+            && p.card_type.is_none_or(|t| self.types.types.contains(&t))
+            && (p.card_types_any.is_empty()
+                || p.card_types_any
+                    .iter()
+                    .any(|t| self.types.types.contains(t)))
+            && p.not_card_types
+                .iter()
+                .all(|t| !self.types.types.contains(t))
+            && p.subtype.as_ref().is_none_or(|s| self.has_subtype(s))
+            && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| self.has_subtype(s)))
+            && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| self.colors.contains(c)))
+            && p.not_subtypes.iter().all(|s| !self.has_subtype(s))
+            && p.min_power.is_none_or(|min| self.power >= min)
+            && p.min_toughness
+                .is_none_or(|min| self.toughness >= i32::from(min))
+            && p.max_power.is_none_or(|max| self.power <= max)
+            && (p.min_mana_value.is_none() && p.max_mana_value.is_none() || {
+                let mana_value = self.derived.mana_value();
+                p.min_mana_value.is_none_or(|min| mana_value >= min)
+                    && p.max_mana_value.is_none_or(|max| mana_value <= max)
+            })
+    }
 }

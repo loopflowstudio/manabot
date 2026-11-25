@@ -34,7 +34,12 @@ crate-type = ["cdylib", "rlib"]
 default = ["mimalloc"]
 python = ["dep:pyo3"]
 # Opt-in measurement only; ordinary wheels have no allocation-counter overhead.
-benchmark = []
+# Feature unification turns a workspace member's dev-dependency features on in
+# every workspace build, including the Engine Budget's: tests that only need
+# constructed positions ask for `fixtures`, never `benchmark`.
+benchmark = ["fixtures"]
+# Constructed-position access to an `Env`'s game; no runtime cost.
+fixtures = []
 mimalloc = ["dep:mimalloc"]
 
 [[example]]

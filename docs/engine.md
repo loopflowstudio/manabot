@@ -294,7 +294,7 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
 ```
 
 The unseen pool is the opponent's unknown hand cards, library and face-down
-foretold cards. Public hand minima and exact viewer-known library positions
+foretold cards, plus the printings under manifested permanents the viewer cannot inspect. The permanents keep their public identities across deals. Public hand minima and exact viewer-known library positions
 reserve distinct definition witnesses; the remaining cards are shuffled.
 Everything the viewer can see is preserved.
 [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
@@ -970,7 +970,9 @@ card’s identity (`key` and a required `scryfall_id`). Double-faced cards
 register their `back_face` alongside the front. A front with `modal_back`
 offers either printed face when the play permission allows it. Casting Photon
 uses Photon’s cost and abilities, then the permanent enters back face up.
-Moving the permanent to the graveyard restores Monica Rambeau.
+Monica's activated ability turns the same permanent over to Photon. The
+modal permanent uses the mana value of the face it shows. Moving it to the
+graveyard restores Monica Rambeau.
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
@@ -1090,6 +1092,43 @@ The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
 
+Cecil, Dark Knight transforms on the battlefield. If Cecil deals three damage
+while you have 13 life, the trigger remembers three. On resolution you fall to
+10, then untap Cecil and turn it over to Cecil, Redeemed Paladin. The same
+object keeps its counters, attachments and any spell already targeting it.
+If Cecil tramples over a blocker, one trigger counts the damage to both
+recipients. You still lose that life if Cecil dies in combat.
+When the Paladin attacks, its trigger gives the other attacking creatures
+indestructible until end of turn.
+
+Vanille’s first-main trigger offers a payment of {3}{B}{G} when you own
+and control her and a creature named Fang, Fearless l'Cie. Paying exiles
+both. The original cards form Ragnarok, Divine Deliverance. Both physical
+card IDs then refer to the same battlefield object. If Lost Days puts
+Ragnarok on the bottom of its owner’s library, the owner chooses which
+card to draw first. Ragnarok stays on the battlefield until that choice
+commits, then both cards move and the spell creates its Clue. A token
+copy of Ragnarok leaves without an ordering choice.
+
+When Manifest Dread resolves, its controller privately inspects the top two library
+cards and chooses one to put onto the battlefield face down. The opponent sees a
+nameless 2/2 creature and can see the other card in the graveyard. With one card
+left, that card enters face down automatically. With an empty library, the spell
+finishes resolving. Copying the face-down creature creates a face-up, nameless
+2/2. It has no back face, even if the manifested card can transform. Copying
+that token again preserves those characteristics. With priority, the controller can
+show a manifested creature card and pay its mana cost to turn it face up. This
+keeps its counters and public object reference. Spells already targeting it
+still target the same permanent. A subsequent token copy sees the revealed
+creature, including its back face when it can transform.
+
+Esper Origins illustrates a zone change with a different face up. Cast it from hand
+to surveil two and gain two life. Cast it from your graveyard for its flashback
+cost and it also exiles itself, then enters as Summon: Esper Maduin with finality
+and lore counters. The stack spell, exiled card and Saga each have their own
+`ObjectId` and share one `CardId`. The Saga has mana value two and no mana cost.
+Its first chapter reveals the top card to both players. A permanent card goes
+to hand and any other card stays known on top.
 Fiendish Panda’s death trigger compares each eligible graveyard card’s mana
 value with the Panda’s power when it died, including its counters. The same
 comparison applies when choosing a new target and when resolving the trigger.
@@ -1147,9 +1186,27 @@ kind `Token`, and neither it nor the copy has a `CardId`. A definition's
 `is_token` says only that its catalog row is a token definition's; an object's
 kind is the authority for what it is.
 
-Copies are made through `Object::token_copy` and `Object::spell_copy`, with
-their viewer id, owner and kind set at creation. The zone allocator supplies
-their `ObjectId`.
+Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
+nonland permanent card with mana value two or less in your graveyard. Nullpriest
+of Oblivion uses the same trigger to return a creature card of any mana value.
+The trigger remembers kicker if the Cleric dies in response. Exiling and
+returning the Cleric gives it a fresh entry, so it offers no second target.
+
+A copy of a kicked permanent spell enters with the original kicker choice and
+X. Only the cast spell has a payment receipt, including when its cost was zero.
+A battlefield copy takes its characteristics from the permanent and starts with
+its own entry choices. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
+
+Fiendish Panda gets one counter each time its controller gains life. When it
+dies, its last battlefield power limits which non-Bear creature cards it can
+return. A Clone that dies as a 4-power Panda can return Driver of the Dead
+(mana value four). It cannot return itself, even though it is a Shapeshifter
+in the graveyard. Changing the trigger's target uses the same restrictions.
+[Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+
+Token creation replacements finish before the allocator assigns the token's
+viewer id, owner and kind. Spell copies use `Object::spell_copy`. The zone
+allocator supplies each copy's `ObjectId`.
 
 A Clone is still a card. A copy effect changes an object's copiable values
 (CR 707.2) and is recorded on that object (`copy`); it does not make a copy
@@ -1200,8 +1257,20 @@ An ability keeps one source identity through pending triggers, the stack and
 child resolution frames. Its captured definition and the retained base
 printing supply definition provenance after departure; these reads never
 borrow a later appearance's copy or transformed face. Battlefield facts come
-from LKI. The retained base preserves the engine's existing departure behavior;
-it does not capture additional copy exceptions or transformed mana value.
+from LKI. When an ability creates a token copy of its source, it takes the
+source's copiable values at resolution or, after departure, at the moment it
+left. A Clone that returns as a different creature keeps its new form while
+the earlier ability copies the departed form.
+
+Stack inspection, target changes and resolution use the triggering face captured
+at placement. For example, a Clone that copies an Electroduplicate token can
+return to hand with its sacrifice ability still on the stack. Both players can
+read the ability, and its source reference still names the departed Clone.
+
+Copy exceptions become part of the new token’s copiable characteristics. A Rite
+of Replication copy of an Electroduplicate Koma’s Coil inherits haste and its own
+end-step sacrifice trigger. A temporary death ability granted to the first Coil
+triggers only when that Coil dies.
 
 A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
 on it, and a delayed trigger watching one creature retires on it. Code picks

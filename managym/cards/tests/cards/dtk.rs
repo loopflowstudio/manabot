@@ -214,7 +214,7 @@ fn impact_tremors_triggers_for_each_goblin() {
             let face = s.game().characteristics(goblin);
             assert_eq!(face.pt(), (1, 1));
             assert_eq!(face.colors, Colors::from_iter([Color::Red]));
-            assert_eq!(face.creature_types, ["Goblin"]);
+            assert_eq!(face.creature_types.listed(), ["Goblin"]);
         }
         s.assert_life(1, 20);
         let stack = s.game().state.stack_objects.clone();

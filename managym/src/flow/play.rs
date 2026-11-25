@@ -21,7 +21,7 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, PendingChoice},
         payment::{bargain_cost, Help, Operation, Payment},
-        proposed_event::EventBinding,
+        proposed_event::{EntryFace, EventBinding, ZoneEntry},
         turn::{PhaseKind, StepKind},
     },
     state::{
@@ -35,6 +35,7 @@ use crate::{
         payment::PaymentReceipt,
         predicate::CardPredicate,
         stack_object::ActivatedAbilityOnStack,
+        subtype::CreatureTypes,
         zone::ZoneType,
     },
 };
@@ -508,7 +509,7 @@ impl Game {
     fn casting_zone(&self, object: ObjectId) -> ZoneType {
         match self.state.zones.zone_of(object) {
             Some(ZoneType::Stack) | None => self
-                .stack_spell(object)
+                .spell_on_stack(object)
                 .map_or(ZoneType::Stack, |spell| spell.cast_from),
             Some(zone) => zone,
         }
@@ -706,9 +707,9 @@ impl Game {
             [self.zone_move_proposal(
                 object,
                 ZoneType::Battlefield,
-                crate::flow::proposed_event::ZoneEntry {
+                ZoneEntry {
                     controller,
-                    transformed: profile == SpellProfile::BackFace,
+                    face: EntryFace::played_as(profile),
                     library_top_departure: self.is_library_top(object),
                     ..Default::default()
                 },
@@ -1223,10 +1224,8 @@ impl Game {
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.fits_target_clause(requirement, x, chosen.iter().copied(), *target)
+                self.can_add_clause_target(requirement, x, chosen.iter().copied(), *target)
             })
-            // Distinctness and the budget are local to this clause.
-            .filter(|target| !chosen.contains(target))
             .collect()
     }
 
@@ -1776,24 +1775,10 @@ impl Game {
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str)),
+            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
         };
         self.price_activation(player, &mut ability);
         Some(ability)
-    }
-
-    /// Record an activation against its exhaust or once-each-turn limit.
-    pub(crate) fn record_activation(
-        &mut self,
-        permanent: PermanentId,
-        ability_index: usize,
-        ability: &ActivatedAbilityDefinition,
-    ) {
-        if !ability.exhaust && !ability.power_up && !ability.once_each_turn {
-            return;
-        }
-        self.state
-            .record_activation(permanent, ability_index, ability);
     }
 
     /// The definition an activation of `source` uses; `None` once the
@@ -1857,9 +1842,10 @@ impl Game {
             .enumerate()
             .all(|(index, requirement)| {
                 requirement.min == 0
-                    || !self
+                    || self
                         .activated_ability_targets(player, source, ability_index, index, &[])
-                        .is_empty()
+                        .len()
+                        >= requirement.min
             })
     }
 
@@ -1911,6 +1897,16 @@ impl Game {
             .collect()
     }
 
+    /// The exact object an activation of `source` comes from, as its stacked
+    /// ability will record it; `None` once a permanent source has left.
+    fn activation_ability_source(&self, source: ActivationSource) -> Option<AbilitySource> {
+        let object = match source {
+            ActivationSource::Permanent(permanent) => self.permanent_object(permanent)?,
+            ActivationSource::Card(card) => self.state.object_of(card),
+        };
+        Some(AbilitySource::new(object, Some(object)))
+    }
+
     /// Targets clause `requirement` of `player`'s activation can choose
     /// next, given those already `chosen` (all clauses). Legality is from
     /// `player`'s side whoever chooses. Under "that share a creature type",
@@ -1928,20 +1924,13 @@ impl Game {
         else {
             return Vec::new();
         };
-        let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
-        let identity = match source {
-            ActivationSource::Permanent(id) => {
-                let Some(object) = self.permanent_object(id) else {
-                    return Vec::new();
-                };
-                AbilitySource::new(object, Some(object))
-            }
-            ActivationSource::Card(card) => AbilitySource::new(self.state.object_of(card), None),
+        let Some(ability_source) = self.activation_ability_source(source) else {
+            return Vec::new();
         };
-        let candidates: Vec<_> = self
-            .targets_for_source(&clause, player, identity)
+        let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
+        let candidates: Vec<Target> = self
+            .legal_clause_targets(&clause, player, ability_source)
             .filter(|target| !chosen.contains(target))
-            .filter(|target| self.fits_target_clause(&clause, 0, chosen.iter().copied(), *target))
             .collect();
         if !clause.shares_creature_type {
             return candidates;
@@ -1952,7 +1941,9 @@ impl Game {
             .copied()
             .filter(|target| {
                 let with = |extra: &[Target]| {
-                    self.targets_share_creature_type(chosen.iter().chain([target]).chain(extra))
+                    self.targets_share_creature_type(
+                        chosen.iter().chain([target]).chain(extra).copied(),
+                    )
                 };
                 with(&[])
                     && (!needs_partner
@@ -1965,16 +1956,19 @@ impl Game {
 
     /// Whether the permanents among `targets` have a creature type in common
     /// ("that share a creature type").
-    fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
-        let mut common: Option<Vec<String>> = None;
+    pub(super) fn targets_share_creature_type(
+        &self,
+        targets: impl Iterator<Item = Target>,
+    ) -> bool {
+        let mut common: Option<CreatureTypes> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.characteristics(*id).creature_types.clone();
+            let types = self.characteristics(id).creature_types.clone();
             common = Some(match common {
                 None => types,
-                Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
+                Some(common) => common.intersection(&types),
             });
         }
         common.is_some_and(|common| !common.is_empty())
@@ -2157,7 +2151,8 @@ impl Game {
             }
             self.tap_permanent(permanent_id, false);
         }
-        self.record_activation(permanent_id, ability_index, &ability);
+        self.state
+            .record_activation(permanent_id, ability_index, &ability);
 
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
@@ -2172,6 +2167,9 @@ impl Game {
             source_object,
             ability_index,
             targets,
+            attached: self.state.permanents[permanent_id]
+                .as_ref()
+                .and_then(|p| p.attached_to),
             x,
             granted_by: ability.granted_by,
             paid: PaymentReceipt::default(),
@@ -2209,6 +2207,7 @@ impl Game {
             source_object,
             ability_index,
             targets,
+            attached: None,
             x: 0,
             granted_by: None,
             paid: PaymentReceipt::default(),
@@ -2224,7 +2223,7 @@ impl Game {
         object: ObjectId,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        self.targets_for_source(requirement, player, AbilitySource::new(object, None))
+        self.legal_clause_targets(requirement, player, AbilitySource::new(object, None))
             .filter(|target| *target != Target::StackSpell(object))
             .collect()
     }

@@ -44,7 +44,10 @@ impl EffectObject {
                     .id
                     .0 as i32
             }),
-            incarnation: Some(object.generation()),
+            incarnation: Some(
+                game.object_event_ref(object)
+                    .map_or(object.generation(), |event| event.incarnation),
+            ),
         }
     }
 

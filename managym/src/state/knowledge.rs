@@ -74,14 +74,21 @@ impl LibraryKnowledge {
     /// (the bottom of a library of `position + 1` cards). Facts about the
     /// cards it passes shift up one; each viewer keeps what it saw of it.
     pub fn move_top_to(&mut self, position: usize) {
+        self.move_position(0, position);
+    }
+
+    pub fn move_position(&mut self, from: usize, to: usize) {
         for view in [&mut self.public, &mut self.own] {
-            let moved = view.remove(&0);
+            let moved = view.remove(&from);
             *view = std::mem::take(view)
                 .into_iter()
-                .map(|(at, definition)| (at - usize::from(at <= position), definition))
+                .map(|(at, definition)| {
+                    let after_removal = at - usize::from(at > from);
+                    (after_removal + usize::from(after_removal >= to), definition)
+                })
                 .collect();
             if let Some(definition) = moved {
-                view.insert(position, definition);
+                view.insert(to, definition);
             }
             Self::bound(view);
         }

@@ -32,8 +32,8 @@ use crate::{
             PermanentId, PermanentVec, PlayerId, Target,
         },
         knowledge::LibraryKnowledge,
-        mana::{Mana, ManaPool},
-        permanent::{CounterKind, Permanent},
+        mana::ManaPool,
+        permanent::{CounterKind, Permanent, SpellEntry},
         stack_object::{SpellLki, StackObject},
         zone::{ZoneManager, ZoneType},
     },
@@ -118,7 +118,6 @@ pub struct GameState {
     pub priority: PriorityState,
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<Box<CombatState>>,
-    pub mana_cache: [Option<Mana>; 2],
     /// Committed rules events; forks share the sealed history.
     pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
@@ -211,6 +210,17 @@ impl GameState {
         self.zones.latest().zip(self.objects.iter())
     }
 
+    /// Cards still in the exile appearances produced by this source's moves.
+    pub(crate) fn exiled_with(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+        self.exile_links
+            .iter()
+            .filter(move |link| {
+                link.source == source
+                    && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+            })
+            .map(|link| link.exiled_object)
+    }
+
     /// `object` while it still names an object in a zone (CR 400.7).
     pub fn live(&self, object: ObjectId) -> Option<ObjectId> {
         self.zones.zone_of(object).map(|_| object)
@@ -283,6 +293,14 @@ impl GameState {
             .get(object.slot())
             .copied()
             .flatten()
+    }
+
+    /// Casting choices and payment belong to this exact battlefield appearance.
+    pub(crate) fn spell_entry(&self, object: ObjectId) -> Option<&SpellEntry> {
+        self.permanents[self.permanent_of(object)?]
+            .as_ref()?
+            .spell_entry
+            .as_deref()
     }
 
     /// The object the card behind `object` is now: a test follows one card
@@ -547,11 +565,6 @@ impl TrackedState {
         &mut self.state.observation_events
     }
 
-    /// The producible-mana cache has its own invalidation (`invalidate_mana_cache`).
-    pub(crate) fn mana_cache_mut(&mut self) -> &mut [Option<Mana>; 2] {
-        &mut self.state.mana_cache
-    }
-
     pub(crate) fn stack_objects_mut(&mut self) -> &mut Vec<StackObject> {
         &mut self.state.stack_objects
     }
@@ -578,6 +591,30 @@ impl TrackedState {
 
     pub(crate) fn suspended_decision_mut(&mut self) -> &mut Option<SuspendedResolution> {
         &mut self.state.suspended_decision
+    }
+
+    /// At stable priority with an empty stack only delayed instructions can
+    /// still refer to a departed form. Pending decisions never reach this point.
+    pub(crate) fn release_resolved_forms(&mut self) {
+        if self.state.stack_objects.is_empty() {
+            let delayed = &self.state.delayed_triggers;
+            let still_watched = |object| {
+                delayed.iter().any(|trigger| {
+                    trigger.source_identity.object() == object
+                        || trigger
+                            .remembered
+                            .iter()
+                            .any(|binding| binding.object == object)
+                })
+            };
+            self.state.object_lki.retain_forms(still_watched);
+            let zones = &self.state.zones;
+            self.state.exile_links.retain(|link| {
+                zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
+                    && (zones.zone_of(link.source) == Some(ZoneType::Battlefield)
+                        || still_watched(link.source))
+            });
+        }
     }
 
     pub(crate) fn object_lki_mut(&mut self) -> &mut ObjectLkiLog {
@@ -692,6 +729,8 @@ impl TrackedState {
         }
     }
 
+    /// Record an activation against its once-per-object or once-each-turn
+    /// limit; an unlimited ability records nothing.
     pub(crate) fn record_activation(
         &mut self,
         permanent_id: PermanentId,
@@ -858,7 +897,7 @@ const _: () = {
     use crate::state::game_object::Object;
     use std::mem::size_of;
 
-    assert!(size_of::<Object>() <= 96);
+    assert!(size_of::<Object>() <= 40);
     assert!(size_of::<Permanent>() <= 168);
     assert!(size_of::<GameState>() <= 4096);
     assert!(size_of::<TrackedState>() <= 4136);

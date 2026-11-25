@@ -20,6 +20,15 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardDefId(pub u32);
 
+impl CardDefId {
+    /// Absent definition join in the runtime object's fixed-width identity slot.
+    pub const ANONYMOUS: Self = Self(u32::MAX);
+
+    pub fn catalog_id(self) -> Option<Self> {
+        (self != Self::ANONYMOUS).then_some(self)
+    }
+}
+
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -539,6 +548,9 @@ pub enum ReplacementEffect {
     EntersWithCounters {
         kind: CounterKind,
         count: i32,
+        /// "If you cast it": check the entering controller against the cast spell.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        if_cast: bool,
     },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
@@ -577,7 +589,7 @@ pub enum ReplacementEffect {
         scope: crate::ability::Scope,
         predicate: CardPredicate,
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        exceptions: Vec<crate::effect::Modification>,
+        exceptions: Vec<crate::effect::CopyException>,
     },
 }
 
@@ -638,6 +650,17 @@ fn is_mana_output(effect: &Effect) -> bool {
 }
 
 impl ActivatedAbilityDefinition {
+    /// Each object may activate this ability only once (exhaust, power-up
+    /// or "activate only once").
+    pub fn once_per_object(&self) -> bool {
+        self.once_only || self.exhaust || self.power_up
+    }
+
+    /// Whether activating the ability spends one of its uses on the object.
+    pub fn is_use_limited(&self) -> bool {
+        self.once_per_object() || self.once_each_turn
+    }
+
     /// Equip attaches the Equipment to a creature its controller controls (CR 702.6).
     pub fn equip(mana_cost: ManaCost) -> Self {
         Self {
@@ -883,8 +906,14 @@ pub struct ActivatedAbilityDefinition {
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    /// Power-up: "costs less if this permanent entered this turn"; each
+    /// object may activate it only once.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub power_up: bool,
+    /// "Activate only once": each object may activate this ability only
+    /// once (CR 602.5b, CR 400.7).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub once_only: bool,
     /// "Activate only once each turn" (CR 602.5b); counted per object.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub once_each_turn: bool,
@@ -1819,13 +1848,6 @@ impl PrintedCharacteristics {
     pub fn attached_grants(&self) -> impl Iterator<Item = &ActivatedAbilityDefinition> {
         self.statics.iter().filter_map(|ability| match ability {
             StaticAbility::AttachedHas(granted) => Some(granted),
-            _ => None,
-        })
-    }
-
-    pub fn attached_characteristics(&self) -> Option<&SetCharacteristics> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::AttachedSetsCharacteristics(set) => Some(set),
             _ => None,
         })
     }
