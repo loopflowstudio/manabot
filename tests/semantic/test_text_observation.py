@@ -2840,3 +2840,23 @@ def test_tinybones_stashes_a_card_discarded_to_activate_landcycling() -> None:
             return
         _choose(env, "Pass priority")
     pytest.fail("Tinybones did not exile the discarded landcycler")
+
+
+def test_angel_replaces_a_one_life_gain_and_updates_its_power_at_25() -> None:
+    env = priority_root((), ("Vampire Neonate", "Angel of Vitality", "Swamp", "Swamp"))
+    env.scenario_set_life(0, 24)
+    env.scenario_refresh()
+    _choose(env, "Vampire Neonate")
+    for _ in range(4):
+        obs = env.observation_for_player(0)
+        if obs.agent.life == 26:
+            assert obs.opponent.life == 19
+            [angel] = [
+                p.characteristics
+                for p in obs.agent_permanents
+                if p.characteristics.name == "Angel of Vitality"
+            ]
+            assert (angel.power, angel.toughness) == (4, 4)
+            return
+        _choose(env, "Pass priority")
+    pytest.fail("Angel of Vitality did not replace the gain from 24 life")

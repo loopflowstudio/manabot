@@ -51,6 +51,7 @@ RESOLVING_STAGES = frozenset(
         "resolution_payment",
         "private_search",
         "name_card",
+        "choose_creature_type",
         "resolution_mode",
         "discard",
         "select_cards",

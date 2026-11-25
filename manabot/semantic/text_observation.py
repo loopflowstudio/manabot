@@ -114,6 +114,7 @@ _STAGES = frozenset(
         "resolution_payment",
         "resolution_mode",
         "name_card",
+        "choose_creature_type",
         "discard",
         "select_milled",
         "select_cards",

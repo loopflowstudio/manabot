@@ -64,6 +64,7 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
       // Mid-payment, a modal choice is what a tap pays, not a mode of the spell.
       if (context?.stage === 'payment') return `Choose what the tap pays${source ? ` for ${source}` : ''}`;
       if (context?.stage === 'assign_combat_damage') return 'Assign combat damage';
+      if (context?.stage === 'choose_creature_type') return 'Choose a creature type';
       if (context?.stage === 'order_replacement') return 'Choose which replacement applies next';
       return `Choose a mode${source ? ` for ${source}` : ''}`;
     case 'LEGEND_RULE':
