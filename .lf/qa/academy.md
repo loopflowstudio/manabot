@@ -1,9 +1,15 @@
 Read when the change touches Academy (`managym/academy`, `academy/ui`): the table, replays, launch, recovery or browser scripts.
 
-- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
-  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
-  the panel is not an offer). Tapped lands show only in a `fullPage`
-  screenshot, not in the board's text.
+- For the default Playwright config, choose unused `ACADEMY_API_PORT` and
+  `ACADEMY_FRONTEND_PORT`. The config reuses servers on the selected ports,
+  even from another checkout. Set `VIRTUAL_ENV` to the checkout's `.venv`
+  for the backend's `uv run --active`. Tab enters an unused board region on
+  its first control with an offer. Use arrow keys to move within the region.
+- Academy browser scripts can wait for a ready offer with
+  `[data-testid=action-option]:enabled:not([aria-disabled])`. A press during
+  an opponent read-out only ends the read-out. If a click stalls while
+  previewing an offer, check whether the rows move under the pointer.
+- Capture tapped lands with a `fullPage` screenshot.
 - Academy policy/session recovery: build the static SPA before browser servers
   (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`). Then use
   `npm --prefix academy/ui run test:e2e -- --config playwright.policy.config.ts`
@@ -22,8 +28,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
   `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise `site.missing`).
   Plain `npm run build` uses adapter-auto and does not create that directory. Pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
-  port 8000 is often taken. Open READY's `open` address in Playwright. For a
-  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  port 8000 is often taken. Open READY's `open` address in Playwright to start
+  the game. To compare UI revisions, build each into its own directory and
+  point a separate CLI server at each build. Use the same decks, `--opponent
+  search --sims 16`, `--seed` and human choices to compare the same game.
+  Open each launch in its own browser context. For a multi-game evaluation
+  trace, call `manabot.eval.match.play_cell` with
   `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
@@ -152,6 +162,8 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Compare `[data-payment-source]` ids with the frame's tapped permanent ids
   after the commit. `trigger_order_server` with `payment_fixture: true` in the
   `new_game` config gives a ready Lightning Strike payment with nine offers.
+  Playwright's release configuration starts the fixture server for
+  `e2e/mana-payment.spec.ts`.
   Rebuilding the SPA stops running `npm run preview` servers; restart them.
   For a fixture-free game, `managym academy play --deck <f> --opponent-deck
   <f> --opponent passive --seed 7` with `18 Mountain / 18 Forest / 12

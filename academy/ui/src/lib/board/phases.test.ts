@@ -10,9 +10,9 @@ describe('stops per step, for both turns', () => {
     let once = emptyOnce();
     const states: string[] = [];
     for (let press = 0; press < 3; press++) {
-      const state = phaseTrack(turn('PRECOMBAT_MAIN_STEP'), stops, true, once).marks.find(mark => mark.key === 'upkeep')!.state.opponent;
+      const state = phaseTrack('PRECOMBAT_MAIN_STEP', stops, true, once).marks.find(mark => mark.key === 'upkeep')!.state.opponent;
       ({ stops, once } = withStopState(stops, once, 'opponent', 'upkeep', nextStopState(state)));
-      states.push(phaseTrack(turn('PRECOMBAT_MAIN_STEP'), stops, true, once).marks.find(mark => mark.key === 'upkeep')!.state.opponent);
+      states.push(phaseTrack('PRECOMBAT_MAIN_STEP', stops, true, once).marks.find(mark => mark.key === 'upkeep')!.state.opponent);
     }
     expect(states).toEqual(['every', 'once', 'off']);
     expect(stops).toEqual(defaultStops());
@@ -41,7 +41,7 @@ describe('stops per step, for both turns', () => {
   });
 
   it('marks the current step and rules each phase', () => {
-    const track = phaseTrack(turn('COMBAT_DECLARE_BLOCKERS'), defaultStops(), false);
+    const track = phaseTrack('COMBAT_DECLARE_BLOCKERS', defaultStops(), false);
     expect(track.marks.filter(mark => mark.current).map(mark => mark.key)).toEqual(['declare_blockers']);
     expect(track.marks.filter(mark => mark.phaseStart).map(mark => mark.short)).toEqual(['Upkeep', 'Main', 'Combat', 'Main 2', 'End']);
     expect(track.active).toBe('opponent');

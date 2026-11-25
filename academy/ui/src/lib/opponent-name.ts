@@ -22,3 +22,9 @@ export function catalogOpponentName(entry: Pick<TrainedOpponent, 'name' | 'kind'
 export function shortName(name: string): string {
   return name.split(' · ')[0];
 }
+
+/** How it decides, as a caption begins it: "Scripted", "Search 1×1", "Checkpoint w17"; null for a bare name. */
+export function decidesBy(name: string): string | null {
+  const kind = name.split(' · ').slice(1).join(' · ');
+  return kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : null;
+}

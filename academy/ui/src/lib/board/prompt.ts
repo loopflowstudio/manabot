@@ -1,8 +1,8 @@
 /**
  * The prompt's one line: what to do now, in plain words.
  *
- * `promptLine(frame, view)` names the decision and the input that answers it
- * ("Choose blockers", "Pay {2}{U}: Space pays automatically"). The engine's
+ * `promptLine(frame, view)` names the decision ("Choose blockers", "Pay {2}{U}").
+ * `promptHint(frame, view)` describes how to answer a mana payment. The engine's
  * own instruction stays available behind the prompt's details; this line adds
  * no rules and chooses nothing.
  */
@@ -73,14 +73,11 @@ export function promptLine(frame: ExperienceFrame, view: BoardView): string {
   }
 }
 
-/**
- * How to answer a mana payment, apart from what it asks. `planned`: the board
- * shows the automatic payer's taps for the primary payment.
- */
-export function promptHint(frame: ExperienceFrame, view: BoardView, planned = false): string | null {
+/** The payment instructions hold steady as previews arrive and change. */
+export function promptHint(frame: ExperienceFrame, view: BoardView): string | null {
   if (frame.action_space !== 'PAY_OR_NOT' || !frame.projection.decision_context?.mana_cost) return null;
   if (!view.primary) return 'Click lands to tap them yourself';
-  return `${planned ? 'Space taps the dashed lands' : 'Space pays automatically'}, or click lands to tap them yourself`;
+  return 'Space pays automatically, or click lands to tap them yourself';
 }
 
 /**

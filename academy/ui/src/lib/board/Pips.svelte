@@ -3,6 +3,7 @@
    * A mana cost or pool as symbols; the accessible text is the cost itself.
    * Each coloured pip carries its letter (W U B R G, ◇ for colourless), so
    * white and colourless, the two pale pips, differ by more than a tint.
+   * Glyphs are drawn, not text, so a line's text holds the cost once.
    */
   import { costSymbols } from '$lib/card-faces.svelte';
 
@@ -29,7 +30,7 @@
   <span class="pips" style:--pip={`${size}px`} title={cost}>
     <span class="sr-only">{cost}</span>
     {#each symbols as symbol, index (index)}
-      <i class={`pip ${kind(symbol)}`} style={style(symbol)} aria-hidden="true">{glyph(symbol)}</i>
+      <i class={`pip ${kind(symbol)}`} style={style(symbol)} data-glyph={glyph(symbol)} aria-hidden="true"></i>
     {/each}
   </span>
 {/if}
@@ -42,6 +43,7 @@
     box-shadow: 0 0 0 1px var(--pip-edge);
     background: var(--pip-generic);
   }
+  .pip::before { content: attr(data-glyph); }
   .w { background: var(--pip-w); } .u { background: var(--pip-u); } .b { background: var(--pip-b); }
   .r { background: var(--pip-r); } .g { background: var(--pip-g); } .c { background: var(--pip-c); }
   .w, .u, .b, .r, .g { font-size: calc(var(--pip) * 0.62); }

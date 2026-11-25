@@ -478,7 +478,10 @@ session.
 Academy names every opponent with how it decides: **Search 64 · search**,
 **Heuristic · scripted**, **Passive · scripted**, a checkpoint by its name and
 the world it was trained in (**<name> · checkpoint w17**). The setup picker,
-the board, the waiting line and the result card use the same name.
+the top bar and the result card use that full name. The opponent's plate is
+titled with the short name ("Heuristic", "Search 64") and puts how it decides
+in the caption beside the deck ("Scripted · GW Allies"), which wraps to a
+second line rather than cutting a long deck name.
 
 A trained or independent policy must first be registered with this Academy
 server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
@@ -596,10 +599,13 @@ clicked.
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
-symbols, with any restriction or expiry written under them; open a graveyard or
+symbols, with any restriction or expiry written under them and wrapped within
+the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
+braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
 outlined plate. Identical permanents with the same choices share a pile, its
-count after the name ("Forest ×4"), and each copy remains its own control. Crowded rows shrink their cards
+count after the top copy's name ("Forest ×4"; the copies beneath show no name of
+their own), and each copy remains its own control. Crowded rows shrink their cards
 and wrap onto a further line before anything scrolls, and each half gives the
 crowded row more of its height.
 
@@ -618,7 +624,9 @@ keeps for it so it never covers a neighbour; its name bar stays across the
 top. An attacker steps toward the player it attacks and tilts a few degrees:
 one that tapped lies just past the quarter, a vigilant one stays upright.
 Something a spell on the stack targets has a dashed red edge. Cards in hand
-have the type line under the name and the cost on the art.
+have the type line under the name and the cost on the art; a hand card's name
+stays on one line, shortened with an ellipsis when long, and its full name is
+in the inspection.
 
 While you may act, what you can act on is raised and what you cannot steps
 back: a card in hand you cannot play now is dimmed most, a permanent of yours
@@ -646,7 +654,12 @@ the step's name and the stop for the opponent's turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
 strip has room; with 24 permanents or more on the battlefield the board may
-take the hand down to about 100 px wide. An empty hand is a label.
+take the hand down to about 100 px wide. A hand too long for the strip first
+shrinks its cards toward that floor; only then do they overlap, left over
+right, and each covered card's visible slice gives its name the whole width,
+with its cost on the line beneath in place of the type line, so a nine-card
+hand reads every card's name and cost. Pointing at or focusing a covered card lifts it whole. An empty hand is a
+label.
 
 The rail holds:
 
@@ -663,10 +676,11 @@ The rail holds:
   attacked, blocked, were targeted or were dealt damage are ringed on the board,
   and damage dealt since your last move shows on the card or the player's plate
   as it lands ("−2").
-- **The decision**: who decides, one line saying what to do ("Pay {1}{U} for
-  Accumulate Wisdom. Space taps the dashed lands, or click lands to tap them
-  yourself"),
-  and its buttons. **Rules detail** holds the engine's full instruction.
+- **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
+  Accumulate Wisdom"), and the buttons. For mana payments the hint below the
+  prompt says how to pay. It stays steady as different previews appear.
+  Mana in the prompt, the buttons and the choices is drawn as pips.
+  **Rules detail** holds the engine's full instruction.
   Passing priority and paying a cost are the primary button (Space), labelled
   with what it does next: **Resolve** and the spell on top of the stack, the
   step it moves to ("To combat", "To blockers"), or the cost ("Pay {1}{U}",
@@ -687,7 +701,8 @@ The rail holds:
   see the card.
 
 While the opponent decides, the rail and the opponent's plate say so, with
-the seconds it has taken ("Search 64 is searching… · 3 s"). An attacking creature steps toward the player it
+the seconds it has taken ("Search 64 is searching · 3 s"), and the rail's
+choice list reads "Waiting for Search 64" until there is a decision of yours. An attacking creature steps toward the player it
 attacks, and a blocker is joined to the attacker it blocks by a line. Combat
 usually ends before your next decision, so the line stays after it, until your
 next move, while both creatures are on the board. Cards
@@ -696,7 +711,8 @@ card from their plate) instead of appearing; with reduced motion they appear
 in place and every fact above stays.
 
 Choices with no card on the board, such as Lessons outside the game, appear in
-a tray over the board.
+a tray over the board. Trays, the inspection, menus and the result card are
+opaque and sit above the lines between targets, so a line never crosses them.
 
 Combat is drafted whole. At an attack, every creature that can attack is
 outlined; click one (or focus it and press Enter) to add it to the attack or
@@ -744,7 +760,10 @@ outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
 (`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
 automatic payer would tap get a dashed outline and a mark with their order and
-what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. Nothing has
+what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. A planned land
+in a pile of identical lands leaves the pile while the plan is shown, so each
+planned land has its own outline and its mark sits at the same corner of its
+art. Nothing has
 happened yet; pointing and focusing send no action. Pointing at a row of **All
 legal choices** previews that choice the same way.
 
@@ -762,9 +781,9 @@ each land you may tap is raised.
 
 1. To accept the plan, press Space or the primary button.
 2. Point at another land to preview "tap this one, then pay the rest
-   automatically": that land becomes `1` and the marks move. A land the plan
-   picked out of a pile of identical lands stands on its own, so its mark is
-   never hidden.
+   automatically": that land becomes `1` and the marks move. The prompt, the
+   **Pay** button and the line under it keep describing Pay's own plan, so the
+   rail holds still under the pointer.
 3. Click a land to tap it. It shows as tapped, its mana appears on your plate,
    and the plan for the rest is asked again and redrawn. Tap another land or
    press Space to finish. When your tap leaves no choice for the rest, the game
@@ -941,17 +960,32 @@ The rail tells what happened in prose. In live play it is **Since
 your last move**: spells cast and their targets, lands played, discards,
 reveals, attacks, blocks, damage and deaths, read from the authority's presentation
 events after your last commit, with the move list beneath grouped by turn.
-When the opponent moved, those facts are also read out one at a time over the
-move list, about a second each, with the cards each is about outlined on the
-board. Each fact is shown on the board it happened on: the server sends your
-view of the board after each step with the frame, so an attacker that died is
-seen attacking before it leaves, and cards travel from one board to the next.
-A past board outlines nothing. Space (when no control has focus), a click on
-the caption or on the board, or any action ends the reading and shows the
-current board; a click that ends it acts on nothing. The choices stay live
-throughout. Reduced motion reads out nothing and shows the current board; the
-recap lists every fact. Sentences name a player
-shortly ("Heuristic cast…"); the plate and top bar keep how it decides
+When the opponent moved, those facts are read out one at a time before your
+decision, with the cards each is about outlined on the
+board. The fact being read heads the decision block, above your dimmed prompt.
+Each fact is shown on the board after the engine step it happened in: the
+server sends your view of the board after each step with the frame, so an
+attacker that died is usually seen attacking before it leaves, and cards travel
+from one board to the next. One step can run from an attack through damage into
+the next turn, when nobody had a choice between; such a fact is shown on the
+board at that next turn. A past board outlines nothing. While the reading lasts,
+the top bar names the turn the fact happened in, and the step bar marks that
+turn's step when the board shows it and no step when the board is a later
+turn's. Your decision's buttons and numbered choices stay in place
+but wait. They are announced as unavailable and still take focus. Clicking
+the board or rail, activating a control, or pressing a key such as Space,
+Enter, Escape or a number key ends the reading. Focus keys still move and
+`?` opens keyboard help. The current board and your live decision answer the
+next press. So when
+Heuristic attacks, you watch the attack land before you are asked to block, and
+pressing `1` early shows the blocking board rather than declaring a block.
+Damage marks ("−2") and a finished game's result card wait with the decision,
+so a past board never shows damage it has not yet taken. A
+new frame or a reconnect ends the reading and shows the actual pending
+decision. **Opponent's moves** in **Menu** sets the pace: **Quick** (under a
+second a fact), **Slow** or **Off**. With **Off** or reduced motion nothing is
+read out and the current board shows at once; the recap lists every fact. Sentences name a player
+shortly ("Heuristic cast…"); the top bar keeps how it decides
 ("Heuristic · scripted"). In Replay the same recap
 covers **This move** at a consequences position and **Since the last
 decision** at a choice (from the same chooser's previous decision); the move

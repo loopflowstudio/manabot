@@ -113,6 +113,22 @@ export interface NameBook {
   casts: Record<Side, string[]>;
 }
 
+/**
+ * The phrases of one narrated move. `narrate_move`
+ * (managym/academy/recording.py) joins a compound move's phrases with "; ":
+ * "Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Earth Kingdom Jailer".
+ */
+export function movePhrases(text: string): string[] {
+  return text.split('; ');
+}
+
+/** The spells a narrated move cast, by name, without their ", targeting …" clauses. */
+function narratedSpells(text: string): string[] {
+  return movePhrases(text)
+    .filter(phrase => phrase.startsWith('Cast '))
+    .map(phrase => phrase.slice('Cast '.length).split(', targeting ')[0]);
+}
+
 export function nameBook(frames: readonly ExperienceFrame[], moves: readonly GameLogEntry[]): NameBook {
   const ids = new Map<number, string>();
   for (const frame of frames) {
@@ -121,9 +137,10 @@ export function nameBook(frames: readonly ExperienceFrame[], moves: readonly Gam
       for (const permanent of player.battlefield) if (permanent.name) ids.set(permanent.id, permanent.name);
     }
   }
+  // The targets are presentation events of their own.
   const cast = (actor: GameLogEntry['actor']): string[] => moves
-    .filter(move => move.actor === actor && move.text.startsWith('Cast '))
-    .map(move => move.text.slice('Cast '.length));
+    .filter(move => move.actor === actor)
+    .flatMap(move => narratedSpells(move.text));
   return { ids, casts: { you: cast('hero'), opponent: cast('villain') } };
 }
 
