@@ -1,4 +1,4 @@
-at: e41607db147fd0e0ff0675b8cb9cb81a63f31654
+at: bbc0dacc0f3390cdee16db5a8d3b65864ab7a922
 first:
   - path: docs/academy.md
     why: How a player reads and inspects battlefield state
@@ -7,11 +7,11 @@ first:
   - path: managym/academy/README.md
     why: Wire contract for AbilityGrantView and RestrictionView
   - path: managym/state/src/ability.rs
-    why: Unified Layer 6 AbilitySource provenance enum
+    why: Unified Layer 6 AbilityOrigin provenance enum
   - path: managym/src/experience.rs
     why: Optional permanent fields carried by Academy frames
   - path: managym/src/flow/layers.rs
-    why: Tracks AbilitySource through ability loss, counters and grants
+    why: Tracks AbilityOrigin through ability loss, counters and grants
   - path: managym/src/flow/statics.rs
     why: Exposes external static restriction sources without hot-path allocs
   - path: managym/src/permanent_details.rs
