@@ -673,29 +673,21 @@ value points; the e2e acceptance spec `study-review.spec.ts`, including its
 second test (Show analysis mid-game → "analysis shown" in Review and Games).
 That spec still does not exist.
 
-## Remaining (realign, 2026-11-25)
+## Remaining (realign, 2026-11-25, after item 3)
 
-1. **Playing on from the line** (slice 4's remainder; approved in the
-   chess.com table). A playable branch rooted in a re-executed position: a
-   `StudyForkProvider` over `agent_line`'s walk, or a Play game whose opening
-   moves are the record's (questions.md, slice 4 choices). Review opens it at
-   any analysed decision; the person plays on or lets the policy keep
-   choosing in their seat.
-2. **`academy/ui/e2e/study-review.spec.ts`**, the acceptance spec, with both
-   tests (§ Acceptance check), added to `playwright.policy.config.ts`'s
-   `testMatch`. Gate runs it but nothing has written it yet.
-3. **Policy admission cost.** `analysing_policies` / `analysis_choices`
-   admit every registered policy (2.5–2.9 s with 23 checkpoints). Play pays
-   it once per game, on the first Show analysis and under the game lock;
-   Review pays it on every open of `/analyses/policies`. Admission depends on
-   the world and the two setups, not the game, so one cache keyed by those
-   would serve both. Take it off the game lock either way.
-4. Not built, by headless choice: live value points on the folded Strip
-   (§6). Probabilities and estimates are on the offers.
+Items 1–3 of the 2026-11-25 realign are built (statuses below). What is
+left is not building:
 
-Next: items 1 and 2 together in one pass. The spec's second test exercises
-slice 6 end to end, and the line's playable branch gets its browser proof in
-the same run.
+- Item 4, live value points on the folded Strip (§6), stays unbuilt by
+  headless choice; probabilities and estimates are on the offers.
+- `PolicyAdmissions` remembers every key and every refusal for the life of
+  the process (a key per registered-policy set and deck pair). Acceptable for
+  a local server; revisit if hosted play registers policies often.
+
+Next: gate. Deferred to gate/CI: a clean run of the policy e2e spec
+(`study-review.spec.ts`), the configured-launch e2e, `test:e2e:release`,
+timing with a current-world checkpoint, and the control-fixture schema test
+that already fails on the base commit.
 
 ## Status (2026-11-25, items 1 and 2)
 
@@ -739,28 +731,8 @@ What it taught:
   (read-only) and Show analysis in the played-on game cover reading what it
   would do (questions.md).
 
-Remaining (realign, 2026-11-25, after items 1 and 2):
-
-- **Item 3, the next pass.** Admission (`analysing_policies`,
-  `managym/academy/analysis.py:276`) is paid in three places: Play's
-  `show_analysis` (`server.py` ~2987, cached per match but under the game
-  lock), `GET /analyses/policies` and `POST /analyses` (both through
-  `analysis_choices`, every call; `POST` also re-walks the game). One cache
-  keyed by what admission reads (the registry's descriptors, the world and
-  `config.to_rust()`'s two setups) serves all three, and Play's first Show
-  analysis computes it off the game lock (the switch answers when it is
-  ready). Delete `GameSession._analysing_policies`. Test: a second
-  `/analyses/policies` for a game with the same setups admits nothing again
-  (count `registry.admit` calls), and Show analysis does not hold the lock
-  while admitting.
-- Item 4 stays unbuilt (headless choice).
-- Shape: playing on lives on `GameSession` (`_played_from_source`,
-  `_play_recorded_prefix`) beside the play-demo prefix path it reuses;
-  nothing to remove.
-
-Then gate. Deferred to gate/CI: the policy e2e spec on a clean run, the
-configured-launch e2e, `test:e2e:release`, timing with a current-world
-checkpoint, and the pre-existing control-fixture schema test failure.
+Shape: playing on lives on `GameSession` (`_played_from_source`,
+`_play_recorded_prefix`) beside the play-demo prefix path it reuses.
 
 ## Status (2026-11-25, item 3)
 
@@ -780,7 +752,6 @@ What it taught: the cache is shared across games, not just per game, since
 admission reads no game state; a failed admission (OSError included) is
 remembered until a policy registers or the process restarts.
 
-Remaining: item 4 stays unbuilt (headless choice). Next is gate.
 
 ## Slices
 
