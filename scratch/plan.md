@@ -1,498 +1,500 @@
-# MTG-483 — One drafted-decision lifecycle, one chunked runner, and the audit of what to draft next
+# MTG-483 — Grouped input: one managym compiler from a whole plan to sequential Actions
 
-This file replaces MTG-431's plan, which arrived through the stack sync (see
-Base). `scratch/concept-review.html` is now MTG-483's concept review as well;
-`scratch/tour.yaml` remains MTG-431's and is left untouched. On a sync conflict
-in `scratch/plan.md`, `scratch/questions.md`, or `scratch/concept-review.html`,
-this Task's version stays.
+This plan replaces the browser-side chunked-runner plan (`chunked.ts`,
+`draft-store.ts`, `PartitionPanel.svelte`, the `piloting`/`rejected` props).
+None of that was built; nothing of it remains to remove.
+
+Direction, verbatim (Jack Heart, 2026-11-25, Option A):
+
+> Stop the browser-side chunked Command runner build and pivot MTG-483 to a
+> first-class managym grouped-input API.
+> - Keep core engine `Action` / `step()` flat and sequential (never add atomic
+>   grouped `Action` variants that change RL/search action spaces,
+>   observations, digests, or split human vs bot semantics).
+> - Promote the pattern started in `managym/src/flow/combat_preview.rs`
+>   (`Game::combat_preview`) into a first-class `managym` grouped-input
+>   compiler layer above sequential `Action`s:
+>   1. Structured grouped-decision descriptor / metadata from `managym` (on
+>      `ExperienceFrame` / Python API) so callers never scrape Rust `Debug`
+>      strings (`pending`) or label regexes (`FACE_UP_RE`) and never
+>      re-implement engine rules (`skip_trivial`, lethal minimums,
+>      `max_share + targets - 1`, distinct-name constraints) in TypeScript.
+>   2. Read-only `preview_group(plan)` (clone-and-step compiler): validates a
+>      typed grouped plan against the real engine rules, returns
+>      requirements/legality/refusal reasons and the compiled sequential steps.
+>   3. First-class grouped submission (`apply_group(plan)` in `managym` +
+>      Academy server endpoint) bound to `(revision, frame_hash)`: validates
+>      the whole plan on a clone first, then executes the exact same sequential
+>      `Action`s in one server/engine call—recording identical per-step
+>      trace/replay actions, digests, presentation events, Study forks, and
+>      policy-probability attachment points while eliminating multi-RTT browser
+>      send loops, disconnect/reload half-commits, and double `command_outcome`
+>      races.
+>   4. Honest purity boundary: groups stop cleanly at any hidden-info reveal,
+>      shuffle/draw, or opponent choice (e.g., Surveil before OrderLibrary,
+>      OrderTriggers when modes/targets interleave).
+>   5. Shared decision surface & MTG-441 invariants preserved: raw single-step
+>      offers stay reachable under the collapsed disclosure in live play (never
+>      hidden permanently); Replay/Study keep raw per-step offers visible;
+>      nothing commits until Confirm; preserve MTG-441 drag/combat UX and check
+>      whether stacking on MTG-431 is still needed or if MTG-483 should base
+>      cleanly on main / wait cleanly for MTG-441.
 
 ## Outcome
 
-A person playing live in Academy drafts a multi-part decision whole and
-confirms once. Today two decisions do that (combat declarations, Curator of
-Destinies' pile split) through two hand-copied send loops, two storage keys,
-and inconsistent wait/refusal/keyboard handling in `Board.svelte`. After this
-change:
+A person playing live in Academy drafts a multi-part decision whole, sees the
+engine's own verdict on the draft as they edit it, and confirms once. Confirm
+is one message and one authority call: the whole plan lands or none of it
+does. Nothing about a half-sent sequence can be shown, because there is none.
 
-1. **One drafted-decision contract and one chunked runner** govern every
-   drafted decision (combat today, pile split today, and future drafts).
-   `Board.svelte` owns one runner, one `Stop sending` control, one `Escape` /
-   `Space` / `1–9` / auto-tap gate, and delegates panel UI to self-contained
-   components (`PartitionPanel.svelte`).
-2. **Table role is separated from transient submission readiness** (`piloting`
-   vs `interaction`/`live`), so *both* combat and frame-derived drafts (pile
-   split and future Class A drafts) stay visible with controls disabled across
-   pending Commands, server work, and priority-stop updates, and disappear in
-   Study, Replay, Watch, and Interrupted views.
-3. **Authority rejections, disconnects, unexpected frames, reloads, and Escape**
-   are handled identically and truthfully for every draft, using the authority's
-   `CommandRejection` directly rather than guessing from revision equality.
-4. **`docs/academy.md`** classifies every multi-step native decision into what
-   can be drafted from structured frame data today (A1), what needs small
-   structured frame fields instead of Rust `Debug` text scraping (A2), what
-   needs a read-only clone-and-step native preview (B), and what stays
-   sequential (C), plus the `ChoosePile` opponent-view verification.
+After this change that holds for combat declarations (attackers, blockers) and
+for arranging looked-at cards (Scry, Surveil, OrderLibrary). The recording of
+such a turn is byte-for-byte the per-step recording it is today: one recorded
+decision per native step, each with its frame, offers and retained root, so
+Replay, Study forks and policy probabilities attach exactly where they do now.
 
-No engine, server or protocol change. No new drafted decision ships here.
+A Python caller of `managym` gets the same three calls (`group`,
+`preview_group`, `apply_group`) with no Academy involved.
 
-## Base (choices made for review)
+## Base (done in kickoff; choice made for review)
 
-- **Stacked on MTG-431** (`lf sync jack/mtg-431-close-foundations-stack-copies-choices-costs`,
-  merge `2647b11c85`). `partition.ts`, the partition loop in `Board.svelte`,
-  and `Decision::PartitionPiles` / `ChoosePile` / `KeepPermanents` /
-  `OrderEntryChoices` / `target_shares` exist only on that branch (PR #605,
-  open). Without it there is one loop and nothing to unify.
-  Passed over: basing on main + MTG-441 and porting the pile split later; that
-  leaves the duplication the brief names for another Task. Undo with
-  `lf sync main`.
-- **MTG-441 (PR #613) must be underneath before `Board.svelte`, `Rail.svelte`,
-  or `+page.svelte` is touched.** It rewrites the combat loop, adds the
-  `pending` and `interaction` props, `drag.ts`, `addAttackers`/`setBlock`, the
-  rail's collapsed disclosure and `e2e/fixtures/combat.ts`. It conflicts with
-  MTG-431 in `Board.svelte`, `Lines.svelte` and `Plate.svelte`
-  (`git merge-tree` of this branch with it, 2026-11-25), and that conflict
-  belongs to MTG-431's sync with main, not to this Task ("Never `git merge` a
-  Task's branch"). Pass 1 touches none of those files. Pass 2 starts with
-  `lf sync` and checks that `Board.svelte` declares `interaction:` and
-  `pending?:`. If it does not, pass 2 has not got its input: the build stops
-  there and says MTG-431 has not yet absorbed main with #613.
-
-Direction received for this plan, verbatim:
-
-> check out MTG-441 (PR #613 ...) before finalizing the plan and building.
-> ... Apply this same pattern to standardized chunked drafts rather than
-> regressing it. ... the runner must wait until the board is answerable
-> (`live && !pending`) instead of stopping after step 1. ... Keep draft state
-> visible through pending Command, server work, and priority-stop updates
-> (disable edits/Confirm until live). ... On same-revision refusal at step 0
-> (`sending.at === 0`), preserve the draft so the user can edit and retry; on
-> refusal after committed steps (`sending.at > 0`), clear the draft and
-> surface exact partial progress. ... Account for MTG-441 landing on main
-> (sync/merge cleanly and preserve all drag + combat draft behavior).
+- **Based on main, no stack.** `lf sync main` ran in kickoff (merge
+  `e2224c3988`); `stack_parent` is now null and the branch differs from main
+  only in `scratch/`. Undo: `lf sync MTG-431`.
+  Why: the native layer is additive (`flow/group/`), and every first consumer
+  exists on main — `combat_preview.rs`, `Decision::Scry`, `Surveil`,
+  `OrderLibrary`. MTG-431 (PR #605) is `CONFLICTING` with main and still
+  planning engine slices; stacking would hold this Task behind it for a pile
+  split that is one more group kind.
+  Passed over: staying stacked to migrate the pile split here. It becomes a
+  follow-up (see `scratch/questions.md`).
+- `docs/academy.md` is main's again. The "Drafted decisions" section committed
+  earlier described the chunked runner and the MTG-431 pile split; the audit
+  it carried is kept below and rewritten in pass 3.
+- `scratch/concept-review.html` (the chunked-runner concept review) is deleted.
+- **MTG-441 (PR #613) must be on main before pass 3.** It has auto-merge on
+  and is `MERGEABLE`, with `Academy UI` failing as of 2026-11-25. It rewrites
+  the combat draft in `Board.svelte`, `Rail.svelte` and `+page.svelte`. Passes
+  1 and 2 touch no file under `academy/ui/`. Pass 3 starts with `lf sync` and
+  checks that `Board.svelte` declares `interaction:`; if it does not, pass 3
+  has not got its input and the build says so and stops there.
 
 ## What was found
 
-### Runner & Board lifecycle (current base + MTG-441)
+### Two grouped mechanisms already exist; one generalizes
 
-- **Two duplicated loops in `Board.svelte`** (`289–313` combat, `367–391`
-  partition) with duplicated stop handlers, Escape branches, Space branches,
-  `Stop sending` snippets, and two `sessionStorage` keys
-  (`academy.table.combat-draft`, `academy.table.partition-draft`).
-- **Live-table role is conflated with transient readiness.** In MTG-441,
-  `+page.svelte` collapses `liveTable` and `inputReady` into
-  `interaction: 'play' | 'study' | 'read-only'`. When a Command is pending,
-  server work runs, or priority stops sync, `interaction` drops to
-  `'read-only'`. Combat stayed visible during those waits only because
-  `+page.svelte` side-channeled `liveTable` through
-  `combatPreview={liveTable ? fetchCombatPreview : undefined}`. Frame-derived
-  drafts (partition and every future Class A draft) have no preview fetcher, so
-  gating them on `interaction === 'play'` would hide the panel and pop open raw
-  choices on every transient wait.
-- **Guessing refusals from `revision === sentAt && answerable` fails on real
-  server rejections.**
-  - `stale_revision` rejections include a `recovery` frame
-    (`server.py:1538, 2583`). If that frame has a newer revision, checking only
-    `revision === sentAt` mistakes the rejection for an accepted step: on the
-    last step it silently reports `done`; earlier it reports `unpredicted` with
-    `sent = at + 1` (off by one) or keeps sending.
-  - `not_actor` rejections omit `recovery` (`server.py:1550`). If a role change
-    made `answerable === false`, checking only `revision === sentAt && answerable`
-    leaves the runner stuck in `wait` until Escape.
-  - `sendAction` already returns `boolean` (`socket.svelte.ts:364`) and
-    `gameStore.lastCommandRejection` already records explicit rejections
-    (`game.svelte.ts:147`, cleared on `beginCommand` and `applyFrame`, set after
-    `applyRecovery` in `socket.svelte.ts:705-708`), but `Board.svelte` never
-    sees either.
-- **Disconnect and final-step ordering bugs if checked naively.**
-  - Disconnecting sets both `connected = false` and `answerable = false`;
-    checking `!answerable` before `!connected` prevents disconnect stop from
-    ever firing.
-  - When the final step (`at + 1 >= total`) is accepted and advances the
-    revision while the opponent starts thinking (`work: 'running'`,
-    `answerable = false`), checking `!answerable` before checking completion
-    leaves `"Declaring N of N…"` and `"Stop sending"` on screen while the bot
-    thinks.
-- **Partition lacks keyboard & raw-choice parity.** Pressing `1–9` while the
-  partition panel is open fires the raw per-card offer behind the panel's back
-  (MTG-441 suppressed `1–9` for combat only). MTG-441's rail folds raw offers
-  under `<details data-testid="per-creature-choices">` with hardcoded combat
-  copy (`"Each creature's choice"`) and leaves raw offer rows clickable during
-  an active run.
-- **Reload mid-send is silent.** Neither loop persists an in-flight run marker,
-  so reloading mid-sequence loses the count of steps already sent.
-- **Board.svelte bloat.** Partition's panel markup, snippet, and CSS (~100
-  lines) live inline inside a ~1,900-line `Board.svelte`. Extracting
-  `PartitionPanel.svelte` sets the component pattern for every future drafted
-  decision.
+- **`Game::combat_preview`** (`managym/src/flow/combat_preview.rs`, shipped in
+  0.2.6 as `Env.combat_preview_json`, `managym/combat.py`). Checks the semantic
+  address `(viewer, revision, fingerprint)`, clones, asks the clone's own
+  action space for the action matching the plan's answer for the creature
+  asked, records `(revision, fingerprint, action_index)`, steps, and stops
+  when the decision is about none of the creatures still to declare. Coupled
+  rules (menace, must-attack, must-block) need no special case: the engine
+  refuses or repairs on the clone and the preview reports it. Nothing in the
+  loop is combat-specific except "which creature is asked", "which action
+  answers it" and "what did the engine declare".
+- **`compound_offers` / `compound_commands` / `step_structured`**
+  (`managym/src/agent/structured_offer.rs`). A static product descriptor
+  (`ChoiceStep::Select { min, max, ordered, distinct }`) decoded and lowered on
+  a fork. It returns the plain sequential surface whenever choices couple
+  (`structured_blocker_offers` gives up on menace, blocking limits and
+  must-be-blocked), has no refusal reasons, and is a policy surface: Study
+  branches (`managym/academy/study_branch.py`) and `manabot/sim/action/benchmark.py`
+  execute through it. Widening it would change what those consumers can
+  submit, which the direction rules out.
+  **Decision:** build on the `combat_preview` mechanism. `compound_*` is left
+  exactly as it is and the new layer shares only its id types
+  (`ObjectRenderId`, `SubjectRef`).
 
-### Native audit (`managym/src/flow/decision.rs` = D, `decision_context.rs` = C, `agent/effect_execution.rs` = E)
+### The descriptor cannot go inside `ExperienceFrame`
 
-- `skip_trivial` answers any one-action space and loops
-  (`flow/tick.rs:110-122`), so the last step of a sequence is often never
-  asked: the last card of `OrderLibrary`, the last target's share, the
-  `Decline` after every card is picked. A plan lists only the steps that will
-  be asked; the runner finishes when its steps run out and never waits for a
-  closing frame.
-- Scry is not a cursor: every remaining card is offered with both sides each
-  step and pick order is the final order (D:2218-2234, 3015-3027).
-- `KeepCreatures` does not exist; it is `KeepPermanents{TotalCreaturePower}`.
-  Cast-time shares are `PendingChoice::DivideAmongTargets`, and trigger
-  ordering is `state.trigger_placement` with its own `ORDER_TRIGGERS` space;
-  neither is a `Decision` variant.
-- **Structured frame fields vs Rust `Debug` text (`E:267-281, 1528-1766`).**
-  `effect_execution.rs` formats decision limits (`min`/`max`, `remaining`,
-  `count`, `face-down pile size`) via `format!("{name}: {value:?}")` into
-  `decision_context.pending: string[]`. Only `Scry`, `Surveil`, and
-  `OrderLibrary` carry all needed state in typed frame fields today (`inspected`
-  + `offers`). `SelectCards`, `SearchDistinctNames`, `OpponentSplitsRevealed`,
-  `Discard`, `DistributeCounters`, `KeepPermanents AllBut` need small typed
-  limit/remaining fields on `DecisionContextView` (not a clone-and-step preview)
-  so the UI never parses Rust `{:?}` strings; `PartitionPiles` similarly needs a
-  structured pile side on its offers to replace `FACE_UP_RE` regex matching.
-- `combat_preview` (`flow/combat_preview.rs:104-199`) clones the game, steps
-  the clone and returns `revision`, `fingerprint`, `action_index` per asked
-  step. The clone-and-step core is not combat-specific; a general preview
-  needs a per-decision plan matcher, a stop rule, and a rule that it stops
-  before any step whose next frame depends on a shuffle, draw or opponent
-  choice.
-- The `discard` instruction says `"or decline when offered"` (C:516); no
-  decline is ever offered (D:2166).
+`_build_frame` (`managym/academy/server.py`) hashes the whole frame into
+`frame_hash`; `ExperienceFrame` is `deny_unknown_fields` and byte-compared with
+`protocol/experience-v1.schema.json`; `replay_index.py` compares a re-derived
+frame's hash with the recorded address. A `group` field would move the hash of
+every combat frame and break retained replays.
+**Decision:** the descriptor travels beside the frame on live envelopes, the
+way `log`, `auto_passed` and `boards` already do (`_drain_surface_metadata`:
+"outside the canonical frame"). Replay and Study frames never carry it, which
+is also what keeps their raw per-step offers the only thing shown.
 
-Classification the doc will carry:
-- **A1** — draftable from structured frame fields today (no native change).
-- **A2** — frame-derivable without a clone-and-step preview, once small typed
-  count/limit/side fields are exposed on `DecisionContextView` or
-  `InteractionOffer` (avoiding Rust `Debug` / label-regex scraping).
-- **B** — needs a read-only clone-and-step native preview.
-- **C** — leave sequential.
+### The authority's per-step path is already what a group needs
 
-| Decision (stage) | Class | Why |
-|---|---|---|
-| Scry (`scry`) | A1, N≥2 | all looked cards in `inspected`; nothing commits until the last step |
-| Surveil (`surveil`) then `order_library_top` | A1, two phases | graveyard picks commit as one batch before ordering |
-| OrderLibrary (`order_library_top`/`_bottom`) | A1 | N−1 asked steps; bottom shows only `cards[next..]` |
-| PartitionPiles (`partition_piles`) | A1 (shipped; A2 cleanup) | shipped via `inspected`; still matches `offer.label` with `FACE_UP_RE` until a structured pile side is offered |
-| SelectCards (`select_cards`, `private_search`) with max > 1 | A2 | candidates fixed, nothing moves until finish; `min`/`max` only in `pending` Debug text today |
-| SearchDistinctNames (`private_search`) | A2 | draft enforces distinct names; `remaining` only in `pending` Debug text today |
-| OpponentSplitsRevealed (`split_revealed`) | A2 | each pick moves at once; `remaining` only in `pending` Debug text today |
-| Discard (`discard`), 2+ cards | A2 | each discard commits and is public; `remaining` only in `pending` Debug text today (cleanup discard asks one at a time with no total) |
-| DistributeCounters (`distribute_counters`) | A2 | one counter per step, repeats allowed, each commits; `remaining` only in `pending` Debug text today |
-| DivideAmongTargets (`target_shares`) | A2 | arithmetic (`total = max_share + targets − 1`); relies on offer ordering/labels until share values are structured |
-| KeepPermanents `AllBut` (`keep_permanents`) | A2 | public board, count limit; `count` only in `pending` Debug text today |
-| AssignCombatDamage (`assign_combat_damage`) | B | asking order and lethal minimums are engine rules (`combat_actions.rs:176-262`); frame shows one pair |
-| KeepPermanents by total power (`keep_permanents`) | B | layered power sums; may end without a decline |
-| Trigger ordering (`order_triggers`) | B | modes and targets are asked between picks; pure only when no trigger has either |
-| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | C | later options are legality- or planner-filtered, or answers interleave with other questions; usually one or two steps |
-| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | C | one step (all `LookAndSelect` users have `max_select: 1`) |
+- `hero_command` → `_apply_bound_command` → `_step_and_record` writes one
+  `ReplayDecision` (frame, offer, command, retained `clone_env` root,
+  presentation drain) per native step, then `_advance()` runs bots and
+  automatic passes. Inside a group the next decision is the same person's
+  non-priority decision, so `_advance()` does nothing between steps today.
+  Applying a group is therefore: for each compiled step, publish the prompt,
+  check it is the step the compiler predicted, `_apply_bound_command`; then
+  one `_advance()`.
+- `accepted_commands` already gives a retried `command_id` its receipt
+  (`status: duplicate`). A group's one client `command_id` gets the same
+  treatment, so a response lost to a disconnect cannot double-apply.
+- `_send_table_response` is the one place a table message leaves the server,
+  per recipient. It is where the descriptor is attached, for recipients whose
+  role has `SUBMIT_LIVE_COMMAND` only: a Scry descriptor names the looked-at
+  cards.
 
-Also multi-step and unlisted in the brief: `SearchNamed`, opening-hand
-bottoming, `PendingChoice::Pay` (crew, convoke, waterbend), one-per-step
-targets. Each commits per step; class C unless a later Task says otherwise.
+### Native facts the compiler relies on (audit, carried over)
 
-ChoosePile: one step, so nothing to draft. The companion check is whether the
-chooser sees the face-up cards and the face-down count; the prompt line exists
-(`prompt.ts:72`) and `effect_execution.rs:1729-1734` emits `face-up pile` and
-`face-down pile size`, but no UI test or e2e covers the frame. Pass 1 reads a
-real `choose_pile` frame (Curator of Destinies through the engine in a Python
-session) and the doc records what it shows; any gap is a row in the follow-up
-list, not a fix here.
+- `skip_trivial` answers any one-action space and loops (`flow/tick.rs`), so
+  the last step of a sequence is often never asked (last card of
+  `OrderLibrary`, a creature with one legal answer). The compiler steps a
+  clone with the same setting, so it lists exactly the steps that will be
+  asked. No caller counts steps.
+- Scry offers every remaining card with both sides each step; pick order is
+  final order. Surveil is "select cards for the graveyard, then `Decline`
+  ('Keep on top')"; the graveyard picks commit as one batch and a separate
+  `OrderLibrary` decision follows for two or more kept cards.
+- Limits (`min`/`max`, `remaining`, lethal `minimum`) are typed fields of the
+  pending `Decision`; only their `Debug` rendering reaches
+  `decision_context.pending` today. A descriptor reads the fields.
+- Mid-`Decision` steps do not draw, shuffle or pass the choice to another
+  player: triggers and state-based actions wait for the resolving instruction
+  to finish. This is the claim pass 1 tests rather than assumes (see
+  Boundary).
 
 ## Design
 
-### Product model → code model
+### Source of truth
 
-At any decision, a live player sees **at most one active Draft** (or none, for
-single-step decisions). The lifecycle has four phases owned by one shared
-mechanism:
+The engine's sequential `Action`s. A group is a *reading* of the pending
+decision plus a *compiler* from a typed plan to the action indices the engine
+will accept, in order. It adds no `Action`, no `ActionSpaceKind`, no
+observation field, no state and no digest input. `Game::step` is the only
+thing that changes a game.
 
-1. **Eligible table (`piloting` vs `live`).** `Board.svelte` separates *table
-   role* (`piloting?: boolean`, default `interaction === 'play'`) from *current
-   submission readiness* (`interaction: 'play' | 'study' | 'read-only'`,
-   `pending?: boolean`). `+page.svelte` passes `piloting={liveTable}`,
-   `rejected={gameStore.lastCommandRejection !== null}`, and returns
-   `sendAction`'s boolean from `onact`. Replay and Study omit `piloting` (false)
-   and never open drafts. When `piloting` is true and `live` drops during a
-   pending Command, server work, or stop-bar update, any open draft (combat,
-   pile split, or future Class A/B) stays visible with edits and Confirm
-   disabled, and raw offers stay folded.
-2. **Pure chunked runner (`academy/ui/src/lib/board/chunked.ts`, no Svelte).**
-   Source of truth is the authority frame and its offers. A plan is an ordered
-   list of steps plus `offerFor(frame, step)` returning the frame's own offer
-   or `null`. A plan comes from the frame (pile split) or from a native preview
-   (combat); the runner does not care which.
+### Native layer: `managym/src/flow/group/`
 
-```ts
-export interface DraftCopy {
-  /** Progress verb, capitalized: "Declaring", "Placing". */
-  verb: string;
-  /** Singular step noun: "declaration", "card placement". */
-  item: string;
-  /** Rail disclosure summary & note for raw offers. */
-  raw: { summary: string; note: string };
-  /** What the stop line says to do next: "Draft again from here.", "Split any remaining cards from here." */
-  retryHint: string;
-  /** Why an unpredicted frame stopped: "the preview did not predict" | "unexpected". */
-  unexpectedPhrase: string;
+`mod.rs` holds the types and the one driver; one file per kind
+(`combat.rs`, `library.rs`).
+
+```rust
+pub enum GroupKind { DeclareAttackers, DeclareBlockers, Scry, Surveil, OrderLibrary }
+
+/// The grouped decision `viewer` faces now, read from the pending decision.
+pub struct Group {
+    pub kind: GroupKind,
+    pub revision: u64,          // native semantic address it was read at
+    pub fingerprint: String,
+    pub items: Vec<GroupItem>,  // what will be asked, in asking order where the engine fixes one
+    pub ordered: bool,          // the order of a plan's choices is part of the answer
 }
-
-export interface ChunkedPlan<Step> {
-  steps: readonly Step[];
-  offerFor(frame: ExperienceFrame, step: Step): InteractionOffer | null;
+pub struct GroupItem {
+    pub item: ObjectRenderId,
+    pub label: String,
+    pub answers: Vec<Answer>,   // legal for this item from here
+    pub required: bool,         // no default: must attack, must block, must be placed
 }
-
-/** Step `at` was sent at frame revision `sentAt`. */
-export interface Run {
-  kind: string;
-  total: number;
-  at: number;
-  sentAt: number;
-  copy: DraftCopy;
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Answer {
+    Attack, Block { attacker: ObjectRenderId },   // left out: stays home / does not block
+    Top, Bottom,                                  // scry; no default
+    Graveyard,                                    // surveil; left out: kept
+    Next,                                         // order_library; no default
 }
+pub struct GroupPlan { pub kind: GroupKind, pub choices: Vec<Choice> }
+pub struct Choice { pub item: ObjectRenderId, pub answer: Answer }
 
-export type Stop =
-  | { why: 'refused'; sent: number }      // authority rejected or refused step `sent`
-  | { why: 'unpredicted'; sent: number }  // next frame did not match planned step `sent`
-  | { why: 'disconnected'; sent: number } // connection left 'connected' after `sent` sent
-  | { why: 'stopped'; sent: number }      // Escape / Stop sending after `sent` sent
-  | { why: 'reloaded'; sent: number; total: number };
-
-export interface TableGate {
-  connected: boolean;
-  answerable: boolean; // live && !pending
-  rejected: boolean;   // gameStore.lastCommandRejection !== null
+pub struct GroupPreview {
+    pub group: Group,
+    pub steps: Vec<GroupStep>,        // (revision, fingerprint, action_index, item, answer)
+    pub refused: Option<GroupRefusal>,// first item the engine will not answer as planned, and why
+    pub complete: bool,               // following `steps` finishes this group
+    pub outcome: GroupOutcome,        // what the engine did: declared attackers and blocks
 }
-
-export type Advance =
-  | { kind: 'wait' }
-  | { kind: 'send'; run: Run; offer: InteractionOffer }
-  | { kind: 'done' }
-  | { kind: 'stop'; stop: Stop; keepDraft: boolean };
-
-export function begin<S>(
-  kind: string,
-  plan: ChunkedPlan<S>,
-  frame: ExperienceFrame,
-  copy: DraftCopy,
-): { run: Run; offer: InteractionOffer } | null;
-
-export function advance<S>(
-  run: Run,
-  plan: ChunkedPlan<S>,
-  frame: ExperienceFrame,
-  table: TableGate,
-): Advance;
-
-export function progressWords(run: Run): string;
-export function stopWords(stop: Stop, total: number, copy?: DraftCopy): string;
 ```
 
-Exact rule precedence in `advance` (every branch is a unit test):
+Entry points on `Game`, mirrored on `Env`:
 
-1. **Disconnected (`!table.connected`):** stop immediately, `keepDraft: false`,
-   `{ why: 'disconnected', sent: run.at + 1 }`. Checked first because disconnect
-   also makes `answerable` false.
-2. **Explicit rejection (`table.rejected`):** stop immediately,
-   `{ why: 'refused', sent: run.at }`,
-   `keepDraft: run.at === 0 && frame.revision === run.sentAt`. Handles
-   same-revision rejections, newer-revision `stale_revision` recovery frames,
-   and non-recovering `not_actor` rejections without hanging or miscounting.
-3. **Final step accepted (`frame.revision !== run.sentAt && run.at + 1 >= plan.steps.length`):**
-   `{ kind: 'done' }` immediately — even if `!table.answerable` because the
-   opponent's bot started thinking on the new frame.
-4. **Same revision, now answerable (`frame.revision === run.sentAt && table.answerable`):**
-   fallback refusal detection when no explicit `CommandRejection` arrived
-   (`{ why: 'refused', sent: run.at }`, `keepDraft: run.at === 0`).
-5. **Not yet answerable (`!table.answerable`):** `{ kind: 'wait' }`. Keeps the
-   draft drawn with edits/Confirm disabled through `commandPending`, server
-   work (`command_outcome` with `work: running` before `work: complete`), and
-   `stopsPending`.
-6. **New revision, answerable, more steps remain (`next = run.at + 1 < plan.steps.length`):**
-   - `const offer = plan.offerFor(frame, plan.steps[next])`.
-   - If `!offer`: `{ kind: 'stop', stop: { why: 'unpredicted', sent: next }, keepDraft: false }`.
-   - If `offer`: `{ kind: 'send', run: { ...run, at: next, sentAt: frame.revision }, offer }`.
+- `group(viewer) -> Option<Group>`: `None` when the viewer is not the chooser,
+  the decision is not a grouped kind, or it will ask at most one step.
+- `preview_group(viewer, revision, fingerprint, &plan) -> Result<GroupPreview, AgentError>`:
+  errors on a stale or non-actor address or a plan of another kind; a plan the
+  engine will not take is `refused`, never an error. The live game is only read.
+- `apply_group(viewer, revision, fingerprint, &plan) -> Result<GroupPreview, AgentError>`:
+  runs `preview_group`; a `refused` or incomplete preview is an error and the
+  game is untouched; otherwise steps the live game through `steps`, checking
+  each step's `(revision, fingerprint)` before `step(action_index)`.
 
-Honest count wording in `stopWords`:
-- `refused`: at `sent === 0`, empty string (table's own rejection notice already
-  explains it, and on same-revision refusal the draft is kept; if `sent === 0`
-  with `!keepDraft` because the revision moved on, `"The board moved on before
-  the first ${copy.item} was accepted. ${copy.retryHint}"`). At `sent > 0`:
-  `"Stopped after ${sent} of ${total}. The next ${copy.item} was not accepted. ${copy.retryHint}"`.
-- `unpredicted`: `"Stopped after ${sent} of ${total}: the game asked something ${copy.unexpectedPhrase}. The board shows where it stands; ${copy.retryHint}"`.
-- `disconnected`: `"Stopped after ${sent} of ${total} sent: the connection dropped. The board shows where the game stands."` (explicitly says *sent*, because the last sent step's outcome is unknown until recovery).
-- `stopped`: `"Stopped after ${sent} of ${total} sent; the rest was not sent."`
-- `reloaded`: `"Stopped after ${stop.sent} of ${stop.total} sent: the page reloaded. The board shows where the game stands."` (consumer-agnostic so it works even when the reloaded frame has already moved to a different action space).
+A kind is the small interchangeable part (a trait with one implementation per
+kind, chosen by a `match` on the pending decision):
 
-3. **Unified tab-scoped persistence (`academy/ui/src/lib/board/draft-store.ts`, no Svelte).**
-   One `sessionStorage` key, `academy.table.draft`, storing a single JSON
-   envelope `{ draft?: SavedDraft; run?: InterruptedRun }`:
-   - `SavedDraft`: `{ kind: string; match_id: string; frame_hash: string; value: unknown }`
-   - `InterruptedRun`: `{ kind: string; match_id: string; sent: number; total: number }`
-   Keeping `draft` and `run` as sibling fields in the single envelope means
-   `markRun` never clobbers the saved draft (preserving reload continuity after
-   a step-0 refusal) and `clearRun` never clobbers the draft.
-   API: `saveDraft(kind, frame, value)`, `loadDraft(kind, frame, parse)`,
-   `clearDraft(kind?)`, `markRun(run, matchId)`, `clearRun()`,
-   `takeInterruptedRun(matchId)`.
-   - A draft loads only for the same `kind`, `match_id`, and `frame_hash`, and
-     only if `parse(value)` returns non-null.
-   - `takeInterruptedRun(matchId)` removes any stored `run`, returning it only
-     if `run.match_id === matchId` (so switching games discards stale markers).
-   - Storage failures lose only the draft/marker and never throw.
+- `describe(&Game) -> Group`
+- `next(&Game /* the clone */, &plan, progress) -> Answer step | Finish | Refuse(reason)`:
+  the action in the clone's own action space that gives the planned answer for
+  the item now asked. Legality is whatever that action space offers.
+- `continues(&Game) -> bool`: the clone still asks this group's decision of
+  this player.
+- `outcome` / `unmet`: read what the engine did and name a plan it did not
+  follow (menace removing a lone block).
 
-4. **One active draft surface in `Board.svelte` + extracted `PartitionPanel.svelte`.**
-   - `Board.svelte` owns:
-     - One `run` + `activePlan` + `stopNote` + `startRun(kind, plan, copy, onClear)` + `stopRun()`.
-     - When `startRun` calls `onact(offer)` and `onact` returns `false`, it does
-       not enter `run` (at step 0 it leaves the draft intact; at step > 0 in the
-       effect, `onact` returning `false` stops with `refused, sent: run.at`).
-     - One `$effect` calling `advance(run, activePlan, frame, { connected, answerable, rejected })`, updating `markRun` on every send and calling `clearRun` on `done`/`stop`.
-     - One `onMount` / match-id check calling `takeInterruptedRun(frame.match_id)` to surface `reloaded` once.
-     - One `activeDraft` derivation (`combat` | `partition` | `null`) that drives:
-       - `line` and `hint`
-       - `Space` confirm, `Escape` stop-sending, `1–9` raw-key suppression, and
-         `autoTap` suppression for *every* draft uniformly
-       - One `sendingControls` snippet (`data-testid="draft-sending"`,
-         `data-testid="draft-stop"`) shared by all running drafts
-       - `Rail`'s `draft` prop (`{ controls, raw, sending }`)
-   - `combat.ts` and `partition.ts` each export their `ChunkedPlan` factory and
-     `DraftCopy` constant (`COMBAT_COPY`, `PARTITION_COPY`), plus their pure
-     draft helpers and `stepOffer` / `partitionOffer` verification.
-   - `PartitionPanel.svelte` holds the foldable two-pile overlay panel and its
-     CSS, keeping `Board.svelte` clean and establishing the template for future
-     drafted panels (Scry, SelectCards, Distribute, etc.).
-   - `Rail.svelte`: `draft?: { controls: Snippet; raw: { summary: string; note: string }; sending?: boolean }`; disclosure uses `data-testid="draft-raw-choices"`, stop line uses `data-testid="draft-stopped"`, and raw choice buttons set `disabled={!live || Boolean(draft?.sending)}` so clicking an open raw list cannot race an in-flight chunked run. Replay and Study pass no draft and keep the full list with recorded probabilities.
+`combat.rs` is today's `combat_preview.rs` moved under that interface, its
+refusal sentences unchanged. `Game::combat_preview`, `Env::combat_preview`,
+`Env.combat_preview_json` and `managym/combat.py` stay as wrappers over
+`preview_group` that map `CombatPlan`/`CombatPreview`, each tagged for removal
+in `0.3.0` with a `DeprecationWarning` on the Python call (it shipped in
+0.2.6; main stays patch-clean). `managym/tests/rules/combat_preview.rs` stays
+unedited: it is the proof that the generalization kept combat's behavior.
+
+### Boundary
+
+A group is the consecutive steps of one pending decision by one player. The
+driver stops, and `complete` is true, when `continues` is false: another
+decision, another chooser, or game over. Surveil ends when its graveyard picks
+commit; the `OrderLibrary` that follows is its own group with its own
+Confirm. `OrderTriggers` is not a kind here because modes and targets are
+asked between picks.
+
+The driver also refuses to step the clone past an event that gives the viewer
+new hidden information (a draw, a shuffle, a library look or reveal) and
+returns what it compiled so far with `complete: false`. No kind in this Task
+should ever reach that branch; a test over every kind's fixture asserts the
+clone's event tail holds none of those events between a group's first and
+last step. If that test fails for a kind, the kind's boundary is wrong and it
+is dropped from this Task rather than patched around.
+
+`steps` carry the fingerprints of states the viewer has not reached. They are
+for the authority. Academy's REST preview returns `group`, `refused`,
+`complete` and `outcome` and never `steps`.
+
+### Python surface
+
+`Env.group_json(viewer)`, `Env.preview_group_json(viewer, revision, fingerprint, plan_json)`,
+`Env.apply_group_json(...)` (which honours `reject_guarded_mutation` as
+`step_structured` does), typed in `managym/group.py` as `combat.py` is today,
+declared in `managym/__init__.pyi`, recorded with
+`uv run python scripts/public_api.py record` (additions only).
+
+### Academy authority (`managym/academy/`)
+
+- **Descriptor.** `GameSession.live_group()` returns `Env.group_json` for the
+  published prompt plus the Academy address `(match_id, revision, prompt_id,
+  frame_hash)`, cached with the prompt. `_send_table_response` sets
+  `response["group"]` (object or `null`) on every message that carries a
+  frame, for `SUBMIT_LIVE_COMMAND` recipients.
+- **Preview.** `POST /api/sessions/{id}/group-preview` with the address and a
+  `GroupPlan`, same authorization and staleness checks as `/combat-preview`
+  has now (`409 group_preview_stale`, `403 group_preview_forbidden`,
+  `409 group_preview_no_group`). Read-only.
+- **Apply.** WebSocket `{"type": "group_command", "command": {command_id,
+  match_id, expected_revision, prompt_id, frame_hash, plan}}`, authorized like
+  `command`. `GameSession.hero_group`:
+  1. duplicate `command_id` → the stored receipt (`status: duplicate`);
+  2. address checks → `stale_revision` / `stale_prompt` with recovery;
+     `not_actor`; `frame_hash` mismatch → `stale_revision`;
+  3. `preview_group`; `refused` → `rejected`, code `group_refused`, message
+     the engine's reason, the refused item beside it, no recovery (the frame
+     has not moved); not `complete` → `group_incomplete`;
+  4. for each step: publish the prompt, require its native
+     `(revision, fingerprint)` to equal the step's, `_apply_bound_command`
+     with `source: "client"` and a command id derived from the group's
+     (`<command_id>.<n>`); a mismatch is a `RuntimeError`, as the offer
+     enumeration check in `/combat-preview` is today;
+  5. one receipt under the group's `command_id` (`accepted_at` the first
+     step's revision, `resulting_revision` the last), `committed(...)`, one
+     `_advance()`, one `command_outcome` whose presentation runs from the
+     first step.
+  No `ReplayDecision`, trace or protocol schema changes: the rows are the
+  rows N Commands write.
+- `/combat-preview`, `CombatPreviewRequest` and `tests/academy/test_combat_preview.py`
+  go; the test's cases move to `tests/academy/test_group_command.py`.
+
+### Browser (`academy/ui/`), on top of MTG-441
+
+- `gameStore` keeps `group` only while `group.frame_hash === frame.frame_hash`.
+  No group: the board is exactly the raw offers.
+- Combat keeps MTG-441's draft, drag, marquee and rail controls. What changes
+  is underneath: the preview fetch calls `/group-preview`, Confirm sends one
+  `group_command`, and the `running` send loop, `stepOffer`, `Stop sending`
+  and every partial-progress sentence are deleted. A `group_refused` rejection
+  shows the engine's reason on the draft and keeps it for editing.
+- One `ArrangePanel.svelte` for Scry, Surveil and OrderLibrary, driven only by
+  `group.items[].answers` and `group.ordered`: a row of destinations, cards
+  moved between them and reordered by click or keyboard, Confirm disabled
+  until the preview says `complete` without `refused`. It names nothing from
+  a label and parses no `pending` text.
+- The rail's collapsed disclosure of raw offers (MTG-441's
+  `per-creature-choices`) takes its summary from the group kind and is shown
+  for every group. Raw offers stay clickable and stay ordinary Commands; the
+  next frame brings a descriptor for what remains.
+- Drafts persist in `sessionStorage` under one key scoped to
+  `(match_id, frame_hash, kind)`, replacing the combat-only key.
+- While a `group_command` is pending the draft stays drawn and disabled, the
+  way any pending Command leaves the board (MTG-441's `pending`).
 
 ### Choices made for review
 
-- **Add `piloting?: boolean` and `rejected?: boolean` to `Board.svelte` (and `boolean | void` return on `onact`)** rather than changing `interaction`'s union or smuggling table role via `combatPreview`. Preserves MTG-441's `interaction`, `pending`, `canDrag`, and `data-live` semantics intact with zero Replay churn.
-- **One set of generic rail test ids (`draft-raw-choices`, `draft-stopped`, `draft-stop`, `draft-sending`)** across all drafts, updating MTG-441's and MTG-431's specs in Pass 2 rather than keeping combat-named ids on non-combat drafts.
-- **Extract `PartitionPanel.svelte` in Pass 2** rather than leaving partition's panel inline in `Board.svelte`.
-- **Split Class A into A1 (structured frame today) and A2 (needs structured frame fields, no clone-and-step preview)** in `docs/academy.md` so future Tasks don't scrape Rust `Debug` strings or overbuild clone-and-step previews.
-- **Drop old storage keys (`academy.table.combat-draft`, `academy.table.partition-draft`) without migration** (tab-scoped ephemeral drafts).
-
-Invariants held (`AGENTS.md`, "Academy's shared decision surface"): every step
-sent is the current frame's own offer bound to that frame's revision; nothing
-is sent before Confirm; raw offers stay reachable in "All legal choices" under
-the disclosure; a sent step is never taken back; Escape, Space and the
-disclosure work from the keyboard; drafts are offered only when `piloting` is
-true (live play, never Study/Replay/Watch/Interrupted).
+- Based on main; pile split deferred to a follow-up after MTG-431 (above).
+- First non-combat kinds are Scry, Surveil and OrderLibrary rather than the
+  pick or amount families: they are one panel, they exercise an ordered plan
+  and a `skip_trivial` tail, and Scry is printed across the selected matchup's
+  set (`managym/cards/src/tla.rs`). Passed over: shipping native kinds with no
+  browser consumer.
+- Left-out items take a default only where the game already has one (a
+  creature not declared stays home or does not block; a surveilled card not
+  binned is kept). Scry and OrderLibrary have none: an unplaced card makes the
+  plan incomplete and Confirm stays disabled. Nothing is selected silently.
+- Apply is all-or-nothing. A person who wants one step uses the raw offer.
+- The descriptor is live-only and beside the frame (above).
+- `apply_group` exists natively even though Academy follows the compiled
+  steps itself, because each recorded step needs its own frame, retained root
+  and presentation drain between native steps. Both follow the one `steps`
+  list; pass 1 pins them equal.
 
 ## Acceptance check at gate
 
 ```
-cd academy/ui && npm run check && npm test \
-  && npx playwright test e2e/chunked-drafts.spec.ts e2e/combat-presentation.spec.ts e2e/partition-piles.spec.ts e2e/drag-play.spec.ts e2e/keyboard-play.spec.ts
+CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test-threads 2 -E 'test(group) | test(combat_preview)' \
+  && uv run python scripts/public_api.py check \
+  && uv run --extra dev --extra play python -m pytest tests/academy/test_group_command.py -q \
+  && (cd academy/ui && npm run check && npm test \
+      && npx playwright test e2e/grouped-decisions.spec.ts e2e/combat-presentation.spec.ts e2e/drag-play.spec.ts e2e/keyboard-play.spec.ts)
 ```
 
-All pass. `chunked-drafts.spec.ts` drives the pile split (the consumer that
-lacks MTG-441's fixes today) through a mocked socket:
+All pass. The one scenario that crosses every consumer is a three-creature
+attack:
 
-1. Confirm a 5-card split; the server answers step 3 with a rejection at the
-   same revision. The rail reads `"Stopped after 2 of 5…"`, the panel shows the
-   3 cards left, exactly 3 Commands were sent.
-2. Confirm; the first Command is rejected at the same revision. The drafted
-   split is still on screen and Confirm works again.
-3. Confirm; the first Command is rejected with `stale_revision` and a newer
-   recovery frame. The stale draft clears and no second Command is sent.
-4. Confirm; the accepted frame arrives with `work: running` before
-   `work: complete`. The panel stays visible with controls disabled and
-   advances once work completes; after the last step advances with
-   `work: running`, the run finishes immediately without leaving `Stop sending`
-   on screen.
-5. Confirm; the socket closes after step 2 and reconnects with a later
-   revision. No further Command is sent and the rail names the disconnect
-   (`"Stopped after 2 of 5 sent: the connection dropped…"`).
-6. Confirm; reload after step 2. The rail reads `"Stopped after 2 of 5 sent:
-   the page reloaded…"` once.
-7. While the split is open, `draft-raw-choices` is collapsed, reads `"Each
-   card's choice"`, pressing `1` sends nothing, and opening the disclosure
-   lists both per-card offers.
+1. **Native** (`managym/tests/rules/group.rs`): from one position,
+   `apply_group(plan)`, stepping `preview_group(plan).steps` by hand, and the
+   unedited `combat_preview` test's `follow` all reach the same
+   `state_digest`. A refused plan and a stale address leave the digest where
+   it was. The same three-way equality holds for a Scry 3 with one card
+   bottomed and for Surveil 2 → OrderLibrary.
+2. **Authority** (`tests/academy/test_group_command.py`): two sessions from one
+   seed and config. One sends three `command`s, the other one `group_command`.
+   Their `canonical_decisions` agree row for row on viewer, source, offer,
+   projection and revision, their native state digests are equal, and the
+   second session received exactly one `command_outcome`. A refused plan
+   returns `group_refused` with the engine's sentence and writes no row.
+   Resending the same `command_id` returns `duplicate` and writes no row.
+3. **Browser** (`e2e/grouped-decisions.spec.ts`): drafting three attackers and
+   pressing Confirm sends exactly one socket message of type `group_command`;
+   a Scry 2 opens the arrange panel, Confirm is disabled until both cards are
+   placed, and one message is sent; opening the disclosure lists the raw
+   per-card offers and clicking one sends an ordinary `command`.
+
+Demo: `./scripts/play`, attack with several creatures and press Confirm (the
+network panel shows one frame out), then cast a Scry 2 spell and arrange both
+cards before confirming once.
 
 ## Absent and error states
 
-- No preview answer (combat): no draft; the board keeps one creature at a
-  time, as now.
-- Frame is not a recognised draftable decision: no draft, raw offers only.
-- Storage unavailable or malformed: empty draft, no run marker, no error.
-- Recording, Replay, Watch, Study, Interrupted, read-only: `piloting` is false,
-  no draft, no runner.
-- Run stopped for any reason: the board shows the authority's current frame;
-  a new draft starts from it (except same-revision step-0 refusal, which keeps
-  the draft for editing and retry).
+- No group (single-step decision, not a grouped kind, not the chooser, Replay,
+  Study, Watch, recording): `group` is `null` or absent; raw offers only.
+- Stale preview (`409`): the browser drops the answer and asks again at the
+  current frame; a draft whose `frame_hash` no longer matches is discarded.
+- `group_refused`: nothing applied, frame unchanged, draft kept, engine's
+  reason shown on the refused item.
+- `group_incomplete`: same, naming what is unplaced. The browser should never
+  send one; the code exists for other clients.
+- Stale `group_command`: rejected with recovery, nothing applied, draft
+  discarded with the frame it belonged to.
+- Connection lost during apply: the authority finishes or never started. On
+  reconnect the recovery frame is the truth and a resend of the same
+  `command_id` is a `duplicate`.
+- A compiled step that does not match the live game: `RuntimeError`. It means
+  the clone and the game diverged, which is an engine bug; steps already
+  applied stay recorded as the ordinary decisions they are.
+- Storage unavailable: no saved draft, no error.
+
+## Operational boundary
+
+- Preview: one `Game::clone` and at most `items` steps, as `/combat-preview`
+  costs now. The browser asks once per draft edit, debounced as combat is.
+- Apply: one more clone plus the same steps, under `record.lock` for the whole
+  call, as a single Command is. A plan with more choices than the group has
+  items is refused before any clone.
+- No engine hot path changes; `managym/perf/baseline.json` digests must not
+  move. A moved digest means the layer touched state and is a defect.
 
 ## Exclusions
 
-- Any new drafted decision (Scry, Surveil, library order, damage assignment,
-  shares, …). The doc's table and the follow-up list in `scratch/questions.md`
-  are what ship-review turns into Tasks.
-- Native changes: no general native preview (`combat_preview` is unchanged), no
-  A2 structured count/limit fields on `DecisionContextView`, no structured pile
-  field on `partition_piles` offers, no fix to the wrong `discard` instruction
-  text (C:516).
-- Drag gestures, the marquee and target lines from MTG-441.
+- New `Action` or `ActionSpaceKind` variants, observation or policy-input
+  changes, any change to `compound_*` / `step_structured`, `ExperienceFrame`,
+  `ReplayDecision` or the protocol schemas.
+- Group kinds beyond the five above (table below), and the MTG-431 pile split.
+- Grouped input in Study, Replay or Watch.
+- Resuming or undoing anything: there is no partial state to resume.
 
 ## What goes
 
-- Both send-loop effects, `stopSending` / `stopPartitionSending`, `running` /
-  `partitionRunning`, and the two Escape/Space branches in `Board.svelte`.
-- Inline partition panel markup/CSS from `Board.svelte` (moved into
-  `PartitionPanel.svelte`).
-- `saveDraft` / `loadDraft` and `DRAFT_KEY` in `combat.ts`;
-  `savePartitionDraft` / `loadPartitionDraft` and `DRAFT_KEY` in
-  `partition.ts`; storage keys `academy.table.combat-draft` and
-  `academy.table.partition-draft`.
-- Test ids `combat-stopped`, `per-creature-choices`, `combat-stop`,
-  `partition-stop` (replaced by `draft-stopped`, `draft-raw-choices`,
-  `draft-stop`, `draft-sending`).
-- The duplicated per-consumer stop sentences.
+- `managym/src/flow/combat_preview.rs` as a module of logic (its body moves to
+  `flow/group/combat.rs`; a `0.3.0` wrapper remains).
+- Server: `/combat-preview`, `CombatPreviewRequest`, `tests/academy/test_combat_preview.py`.
+- Browser: `fetchCombatPreview`, the `running` send loop and its `$effect` in
+  `Board.svelte`, `stepOffer` and `DeclarationStep` in `combat.ts`, the
+  `Stop sending` control and stop note with their test ids, the combat-only
+  draft storage key.
+- `managym/README.md`'s combat-preview paragraphs (rewritten as the grouped
+  input section).
 
-Survives unchanged: combat and pile-split drafting, their words and panels,
-`/combat-preview`, MTG-441's drag and draft behavior, reload-keeps-draft,
-`stepOffer` and `partitionOffer` verification.
+Survives unchanged: every `Action`, digest and recorded row; MTG-441's drag
+and draft UX; combat's refusal sentences; `compound_*`;
+`Env.combat_preview_json` until `0.3.0`.
+
+## The audit, reclassified
+
+With a native compiler the earlier A1/A2/B split disappears: "needs typed
+fields" is the descriptor and "needs clone-and-step" is the driver. What
+separates decisions now is the shape of the plan and where the group ends.
+
+| Decision (stage) | Plan shape | Group ends | Status |
+|---|---|---|---|
+| DeclareAttackers / DeclareBlockers | answer per creature | declaration event | this Task (ported) |
+| Scry (`scry`), 2+ cards | destination per card, ordered | scry finishes | this Task |
+| Surveil (`surveil`) | subset to graveyard | picks commit; `OrderLibrary` follows as its own group | this Task |
+| OrderLibrary (`order_library_top` / `_bottom`) | order | last card placed (the final one is never asked) | this Task |
+| PartitionPiles (`partition_piles`, MTG-431) | pile per card | split finishes; `ChoosePile` is the opponent's | follow-up after MTG-431 |
+| SelectCards with max > 1, SearchDistinctNames, Discard of 2+, OpponentSplitsRevealed, KeepPermanents (count or total power) | subset within engine limits | selection finishes | follow-up: "pick" kind and panel |
+| DistributeCounters, DivideAmongTargets (`target_shares`), AssignCombatDamage | amount per recipient | amounts exhausted | follow-up: "amounts" kind and panel |
+| OrderTriggers | order | only while no trigger asks a mode or target between picks | follow-up, behind the boundary test |
+| Retarget, ManaUpfront, ManaSpend, OrderEntryChoices, OrderReplacement | — | — | stays sequential: later options are legality- or planner-filtered, usually one or two steps |
+| LookAndSelect, ManifestDread, ChooseToExile, DiscardFromRevealedHand, OrderMeldedCards, ExileLinked, LegendRule, ChoosePile | — | — | one step |
+
+A follow-up kind is a `flow/group/` file implementing the kind interface plus
+a panel for its shape; it needs no server, protocol or recording change.
 
 ## Passes
 
-1. **Runner, store and audit, with no shared-file edits.** `chunked.ts`,
-   `chunked.test.ts`, `draft-store.ts`, `draft-store.test.ts`; the `"Drafted
-   decisions"` section of `docs/academy.md` (contract, the A1/A2/B/C table,
-   what A2 structured fields and a Class B preview must guarantee, the real
-   `ChoosePile` frame reading); follow-up list in `scratch/questions.md`.
-   This is the pass that proves the state machine before touching shared UI
-   files: `npm test` green with every rule in `advance` (disconnect before
-   unanswerable, explicit rejection at step 0 same-rev vs newer-rev vs step > 0
-   vs unanswerable `not_actor`, final step completing while unanswerable,
-   MTG-441 double `command_outcome` wait-then-send, unexpected frame, Escape,
-   reload) and every `draft-store` envelope case (run marker does not clobber
-   saved draft, match_id scoping, storage error resilience).
-2. **Both consumers on the runner + `PartitionPanel.svelte` + `piloting`/`rejected` props.**
-   Needs MTG-441 underneath (see Base). `+page.svelte`, `Board.svelte`,
-   `PartitionPanel.svelte`, `Rail.svelte`, `combat.ts`, `partition.ts`, their
-   tests and specs, `e2e/chunked-drafts.spec.ts`, the combat and Curator
-   paragraphs of `docs/academy.md`. Removes everything under What goes. Shows:
-   the acceptance command.
+1. **Native layer with combat parity and the library kinds.** The pass that
+   could prove the plan wrong. `flow/group/` (types, driver, `combat.rs`,
+   `library.rs`), `Game`/`Env` entry points, the `combat_preview` wrappers,
+   bindings, `managym/group.py`, `__init__.pyi`, public API record, extension
+   rebuild; `managym/tests/rules/group.rs`.
+   Shows: the unedited `combat_preview` tests pass through the wrapper, so one
+   driver serves combat; Scry, Surveil and OrderLibrary fit the same kind
+   interface without a special case in the driver; `apply_group` equals
+   following `steps`; the boundary test finds no hidden-information event
+   inside any group. If a library kind needs the driver to know about it, the
+   interface is wrong and is reshaped here, before any consumer exists.
+2. **Academy authority.** `live_group`, the `group` field on live messages,
+   `/group-preview`, `group_command` and `hero_group`,
+   `shared_table_protocol.py`; `tests/academy/test_group_command.py`; removal
+   of `/combat-preview`. Shows: acceptance step 2, the recording equality.
+3. **Browser and docs.** Needs MTG-441 on main. `gameStore` group, combat on
+   one-shot Confirm, `ArrangePanel.svelte`, rail disclosure, draft storage,
+   `e2e/grouped-decisions.spec.ts`, updates to MTG-441's combat specs for the
+   removed stop control. `docs/academy.md` gains "Grouped decisions" (what a
+   person sees, the contract, the audit table above) and its combat
+   paragraphs lose the send loop; `managym/README.md` documents `group`,
+   `preview_group`, `apply_group` and the boundary; `AGENTS.md` "Decision
+   ownership" gains the sentence that grouped input compiles to sequential
+   Actions and never widens an action space. Shows: acceptance step 3 and the
+   demo.
 
 ## Done when
 
-- A refused (same-rev, newer-rev, or non-recovering), disconnected, reloaded,
-  unexpected, or Escaped pile split stops with the same semantics and partial
-  count as combat; a same-revision step-0 refusal keeps the split; transient
-  waits (pending Command, server work, stop-bar sync) keep both combat and
-  pile-split drafts visible and disabled.
-- `Board.svelte` has one send loop (`grep -c "sentAt" Board.svelte` is 0 or 1,
-  with the state machine in `chunked.ts`) and delegates the partition overlay
-  to `PartitionPanel.svelte`.
-- One `sessionStorage` key (`academy.table.draft`) holds drafts and in-flight
-  run markers without clobbering each other.
-- `docs/academy.md` classifies every multi-step native decision into A1 / A2 /
-  B / C and records the `ChoosePile` opponent-view verification.
-- Combat click and drag drafting, and the pile split, pass all specs.
-
-## Docs written
-
-- `docs/academy.md` — updated `Playing on the board` (combat + pile-split
-  drafting, wait/stop/reload behavior, `1`–`9` / `Space` / `Escape` keys) and
-  added `## Drafted decisions` (Curator of Destinies example, unified lifecycle
-  and stop-message table, `academy.table.draft` persistence, A1/A2/B/C
-  classification table, A2/Class B requirements, and `ChoosePile` opponent-view
-  contract). Pass 1 will verify the `ChoosePile` opponent-view note against a
-  live Python `GameSession` frame and record any UI gap in `scratch/questions.md`.
+- Confirming a drafted attack, block, scry, surveil or library order sends one
+  message, and the game is either wholly past that decision or exactly where
+  it was with the engine's reason shown.
+- A game played with grouped Confirms and the same game played one Command at
+  a time record the same decisions and reach the same state digest.
+- Replay and Study of such a game show every per-step choice as they do now.
+- The browser holds no send loop, no step verification and no rule about
+  which answers are legal; it reads `group` and the preview.
+- `uv run python scripts/public_api.py check` passes with the three new `Env`
+  methods and `combat_preview_json` still present.
+- `docs/academy.md` carries the reclassified audit and names the follow-up
+  kinds.

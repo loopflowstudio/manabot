@@ -1,55 +1,47 @@
 # MTG-483 questions and assumptions
 
-This file replaces MTG-431's questions, which arrived through the stack sync.
+## Assumptions taken in kickoff after the grouped-input pivot (2026-11-25, nobody present)
 
-## Assumptions taken during kickoff & concept review (2026-11-25, nobody present)
-
-- Stacked this Task on MTG-431 because the pile-split reference exists only
-  there. Undo: `lf sync main`.
-- Pass 2 waits for MTG-431 to absorb main with MTG-441 (PR #613). MTG-431 and
-  MTG-441 conflict in `Board.svelte`, `Lines.svelte` and `Plate.svelte`; that
-  resolution is MTG-431's. Nothing was steered on MTG-431.
-- No new drafted decision and no native/server/protocol change ships in this
-  Task; the audit lands as a doc table (A1 / A2 / B / C) and the list below.
-- Added `piloting?: boolean` (passed as `liveTable` from `+page.svelte`) and
-  `rejected?: boolean` (passed as `gameStore.lastCommandRejection !== null`) to
-  `Board.svelte`, plus `boolean | void` return on `onact`, so frame-derived
-  drafts survive transient waits identically to combat and rejections are read
-  from authority state rather than inferred from revision equality.
-- Extracted `PartitionPanel.svelte` out of `Board.svelte` in Pass 2 to establish
-  the per-decision panel pattern before Scry/Select/Distribute arrive.
-- Rail test ids become `draft-raw-choices`, `draft-stopped`, `draft-stop`, and
-  `draft-sending` for every draft, replacing `per-creature-choices`,
-  `combat-stopped`, `combat-stop`, `partition-stop`.
-- Old draft storage keys (`academy.table.combat-draft`,
-  `academy.table.partition-draft`) are dropped without migration; the new single
-  key `academy.table.draft` stores `{ draft?, run? }` so marking a run never
-  clobbers a saved draft.
+- **Unstacked from MTG-431 onto main** (`lf sync main`, merge `e2224c3988`).
+  The pile split exists only on MTG-431; it becomes a follow-up group kind.
+  Undo: `lf sync MTG-431`.
+- During that sync: `docs/academy.md` was restored to main's text (the earlier
+  "Drafted decisions" section described the chunked runner and the MTG-431
+  pile split), and `scratch/concept-review.html` was deleted as a review of
+  the abandoned design. Both are in git history at `2f3d2833a4`.
+- The group descriptor travels beside the frame on live messages, not inside
+  `ExperienceFrame`: a frame field would move `frame_hash` for every combat
+  frame and break retained replays. The direction said "on `ExperienceFrame` /
+  Python API"; this reads that as "delivered with the frame".
+- Built on `combat_preview`'s clone-and-step mechanism, not on
+  `compound_offers` / `step_structured`, which stays untouched.
+- First non-combat kinds: Scry, Surveil, OrderLibrary (one arrange panel).
+- Apply is all-or-nothing; an incomplete plan is rejected.
+- `Env.combat_preview_json` and `managym/combat.py` stay as `0.3.0`-deprecated
+  wrappers because they shipped in 0.2.6.
+- Per-step recorded command ids are derived from the group's (`<id>.<n>`) with
+  `source: "client"`; no marker field is added to `ReplayDecision`.
 
 ## Open
 
-- Should MTG-431 be asked to sync main as soon as #613 merges, so pass 2 can
-  start?
-- After a disconnect mid-run the plan stops rather than resuming. Is resuming
-  ever wanted?
+- Pass 3 waits for MTG-441 (PR #613) on main. As of 2026-11-25 it has
+  auto-merge on with `Academy UI` failing.
+- Should a recorded step say it came from a group? Nothing reads that today,
+  and adding it would change the replay schema.
 
 ## Follow-ups for ship-review to file or drop
 
-- **Class A1 (ready on current frame):** Draft Scry, Surveil and OrderLibrary
-  as one "arrange the looked-at cards" panel.
-- **Class A2 (needs small structured fields on `DecisionContextView` /
-  `InteractionOffer`, no clone-and-step preview):**
-  - Expose structured `min`/`max`/`remaining`/pile-side/share fields so Academy
-    never parses Rust `{:?}` text in `decision_context.pending` or `offer.label`
-    regexes (`FACE_UP_RE` in `partition.ts`).
-  - Draft multi-card picks: SelectCards with max > 1, SearchDistinctNames,
-    OpponentSplitsRevealed, multi-card Discard, KeepPermanents `AllBut`.
-  - Draft amounts: `target_shares` (`DivideAmongTargets`) and
-    `DistributeCounters`.
-- **Class B (needs general read-only clone-and-step native preview):**
-  AssignCombatDamage, KeepPermanents by total creature power, and trigger
-  ordering (`order_triggers`).
-- `discard` instruction text says "or decline when offered"; none is offered
-  (`managym/src/decision_context.rs:516`).
-- `ChoosePile` opponent view has no UI test; result of the pass 1 real-frame
-  reading goes here.
+- **Pile split as a group kind** once MTG-431 lands: `PartitionPiles` in
+  `flow/group/`, its panel on `group_command`, and removal of MTG-431's
+  `partition.ts` send loop and `FACE_UP_RE`. Includes the `ChoosePile`
+  opponent-view check, which has no UI test.
+- **"Pick" kind and panel:** SelectCards with max > 1, SearchDistinctNames,
+  Discard of 2+, OpponentSplitsRevealed, KeepPermanents.
+- **"Amounts" kind and panel:** DistributeCounters, DivideAmongTargets,
+  AssignCombatDamage.
+- **OrderTriggers** as a group only while no trigger asks a mode or target
+  between picks.
+- The `discard` instruction text says "or decline when offered" though no
+  decline is offered (seen on the MTG-431 branch in
+  `managym/src/decision_context.rs`; check main).
+- Remove the `combat_preview` wrappers with the other `0.3.0` graphs.
