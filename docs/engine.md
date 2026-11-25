@@ -718,8 +718,8 @@ assert reloaded.action_counts == batch.action_counts
 `ObservationLayout(policy_input_version=11, ...)` accepts only v11 (any other
 version raises `ValueError`). `ObservationBatch.from_bytes(data)` validates the
 layout, CSR offsets, capacities and native joins once in Rust on load and
-raises `ValueError` on corrupt, truncated, out-of-bounds or non-v11 bytes; it
-never constructs a partial or uncertified batch.
+raises `ValueError` on corrupt, truncated, out-of-bounds or non-v11 bytes.
+The reader requires the same packed schema and byte order as the writer.
 
 For vector environments, register the layout and per-stream outcome arrays
 (`rewards` float64, `terminated` uint8, `truncated` uint8) with

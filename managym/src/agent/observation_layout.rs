@@ -830,6 +830,10 @@ pub struct PackedField {
 }
 
 impl ArrayLayout {
+    pub fn seat_axis(&self, key: &str) -> bool {
+        self.axes[0] == "viewer_relative_seat" && key != "player_turn_state"
+    }
+
     pub fn packed_fields(&self, table: &str) -> Vec<PackedField> {
         let field = |name: &'static str, index, kind: ValueKind| {
             let memory_flag = table.starts_with("decision_")

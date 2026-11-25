@@ -1,6 +1,8 @@
 //! Freeze the encoder's live prefixes before they cross the Python boundary.
 // PyO3 wrappers generate identity conversions for PyResult.
 #![allow(clippy::useless_conversion)]
+mod archive;
+
 use super::bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation};
 use super::layout_bindings::ObservationLayout;
 use crate::agent::{
@@ -22,7 +24,7 @@ struct FrozenTable {
     values: Py<PyBytes>,
 }
 
-/// Live v11 rows in batch order. Only a native game projection can produce this type.
+/// Live v11 rows in batch order. Archives validate the same layout, row boundaries and joins on load.
 #[pyclass(frozen, module = "managym")]
 pub struct ObservationBatch {
     layout: Py<ObservationLayout>,
@@ -33,6 +35,17 @@ pub struct ObservationBatch {
 
 #[pymethods]
 impl ObservationBatch {
+    /// Store the configured layout and packed records, including empty seat spans.
+    fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        archive::encode(py, self)
+    }
+
+    /// Reload a complete v11 batch after checking its physical layout and native joins.
+    #[staticmethod]
+    fn from_bytes(py: Python<'_>, data: &[u8]) -> PyResult<Self> {
+        archive::decode(py, data)
+    }
+
     #[getter]
     fn layout(&self, py: Python<'_>) -> Py<ObservationLayout> {
         self.layout.clone_ref(py)

@@ -228,8 +228,7 @@ impl PackedRows {
                 .iter()
                 .filter(|(key, _)| !key.ends_with("_valid"))
                 .map(|(key, array)| {
-                    let seat_axis =
-                        array.axes[0] == "viewer_relative_seat" && key != "player_turn_state";
+                    let seat_axis = array.seat_axis(key);
                     (
                         key.clone(),
                         PackedTable {

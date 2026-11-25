@@ -113,7 +113,7 @@ pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
 
 /// Policy support selection only; the game's legal actions remain complete.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ActionOverflow {
     #[default]
     Error,
@@ -163,7 +163,7 @@ pub const DECKLIST_DIM: usize = decklist::WIDTH;
 pub const TURN_STATE_DIM: usize = turn_state::WIDTH;
 
 /// Which object rows the encoder writes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputLayout {
     /// Policy input v11: one row per game thing. Card rows hold cards outside
     /// the battlefield and stack; a permanent row holds its characteristics;
@@ -174,7 +174,7 @@ pub enum InputLayout {
     Legacy,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
     pub max_facts: usize,
     pub max_cards_per_player: usize,
