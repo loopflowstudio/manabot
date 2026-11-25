@@ -1,5 +1,48 @@
 {
-  "breaks": [],
+  "breaks": [
+    {
+      "changes": [
+        "DEPRECATED_REMOVED manabot.env.observation.ObservationEncoder: removed",
+        "DEPRECATED_REMOVED manabot.env.observation.ObservationSpace.allocate: removed",
+        "BREAKING manabot.env.observation.ObservationSpace.contains: removed",
+        "DEPRECATED_REMOVED manabot.env.observation.ObservationSpace.encode: removed",
+        "DEPRECATED_REMOVED manabot.env.observation.ObservationSpace.encoder: removed",
+        "DEPRECATED_REMOVED manabot.env.observation.encode_observation: removed",
+        "BREAKING manabot.training.rollout.actions.PackedActions.__init__: parameter fields removed",
+        "BREAKING manabot.training.rollout.actions.PackedActions.__init__: parameter native removed",
+        "BREAKING manabot.training.rollout.actions.PackedActions.__init__: required parameter selection added",
+        "BREAKING manabot.training.rollout.actions.PackedActions.fields: removed",
+        "BREAKING manabot.training.rollout.actions.PackedActions.native: removed",
+        "BREAKING manabot.training.rollout.actions.PackedActions.selection: field added",
+        "BREAKING manabot.training.rollout.actions.PackedActions.unpack: removed",
+        "BREAKING manabot.training.rollout.collection.RecordedObservations.__init__: parameter memory removed",
+        "BREAKING manabot.training.rollout.collection.RecordedObservations.__init__: parameter memory_capacities removed",
+        "BREAKING manabot.training.rollout.collection.RecordedObservations.memory: removed",
+        "BREAKING manabot.training.rollout.collection.RecordedObservations.memory_capacities: removed",
+        "BREAKING manabot.training.rollout.collection.RecordedObservations.ordered: removed",
+        "BREAKING manabot.training.rollout.collection.RolloutBatch.observations: parameter indexes became required",
+        "BREAKING manabot.training.rollout.collection.RolloutBatch.ordered_obs: removed",
+        "BREAKING manabot.training.rollout.collection.RolloutBatch.policy_rows: removed",
+        "DEPRECATED_REMOVED managym.Env.encode_observation: removed",
+        "DEPRECATED_REMOVED managym.Env.encode_observation_into: removed",
+        "DEPRECATED_REMOVED managym.Observation.legacy_card_lists: removed",
+        "BREAKING managym.ObservationLayout.allocate: removed",
+        "DEPRECATED_REMOVED managym.ObservationLayout.axis_extents: removed",
+        "DEPRECATED_REMOVED managym.ObservationLayout.object_references: removed",
+        "BREAKING managym.RolloutPool.encode_active: removed",
+        "DEPRECATED_REMOVED managym.RolloutPool.set_buffers: removed",
+        "BREAKING managym.RolloutPool.step_active: removed",
+        "DEPRECATED_REMOVED managym.VectorEnv.set_buffers: removed",
+        "BREAKING managym.VectorEnv.write_observations_for_players: removed",
+        "DEPRECATED_REMOVED managym.encode_observation_into: removed",
+        "DEPRECATED_REMOVED managym.encode_observations_into: removed",
+        "BREAKING managym.input_v10_state: removed",
+        "BREAKING managym.observation_layout: parameter legacy removed",
+        "BREAKING managym.observation_layout: parameter turn_state removed"
+      ],
+      "reason": "MTG-433: 0.3.0 removal of policy inputs v9/v10 and the dense observation transport; hold for the 0.3.0 cut"
+    }
+  ],
   "line": "0.2",
   "modules": {
     "manabot.backends.torch.arrays": {
@@ -80,7 +123,7 @@
           },
           "check_observation": {
             "kind": "method",
-            "signature": "(self, obs)"
+            "signature": "(self, obs, *, belief=...)"
           },
           "clear_cache": {
             "kind": "method",
@@ -141,11 +184,11 @@
           },
           "prepare": {
             "kind": "method",
-            "signature": "(self, obs, *, inference=..., memory_roots=...)"
+            "signature": "(self, obs, *, inference=..., belief=..., memory_roots=...)"
           },
           "prepare_admitted": {
             "kind": "method",
-            "signature": "(self, obs, *, inference=..., needs=..., memory_roots=...)"
+            "signature": "(self, obs, *, inference=..., belief=..., needs=..., memory_roots=...)"
           },
           "resident_bytes": {
             "kind": "property"
@@ -333,74 +376,12 @@
       }
     },
     "manabot.env.observation": {
-      "ObservationEncoder": {
-        "deprecated": true,
-        "kind": "class",
-        "members": {
-          "__init__": {
-            "kind": "method",
-            "signature": "(self, config=...)"
-          },
-          "allocate": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, *leading_dims)"
-          },
-          "contains": {
-            "kind": "method",
-            "signature": "(self, x)"
-          },
-          "encode": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, obs)"
-          },
-          "encoder": {
-            "deprecated": true,
-            "kind": "property"
-          },
-          "items": {
-            "kind": "method",
-            "signature": "(self)"
-          },
-          "keys": {
-            "kind": "method",
-            "signature": "(self)"
-          },
-          "sample": {
-            "kind": "method",
-            "signature": "(self, mask=...)"
-          },
-          "values": {
-            "kind": "method",
-            "signature": "(self)"
-          }
-        }
-      },
       "ObservationSpace": {
         "kind": "class",
         "members": {
           "__init__": {
             "kind": "method",
             "signature": "(self, config=...)"
-          },
-          "allocate": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, *leading_dims)"
-          },
-          "contains": {
-            "kind": "method",
-            "signature": "(self, x)"
-          },
-          "encode": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, obs)"
-          },
-          "encoder": {
-            "deprecated": true,
-            "kind": "property"
           },
           "items": {
             "kind": "method",
@@ -432,10 +413,9 @@
         "kind": "function",
         "signature": "(array, *names)"
       },
-      "encode_observation": {
-        "deprecated": true,
+      "encode_policy_batch": {
         "kind": "function",
-        "signature": "(space, obs)"
+        "signature": "(space, observations, *, blank_decision_memory=...)"
       },
       "width": {
         "kind": "function",
@@ -612,6 +592,10 @@
       "ObservationConfig": {
         "kind": "class",
         "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, **data)"
+          },
           "action_overflow": {
             "kind": "field",
             "required": false
@@ -825,7 +809,7 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, offsets, slots, capacity, fields, log_probabilities, native=...)"
+            "signature": "(self, offsets, slots, capacity, log_probabilities, selection)"
           },
           "action_columns": {
             "kind": "method",
@@ -847,17 +831,9 @@
             "kind": "classmethod",
             "signature": "(cls, rows)"
           },
-          "fields": {
-            "kind": "field",
-            "required": true
-          },
           "log_probabilities": {
             "kind": "field",
             "required": true
-          },
-          "native": {
-            "kind": "field",
-            "required": false
           },
           "nbytes": {
             "kind": "property"
@@ -878,13 +854,13 @@
             "kind": "method",
             "signature": "(self, actions, type_width)"
           },
-          "slots": {
+          "selection": {
             "kind": "field",
             "required": true
           },
-          "unpack": {
-            "kind": "method",
-            "signature": "(self, indexes)"
+          "slots": {
+            "kind": "field",
+            "required": true
           },
           "unpack_logs": {
             "kind": "method",
@@ -902,7 +878,7 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, rows, index, needs=..., memory=..., memory_capacities=...)"
+            "signature": "(self, rows, index, needs=...)"
           },
           "concatenate": {
             "kind": "classmethod",
@@ -920,21 +896,9 @@
             "kind": "field",
             "required": true
           },
-          "memory": {
-            "kind": "field",
-            "required": false
-          },
-          "memory_capacities": {
-            "kind": "field",
-            "required": false
-          },
           "needs": {
             "kind": "field",
             "required": false
-          },
-          "ordered": {
-            "kind": "method",
-            "signature": "(self, shape)"
           },
           "rows": {
             "kind": "field",
@@ -1003,19 +967,11 @@
           },
           "observations": {
             "kind": "method",
-            "signature": "(self, indexes=...)"
-          },
-          "ordered_obs": {
-            "kind": "method",
-            "signature": "(self)"
+            "signature": "(self, indexes)"
           },
           "outcome_probabilities": {
             "kind": "field",
             "required": false
-          },
-          "policy_rows": {
-            "kind": "method",
-            "signature": "(self, indexes)"
           },
           "recorded": {
             "kind": "field",
@@ -2152,16 +2108,6 @@
             "kind": "method",
             "signature": "(self)"
           },
-          "encode_observation": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, obs, max_facts=...)"
-          },
-          "encode_observation_into": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, obs, out, action_overflow=...)"
-          },
           "execute_captured_command_json": {
             "kind": "method",
             "signature": "(self, capture, command_json)"
@@ -2714,11 +2660,6 @@
           "game_over": {
             "kind": "attribute"
           },
-          "legacy_card_lists": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self)"
-          },
           "opponent": {
             "kind": "attribute"
           },
@@ -2803,6 +2744,10 @@
             "kind": "method",
             "signature": "(self)"
           },
+          "from_bytes": {
+            "kind": "staticmethod",
+            "signature": "(data)"
+          },
           "gather": {
             "kind": "method",
             "signature": "(self, rows)"
@@ -2811,6 +2756,10 @@
             "kind": "property"
           },
           "tables": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "to_bytes": {
             "kind": "method",
             "signature": "(self)"
           }
@@ -2902,20 +2851,11 @@
             "kind": "method",
             "signature": "(self, *, policy_input_version=..., policy_history=..., max_cards_per_player=..., max_permanents_per_player=..., max_stack_objects=..., max_actions=..., max_focus_objects=..., max_events=..., max_facts=..., max_decision_records=..., max_decision_references=..., max_decision_reference_details=..., max_decision_members=...)"
           },
-          "allocate": {
-            "kind": "method",
-            "signature": "(self, *leading_dims)"
-          },
           "arrays": {
             "kind": "property"
           },
           "axis_buffers": {
             "kind": "property"
-          },
-          "axis_extents": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, obs, *, omit_decision_memory=...)"
           },
           "csr_fact_divisors": {
             "kind": "property"
@@ -2924,10 +2864,6 @@
             "kind": "property"
           },
           "dtypes": {
-            "kind": "property"
-          },
-          "object_references": {
-            "deprecated": true,
             "kind": "property"
           },
           "shapes": {
@@ -3441,10 +3377,6 @@
           "active_count": {
             "kind": "property"
           },
-          "encode_active": {
-            "kind": "method",
-            "signature": "(self)"
-          },
           "encode_active_batch": {
             "kind": "method",
             "signature": "(self)"
@@ -3470,18 +3402,9 @@
             "kind": "method",
             "signature": "(self)"
           },
-          "set_buffers": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, buffers, capacity, *, layout=...)"
-          },
           "set_observation_layout": {
             "kind": "method",
             "signature": "(self, layout, action_overflow=...)"
-          },
-          "step_active": {
-            "kind": "method",
-            "signature": "(self, actions)"
           },
           "step_active_batch": {
             "kind": "method",
@@ -4000,11 +3923,6 @@
             "kind": "method",
             "signature": "(self, active=...)"
           },
-          "set_buffers": {
-            "deprecated": true,
-            "kind": "method",
-            "signature": "(self, buffers, action_overflow=..., *, layout=...)"
-          },
           "set_observation_layout": {
             "kind": "method",
             "signature": "(self, state, layout, action_overflow=...)"
@@ -4060,10 +3978,6 @@
           "take_statistics": {
             "kind": "method",
             "signature": "(self)"
-          },
-          "write_observations_for_players": {
-            "kind": "method",
-            "signature": "(self, players, buffers, action_overflow=..., *, layout)"
           }
         }
       },
@@ -4170,22 +4084,8 @@
         "kind": "function",
         "signature": "(envs, layout, action_overflow=...)"
       },
-      "encode_observation_into": {
-        "deprecated": true,
-        "kind": "function",
-        "signature": "(obs, layout, out, action_overflow=...)"
-      },
-      "encode_observations_into": {
-        "deprecated": true,
-        "kind": "function",
-        "signature": "(envs, layout, buffers, capacity)"
-      },
       "format": {
         "kind": "reexport"
-      },
-      "input_v10_state": {
-        "kind": "function",
-        "signature": "(obs)"
       },
       "learning_catalog": {
         "deprecated": true,
@@ -4208,7 +4108,7 @@
       },
       "observation_layout": {
         "kind": "function",
-        "signature": "(*, policy_history=..., turn_state=..., legacy=..., decision_memory=...)"
+        "signature": "(*, policy_history=..., decision_memory=...)"
       },
       "parse_continuation_frames_json": {
         "kind": "function",

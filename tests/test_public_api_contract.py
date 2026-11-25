@@ -62,7 +62,6 @@ def test_stub_comments_mark_only_the_deprecated_declaration() -> None:
     assert exports["LearningCatalog"].deprecated
     assert exports["PlayerConfig"].members["disclosure"].deprecated
     assert not exports["PlayerConfig"].members["deck"].deprecated
-    assert exports["Observation"].members["legacy_card_lists"].deprecated
     assert not exports["Observation"].members["validate"].deprecated
 
 
