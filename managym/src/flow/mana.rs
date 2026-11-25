@@ -1637,7 +1637,12 @@ impl Game {
         &self,
         effect: &Effect,
         controller: PlayerId,
+        chosen: Option<&crate::state::permanent::EntryChoice>,
     ) -> Option<Effect> {
+        use crate::state::{
+            mana::{Color, ManaRestriction, SpendPredicate},
+            permanent::EntryChoice,
+        };
         match effect {
             Effect::If {
                 condition,
@@ -1659,7 +1664,7 @@ impl Game {
                     otherwise
                 };
                 Some(
-                    self.current_mana_output(&branch[0], controller)
+                    self.current_mana_output(&branch[0], controller, chosen)
                         .unwrap_or_else(|| branch[0].clone()),
                 )
             }
@@ -1674,14 +1679,50 @@ impl Game {
                 }
                 Some(Effect::add_mana(output))
             }
-            Effect::AddOneColorManaValue { amount } => {
+            Effect::AddOneColorManaValue {
+                amount,
+                chosen_color,
+                creature_purposes,
+            } => {
                 let amount = self.controller_value(amount, controller).max(0) as usize;
                 if amount == 0 {
                     return Some(Effect::add_mana(Mana::default()));
                 }
-                Some(Effect::mana_choice(
-                    ["W", "U", "B", "R", "G"].map(|color| Mana::parse(&color.repeat(amount))),
-                ))
+                let restriction = (!creature_purposes.is_empty()).then(|| {
+                    let mut purposes = std::collections::BTreeSet::new();
+                    if let Some(EntryChoice::CreatureType(t)) = chosen {
+                        for p in creature_purposes {
+                            purposes.insert(match p {
+                                crate::state::mana::CreatureManaPurpose::Cast => {
+                                    SpendPredicate::CastCreatureSubtype(t.clone())
+                                }
+                                crate::state::mana::CreatureManaPurpose::Activate => {
+                                    SpendPredicate::ActivateCreatureSubtype(t.clone())
+                                }
+                            });
+                        }
+                    }
+                    ManaRestriction::Only(purposes)
+                });
+                let output = |color: Color| {
+                    let mut amounts = [0; 6];
+                    amounts[color as usize] = amount.min(u8::MAX as usize) as u8;
+                    match &restriction {
+                        Some(r) => Mana::restricted_to(r.clone(), amounts),
+                        None => Mana {
+                            mana: amounts,
+                            ..Default::default()
+                        },
+                    }
+                };
+                Some(if *chosen_color {
+                    Effect::add_mana(match chosen {
+                        Some(EntryChoice::Color(c)) => output(*c),
+                        _ => Mana::default(),
+                    })
+                } else {
+                    Effect::mana_choice(Color::COLORS.map(output))
+                })
             }
             _ => None,
         }
@@ -3176,7 +3217,9 @@ impl Game {
             let Some(permanent) = self.state.permanents[source.permanent].as_ref() else {
                 continue;
             };
-            if self.activations_prohibited(source.permanent) {
+            if self.activations_prohibited(source.permanent)
+                || self.nonmana_activation_prohibited(permanent.object)
+            {
                 continue;
             }
             for (ability_index, ability) in view.activated_abilities.iter().enumerate() {

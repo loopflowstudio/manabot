@@ -2144,7 +2144,11 @@ impl Game {
             ) => {
                 let caster = *caster;
                 who.includes(source_controller, caster)
-                    && self.object_matches_predicate(*object, predicate)
+                    && self.object_matches_with_source(
+                        *object,
+                        predicate,
+                        self.state.permanent_of(source_object),
+                    )
                     && match filter {
                         SpellTargetFilter::Any => true,
                         SpellTargetFilter::TargetsThis => {

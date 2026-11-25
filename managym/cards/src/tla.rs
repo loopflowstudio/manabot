@@ -9413,6 +9413,8 @@ fn the_legend_of_kyoshi() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestPowerYouControl {
                         predicate: CardPredicate::default(),
                     },
@@ -11144,6 +11146,8 @@ fn white_lotus_tile() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
+                    chosen_color: false,
+                    creature_purposes: vec![],
                     amount: EffectValue::GreatestSharedCreatureType,
                 }],
                 ..Default::default()

@@ -902,6 +902,9 @@ fn fact_row_kind(kind: FactKind) -> (&'static str, &'static str) {
     match kind {
         FactKind::Counter => ("counter", "id: CounterKind token; value: count / 10"),
         FactKind::AddedSubtype => ("added_subtype", "id: added subtype token; value: 1"),
+        FactKind::ChosenColor => ("chosen_color","id: chosen color token; value: 1"),
+        FactKind::ChosenSubtype => ("chosen_subtype","id: chosen creature type token; value: 1"),
+        FactKind::ChosenName => ("chosen_name","id: chosen card name; value: 1"),
         FactKind::SetName => ("set_name", "id: set-name token; value: 1"),
         FactKind::SetCreatureType => ("set_creature_type", "id: creature-type token; value: 1"),
         FactKind::TriggeringAmount => ("triggering_amount", "object: controller; id: frame index + 1; value: the triggering event's amount (damage dealt or life lost)"),
@@ -1133,7 +1136,11 @@ pub fn observation_layout(
         layout_kind == InputLayout::OneToken
             || !matches!(
                 kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount
+                FactKind::AbilityResolution
+                    | FactKind::TriggeringAmount
+                    | FactKind::ChosenColor
+                    | FactKind::ChosenSubtype
+                    | FactKind::ChosenName
             )
     });
     facts.row_kinds = kinds

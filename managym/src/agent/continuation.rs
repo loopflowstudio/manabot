@@ -1132,7 +1132,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 34;
+pub const MAX_DECISION_CODE: u8 = 36;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1141,6 +1141,8 @@ pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
         Decision::AssignCombatDamage { .. } => 32,
         Decision::OrderMeldedCards { .. } => 34,
+        Decision::OrderEntryChoices { .. } => 35,
+        Decision::ChooseEntryValue { .. } => 36,
         Decision::OrderReplacement { .. } => 29,
         Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
@@ -1467,7 +1469,20 @@ mod tests {
         let predicate = CardPredicate::default();
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
+        let question = crate::flow::proposed_event::EntryQuestion {
+            object: game.state.zones.latest().next().unwrap(),
+            kind: crate::state::card::EntryChoiceKind::Color,
+        };
         let decisions = [
+            Decision::OrderEntryChoices {
+                player,
+                questions: Vec::new(),
+            },
+            Decision::ChooseEntryValue {
+                player,
+                question,
+                scope: crate::cards::names::NameScope { start: 0, end: 5 },
+            },
             Decision::OrderMeldedCards {
                 player,
                 cards: [game.state.players[0].deck[0], game.state.players[0].deck[1]],

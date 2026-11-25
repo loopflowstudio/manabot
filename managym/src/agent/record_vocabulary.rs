@@ -126,6 +126,9 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
     out.push(record(Token, SPENT_TYPE, None));
     let pack = default_content_pack();
+    for candidate in pack.name_candidates().iter() {
+        out.push(record(Name, &candidate.name, None));
+    }
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
         let json = serde_json::to_value(definition).expect("serializable definition");
@@ -254,6 +257,11 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Saddle",
                 "Station",
             ][..],
+        ),
+        ("EntryChoice", &["Color", "CreatureType", "CardName"][..]),
+        (
+            "SpendPredicate",
+            &["CastCreatureSubtype", "ActivateCreatureSubtype"][..],
         ),
         (
             "Effect",

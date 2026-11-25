@@ -151,6 +151,7 @@ FACT_DIM = width("facts")
 _FACT_KINDS: dict[str, int] = V11_LAYOUT["facts"]["row_kind_names"]
 FACT_COUNTER = _FACT_KINDS["counter"]
 FACT_SET_NAME = _FACT_KINDS["set_name"]
+NAME_ID_KINDS = (FACT_SET_NAME, _FACT_KINDS["chosen_name"])
 FACT_ABILITY_RESOLUTION = _FACT_KINDS["ability_resolution"]
 FACT_TRIGGERING_AMOUNT = _FACT_KINDS["triggering_amount"]
 FACT_USED_ABILITY = _FACT_KINDS["used_ability"]

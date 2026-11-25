@@ -113,7 +113,7 @@ fn brought_back() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{W}{W}")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![Effect::return_to_battlefield(
-                ObjectSelector::Target(spec.clone()),
+                ObjectSelector::Targets(spec.clone()),
                 true,
             )],
             targeting: vec![TargetRequirement::up_to(2, spec)],

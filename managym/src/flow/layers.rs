@@ -141,19 +141,23 @@ struct ReadSet {
 
 impl ReadSet {
     fn predicate(&mut self, p: &CardPredicate) {
-        if p.namesake || p.named.is_some() {
+        if p.chosen_name || p.namesake || p.named.is_some() {
             self.fields |= NAME;
         }
         if p.card_type.is_some() || !p.card_types_any.is_empty() || !p.not_card_types.is_empty() {
             self.fields |= CARD_TYPES;
         }
-        if p.subtype.is_some() || !p.subtypes_any.is_empty() || !p.not_subtypes.is_empty() {
+        if p.chosen_subtype
+            || p.subtype.is_some()
+            || !p.subtypes_any.is_empty()
+            || !p.not_subtypes.is_empty()
+        {
             self.fields |= SUBTYPES;
         }
         if p.supertype.is_some() {
             self.fields |= SUPERTYPES;
         }
-        if !p.colors_any.is_empty() {
+        if p.chosen_color || !p.colors_any.is_empty() {
             self.fields |= COLORS;
         }
         if p.flying || p.not_flying || p.deathtouch {
@@ -670,7 +674,7 @@ impl<'a> Context<'a> {
                     matches!(purpose, SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes, view.creature_types.is_all()))
+                    } if source.describes(&view.subtypes, view.creature_types.is_all(), view.is_creature()))
                 })
                 .cloned();
             let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
@@ -678,6 +682,7 @@ impl<'a> Context<'a> {
                 source: SpendingObject::new(
                     view.subtypes.iter().map(String::as_str),
                     view.creature_types.is_all(),
+                    view.is_creature(),
                 ),
             });
             for ability in &mut view.activated_abilities {
@@ -1176,7 +1181,12 @@ impl<'a> Context<'a> {
             id,
             predicate,
             &self.objects[&id].view,
-            source.map(|s| self.objects[&s].view.name.as_str()),
+            source.map(|s| {
+                (
+                    self.objects[&s].view.name.as_str(),
+                    self.game.live_permanent(s).chosen.as_deref(),
+                )
+            }),
         )
     }
     fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
@@ -1204,6 +1214,14 @@ impl<'a> Context<'a> {
                         add(layer, m.clone());
                     }
                 }
+            }
+            StaticAbility::HasChosenCreatureType => {
+                let Some(crate::state::permanent::EntryChoice::CreatureType(name)) =
+                    self.game.live_permanent(source).chosen.as_deref()
+                else {
+                    return None;
+                };
+                add(Layer::Type, Modification::AddSubtypes(vec![name.clone()]));
             }
             StaticAbility::TypeGrant(g) => {
                 plan.scope = g.scope.clone();
@@ -1495,7 +1513,7 @@ impl<'a> Context<'a> {
 
 impl Game {
     /// Layer evaluation only visits battlefield slots, which are always live.
-    fn live_permanent(&self, id: PermanentId) -> &Permanent {
+    pub(super) fn live_permanent(&self, id: PermanentId) -> &Permanent {
         self.state.permanents[id].as_ref().unwrap()
     }
 }
@@ -1575,7 +1593,7 @@ pub(super) fn matches_view(
     id: PermanentId,
     p: &CardPredicate,
     view: &Characteristics,
-    source_name: Option<&str>,
+    source: Option<(&str, Option<&crate::state::permanent::EntryChoice>)>,
 ) -> bool {
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
@@ -1602,7 +1620,7 @@ pub(super) fn matches_view(
         },
         counters: &permanent.counters,
     }
-    .matches(p, source_name)
+    .matches(p, source)
 }
 
 /// The characteristics and permanent status a battlefield predicate reads,
@@ -1683,11 +1701,21 @@ impl CharacteristicView<'_> {
             || (self.all_creature_types && is_creature_type(subtype))
     }
 
-    fn matches(&self, p: &CardPredicate, source_name: Option<&str>) -> bool {
+    fn matches(
+        &self,
+        p: &CardPredicate,
+        source: Option<(&str, Option<&crate::state::permanent::EntryChoice>)>,
+    ) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
             && p.accepts_name(self.name)
-            && (!p.namesake || source_name == Some(self.name))
+            && (!p.namesake || source.map(|s| s.0) == Some(self.name))
+            && p.matches_choice(
+                source.and_then(|s| s.1),
+                self.name,
+                |c| self.colors.contains(&c),
+                |s| self.has_subtype(s),
+            )
             && (!p.deathtouch || self.keywords.has(Keyword::Deathtouch))
             && (!p.flying || self.keywords.has(Keyword::Flying))
             && (!p.not_flying || !self.keywords.has(Keyword::Flying))
@@ -1700,7 +1728,7 @@ impl CharacteristicView<'_> {
             && (p.any_of.is_empty()
                 || p.any_of
                     .iter()
-                    .any(|alternative| self.matches(alternative, source_name)))
+                    .any(|alternative| self.matches(alternative, source)))
             && p.supertype.as_ref().is_none_or(|s| {
                 if s.eq_ignore_ascii_case("legendary") {
                     self.is_legendary

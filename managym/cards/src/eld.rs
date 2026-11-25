@@ -5,8 +5,9 @@ use managym_state::{
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, PrintedCharacteristics, StaticAbility,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
+        EntryChoiceKind, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
+        StaticAbility, StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -17,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        heraldic_banner(),
         syr_alin_the_lions_claw(),
         bake_into_a_pie(),
         raging_redcap(),
@@ -331,6 +333,47 @@ fn scorching_dragonfire() -> CardDefinition {
                 Effect::deal_damage(3, target()),
                 Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn heraldic_banner() -> CardDefinition {
+    let text_box = "As this artifact enters, choose a color.\nCreatures you control of the chosen color get +1/+0.\n{T}: Add one mana of the chosen color.";
+    CardDefinition {
+        key: "eld.heraldic_banner",
+        scryfall_id: "2e349af5-3f25-46d3-908e-83b2f6028b95",
+        printed: PrintedCharacteristics {
+            name: "Heraldic Banner".into(),
+            types: CardTypes::new([CardType::Artifact]),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            replacement_effects: vec![ReplacementEffect::AsEntersChoose {
+                kind: EntryChoiceKind::Color,
+                look_at_opponent_hand: false,
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::AddOneColorManaValue {
+                    amount: 1.into(),
+                    chosen_color: true,
+                    creature_purposes: vec![],
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::Continuous(StaticContinuous {
+                scope: StaticScope::YouControl(CardPredicate {
+                    chosen_color: true,
+                    ..CardPredicate::creature()
+                }),
+                condition: None,
+                characteristic_defining: false,
+                modifications: vec![Modification::ModifyPt {
+                    power: 1.into(),
+                    toughness: 0.into(),
+                }],
+            })],
             text_box: text_box.into(),
             ..Default::default()
         },

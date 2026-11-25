@@ -799,6 +799,8 @@ pub(super) struct WireCardData {
 #[serde(deny_unknown_fields)]
 pub(super) struct WirePermanentData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chosen: Option<crate::state::permanent::EntryChoice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub front_mana_value: Option<u8>,
     /// Effective colors when a layer changes the copiable colors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1006,6 +1008,7 @@ impl From<WirePermanentData> for PermanentData {
     fn from(w: WirePermanentData) -> Self {
         let card = w.card;
         Self {
+            chosen: w.chosen,
             front_mana_value: w.front_mana_value,
             colors: w.colors,
             keyword_counter_timestamps: w.keyword_counter_timestamps,
@@ -1082,6 +1085,7 @@ impl PermanentData {
 impl Serialize for PermanentData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         WirePermanentData {
+            chosen: self.chosen.clone(),
             front_mana_value: self.front_mana_value,
             colors: self.colors.clone(),
             keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),

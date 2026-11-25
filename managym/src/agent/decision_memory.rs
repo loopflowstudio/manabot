@@ -1025,7 +1025,9 @@ pub(crate) fn capture(
                     }
                 }
                 Some(
-                    Decision::Modal { .. }
+                    Decision::OrderEntryChoices { .. }
+                    | Decision::ChooseEntryValue { .. }
+                    | Decision::Modal { .. }
                     | Decision::ManaChoice { .. }
                     | Decision::ManaSpend { .. }
                     | Decision::ChoosePaymentX { .. },

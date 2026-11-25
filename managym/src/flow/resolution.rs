@@ -2172,7 +2172,7 @@ impl Game {
                     scope: names.root(),
                     names,
                     player: frame.controller,
-                    count: *count,
+                    after: super::decision::AfterNaming::Exile { count: *count },
                 })
             }
             Effect::ExileNamed { name, count } => {
@@ -2534,8 +2534,13 @@ impl Game {
             }
             Effect::AddOneColorManaValue { .. } => {
                 frame.prepend_effects(
-                    self.current_mana_output(effect, frame.controller)
-                        .into_iter(),
+                    self.current_mana_output(
+                        effect,
+                        frame.controller,
+                        self.source_permanent_id(frame)
+                            .and_then(|s| self.live_permanent(s).chosen.as_deref()),
+                    )
+                    .into_iter(),
                 );
                 None
             }

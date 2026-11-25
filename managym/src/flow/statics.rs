@@ -479,9 +479,11 @@ impl Game {
         let power = view.power.clamp(0, u8::MAX.into()) as u8;
         for ability in &mut Arc::make_mut(&mut view).activated_abilities {
             if ability.has_dynamic_mana_output() {
-                if let Some(output) =
-                    self.current_mana_output(&ability.effects[0], permanent.controller)
-                {
+                if let Some(output) = self.current_mana_output(
+                    &ability.effects[0],
+                    permanent.controller,
+                    permanent.chosen.as_deref(),
+                ) {
                     ability.effects[0] = output;
                 }
             }
@@ -575,10 +577,24 @@ impl Game {
         object_id: ObjectId,
         predicate: &CardPredicate,
     ) -> bool {
+        self.object_matches_with_source(object_id, predicate, None)
+    }
+
+    pub(super) fn object_matches_with_source(
+        &self,
+        object_id: ObjectId,
+        predicate: &CardPredicate,
+        source: Option<PermanentId>,
+    ) -> bool {
         if let Some(permanent) = self.state.permanent_of(object_id) {
-            return self.permanent_matches_predicate(permanent, predicate);
+            return self.permanent_matches_with_source(permanent, predicate, source);
         }
-        self.off_battlefield_matches(object_id, predicate, || self.object_pt(object_id).0)
+        self.off_battlefield_matches_choice(
+            object_id,
+            predicate,
+            || self.object_pt(object_id).0,
+            source.and_then(|s| self.live_permanent(s).chosen.as_deref()),
+        )
     }
 
     /// A layer calculation supplies the card's CDA power from its partial board.
@@ -587,6 +603,16 @@ impl Game {
         object_id: ObjectId,
         predicate: &CardPredicate,
         power: impl FnOnce() -> i32,
+    ) -> bool {
+        self.off_battlefield_matches_choice(object_id, predicate, power, None)
+    }
+
+    fn off_battlefield_matches_choice(
+        &self,
+        object_id: ObjectId,
+        predicate: &CardPredicate,
+        power: impl FnOnce() -> i32,
+        chosen: Option<&crate::state::permanent::EntryChoice>,
     ) -> bool {
         let ordinary;
         let predicate = if predicate.from_battlefield_this_turn {
@@ -608,12 +634,13 @@ impl Game {
             predicate
         };
         let object = &self.state[object_id];
-        predicate.matches_printing(
+        predicate.matches_printing_with_choice(
             object,
             object.kind(),
             self.object_mana_value(object_id),
             if predicate.reads_power() { power() } else { 0 },
             &[],
+            chosen,
         )
     }
 
@@ -964,6 +991,18 @@ impl Game {
             })
     }
 
+    /// Static prohibitions follow the source's current name in its zone.
+    pub(super) fn nonmana_activation_prohibited(&self, object: ObjectId) -> bool {
+        if let Some(id) = self.state.permanent_of(object) {
+            return self.has_restriction(id, Restriction::CantActivateNonmanaAbilities);
+        }
+        self.layer_board().restrictions.iter().any(|(source, controller, rule)| {
+            rule.kind == Restriction::CantActivateNonmanaAbilities &&
+            rule.unless.as_ref().is_none_or(|c| !self.check_static_condition(c, *controller)) &&
+            matches!(&rule.scope, StaticScope::All(p) if self.object_matches_with_source(object,p,Some(*source)))
+        })
+    }
+
     /// "attacks each combat if able" (CR 508.1d): the declaration offers it
     /// no choice to stay home.
     pub(crate) fn must_attack(&self, attacker: PermanentId) -> bool {
@@ -1121,7 +1160,12 @@ impl Game {
                 let source_view = source_id()
                     .filter(|_| predicate.reads_source())
                     .map(|id| self.layer_view(id));
-                let source_name = source_view.as_ref().map(|view| view.name.as_str());
+                let source_name = source_view.as_ref().zip(source_id()).map(|(view, id)| {
+                    (
+                        view.name.as_str(),
+                        self.live_permanent(id).chosen.as_deref(),
+                    )
+                });
                 let matching = self
                     .layer_views(self.iter_battlefield_permanents(controller))
                     .filter(|(id, view)| matches_view(self, *id, predicate, view, source_name));
@@ -1136,7 +1180,12 @@ impl Game {
                 let source_view = source_id()
                     .filter(|_| predicate.reads_source())
                     .map(|id| self.layer_view(id));
-                let source_name = source_view.as_ref().map(|view| view.name.as_str());
+                let source_name = source_view.as_ref().zip(source_id()).map(|(view, id)| {
+                    (
+                        view.name.as_str(),
+                        self.live_permanent(id).chosen.as_deref(),
+                    )
+                });
                 self.layer_views(
                     [PlayerId(0), PlayerId(1)]
                         .into_iter()
@@ -1333,7 +1382,7 @@ impl Game {
         source: Option<PermanentId>,
     ) -> bool {
         let view = self.layer_view(id);
-        let source = source
+        let source_view = source
             .filter(|_| predicate.reads_source())
             .map(|id| self.layer_view(id));
         matches_view(
@@ -1341,7 +1390,10 @@ impl Game {
             id,
             predicate,
             &view,
-            source.as_ref().map(|s| s.name.as_str()),
+            source_view
+                .as_ref()
+                .zip(source)
+                .map(|(s, id)| (s.name.as_str(), self.live_permanent(id).chosen.as_deref())),
         )
     }
 

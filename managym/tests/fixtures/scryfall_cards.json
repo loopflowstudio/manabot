@@ -12819,5 +12819,65 @@
     "colors": [
       "G"
     ]
+  },
+  "Adaptive Automaton": {
+    "name": "Adaptive Automaton",
+    "mana_cost": "{3}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "As this creature enters, choose a creature type.\nThis creature is the chosen type in addition to its other types.\nOther creatures you control of the chosen type get +1/+1.",
+    "colors": []
+  },
+  "Diamond Mare": {
+    "name": "Diamond Mare",
+    "mana_cost": "{2}",
+    "type_line": "Artifact Creature — Horse",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "As this creature enters, choose a color.\nWhenever you cast a spell of the chosen color, you gain 1 life.",
+    "colors": []
+  },
+  "Heraldic Banner": {
+    "name": "Heraldic Banner",
+    "mana_cost": "{3}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, choose a color.\nCreatures you control of the chosen color get +1/+0.\n{T}: Add one mana of the chosen color.",
+    "colors": []
+  },
+  "Secluded Courtyard": {
+    "name": "Secluded Courtyard",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this land enters, choose a creature type.\n{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a creature spell of the chosen type or activate an ability of a creature source of the chosen type.",
+    "colors": []
+  },
+  "Sorcerous Spyglass": {
+    "name": "Sorcerous Spyglass",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As this artifact enters, look at an opponent's hand, then choose any card name.\nActivated abilities of sources with the chosen name can't be activated unless they're mana abilities.",
+    "colors": []
+  },
+  "Uncharted Haven": {
+    "name": "Uncharted Haven",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped. As it enters, choose a color.\n{T}: Add one mana of the chosen color.",
+    "colors": []
   }
 }

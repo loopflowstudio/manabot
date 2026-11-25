@@ -2362,6 +2362,15 @@ impl PyPermanent {
         self.data.granted_firebending = value;
     }
     #[getter]
+    fn chosen(&self) -> Option<String> {
+        use crate::state::permanent::EntryChoice;
+        self.data.chosen.as_ref().map(|choice| match choice {
+            EntryChoice::Color(c) => format!("color {c:?}"),
+            EntryChoice::CreatureType(s) => format!("creature type {s}"),
+            EntryChoice::CardName(s) => format!("card name {s}"),
+        })
+    }
+    #[getter]
     fn temp_subtypes(&self) -> Vec<String> {
         self.data.temp_subtypes.clone()
     }

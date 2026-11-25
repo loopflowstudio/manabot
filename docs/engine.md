@@ -1358,6 +1358,23 @@ as a Mountain with zero ice counters. Zhao’s separate ability makes it
 enter tapped. If Zhao has also lost all abilities, the Mountain effect
 still applies in layer 4 and Dark Depths enters untapped.
 
+When several permanents enter together, the active player makes their entry
+choices first, then the other player makes theirs. Each player chooses which
+of their entrants to answer first. For example, Brought Back can return
+Sorcerous Spyglass and Heraldic Banner together. Their controller can look at
+the opponent’s hand and name a card before choosing Banner’s color, or choose
+the color first. Both artifacts enter after the last answer. Each viewer can
+see the name and color on the battlefield. Only the player using Spyglass
+gets the private look.
+
+A copy entering as Adaptive Automaton chooses its own creature type. The
+grouped prompt includes all 367 creature types in CR 205.3m. Secluded
+Courtyard’s colored mana keeps the chosen type until spent and can pay for an
+ability of a creature of that type, including cycling from hand. If Zhao turns
+Courtyard or Uncharted Haven into a Mountain as it enters, the land makes no
+choice. Removing Zhao restores its printed mana abilities, with no chosen
+type or color for that incarnation.
+
 CR 400.7a to c (effects and prevention applied to a permanent spell continuing
 on the permanent) carry nothing, because no supported effect applies to a
 spell. Madness and stickers (CR 400.7k, m) are not modeled.

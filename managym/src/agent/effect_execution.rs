@@ -98,6 +98,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "entry X",
     "entry controller",
     "entry counters",
+    "entry choice",
+    "chosen on entry",
     "event",
     "event ordinal",
     "excess damage",
@@ -819,6 +821,10 @@ impl<'a> Projection<'a> {
         // ZoneEntry's default terms have no effect. Encode only present terms,
         // preserving the same defaults instead of repeating six zero values
         // for every member of a simultaneous token group.
+        if let Some(choice) = &entry.chosen {
+            self.field("chosen on entry", choice);
+            self.note(|| format!("Chosen on entry: {choice:?}"));
+        }
         if entry.tapped {
             self.field("enters tapped", &true);
         }
@@ -1531,6 +1537,23 @@ pub(crate) fn project_decision(
             out.field("remaining", remaining);
             out.field("last blocker", last);
             out.field("assigned combat damage", assigned);
+        }
+        Decision::OrderEntryChoices { questions, .. } => {
+            for q in questions {
+                out.object_id("entering card", q.object);
+            }
+        }
+        Decision::NameCard {
+            after: crate::flow::decision::AfterNaming::Entry { question },
+            ..
+        } => {
+            out.object_id("entering card", question.object);
+        }
+        Decision::ChooseEntryValue {
+            question, scope, ..
+        } => {
+            out.object_id("entering card", question.object);
+            out.field("entry choice", &(question.kind, scope.start, scope.end));
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

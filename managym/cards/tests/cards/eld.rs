@@ -314,3 +314,23 @@ fn foundations_5f_syr_alin_the_lions_claw() {
 fn foundations_5g_scorching_dragonfire() {
     crate::assert_damage_exiles_creature_or_planeswalker("Scorching Dragonfire", 3);
 }
+
+#[test]
+fn entry_choice_heraldic_banner() {
+    use crate::support::play::{choose_entry_value, resolve_top, spend_colorless};
+    let mut s = five_color_setup(&["Heraldic Banner", "Gray Ogre", "Giant Koi"]);
+    let red = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let blue = s.force_permanent_on_battlefield(0, "Giant Koi");
+    cast(&mut s, "Heraldic Banner");
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().actions.len(), 5);
+    choose_entry_value(&mut s, "Red");
+    assert_eq!(s.game().characteristics(red).power, 3);
+    assert_eq!(s.game().characteristics(blue).power, 5);
+    let banner = permanent_named(&s, "Heraldic Banner");
+    assert_eq!(
+        s.game().characteristics(banner).activated_abilities[0].mana_choices(),
+        Some(vec![Mana::parse("R")])
+    );
+}

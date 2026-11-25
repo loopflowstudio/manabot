@@ -137,8 +137,9 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     let Permanent {
+        chosen: _,
         manifested: _,
 
         transforms: _,
@@ -161,6 +162,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
         keyword_counter_timestamps: _,
     } = permanent;
     [
+        (
+            "chosen",
+            Seen::Via("chosen color, creature type or card name fact"),
+        ),
         ("id", Seen::Identity),
         (
             "entered_this_turn",
@@ -1202,6 +1207,8 @@ fn effect_witnesses() -> Vec<Effect> {
             what: ObjectSelector::Target(TargetSpec::Ability),
         },
         Effect::AddOneColorManaValue {
+            chosen_color: false,
+            creature_purposes: vec![],
             amount: EffectValue::GreatestSharedCreatureType,
         },
         Effect::FightLastTarget,
@@ -1559,6 +1566,7 @@ const fn witnessed(
 /// No wildcard: a new `StaticAbility` must be named here.
 fn static_seen(ability: &StaticAbility) -> Witnessed {
     match ability {
+        StaticAbility::HasChosenCreatureType => witnessed("StaticAbility::HasChosenCreatureType", Seen::Via("effective subtype and entry choice fact"), "Adaptive Automaton", "m12", "entry_choice_adaptive_automaton"),
         StaticAbility::BeginOnBattlefield => witnessed("StaticAbility::BeginOnBattlefield", Seen::Actions("retained opening card can enter"), "Leyline Axe", "fdn", "leyline_axe_moves_its_grants_when_equipped_again"),
         StaticAbility::Continuous(_) => witnessed(
             "StaticAbility::Continuous",
@@ -2024,6 +2032,7 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
 fn static_witnesses() -> Vec<StaticAbility> {
     let creature = CardPredicate::creature;
     vec![
+        StaticAbility::HasChosenCreatureType,
         StaticAbility::BeginOnBattlefield,
         StaticAbility::Continuous(managym::state::card::StaticContinuous {
             scope: StaticScope::This,
@@ -3439,6 +3448,9 @@ fn fact_field(kind: FactKind) -> &'static str {
     match kind {
         FactKind::ContinuationProgram => "ContinuationFrame.program",
         FactKind::EffectProgram => "ContinuousEffectData.program",
+        FactKind::ChosenColor | FactKind::ChosenSubtype | FactKind::ChosenName => {
+            "PermanentData.chosen"
+        }
         FactKind::EffectiveColor => "PermanentData.colors",
         FactKind::KeywordCounterTimestamp => "PermanentData.keyword_counter_timestamps",
         FactKind::Counter => "PermanentData.counters",
@@ -3701,6 +3713,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        chosen => [Fact(FactKind::ChosenColor), Fact(FactKind::ChosenSubtype), Fact(FactKind::ChosenName)],
         front_mana_value => [column(Permanent, permanent::MANA_VALUE)],
         colors => [Fact(FactKind::EffectiveColor)],
         keyword_counter_timestamps => [Fact(FactKind::KeywordCounterTimestamp)],
@@ -4585,6 +4598,54 @@ fn granted_firebending_reaches_its_permanent_column_and_an_effect_row() {
 }
 
 #[test]
+fn entry_choice_is_public_in_permanent_facts_and_printed_rules() {
+    for (card, choice, kind, id, rule) in [
+        (
+            "Heraldic Banner",
+            "Green",
+            FactKind::ChosenColor,
+            "Color::Green",
+            "EntryChoiceKind::Color",
+        ),
+        (
+            "Adaptive Automaton",
+            "Atog",
+            FactKind::ChosenSubtype,
+            "Atog",
+            "EntryChoiceKind::CreatureType",
+        ),
+        (
+            "Sorcerous Spyglass",
+            "Forest",
+            FactKind::ChosenName,
+            "Forest",
+            "Restriction::CantActivateNonmanaAbilities",
+        ),
+    ] {
+        let mut s = five_color_setup(&[card]);
+        cast(&mut s, card);
+        spend_colorless(&mut s);
+        resolve_top(&mut s);
+        for frame in &Observation::for_player(s.game(), PlayerId(0)).continuation {
+            assert_execution_tokens_registered(frame);
+        }
+        crate::support::play::choose_entry_value(&mut s, choice);
+        let permanent = s.battlefield_permanents_named(0, card)[0];
+        for viewer in 0..2 {
+            let facts = facts_about(&s, viewer, object_index(&s, viewer, permanent));
+            fact_row(&facts, kind, name_value(id));
+        }
+        let tokens = tokens_of(&card_definition(card));
+        for name in ["ReplacementEffect::AsEntersChoose", rule] {
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(name))),
+                "{card}: {name}"
+            );
+        }
+    }
+}
+
+#[test]
 fn each_added_subtype_reaches_a_fact_row() {
     for subtype in ["Plains", "Construct", "Citizen"] {
         let (baseline, ogre) = ogre_state();
@@ -5030,8 +5091,7 @@ fn mai(exhausted: bool) -> (Scenario, PermanentId) {
         s.game_mut().state.permanents[mai]
             .as_mut()
             .unwrap()
-            .spent_abilities
-            .push(0);
+            .spent_abilities = Box::new([0]);
     }
     (s, mai)
 }

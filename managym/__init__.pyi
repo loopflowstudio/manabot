@@ -1195,6 +1195,7 @@ class Permanent:
     exhausted_abilities: int
     once_each_turn_used: int
     granted_firebending: int
+    chosen: str | None
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords

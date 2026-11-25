@@ -1053,6 +1053,7 @@ impl Game {
                 object_id,
                 &self.state[object_id],
             );
+            permanent.chosen = entry.chosen.map(std::sync::Arc::new);
             permanent.manifested = entry.face == EntryFace::Manifested;
             permanent.controller = holder;
             permanent.entry_turn = self.state.turn.turn_number;

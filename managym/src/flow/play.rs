@@ -1570,7 +1570,9 @@ impl Game {
                 "ability does not function on the battlefield".into(),
             ));
         }
-        if self.activations_prohibited(permanent_id) {
+        if self.activations_prohibited(permanent_id)
+            || (!ability.is_mana_ability() && self.nonmana_activation_prohibited(permanent.object))
+        {
             return Err(AgentError(
                 "its activated abilities can't be activated".into(),
             ));
@@ -1769,13 +1771,19 @@ impl Game {
                 .state
                 .zones
                 .contains(self.state.object_of(card), ability.zone.zone(), player)
+            || (!ability.is_mana_ability()
+                && self.nonmana_activation_prohibited(self.state.object_of(card)))
         {
             return None;
         }
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(definition.subtypes.iter().map(String::as_str), false),
+            source: SpendingObject::new(
+                definition.subtypes.iter().map(String::as_str),
+                false,
+                definition.types.is_creature(),
+            ),
         };
         self.price_activation(player, &mut ability);
         Some(ability)

@@ -454,6 +454,17 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Zubera", Creature),
 ];
 
+/// Indexed by the grouped creature-type prompt in the same sorted order.
+pub fn creature_type_names() -> &'static [&'static str] {
+    static NAMES: std::sync::LazyLock<Vec<&str>> = std::sync::LazyLock::new(|| {
+        SUBTYPES
+            .iter()
+            .filter_map(|(name, category)| (*category == Creature).then_some(*name))
+            .collect()
+    });
+    &NAMES
+}
+
 /// Every subtype in the table, in name order.
 pub fn subtypes() -> impl Iterator<Item = &'static str> {
     SUBTYPES.iter().map(|(name, _)| *name)

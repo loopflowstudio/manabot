@@ -715,6 +715,9 @@ fn color_word(color: Color) -> &'static str {
 pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
+        chosen_color,
+        chosen_subtype,
+        chosen_name,
         named,
         flying,
         not_flying,
@@ -808,6 +811,15 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if kind.is_none() || noun != "permanent" {
         terms.push(noun.into());
+    }
+    if *chosen_color {
+        terms.push("of the chosen color".into());
+    }
+    if *chosen_subtype {
+        terms.push("of the chosen type".into());
+    }
+    if *chosen_name {
+        terms.push("with the chosen name".into());
     }
     if *namesake {
         terms.push("with the same name as this permanent".into());
@@ -1569,7 +1581,18 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         CounterUnlessPays { cost } => format!("Counter the spell unless its controller pays {}",payment_description(cost)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
         Earthbend { count, what } => { let count = value_description(triggering, count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",selector_description(triggering, what)) },
-        AddOneColorManaValue { amount } => format!("Add X mana of any one color, where X is {}",value_description(triggering, amount)),
+        AddOneColorManaValue { amount, chosen_color, creature_purposes } => {
+            let color = if *chosen_color { "the chosen color" } else { "any one color" };
+            let mut description = format!("Add X mana of {color}, where X is {}", value_description(triggering, amount));
+            if !creature_purposes.is_empty() {
+                let uses: Vec<_> = creature_purposes.iter().map(|p| match p {
+                    crate::state::mana::CreatureManaPurpose::Cast => "cast a creature spell",
+                    crate::state::mana::CreatureManaPurpose::Activate => "activate an ability of a creature source",
+                }).collect();
+                description.push_str(&format!("; spend only to {} of the chosen type", uses.join(" or ")));
+            }
+            description
+        },
         AddMana { mana, amount: EffectValue::Fixed(1), until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         AddMana { mana, amount, until_end_of_combat } => format!("Add {} for each of {}{}", mana_description(mana), value_description(triggering, amount), if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         AttachSourceTo { what } => format!("Attach this to {}",selector_description(triggering, what)),

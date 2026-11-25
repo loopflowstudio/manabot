@@ -483,6 +483,7 @@ pub struct StaticRestriction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Restriction {
+    CantActivateNonmanaAbilities,
     /// CR 508.1c, 509.1b.
     CantAttackOrBlock,
     /// CR 502.3.
@@ -502,6 +503,13 @@ pub enum DamageTransform {
     Prevent(u32),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EntryChoiceKind {
+    Color,
+    CreatureType,
+    CardName,
+}
+
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
@@ -509,6 +517,10 @@ pub enum DamageTransform {
 /// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
+    AsEntersChoose {
+        kind: EntryChoiceKind,
+        look_at_opponent_hand: bool,
+    },
     AdventureExile,
     ExileInsteadOfGraveyard,
     EntersPrepared,
@@ -1042,6 +1054,7 @@ pub struct StaticContinuous {
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    HasChosenCreatureType,
     BeginOnBattlefield,
     /// One continuous effect whose parts may apply in different layers.
     Continuous(StaticContinuous),

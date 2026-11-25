@@ -2027,6 +2027,12 @@ pub enum Effect {
     /// "Add X mana of any one color", X read as the mana ability resolves.
     AddOneColorManaValue {
         amount: EffectValue,
+        /// Use the color chosen on entry; otherwise its controller picks the color now.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        chosen_color: bool,
+        /// Allowed uses of this mana, bound to its source's chosen creature type.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        creature_purposes: Vec<crate::mana::CreatureManaPurpose>,
     },
 
     /// The first chosen creature fights the last (CR 701.14); records the
@@ -2381,7 +2387,7 @@ impl Effect {
             | Self::DrainLife { amount }
             | Self::AddMana { amount, .. }
             | Self::CreateToken { count: amount, .. }
-            | Self::AddOneColorManaValue { amount }
+            | Self::AddOneColorManaValue { amount, .. }
             | Self::ExileUntilNonlandCastFree { below: amount }
             | Self::LookAndSelect { look: amount, .. } => Some(amount),
             _ => None,

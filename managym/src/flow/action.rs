@@ -407,6 +407,31 @@ impl Game {
                     );
                 Some(format!("{name}: {}", candidate.description()))
             }
+            Some(Decision::OrderEntryChoices { questions, .. }) => {
+                let card = self.state.entry_object(questions.get(mode)?.object);
+                Some(format!("Choose for {}", card.name))
+            }
+            Some(Decision::ChooseEntryValue {
+                question, scope, ..
+            }) => {
+                use crate::state::{
+                    card::EntryChoiceKind, mana::Color, subtype::creature_type_names,
+                };
+                Some(match (question.kind, scope.option(mode)?) {
+                    (EntryChoiceKind::Color, NameOption::Name(row)) => {
+                        format!("Choose {:?}", Color::COLORS[row])
+                    }
+                    (EntryChoiceKind::CreatureType, NameOption::Name(row)) => {
+                        format!("Choose {}", creature_type_names()[row])
+                    }
+                    (EntryChoiceKind::CreatureType, NameOption::Group(group)) => format!(
+                        "Types {} through {}",
+                        creature_type_names()[group.start],
+                        creature_type_names()[group.end - 1]
+                    ),
+                    _ => return None,
+                })
+            }
             Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
                 NameOption::Group(group) => Some(format!(
                     "Names {} through {}",
@@ -640,6 +665,8 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
+                    || (!ability.is_mana_ability()
+                        && self.nonmana_activation_prohibited(permanent.object))
                     || !self.activation_targets_available(player, source, ability_index)
                 {
                     continue;

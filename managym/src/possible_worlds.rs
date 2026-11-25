@@ -697,7 +697,10 @@ impl HiddenHandConstraints {
                         .is_some_and(|suspended| {
                             matches!(
                                 suspended.decision,
-                                crate::flow::decision::Decision::OrderReplacement { .. }
+                                crate::flow::decision::Decision::OrderEntryChoices { .. }
+                                    | crate::flow::decision::Decision::ChooseEntryValue { .. }
+                                    | crate::flow::decision::Decision::NameCard { .. }
+                                    | crate::flow::decision::Decision::OrderReplacement { .. }
                                     | crate::flow::decision::Decision::AssignCombatDamage { .. }
                             )
                         }) =>

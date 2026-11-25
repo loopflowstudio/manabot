@@ -28,6 +28,7 @@ pub enum Color {
 }
 
 impl Color {
+    pub const COLORS: [Color; 5] = [Self::White, Self::Blue, Self::Black, Self::Red, Self::Green];
     pub fn symbol(self) -> &'static str {
         match self {
             Color::White => "W",
@@ -43,6 +44,12 @@ impl Color {
 
 pub type Colors = BTreeSet<Color>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum CreatureManaPurpose {
+    Cast,
+    Activate,
+}
+
 /// One purpose mana may be spent on (CR 106.6), as a restriction names it.
 /// Subtypes are printed names from any vocabulary; none is privileged.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
@@ -51,11 +58,19 @@ pub enum SpendPredicate {
     CastSubtype(String),
     /// Activating an ability of a source with this subtype.
     ActivateSubtype(String),
+    CastCreatureSubtype(String),
+    ActivateCreatureSubtype(String),
 }
 
 impl SpendPredicate {
     pub fn matches(&self, context: &SpendingContext) -> bool {
         match (self, context) {
+            (Self::CastCreatureSubtype(name), SpendingContext::Cast { spell, .. }) => {
+                spell.0.types.is_creature() && spell.0.subtypes.contains(name)
+            }
+            (Self::ActivateCreatureSubtype(name), SpendingContext::Activate { source, .. }) => {
+                source.creature && source.has_subtype(name)
+            }
             (Self::CastSubtype(name), SpendingContext::Cast { spell, .. }) => {
                 spell.0.subtypes.iter().any(|subtype| subtype == name)
             }
@@ -130,7 +145,7 @@ impl ManaRestriction {
     pub fn spell_subtypes(&self) -> impl Iterator<Item = &str> {
         self.predicates().filter_map(|predicate| match predicate {
             SpendPredicate::CastSubtype(name) => Some(name.as_str()),
-            SpendPredicate::ActivateSubtype(_) => None,
+            _ => None,
         })
     }
 
@@ -139,7 +154,7 @@ impl ManaRestriction {
     pub fn source_subtypes(&self) -> impl Iterator<Item = &str> {
         self.predicates().filter_map(|predicate| match predicate {
             SpendPredicate::ActivateSubtype(name) => Some(name.as_str()),
-            SpendPredicate::CastSubtype(_) => None,
+            _ => None,
         })
     }
 
@@ -168,6 +183,20 @@ impl ManaRestriction {
         let sources = self.source_subtypes().collect::<Vec<_>>();
         if !sources.is_empty() {
             parts.push(format!("abilities of {} sources", sources.join(" or ")));
+        }
+        for p in self.predicates() {
+            match p {
+                SpendPredicate::CastCreatureSubtype(s) => {
+                    parts.push(format!("{s} creature spells"))
+                }
+                SpendPredicate::ActivateCreatureSubtype(s) => {
+                    parts.push(format!("abilities of {s} creature sources"))
+                }
+                _ => {}
+            }
+        }
+        if parts.is_empty() {
+            return "no eligible purpose".into();
         }
         parts.join(" or ")
     }
@@ -297,6 +326,8 @@ impl ManaClass {
 /// witnesses and forks; it never follows the live object.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct SpendingObject {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub creature: bool,
     /// Sorted and deduplicated.
     pub subtypes: Vec<String>,
     /// It has all creature types (CR 205.3m) beyond those listed.
@@ -310,7 +341,8 @@ pub struct SpendingObject {
 
 impl PartialEq for SpendingObject {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest
+        self.creature == other.creature
+            && self.digest == other.digest
             && self.all_creature_types == other.all_creature_types
             && self.subtypes == other.subtypes
     }
@@ -328,6 +360,7 @@ impl SpendingObject {
     pub fn new<'a>(
         subtypes: impl IntoIterator<Item = &'a str>,
         all_creature_types: bool,
+        creature: bool,
     ) -> Arc<Self> {
         use std::hash::{Hash, Hasher};
         let mut subtypes = subtypes.into_iter().map(String::from).collect::<Vec<_>>();
@@ -336,7 +369,9 @@ impl SpendingObject {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         subtypes.hash(&mut hasher);
         all_creature_types.hash(&mut hasher);
+        creature.hash(&mut hasher);
         Arc::new(Self {
+            creature,
             subtypes,
             all_creature_types,
             digest: hasher.finish(),
@@ -352,13 +387,14 @@ impl SpendingObject {
 
     /// Whether this snapshot names exactly these subtypes (in any order, with
     /// repeats), so a rebuilt view can keep sharing it without allocating.
-    pub fn describes(&self, subtypes: &[String], all_creature_types: bool) -> bool {
+    pub fn describes(&self, subtypes: &[String], all_creature_types: bool, creature: bool) -> bool {
         let distinct = subtypes
             .iter()
             .enumerate()
             .filter(|(i, name)| !subtypes[..*i].contains(name))
             .count();
-        all_creature_types == self.all_creature_types
+        creature == self.creature
+            && all_creature_types == self.all_creature_types
             && distinct == self.subtypes.len()
             && subtypes
                 .iter()
@@ -437,7 +473,7 @@ impl SpendingContext {
     pub fn ability<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Self {
         Self::Activate {
             zone: ZoneType::Battlefield,
-            source: SpendingObject::new(subtypes, false),
+            source: SpendingObject::new(subtypes, false, false),
         }
     }
 

@@ -840,6 +840,7 @@ impl ContinuousEffectData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 #[serde(from = "super::observation_json::WirePermanentData")]
 pub struct PermanentData {
+    pub chosen: Option<crate::state::permanent::EntryChoice>,
     /// Mana value from the front of a transformed permanent (CR 202.3b).
     pub front_mana_value: Option<u8>,
     pub characteristics: CharacteristicsData,
@@ -1678,6 +1679,7 @@ impl Observation {
         let face = object.definition_id;
         let printed_abilities = (permanent.object, face, 0)..=(permanent.object, face, usize::MAX);
         let pdat = PermanentData {
+            chosen: permanent.chosen.as_deref().cloned(),
             front_mana_value: (object
                 .form_faces()
                 .is_some_and(|faces| faces.back_up && !faces.front.1.modal_back)
@@ -2479,6 +2481,26 @@ impl Observation {
                             .map(|candidate| game.observed_object_id(candidate.source()))
                             .into_iter()
                             .collect();
+                    }
+                    (
+                        Action::ChooseMode { .. },
+                        Some(
+                            Decision::ChooseEntryValue { question, .. }
+                            | Decision::NameCard {
+                                after: crate::flow::decision::AfterNaming::Entry { question },
+                                ..
+                            },
+                        ),
+                    ) => return vec![game.state.entry_object(question.object).id],
+                    (
+                        Action::ChooseMode { mode, .. },
+                        Some(Decision::OrderEntryChoices { questions, .. }),
+                    ) => {
+                        return questions
+                            .get(*mode)
+                            .map(|q| game.state.entry_object(q.object).id)
+                            .into_iter()
+                            .collect()
                     }
                     // An amount of combat damage is about the attacker
                     // assigning it and the blocker receiving it.

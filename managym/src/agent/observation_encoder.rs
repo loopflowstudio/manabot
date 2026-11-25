@@ -72,6 +72,9 @@ pub enum FactKind {
     ContinuationProgram = 14,
     AbilityResolution = 15,
     TriggeringAmount = 16,
+    ChosenColor = 17,
+    ChosenSubtype = 18,
+    ChosenName = 19,
 }
 
 impl FactKind {
@@ -83,7 +86,7 @@ impl FactKind {
         }
     }
 
-    pub const ALL: [FactKind; 15] = [
+    pub const ALL: [FactKind; 18] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
@@ -99,6 +102,9 @@ impl FactKind {
         FactKind::ContinuationProgram,
         FactKind::AbilityResolution,
         FactKind::TriggeringAmount,
+        FactKind::ChosenColor,
+        FactKind::ChosenSubtype,
+        FactKind::ChosenName,
     ];
 }
 
@@ -1792,6 +1798,21 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
                 );
             }
         }
+        if let Some(choice) = permanent
+            .chosen
+            .as_ref()
+            .filter(|_| layout == InputLayout::OneToken)
+        {
+            use crate::state::permanent::EntryChoice;
+            let (kind, id) = match choice {
+                EntryChoice::Color(c) => {
+                    (FactKind::ChosenColor, name_value(&format!("Color::{c:?}")))
+                }
+                EntryChoice::CreatureType(s) => (FactKind::ChosenSubtype, name_value(s)),
+                EntryChoice::CardName(s) => (FactKind::ChosenName, name_value(s)),
+            };
+            push(object, kind, id, 1);
+        }
         for subtype in &permanent.temp_subtypes {
             push(object, FactKind::AddedSubtype, name_value(subtype), 1);
         }
@@ -2770,6 +2791,7 @@ mod tests {
     fn make_permanent(id: i32, mine: bool) -> PermanentData {
         PermanentData {
             colors: None,
+            chosen: None,
             keyword_counter_timestamps: Default::default(),
             id,
             registry_key: 0,

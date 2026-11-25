@@ -499,7 +499,27 @@ pub enum SelectionOrigin {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(untagged)]
+pub enum AfterNaming {
+    Exile {
+        count: usize,
+    },
+    Entry {
+        question: super::proposed_event::EntryQuestion,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
+    OrderEntryChoices {
+        player: PlayerId,
+        questions: Vec<super::proposed_event::EntryDecision>,
+    },
+    ChooseEntryValue {
+        player: PlayerId,
+        question: super::proposed_event::EntryQuestion,
+        scope: crate::cards::names::NameScope,
+    },
     OrderMeldedCards {
         player: PlayerId,
         cards: [CardId; 2],
@@ -535,7 +555,8 @@ pub enum Decision {
     /// an effect. Clones retain constant-size bookkeeping.
     NameCard {
         player: PlayerId,
-        count: usize,
+        #[serde(flatten)]
+        after: AfterNaming,
         names: std::sync::Arc<crate::cards::names::NameVocabulary>,
         scope: crate::cards::names::NameScope,
     },
@@ -783,6 +804,8 @@ impl Decision {
             Decision::OrderMeldedCards { player, .. }
             | Decision::AssignCombatDamage { player, .. }
             | Decision::OrderReplacement { player, .. }
+            | Decision::OrderEntryChoices { player, .. }
+            | Decision::ChooseEntryValue { player, .. }
             | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
@@ -892,6 +915,8 @@ impl Decision {
             Decision::OrderMeldedCards { .. }
             | Decision::AssignCombatDamage { .. }
             | Decision::OrderReplacement { .. }
+            | Decision::OrderEntryChoices { .. }
+            | Decision::ChooseEntryValue { .. }
             | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
@@ -2148,10 +2173,32 @@ impl Game {
                     focus: self.object_focus(looked),
                 }
             }
-            Decision::NameCard { player, scope, .. } => ActionSpace {
+            Decision::OrderEntryChoices { player, questions } => ActionSpace {
+                kind: ActionSpaceKind::Modal,
+                player: Some(*player),
+                focus: questions
+                    .iter()
+                    .map(|q| self.state.entry_object(q.object).id)
+                    .collect(),
+                actions: (0..questions.len())
+                    .map(|mode| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
+            decision @ (Decision::ChooseEntryValue { player, scope, .. }
+            | Decision::NameCard { player, scope, .. }) => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
-                focus: source_focus,
+                focus: match decision {
+                    Decision::ChooseEntryValue { question, .. }
+                    | Decision::NameCard {
+                        after: AfterNaming::Entry { question },
+                        ..
+                    } => vec![self.state.entry_object(question.object).id],
+                    _ => source_focus,
+                },
                 actions: (0..scope.option_count())
                     .map(|mode| Action::ChooseMode {
                         player: *player,
@@ -2311,6 +2358,58 @@ impl Game {
                 let mut amounts = assigned.clone();
                 amounts.push(amount);
                 self.assign_combat_damage(suspended.frame, *pass, amounts);
+                Ok(())
+            }
+            (Decision::OrderEntryChoices { questions, .. }, Action::ChooseMode { mode, .. }) => {
+                if *mode >= questions.len() {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("unknown entering object".into()));
+                }
+                suspended.decision = self.begin_entry_decision(
+                    suspended.frame.batch.as_mut().expect("entry batch"),
+                    questions.swap_remove(*mode),
+                );
+                *self.state.suspended_decision_mut() = Some(suspended);
+                Ok(())
+            }
+            (
+                Decision::ChooseEntryValue {
+                    question, scope, ..
+                },
+                Action::ChooseMode { mode, .. },
+            ) => {
+                use crate::state::{
+                    card::EntryChoiceKind, mana::Color, permanent::EntryChoice,
+                    subtype::creature_type_names,
+                };
+                match scope.option(*mode) {
+                    Some(NameOption::Group(child)) => {
+                        *scope = child;
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                    }
+                    Some(NameOption::Name(row)) => {
+                        let value = match question.kind {
+                            EntryChoiceKind::Color => EntryChoice::Color(Color::COLORS[row]),
+                            EntryChoiceKind::CreatureType => {
+                                EntryChoice::CreatureType(creature_type_names()[row].into())
+                            }
+                            EntryChoiceKind::CardName => {
+                                unreachable!("card naming has its own vocabulary")
+                            }
+                        };
+                        suspended
+                            .frame
+                            .batch
+                            .as_mut()
+                            .expect("entry batch")
+                            .answer_entry(value);
+                        self.run_frame(suspended.frame);
+                    }
+                    None => {
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Err(AgentError("entry choice out of range".into()));
+                    }
+                }
                 Ok(())
             }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
@@ -3203,7 +3302,7 @@ impl Game {
             }
             (
                 Decision::NameCard {
-                    count,
+                    after,
                     names,
                     scope,
                     ..
@@ -3224,10 +3323,22 @@ impl Game {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("name option out of range".into()));
                 };
-                suspended.frame.queue.push_front(Effect::ExileNamed {
-                    name: candidate.name.clone(),
-                    count: *count,
-                });
+                match after {
+                    AfterNaming::Exile { count } => {
+                        suspended.frame.queue.push_front(Effect::ExileNamed {
+                            name: candidate.name.clone(),
+                            count: *count,
+                        })
+                    }
+                    AfterNaming::Entry { .. } => suspended
+                        .frame
+                        .batch
+                        .as_mut()
+                        .expect("entry batch")
+                        .answer_entry(crate::state::permanent::EntryChoice::CardName(
+                            candidate.name.clone(),
+                        )),
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
