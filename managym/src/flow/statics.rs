@@ -1466,6 +1466,7 @@ mod cache_tests {
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
             play_permissions: board.play_permissions.clone(),
             restrictions: board.restrictions.clone(),
+            land_type_overwrites: board.land_type_overwrites.clone(),
             objects: board.objects.clone(),
             reads_mana: !board.reads_mana,
             reads_tapped: board.reads_tapped,
