@@ -89,6 +89,8 @@
     evidence?: OfferEvidence | null;
     /** An analysis's mark on each of your moves, by move id. */
     moveMarks?: ReadonlyMap<string, DecisionMark>;
+    /** Your moves chosen with a live analysis shown (Review), by move id. */
+    shownMoves?: ReadonlySet<string>;
     /** The recap's heading, when it is not the person's last move. */
     recapTitle?: string;
     /** What the shown position is, when the caller knows (a recording): "After Heuristic's move". */
@@ -111,7 +113,7 @@
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, moveMarks, recapTitle, heading = null, bottom, strip, notices, result, menu,
+    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, moveMarks, shownMoves, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
 
@@ -892,7 +894,7 @@
     <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {moveMarks} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
+      {evidence} {moveMarks} {shownMoves} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 

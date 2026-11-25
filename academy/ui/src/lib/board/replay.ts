@@ -353,6 +353,24 @@ export function moveMarks(entries: readonly GameLogEntry[], positions: readonly 
   return marks;
 }
 
+/**
+ * Your moves chosen with a live analysis shown, by log entry id: a move is
+ * marked when any of your choices from its entry up to the next entry was
+ * committed with the analysis shown. A stored fact about the game, shown
+ * whether or not an analysis is open.
+ */
+export function analysisShownMoves(entries: readonly GameLogEntry[], positions: readonly Position[]): Set<string> {
+  const ids = new Set(entries.map(entry => entry.id));
+  const hero = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
+  const shown = new Set<string>();
+  let current: string | null = null;
+  for (const position of positions) {
+    if (ids.has(position.key)) current = position.key;
+    if (current !== null && hero.has(current) && position.kind === 'choice' && position.analysis_shown) shown.add(current);
+  }
+  return shown;
+}
+
 /** Turn starts far enough apart to number without overlap, as indices into `marks`. */
 export function labelledTurns(marks: readonly StripMark[], minGap: number): StripMark[] {
   const span = Math.max(1, marks.length - 1);

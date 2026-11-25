@@ -502,6 +502,11 @@ class Recording:
             "branched": self.payload["events"][position.event_index].get("branched")
             if position.kind == "choice"
             else None,
+            # The person chose here with a live analysis shown.
+            "analysis_shown": position.kind == "choice"
+            and bool(
+                self.payload["events"][position.event_index].get("analysis_shown")
+            ),
         }
 
     def _description(self, position: Position) -> str | None:

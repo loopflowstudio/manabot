@@ -470,6 +470,10 @@ def test_showing_analysis_needs_a_policy_that_can_read_the_game(
     game.new_game(
         {"hero_deck": BOLT, "villain_deck": BOLT, "villain_type": "random", "seed": 1}
     )
-    with pytest.raises(server.TableDispatchError, match="No registered policy"):
-        game.show_analysis(True, None, Delivered())
-    assert game.show_analysis(False, None, Delivered())["policies"] == []
+    state = game.show_analysis(True, None, Delivered())
+    assert not state["shown"] and state["policies"] == []
+    assert state["unavailable"] == "No registered policy can read this game."
+    assert "analysis" not in game.current_message()
+    registry.register(ReadingFactory())
+    with pytest.raises(server.TableDispatchError, match="cannot read"):
+        game.show_analysis(True, "0" * 64, Delivered())

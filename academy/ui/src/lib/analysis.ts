@@ -44,6 +44,74 @@ export interface AnalysisChoices {
   events: number[];
 }
 
+// ———————————————————————————————————————— Analysis while you play
+
+/** A policy that may read a game, by registered id. */
+export interface AnalysisPolicy { sha256: string; name: string }
+
+/**
+ * The server's answer to Show analysis (`analysis_state`): whether it is
+ * shown, by which policy, which policies may read this game, and why none
+ * may.
+ */
+export interface LiveAnalysisState {
+  type: 'analysis_state';
+  shown: boolean;
+  policy: AnalysisPolicy | null;
+  policies: AnalysisPolicy[];
+  unavailable: string | null;
+}
+
+/**
+ * One live reading (`analysis`), sent after the decision's frame and never
+ * inside it: the policy's probabilities and estimates at the decision
+ * published at `revision`, or why the analysis stopped.
+ */
+export type LiveAnalysisMessage = { type: 'analysis'; policy: AnalysisPolicy } & (
+  | { event: number; revision: number; annotation: AnalysedDecision['annotation']; semantic: string | null; after: (number | null)[] }
+  | { stopped: string }
+);
+
+/** What Play holds of a live analysis. Off at the start of every game. */
+export interface LiveAnalysis {
+  shown: boolean;
+  /** A Show analysis request is on its way; the switch waits for its answer. */
+  pending: boolean;
+  policy: AnalysisPolicy | null;
+  /** Known once the server has answered a request. */
+  policies: AnalysisPolicy[] | null;
+  unavailable: string | null;
+  stopped: string | null;
+  /** The latest reading, for the decision published at its revision. */
+  reading: { revision: number; decision: AnalysedDecision } | null;
+}
+
+export const LIVE_ANALYSIS_OFF: LiveAnalysis = { shown: false, pending: false, policy: null, policies: null, unavailable: null, stopped: null, reading: null };
+
+/** The next live analysis after a server message. A reading arriving after the person turned it off is dropped. */
+export function nextLiveAnalysis(current: LiveAnalysis, message: LiveAnalysisState | LiveAnalysisMessage): LiveAnalysis {
+  if (message.type === 'analysis_state') {
+    return { ...LIVE_ANALYSIS_OFF, shown: message.shown, policy: message.policy, policies: message.policies, unavailable: message.unavailable };
+  }
+  if (!current.shown || current.pending) return current;
+  if ('stopped' in message) return { ...current, stopped: message.stopped, reading: null };
+  return {
+    ...current,
+    stopped: null,
+    reading: { revision: message.revision, decision: { event: message.event, played: -1, annotation: message.annotation, semantic: message.semantic, after: message.after } },
+  };
+}
+
+/**
+ * Follow the server's frames: each carries the live analysis's policy while it
+ * is shown, so a reloaded page reads it as on, and a new game reads it as off.
+ */
+export function followShown(current: LiveAnalysis, policy: AnalysisPolicy | null): LiveAnalysis {
+  if (current.pending) return current;
+  if (policy === null) return current.shown ? { ...LIVE_ANALYSIS_OFF, policies: current.policies } : current;
+  return current.shown && current.policy?.sha256 === policy.sha256 ? current : { ...current, shown: true, policy };
+}
+
 /** What the 0–100 line measures, by the policy's value semantic; null without a scale. */
 export function scoreName(semantic: string | null): string | null {
   return semantic === 'signed_outcome' ? 'Expected score' : semantic === 'win_logit' ? 'Win chance' : null;

@@ -890,6 +890,8 @@ export type ServerMessage = (
       resume_token?: string;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
+      /** Present while a live analysis is shown in this game. */
+      analysis?: { policy: import('./analysis').AnalysisPolicy };
     }
   | {
       type: 'game_over';
@@ -918,6 +920,8 @@ export type ServerMessage = (
         }
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
+  | import('./analysis').LiveAnalysisState
+  | import('./analysis').LiveAnalysisMessage
 ) & {
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;

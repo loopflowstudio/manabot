@@ -63,6 +63,8 @@
     evidence?: OfferEvidence | null;
     /** An analysis's mark on each of your moves, by move id. */
     moveMarks?: ReadonlyMap<string, DecisionMark>;
+    /** Your moves chosen with a live analysis shown, by move id. */
+    shownMoves?: ReadonlySet<string>;
     /** The recap's heading. */
     recapTitle?: string;
     /** Moves jump to their position when set. */
@@ -77,7 +79,7 @@
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
-    evidence = null, moveMarks = new Map(), recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
+    evidence = null, moveMarks = new Map(), shownMoves = new Set(), recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
   const readingOut = $derived(reading !== undefined);
@@ -340,6 +342,7 @@
                       </span>
                       <span class="sr-only">{mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
                     {/if}
+                    {#if shownMoves.has(move.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
                   </button>
                 </li>
               {:else if move.passes}
@@ -465,6 +468,7 @@
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
+  .shown { flex: none; font-family: var(--font-sans); color: var(--text-tertiary); font-style: italic; }
   .mark[data-same='false'] { color: var(--text-secondary); }
   .track { width: 32px; height: 8px; }
   .track line { stroke: var(--border); stroke-width: 1; }

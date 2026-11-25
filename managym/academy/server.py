@@ -2868,13 +2868,12 @@ class GameSession:
             "shown": False,
             "policy": None,
             "policies": choices.policies,
+            "unavailable": None
+            if choices.policies
+            else "No registered policy can read this game.",
         }
-        if not shown:
+        if not shown or not choices.policies:
             return state
-        if not choices.policies:
-            raise TableDispatchError(
-                "not_found", "No registered policy can read this game."
-            )
         key = policy or choices.default or choices.policies[0]["sha256"]
         chosen = next((p for p in choices.policies if p["sha256"] == key), None)
         if chosen is None:

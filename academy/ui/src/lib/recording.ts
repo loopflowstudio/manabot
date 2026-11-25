@@ -47,6 +47,8 @@ export interface Position {
   value?: number | null;
   /** How an imported record re-dealt the position before this choice, in order. */
   branched?: BranchKind[] | null;
+  /** The person chose here with a live analysis shown. */
+  analysis_shown?: boolean;
 }
 /** A record intervention that branches the position from the game it came from. */
 export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed';

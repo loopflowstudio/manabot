@@ -7,6 +7,7 @@ import { browser } from '$app/environment';
 import { sanitizeDeckSelection } from './decks';
 import { playerToken, rememberRecordCredential } from './records';
 import { policyChoice, gameStore } from './game.svelte';
+import { followShown, nextLiveAnalysis } from './analysis';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -60,6 +61,8 @@ interface InterruptedSnapshot {
 type PendingCommand = Extract<SharedTableRequest, { type: 'command' }>;
 const VALID_SERVER_TYPES = new Set([
   'work_status',
+  'analysis_state',
+  'analysis',
   'observation',
   'game_over',
   'command_outcome',
@@ -424,6 +427,17 @@ export class GameSocketController {
     });
   }
 
+  /** Show or hide a policy's live reading of your decisions; `policy` by id, else the server's default. */
+  sendShowAnalysis(shown: boolean, policy: string | null = null): void {
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: true };
+    this.send({
+      type: 'show_analysis',
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+      shown,
+      policy,
+    });
+  }
+
   sendPassTurn(): boolean {
     if (this.pendingResume || gameStore.resumeFailed || this.pendingCommand) return false;
     gameStore.beginFastForward();
@@ -567,6 +581,11 @@ export class GameSocketController {
       gameStore.applyTable(message.table);
     }
 
+    if (message.type === 'analysis_state' || message.type === 'analysis') {
+      gameStore.liveAnalysis = nextLiveAnalysis(gameStore.liveAnalysis, message);
+      return;
+    }
+
     if (message.type === 'table_snapshot') {
       if ('session_interrupted' in message && message.session_interrupted) {
         this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
@@ -647,6 +666,7 @@ export class GameSocketController {
         writeTabValue(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
       }
       this.pendingResume = false;
+      if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if (!this.pendingCommand) gameStore.endCommand();
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
@@ -1001,6 +1021,10 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
+
+export function sendShowAnalysis(shown: boolean, policy: string | null = null): void {
+  controller.sendShowAnalysis(shown, policy);
+}
 
 export function sendSetStops(): void {
   controller.sendSetStops();

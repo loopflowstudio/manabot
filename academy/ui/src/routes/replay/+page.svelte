@@ -32,7 +32,7 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    analysedEvidence, analysedMarks, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, keyMoments, scoreName, type AgentLine, type Analysis, type AnalysisChoices } from '$lib/analysis';
   import { agreement, duration, estimateArc, numberRows, playOrDraw, type GameNumbers } from '$lib/numbers';
@@ -168,6 +168,7 @@
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
   const marks = $derived(analysis ? analysedMarks(stripMarks(positions, heroSeat), positions, analysed) : stripMarks(positions, heroSeat));
   const marksByMove = $derived(moveMarks(entries, positions, analysed));
+  const shownMoves = $derived(analysisShownMoves(entries, positions));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
 
   // ———————————————— Key moments and its line
@@ -637,6 +638,7 @@
               <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
             </table>
             {#if numbers && !numbers.complete}<p class="text-ink-3">Counted to where the game stopped.</p>{/if}
+            {#if numbers?.analysis_shown}<p class="text-ink-2" data-testid="analysis-shown-count">Chosen with analysis shown: {numbers.analysis_shown} {numbers.analysis_shown === 1 ? 'decision' : 'decisions'}</p>{/if}
           {:else if index.status !== 'waiting'}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
           {#if analysis && agreed}
             <p data-testid="agreement">Decisions with a choice: {agreed.of} · chose as {analysisName} would: {agreed.same} of {agreed.of}</p>
@@ -727,6 +729,7 @@
     {currentMove}
     {evidence}
     moveMarks={marksByMove}
+    {shownMoves}
     bottom={bottomEdge}
     strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek, scale: analysisScale } : undefined}
     {notices}

@@ -867,7 +867,9 @@ class AttemptStore:
         self, owners: set[str], token: str | None = None
     ) -> list[dict[str, Any]]:
         """Your completed games against bots, counted by opponent identity and
-        your deck and theirs, across sessions. Counts, never a rating."""
+        your deck and theirs, across sessions. Counts, never a rating;
+        `with_analysis` counts the games with a decision made while a live
+        analysis was shown."""
         mine, args = self._mine(owners, token)
         with self.connect() as db:
             rows = db.execute(
@@ -876,7 +878,9 @@ class AttemptStore:
                     count(*) AS games,
                     sum(a.winner=h.seat) AS wins,
                     sum(a.winner IS NULL) AS draws,
-                    sum(a.winner IS NOT NULL AND a.winner<>h.seat) AS losses
+                    sum(a.winner IS NOT NULL AND a.winner<>h.seat) AS losses,
+                    sum(coalesce(json_extract(a.numbers_json,'$.analysis_shown'),0)>0)
+                        AS with_analysis
                 FROM attempts a
                 JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
                 JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'

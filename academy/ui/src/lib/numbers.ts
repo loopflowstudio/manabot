@@ -23,6 +23,8 @@ export interface GameNumbers {
   complete: boolean;
   turns: number;
   seats: [SeatNumbers, SeatNumbers];
+  /** Your decisions committed with a live analysis shown (0 in numbers saved before it was counted). */
+  analysis_shown?: number;
 }
 
 /** Completed games against one opponent with one pair of decks (`/api/traces/record`). */
@@ -35,6 +37,8 @@ export interface RecordRow {
   wins: number;
   draws: number;
   losses: number;
+  /** Of `games`, those with a decision made while a live analysis was shown. */
+  with_analysis: number;
   /** 95% Wilson interval on wins / games; draws count as games. */
   interval: [number, number];
 }

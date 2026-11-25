@@ -27,7 +27,7 @@
   import { gameResult } from '$lib/board/result';
   import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
-  import { logMarks } from '$lib/board/replay';
+  import { analysedEvidence, logMarks } from '$lib/board/replay';
   import { spentOnce } from '$lib/board/phases';
   import {
     connect,
@@ -42,6 +42,7 @@
     sendReturnFromBranch,
     sendReturnToLive,
     sendSetStops,
+    sendShowAnalysis,
     sendTransferPilot,
     fetchPaymentPreview,
     fetchCombatPreview,
@@ -346,6 +347,14 @@
   // shows no past position yet: positions open in Review once the game ends.
   let stripOpen = $state(false);
   const liveMarks = $derived(logMarks(gameStore.actionLog));
+  // A policy's reading of your decision, shown beside its offers while you
+  // show analysis: its probability and estimate on each, nothing selected.
+  // A reading for another revision (a decision already made) is not drawn.
+  const liveAnalysis = $derived(gameStore.liveAnalysis);
+  const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
+    && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
+    ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
+  const canShowAnalysis = $derived(!demoName && !gameStore.gameOver && pilotCanAct && gameStore.connection === 'connected' && !liveAnalysis.pending);
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 
   // How the opponent's moves are read out, remembered per browser.
@@ -371,6 +380,22 @@
   {#if !inGame}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
   {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous game is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
+  {#if inGame && !demoName && !gameStore.gameOver && pilotCanAct}
+    <section class="live-analysis type-caption" aria-label="Analysis" data-testid="live-analysis">
+      <label class="switch"><input type="checkbox" role="switch" data-testid="show-analysis" checked={liveAnalysis.shown} disabled={!canShowAnalysis}
+        onchange={event => sendShowAnalysis(event.currentTarget.checked)} /> Show analysis</label>
+      {#if liveAnalysis.shown && liveAnalysis.policies && liveAnalysis.policies.length > 1}
+        <select aria-label="Analysing policy" value={liveAnalysis.policy?.sha256} disabled={!canShowAnalysis}
+          onchange={event => sendShowAnalysis(true, event.currentTarget.value)}>
+          {#each liveAnalysis.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
+        </select>
+      {:else if liveAnalysis.shown && liveAnalysis.policy}<span class="text-ink-3">by {liveAnalysis.policy.name}</span>{/if}
+      {#if liveAnalysis.pending}<span class="text-ink-3" role="status">{liveAnalysis.shown ? 'Turning off…' : 'Loading the policy…'}</span>{/if}
+      {#if liveAnalysis.unavailable}<p class="text-ink-3" data-testid="live-analysis-unavailable">{liveAnalysis.unavailable} Install a policy provider (managym.bots) to analyse.</p>{/if}
+      {#if liveAnalysis.stopped}<p class="text-ink-3" role="status">{liveAnalysis.stopped}</p>{/if}
+      {#if liveAnalysis.shown}<p class="text-ink-3">Each choice you make while it is shown is marked "analysis shown" in Review.</p>{/if}
+    </section>
+  {/if}
   {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
 {/snippet}
 
@@ -459,6 +484,7 @@
       presentation={presentationPlayer}
       {thinking}
       {opponentChoosing}
+      evidence={liveEvidence}
       workStarted={gameStore.work?.state === 'running' && gameStore.connection === 'connected' ? gameStore.work.started_at : null}
       interrupted={gameStore.resumeFailed}
       payment={paymentState}
@@ -567,6 +593,9 @@
   .home-matchup { line-height: 1.35; }
   .home-play { font-size: 16px; padding: 10px 22px; }
   .game-menu { position: relative; }
+  .live-analysis { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .live-analysis p { flex-basis: 100%; margin: 0; }
+  .live-analysis .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
   .game-menu > summary { list-style: none; }
   .game-menu > summary::-webkit-details-marker { display: none; }
   .menu-panel {

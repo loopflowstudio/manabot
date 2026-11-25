@@ -255,11 +255,11 @@
   {#if record?.length}
     <section aria-label="My record" class="mb-5 rounded border border-line bg-panel p-4" data-testid="my-record">
       <h2 class="type-title text-xl">My record</h2>
-      <p class="text-sm text-ink-2">Completed games across sessions, by opponent and decks. Win rate counts draws as games; the range is a 95% Wilson interval. Counts of recorded games, not a rating.</p>
+      <p class="text-sm text-ink-2">Completed games across sessions, by opponent and decks. Win rate counts draws as games; the range is a 95% Wilson interval. Counts of recorded games, not a rating. "With analysis" counts games in which you chose at least once with analysis shown; they are included in the other columns.</p>
       <div class="overflow-x-auto">
         <table class="mt-3 w-full text-left [font-variant-numeric:tabular-nums]">
           <caption class="sr-only">Wins, losses and draws by opponent and decks</caption>
-          <thead class="border-b border-line text-ink-2"><tr><th class="py-2 pr-4">Opponent</th><th class="py-2 pr-4">Your deck</th><th class="py-2 pr-4">Their deck</th><th class="py-2 pr-4 text-right">Games</th><th class="py-2 pr-4 text-right">W–L–D</th><th class="py-2 text-right">Win rate</th></tr></thead>
+          <thead class="border-b border-line text-ink-2"><tr><th class="py-2 pr-4">Opponent</th><th class="py-2 pr-4">Your deck</th><th class="py-2 pr-4">Their deck</th><th class="py-2 pr-4 text-right">Games</th><th class="py-2 pr-4 text-right">W–L–D</th><th class="py-2 pr-4 text-right">Win rate</th><th class="py-2 text-right" title="Games with a decision made while analysis was shown">With analysis</th></tr></thead>
           <tbody>
             {#each record as row (`${row.opponent_id}|${row.opponent_name}|${row.human_deck}|${row.opponent_deck}`)}
               <tr class="border-b border-line" data-testid="my-record-row">
@@ -268,7 +268,8 @@
                 <td class="py-2 pr-4">{row.opponent_deck.replaceAll('_', ' ')}</td>
                 <td class="py-2 pr-4 text-right">{row.games}</td>
                 <td class="py-2 pr-4 text-right">{row.wins}–{row.losses}–{row.draws}</td>
-                <td class="py-2 text-right">{winRate(row)}</td>
+                <td class="py-2 pr-4 text-right">{winRate(row)}</td>
+                <td class="py-2 text-right" data-testid="my-record-with-analysis">{row.with_analysis}</td>
               </tr>
             {/each}
           </tbody>
@@ -299,7 +300,7 @@
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
               {/each}
-              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`].filter(Boolean).join(' · ')}</div></td>
+              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null].filter(Boolean).join(' · ')}</div></td>
               <td class="p-4">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
                 {#if game.feedback_truncated}<p class="text-xs text-ink-2">Showing the latest 100 notes.</p>{/if}
                 {#each game.feedback as note}<blockquote class="mt-2 max-w-64 break-words text-sm italic">{note.note}</blockquote>{/each}
