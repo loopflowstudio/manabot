@@ -1,6 +1,7 @@
 /** Ordinary release-SPA work. Old DOM-response baselines remain frozen separately. */
 import { writeFile } from 'node:fs/promises';
 import { expect, test, type Request } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
 
 interface Sample {
   match: string; revision: number; input: number; sent: number | null;
@@ -112,8 +113,9 @@ for (const [seed, width, height, motion] of [
       }));
       await expect.poll(async () => await page.getByTestId('action-option').count() > 0 || await page.getByTestId('game-result').isVisible()).toBe(true);
       if (await page.getByTestId('game-result').isVisible()) break;
+      await showEachCreaturesChoice(page);
       const actions = page.getByTestId('action-option');
-      if (input === 15) await page.getByTestId('inspect-toggle').click();
+      if (input === 15) { await page.getByTestId('game-menu').click(); await page.getByTestId('inspect-toggle').check(); await page.getByTestId('game-menu').click(); }
       const labels = await actions.allTextContents();
       let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast /.test(label));
       if (pick < 0) pick = input % labels.length;

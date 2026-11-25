@@ -552,3 +552,11 @@ summary {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Academy's header on every page and the table's bar: paper, with the color
+   pie as a thin W-U-B-R-G rule beneath. */
+.chrome-bar { position: relative; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
+.chrome-bar::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, var(--vivid-w) 0 20%, var(--vivid-u) 20% 40%, var(--vivid-b) 40% 60%, var(--vivid-r) 60% 80%, var(--vivid-g) 80%);
+}

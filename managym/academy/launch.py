@@ -467,6 +467,8 @@ class Academy:
                 return f"policy:{registry.register(value)}"
             if is_python_policy_ref(value):
                 return f"policy:{registry.register(load_python_policy(value))}"
+            if value.endswith(".json"):
+                return f"policy:{registry.register(PolicySpec.read(Path(value).expanduser()))}"
             key = value.removeprefix("policy:")
             if (
                 key in registry.aliases
@@ -479,7 +481,7 @@ class Academy:
                     raise ValueError("Search playout count must be between 1 and 4096.")
             elif value not in ("random", "search", "passive"):
                 raise ValueError(
-                    f"Player {value!r} is unavailable. Register a policy object, pass path/to/bot.py:func, or choose a catalog id."
+                    f"Player {value!r} is unavailable. Register a policy object, pass path/to/bot.py:func or policy.json, or choose a catalog id."
                 )
             return value
         except (OSError, ValueError, ImportError) as error:

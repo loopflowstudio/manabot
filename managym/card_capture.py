@@ -105,6 +105,14 @@ class ExposureCapture(StrictModel):
     blockers_lost_for_nothing: tuple[int, int] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
+    # Damage dealt to each player, and dealt by each player's sources to the
+    # other; absent from captures written before they were counted.
+    player_damage_taken: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    player_damage_dealt: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     mana: tuple[ManaUse, ManaUse] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )

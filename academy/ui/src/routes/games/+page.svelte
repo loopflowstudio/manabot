@@ -9,12 +9,14 @@
   import { goto } from '$app/navigation';
   import { recordFetch } from '$lib/records';
   import type { GameSummary } from '$lib/types';
+  import { duration, winRate, type RecordRow } from '$lib/numbers';
 
   let sessionResults = $state<SessionResult[]>([]);
   let sessionTotals = $state<{origin:string; status:string; count:number}[]>([]);
   let nextResultOffset = $state<number | null>(null);
   let moreResultsPending = $state(false);
   let games = $state<GameSummary[]>([]);
+  let record = $state<RecordRow[] | null>(null);
   let loading = $state(false);
   let error = $state('');
   let sessionAccessDenied = $state(false);
@@ -59,6 +61,11 @@
         checkSessionResponse(summary, sequence);
         const data = await summary.json();
         if (sequence === requestSequence) { sessionResults = data.results; sessionTotals = data.totals; nextResultOffset = data.next_result_offset; }
+      }
+      record = null;
+      if (params.get('scope') === 'mine' && !session) {
+        const read = await recordFetch('/api/traces/record');
+        if (read.ok && sequence === requestSequence) record = (await read.json()).rows;
       }
       const response = await recordFetch(`/api/traces?${params}`);
       if (!response.ok) {
@@ -245,6 +252,31 @@
     {#if sessionAccessDenied}<a class="underline" href={filterUrl('session', null)}>Browse games outside this session</a>
     {:else}<button class="underline" onclick={() => void load(page.url.search)}>Try again</button>{/if}
   </p>{/if}
+  {#if record?.length}
+    <section aria-label="My record" class="mb-5 rounded border border-line bg-panel p-4" data-testid="my-record">
+      <h2 class="type-title text-xl">My record</h2>
+      <p class="text-sm text-ink-2">Completed games across sessions, by opponent and decks. Win rate counts draws as games; the range is a 95% Wilson interval. Counts of recorded games, not a rating. "With analysis" counts games in which you chose at least once with analysis shown; they are included in the other columns. Games played on from another game are left out.</p>
+      <div class="overflow-x-auto">
+        <table class="mt-3 w-full text-left [font-variant-numeric:tabular-nums]">
+          <caption class="sr-only">Wins, losses and draws by opponent and decks</caption>
+          <thead class="border-b border-line text-ink-2"><tr><th class="py-2 pr-4">Opponent</th><th class="py-2 pr-4">Your deck</th><th class="py-2 pr-4">Their deck</th><th class="py-2 pr-4 text-right">Games</th><th class="py-2 pr-4 text-right">W–L–D</th><th class="py-2 pr-4 text-right">Win rate</th><th class="py-2 text-right" title="Games with a decision made while analysis was shown">With analysis</th></tr></thead>
+          <tbody>
+            {#each record as row (`${row.opponent_id}|${row.opponent_name}|${row.human_deck}|${row.opponent_deck}`)}
+              <tr class="border-b border-line" data-testid="my-record-row">
+                <td class="py-2 pr-4"><a class="underline" href={filterUrl('other', row.opponent_id)}>{row.opponent_name}</a></td>
+                <td class="py-2 pr-4">{row.human_deck.replaceAll('_', ' ')}</td>
+                <td class="py-2 pr-4">{row.opponent_deck.replaceAll('_', ' ')}</td>
+                <td class="py-2 pr-4 text-right">{row.games}</td>
+                <td class="py-2 pr-4 text-right">{row.wins}–{row.losses}–{row.draws}</td>
+                <td class="py-2 pr-4 text-right">{winRate(row)}</td>
+                <td class="py-2 text-right" data-testid="my-record-with-analysis">{row.with_analysis}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {/if}
   <p role="status" class="mb-3 text-ink-2">{loading ? 'Loading games…' : `${count(games.length, 'game')} on this page`}</p>
   {#if !loading && !error && !games.length}<p class="rounded border border-line bg-panel p-8 text-center">No games match these filters. Try another player or clear the filters.</p>{/if}
   {#if games.length}
@@ -252,7 +284,7 @@
       <table class="w-full table-fixed text-left [overflow-wrap:anywhere]">
         <caption class="sr-only">Recorded games across players</caption>
         <colgroup><col style="width: 14%" /><col style="width: 30%" /><col style="width: 30%" /><col style="width: 18%" /><col style="width: 8%" /></colgroup>
-        <thead class="border-b border-line text-ink-2"><tr><th class="p-4">Played</th><th class="p-4">Player 1</th><th class="p-4">Player 2</th><th class="p-4">Result / status</th><th class="p-4">Review</th></tr></thead>
+        <thead class="border-b border-line text-ink-2"><tr><th class="p-4">Played</th><th class="p-4">Player 1 · on the play</th><th class="p-4">Player 2</th><th class="p-4">Result / status</th><th class="p-4">Review</th></tr></thead>
         <tbody>
           {#each games as game (game.id)}
             <tr class="border-b border-line align-top" data-testid="game-history-row">
@@ -268,7 +300,7 @@
                   {:else}<span class="text-ink-2">Unknown player</span>{/if}
                 </td>
               {/each}
-              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2">{game.num_events} recorded steps</div></td>
+              <td class="p-4"><span class="font-semibold">{resultLabel(game)}</span>{#if game.status !== 'completed' && game.end_reason !== 'active'}<div class="text-sm text-ink-2">{game.end_reason?.replaceAll('_', ' ')}</div>{/if}<div class="mt-1 text-xs text-ink-2" data-testid="game-history-numbers">{[game.numbers ? `${game.numbers.turns} ${game.numbers.turns === 1 ? 'turn' : 'turns'}` : null, duration(game.timestamp, game.ended_at), `${game.num_events} recorded steps`, game.numbers?.analysis_shown ? `analysis shown at ${count(game.numbers.analysis_shown, 'decision')}` : null, game.numbers?.played_from != null ? 'played on from another game' : null].filter(Boolean).join(' · ')}</div></td>
               <td class="p-4">{#if game.replay_available}<a href={replayUrl(game.id)} class="underline" aria-label={`Replay game ${game.id}`}>Replay</a>{:else}<span class="text-sm text-ink-2">Replay private until completed</span>{/if}
                 {#if game.feedback_truncated}<p class="text-xs text-ink-2">Showing the latest 100 notes.</p>{/if}
                 {#each game.feedback as note}<blockquote class="mt-2 max-w-64 break-words text-sm italic">{note.note}</blockquote>{/each}

@@ -53,6 +53,16 @@ pending choice with the same legal offers and permitted information.
   every projection, and each event, decision and presentation event is
   encoded to JSON once (`append_json.py`); the stored bytes are what
   `json.dumps` of the whole record gives.
+- **`recording.py`**: positions over retained recordings; `record_of(attempt)`
+  builds the engine's `GameRecord` from a played game's stored seed, setups
+  and actions, so a played game is re-executed like any other record.
+- **`analysis.py`**: a policy's reading of one seat of a played game
+  (`analyse_game`), saved per decision in the `analyses` and
+  `analysed_decisions` tables beside the game, never in its trace; and the
+  same reading during play (`LiveAnalysis`).
+- **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
+  `managym.statistics` over one re-execution and saved in
+  `attempts.numbers_json`; `wilson_interval` for the My games record.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -116,7 +126,11 @@ offer by number. `boardView` places each offer exactly once in that list and
 at least once on the card or player it acts on, as a prompt button (pass, pay,
 declines and combat answers without another creature) or in a tray for subjects
 the board does not draw. A card with one offer commits it on click; several
-open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
+open at the card. Pointer drag routes through the same offer and combat-draft
+paths: drag playable cards from hand onto the battlefield, pull lines from
+sources to legal targets or blockers to attackers, and drag a marquee across
+battlefield rows to add drafted attackers. Number keys, Space (primary) and F6
+act from the keyboard. Rows size
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
 sideways width and wrapping before scrolling. See [playing on the board](../../docs/academy.md#playing-on-the-board).
 Priority stops are set on the bottom step bar (off, every time or once)
@@ -316,6 +330,137 @@ have the ordinary game-session lifetime; saved completed inspection remains
 available after the session expires, while a fresh Study fork requires retained
 roots. Existing structured Study receipts and frozen `erd1` evidence keep their
 original command bindings.
+
+## Reading a played game
+
+A played game retains the boards, seed, both setups and the action at each
+step. `ReplayedViews` re-executes it with `managym.replay.RecordWalker` as far
+as a read asks, so opening a long game costs nothing up front and each step
+forward adds one or two projections. [Guide](../../docs/academy.md#inspect-a-replay)
+
+A played game has no state digests, so the walk checks itself against the
+stored track: each step's acting-seat board and action description must equal
+what was stored, and the final board and result must too. At the first
+difference the walk stops; replayed views are used up to it and the stored
+track after it, and the read's `views_stopped` says how far the view was
+replayed. A game from another world or card set is not walked. The stored
+boards stay the authority for what the person saw; replayed views are never
+written back. Narration of the opponent's moves reads the stored track.
+
+Access follows the recording. A reading from the person's seat contains
+nothing that seat did not see. The opponent's view, for **Show both hands**,
+exists only for an authoritatively complete game (`end_reason == "game_over"`).
+Each `TraceEvent` records `committed_at`, its commit time in UTC; nothing
+shows it yet.
+
+### Analysis lifecycle
+
+`POST /api/traces/{id}/analyses {"policy": <Policy ID>}` (participant only)
+loads a fresh `PolicyRunner` in the person's seat and walks the game on a
+daemon thread; `GET` lists the game's analyses with their decisions so far,
+reading only their rows, so Review follows a running analysis with it.
+`GET /api/traces/{id}/analyses/policies`, read once when Review opens,
+re-executes the game to list the eligible policies, the default (the
+opponent's own policy, else the recommended one), why none may run and the events an analysis of the
+person's seat reads. Eligible means registered, admitted for the game's decks, with an
+artifact and no Search composition: Search plays out from the walk's real
+hidden cards. Admission takes seconds with many checkpoints and reads only the
+registered policies and each seat's deck, sideboard and world, so
+`PolicyAdmissions` admits each (registered policies, setups) once per process,
+for every game with those decks, Review and Play alike; loading a runner still
+admits it again. A game still being played is refused (`analysis_game_active`);
+one analysis runs per game per process (`analysis_running`).
+
+At each of the seat's deliberate decisions (automation is skipped) the runner
+is called on the walk's observation and Env, its `BotDecision` kept as a
+`DecisionAnnotation` plus the value semantic, its sampled action discarded.
+The walk checks each step's actor and action description, not whole boards.
+Each offer's estimate after it is read through the session's history-free
+`evaluate` at the next decision on a clone: the seat's own value when it
+chooses next, else the opponent's negated, in a world `determinize`d from the
+seat's perspective. Closed decklists cannot be re-dealt, so those estimates
+are absent. A manabot value belongs to the chooser, so no value is read from
+a seat that is not choosing.
+
+A runner error or divergence stops the analysis with its reason; saved
+decisions stay. A `running` row whose process is gone reads as stopped.
+
+`POST /api/traces/{id}/analyses/{analysis}/line {"event": <analysed event>}`
+(participant only; `agent_line`) re-executes the game to that decision with a
+fresh runner of the analysing policy in the seat and the game's own opponent
+(`build_villain_policy`) in the other, plays the analysis's first choice on a
+copy and continues with the policy's first choice and the opponent's own
+choice to the end of the next turn (`LINE_TURNS`), the end of the game or
+`MAX_LINE_STEPS`. A recurrent policy is asked at each of its seat's earlier
+decisions so it has its history. Each step returns the seat's own
+`decision_surface_view`; the opponent's actions are named only for a complete
+game. The line is computed per request in the real game's world and never
+saved. Key moments are derived in the client from the analysis
+(`keyMoments`).
+
+### Playing on from a decision
+
+`new_game {"played_from": {"trace_id", "event"}, "player_token"}` starts a
+Play game from one of the person's deliberate decisions (`actor` hero, not
+`auto`) of their own game that is no longer being played; another reader's
+game, an opponent's step or an active game is refused (`played_from_*`). The
+new game takes the source's setup and seed (`setup_draft` plus the seed), and
+`_play_recorded_prefix` replays the first `event` steps through the ordinary
+Command path: the opponent's recorded actions through the offer-policy hook (a
+recurrent opponent is still asked, so it keeps its history) and the person's
+through `hero_command`, with every window surfaced so automated passes replay
+as recorded, now as Commands. Each step must name the recorded action; the
+first that does not stops the start with `played_from_diverged`. The prefix is
+persisted once, like a play demo's, and the game is then an ordinary recorded
+game against a fresh opponent policy. `Trace.played_from` names the source and
+step (written only when set); `GameNumbers.played_from` copies the step so
+`/api/traces/record` leaves the game out, and the recording index returns it
+with the turn it starts on.
+
+### Analysis while you play
+
+The pilot's `show_analysis {"shown": true, "policy": <Policy ID or null>}`
+request (`SUBMIT_LIVE_COMMAND`) answers `analysis_state` with the policy shown,
+the policies that may read the game (`analysing_policies`, from
+`PolicyAdmissions`) and why none may. The connection admits them off the game
+lock before dispatching the request, so the first Show analysis of a game's
+decks never holds play while checkpoints are admitted. Showing starts a `LiveAnalysis` on its own daemon
+thread: it loads a fresh runner, walks the game so far with `seat_decisions`
+(asking the runner at each earlier decision, as an analysis after the game
+does, so decision memory matches), then applies each step the game commits and
+reads each decision the game publishes to the person (`_publish_current_prompt`)
+with `read_decision`. Steps and decisions reach the worker in the game's order
+on one queue; the worker never reads the game's Env, so nothing it does holds
+the game lock or a frame.
+
+Each reading goes to the pilot's sockets as its own
+`{"type": "analysis", "policy", "event", "revision", "annotation", "semantic",
+"after"}` message (or `{"stopped": reason}`), scheduled on the server loop
+without waiting. The client draws it only while its frame's revision matches.
+Once a send completes the event is `shown`, and committing that decision stores
+`analysis_shown: true` on its `TraceEvent`. The field is written only when true,
+so a game played without analysis saves the same row as before. Frames carry
+`analysis: {"policy"}` only while it is shown, so a reload reads the switch.
+`show_analysis {"shown": false}` closes the worker; a new game or a closed
+session closes it too. `GameNumbers.analysis_shown` counts the marked
+decisions, the Review position index exposes `analysis_shown` per choice, and
+`/api/traces/record` counts games with any (`with_analysis`).
+
+### Numbers and record
+
+When a played game is no longer being played, `game_numbers` walks it once
+with `Behaviour` and `Totals` (`managym.statistics`), checking each step's
+actor and action description as an analysis does, and saves the result in
+`attempts.numbers_json`. A failed count never affects the saved game.
+`GET /api/traces/{id}/numbers` returns it, counting a game saved before
+numbers were on its first read; a game that does not re-execute here, a Watch
+game or a game still being played reads `null`. `GET /api/traces` rows carry
+`numbers` from the column and never re-execute.
+
+`GET /api/traces/record` groups the caller's completed games by opponent
+identity and both decks: games, wins, draws, losses, games with a decision made
+while analysis was shown (`with_analysis`), and a 95% Wilson interval on wins
+over games.
 
 
 ## Elemental roster
