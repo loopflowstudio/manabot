@@ -12,6 +12,11 @@ from manabot.infra.config import MatchConfig, RewardConfig
 import managym
 from managym import WORLD_SETUP
 
+__all__ = [
+    "Match",
+    "Reward",
+]
+
 
 @dataclass
 class Match:

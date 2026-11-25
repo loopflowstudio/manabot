@@ -56,6 +56,11 @@ from manabot.policy.prepare import Tables
 from manabot.policy.protocol import Precision
 import managym
 
+__all__ = [
+    "load_checkpoint",
+    "save_checkpoint",
+]
+
 if TYPE_CHECKING:
     from manabot.backends.torch.learner import Learner
 

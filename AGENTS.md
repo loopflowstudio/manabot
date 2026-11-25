@@ -50,6 +50,24 @@ the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
 compatibility graph with that version so rollover finds it; serialized keys,
 checkpoint fields and frozen evidence keep their spelling.
 
+Published library API and patch-clean `main`: `manabot`'s published surface is
+the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
+`manabot/README.md#library-api`), each defining `__all__` while package
+`__init__.py` files stay empty; no unpublished `manabot` module defines
+`__all__` (except explicitly exempted `0.3.0`-deprecated shims such as
+`manabot/sim/search/flat.py`). `managym`'s top-level surface is
+`managym/__init__.pyi`. `Prepared`, `Collector`, `Prefix`, and `MemoryArchive`
+are opaque handles (class identity promised, internal fields free to evolve);
+everything else in `manabot` is internal. `tests/public_api.json` snapshots the
+published surface and `tests/test_public_api_contract.py` plus
+`tests/infra/test_external_consumer.py` enforce it. During a `0.Y.x` cycle,
+`main` stays patch-compatible so `0.Y.(Z+1)` can be cut from `main` at any time:
+run `uv run python scripts/public_api.py check`, use plain
+`uv run python scripts/public_api.py record` for non-breaking additions only
+(`--allow-break --reason "<why>"` is break-glass only), and hold PRs that remove
+`0.(Y+1).0`-deprecated compatibility graphs to merge together immediately before
+cutting `0.(Y+1).0` ([patch-clean main](docs/development.md#patch-clean-main)).
+
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
 through the `managym.bots` provider entry points; optional historical replay/advice

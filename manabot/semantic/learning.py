@@ -822,23 +822,3 @@ class BoundSemanticPack:
                 "semantic artifact header mismatch: " + ", ".join(mismatches)
             )
         return actual
-
-
-__all__ = [
-    "ArtifactCompatibilityError",
-    "BoundSemanticPack",
-    "ContentPackBindingError",
-    "FROZEN_VOCABULARY_LABELS",
-    "DEFAULT_SCHEMA_PATH",
-    "LearningSchema",
-    "PROGRAM_KINDS",
-    "SemanticArtifactHeader",
-    "SemanticCatalog",
-    "SemanticObjectBatch",
-    "SemanticObjectProjection",
-    "SemanticProjectionError",
-    "TOKEN_KINDS",
-    "UnadmittedDefinitionError",
-    "UnknownSchemaError",
-    "token_value",
-]
