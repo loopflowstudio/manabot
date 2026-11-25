@@ -129,18 +129,7 @@ def _state(
         _engine=engine,
     )
     engine.space = space
-    viewer_state: dict[str, Any] = {"opponent_cards": []}
-    if turn_number is not None:
-        viewer_state["turn"] = {"turn_number": turn_number}
-    observation = Observation(
-        schema_version=SEMANTIC_DECISION_VERSION,
-        revision=revision,
-        viewer=0,
-        viewer_state_hash=f"hash-{identity}",
-        viewer_state=viewer_state,
-        events=(),
-        decision=None,
-    )
+    observation = Observation.from_json(engine.semantic_observation_json(0))
     return engine, space, observation
 
 

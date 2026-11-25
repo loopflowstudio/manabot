@@ -23,6 +23,13 @@ JOBS = {
 }
 
 
+def parse_selected(lines: list[str]) -> set[str]:
+    outputs = dict(line.split("=", 1) for line in lines)
+    assert set(outputs) == JOBS
+    assert set(outputs.values()) <= {"true", "false"}
+    return {job for job, value in outputs.items() if value == "true"}
+
+
 def selected(
     paths: list[str], *, full: bool = False, only: list[str] | None = None
 ) -> set[str]:
@@ -34,10 +41,7 @@ def selected(
         capture_output=True,
         check=True,
     )
-    outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
-    assert set(outputs) == JOBS
-    assert set(outputs.values()) <= {"true", "false"}
-    return {job for job, value in outputs.items() if value == "true"}
+    return parse_selected(result.stdout.splitlines())
 
 
 @pytest.mark.parametrize(
@@ -202,7 +206,7 @@ def selected_by_path(paths: list[str]) -> dict[str, set[str]]:
     """Run select-tests.sh once per path in a single bash invocation."""
     script = (
         'while IFS= read -r -d "" path; do '
-        'printf "PATH\\t%s\\n" "$path"; '
+        'printf "\\0%s\\n" "$path"; '
         'printf "%s\\0" "$path" | bash "$1"; '
         "done"
     )
@@ -214,23 +218,9 @@ def selected_by_path(paths: list[str]) -> dict[str, set[str]]:
         check=True,
     )
     by_path: dict[str, set[str]] = {}
-    current: str | None = None
-    outputs: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        if line.startswith("PATH\t"):
-            if current is not None:
-                assert set(outputs) == JOBS
-                assert set(outputs.values()) <= {"true", "false"}
-                by_path[current] = {k for k, v in outputs.items() if v == "true"}
-            current = line.split("\t", 1)[1]
-            outputs = {}
-        else:
-            job, value = line.split("=", 1)
-            outputs[job] = value
-    if current is not None:
-        assert set(outputs) == JOBS
-        assert set(outputs.values()) <= {"true", "false"}
-        by_path[current] = {k for k, v in outputs.items() if v == "true"}
+    for block in result.stdout.split("\0")[1:]:
+        path, *lines = block.splitlines()
+        by_path[path] = parse_selected(lines)
     assert set(by_path) == set(paths)
     return by_path
 
@@ -274,7 +264,7 @@ def pytest_covered_files(workflow_text: str, all_tests: set[str]) -> set[str]:
     return covered
 
 
-def _workflow_job_blocks(workflow_text: str) -> dict[str, str]:
+def workflow_job_blocks(workflow_text: str) -> dict[str, str]:
     """Split a GitHub Actions workflow's `jobs:` section into raw per-job blocks."""
     blocks: dict[str, list[str]] = {}
     in_jobs = False
@@ -295,8 +285,8 @@ def _workflow_job_blocks(workflow_text: str) -> dict[str, str]:
     return {job: "\n".join(lines) for job, lines in blocks.items()}
 
 
-def _pr_job_coverage(all_tests: set[str]) -> dict[str, set[str]]:
-    ci_jobs = _workflow_job_blocks((ROOT / ".github/workflows/ci.yml").read_text())
+def pr_job_coverage(all_tests: set[str]) -> dict[str, set[str]]:
+    ci_jobs = workflow_job_blocks((ROOT / ".github/workflows/ci.yml").read_text())
     coverage: dict[str, set[str]] = {}
     for job_id, block in ci_jobs.items():
         key = job_id.replace("-", "_")
@@ -330,10 +320,8 @@ def test_all_test_files_are_covered_by_ci_workflows() -> None:
     )
     assert nightly_only <= nightly_covered, sorted(nightly_only - nightly_covered)
 
-    job_coverage = _pr_job_coverage(all_tests)
-    assert {"python_unit", "protocol_v1", "integration", "academy_integration"} <= set(
-        job_coverage
-    )
+    job_coverage = pr_job_coverage(all_tests)
+    assert set(job_coverage) == JOBS
     # Filtered `-k` runs (like protocol_v1's test_server.py subset) do not own the file.
     assert "tests/academy/test_server.py" not in job_coverage["protocol_v1"]
 
