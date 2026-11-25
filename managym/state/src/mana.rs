@@ -85,38 +85,42 @@ impl SpendPredicate {
 /// Sorted, deduplicated spending predicates with a precomputed hash digest,
 /// shared across cloned pools and payment-search states.
 #[derive(Clone, Debug)]
-pub struct SpendPredicates {
+pub struct SpendPredicates(Arc<SpendPredicatesInner>);
+
+#[derive(Debug)]
+struct SpendPredicatesInner {
     predicates: BTreeSet<SpendPredicate>,
     digest: u64,
 }
 
 impl SpendPredicates {
-    pub fn new(predicates: BTreeSet<SpendPredicate>) -> Arc<Self> {
+    pub fn new(predicates: BTreeSet<SpendPredicate>) -> Self {
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         predicates.hash(&mut hasher);
-        Arc::new(Self {
+        Self(Arc::new(SpendPredicatesInner {
             predicates,
             digest: hasher.finish(),
-        })
+        }))
     }
 
     pub fn iter(&self) -> std::collections::btree_set::Iter<'_, SpendPredicate> {
-        self.predicates.iter()
+        self.0.predicates.iter()
     }
 
     pub fn len(&self) -> usize {
-        self.predicates.len()
+        self.0.predicates.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.predicates.is_empty()
+        self.0.predicates.is_empty()
     }
 }
 
 impl PartialEq for SpendPredicates {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest && self.predicates == other.predicates
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.0.digest == other.0.digest && self.0.predicates == other.0.predicates)
     }
 }
 
@@ -130,90 +134,40 @@ impl PartialOrd for SpendPredicates {
 
 impl Ord for SpendPredicates {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.predicates.cmp(&other.predicates)
+        if Arc::ptr_eq(&self.0, &other.0) {
+            std::cmp::Ordering::Equal
+        } else {
+            self.0.predicates.cmp(&other.0.predicates)
+        }
     }
 }
 
 impl std::hash::Hash for SpendPredicates {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.digest);
+        state.write_u64(self.0.digest);
     }
 }
 
 impl serde::Serialize for SpendPredicates {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.predicates.serialize(serializer)
+        self.0.predicates.serialize(serializer)
     }
 }
 
 /// The spending restriction that mana keeps until it is spent or lost
 /// (CR 106.6). A [`ManaClass`] can carry this restriction independently of its
 /// spend effect and expiry; ordinary mana lives in [`Mana::mana`].
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum ManaRestriction {
     /// Spend only on a purpose matching one of these ("spend this mana only
     /// to cast a Lesson spell"). Resolving costs match none of them.
-    Only(Arc<SpendPredicates>),
+    Only(SpendPredicates),
     /// Spend on anything but casting a nonartifact spell (Powerstone),
     /// resolving costs included.
     ExceptNonartifactSpells,
     /// Spend on anything but casting a spell from its caster's hand
     /// (Heartwood Crafter), resolving costs included.
     ExceptSpellsFromHand,
-}
-
-impl PartialEq for ManaRestriction {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Only(a), Self::Only(b)) => Arc::ptr_eq(a, b) || a == b,
-            (Self::ExceptNonartifactSpells, Self::ExceptNonartifactSpells)
-            | (Self::ExceptSpellsFromHand, Self::ExceptSpellsFromHand) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for ManaRestriction {}
-
-impl PartialOrd for ManaRestriction {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ManaRestriction {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let rank = |r: &Self| match r {
-            Self::Only(_) => 0_u8,
-            Self::ExceptNonartifactSpells => 1,
-            Self::ExceptSpellsFromHand => 2,
-        };
-        rank(self)
-            .cmp(&rank(other))
-            .then_with(|| match (self, other) {
-                (Self::Only(a), Self::Only(b)) => {
-                    if Arc::ptr_eq(a, b) {
-                        std::cmp::Ordering::Equal
-                    } else {
-                        a.cmp(b)
-                    }
-                }
-                _ => std::cmp::Ordering::Equal,
-            })
-    }
-}
-
-impl std::hash::Hash for ManaRestriction {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Self::Only(predicates) => {
-                state.write_u8(0);
-                state.write_u64(predicates.digest);
-            }
-            Self::ExceptNonartifactSpells => state.write_u8(1),
-            Self::ExceptSpellsFromHand => state.write_u8(2),
-        }
-    }
 }
 
 impl ManaRestriction {

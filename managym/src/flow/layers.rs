@@ -595,16 +595,15 @@ impl<'a> Context<'a> {
             }
         }
         for (&id, object) in &mut context.objects {
-            if !retain_sources {
-                // The uncached debug oracle recomputes every derived field so
-                // `statics.rs` verifies dirty tracking on every board rebuild.
+            if !retain_sources || object.dirty != 0 {
                 let object = Arc::make_mut(object);
-                object.dirty = FINISH_ALL;
+                if !retain_sources {
+                    // The uncached debug oracle recomputes every derived field so
+                    // `statics.rs` verifies dirty tracking on every board rebuild.
+                    object.dirty = FINISH_ALL;
+                }
                 let record = &game.state[game.live_permanent(id).object];
                 Self::finish_object(object, record);
-            } else if object.dirty != 0 {
-                let record = &game.state[game.live_permanent(id).object];
-                Self::finish_object(Arc::make_mut(object), record);
             }
         }
         context
@@ -872,49 +871,40 @@ impl<'a> Context<'a> {
         if !self.condition_met(node) {
             return Vec::new();
         }
-        match &node.scope {
-            StaticScope::This => self
-                .objects
-                .contains_key(&node.source)
-                .then_some(node.source)
-                .into_iter()
-                .collect(),
-            StaticScope::Attached => self
-                .game
-                .attached_permanent(node.source)
-                .filter(|id| self.objects.contains_key(id))
-                .into_iter()
-                .collect(),
-            StaticScope::SpellsYouControl(_) => Vec::new(),
-            scope => {
-                let source_controller = self.controller(node.source);
-                let predicate = match scope {
-                    StaticScope::OtherYouControl(p)
-                    | StaticScope::YouControl(p)
-                    | StaticScope::Other(p)
-                    | StaticScope::All(p) => p,
-                    _ => unreachable!(),
-                };
-                let pred_source = self.predicate_source(predicate, Some(node.source));
-                self.objects
-                    .iter()
-                    .filter(|&(&id, object)| {
-                        matches_static_scope(
-                            scope,
-                            node.source,
-                            source_controller,
-                            None,
-                            id,
-                            self.controller(id),
-                            |predicate| {
-                                matches_view(self.game, id, predicate, &object.view, pred_source)
-                            },
-                        )
-                    })
-                    .map(|(&id, _)| id)
-                    .collect()
+        let (predicate, only_other, only_controlled) = match &node.scope {
+            StaticScope::This => {
+                return self
+                    .objects
+                    .contains_key(&node.source)
+                    .then_some(node.source)
+                    .into_iter()
+                    .collect();
             }
-        }
+            StaticScope::Attached => {
+                return self
+                    .game
+                    .attached_permanent(node.source)
+                    .filter(|id| self.objects.contains_key(id))
+                    .into_iter()
+                    .collect();
+            }
+            StaticScope::SpellsYouControl(_) => return Vec::new(),
+            StaticScope::OtherYouControl(p) => (p, true, true),
+            StaticScope::YouControl(p) => (p, false, true),
+            StaticScope::Other(p) => (p, true, false),
+            StaticScope::All(p) => (p, false, false),
+        };
+        let source_controller = self.controller(node.source);
+        let pred_source = self.predicate_source(predicate, Some(node.source));
+        self.objects
+            .iter()
+            .filter(|&(&id, object)| {
+                (!only_other || id != node.source)
+                    && (!only_controlled || self.controller(id) == source_controller)
+                    && matches_view(self.game, id, predicate, &object.view, pred_source)
+            })
+            .map(|(&id, _)| id)
+            .collect()
     }
     fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
         if !self.exists(node) {

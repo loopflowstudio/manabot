@@ -742,57 +742,38 @@ fn build(recipe: &Recipe) -> Env {
             "Elf", "Goblin", "Ally", "Dragon", "Human", "Soldier", "Wizard", "Cat", "Angel",
             "Demon", "Spirit", "Zombie", "Beast", "Bird", "Warrior", "Knight",
         ];
-        const CHOSEN_COLORS: &[Color] = &[
-            Color::White,
-            Color::Blue,
-            Color::Black,
-            Color::Red,
-            Color::Green,
-        ];
-        let game = env.fixture_game_mut();
         let mut courtyard = [0usize; 2];
         let mut automaton = [0usize; 2];
         let mut banner = [0usize; 2];
-        let state = &mut *game.state;
-        let ids: Vec<_> = state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                p.as_ref().map(|p| {
-                    (
-                        managym::state::game_object::PermanentId(i),
-                        p.controller.0,
-                        state[p.object].name.clone(),
-                    )
-                })
-            })
-            .collect();
-        for (pid, seat, name) in ids {
-            let choice = match name.as_str() {
+        let next = |counts: &mut [usize; 2], seat: usize| {
+            let i = counts[seat];
+            counts[seat] += 1;
+            i
+        };
+        let state = &mut *env.fixture_game_mut().state;
+        for permanent in state.permanents.iter_mut().flatten() {
+            let seat = permanent.controller.0;
+            let choice = match state.objects[permanent.object.slot()].name.as_str() {
                 "Secluded Courtyard" => {
-                    let i = courtyard[seat];
-                    courtyard[seat] += 1;
+                    let i = next(&mut courtyard, seat);
                     Some(EntryChoice::CreatureType(
                         CHOSEN_TYPES[i % CHOSEN_TYPES.len()].into(),
                     ))
                 }
                 "Adaptive Automaton" => {
-                    let i = automaton[seat];
-                    automaton[seat] += 1;
+                    let i = next(&mut automaton, seat);
                     Some(EntryChoice::CreatureType(
                         CHOSEN_TYPES[i % CHOSEN_TYPES.len()].into(),
                     ))
                 }
                 "Heraldic Banner" => {
-                    let i = banner[seat];
-                    banner[seat] += 1;
-                    Some(EntryChoice::Color(CHOSEN_COLORS[i % CHOSEN_COLORS.len()]))
+                    let i = next(&mut banner, seat);
+                    Some(EntryChoice::Color(Color::COLORS[i % Color::COLORS.len()]))
                 }
                 _ => None,
             };
             if let Some(choice) = choice {
-                state.permanents[pid].as_mut().unwrap().chosen = Some(std::sync::Arc::new(choice));
+                permanent.chosen = Some(std::sync::Arc::new(choice));
             }
         }
     }
@@ -1054,7 +1035,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
     match recipe.state.as_str() {
         "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
-        | "blast-discard" => {
+        | "blast-discard" | "genesis-wave" => {
             let env = match recipe.state.as_str() {
                 "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
                 "venom-team" => {
@@ -1070,30 +1051,26 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                     result = vec![("order".into(), order.fork().unwrap())];
                     order
                 }
+                "genesis-wave" => {
+                    let mut cast = follow(root, &[("cast", 0)]);
+                    // Pick X = size (the highest offered X value) so the top `size`
+                    // library cards are revealed and offered for selection.
+                    let max_x = actions(&mut cast)
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, a)| match a {
+                            Action::ChooseMode { mode, .. } => Some((i, *mode)),
+                            _ => None,
+                        })
+                        .max_by_key(|&(_, v)| v)
+                        .expect("Genesis Wave offers X choices")
+                        .0;
+                    cast.step(max_x as i64).unwrap();
+                    cast
+                }
                 _ => follow(root, &[("cast", 0)]),
             };
             let resolution = before_resolution(env, recipe.state == "venom-team");
-            let resolved = follow(&resolution, &[("resolve", 0)]);
-            result.push(("resolution".into(), resolution));
-            result.push(("after-resolution".into(), resolved));
-            return result;
-        }
-        "genesis-wave" => {
-            let mut cast = follow(root, &[("cast", 0)]);
-            // Pick X = size (the highest offered X value) so the top `size`
-            // library cards are revealed and offered for selection.
-            let max_x = actions(&mut cast)
-                .iter()
-                .enumerate()
-                .filter_map(|(i, a)| match a {
-                    Action::ChooseMode { mode, .. } => Some((i, *mode)),
-                    _ => None,
-                })
-                .max_by_key(|&(_, v)| v)
-                .expect("Genesis Wave offers X choices")
-                .0;
-            cast.step(max_x as i64).unwrap();
-            let resolution = before_resolution(cast, false);
             let resolved = follow(&resolution, &[("resolve", 0)]);
             result.push(("resolution".into(), resolution));
             result.push(("after-resolution".into(), resolved));

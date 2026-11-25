@@ -187,6 +187,16 @@ struct ManaActivation {
     life_cost: u32,
 }
 
+impl ManaActivation {
+    fn max_net(&self) -> u64 {
+        self.outputs
+            .iter()
+            .map(|output| u64::from(output.total()).saturating_sub(u64::from(self.cost.mana_value)))
+            .max()
+            .unwrap_or(0)
+    }
+}
+
 /// Optimistic color upper bound and maximum single-mode usable total over
 /// `outputs`, projected onto one spending purpose. Maxima are taken within
 /// each allowed class *before* combining classes so two modes with different
@@ -198,35 +208,27 @@ fn optimistic_supply(
     let mut upper = [0_u8; 6];
     let mut max_usable = 0_u64;
     let mut has_classes = false;
+    let single = outputs.len() == 1;
     for output in outputs {
         let mut mode_usable = 0_u64;
         for (amount, more) in upper.iter_mut().zip(output.mana) {
             *amount = (*amount).max(more);
             mode_usable += u64::from(more);
         }
-        if !output.classes().is_empty() {
+        for (class, amounts) in output.classes() {
             has_classes = true;
-            for (class, amounts) in output.classes() {
-                if allows(class) {
-                    for &more in amounts {
-                        mode_usable += u64::from(more);
+            if allows(class) {
+                for (amount, &more) in upper.iter_mut().zip(amounts) {
+                    mode_usable += u64::from(more);
+                    if single {
+                        *amount = amount.saturating_add(more);
                     }
                 }
             }
         }
         max_usable = max_usable.max(mode_usable);
     }
-    if !has_classes {
-        return (upper, max_usable);
-    }
-    if outputs.len() == 1 {
-        for (class, amounts) in outputs[0].classes() {
-            if allows(class) {
-                for (amount, more) in upper.iter_mut().zip(amounts) {
-                    *amount = amount.saturating_add(*more);
-                }
-            }
-        }
+    if single || !has_classes {
         return (upper, max_usable);
     }
     for (index, output) in outputs.iter().enumerate() {
@@ -394,8 +396,7 @@ struct SourceSupply {
     fixed_upper: [u8; 6],
     fixed_usable: u64,
     fixed_net: u64,
-    abilities_start: usize,
-    abilities_len: usize,
+    abilities: std::ops::Range<usize>,
 }
 
 /// Per-`SpendingContext` supply memo for one `PaymentSearch`: caches
@@ -409,28 +410,38 @@ struct PurposeSupply {
 }
 
 impl PurposeSupply {
-    fn class_allows(
-        class: &ManaClass,
-        purpose: &SpendingContext,
-        allows: &mut std::collections::HashMap<ManaRestriction, bool>,
-    ) -> bool {
+    fn allows(&mut self, class: &ManaClass) -> bool {
         let Some(restriction) = &class.restriction else {
             return true;
         };
-        if let Some(&allowed) = allows.get(restriction) {
+        if let Some(&allowed) = self.allows.get(restriction) {
             return allowed;
         }
-        let allowed = restriction.allows(purpose);
-        allows.insert(restriction.clone(), allowed);
+        let allowed = restriction.allows(&self.purpose);
+        self.allows.insert(restriction.clone(), allowed);
         allowed
     }
 
-    fn allows(&mut self, class: &ManaClass) -> bool {
-        Self::class_allows(class, &self.purpose, &mut self.allows)
+    fn allows_cached(&self, class: &ManaClass) -> bool {
+        class.restriction.as_ref().is_none_or(|restriction| {
+            self.allows
+                .get(restriction)
+                .copied()
+                .unwrap_or_else(|| restriction.allows(&self.purpose))
+        })
+    }
+
+    fn abilities_of(&self, source: usize) -> &[AbilitySupply] {
+        &self.abilities[self.sources[source].abilities.clone()]
     }
 
     fn build(model: &PaymentModel, purpose: &SpendingContext) -> Self {
-        let mut allows = std::collections::HashMap::new();
+        let mut supply = Self {
+            purpose: purpose.clone(),
+            allows: std::collections::HashMap::new(),
+            sources: Vec::new(),
+            abilities: Vec::new(),
+        };
         let mut sources = Vec::with_capacity(model.sources.len());
         let mut abilities = Vec::new();
         for source in model.sources.iter() {
@@ -438,46 +449,32 @@ impl PurposeSupply {
                 Some(output) => {
                     let (upper, usable) =
                         optimistic_supply(std::slice::from_ref(output), |class| {
-                            Self::class_allows(class, purpose, &mut allows)
+                            supply.allows(class)
                         });
                     (upper, usable, u64::from(output.total()))
                 }
                 None => ([0; 6], 0, 0),
             };
-            let abilities_start = abilities.len();
+            let start = abilities.len();
             for ability in &source.abilities {
-                let (upper, max_usable) = optimistic_supply(&ability.outputs, |class| {
-                    Self::class_allows(class, purpose, &mut allows)
-                });
-                let max_net = ability
-                    .outputs
-                    .iter()
-                    .map(|output| {
-                        u64::from(output.total()).saturating_sub(u64::from(ability.cost.mana_value))
-                    })
-                    .max()
-                    .unwrap_or(0);
+                let (upper, max_usable) =
+                    optimistic_supply(&ability.outputs, |class| supply.allows(class));
                 abilities.push(AbilitySupply {
                     upper,
                     max_usable,
-                    max_net,
+                    max_net: ability.max_net(),
                 });
             }
-            let abilities_len = abilities.len() - abilities_start;
             sources.push(SourceSupply {
                 fixed_upper,
                 fixed_usable,
                 fixed_net,
-                abilities_start,
-                abilities_len,
+                abilities: start..abilities.len(),
             });
         }
-        Self {
-            purpose: purpose.clone(),
-            allows,
-            sources,
-            abilities,
-        }
+        supply.sources = sources;
+        supply.abilities = abilities;
+        supply
     }
 }
 
@@ -678,6 +675,23 @@ impl PaymentSearch {
         usable
     }
 
+    fn usable_total(&mut self, purpose_indices: &[usize], mana: &Mana) -> u64 {
+        self.usable_for(purpose_indices, mana).iter().sum()
+    }
+
+    fn usable_total_cached(&self, purpose_indices: &[usize], mana: &Mana) -> u64 {
+        let mut total: u64 = mana.mana.iter().map(|&n| u64::from(n)).sum();
+        for (class, amounts) in mana.classes() {
+            if purpose_indices
+                .iter()
+                .any(|&pi| self.purposes[pi].allows_cached(class))
+            {
+                total += amounts.iter().map(|&n| u64::from(n)).sum::<u64>();
+            }
+        }
+        total
+    }
+
     fn insert(&mut self, model: &PaymentModel, state: &Arc<PaymentSearchState>) -> bool {
         if self.groups.is_none() && self.visited.len() >= Self::GROWTH {
             // A visited identity state failed or is being expanded, and so is
@@ -832,58 +846,13 @@ impl PaymentModel<'_> {
         });
     }
 
-    /// Gross usable output and net new units for one precomputed purpose.
-    fn source_bounds_for_purpose(
-        &self,
-        resources: &PaymentResources,
-        supply: &PurposeSupply,
-        pays_by_tap: impl Fn(&ManaSource) -> bool,
-    ) -> (u64, u64) {
-        let mut net_total = 0;
-        let mut total = 0;
-        for (index, source) in self.sources.iter().enumerate() {
-            if !resources.present[index] {
-                continue;
-            }
-            let src = &supply.sources[index];
-            let mut tap_total = 0;
-            let mut net_tap_total = 0;
-            if resources.untapped[index] {
-                tap_total = src.fixed_usable;
-                net_tap_total = src.fixed_net;
-                if pays_by_tap(source) {
-                    tap_total = tap_total.max(1);
-                    net_tap_total = net_tap_total.max(1);
-                }
-            }
-            for (ability_index, ability) in source.abilities.iter().enumerate() {
-                let uses = self.uses(resources, index, ability_index) as u64;
-                if uses == 0 {
-                    continue;
-                }
-                let ab = &supply.abilities[src.abilities_start + ability_index];
-                let output = uses * ab.max_usable;
-                let net_output = uses * ab.max_net;
-                if ability.tap_source {
-                    net_tap_total = net_tap_total.max(net_output);
-                    tap_total = tap_total.max(output);
-                } else {
-                    total += output;
-                    net_total += net_output;
-                }
-            }
-            total += tap_total;
-            net_total += net_tap_total;
-        }
-        (total, net_total)
-    }
-
     /// Gross usable output and net new units. Each tap can choose one mode.
     fn source_bounds(
         &self,
         resources: &PaymentResources,
         life: u32,
-        mut usable_total: impl FnMut(&Mana) -> u64,
+        mut fixed_supply: impl FnMut(usize, &Mana) -> (u64, u64),
+        mut ability_supply: impl FnMut(usize, usize, &ManaActivation) -> (u64, u64),
         pays_by_tap: impl Fn(&ManaSource) -> bool,
     ) -> (u64, u64) {
         let mut net_total = 0;
@@ -897,11 +866,9 @@ impl PaymentModel<'_> {
             let mut tap_total = 0;
             let mut net_tap_total = 0;
             if resources.untapped[index] {
-                tap_total = source.fixed.as_ref().map_or(0, &mut usable_total);
-                net_tap_total = source
-                    .fixed
-                    .as_ref()
-                    .map_or(0, |output| u64::from(output.total()));
+                if let Some(output) = &source.fixed {
+                    (tap_total, net_tap_total) = fixed_supply(index, output);
+                }
                 if pays_by_tap(source) {
                     tap_total = tap_total.max(1);
                     net_tap_total = net_tap_total.max(1);
@@ -912,23 +879,9 @@ impl PaymentModel<'_> {
                 if uses == 0 || ability.life_cost > life {
                     continue;
                 }
-                let output = uses
-                    * ability
-                        .outputs
-                        .iter()
-                        .map(&mut usable_total)
-                        .max()
-                        .unwrap_or(0);
-                let net_output = uses
-                    * ability
-                        .outputs
-                        .iter()
-                        .map(|output| {
-                            u64::from(output.total())
-                                .saturating_sub(u64::from(ability.cost.mana_value))
-                        })
-                        .max()
-                        .unwrap_or(0);
+                let (usable, net) = ability_supply(index, ability_index, ability);
+                let output = uses * usable;
+                let net_output = uses * net;
                 if ability.tap_source {
                     net_tap_total = net_tap_total.max(net_output);
                     tap_total = tap_total.max(output);
@@ -1083,26 +1036,46 @@ impl PaymentModel<'_> {
         // from this accounting. Already saved outputs remain gross supply;
         // their upfront fees are explicit pending Pay obligations.
         let (gross, net) = if let [only] = purpose_indices.as_slice() {
-            self.source_bounds_for_purpose(&state.resources, &visited.purposes[*only], pays_by_tap)
+            let supply = &visited.purposes[*only];
+            self.source_bounds(
+                &state.resources,
+                u32::MAX,
+                |i, _| (supply.sources[i].fixed_usable, supply.sources[i].fixed_net),
+                |i, ai, _| {
+                    let ab = &supply.abilities_of(i)[ai];
+                    (ab.max_usable, ab.max_net)
+                },
+                pays_by_tap,
+            )
         } else {
             self.source_bounds(
                 &state.resources,
                 u32::MAX,
-                |mana| visited.usable_for(&purpose_indices, mana).iter().sum(),
+                |_, output| {
+                    (
+                        visited.usable_total_cached(&purpose_indices, output),
+                        u64::from(output.total()),
+                    )
+                },
+                |_, _, ability| {
+                    let max_usable = ability
+                        .outputs
+                        .iter()
+                        .map(|output| visited.usable_total_cached(&purpose_indices, output))
+                        .max()
+                        .unwrap_or(0);
+                    (max_usable, ability.max_net())
+                },
                 pays_by_tap,
             )
         };
-        let mut total = visited
-            .usable_for(&purpose_indices, &state.pool)
-            .iter()
-            .sum::<u64>()
-            + gross;
+        let mut total = visited.usable_total(&purpose_indices, &state.pool) + gross;
         let mut net_total = u64::from(state.pool.total()) + net;
         for obligation in &state.obligations {
             if let Obligation::Output { choices, .. } = obligation {
                 total += choices
                     .iter()
-                    .map(|mana| visited.usable_for(&purpose_indices, mana).iter().sum())
+                    .map(|mana| visited.usable_total(&purpose_indices, mana))
                     .max()
                     .unwrap_or(0);
                 net_total += choices
@@ -1184,7 +1157,14 @@ impl PaymentModel<'_> {
             }
             Obligation::Pay { cost, taps } => {
                 let pooled = state.pool.can_pay(cost);
-                if !pooled && !self.cost_coverable(&state, cost, *taps, visited) {
+                if !pooled
+                    && !self.cost_coverable(
+                        &state,
+                        cost,
+                        *taps,
+                        &mut visited.purposes[purpose_indices[0]],
+                    )
+                {
                     return None;
                 }
                 // Pool the whole current cost before spending starts;
@@ -1301,10 +1281,8 @@ impl PaymentModel<'_> {
         state: &PaymentSearchState,
         cost: &ManaCost,
         taps: Taps,
-        visited: &mut PaymentSearch,
+        supply: &mut PurposeSupply,
     ) -> bool {
-        let supply_index = visited.purpose_index(self, &cost.purpose);
-        let supply = &mut visited.purposes[supply_index];
         let (mut upper, mut usable) =
             optimistic_supply(std::slice::from_ref(&state.pool), |class| {
                 supply.allows(class)
@@ -1326,12 +1304,11 @@ impl PaymentModel<'_> {
                     usable += 1;
                 }
             }
-            for ability_index in 0..src.abilities_len {
+            for (ability_index, ab) in supply.abilities_of(index).iter().enumerate() {
                 let uses = self.uses(&state.resources, index, ability_index);
                 if uses == 0 {
                     continue;
                 }
-                let ab = &supply.abilities[src.abilities_start + ability_index];
                 let mul = uses.min(u8::MAX as usize) as u8;
                 for (slot, &more) in upper.iter_mut().zip(&ab.upper) {
                     *slot = slot.saturating_add(more.saturating_mul(mul));
@@ -2079,7 +2056,13 @@ impl Game {
             return;
         }
         let model = self.payment_model(player, None);
-        let (_, net) = model.source_bounds(&model.resources(), model.life, |_| 0, |_| false);
+        let (_, net) = model.source_bounds(
+            &model.resources(),
+            model.life,
+            |_, output| (0, u64::from(output.total())),
+            |_, _, ability| (0, ability.max_net()),
+            |_| false,
+        );
         let supply = net + u64::from(self.pooled_mana(player).total());
         if let Some(turn) = self
             .exposure_mut()
