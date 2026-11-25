@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "managym"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "base64",
  "blake3",
@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "managym-cards"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "managym",
  "managym-state",
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "managym-state"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "rand",
  "serde",
