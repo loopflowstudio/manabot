@@ -1,0 +1,4360 @@
+{
+  "breaks": [],
+  "line": "0.2",
+  "modules": {
+    "manabot.backends.torch.arrays": {
+      "on_device": {
+        "kind": "function",
+        "overloads": [
+          "(batch, device)"
+        ],
+        "signature": "(batch, device)"
+      }
+    },
+    "manabot.backends.torch.bot": {
+      "evaluate_observation": {
+        "kind": "function",
+        "signature": "(scope, space, observation)"
+      }
+    },
+    "manabot.backends.torch.checkpoint": {
+      "load_checkpoint": {
+        "kind": "function",
+        "overloads": [
+          "(path, *, bucketed_shapes=..., live_tokens=...)",
+          "(path, *, include_belief_binding, bucketed_shapes=..., live_tokens=...)"
+        ],
+        "signature": "(path, *, include_belief_binding=..., bucketed_shapes=..., live_tokens=...)"
+      },
+      "save_checkpoint": {
+        "kind": "function",
+        "signature": "(agent, obs_space, path, *, player_configs, extra=..., belief_schema=...)"
+      }
+    },
+    "manabot.backends.torch.collection": {
+      "CollectionSession": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, *, device, seed, precision=...)"
+          },
+          "check_packed": {
+            "kind": "staticmethod",
+            "signature": "(packed, actions, selected_logs)"
+          },
+          "device_name": {
+            "kind": "property"
+          },
+          "packing_mask": {
+            "kind": "staticmethod",
+            "signature": "(mask, logs)"
+          },
+          "restore_rng": {
+            "kind": "method",
+            "signature": "(self, state)"
+          },
+          "scope": {
+            "kind": "method",
+            "signature": "(self, agent)"
+          },
+          "snapshot_rng": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      }
+    },
+    "manabot.backends.torch.policy": {
+      "ActorCritic": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, observation_space, config, *, readings=..., fact_kinds=..., bucketed_shapes=..., live_tokens=...)"
+          },
+          "admit_belief": {
+            "kind": "method",
+            "signature": "(self, belief_schema)"
+          },
+          "architecture_receipt": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "cache_programs": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "check_observation": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "clear_cache": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "device_type": {
+            "kind": "property"
+          },
+          "encode_decision_memory": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "evaluate": {
+            "kind": "method",
+            "signature": "(self, batch)"
+          },
+          "evaluate_probabilities": {
+            "kind": "method",
+            "signature": "(self, batch)"
+          },
+          "forward": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "forward_distribution": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "get_action_and_value": {
+            "kind": "method",
+            "signature": "(self, obs, action=..., deterministic=...)"
+          },
+          "get_value": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "has_programs": {
+            "kind": "property"
+          },
+          "inference_scope": {
+            "kind": "method",
+            "signature": "(self, *, cache_catalog=...)"
+          },
+          "memory_gates": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "normalize_logits": {
+            "kind": "staticmethod",
+            "signature": "(logits, *, double=...)"
+          },
+          "object_trimming": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "parameter_count": {
+            "kind": "property"
+          },
+          "prepare": {
+            "kind": "method",
+            "signature": "(self, obs, *, inference=..., memory_roots=...)"
+          },
+          "prepare_admitted": {
+            "kind": "method",
+            "signature": "(self, obs, *, inference=..., needs=..., memory_roots=...)"
+          },
+          "resident_bytes": {
+            "kind": "property"
+          },
+          "sample": {
+            "kind": "method",
+            "signature": "(self, batch, *, deterministic=..., temperature=..., sampling=...)"
+          },
+          "sample_logits": {
+            "kind": "method",
+            "signature": "(self, logits, *, deterministic=..., temperature=..., sampling=...)"
+          },
+          "sample_rows": {
+            "kind": "staticmethod",
+            "signature": "(logits, masks, seeds, deterministic)"
+          },
+          "win_probabilities": {
+            "kind": "method",
+            "signature": "(self, batch)"
+          }
+        }
+      },
+      "PolicyInference": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, agent, *, cache_catalog=...)"
+          },
+          "cache_programs": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "check": {
+            "kind": "method",
+            "signature": "(self, agent)"
+          },
+          "infer": {
+            "kind": "method",
+            "signature": "(self, obs, *, span=...)"
+          },
+          "prepare": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          }
+        }
+      }
+    },
+    "manabot.backends.torch.rollout": {
+      "AdmittedRollout": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, agent, batch)"
+          },
+          "admit_rows": {
+            "kind": "method",
+            "signature": "(self, indexes, chunk_rows)"
+          },
+          "bootstrap_inputs": {
+            "kind": "method",
+            "signature": "(self, size)"
+          },
+          "evidence": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "legal": {
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "minibatches": {
+            "kind": "method",
+            "signature": "(self, order, size, device)"
+          },
+          "next_observation": {
+            "kind": "method",
+            "signature": "(self, device)"
+          },
+          "next_observations": {
+            "kind": "method",
+            "signature": "(self, device, size)"
+          },
+          "prefetch_minibatches": {
+            "kind": "method",
+            "signature": "(self, order, size)"
+          },
+          "prepare_rows": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "rows": {
+            "kind": "method",
+            "signature": "(self, indexes, device)"
+          }
+        }
+      }
+    },
+    "manabot.env.match": {
+      "Match": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, config=...)"
+          },
+          "config": {
+            "kind": "field",
+            "required": true
+          },
+          "hero": {
+            "kind": "field",
+            "required": true
+          },
+          "hero_deck": {
+            "kind": "field",
+            "required": true
+          },
+          "hero_sideboard": {
+            "kind": "field",
+            "required": true
+          },
+          "swapped": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "to_rust": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "to_rust_hero": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "to_rust_villain": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "villain": {
+            "kind": "field",
+            "required": true
+          },
+          "villain_deck": {
+            "kind": "field",
+            "required": true
+          },
+          "villain_sideboard": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "Reward": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, config)"
+          },
+          "compute": {
+            "kind": "method",
+            "signature": "(self, raw_reward, _last_obs, new_obs)"
+          }
+        }
+      }
+    },
+    "manabot.env.memory_store": {
+      "MemoryArchive": {
+        "kind": "opaque"
+      },
+      "MemoryCapacities": {
+        "kind": "type_alias"
+      },
+      "Prefix": {
+        "kind": "opaque"
+      },
+      "archive_memory": {
+        "kind": "function",
+        "signature": "(prefixes, capacities)"
+      },
+      "restore_memory": {
+        "kind": "function",
+        "signature": "(archive)"
+      }
+    },
+    "manabot.env.observation": {
+      "ObservationEncoder": {
+        "deprecated": true,
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, config=...)"
+          },
+          "allocate": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, *leading_dims)"
+          },
+          "contains": {
+            "kind": "method",
+            "signature": "(self, x)"
+          },
+          "encode": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "encoder": {
+            "deprecated": true,
+            "kind": "property"
+          },
+          "items": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "keys": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "sample": {
+            "kind": "method",
+            "signature": "(self, mask=...)"
+          },
+          "values": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "ObservationSpace": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, config=...)"
+          },
+          "allocate": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, *leading_dims)"
+          },
+          "contains": {
+            "kind": "method",
+            "signature": "(self, x)"
+          },
+          "encode": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, obs)"
+          },
+          "encoder": {
+            "deprecated": true,
+            "kind": "property"
+          },
+          "items": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "keys": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "sample": {
+            "kind": "method",
+            "signature": "(self, mask=...)"
+          },
+          "values": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "column": {
+        "kind": "function",
+        "signature": "(array, name)"
+      },
+      "column_names": {
+        "kind": "function",
+        "signature": "(array)"
+      },
+      "columns": {
+        "kind": "function",
+        "signature": "(array, *names)"
+      },
+      "encode_observation": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "(space, obs)"
+      },
+      "width": {
+        "kind": "function",
+        "signature": "(array)"
+      }
+    },
+    "manabot.infra.config": {
+      "MatchConfig": {
+        "kind": "class",
+        "members": {
+          "authored": {
+            "kind": "classmethod",
+            "signature": "(cls, setup, hero_deck, villain_deck, *, hero=..., villain=..., decklists=...)"
+          },
+          "decklists": {
+            "kind": "field",
+            "required": false
+          },
+          "from_import": {
+            "kind": "classmethod",
+            "signature": "(cls, hero, villain)"
+          },
+          "from_players": {
+            "kind": "classmethod",
+            "signature": "(cls, first, second, *, decklists, mana_floats=..., mana_payment=...)"
+          },
+          "hero": {
+            "kind": "field",
+            "required": false
+          },
+          "hero_deck": {
+            "kind": "field",
+            "required": false
+          },
+          "hero_sideboard": {
+            "kind": "field",
+            "required": false
+          },
+          "hero_source": {
+            "kind": "field",
+            "required": false
+          },
+          "mana_floats": {
+            "kind": "field",
+            "required": false
+          },
+          "mana_payment": {
+            "kind": "field",
+            "required": false
+          },
+          "validate_sideboard_counts": {
+            "kind": "classmethod",
+            "signature": "(cls, value)"
+          },
+          "validate_sources": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "validate_world": {
+            "kind": "classmethod",
+            "signature": "(cls, value)"
+          },
+          "villain": {
+            "kind": "field",
+            "required": false
+          },
+          "villain_deck": {
+            "kind": "field",
+            "required": false
+          },
+          "villain_sideboard": {
+            "kind": "field",
+            "required": false
+          },
+          "villain_source": {
+            "kind": "field",
+            "required": false
+          },
+          "world": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "ModelConfig": {
+        "kind": "class",
+        "members": {
+          "attention_feedforward_dim": {
+            "kind": "field",
+            "required": false
+          },
+          "attention_layers": {
+            "kind": "field",
+            "required": false
+          },
+          "attention_on": {
+            "kind": "field",
+            "required": false
+          },
+          "belief_card_vocab_size": {
+            "kind": "field",
+            "required": false
+          },
+          "belief_count_buckets": {
+            "kind": "field",
+            "required": false
+          },
+          "belief_hidden_zone_vocab_size": {
+            "kind": "field",
+            "required": false
+          },
+          "belief_owner_role_vocab_size": {
+            "kind": "field",
+            "required": false
+          },
+          "catalog_records": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "checkpoint_payload": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_memory": {
+            "kind": "field",
+            "required": false
+          },
+          "decision_memory_gate_scale": {
+            "kind": "field",
+            "required": false
+          },
+          "decision_memory_summaries": {
+            "kind": "field",
+            "required": false
+          },
+          "definition_names": {
+            "kind": "field",
+            "required": false
+          },
+          "focus_film": {
+            "kind": "field",
+            "required": false
+          },
+          "from_checkpoint": {
+            "kind": "classmethod",
+            "signature": "(cls, payload)"
+          },
+          "hidden_dim": {
+            "kind": "field",
+            "required": false
+          },
+          "num_attention_heads": {
+            "kind": "field",
+            "required": false
+          },
+          "policy_film": {
+            "kind": "field",
+            "required": false
+          },
+          "recent_events": {
+            "kind": "field",
+            "required": false
+          },
+          "record_vocabulary": {
+            "kind": "field",
+            "required": false
+          },
+          "reject_compound_decisions": {
+            "kind": "classmethod",
+            "signature": "(cls, data)"
+          },
+          "reject_pooled_token_stream": {
+            "kind": "classmethod",
+            "signature": "(cls, data)"
+          },
+          "stream_norm": {
+            "kind": "field",
+            "required": false
+          },
+          "validate_value_architecture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "value_aggregation": {
+            "kind": "field",
+            "required": false
+          },
+          "value_kind": {
+            "kind": "field",
+            "required": false
+          },
+          "world": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "ObservationConfig": {
+        "kind": "class",
+        "members": {
+          "action_overflow": {
+            "kind": "field",
+            "required": false
+          },
+          "decision_memory_include_own": {
+            "kind": "field",
+            "required": false
+          },
+          "from_checkpoint": {
+            "kind": "classmethod",
+            "signature": "(cls, payload)"
+          },
+          "mana_floats": {
+            "kind": "field",
+            "required": false
+          },
+          "mana_payment": {
+            "kind": "field",
+            "required": false
+          },
+          "max_actions": {
+            "kind": "field",
+            "required": false
+          },
+          "max_cards_per_player": {
+            "kind": "field",
+            "required": false
+          },
+          "max_decision_members": {
+            "kind": "field",
+            "required": false
+          },
+          "max_decision_records": {
+            "kind": "field",
+            "required": false
+          },
+          "max_decision_reference_details": {
+            "kind": "field",
+            "required": false
+          },
+          "max_decision_references": {
+            "kind": "field",
+            "required": false
+          },
+          "max_events": {
+            "kind": "field",
+            "required": false
+          },
+          "max_facts": {
+            "kind": "field",
+            "required": false
+          },
+          "max_focus_objects": {
+            "kind": "field",
+            "required": false
+          },
+          "max_permanents_per_player": {
+            "kind": "field",
+            "required": false
+          },
+          "max_stack_objects": {
+            "kind": "field",
+            "required": false
+          },
+          "policy_history_version": {
+            "kind": "field",
+            "required": false
+          },
+          "policy_input_version": {
+            "kind": "field",
+            "required": false
+          },
+          "reject_other_inputs": {
+            "kind": "classmethod",
+            "signature": "(cls, value)"
+          }
+        }
+      },
+      "POLICY_INPUT_VERSION": {
+        "kind": "value"
+      },
+      "PolicyInputVersion": {
+        "kind": "type_alias"
+      },
+      "RewardConfig": {
+        "kind": "class",
+        "members": {
+          "creature_play_reward": {
+            "kind": "field",
+            "required": false
+          },
+          "land_play_reward": {
+            "kind": "field",
+            "required": false
+          },
+          "lose_reward": {
+            "kind": "field",
+            "required": false
+          },
+          "managym": {
+            "kind": "field",
+            "required": false
+          },
+          "opponent_life_loss_reward": {
+            "kind": "field",
+            "required": false
+          },
+          "potential_creature_weight": {
+            "kind": "field",
+            "required": false
+          },
+          "potential_enabled": {
+            "kind": "field",
+            "required": false
+          },
+          "potential_gamma": {
+            "kind": "field",
+            "required": false
+          },
+          "potential_land_weight": {
+            "kind": "field",
+            "required": false
+          },
+          "potential_life_weight": {
+            "kind": "field",
+            "required": false
+          },
+          "trivial": {
+            "kind": "field",
+            "required": false
+          },
+          "win_reward": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "UnsupportedPolicyInput": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, version)"
+          }
+        }
+      }
+    },
+    "manabot.policy.prepare": {
+      "Prepared": {
+        "kind": "opaque"
+      },
+      "reference_distribution": {
+        "kind": "function",
+        "signature": "(obs, kind)"
+      }
+    },
+    "manabot.training.decks": {
+      "UniformDecks": {
+        "kind": "class",
+        "members": {
+          "check": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decklists": {
+            "kind": "field",
+            "required": false
+          },
+          "decks": {
+            "kind": "field",
+            "required": true
+          },
+          "digest": {
+            "kind": "property"
+          },
+          "entry_ids": {
+            "kind": "field",
+            "required": false
+          },
+          "match_config": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "players": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "sampling": {
+            "kind": "field",
+            "required": false
+          },
+          "valid_population": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      }
+    },
+    "manabot.training.rollout.actions": {
+      "ActionRows": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, observation, log_probabilities)"
+          },
+          "log_probabilities": {
+            "kind": "field",
+            "required": true
+          },
+          "observation": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "PackedActions": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, offsets, slots, capacity, fields, log_probabilities, native=...)"
+          },
+          "action_columns": {
+            "kind": "method",
+            "signature": "(self, positions, columns)"
+          },
+          "behavior": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "capacity": {
+            "kind": "field",
+            "required": true
+          },
+          "check": {
+            "kind": "method",
+            "signature": "(self, actions, selected_logs, *, validator)"
+          },
+          "concatenate": {
+            "kind": "classmethod",
+            "signature": "(cls, rows)"
+          },
+          "fields": {
+            "kind": "field",
+            "required": true
+          },
+          "log_probabilities": {
+            "kind": "field",
+            "required": true
+          },
+          "native": {
+            "kind": "field",
+            "required": false
+          },
+          "nbytes": {
+            "kind": "property"
+          },
+          "offsets": {
+            "kind": "field",
+            "required": true
+          },
+          "pack": {
+            "kind": "classmethod",
+            "signature": "(cls, observation, log_probabilities, *, validator)"
+          },
+          "row": {
+            "kind": "method",
+            "signature": "(self, index)"
+          },
+          "selected_types": {
+            "kind": "method",
+            "signature": "(self, actions, type_width)"
+          },
+          "slots": {
+            "kind": "field",
+            "required": true
+          },
+          "unpack": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "unpack_logs": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          }
+        }
+      }
+    },
+    "manabot.training.rollout.collection": {
+      "Collector": {
+        "kind": "opaque"
+      },
+      "PackedActions": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, offsets, slots, capacity, fields, log_probabilities, native=...)"
+          },
+          "action_columns": {
+            "kind": "method",
+            "signature": "(self, positions, columns)"
+          },
+          "behavior": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "capacity": {
+            "kind": "field",
+            "required": true
+          },
+          "check": {
+            "kind": "method",
+            "signature": "(self, actions, selected_logs, *, validator)"
+          },
+          "concatenate": {
+            "kind": "classmethod",
+            "signature": "(cls, rows)"
+          },
+          "fields": {
+            "kind": "field",
+            "required": true
+          },
+          "log_probabilities": {
+            "kind": "field",
+            "required": true
+          },
+          "native": {
+            "kind": "field",
+            "required": false
+          },
+          "nbytes": {
+            "kind": "property"
+          },
+          "offsets": {
+            "kind": "field",
+            "required": true
+          },
+          "pack": {
+            "kind": "classmethod",
+            "signature": "(cls, observation, log_probabilities, *, validator)"
+          },
+          "row": {
+            "kind": "method",
+            "signature": "(self, index)"
+          },
+          "selected_types": {
+            "kind": "method",
+            "signature": "(self, actions, type_width)"
+          },
+          "slots": {
+            "kind": "field",
+            "required": true
+          },
+          "unpack": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "unpack_logs": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          }
+        }
+      },
+      "RecordedObservations": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, rows, index, needs=..., memory=..., memory_capacities=...)"
+          },
+          "gather": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "gather_needs": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "index": {
+            "kind": "field",
+            "required": true
+          },
+          "memory": {
+            "kind": "field",
+            "required": false
+          },
+          "memory_capacities": {
+            "kind": "field",
+            "required": false
+          },
+          "needs": {
+            "kind": "field",
+            "required": false
+          },
+          "ordered": {
+            "kind": "method",
+            "signature": "(self, shape)"
+          },
+          "rows": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "RolloutBatch": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, recorded, actions, logprobs, rewards, dones, values, next_obs, next_done, action_data, outcome_probabilities=..., assignments=..., target_residuals=..., trajectories=..., episode_source=..., snapshot_id=..., branch_group_id=..., is_root_decision=..., sample_weight=...)"
+          },
+          "action_data": {
+            "kind": "field",
+            "required": true
+          },
+          "actions": {
+            "kind": "field",
+            "required": true
+          },
+          "assignments": {
+            "kind": "field",
+            "required": false
+          },
+          "bootstrap_indexes": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "bootstrapped_tail_fraction": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "branch_group_id": {
+            "kind": "field",
+            "required": false
+          },
+          "dones": {
+            "kind": "field",
+            "required": true
+          },
+          "episode_source": {
+            "kind": "field",
+            "required": false
+          },
+          "is_root_decision": {
+            "kind": "field",
+            "required": false
+          },
+          "logprobs": {
+            "kind": "field",
+            "required": true
+          },
+          "next_done": {
+            "kind": "field",
+            "required": true
+          },
+          "next_obs": {
+            "kind": "field",
+            "required": true
+          },
+          "observations": {
+            "kind": "method",
+            "signature": "(self, indexes=...)"
+          },
+          "ordered_obs": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "outcome_probabilities": {
+            "kind": "field",
+            "required": false
+          },
+          "policy_rows": {
+            "kind": "method",
+            "signature": "(self, indexes)"
+          },
+          "recorded": {
+            "kind": "field",
+            "required": true
+          },
+          "rewards": {
+            "kind": "field",
+            "required": true
+          },
+          "sample_weight": {
+            "kind": "field",
+            "required": false
+          },
+          "segment_ends": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "snapshot_id": {
+            "kind": "field",
+            "required": false
+          },
+          "target_residuals": {
+            "kind": "field",
+            "required": false
+          },
+          "trajectories": {
+            "kind": "field",
+            "required": false
+          },
+          "trajectory_rows": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "values": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "close_collector": {
+        "kind": "function",
+        "signature": "(collector)"
+      },
+      "collect": {
+        "kind": "function",
+        "signature": "(collector, agent, num_steps, *, snapshot_starts=..., snapshot_plan=..., deadline_monotonic=..., check=...)"
+      },
+      "open_collector": {
+        "kind": "function",
+        "signature": "(observation_space, match, reward, *, num_envs, execution_rows=..., seed=..., opponent_mode=..., numerics, opponent_agent=..., learning_seats=..., batch_closure=..., games_per_stream=..., root=..., matchup_curriculum=..., deck_source=..., workers=..., game_errors=..., record_attempt=..., adaptive=..., snapshot_vector=..., snapshot_bank=..., snapshots=..., snapshot=..., capture_predicate=..., operation=..., games_path=..., record_fraction=...)"
+      }
+    },
+    "manabot.training.state.game_errors": {
+      "GameAttempt": {
+        "kind": "class",
+        "members": {
+          "actions": {
+            "kind": "field",
+            "required": false
+          },
+          "decision_memory": {
+            "kind": "field",
+            "required": false
+          },
+          "decks_digest": {
+            "kind": "field",
+            "required": false
+          },
+          "discarded_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "error": {
+            "kind": "field",
+            "required": false
+          },
+          "error_class": {
+            "kind": "field",
+            "required": false
+          },
+          "frame_json": {
+            "kind": "field",
+            "required": false
+          },
+          "interventions": {
+            "kind": "field",
+            "required": false
+          },
+          "learned_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "matchup": {
+            "kind": "field",
+            "required": true
+          },
+          "native_trace": {
+            "kind": "field",
+            "required": false
+          },
+          "object_candidate_frames": {
+            "kind": "field",
+            "required": false
+          },
+          "observation": {
+            "kind": "field",
+            "required": false
+          },
+          "outcome": {
+            "kind": "field",
+            "required": true
+          },
+          "resource_limit_has_input_contract": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "seat": {
+            "kind": "field",
+            "required": true
+          },
+          "seconds": {
+            "kind": "field",
+            "required": false
+          },
+          "seed": {
+            "kind": "field",
+            "required": true
+          },
+          "stream": {
+            "kind": "field",
+            "required": true
+          },
+          "valid_samples": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "GameErrorLimit": {
+        "kind": "class"
+      },
+      "GameErrorPolicy": {
+        "kind": "class",
+        "members": {
+          "bounded_warmup": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "max_game_actions": {
+            "kind": "field",
+            "required": false
+          },
+          "recover_capacity": {
+            "kind": "field",
+            "required": false
+          },
+          "threshold": {
+            "kind": "field",
+            "required": false
+          },
+          "warmup": {
+            "kind": "field",
+            "required": false
+          },
+          "window": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "GameErrorState": {
+        "kind": "class",
+        "members": {
+          "abandoned": {
+            "kind": "field",
+            "required": false
+          },
+          "abandoned_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "attempted": {
+            "kind": "field",
+            "required": false
+          },
+          "by_cell": {
+            "kind": "field",
+            "required": false
+          },
+          "completed": {
+            "kind": "field",
+            "required": false
+          },
+          "crashed": {
+            "kind": "field",
+            "required": false
+          },
+          "discarded_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "error_rate": {
+            "kind": "property"
+          },
+          "learned_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "replacement_debt": {
+            "kind": "property"
+          },
+          "replacement_samples": {
+            "kind": "field",
+            "required": false
+          },
+          "stop_reason": {
+            "kind": "field",
+            "required": false
+          },
+          "window": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "GameOutcome": {
+        "kind": "type_alias"
+      },
+      "settle": {
+        "kind": "function",
+        "signature": "(state, attempt, policy)"
+      }
+    },
+    "managym": {
+      "ALLOCATION_COUNTING": {
+        "kind": "value"
+      },
+      "Action": {
+        "kind": "class",
+        "members": {
+          "ability_index": {
+            "kind": "attribute"
+          },
+          "action_type": {
+            "kind": "attribute"
+          },
+          "announces_x": {
+            "kind": "attribute"
+          },
+          "continuation_index": {
+            "kind": "attribute"
+          },
+          "declared": {
+            "kind": "attribute"
+          },
+          "description": {
+            "kind": "attribute"
+          },
+          "focus": {
+            "kind": "attribute"
+          },
+          "mode_index": {
+            "kind": "attribute"
+          },
+          "name_definition": {
+            "kind": "attribute"
+          },
+          "name_group": {
+            "kind": "attribute"
+          },
+          "name_index": {
+            "kind": "attribute"
+          },
+          "pays_directly": {
+            "kind": "attribute"
+          },
+          "play_route": {
+            "kind": "attribute"
+          },
+          "quota_type": {
+            "kind": "attribute"
+          },
+          "route_mana_value": {
+            "kind": "attribute"
+          },
+          "spell_profile": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ActionEnum": {
+        "kind": "enum",
+        "members": {
+          "CHOOSE_MODE": {
+            "kind": "enum_member",
+            "value": 12
+          },
+          "CHOOSE_TARGET": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "CHOOSE_TRIGGER": {
+            "kind": "enum_member",
+            "value": 16
+          },
+          "DECLARE_ATTACKER": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "DECLARE_BLOCKER": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "DECLINE_CHOICE": {
+            "kind": "enum_member",
+            "value": 10
+          },
+          "LEARN_DISCARD": {
+            "kind": "enum_member",
+            "value": 15
+          },
+          "LEARN_TAKE_LESSON": {
+            "kind": "enum_member",
+            "value": 14
+          },
+          "PAY_COST": {
+            "kind": "enum_member",
+            "value": 11
+          },
+          "PRIORITY_ACTIVATE_ABILITY": {
+            "kind": "enum_member",
+            "value": 6
+          },
+          "PRIORITY_CAST_SPELL": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "PRIORITY_PASS_PRIORITY": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "PRIORITY_PLAY_LAND": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "SCRY_BOTTOM": {
+            "kind": "enum_member",
+            "value": 8
+          },
+          "SCRY_KEEP": {
+            "kind": "enum_member",
+            "value": 7
+          },
+          "SELECT_CARD": {
+            "kind": "enum_member",
+            "value": 9
+          },
+          "TAP_FOR_COST": {
+            "kind": "enum_member",
+            "value": 13
+          }
+        }
+      },
+      "ActionSpace": {
+        "kind": "class",
+        "members": {
+          "action_space_type": {
+            "kind": "attribute"
+          },
+          "actions": {
+            "kind": "attribute"
+          },
+          "focus": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ActionSpaceEnum": {
+        "kind": "enum",
+        "members": {
+          "CHOOSE_TARGET": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "DECLARE_ATTACKER": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "DECLARE_BLOCKER": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "DISCARD": {
+            "kind": "enum_member",
+            "value": 11
+          },
+          "GAME_OVER": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "LEARN": {
+            "kind": "enum_member",
+            "value": 9
+          },
+          "LEGEND_RULE": {
+            "kind": "enum_member",
+            "value": 12
+          },
+          "LOOK_AND_SELECT": {
+            "kind": "enum_member",
+            "value": 6
+          },
+          "MODAL": {
+            "kind": "enum_member",
+            "value": 8
+          },
+          "ORDER_TRIGGERS": {
+            "kind": "enum_member",
+            "value": 13
+          },
+          "PAY_OR_NOT": {
+            "kind": "enum_member",
+            "value": 7
+          },
+          "PRIORITY": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "SCRY": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "WATERBEND": {
+            "kind": "enum_member",
+            "value": 10
+          }
+        }
+      },
+      "AgentError": {
+        "kind": "class"
+      },
+      "CARD_DEFINITION_COUNT": {
+        "kind": "value"
+      },
+      "Card": {
+        "kind": "class",
+        "members": {
+          "card_types": {
+            "kind": "attribute"
+          },
+          "cast_permission": {
+            "kind": "attribute"
+          },
+          "cast_permissions": {
+            "kind": "attribute"
+          },
+          "characteristics": {
+            "kind": "attribute"
+          },
+          "counters": {
+            "kind": "attribute"
+          },
+          "face_down": {
+            "kind": "attribute"
+          },
+          "from_battlefield_this_turn": {
+            "kind": "attribute"
+          },
+          "id": {
+            "kind": "attribute"
+          },
+          "is_ally": {
+            "kind": "attribute"
+          },
+          "is_legendary": {
+            "kind": "attribute"
+          },
+          "is_lesson": {
+            "kind": "attribute"
+          },
+          "is_token": {
+            "kind": "attribute"
+          },
+          "keywords": {
+            "kind": "attribute"
+          },
+          "kicker_cost": {
+            "kind": "attribute"
+          },
+          "mana_cost": {
+            "kind": "attribute"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "owner_id": {
+            "kind": "attribute"
+          },
+          "power": {
+            "kind": "attribute"
+          },
+          "registry_key": {
+            "kind": "attribute"
+          },
+          "text_box": {
+            "kind": "attribute"
+          },
+          "toughness": {
+            "kind": "attribute"
+          },
+          "ward_cost": {
+            "kind": "attribute"
+          },
+          "x": {
+            "kind": "attribute"
+          },
+          "zone": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "CardPool": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, cards)"
+          },
+          "cards": {
+            "kind": "property"
+          },
+          "counts": {
+            "kind": "property"
+          },
+          "from_counts": {
+            "kind": "staticmethod",
+            "signature": "(counts)"
+          }
+        }
+      },
+      "CardTypes": {
+        "kind": "class",
+        "members": {
+          "is_artifact": {
+            "kind": "attribute"
+          },
+          "is_battle": {
+            "kind": "attribute"
+          },
+          "is_castable": {
+            "kind": "attribute"
+          },
+          "is_creature": {
+            "kind": "attribute"
+          },
+          "is_enchantment": {
+            "kind": "attribute"
+          },
+          "is_kindred": {
+            "kind": "attribute"
+          },
+          "is_land": {
+            "kind": "attribute"
+          },
+          "is_non_creature_permanent": {
+            "kind": "attribute"
+          },
+          "is_non_land_permanent": {
+            "kind": "attribute"
+          },
+          "is_permanent": {
+            "kind": "attribute"
+          },
+          "is_planeswalker": {
+            "kind": "attribute"
+          },
+          "is_spell": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "CastPermission": {
+        "kind": "class",
+        "members": {
+          "after_turn": {
+            "kind": "attribute"
+          },
+          "any_mana": {
+            "kind": "attribute"
+          },
+          "condition": {
+            "kind": "attribute"
+          },
+          "cost": {
+            "kind": "attribute"
+          },
+          "face_down": {
+            "kind": "attribute"
+          },
+          "flash": {
+            "kind": "attribute"
+          },
+          "flashback": {
+            "kind": "attribute"
+          },
+          "follows_source_controller": {
+            "kind": "attribute"
+          },
+          "foretold": {
+            "kind": "attribute"
+          },
+          "on_adventure": {
+            "kind": "attribute"
+          },
+          "own_turn_only": {
+            "kind": "attribute"
+          },
+          "play_lands": {
+            "kind": "attribute"
+          },
+          "player_id": {
+            "kind": "attribute"
+          },
+          "prepared": {
+            "kind": "attribute"
+          },
+          "source_permanent_id": {
+            "kind": "attribute"
+          },
+          "this_turn": {
+            "kind": "attribute"
+          },
+          "through_next_turn": {
+            "kind": "attribute"
+          },
+          "waterbend": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "CatalogTokens": {
+        "kind": "typed_dict",
+        "members": {
+          "content_digest": {
+            "kind": "field",
+            "required": true
+          },
+          "definition_offsets": {
+            "kind": "field",
+            "required": true
+          },
+          "definition_program_offsets": {
+            "kind": "field",
+            "required": true
+          },
+          "definition_program_rows": {
+            "kind": "field",
+            "required": true
+          },
+          "definition_ref_source_tokens": {
+            "kind": "field",
+            "required": true
+          },
+          "definition_ref_target_rows": {
+            "kind": "field",
+            "required": true
+          },
+          "keys": {
+            "kind": "field",
+            "required": true
+          },
+          "program_offsets": {
+            "kind": "field",
+            "required": true
+          },
+          "registry_names": {
+            "kind": "field",
+            "required": true
+          },
+          "token_kind": {
+            "kind": "field",
+            "required": true
+          },
+          "token_value": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "ClauseTarget": {
+        "kind": "class",
+        "members": {
+          "clause": {
+            "kind": "attribute"
+          },
+          "legal_at_resolution_start": {
+            "kind": "attribute"
+          },
+          "reference": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ContentPool": {
+        "kind": "typed_dict",
+        "members": {
+          "content_digest": {
+            "kind": "field",
+            "required": true
+          },
+          "definitions": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "ContinuationFrame": {
+        "kind": "class",
+        "members": {
+          "ability": {
+            "kind": "attribute"
+          },
+          "active_clause": {
+            "kind": "attribute"
+          },
+          "attackers": {
+            "kind": "attribute"
+          },
+          "can_decline": {
+            "kind": "attribute"
+          },
+          "context": {
+            "kind": "attribute"
+          },
+          "controller": {
+            "kind": "attribute"
+          },
+          "cost": {
+            "kind": "attribute"
+          },
+          "decision": {
+            "kind": "attribute"
+          },
+          "delayed_frequency": {
+            "kind": "attribute"
+          },
+          "effect_execution": {
+            "kind": "attribute"
+          },
+          "effect_execution_description": {
+            "kind": "attribute"
+          },
+          "effect_execution_references": {
+            "kind": "attribute"
+          },
+          "effect_execution_summary": {
+            "kind": "attribute"
+          },
+          "granted_keywords": {
+            "kind": "attribute"
+          },
+          "hybrid": {
+            "kind": "attribute"
+          },
+          "inherited_from": {
+            "kind": "attribute"
+          },
+          "kicked": {
+            "kind": "attribute"
+          },
+          "kind": {
+            "kind": "attribute"
+          },
+          "lesson": {
+            "kind": "attribute"
+          },
+          "mana_outputs": {
+            "kind": "attribute"
+          },
+          "mode": {
+            "kind": "attribute"
+          },
+          "parent": {
+            "kind": "attribute"
+          },
+          "program": {
+            "kind": "attribute"
+          },
+          "program_description": {
+            "kind": "attribute"
+          },
+          "remembered": {
+            "kind": "attribute"
+          },
+          "resolutions_this_turn": {
+            "kind": "attribute"
+          },
+          "sacrifice": {
+            "kind": "attribute"
+          },
+          "source": {
+            "kind": "attribute"
+          },
+          "source_transforms": {
+            "kind": "attribute"
+          },
+          "spell_profile": {
+            "kind": "attribute"
+          },
+          "targets": {
+            "kind": "attribute"
+          },
+          "this_turn": {
+            "kind": "attribute"
+          },
+          "trigger_damage": {
+            "kind": "attribute"
+          },
+          "triggering_amount": {
+            "kind": "attribute"
+          },
+          "waterbend": {
+            "kind": "attribute"
+          },
+          "x": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ContinuousEffect": {
+        "kind": "class",
+        "members": {
+          "amount": {
+            "kind": "attribute"
+          },
+          "color": {
+            "kind": "attribute"
+          },
+          "description": {
+            "kind": "attribute"
+          },
+          "duration": {
+            "kind": "attribute"
+          },
+          "keywords": {
+            "kind": "attribute"
+          },
+          "modification": {
+            "kind": "attribute"
+          },
+          "power": {
+            "kind": "attribute"
+          },
+          "program": {
+            "kind": "attribute"
+          },
+          "source_name": {
+            "kind": "attribute"
+          },
+          "source_registry_key": {
+            "kind": "attribute"
+          },
+          "subtypes": {
+            "kind": "attribute"
+          },
+          "timestamp": {
+            "kind": "attribute"
+          },
+          "toughness": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "CopyEffect": {
+        "kind": "class",
+        "members": {
+          "exceptions": {
+            "kind": "attribute"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "registry_key": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "DEVELOPMENT_RULESET": {
+        "kind": "value"
+      },
+      "DecisionCapture": {
+        "kind": "class",
+        "members": {
+          "to_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "Deck": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, main, sideboard=...)"
+          },
+          "from_dict": {
+            "kind": "staticmethod",
+            "signature": "(value)"
+          },
+          "identity": {
+            "kind": "property"
+          },
+          "main": {
+            "kind": "property"
+          },
+          "player": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "sideboard": {
+            "kind": "property"
+          },
+          "to_dict": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "DeckEntry": {
+        "kind": "class",
+        "members": {
+          "card_def_id": {
+            "kind": "property"
+          },
+          "count": {
+            "kind": "property"
+          },
+          "key": {
+            "kind": "property"
+          },
+          "line": {
+            "kind": "property"
+          },
+          "name": {
+            "kind": "property"
+          },
+          "section": {
+            "kind": "property"
+          },
+          "to_dict": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "DeckImport": {
+        "kind": "class",
+        "members": {
+          "deck": {
+            "kind": "property"
+          },
+          "decklist": {
+            "kind": "property"
+          },
+          "to_dict": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "DeckImportError": {
+        "kind": "class",
+        "members": {
+          "decklists": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "DeckIssue": {
+        "kind": "class",
+        "members": {
+          "card_name": {
+            "kind": "property"
+          },
+          "code": {
+            "kind": "property"
+          },
+          "line": {
+            "kind": "property"
+          },
+          "message": {
+            "kind": "property"
+          },
+          "section": {
+            "kind": "property"
+          },
+          "to_dict": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "Decklist": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, source, filename=...)"
+          },
+          "dialect": {
+            "kind": "property"
+          },
+          "entries": {
+            "kind": "property"
+          },
+          "filename": {
+            "kind": "property"
+          },
+          "from_dict": {
+            "kind": "staticmethod",
+            "signature": "(value)"
+          },
+          "issues": {
+            "kind": "property"
+          },
+          "read": {
+            "kind": "staticmethod",
+            "signature": "(path, filename=...)"
+          },
+          "source": {
+            "kind": "property"
+          },
+          "to_dict": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "validate_deck": {
+            "kind": "method",
+            "signature": "(self, deck)"
+          }
+        }
+      },
+      "EffectMembership": {
+        "kind": "class",
+        "members": {
+          "order": {
+            "kind": "attribute"
+          },
+          "target": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "EffectObject": {
+        "kind": "class",
+        "members": {
+          "incarnation": {
+            "kind": "attribute"
+          },
+          "object_id": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "Env": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, seed=..., skip_trivial=..., enable_profiler=..., enable_behavior_tracking=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
+          },
+          "action_count": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "capture_decision": {
+            "kind": "method",
+            "signature": "(self, viewer, history_capacity=...)"
+          },
+          "card_capture_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "clone_env": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "combat_preview_json": {
+            "kind": "method",
+            "signature": "(self, viewer, revision, fingerprint, plan_json)"
+          },
+          "compare_profile": {
+            "kind": "method",
+            "signature": "(self, baseline)"
+          },
+          "compound_commands_json": {
+            "kind": "method",
+            "signature": "(self, offers, submission_json)"
+          },
+          "compound_offers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "content_pack_manifest": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_agent_index": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_context_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "decision_memory_counts": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_offer_subjects_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "determinize": {
+            "kind": "method",
+            "signature": "(self, seed, perspective=...)"
+          },
+          "enable_card_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_exposure_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_profiler": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "encode_observation": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, obs, max_facts=...)"
+          },
+          "encode_observation_into": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, obs, out, action_overflow=...)"
+          },
+          "execute_captured_command_json": {
+            "kind": "method",
+            "signature": "(self, capture, command_json)"
+          },
+          "execute_semantic_command_json": {
+            "kind": "method",
+            "signature": "(self, command_json)"
+          },
+          "export_profile_baseline": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "flat_mc_scores": {
+            "kind": "method",
+            "signature": "(self, worlds, rollouts, seed, max_steps=...)"
+          },
+          "flat_mc_scores_for_worlds": {
+            "kind": "method",
+            "signature": "(self, viewer, space_identity, world_indexes, world_seeds, rollouts, max_steps=...)"
+          },
+          "hand_snapshot": {
+            "kind": "method",
+            "signature": "(self, player)"
+          },
+          "hidden_hand_constraints_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "info": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "is_game_over": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "materialize_possible_world": {
+            "kind": "method",
+            "signature": "(self, viewer, space_identity, world_index, seed, refresh_opponent_commitment=...)"
+          },
+          "materialize_sampled_hand": {
+            "kind": "method",
+            "signature": "(self, viewer, constraints_json, hand, seed)"
+          },
+          "observation_for_player": {
+            "kind": "method",
+            "signature": "(self, player_index)"
+          },
+          "payment_preview_json": {
+            "kind": "method",
+            "signature": "(self, viewer, revision, fingerprint, action_index)"
+          },
+          "player_controls_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "possible_world_space_construction_count": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "possible_world_space_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "possible_world_support_json": {
+            "kind": "method",
+            "signature": "(self, viewer, space_identity, query_json)"
+          },
+          "prepare_possible_world_materializer": {
+            "kind": "method",
+            "signature": "(self, viewer, expected_space_identity, max_batch_size)"
+          },
+          "presentation_subjects_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "public_schedule_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "random_action_index": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "random_playout": {
+            "kind": "method",
+            "signature": "(self, seed, max_steps=...)"
+          },
+          "reseed_rollout": {
+            "kind": "method",
+            "signature": "(self, seed)"
+          },
+          "reset": {
+            "kind": "method",
+            "signature": "(self, player_configs)"
+          },
+          "rollout_pool": {
+            "kind": "method",
+            "signature": "(self, worlds, rollouts, seed, max_steps=...)"
+          },
+          "scenario_clear_hand": {
+            "kind": "method",
+            "signature": "(self, player)"
+          },
+          "scenario_force_battlefield": {
+            "kind": "method",
+            "signature": "(self, player, name, ready=...)"
+          },
+          "scenario_force_card_in_hand": {
+            "kind": "method",
+            "signature": "(self, player, name)"
+          },
+          "scenario_naming_vocabulary": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "scenario_refresh": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "scenario_set_life": {
+            "kind": "method",
+            "signature": "(self, player, life)"
+          },
+          "search_context_json": {
+            "kind": "method",
+            "signature": "(self, include_witness=...)"
+          },
+          "search_witness_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "semantic_decision_frame_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "semantic_observation_json": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "semantic_viewer_state_hash": {
+            "kind": "method",
+            "signature": "(self, viewer)"
+          },
+          "set_seed": {
+            "kind": "method",
+            "signature": "(self, seed)"
+          },
+          "skip_trivial_count": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "snapshot": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "state_digest": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "step": {
+            "kind": "method",
+            "signature": "(self, action=...)"
+          },
+          "step_legacy_submission": {
+            "kind": "method",
+            "signature": "(self, offers, submission_json)"
+          },
+          "step_structured": {
+            "kind": "method",
+            "signature": "(self, offers, submission_json)"
+          },
+          "structured_offers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "structured_search_offers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "take_statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "winner_index": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "EventData": {
+        "kind": "class",
+        "members": {
+          "amount": {
+            "kind": "attribute"
+          },
+          "controller_id": {
+            "kind": "attribute"
+          },
+          "event_type": {
+            "kind": "attribute"
+          },
+          "source_id": {
+            "kind": "attribute"
+          },
+          "source_kind": {
+            "kind": "attribute"
+          },
+          "target_id": {
+            "kind": "attribute"
+          },
+          "target_kind": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "EventEntityKindEnum": {
+        "kind": "enum",
+        "members": {
+          "CARD": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "DEFINITION": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "NONE": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "OBJECT": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "PERMANENT": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "PLAYER": {
+            "kind": "enum_member",
+            "value": 3
+          }
+        }
+      },
+      "EventTypeEnum": {
+        "kind": "enum",
+        "members": {
+          "ABILITY_COUNTERED": {
+            "kind": "enum_member",
+            "value": 13
+          },
+          "ABILITY_TRIGGERED": {
+            "kind": "enum_member",
+            "value": 6
+          },
+          "BLOCKERS_DECLARED": {
+            "kind": "enum_member",
+            "value": 8
+          },
+          "CARD_MOVED": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "CARD_REVEALED": {
+            "kind": "enum_member",
+            "value": 12
+          },
+          "COMBAT_ATTACKERS_DECLARED": {
+            "kind": "enum_member",
+            "value": 7
+          },
+          "COMBAT_DAMAGE_DEALT": {
+            "kind": "enum_member",
+            "value": 9
+          },
+          "DAMAGE_DEALT": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "LIFE_CHANGED": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "PERMANENTS_DIED": {
+            "kind": "enum_member",
+            "value": 10
+          },
+          "SPELL_CAST": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "SPELL_COUNTERED": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "SPELL_RESOLVED": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "TURN_STARTED": {
+            "kind": "enum_member",
+            "value": 11
+          }
+        }
+      },
+      "GameSetup": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, players, *, decklists=..., mana_floats=..., mana_payment=...)"
+          },
+          "decklists": {
+            "kind": "property"
+          },
+          "mana_floats": {
+            "kind": "property"
+          },
+          "mana_payment": {
+            "kind": "property"
+          },
+          "players": {
+            "kind": "property"
+          }
+        }
+      },
+      "GameSnapshot": {
+        "kind": "class",
+        "members": {
+          "acting_player": {
+            "kind": "property"
+          },
+          "from_replay_json": {
+            "kind": "staticmethod",
+            "signature": "(raw)"
+          },
+          "metadata": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "restore": {
+            "kind": "method",
+            "signature": "(self, options=...)"
+          },
+          "seed": {
+            "kind": "property"
+          },
+          "state_digest": {
+            "kind": "property"
+          },
+          "to_replay_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "HandSnapshot": {
+        "kind": "class",
+        "members": {
+          "cards": {
+            "kind": "property"
+          },
+          "game_id": {
+            "kind": "property"
+          },
+          "player": {
+            "kind": "property"
+          },
+          "revision": {
+            "kind": "property"
+          },
+          "seed": {
+            "kind": "property"
+          }
+        }
+      },
+      "Heuristic": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, max_actions=...)"
+          },
+          "reset": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "select_action": {
+            "kind": "method",
+            "signature": "(self, observation)"
+          }
+        }
+      },
+      "Keywords": {
+        "kind": "class",
+        "members": {
+          "deathtouch": {
+            "kind": "attribute"
+          },
+          "defender": {
+            "kind": "attribute"
+          },
+          "double_strike": {
+            "kind": "attribute"
+          },
+          "first_strike": {
+            "kind": "attribute"
+          },
+          "flash": {
+            "kind": "attribute"
+          },
+          "flying": {
+            "kind": "attribute"
+          },
+          "haste": {
+            "kind": "attribute"
+          },
+          "hexproof": {
+            "kind": "attribute"
+          },
+          "indestructible": {
+            "kind": "attribute"
+          },
+          "lifelink": {
+            "kind": "attribute"
+          },
+          "menace": {
+            "kind": "attribute"
+          },
+          "reach": {
+            "kind": "attribute"
+          },
+          "trample": {
+            "kind": "attribute"
+          },
+          "vigilance": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "LearningCatalog": {
+        "deprecated": true,
+        "kind": "type_alias"
+      },
+      "MAX_DECISION_CODE": {
+        "kind": "value"
+      },
+      "MAX_DECKLIST_BYTES": {
+        "kind": "value"
+      },
+      "ManaCost": {
+        "kind": "class",
+        "members": {
+          "cost": {
+            "kind": "attribute"
+          },
+          "hybrid": {
+            "kind": "attribute"
+          },
+          "mana_value": {
+            "kind": "attribute"
+          },
+          "x": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ManaFloats": {
+        "kind": "type_alias"
+      },
+      "ManaOutput": {
+        "kind": "class",
+        "members": {
+          "lesson": {
+            "kind": "attribute"
+          },
+          "mana": {
+            "kind": "attribute"
+          },
+          "mode": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ManaPayment": {
+        "kind": "type_alias"
+      },
+      "NAME_BRANCHING": {
+        "kind": "value"
+      },
+      "NATIVE_ALLOCATOR": {
+        "kind": "value"
+      },
+      "NameCandidate": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, name, definition=...)"
+          },
+          "definition": {
+            "kind": "property"
+          },
+          "name": {
+            "kind": "property"
+          }
+        }
+      },
+      "Observation": {
+        "kind": "class",
+        "members": {
+          "action_space": {
+            "kind": "attribute"
+          },
+          "agent": {
+            "kind": "attribute"
+          },
+          "agent_cards": {
+            "kind": "attribute"
+          },
+          "agent_permanents": {
+            "kind": "attribute"
+          },
+          "agent_sideboard": {
+            "kind": "attribute"
+          },
+          "continuation": {
+            "kind": "attribute"
+          },
+          "continuation_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_memory_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decklists_closed": {
+            "kind": "attribute"
+          },
+          "from_json": {
+            "kind": "staticmethod",
+            "signature": "(text, *, continuation_json=...)"
+          },
+          "game_over": {
+            "kind": "attribute"
+          },
+          "legacy_card_lists": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "opponent": {
+            "kind": "attribute"
+          },
+          "opponent_cards": {
+            "kind": "attribute"
+          },
+          "opponent_permanents": {
+            "kind": "attribute"
+          },
+          "recent_events": {
+            "kind": "attribute"
+          },
+          "shared_effects": {
+            "kind": "attribute"
+          },
+          "stack_objects": {
+            "kind": "attribute"
+          },
+          "toJSON": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "turn": {
+            "kind": "attribute"
+          },
+          "validate": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "won": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ObservationArrayLayout": {
+        "kind": "typed_dict",
+        "members": {
+          "axes": {
+            "kind": "field",
+            "required": true
+          },
+          "columns": {
+            "kind": "field",
+            "required": true
+          },
+          "dtype": {
+            "kind": "field",
+            "required": true
+          },
+          "element": {
+            "kind": "field",
+            "required": false
+          },
+          "program_token_kinds": {
+            "kind": "field",
+            "required": false
+          },
+          "row_kind_names": {
+            "kind": "field",
+            "required": true
+          },
+          "row_kinds": {
+            "kind": "field",
+            "required": true
+          },
+          "shape": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "ObservationBatch": {
+        "kind": "class",
+        "members": {
+          "action_counts": {
+            "kind": "property"
+          },
+          "batch_size": {
+            "kind": "property"
+          },
+          "blank_decision_memory": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "gather": {
+            "kind": "method",
+            "signature": "(self, rows)"
+          },
+          "layout": {
+            "kind": "property"
+          },
+          "tables": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "ObservationCapacity": {
+        "kind": "class"
+      },
+      "ObservationCharacteristics": {
+        "kind": "class",
+        "members": {
+          "card_types": {
+            "kind": "attribute"
+          },
+          "is_ally": {
+            "kind": "attribute"
+          },
+          "is_legendary": {
+            "kind": "attribute"
+          },
+          "is_lesson": {
+            "kind": "attribute"
+          },
+          "keywords": {
+            "kind": "attribute"
+          },
+          "kicker_cost": {
+            "kind": "attribute"
+          },
+          "mana_cost": {
+            "kind": "attribute"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "power": {
+            "kind": "attribute"
+          },
+          "text_box": {
+            "kind": "attribute"
+          },
+          "toughness": {
+            "kind": "attribute"
+          },
+          "ward_cost": {
+            "kind": "attribute"
+          },
+          "ward_life": {
+            "kind": "attribute"
+          },
+          "ward_program": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "ObservationColumnLayout": {
+        "kind": "typed_dict",
+        "members": {
+          "encoding": {
+            "kind": "field",
+            "required": true
+          },
+          "index": {
+            "kind": "field",
+            "required": true
+          },
+          "kind": {
+            "kind": "field",
+            "required": true
+          },
+          "range": {
+            "kind": "field",
+            "required": true
+          },
+          "scale": {
+            "kind": "field",
+            "required": false
+          },
+          "size": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "ObservationLayout": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, *, policy_input_version=..., policy_history=..., max_cards_per_player=..., max_permanents_per_player=..., max_stack_objects=..., max_actions=..., max_focus_objects=..., max_events=..., max_facts=..., max_decision_records=..., max_decision_references=..., max_decision_reference_details=..., max_decision_members=...)"
+          },
+          "allocate": {
+            "kind": "method",
+            "signature": "(self, *leading_dims)"
+          },
+          "arrays": {
+            "kind": "property"
+          },
+          "axis_buffers": {
+            "kind": "property"
+          },
+          "axis_extents": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, obs, *, omit_decision_memory=...)"
+          },
+          "csr_fact_divisors": {
+            "kind": "property"
+          },
+          "csr_fields": {
+            "kind": "property"
+          },
+          "dtypes": {
+            "kind": "property"
+          },
+          "object_references": {
+            "deprecated": true,
+            "kind": "property"
+          },
+          "shapes": {
+            "kind": "property"
+          }
+        }
+      },
+      "ObservationRead": {
+        "kind": "class",
+        "members": {
+          "game_id": {
+            "kind": "property"
+          },
+          "player": {
+            "kind": "property"
+          },
+          "revision": {
+            "kind": "property"
+          },
+          "seed": {
+            "kind": "property"
+          },
+          "slot": {
+            "kind": "property"
+          }
+        }
+      },
+      "ObservationValueLayout": {
+        "kind": "typed_dict",
+        "members": {
+          "encoding": {
+            "kind": "field",
+            "required": true
+          },
+          "kind": {
+            "kind": "field",
+            "required": true
+          },
+          "range": {
+            "kind": "field",
+            "required": true
+          },
+          "scale": {
+            "kind": "field",
+            "required": false
+          },
+          "size": {
+            "kind": "field",
+            "required": false
+          }
+        }
+      },
+      "Permanent": {
+        "kind": "class",
+        "members": {
+          "abilities_lost": {
+            "kind": "attribute"
+          },
+          "ability_resolutions": {
+            "kind": "attribute"
+          },
+          "attached_to": {
+            "kind": "attribute"
+          },
+          "attacked_this_turn": {
+            "kind": "attribute"
+          },
+          "attacking": {
+            "kind": "attribute"
+          },
+          "blocking": {
+            "kind": "attribute"
+          },
+          "cant_be_blocked_this_turn": {
+            "kind": "attribute"
+          },
+          "card": {
+            "deprecated": true,
+            "kind": "property"
+          },
+          "characteristics": {
+            "kind": "attribute"
+          },
+          "colors": {
+            "kind": "attribute"
+          },
+          "combat_damage_to_players": {
+            "kind": "attribute"
+          },
+          "controller_id": {
+            "kind": "attribute"
+          },
+          "copy": {
+            "kind": "attribute"
+          },
+          "counters": {
+            "kind": "attribute"
+          },
+          "creature_types": {
+            "kind": "attribute"
+          },
+          "damage": {
+            "kind": "attribute"
+          },
+          "damaged_permanents": {
+            "kind": "attribute"
+          },
+          "dealt_damage_this_turn": {
+            "kind": "attribute"
+          },
+          "effects": {
+            "kind": "attribute"
+          },
+          "entered_this_turn": {
+            "kind": "attribute"
+          },
+          "exhausted_abilities": {
+            "kind": "attribute"
+          },
+          "exile_if_dies_this_turn": {
+            "kind": "attribute"
+          },
+          "face_down": {
+            "kind": "attribute"
+          },
+          "first_strike_participant": {
+            "kind": "attribute"
+          },
+          "granted_firebending": {
+            "kind": "attribute"
+          },
+          "has_exile_link": {
+            "kind": "attribute"
+          },
+          "id": {
+            "kind": "attribute"
+          },
+          "is_animated": {
+            "kind": "attribute"
+          },
+          "is_granted_land": {
+            "kind": "attribute"
+          },
+          "is_summoning_sick": {
+            "kind": "attribute"
+          },
+          "is_token": {
+            "kind": "attribute"
+          },
+          "keyword_counter_timestamps": {
+            "kind": "attribute"
+          },
+          "keywords": {
+            "kind": "attribute"
+          },
+          "mana_value": {
+            "kind": "property"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "object_id": {
+            "kind": "attribute"
+          },
+          "once_each_turn_used": {
+            "kind": "attribute"
+          },
+          "owner_id": {
+            "kind": "attribute"
+          },
+          "plus1_counters": {
+            "kind": "attribute"
+          },
+          "power": {
+            "kind": "attribute"
+          },
+          "registry_key": {
+            "kind": "attribute"
+          },
+          "tapped": {
+            "kind": "attribute"
+          },
+          "temp_subtypes": {
+            "kind": "attribute"
+          },
+          "timestamp": {
+            "kind": "attribute"
+          },
+          "toughness": {
+            "kind": "attribute"
+          },
+          "transforms": {
+            "kind": "attribute"
+          },
+          "used_abilities": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "PhaseEnum": {
+        "kind": "enum",
+        "members": {
+          "BEGINNING": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "COMBAT": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "ENDING": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "POSTCOMBAT_MAIN": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "PRECOMBAT_MAIN": {
+            "kind": "enum_member",
+            "value": 1
+          }
+        }
+      },
+      "Player": {
+        "kind": "class",
+        "members": {
+          "additional_combats": {
+            "kind": "attribute"
+          },
+          "combat_mana": {
+            "kind": "attribute"
+          },
+          "counters": {
+            "kind": "attribute"
+          },
+          "effects": {
+            "kind": "attribute"
+          },
+          "extra_turns": {
+            "kind": "attribute"
+          },
+          "graveyard_lessons": {
+            "kind": "attribute"
+          },
+          "hand_only_until": {
+            "kind": "attribute"
+          },
+          "id": {
+            "kind": "attribute"
+          },
+          "is_active": {
+            "kind": "attribute"
+          },
+          "is_agent": {
+            "kind": "attribute"
+          },
+          "keeps_red_mana": {
+            "kind": "attribute"
+          },
+          "known_hand": {
+            "kind": "attribute"
+          },
+          "known_library": {
+            "kind": "attribute"
+          },
+          "lesson_mana": {
+            "kind": "attribute"
+          },
+          "life": {
+            "kind": "attribute"
+          },
+          "main_counts": {
+            "kind": "attribute"
+          },
+          "mana": {
+            "kind": "attribute"
+          },
+          "no_maximum_hand_size": {
+            "kind": "attribute"
+          },
+          "player_index": {
+            "kind": "attribute"
+          },
+          "pooled_mana_classes": {
+            "kind": "attribute"
+          },
+          "remaining_sideboard_counts": {
+            "kind": "attribute"
+          },
+          "restricted_mana": {
+            "kind": "attribute"
+          },
+          "sideboard_counts": {
+            "kind": "attribute"
+          },
+          "spells_cast": {
+            "kind": "attribute"
+          },
+          "spent_graveyard_types": {
+            "kind": "attribute"
+          },
+          "turn_history": {
+            "kind": "attribute"
+          },
+          "unseen_counts": {
+            "kind": "attribute"
+          },
+          "zone_counts": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "PlayerConfig": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, name, decklist, sideboard=..., world=..., disclosure=...)"
+          },
+          "deck": {
+            "kind": "property"
+          },
+          "decklist": {
+            "kind": "property"
+          },
+          "disclosure": {
+            "kind": "attribute"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "sideboard": {
+            "kind": "property"
+          },
+          "world": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "PlayerTurnHistory": {
+        "kind": "class",
+        "members": {
+          "attacked": {
+            "kind": "attribute"
+          },
+          "bent": {
+            "kind": "attribute"
+          },
+          "cards_drawn": {
+            "kind": "attribute"
+          },
+          "creatures_died": {
+            "kind": "attribute"
+          },
+          "land_entered": {
+            "kind": "attribute"
+          },
+          "life_gained": {
+            "kind": "attribute"
+          },
+          "life_gains": {
+            "kind": "attribute"
+          },
+          "life_lost": {
+            "kind": "attribute"
+          },
+          "mana_spent_casting": {
+            "kind": "attribute"
+          },
+          "nonland_permanents_left": {
+            "kind": "attribute"
+          },
+          "permanents_left": {
+            "kind": "attribute"
+          },
+          "permanents_sacrificed": {
+            "kind": "attribute"
+          },
+          "warped_this_turn": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "PoolDefinition": {
+        "kind": "typed_dict",
+        "members": {
+          "card_def_id": {
+            "kind": "field",
+            "required": true
+          },
+          "eligibility": {
+            "kind": "field",
+            "required": true
+          },
+          "key": {
+            "kind": "field",
+            "required": true
+          },
+          "reason": {
+            "kind": "field",
+            "required": true
+          },
+          "registry_name": {
+            "kind": "field",
+            "required": true
+          },
+          "scryfall_id": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "PooledManaClass": {
+        "kind": "class",
+        "members": {
+          "combat": {
+            "kind": "attribute"
+          },
+          "effect": {
+            "kind": "attribute"
+          },
+          "mana": {
+            "kind": "attribute"
+          },
+          "program": {
+            "kind": "attribute"
+          },
+          "restriction": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "PreparedPossibleWorldMaterializer": {
+        "kind": "class",
+        "members": {
+          "construction_count": {
+            "kind": "property"
+          },
+          "diagnostics_json": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "materialize_indexes": {
+            "kind": "method",
+            "signature": "(self, world_indexes, seeds, refresh_opponent_commitment=...)"
+          },
+          "max_batch_size": {
+            "kind": "property"
+          },
+          "space_identity": {
+            "kind": "property"
+          },
+          "support_size": {
+            "kind": "property"
+          },
+          "viewer": {
+            "kind": "property"
+          }
+        }
+      },
+      "RestoreOptions": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "determinize": {
+            "kind": "staticmethod",
+            "signature": "(viewer, seed, *, enable_decision_memory=..., forced_first_action=...)"
+          },
+          "exact": {
+            "kind": "staticmethod",
+            "signature": "(*, reseed=..., enable_decision_memory=..., forced_first_action=...)"
+          },
+          "forced_first_action": {
+            "kind": "property"
+          },
+          "shuffle_libraries": {
+            "kind": "staticmethod",
+            "signature": "(seed, *, enable_decision_memory=..., forced_first_action=...)"
+          }
+        }
+      },
+      "RestrictedMana": {
+        "kind": "class",
+        "members": {
+          "abilities": {
+            "kind": "attribute"
+          },
+          "except_nonartifact_spells": {
+            "kind": "attribute"
+          },
+          "mana": {
+            "kind": "attribute"
+          },
+          "spells": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "RolloutPool": {
+        "kind": "class",
+        "members": {
+          "acting_players": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "active_count": {
+            "kind": "property"
+          },
+          "encode_active": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "encode_active_batch": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "finish_random": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "hero_index": {
+            "kind": "property"
+          },
+          "num_actions": {
+            "kind": "property"
+          },
+          "num_slots": {
+            "kind": "property"
+          },
+          "root_actions": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "scores": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "set_buffers": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, buffers, capacity, *, layout=...)"
+          },
+          "set_observation_layout": {
+            "kind": "method",
+            "signature": "(self, layout, action_overflow=...)"
+          },
+          "step_active": {
+            "kind": "method",
+            "signature": "(self, actions)"
+          },
+          "step_active_batch": {
+            "kind": "method",
+            "signature": "(self, actions)"
+          }
+        }
+      },
+      "SelectedBranchRuntime": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, match_id, audit=...)"
+          },
+          "apply_policy_choice": {
+            "kind": "method",
+            "signature": "(self, branch, site, policy_index, preconditions_json=...)"
+          },
+          "determinize": {
+            "kind": "method",
+            "signature": "(self, branch, seed, perspective)"
+          },
+          "driver_id": {
+            "kind": "property"
+          },
+          "fork_exact": {
+            "kind": "method",
+            "signature": "(self, source, site)"
+          },
+          "record_leaf_playout": {
+            "kind": "method",
+            "signature": "(self, hit_cap=...)"
+          },
+          "reseed_rollout": {
+            "kind": "method",
+            "signature": "(self, branch, seed)"
+          },
+          "sample_policy_index": {
+            "kind": "method",
+            "signature": "(self, branch)"
+          },
+          "snapshot_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "SharedEffect": {
+        "kind": "class",
+        "members": {
+          "controller_id": {
+            "kind": "attribute"
+          },
+          "effect": {
+            "kind": "attribute"
+          },
+          "members": {
+            "kind": "attribute"
+          },
+          "source": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "SideboardCard": {
+        "kind": "class",
+        "members": {
+          "candidate_id": {
+            "kind": "attribute"
+          },
+          "name": {
+            "kind": "attribute"
+          },
+          "owner_id": {
+            "kind": "attribute"
+          },
+          "registry_key": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "SlotLoad": {
+        "kind": "class",
+        "members": {
+          "branch_root": {
+            "kind": "property"
+          },
+          "fresh": {
+            "kind": "staticmethod",
+            "signature": "(slot, player_configs=...)"
+          },
+          "slot": {
+            "kind": "property"
+          },
+          "snapshot": {
+            "kind": "staticmethod",
+            "signature": "(slot, snapshot, options=...)"
+          },
+          "uses_slot_setup": {
+            "kind": "property"
+          },
+          "with_slot": {
+            "kind": "method",
+            "signature": "(self, slot)"
+          }
+        }
+      },
+      "SlotLoadResult": {
+        "kind": "class",
+        "members": {
+          "acting_player": {
+            "kind": "property"
+          },
+          "generation": {
+            "kind": "property"
+          },
+          "seed": {
+            "kind": "property"
+          },
+          "slot": {
+            "kind": "property"
+          },
+          "source_digest": {
+            "kind": "property"
+          },
+          "terminal": {
+            "kind": "property"
+          },
+          "with_slot": {
+            "kind": "method",
+            "signature": "(self, slot)"
+          }
+        }
+      },
+      "SnapshotMetadata": {
+        "kind": "class",
+        "members": {
+          "acting_player": {
+            "kind": "property"
+          },
+          "action_count": {
+            "kind": "property"
+          },
+          "action_kind": {
+            "kind": "property"
+          },
+          "active_card_defs": {
+            "kind": "property"
+          },
+          "board_counts": {
+            "kind": "property"
+          },
+          "life": {
+            "kind": "property"
+          },
+          "phase": {
+            "kind": "property"
+          },
+          "stack_len": {
+            "kind": "property"
+          },
+          "terminal": {
+            "kind": "property"
+          },
+          "turn": {
+            "kind": "property"
+          }
+        }
+      },
+      "StackObject": {
+        "kind": "class",
+        "members": {
+          "ability_index": {
+            "kind": "attribute"
+          },
+          "ability_resolutions": {
+            "kind": "attribute"
+          },
+          "announced_x": {
+            "kind": "attribute"
+          },
+          "card": {
+            "deprecated": true,
+            "kind": "property"
+          },
+          "cast_from_graveyard": {
+            "kind": "property"
+          },
+          "characteristics": {
+            "kind": "attribute"
+          },
+          "chosen_mode": {
+            "kind": "attribute"
+          },
+          "combat_damage_to_players": {
+            "kind": "attribute"
+          },
+          "controller_id": {
+            "kind": "attribute"
+          },
+          "description": {
+            "kind": "attribute"
+          },
+          "effective_mana_value": {
+            "kind": "attribute"
+          },
+          "flashback": {
+            "kind": "property"
+          },
+          "from_prepared": {
+            "kind": "property"
+          },
+          "granted_keywords": {
+            "kind": "attribute"
+          },
+          "is_copy": {
+            "kind": "attribute"
+          },
+          "kicked": {
+            "kind": "attribute"
+          },
+          "kind": {
+            "kind": "attribute"
+          },
+          "mana_spent": {
+            "kind": "attribute"
+          },
+          "object_id": {
+            "kind": "attribute"
+          },
+          "owner_id": {
+            "kind": "attribute"
+          },
+          "paid_amount": {
+            "kind": "attribute"
+          },
+          "source_card_registry_key": {
+            "kind": "attribute"
+          },
+          "source_permanent_id": {
+            "kind": "attribute"
+          },
+          "source_power": {
+            "kind": "attribute"
+          },
+          "stack_object_id": {
+            "kind": "attribute"
+          },
+          "targets": {
+            "kind": "attribute"
+          },
+          "x": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "StackObjectKindEnum": {
+        "kind": "enum",
+        "members": {
+          "ACTIVATED_ABILITY": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "SPELL": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "TRIGGERED_ABILITY": {
+            "kind": "enum_member",
+            "value": 2
+          }
+        }
+      },
+      "StackTarget": {
+        "kind": "class",
+        "members": {
+          "card_id": {
+            "kind": "attribute"
+          },
+          "kind": {
+            "kind": "attribute"
+          },
+          "permanent_id": {
+            "kind": "attribute"
+          },
+          "player_id": {
+            "kind": "attribute"
+          },
+          "stack_object_id": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "StackTargetKindEnum": {
+        "kind": "enum",
+        "members": {
+          "CARD": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "PERMANENT": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "PLAYER": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "STACK_OBJECT": {
+            "kind": "enum_member",
+            "value": 2
+          }
+        }
+      },
+      "StepEnum": {
+        "kind": "enum",
+        "members": {
+          "BEGINNING_DRAW": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "BEGINNING_UNTAP": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "BEGINNING_UPKEEP": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "COMBAT_BEGIN": {
+            "kind": "enum_member",
+            "value": 4
+          },
+          "COMBAT_DAMAGE": {
+            "kind": "enum_member",
+            "value": 7
+          },
+          "COMBAT_DECLARE_ATTACKERS": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "COMBAT_DECLARE_BLOCKERS": {
+            "kind": "enum_member",
+            "value": 6
+          },
+          "COMBAT_END": {
+            "kind": "enum_member",
+            "value": 8
+          },
+          "COMBAT_FIRST_STRIKE_DAMAGE": {
+            "kind": "enum_member",
+            "value": 12
+          },
+          "ENDING_CLEANUP": {
+            "kind": "enum_member",
+            "value": 11
+          },
+          "ENDING_END": {
+            "kind": "enum_member",
+            "value": 10
+          },
+          "POSTCOMBAT_MAIN_STEP": {
+            "kind": "enum_member",
+            "value": 9
+          },
+          "PRECOMBAT_MAIN_STEP": {
+            "kind": "enum_member",
+            "value": 3
+          }
+        }
+      },
+      "StructuredOfferSet": {
+        "kind": "class",
+        "members": {
+          "projection_json": {
+            "kind": "method",
+            "signature": "(self)"
+          }
+        }
+      },
+      "Turn": {
+        "kind": "class",
+        "members": {
+          "active_player_id": {
+            "kind": "attribute"
+          },
+          "agent_player_id": {
+            "kind": "attribute"
+          },
+          "creature_died_this_turn": {
+            "kind": "attribute"
+          },
+          "phase": {
+            "kind": "attribute"
+          },
+          "step": {
+            "kind": "attribute"
+          },
+          "turn_number": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "VectorEnv": {
+        "kind": "class",
+        "members": {
+          "__init__": {
+            "kind": "method",
+            "signature": "(self, num_envs, seed=..., skip_trivial=..., opponent_policy=..., seed_stride=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
+          },
+          "buffered_call_timings": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_action_summaries": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_agent_indices": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_exposure": {
+            "kind": "method",
+            "signature": "(self, active=...)"
+          },
+          "current_game_generations": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_game_seeds": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_matchup_indices": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "current_player_configs": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_memory_counts": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_memory_cursors": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "decision_observations": {
+            "kind": "method",
+            "signature": "(self, active)"
+          },
+          "enable_exposure_capture": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_profiler": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "enable_statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "get_last_info": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "hand_snapshots": {
+            "kind": "method",
+            "signature": "(self, players)"
+          },
+          "load_slots_into_buffers": {
+            "kind": "method",
+            "signature": "(self, requests)"
+          },
+          "next_fresh_seeds": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "observation_rows": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "observations_for_players": {
+            "kind": "method",
+            "signature": "(self, players)"
+          },
+          "record_games": {
+            "kind": "method",
+            "signature": "(self, active)"
+          },
+          "reset_all": {
+            "kind": "method",
+            "signature": "(self, player_configs)"
+          },
+          "reset_all_into_buffers": {
+            "kind": "method",
+            "signature": "(self, player_configs)"
+          },
+          "reset_each_into_buffers": {
+            "kind": "method",
+            "signature": "(self, player_configs, *, seeds=...)"
+          },
+          "reset_seeds_into_buffers": {
+            "kind": "method",
+            "signature": "(self, seeds)"
+          },
+          "scenario_naming_vocabulary_into_buffers": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "semantic_decision_frames_json": {
+            "kind": "method",
+            "signature": "(self, active=...)"
+          },
+          "set_buffers": {
+            "deprecated": true,
+            "kind": "method",
+            "signature": "(self, buffers, action_overflow=..., *, layout=...)"
+          },
+          "set_observation_layout": {
+            "kind": "method",
+            "signature": "(self, state, layout, action_overflow=...)"
+          },
+          "set_training_decks": {
+            "kind": "method",
+            "signature": "(self, decks, distinct=...)"
+          },
+          "set_uniform_roster": {
+            "kind": "method",
+            "signature": "(self, roster)"
+          },
+          "skip_trivial_counts": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "slot_metadata": {
+            "kind": "method",
+            "signature": "(self, mask)"
+          },
+          "snapshot_slots": {
+            "kind": "method",
+            "signature": "(self, mask)"
+          },
+          "state_digests": {
+            "kind": "method",
+            "signature": "(self, active=...)"
+          },
+          "statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "step": {
+            "kind": "method",
+            "signature": "(self, actions)"
+          },
+          "step_into_buffers": {
+            "kind": "method",
+            "signature": "(self, actions, active=...)"
+          },
+          "step_isolated_into_buffers": {
+            "kind": "method",
+            "signature": "(self, actions, active, recover_capacity=...)"
+          },
+          "step_observation_batch": {
+            "kind": "method",
+            "signature": "(self, actions, layout, action_overflow=...)"
+          },
+          "take_exposure": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "take_statistics": {
+            "kind": "method",
+            "signature": "(self)"
+          },
+          "write_observations_for_players": {
+            "kind": "method",
+            "signature": "(self, players, buffers, action_overflow=..., *, layout)"
+          }
+        }
+      },
+      "VisibleReference": {
+        "kind": "class",
+        "members": {
+          "definition": {
+            "kind": "attribute"
+          },
+          "object": {
+            "kind": "attribute"
+          },
+          "player": {
+            "kind": "attribute"
+          }
+        }
+      },
+      "WORLD_SETUP": {
+        "kind": "value"
+      },
+      "WORLD_VERSION": {
+        "deprecated": true,
+        "kind": "value"
+      },
+      "WorldIdentity": {
+        "kind": "typed_dict",
+        "members": {
+          "card_digest": {
+            "kind": "field",
+            "required": true
+          }
+        }
+      },
+      "ZoneEnum": {
+        "kind": "enum",
+        "members": {
+          "BATTLEFIELD": {
+            "kind": "enum_member",
+            "value": 2
+          },
+          "COMMAND": {
+            "kind": "enum_member",
+            "value": 6
+          },
+          "EXILE": {
+            "kind": "enum_member",
+            "value": 5
+          },
+          "GRAVEYARD": {
+            "kind": "enum_member",
+            "value": 3
+          },
+          "HAND": {
+            "kind": "enum_member",
+            "value": 1
+          },
+          "LIBRARY": {
+            "kind": "enum_member",
+            "value": 0
+          },
+          "STACK": {
+            "kind": "enum_member",
+            "value": 4
+          }
+        }
+      },
+      "admit_decklists": {
+        "kind": "function",
+        "signature": "(decklists)"
+      },
+      "authored_deck_keys": {
+        "kind": "function",
+        "signature": "(setup)"
+      },
+      "authored_deck_setup": {
+        "kind": "function",
+        "signature": "(setup, deck_key)"
+      },
+      "card_definitions_json": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "catalog_token_renames": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "catalog_token_value": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "catalog_tokens": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "check_decks": {
+        "kind": "function",
+        "signature": "(decks)"
+      },
+      "content_pool": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "encode_observation_batch": {
+        "kind": "function",
+        "signature": "(envs, layout, action_overflow=...)"
+      },
+      "encode_observation_into": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "(obs, layout, out, action_overflow=...)"
+      },
+      "encode_observations_into": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "(envs, layout, buffers, capacity)"
+      },
+      "format": {
+        "kind": "reexport"
+      },
+      "input_v10_state": {
+        "kind": "function",
+        "signature": "(obs)"
+      },
+      "learning_catalog": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "()"
+      },
+      "learning_record_names": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "()"
+      },
+      "learning_token_value": {
+        "deprecated": true,
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "naming_catalog": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "observation_layout": {
+        "kind": "function",
+        "signature": "(*, policy_history=..., turn_state=..., legacy=..., decision_memory=...)"
+      },
+      "parse_continuation_frames_json": {
+        "kind": "function",
+        "signature": "(text)"
+      },
+      "policy_action_count": {
+        "kind": "function",
+        "signature": "(count, capacity, action_overflow=...)"
+      },
+      "record_vocabulary": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "resolve_decklists": {
+        "kind": "function",
+        "signature": "(player_configs, seed)"
+      },
+      "set_cards": {
+        "kind": "function",
+        "signature": "(sets)"
+      },
+      "unrepresentable_state": {
+        "kind": "function",
+        "signature": "(obs)"
+      },
+      "unsupported_cards": {
+        "kind": "function",
+        "signature": "(names)"
+      },
+      "validate_observation_json": {
+        "kind": "function",
+        "signature": "(text, *, schema_version=...)"
+      },
+      "world_identity": {
+        "kind": "function",
+        "signature": "()"
+      }
+    }
+  }
+}
