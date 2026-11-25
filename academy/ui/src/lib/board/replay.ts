@@ -252,7 +252,7 @@ export function entryPosition(id: string): string {
 export function replayLog(
   positions: readonly Position[],
   heroSeat: 0 | 1,
-  seatName?: (seat: 0 | 1, currentHero?: 0 | 1) => string,
+  seatName?: (seat: 0 | 1, currentHero: 0 | 1) => string,
   swaps: readonly SeatSwap[] = [],
 ): GameLogEntry[] {
   const entries: GameLogEntry[] = [];

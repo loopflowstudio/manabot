@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 import pytest
+from starlette.testclient import WebSocketTestSession
 
 import managym
 from managym.academy import server, trace as trace_module
@@ -43,6 +44,17 @@ TOKEN = "s" * 36
 OTHER_BOLT = {"Mountain": 8, "Lightning Bolt": 12}
 
 
+def _uniform_decision(view: PolicyView) -> PolicyDecision:
+    count = len(view.choices)
+    probs = tuple(1.0 / count for _ in range(count))
+    return PolicyDecision(
+        view.choices[0],
+        view.binding,
+        probs,
+        ValueEstimate(0.0, view.seat, "signed_outcome"),
+    )
+
+
 @dataclass
 class RecurrentSession:
     """Recurrent fixture session that records every observed and chosen step."""
@@ -59,14 +71,7 @@ class RecurrentSession:
     def choose(self, view: PolicyView) -> PolicyDecision:
         assert view.seat == self.seat
         self.chosen_steps.append(int(view.observation.turn.turn_number))
-        count = len(view.choices)
-        probs = tuple(1.0 / count for _ in range(count))
-        return PolicyDecision(
-            view.choices[0],
-            view.binding,
-            probs,
-            ValueEstimate(0.0, view.seat, "signed_outcome"),
-        )
+        return _uniform_decision(view)
 
     def close(self) -> None:
         self.closed = True
@@ -730,41 +735,23 @@ class BlockingSwapSession:
             self._blocked_once = True
             self.entering.set()
             self.release.wait(timeout=5.0)
-        count = len(view.choices)
-        probs = tuple(1.0 / count for _ in range(count))
-        return PolicyDecision(
-            view.choices[0],
-            view.binding,
-            probs,
-            ValueEstimate(0.0, view.seat, "signed_outcome"),
-        )
+        return _uniform_decision(view)
 
     def close(self) -> None:
         pass
 
 
 @dataclass
-class BlockingSwapFactory:
-    entering: threading.Event
-    release: threading.Event
+class BlockingSwapFactory(ReadingFactory):
+    entering: threading.Event = field(default_factory=threading.Event)
+    release: threading.Event = field(default_factory=threading.Event)
     name: str = "BlockingSwapBot"
-
-    def describe(self) -> PolicyDescriptor:
-        return PolicyDescriptor(
-            self.name,
-            "fixture",
-            "blocking-swap-1",
-            artifacts={"actor": self.name},
-        )
-
-    def admit(self, setup: Sequence[managym.PlayerConfig]) -> None:
-        pass
 
     def load(self, *, seat: int, seed: int) -> BlockingSwapSession:
         return BlockingSwapSession(seat, self.entering, self.release)
 
 
-def _next_observation(socket: Any) -> dict[str, Any]:
+def _next_message(socket: WebSocketTestSession) -> dict[str, Any]:
     while True:
         msg = socket.receive_json()
         if msg.get("type") in {"work_status", "analysis"}:
@@ -777,7 +764,7 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
 ) -> None:
     entering = threading.Event()
     release = threading.Event()
-    slow_key = registry.register(BlockingSwapFactory(entering, release))
+    slow_key = registry.register(BlockingSwapFactory(entering=entering, release=release))
     reader_key = registry.register(ReadingFactory(name="LiveReader"))
 
     client = TestClient(server.app)
@@ -811,7 +798,7 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                     "policy": reader_key,
                 }
             )
-            analysis_reply = _next_observation(pilot_ws)
+            analysis_reply = _next_message(pilot_ws)
             assert analysis_reply["type"] == "analysis_state"
             assert analysis_reply["shown"] is True
 
@@ -824,7 +811,7 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
                     }
                 )
                 settled_message(watcher_ws)
-                _next_observation(pilot_ws)
+                _next_message(pilot_ws)
 
                 pilot_ws.send_json(
                     {
@@ -840,8 +827,8 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
 
                 # Both pilot and watcher already received the committed flipped board
                 # BEFORE the slow bot finished choosing.
-                early_pilot = _next_observation(pilot_ws)
-                early_watcher = _next_observation(watcher_ws)
+                early_pilot = _next_message(pilot_ws)
+                early_watcher = _next_message(watcher_ws)
                 assert early_pilot["type"] == "observation"
                 assert early_pilot["table"]["access"]["identity"]["rules_viewer"] == 1
                 assert early_pilot["frame"]["projection"]["agent"]["player_index"] == 1
@@ -857,8 +844,8 @@ def test_websocket_swap_sides_commits_flipped_board_before_slow_bot_advances(
 
                 # Release the slow bot and verify the settled post-advance frame arrives.
                 release.set()
-                settled_pilot = _next_observation(pilot_ws)
-                settled_watcher = _next_observation(watcher_ws)
+                settled_pilot = _next_message(pilot_ws)
+                settled_watcher = _next_message(watcher_ws)
                 assert settled_pilot["type"] in {"observation", "game_over"}
                 assert (settled_pilot.get("work") or {}).get("state") != "running"
                 assert settled_pilot["frame"]["projection"]["agent"]["player_index"] == 1

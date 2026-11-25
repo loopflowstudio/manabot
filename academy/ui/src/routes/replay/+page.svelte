@@ -95,9 +95,9 @@
     const said = shortName(name);
     return said === shortName(nameOf(1 - seat)) ? `${said} (seat ${seat + 1})` : said;
   };
-  const nameAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): string => nameOf(pilotSeatAt(seat, heroSeat, hero));
-  const saidAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): string => saidOf(pilotSeatAt(seat, heroSeat, hero));
-  const identityAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): PlayerIdentity => identity(pilotSeatAt(seat, heroSeat, hero));
+  const otherSeat = (seat: 0 | 1): 0 | 1 => (seat === 0 ? 1 : 0);
+  const pilotAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): 0 | 1 => pilotSeatAt(seat, heroSeat, hero);
+  const saidAt = (seat: 0 | 1, hero: 0 | 1 = currentHero): string => saidOf(pilotAt(seat, hero));
   const deckOf = (seat: number): string | null => {
     const player = index?.players.find(candidate => candidate.seat === seat);
     return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
@@ -160,7 +160,7 @@
     } catch { /* Review stands without its numbers. */ }
   }
 
-  const entries = $derived(replayLog(positions, startingHeroSeat, (seat, hero) => saidAt(seat, hero ?? heroSeat), seatSwaps));
+  const entries = $derived(replayLog(positions, startingHeroSeat, saidAt, seatSwaps));
   const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
   const baseMarks = $derived(stripMarks(positions, startingHeroSeat, seatSwaps));
@@ -211,7 +211,7 @@
   }
 
   const ending = $derived(frame && !branched && frame.projection.game_over && index
-    ? gameResult(frame, { you: saidAt(viewerSeat), opponent: saidAt((1 - viewerSeat) as 0 | 1) }, index.winner)
+    ? gameResult(frame, { you: saidAt(viewerSeat), opponent: saidAt(otherSeat(viewerSeat)) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''
@@ -648,7 +648,7 @@
           <p class="text-ink-2">{[numbers ? `${numbers.turns} ${numbers.turns === 1 ? 'turn' : 'turns'}` : null, playOrDraw(heroSeat, startingHeroSeat), duration(index.started_at, index.ended_at)].filter(Boolean).join(' · ')}</p>
           {#if numbersRows.length}
             <table>
-              <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{seatColumnLabel(numbersFirstSeat, saidOf(numbersFirstSeat), deckOf(numbersFirstSeat), seatSwaps.length > 0)}</th><th scope="col">{seatColumnLabel((1 - numbersFirstSeat) as 0 | 1, saidOf(1 - numbersFirstSeat), deckOf(1 - numbersFirstSeat), seatSwaps.length > 0)}</th></tr></thead>
+              <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{seatColumnLabel(numbersFirstSeat, saidOf(numbersFirstSeat), deckOf(numbersFirstSeat), seatSwaps.length > 0)}</th><th scope="col">{seatColumnLabel(otherSeat(numbersFirstSeat), saidOf(otherSeat(numbersFirstSeat)), deckOf(otherSeat(numbersFirstSeat)), seatSwaps.length > 0)}</th></tr></thead>
               <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
             </table>
             {#if numbers && !numbers.complete}<p class="text-ink-3">Counted to where the game stopped.</p>{/if}
@@ -723,8 +723,8 @@
     {frame}
     interaction={studying && canRetry ? 'study' : 'read-only'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
-    you={{ name: nameAt(viewerSeat), deck: deckOf(viewerSeat) }}
-    opponent={{ name: nameAt((1 - viewerSeat) as 0 | 1), deck: deckOf(1 - viewerSeat), description: identityAt((1 - viewerSeat) as 0 | 1).description }}
+    you={{ name: nameOf(pilotAt(viewerSeat)), deck: deckOf(viewerSeat) }}
+    opponent={{ name: nameOf(pilotAt(otherSeat(viewerSeat))), deck: deckOf(otherSeat(viewerSeat)), description: identity(pilotAt(otherSeat(viewerSeat))).description }}
     stops={frame.stops}
     log={[]}
     canPassTurn={false}
@@ -736,7 +736,7 @@
     onact={offer => void retryStudyOffer(offer)}
     {since}
     recapTitle={studying ? 'This line' : line ? 'Its line' : current?.kind === 'consequences' ? 'This move' : 'Since the last decision'}
-    heading={branched || !current ? null : positionHeading(current, seat => saidAt(seat), frame.projection.game_over, index?.winner ?? null)}
+    heading={branched || !current ? null : positionHeading(current, saidAt, frame.projection.game_over, index?.winner ?? null)}
     {moves}
     onjump={locked ? undefined : jump}
     readOnly={!studying}

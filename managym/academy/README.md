@@ -435,15 +435,18 @@ On commit, the session flips `human_seat` and `deck_names`, appends
 refreshes presentation state from the new seat's canonical track, bumps the
 protocol revision so in-flight Commands for the old seat are rejected as stale,
 updates active `attempt_players` and `session_games.matchup_json` atomically in
-`AttemptStore.save`, advances if the bot is now to act, and restarts
-`LiveAnalysis` for the new seat if live analysis was on. Every reader
+`AttemptStore.save`, immediately broadcasts the committed flipped board (with
+`work.state == "running"` and active live-analysis policy metadata), then
+advances if the bot is now to act and restarts `LiveAnalysis` for the new seat
+if live analysis was on. Every reader
 (`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
 `analyse_game`, `agent_line`, `LiveAnalysis`, and `_play_recorded_prefix`)
 resolves the human seat at step `i` through `human_seat_at(trace, i)` in
-`trace.py`. `Recording` includes all `DecisionSource.CLIENT` decisions across
-both seats and exposes `seat_swaps` and `starting_human_seat` on
-`/api/traces/{id}/recording`. Native mana payment and float modes remain on
-their starting seats.
+`trace.py`. `Recording` and `GET /api/traces/{id}/decisions`
+(`play_decisions_with_addresses`) include all `DecisionSource.CLIENT` decisions
+across both seats and exclude `DecisionSource.POLICY` rows;
+`/api/traces/{id}/recording` exposes `seat_swaps` and `starting_human_seat`.
+Native mana payment and float modes remain on their starting seats.
 
 ### Analysis while you play
 

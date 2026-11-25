@@ -1747,10 +1747,9 @@ class GameSession:
         if committed is not None:
             self.work.stage("advance", self.match_id, self.revision)
             early = self._wire_message(reason="explicit_resync")
-            if live_analysis_policy is not None and not self.obs.game_over:
+            if live_analysis_policy is not None:
                 early["analysis"] = {"policy": live_analysis_policy}
             committed(early)
-            self._last_presentation_cursor = self.presentation.next_seq
         self._advance()
         if (
             live_analysis_policy is not None
@@ -4017,20 +4016,25 @@ def _dispatch_table_request(
         return response, True
     if isinstance(request, SwapSidesMessage):
         previous_revision = record.game.revision
+        bumped = False
 
         def swap_committed(message: dict[str, Any]) -> None:
+            nonlocal bumped
             record.table_revision += 1
-            if committed is not None:
-                committed(message)
+            bumped = True
+            assert committed is not None
+            committed(message)
 
         response = record.game.swap_sides(
             request_id=request.request_id,
             match_id=request.match_id,
             expected_revision=request.expected_revision,
-            committed=swap_committed,
+            committed=swap_committed if committed is not None else None,
         )
         if record.game.revision == previous_revision:
             return response, False
+        if not bumped:
+            record.table_revision += 1
         return response, True
     if isinstance(request, CommandMessage):
         command_id = request.command.command_id

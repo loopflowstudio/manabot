@@ -351,8 +351,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `--deck ur_lessons --opponent-deck gw_allies` (otherwise `setup.invalid`).
   Each fresh browser launch of the same `?launch=` URL starts a new game as a
   new player, so drive the whole game, swaps and reloads in one script. The
-  swap's answer arrives after the bot has played the seat you left, so expect
-  seconds: at load ~110 a swap took 5.6 s (policy build 1.2 s, the new
+  flipped board publishes immediately after policy build (with `work.state`
+  `running`) before the bot plays the seat you left; the settled turn can
+  still take seconds (at load ~110 policy build was 1.2 s and the new
   runner's first decision 4.3 s, which a fresh game's first bot move also
   costs). To time the server path, start the CLI from a small script that
   wraps `GameSession.swap_sides`, `_build_swap_policy` and `_advance` with

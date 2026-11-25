@@ -622,20 +622,27 @@ def _group_by_viewer(
     return grouped
 
 
-def project_replay(
-    replay: CanonicalReplayV1,
-    authorized_viewer: int,
-) -> CanonicalReplayProjectionV1:
+def _presentation_track(
+    replay: CanonicalReplayV1, viewer: int
+) -> ViewerPresentationTrack:
     track = next(
         (
             candidate
             for candidate in replay.presentation_tracks
-            if candidate.viewer == authorized_viewer
+            if candidate.viewer == viewer
         ),
         None,
     )
     if track is None:
         raise DecisionNotFoundError("decision not found")
+    return track
+
+
+def project_replay(
+    replay: CanonicalReplayV1,
+    authorized_viewer: int,
+) -> CanonicalReplayProjectionV1:
+    track = _presentation_track(replay, authorized_viewer)
     return CanonicalReplayProjectionV1(
         version=CANONICAL_REPLAY_VERSION,
         replay_id=replay.replay_id,
@@ -671,25 +678,15 @@ def play_decisions_with_addresses(
     viewer: int,
 ) -> dict[str, Any]:
     """Return every client-authored decision across seats with DecisionAddressV2 addresses."""
-    track = next(
-        (
-            candidate
-            for candidate in replay.presentation_tracks
-            if candidate.viewer == viewer
-        ),
-        None,
-    )
-    if track is None:
-        raise DecisionNotFoundError("decision not found")
-    decisions: list[dict[str, Any]] = []
-    for row in replay.decisions:
-        if row.source != DecisionSource.CLIENT:
-            continue
-        row_payload = row.model_dump(mode="json")
-        row_payload["address"] = DecisionAddressV2.from_decision(
-            replay, row
-        ).serialize()
-        decisions.append(row_payload)
+    track = _presentation_track(replay, viewer)
+    decisions = [
+        {
+            **row.model_dump(mode="json"),
+            "address": DecisionAddressV2.from_decision(replay, row).serialize(),
+        }
+        for row in replay.decisions
+        if row.source == DecisionSource.CLIENT
+    ]
     return {
         "version": replay.version,
         "replay_id": replay.replay_id,
@@ -723,16 +720,7 @@ def restore_decision(
     )
     if address != expected or row.viewer != authorized_viewer:
         raise DecisionNotFoundError("decision not found")
-    track = next(
-        (
-            candidate
-            for candidate in replay.presentation_tracks
-            if candidate.viewer == authorized_viewer
-        ),
-        None,
-    )
-    if track is None:
-        raise DecisionNotFoundError("decision not found")
+    track = _presentation_track(replay, authorized_viewer)
     later_cursor = next(
         (
             candidate.presentation_cursor
