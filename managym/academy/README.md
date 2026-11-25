@@ -138,9 +138,23 @@ skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
-incarnation and board display ID. These read-only projections introduce no legal
-actions or editable payment transaction. Other viewers receive only public
-ownership/kind and committed facts. Retained frames omit these optional fields.
+incarnation and board display ID; `permanent_details_json` attaches effective
+battlefield details (Layer 6 keyword abilities, overridden Defender and active
+combat/untap restrictions) by public permanent ID. Each keyword ability
+instance has a label and an optional `granted` flag, so a creature can carry
+two different Ward costs. A granted trigger carries the granting permanent’s
+public effective name in `source` or the resolved record’s `effect_timestamp`.
+For evergreen keywords, `keyword_grants` maps each external grant to its
+`source`, `effect_timestamp` or `counter: true`. An empty map means the
+effective keywords come from the permanent itself, including its conditional
+abilities. Each restriction names its `kind` and, for an external static rule,
+the permanent imposing it. Inspect combines these sources with recorded effects.
+Firebending X keeps its printed X because its trigger
+determines the amount on resolution. The details travel with `decision_surface_view` without altering
+`Observation` or default `serialize_observation()`. These read-only projections
+introduce no legal actions or editable payment transaction. Other viewers
+receive only public ownership/kind and committed facts. Earlier recordings
+can omit these optional fields.
 
 For Precision, click **Start game**, inspect **Deadly Precision**, then explicitly
 choose its cast offer and an Inspector target. In the Treasure demo, reserve that
