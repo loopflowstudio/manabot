@@ -194,7 +194,10 @@ def test_python_enums_match_rust_generated_schema():
         assert (
             RUST_SCHEMA["$defs"][name]["enum"] == PYTHON_SCHEMA["$defs"][name]["enum"]
         ), name
-    assert list(get_args(PresentationRule)) == RUST_SCHEMA["$defs"]["PresentationRule"]["enum"]
+    assert (
+        list(get_args(PresentationRule))
+        == RUST_SCHEMA["$defs"]["PresentationRule"]["enum"]
+    )
 
 
 @pytest.mark.parametrize(

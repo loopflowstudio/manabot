@@ -315,4 +315,3 @@ def test_watch_reads_never_carry_person_seat_boards(
     for pos in recording.positions:
         if pos.kind == "consequences":
             assert recording.read(pos.key)["boards"] == []
-

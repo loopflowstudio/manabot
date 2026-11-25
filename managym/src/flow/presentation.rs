@@ -361,10 +361,11 @@ impl Game {
         }
         let lines =
             [PlayerId(0), PlayerId(1)].map(|viewer| self.ability_fizzled_line(stacked, viewer));
-        self.presentation
-            .as_deref_mut()
-            .unwrap()
-            .push_root(Some(PresentationRule::IllegalTargets), None, lines);
+        self.presentation.as_deref_mut().unwrap().push_root(
+            Some(PresentationRule::IllegalTargets),
+            None,
+            lines,
+        );
     }
 
     /// Attach the hand appearance to the CardDrawn fact before another effect can move it.

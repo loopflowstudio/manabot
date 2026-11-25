@@ -705,10 +705,11 @@ fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
         })
         .expect("expected destroyed fact");
     assert!(destroyed_fact.cause.is_some());
-    assert!(destroyed_fact
-        .lines
-        .iter()
-        .any(|l| l.labels.objects.values().any(|n| n == "Gray Ogre")));
+    assert!(destroyed_fact.lines.iter().any(|l| l
+        .labels
+        .objects
+        .values()
+        .any(|n| n == "Gray Ogre")));
 
     // 3. Jet's Brainwashing (kicked) steals opponent's creature, creates a Clue,
     //    and returns control at cleanup with Rule::Cleanup.
@@ -745,12 +746,11 @@ fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
                     ..
                 }
             )
-        }) && told.iter().flat_map(|f| &f.lines).any(|l| {
-            matches!(
-                l.kind,
-                PresentationKind::TokenCreated { .. }
-            )
-        }) {
+        }) && told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::TokenCreated { .. }))
+        {
             break;
         }
         control_s.advance_default_action();
@@ -894,10 +894,11 @@ fn illegal_target_fizzles_for_spells_and_abilities_are_separate_from_counterspel
     assert_eq!(spell_fizzle.rule, Some(PresentationRule::IllegalTargets));
     assert_eq!(spell_fizzle.cause, None);
     assert!(spell_fizzle.position.is_some());
-    assert!(spell_fizzle
-        .lines
-        .iter()
-        .any(|l| l.labels.stacks.values().any(|n| n == "Lightning Bolt")));
+    assert!(spell_fizzle.lines.iter().any(|l| l
+        .labels
+        .stacks
+        .values()
+        .any(|n| n == "Lightning Bolt")));
 
     // 2. Real Counterspell counters Lightning Bolt with `rule: None` and `cause: Some(resolved)`.
     let mut counter_s = five_color_setup(&["Lightning Bolt", "Counterspell", "Gray Ogre"]);
@@ -946,14 +947,14 @@ fn illegal_target_fizzles_for_spells_and_abilities_are_separate_from_counterspel
         .expect("expected countered spell fact");
     assert_eq!(countered.rule, None);
     assert_eq!(countered.cause, Some(counter_resolved.id));
-    assert!(countered
-        .lines
-        .iter()
-        .any(|l| l.labels.stacks.values().any(|n| n == "Lightning Bolt")));
+    assert!(countered.lines.iter().any(|l| l
+        .labels
+        .stacks
+        .values()
+        .any(|n| n == "Lightning Bolt")));
 
     // 3. Targeted triggered ability fizzles when its target leaves before resolution.
-    let mut ability_s =
-        five_color_setup(&["Earth Kingdom Jailer", "Lightning Bolt", "Gray Ogre"]);
+    let mut ability_s = five_color_setup(&["Earth Kingdom Jailer", "Lightning Bolt", "Gray Ogre"]);
     let ogre3 = ability_s.force_permanent_on_battlefield(1, "Gray Ogre");
     ability_s.force_card_in_hand(0, "Earth Kingdom Jailer");
     ability_s.force_card_in_hand(0, "Lightning Bolt");

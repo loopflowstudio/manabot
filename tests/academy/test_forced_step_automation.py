@@ -12,9 +12,7 @@ from managym.bots import BotDecision, BotPolicy
 from managym.experience import Command, ExperienceFrame
 
 
-def _auto_pass_turns(
-    events: list[dict[str, Any]], human_seat: int
-) -> list[int | None]:
+def _auto_pass_turns(events: list[dict[str, Any]], human_seat: int) -> list[int | None]:
     """Turn number of each automated priority pass on the person's track."""
     turn: int | None = None
     turns: list[int | None] = []

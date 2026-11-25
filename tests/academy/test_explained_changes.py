@@ -297,7 +297,11 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
         prompt = session._publish_current_prompt()
         assert prompt is not None
         label = next(
-            (a["description"] for a in prompt.actions if a["description"].startswith("Pay")),
+            (
+                a["description"]
+                for a in prompt.actions
+                if a["description"].startswith("Pay")
+            ),
             "Pass priority",
         )
         res = _command(session, label, f"step-{index}")
@@ -320,7 +324,11 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
         prompt = session._publish_current_prompt()
         assert prompt is not None
         pay = next(
-            (a["description"] for a in prompt.actions if a["description"].startswith("Pay")),
+            (
+                a["description"]
+                for a in prompt.actions
+                if a["description"].startswith("Pay")
+            ),
             "Pass priority",
         )
         _command(session, pay, f"finish-{index}")
@@ -350,9 +358,7 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
     passed = _first(events, "passed")
     activated = _first(events, "activated")
     counters = _first(events, "counters")
-    ability_resolutions = [
-        e for e in events if e["kind"]["kind"] == "ability_resolved"
-    ]
+    ability_resolutions = [e for e in events if e["kind"]["kind"] == "ability_resolved"]
     assert len(ability_resolutions) == 2
     trigger_resolved, activation_resolved = ability_resolutions
 
@@ -458,15 +464,12 @@ def test_remaining_kinds_searched_looked_sacrificed_and_lost_through_session(
         a["description"] for a in prompt.actions if "Evolving Wilds" in a["description"]
     )
     _command(session, ew_label, "ew-activate")
-    advance_until(
-        lambda evs: any(e["kind"]["kind"] == "searched" for e in evs), "ew"
-    )
+    advance_until(lambda evs: any(e["kind"]["kind"] == "searched" for e in evs), "ew")
 
     _command(session, "Cast Opt", "cast-opt")
     advance_until(
         lambda evs: any(
-            e["kind"]["kind"] == "looked" and e["kind"]["action"] == "scry"
-            for e in evs
+            e["kind"]["kind"] == "looked" and e["kind"]["action"] == "scry" for e in evs
         ),
         "opt",
     )
@@ -646,7 +649,11 @@ def test_spell_and_ability_results_exile_destroy_tokens_pump_and_control_change(
         if any("Attack with Wandering Musicians" in d for d in descriptions):
             break
         skip = next(
-            (d for d in descriptions if d.startswith("Do not attack") or d == "Pass priority"),
+            (
+                d
+                for d in descriptions
+                if d.startswith("Do not attack") or d == "Pass priority"
+            ),
             descriptions[0],
         )
         _command(session, skip, f"to-combat-{step}")
@@ -845,7 +852,9 @@ def test_illegal_target_fizzles_for_spells_and_abilities_through_session(
     prompt = session._publish_current_prompt()
     assert prompt is not None
     ogre_target_idx = next(
-        i for i, a in enumerate(prompt.actions) if a["description"] == "Target Gray Ogre"
+        i
+        for i, a in enumerate(prompt.actions)
+        if a["description"] == "Target Gray Ogre"
     )
     session.hero_command(
         {
@@ -862,7 +871,11 @@ def test_illegal_target_fizzles_for_spells_and_abilities_through_session(
         start,
         lambda _evs: any(
             a["description"] == "Cast Lightning Bolt"
-            for a in (session._publish_current_prompt().actions if session._publish_current_prompt() else [])
+            for a in (
+                session._publish_current_prompt().actions
+                if session._publish_current_prompt()
+                else []
+            )
         ),
         "bolt1-pay",
     )
@@ -870,7 +883,9 @@ def test_illegal_target_fizzles_for_spells_and_abilities_through_session(
     prompt = session._publish_current_prompt()
     assert prompt is not None
     ogre_target_idx2 = next(
-        i for i, a in enumerate(prompt.actions) if a["description"] == "Target Gray Ogre"
+        i
+        for i, a in enumerate(prompt.actions)
+        if a["description"] == "Target Gray Ogre"
     )
     session.hero_command(
         {
@@ -930,6 +945,3 @@ def test_illegal_target_fizzles_for_spells_and_abilities_through_session(
         trig_fizzle["labels"]["stacks"][str(trig["kind"]["stack"])]
         == "Earth Kingdom Jailer"
     )
-
-
-

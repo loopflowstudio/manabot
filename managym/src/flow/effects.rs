@@ -56,12 +56,16 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
-        let pt_delta = self.presentation.is_some().then_some(&modification).and_then(|m| match *m {
-            Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
-                Some((power, toughness))
-            }
-            _ => None,
-        });
+        let pt_delta = self
+            .presentation
+            .is_some()
+            .then_some(&modification)
+            .and_then(|m| match *m {
+                Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
+                    Some((power, toughness))
+                }
+                _ => None,
+            });
         let mut pt_objects = Vec::new();
         self.push_effects(affected.into_iter().map(|affected| {
             if pt_delta.is_some() {
