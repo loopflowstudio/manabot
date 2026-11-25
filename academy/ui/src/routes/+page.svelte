@@ -406,7 +406,7 @@
   const liveScale = $derived.by(() => {
     const name = scoreName(liveAnalysis.points.find(point => point.semantic !== null)?.semantic ?? null);
     if (!name || !liveAnalysis.policy) return null;
-    return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} from your seat · ${liveAnalysis.points.length} decisions read`;
+    return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
   const liveMarks = $derived(liveScale ? liveAnalysedMarks(gameStore.actionLog, liveAnalysis.points) : logMarks(gameStore.actionLog));
   $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
@@ -555,7 +555,7 @@
       onpassturn={handlePassTurn}
       {notices}
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
-        note: gameStore.gameOver ? null : 'Positions open in Review after the game', scale: liveScale }}
+        note: gameStore.gameOver || liveScale ? null : 'Review the game once it ends to step back through these', scale: liveScale }}
       result={gameStore.gameOver ? result : undefined}
       {menu}
       {stepBoards}

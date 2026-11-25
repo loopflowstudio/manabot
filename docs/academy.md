@@ -1212,7 +1212,8 @@ carries the policy's probability and its estimate after it. Nothing is
 chosen, raised or reordered for you, and no key plays the policy's choice.
 
 Turning it on also opens the strip under the board, which draws the policy's
-estimate from your seat at each decision it has read this game, on Review's
+estimate from your seat at each of your decisions this game, those made
+before you turned it on included (read after the fact, so they mark nothing), on Review's
 fixed 0–100 axis; hovering it names the nearest point by the move before it
 and its score. The line keeps its points when you turn analysis off and on
 again, and starts over if you switch to another policy.

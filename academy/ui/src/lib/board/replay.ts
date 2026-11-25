@@ -405,26 +405,31 @@ export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
 
 /**
  * Live play's strip with the policy's line on it: each reading is a point of
- * its own, placed where the action log stood when it was read, so a decision
- * that logs nothing (a priority pass) still has its point. Logged moves keep
- * their ticks; only the points carry values.
+ * its own, so a decision that logs nothing (a priority pass) still has one.
+ * A decision read as you faced it sits where the action log stood then and is
+ * named by the move before it; one read after the fact sits at the start of
+ * its turn and is named by the move you chose. Logged moves carry no value.
  */
 export function liveAnalysedMarks(entries: readonly GameLogEntry[], points: readonly LivePoint[]): StripMark[] {
   const marks = logMarks(entries);
+  const placed = points.map(live => {
+    if (live.at !== null) return { live, at: live.at };
+    const turnStart = entries.findIndex(entry => entry.turn !== null && entry.turn >= (live.turn ?? 0));
+    return { live, at: turnStart === -1 ? entries.length : turnStart };
+  }).sort((a, b) => a.at - b.at || a.live.event - b.live.event);
+  const point = ({ live, at }: (typeof placed)[number]): StripMark => {
+    const last = entries[at - 1];
+    const turn = live.turn ?? last?.turn ?? entries[0]?.turn ?? null;
+    const where = live.label ?? (last ? `after ${last.text}` : 'before the first move');
+    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score, label: `Turn ${turn ?? '?'} · ${where}` };
+  };
   const out: StripMark[] = [];
   let next = 0;
-  // A point is named by the last move logged before it, which is where it sits.
-  const point = (live: LivePoint, before: number): StripMark => {
-    const last = entries[before - 1];
-    const turn = last?.turn ?? entries[0]?.turn ?? null;
-    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score,
-      label: `Turn ${turn ?? '?'} · ${last ? `after ${last.text}` : 'before the first move'}` };
-  };
   marks.forEach((mark, index) => {
-    while (next < points.length && points[next].at <= index) out.push(point(points[next++], index));
+    while (next < placed.length && placed[next].at <= index) out.push(point(placed[next++]));
     out.push({ ...mark, value: null });
   });
-  while (next < points.length) out.push(point(points[next++], marks.length));
+  while (next < placed.length) out.push(point(placed[next++]));
   return out.map((mark, at) => ({ ...mark, at, turnStart: at === 0 || mark.turn !== out[at - 1].turn }));
 }
 

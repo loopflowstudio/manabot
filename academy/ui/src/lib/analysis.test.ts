@@ -64,6 +64,14 @@ describe('analysis while you play', () => {
     expect(nextLiveAnalysis(second, { ...reading, annotation: { probabilities: [1], value: 0 } }, 3).points.map(point => point.score)).toEqual([0.25, 0.5]);
     const off = nextLiveAnalysis(second, { type: 'analysis_state', shown: false, policy: null, policies: [reader], unavailable: null });
     expect(nextLiveAnalysis(off, { type: 'analysis_state', shown: true, policy: reader, policies: [reader], unavailable: null }).points).toHaveLength(2);
+    const filled = nextLiveAnalysis(second, { type: 'analysis', policy: reader, history: [
+      { event: 1, turn: 1, label: 'Play Mountain', score: 0.7, semantic: 'signed_outcome' },
+      { event: 4, turn: 2, label: 'Cast Shock', score: 0.6, semantic: 'signed_outcome' },
+    ] });
+    expect(filled.points.map(point => [point.event, point.at])).toEqual([[1, null], [4, null], [7, 6]]);
+    // Arriving before the answer to Show analysis, the line so far is kept by that answer.
+    const early = nextLiveAnalysis({ ...LIVE_ANALYSIS_OFF, pending: true }, { type: 'analysis', policy: reader, history: [{ event: 1, turn: 1, label: 'Play Mountain', score: 0.7, semantic: 'signed_outcome' }] });
+    expect(nextLiveAnalysis(early, { type: 'analysis_state', shown: true, policy: reader, policies: [reader], unavailable: null }).points).toHaveLength(1);
     const other = { sha256: 'o'.repeat(64), name: 'Other' };
     expect(nextLiveAnalysis(second, { type: 'analysis_state', shown: true, policy: other, policies: [reader, other], unavailable: null }).points).toEqual([]);
   });

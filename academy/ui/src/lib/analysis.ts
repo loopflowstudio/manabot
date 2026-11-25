@@ -69,6 +69,8 @@ export interface LiveAnalysisState {
 export type LiveAnalysisMessage = { type: 'analysis'; policy: AnalysisPolicy } & (
   | { event: number; revision: number; annotation: AnalysedDecision['annotation']; semantic: string | null; after: (number | null)[] }
   | { stopped: string }
+  /** The line so far, sent once when analysis turns on: the policy's score at each decision you already made. */
+  | { history: { event: number; turn: number; label: string; score: number | null; semantic: string | null }[] }
 );
 
 /** What Play holds of a live analysis. Off at the start of every game. */
@@ -92,11 +94,12 @@ export interface LiveAnalysis {
 }
 
 /**
- * One point of the live line: your decision at trace `event`, read when the
- * action log held `at` entries, so the move that settles it is the next of
- * yours from there.
+ * One point of the live line: your decision at trace `event`. A decision read
+ * as you faced it carries `at`, the action log's length then, which places it
+ * after the last move logged. One read after the fact (`history`) carries its
+ * `turn` and the move you chose there instead.
  */
-export interface LivePoint { event: number; at: number; score: number | null; semantic: string | null }
+export interface LivePoint { event: number; at: number | null; score: number | null; semantic: string | null; turn?: number; label?: string }
 
 export const LIVE_ANALYSIS_OFF: LiveAnalysis = { shown: false, pending: false, policy: null, policies: null, unavailable: null, stopped: null, reading: null, points: [] };
 
@@ -109,6 +112,15 @@ export function nextLiveAnalysis(current: LiveAnalysis, message: LiveAnalysisSta
   if (message.type === 'analysis_state') {
     const samePolicy = message.policy === null || message.policy.sha256 === current.policy?.sha256;
     return { ...LIVE_ANALYSIS_OFF, shown: message.shown, policy: message.policy ?? current.policy, policies: message.policies, unavailable: message.unavailable, points: samePolicy ? current.points : [] };
+  }
+  if ('history' in message) {
+    // The line so far can outrun the answer to the request that asked for it;
+    // holding it under its policy lets that answer keep it.
+    if (!current.shown && !current.pending) return current;
+    const same = current.policy?.sha256 === message.policy.sha256;
+    const read = new Set(message.history.map(point => point.event));
+    const earlier = message.history.map(point => ({ ...point, at: null }));
+    return { ...current, policy: message.policy, points: [...earlier, ...(same ? current.points.filter(point => !read.has(point.event)) : [])] };
   }
   if (!current.shown || current.pending) return current;
   if ('stopped' in message) return { ...current, stopped: message.stopped, reading: null };

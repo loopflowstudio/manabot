@@ -271,4 +271,15 @@ describe('liveAnalysedMarks', () => {
     expect(marks.at(-1)).toMatchObject({ side: 'you', decision: true, turn: 2, label: 'Turn 2 · after You cast Shock' });
     expect(marks[1].label).toBe('Turn 1 · after Opponent plays Island');
   });
+
+  it('places a decision read after the fact at its turn, named by the move you chose', () => {
+    const marks = liveAnalysedMarks(log, [
+      { event: 6, at: null, score: 0.4, semantic: 'signed_outcome', turn: 2, label: 'Cast Shock' },
+      { event: 1, at: null, score: 0.7, semantic: 'signed_outcome', turn: 1, label: 'Play Mountain' },
+      { event: 9, at: 4, score: 0.3, semantic: 'signed_outcome' },
+    ]);
+    expect(marks.map(mark => mark.key)).toEqual(['read-1', 'a', 'b', 'read-6', 'c', 'd', 'read-9']);
+    expect(marks[0].label).toBe('Turn 1 · Play Mountain');
+    expect(marks[3]).toMatchObject({ turn: 2, value: 0.4, label: 'Turn 2 · Cast Shock' });
+  });
 });

@@ -450,6 +450,21 @@ def test_shown_analysis_reads_each_decision_live_and_marks_it(
     assert state["shown"] and state["policy"]["sha256"] == key
     message = game.current_message()
     assert message["analysis"] == {"policy": state["policy"]}
+    # The line so far: the two decisions made before analysis was shown.
+    first = delivered.reading(message["frame"]["revision"])
+    (history,) = [m["history"] for m in delivered.messages if "history" in m]
+    assert delivered.messages.index(first) > 0
+    earlier = [vars(event) for event in game.trace.events]
+    assert [point["event"] for point in history] == analysed_events(
+        {"config": vars(game.trace.config), "events": earlier}, 0
+    )
+    assert all(
+        point["label"] == earlier[point["event"]]["action_description"]
+        and point["semantic"] == "signed_outcome"
+        and 0 <= point["score"] <= 1
+        and point["turn"] >= 0
+        for point in history
+    )
     readings = []
     for index in range(2, 6):
         frame = message["frame"]

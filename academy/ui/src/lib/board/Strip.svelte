@@ -82,6 +82,9 @@
       {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
     {/each}
     <polyline class="value" points={line('you')} data-testid="strip-value" data-points={decisions.filter(mark => mark.side === 'you' && mark.value !== null).length} />
+    {#if scale !== null}
+      {#each valued as mark (mark.key)}<circle class="point" class:theirs={mark.side === 'opponent'} cx={x(mark.at)} cy={y(mark.value!)} r="1.75" />{/each}
+    {/if}
     {#each decisions as mark (mark.key)}
       {#if mark.differs && mark.value !== null}<circle class="differs" cx={x(mark.at)} cy={y(mark.value)} r="2.5"><title>{mark.label} · chose otherwise</title></circle>{/if}
     {/each}
@@ -132,6 +135,9 @@
   .zero { stroke: var(--border-strong); stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
   .value { fill: none; stroke: var(--info-text, var(--accent)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .value.theirs { stroke: var(--text-tertiary); }
+  /* Every read decision is a dot, so one reading alone still shows. */
+  .point { fill: var(--info-text, var(--accent)); }
+  .point.theirs { fill: var(--text-tertiary); }
   /* Where you and the policy chose differently: a neutral fact, not a fault. */
   .differs { fill: var(--text-secondary); vector-effect: non-scaling-stroke; }
   .here { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }

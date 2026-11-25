@@ -426,7 +426,8 @@ class LiveAnalysis:
 
     The worker first loads the policy and walks the game so far (`seat_decisions`),
     asking the policy at each of the seat's earlier decisions so a
-    decision-memory policy has the history a bot in the seat would have; then
+    decision-memory policy has the history a bot in the seat would have, and
+    publishes its estimates there as one `history` message; then
     it applies each `advance` and reads each `decide`, giving `publish` one
     message per read. `publish` returns a future that is true once the message
     reached the person; only then is the decision `shown`. `close` stops the
@@ -497,10 +498,27 @@ class LiveAnalysis:
         try:
             runner = load()
             walker = open_walk(attempt)
+            earlier: list[dict[str, Any]] = []
             for index, env, observation in seat_decisions(
                 walker, attempt.trace, self._seat
             ):
                 ask(runner, env, observation, index)
+                decision = runner.last_decision
+                if decision is not None and decision.value is not None:
+                    event = attempt.trace["events"][index]
+                    earlier.append(
+                        {
+                            "event": index,
+                            "turn": observation.turn.turn_number,
+                            "label": event["action_description"],
+                            "score": score(decision.value, decision.value_semantic),
+                            "semantic": decision.value_semantic,
+                        }
+                    )
+            if earlier:
+                # The line so far: the policy's estimate at each decision already
+                # made. These were not shown when chosen, so they mark nothing.
+                self._send({"history": earlier})
             env = walker.env
             position = len(attempt.trace["events"])
             read: tuple[int, dict[str, Any]] | None = None
