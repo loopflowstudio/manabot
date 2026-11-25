@@ -20,6 +20,15 @@ pub struct ObjectEventRef {
     pub incarnation: u32,
 }
 
+impl From<ObjectEventRef> for crate::experience::ObjectRenderId {
+    fn from(event: ObjectEventRef) -> Self {
+        Self {
+            entity: event.entity.0,
+            incarnation: event.incarnation,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventSubject {
     Object(ObjectEventRef),
@@ -28,6 +37,8 @@ pub enum EventSubject {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
+    Object(ObjectEventRef),
+    Definition(CardDefId),
     Card(ObjectId),
     Permanent(PermanentId),
     Player(PlayerId),
@@ -199,6 +210,17 @@ pub enum GameEvent {
     CombatDamageToPlayers {
         hits: Vec<CombatPlayerHit>,
     },
+    CardsLeftGraveyard {
+        owner: PlayerId,
+    },
+    /// Trigger occurrence for one source across all recipients in a damage batch.
+    SourceDealtDamage {
+        source: ObjectId,
+        amount: i32,
+        /// All of it was combat damage: one combat damage step's batch.
+        #[serde(skip)]
+        combat: bool,
+    },
     /// Each permanent that dealt combat damage in one combat damage step,
     /// to any recipients, with its total (CR 510.2): a trailing trample
     /// split is one entry. Trigger-only (`Game::emit_trigger_event`); the
@@ -250,6 +272,8 @@ pub enum EventKind {
     TurnStarted,
     StepStarted,
     Surveilled,
+    CardsLeftGraveyard,
+    SourceDealtDamage,
     PermanentUntapped,
 }
 
@@ -268,6 +292,8 @@ impl GameEvent {
             GameEvent::PermanentSacrificed { .. } => EventKind::PermanentSacrificed,
             GameEvent::CardRevealed { .. } => EventKind::CardRevealed,
             GameEvent::CardMoved { .. } => EventKind::CardMoved,
+            GameEvent::CardsLeftGraveyard { .. } => EventKind::CardsLeftGraveyard,
+            GameEvent::SourceDealtDamage { .. } => EventKind::SourceDealtDamage,
             GameEvent::DamageDealt { .. } => EventKind::DamageDealt,
             GameEvent::LifeChanged { .. } => EventKind::LifeChanged,
             GameEvent::SpellCast { .. } => EventKind::SpellCast,

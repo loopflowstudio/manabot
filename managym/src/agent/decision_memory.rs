@@ -345,7 +345,7 @@ fn snapshot(
     committed_public: bool,
 ) -> DecisionReference {
     let visible = game.state.live(object).is_some()
-        && (committed_public || game.visible_reference(object, viewer).definition.is_some());
+        && (committed_public || game.visible_reference(object, viewer).object.is_some());
     if !visible {
         return DecisionReference {
             role: 0,
@@ -445,8 +445,8 @@ fn snapshot(
         .unwrap_or((0, 0));
     DecisionReference {
         role,
-        definition: Some(data.definition_id.0),
-        appearance: Some(data.id.0),
+        definition: data.definition_id.catalog_id().map(|id| id.0),
+        appearance: Some(game.observed_object_id(object).0),
         name: Some(printed.name.clone()),
         description,
         power,
@@ -546,6 +546,7 @@ pub const RECORD_NAMES: &[&str] = &[
     "BoardCounts",
     "Ready",
     "Foretell",
+    "TurnFaceUp",
 ];
 
 use super::{
@@ -883,7 +884,7 @@ fn own_projection(
                 || reference.appearance.is_some_and(|appearance| {
                     game.state
                         .latest_objects()
-                        .find(|(_, row)| row.id.0 == appearance)
+                        .find(|(object, _)| game.observed_object_id(*object).0 == appearance)
                         .is_some_and(|(object, _)| {
                             game.visible_reference(object, actor).definition.is_some()
                         })
@@ -1057,6 +1058,12 @@ pub(crate) fn capture(
                 .push(reference(game, *object, viewer, true));
             true
         }
+        Action::TurnFaceUp { object, .. } => {
+            choice
+                .references
+                .push(reference(game, *object, viewer, false));
+            true
+        }
         Action::Foretell { .. } => {
             choice
                 .references
@@ -1071,6 +1078,7 @@ pub(crate) fn capture(
     if public {
         choice.kind = Some(match action {
             Action::PassPriority { .. } => "PassPriority".into(),
+            Action::TurnFaceUp { .. } => "TurnFaceUp".into(),
             Action::Foretell { .. } => "Foretell".into(),
             _ => format!("{:?}", action.action_type()),
         });
@@ -1447,6 +1455,42 @@ mod tests {
         assert_eq!(game.decision_memory[0].len(), 1);
         assert!(game.decision_memory[1].is_empty());
     }
+    /// A manifest turned face up is named by its permanent alias (CR 708.2),
+    /// and its actor's own record keeps the definition it now shows.
+    #[test]
+    fn decision_memory_own_record_keeps_a_turned_up_manifest() {
+        use crate::flow::zones::FormTransition;
+        let mut game = game();
+        game.decision_memory_include_own = true;
+        let card = game
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(0))
+            .iter()
+            .copied()
+            .find(|&object| game.state[object].name == "Mountain")
+            .unwrap();
+        let manifest = game.manifest(card, PlayerId(0));
+        assert!(game.turn_over(manifest, FormTransition::TurnFaceUp));
+        let alias = game.observed_object_id(manifest).0;
+        assert_ne!(
+            alias, game.state[manifest].id.0,
+            "the alias is not the card"
+        );
+        let pending = pending_pass(&game).unwrap();
+        let shown = |record: &DecisionRecord| {
+            record
+                .context
+                .mana_sources
+                .iter()
+                .find(|reference| reference.appearance == Some(alias))
+                .map(|reference| reference.definition)
+        };
+        let mountain = Some(game.state[manifest].definition_id.0);
+        assert_eq!(shown(&pending.record), Some(mountain));
+        assert_eq!(shown(pending.own.as_ref().unwrap()), Some(mountain));
+    }
+
     #[test]
     fn decision_memory_own_option_rebases_only_the_opposing_public_projection() {
         let mut game = game();

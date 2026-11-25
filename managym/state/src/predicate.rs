@@ -4,7 +4,7 @@
 
 use super::card::{CardType, Keyword, PrintedCharacteristics};
 
-use super::game_object::{Object, ObjectKind};
+use super::game_object::ObjectKind;
 use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
@@ -77,6 +77,8 @@ pub struct CardPredicate {
     /// "nonbasic": the card must not have the basic supertype.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nonbasic: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub nonlegendary: bool,
     /// At least one alternative must match ("artifact or Lesson").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<CardPredicate>,
@@ -176,32 +178,7 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
-    /// Match against an object's printed characteristics.
-    pub fn matches_object(&self, object: &Object) -> bool {
-        self.matches_object_with_power(object, object.power.unwrap_or(0))
-    }
-
-    /// Match against an object, substituting `power` (e.g. a permanent's
-    /// effective power including counters and until-EOT modifiers).
-    pub fn matches_object_with_power(&self, object: &Object, power: i32) -> bool {
-        self.matches(object, power, &[])
-    }
-
-    /// Full matching: `power` substitutes the card's printed power and
-    /// `added_types` are card types the object has in addition to its printed
-    /// types (an animated land's creature type, a granted land type).
-    pub fn matches(&self, object: &Object, power: i32, added_types: &[CardType]) -> bool {
-        self.matches_printing(
-            object,
-            object.kind(),
-            object.mana_value_cost().map_or(0, |cost| cost.mana_value),
-            power,
-            added_types,
-        )
-    }
-
-    /// Whether an object named `name` satisfies `named` (CR 201.2); an empty
-    /// name names nothing (CR 201.2a).
+    /// Whether an object named `name` satisfies `named` (CR 201.2).
     pub fn accepts_name(&self, name: &str) -> bool {
         self.named
             .as_deref()
@@ -221,6 +198,9 @@ impl CardPredicate {
 
     /// Structural matching over retained printing provenance, without looking
     /// up a departed object or borrowing a later appearance's copiable face.
+    /// `power` substitutes the printed power and `added_types` are card types
+    /// the object has beyond its printed ones (an animated land's creature
+    /// type, a granted land type).
     pub fn matches_printing(
         &self,
         object: &PrintedCharacteristics,
@@ -285,6 +265,14 @@ impl CardPredicate {
             .supertype
             .as_ref()
             .is_some_and(|s| !object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+        {
+            return false;
+        }
+        if self.nonlegendary
+            && object
+                .supertypes
+                .iter()
+                .any(|s| s.eq_ignore_ascii_case("legendary"))
         {
             return false;
         }

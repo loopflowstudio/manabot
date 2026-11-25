@@ -480,8 +480,12 @@ fn ogre_receipt(game: &Game) -> PaymentReceipt {
             .flatten()
             .find(|permanent| game.state[permanent.object].name == "Gray Ogre")
             .expect("the Ogre was cast")
-            .cast_spent
+            .spell_entry
+            .as_deref()
+            .unwrap()
+            .payment
             .clone()
+            .unwrap()
     })
 }
 

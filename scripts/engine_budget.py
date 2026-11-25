@@ -132,13 +132,30 @@ class Check:
 # --- Reading -----------------------------------------------------------------
 
 
+# Rows only a ``benchmark``-feature build prints. That build counts every
+# allocation and times layer work, so its speed is not the engine's.
+INSTRUMENTED_KEYS = ("layer_metrics", "payment_metrics")
+
+
 def _lines(path: Path) -> list[dict[str, Any]]:
-    """The JSON objects in benchmark output; cargo's own lines are skipped."""
-    return [
+    """The JSON objects in benchmark output; cargo's own lines are skipped.
+
+    Output from a build with the ``benchmark`` feature fails by name: Cargo
+    unifies a workspace member's dev-dependency features into the budget's
+    own build, so one test crate asking for it would slow every candidate.
+    """
+    rows = [
         json.loads(line)
         for line in path.read_text().splitlines()
         if line.startswith("{")
     ]
+    if any(key in row for row in rows for key in INSTRUMENTED_KEYS):
+        raise SystemExit(
+            f"{path}: built with the managym `benchmark` feature (allocation "
+            "counting and layer timers); a workspace dev-dependency that "
+            "needs constructed positions asks for `fixtures` instead"
+        )
+    return rows
 
 
 def read_search(path: Path) -> SearchResult:

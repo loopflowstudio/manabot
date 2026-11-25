@@ -195,7 +195,11 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
         name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
         incarnation: object.generation(),
         owner: owner.0,
-        zone: game.state.zones.zone_of(object),
+        zone: game.state.zones.zone_of(
+            game.state
+                .card_id(object)
+                .map_or(object, |card| game.state.object_of(card)),
+        ),
         origin: match game.state.card_id(object) {
             Some(card) if player.deck.contains(&card) => "deck",
             Some(card) if player.sideboard.contains(&card) => "outside",
@@ -834,8 +838,15 @@ mod tests {
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state[object]
-            .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
+        let front = (
+            game.state[object].definition_id,
+            game.state[object].copiable_definition(),
+        );
+        game.state[object].show_transforming_face(crate::state::game_object::TransformingFaces {
+            front,
+            back: (back, Arc::clone(&content.definition(back).unwrap().printed)),
+            back_up: true,
+        });
         let after = snapshot(&game, object);
         assert_eq!(game.state[object].name, "Forest");
         assert_eq!(after.name, before.name);

@@ -29,6 +29,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         into_the_roil(),
         lotus_cobra(),
         valakut_the_molten_pinnacle(),
+        rite_of_replication(),
     ]
 }
 
@@ -378,6 +379,31 @@ fn adventuring_gear() -> CardDefinition {
                     Modification::pump(2, 2),
                 )],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn rite_of_replication() -> CardDefinition {
+    let text_box = "Kicker {5} (You may pay an additional {5} as you cast this spell.)\nCreate a token that's a copy of target creature. If this spell was kicked, create five of those tokens instead.";
+    let copy =
+        |count| Effect::create_token_copies(ObjectSelector::Target(TargetSpec::Creature), count);
+    CardDefinition {
+        key: "zen.rite_of_replication",
+        scryfall_id: "4530fe45-8a3d-48e9-a7a5-abf8fb1485e3",
+        printed: PrintedCharacteristics {
+            name: "Rite of Replication".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{5}"))],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::If {
+                condition: Condition::Kicked,
+                then: vec![copy(5)],
+                otherwise: vec![copy(1)],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

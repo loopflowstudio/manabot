@@ -6,6 +6,7 @@ use crate::{
         decision::EffectFrame,
         game::{Game, Revisions},
         layers::{matches_view, Context, SourceSeed},
+        proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
     },
@@ -18,6 +19,7 @@ use crate::{
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
+        subtype::{is_creature_type, CreatureTypes},
         zone::ZoneType,
     },
 };
@@ -55,19 +57,20 @@ pub struct Characteristics {
     pub triggered_abilities: Vec<crate::state::ability::EffectiveTrigger>,
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
     pub name: String,
-    /// Whether a layer 1 effect replaced its name ("named Humble Merchant").
+    /// Whether a layer 3 effect set its name.
     pub name_set: bool,
-    /// Whether a layer 4 effect replaced its creature types ("is a black
-    /// Skeleton creature").
+    /// Whether a layer 4 effect replaced its creature types (Kellan's
+    /// upgrades, a Citizen, a Skeleton) or removed them with Creature. A
+    /// later grant of all creature types clears it, so it never accompanies
+    /// `CreatureTypes::All`.
     pub creature_types_set: bool,
-    /// Every subtype it has: printed (creature types replaced by a
-    /// characteristic-setting Aura's), then added by records.
+    /// Every subtype it has: printed or set, then added by records.
     pub subtypes: Vec<String>,
-    /// Creature subtypes added by records after any characteristic-setting
-    /// Aura (layer 4), in record order.
+    /// Subtypes added on top of its printed or set ones (layer 4), in record
+    /// order; creature types a record replaced are in `creature_types`.
     pub added_subtypes: Vec<String>,
-    /// Distinct creature types (CR 205.3m), sorted.
-    pub creature_types: Vec<String>,
+    /// Its creature types (CR 205.3m); none unless it is a creature.
+    pub creature_types: CreatureTypes,
     /// Layer 4 card types: printed, added by static type grants, and
     /// Creature when animated.
     pub types: CardTypes,
@@ -129,13 +132,27 @@ impl Characteristics {
         self.types.is_creature()
     }
 
+    /// Whether it has every creature type. Mid-pass, `CreatureTypes::All`
+    /// only marks the grant, which counts for a creature alone (CR 205.3d).
+    pub fn has_all_creature_types(&self) -> bool {
+        self.is_creature() && self.creature_types.is_all()
+    }
+
+    /// Whether a summoning-sick permanent with these characteristics can't
+    /// attack or pay {T} (CR 302.6): it is a creature without haste.
+    pub fn restricted_by_summoning_sickness(&self) -> bool {
+        self.is_creature() && !self.keywords.has(Keyword::Haste)
+    }
+
     /// Printed or granted land.
     pub fn is_land(&self) -> bool {
         self.types.is_land()
     }
 
+    /// Whether it has this subtype, counting all creature types.
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
+            || (self.has_all_creature_types() && is_creature_type(subtype))
     }
 }
 
@@ -542,7 +559,7 @@ impl Game {
             return printed;
         };
         let controller = self
-            .stack_spell(object_id)
+            .spell_on_stack(object_id)
             .map(|spell| spell.controller)
             .unwrap_or(object.owner);
         let value = self.cda_value(cda, controller);
@@ -588,60 +605,22 @@ impl Game {
         } else {
             predicate
         };
-        predicate.matches_object_with_power(
-            &self.state[object_id],
+        let object = &self.state[object_id];
+        predicate.matches_printing(
+            object,
+            object.kind(),
+            self.object_mana_value(object_id),
             if predicate.reads_power() { power() } else { 0 },
+            &[],
         )
     }
 
-    /// A departed permanent's predicate, read from its last known layered
-    /// view and battlefield status (CR 603.10a), with the live matcher's
-    /// semantics: a Clone, a transformed face and granted subtypes, types
-    /// and colors are what it was, never its printing or a later appearance.
     pub(crate) fn lki_matches_predicate(
         &self,
         lki: &crate::state::game_object::ObjectLki,
         predicate: &CardPredicate,
     ) -> bool {
-        let kind = self.state.objects.provenance(lki.object).map_or(
-            crate::state::game_object::ObjectKind::Card,
-            |(_, _, kind)| kind,
-        );
-        super::layers::matches_permanent_facts(
-            predicate,
-            &super::layers::PermanentFacts::departed(
-                lki,
-                self.lki_face_printing(lki),
-                self.lki_mana_printing(lki),
-                kind,
-            ),
-            None,
-        )
-    }
-
-    /// The copiable face a departed permanent last showed: a copy's or back
-    /// face's values when they changed, otherwise its retained printing.
-    /// Its name and supertypes come from here.
-    pub(crate) fn lki_face_printing<'a>(
-        &'a self,
-        lki: &'a crate::state::game_object::ObjectLki,
-    ) -> &'a crate::state::card::PrintedCharacteristics {
-        lki.copiable.as_ref().map_or_else(
-            || self.state.source_base(lki.object).1,
-            |changed| &*changed.printed,
-        )
-    }
-
-    /// The printing whose mana cost a departed permanent had: a transformed
-    /// permanent's front face (CR 712.8e), otherwise its face.
-    pub(crate) fn lki_mana_printing<'a>(
-        &'a self,
-        lki: &'a crate::state::game_object::ObjectLki,
-    ) -> &'a crate::state::card::PrintedCharacteristics {
-        lki.copiable
-            .as_ref()
-            .and_then(|changed| changed.front.as_ref())
-            .map_or_else(|| self.lki_face_printing(lki), |(_, front)| &**front)
+        super::layers::matches_departure(lki, predicate)
     }
 
     /// A recorded event can still ask what its departed card was. Read the
@@ -654,15 +633,32 @@ impl Game {
         if self.state.live(object).is_some() {
             return self.object_matches_predicate(object, predicate);
         }
-        let (_, printing) = self.state.source_base(object);
+        if let Some(lki) = self.object_lki(object) {
+            return super::layers::matches_departure(lki, predicate);
+        }
+        self.printing_matches_predicate(object, predicate)
+    }
+
+    /// Match the printing an object's card retains, not its current
+    /// appearance: a face-down manifest's hidden card, or a departed object
+    /// without last known information. Sampling reads a hidden slot this way.
+    pub(crate) fn printing_matches_predicate(
+        &self,
+        object: ObjectId,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let (_, printing) = self
+            .state
+            .objects
+            .retained_base(object)
+            .expect("retained printing");
         let (_, owner, kind) = self
             .state
             .objects
             .provenance(object)
             .expect("recorded provenance");
         let power = if predicate.reads_power() {
-            self.object_lki(object)
-                .map_or_else(|| self.printed_power(printing, owner), |lki| lki.power)
+            self.printed_power(printing, owner)
         } else {
             0
         };
@@ -739,21 +735,46 @@ impl Game {
     pub(crate) fn entry_matches_predicate(
         &self,
         object: ObjectId,
+        entry: &ZoneEntry,
         predicate: &CardPredicate,
     ) -> bool {
-        if self.state.live(object).is_some() {
-            return self.object_matches_predicate(object, predicate);
-        }
         if predicate.from_battlefield_this_turn {
-            return false;
+            return self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
+                && self.state.turn.graveyard_from_battlefield.contains(&object)
+                && self.entry_matches_predicate(
+                    object,
+                    entry,
+                    &CardPredicate {
+                        from_battlefield_this_turn: false,
+                        ..predicate.clone()
+                    },
+                );
         }
+        let Some(face) = self.battlefield_entry_face(object, entry) else {
+            return false;
+        };
         let row = self.state.entry_object(object);
         let power = if predicate.reads_power() {
-            self.printed_power(&row, row.owner)
+            self.printed_power(face, entry.controller.unwrap_or(row.owner))
         } else {
             0
         };
-        predicate.matches_object_with_power(row, power)
+        // A manifested permanent is a face-down 2/2 with mana value 0
+        // (CR 708.2), whatever card it hides.
+        let mana_value = match entry.face {
+            EntryFace::Manifested => 0,
+            EntryFace::Melded { partner, .. } => self.meld_mana_value(
+                self.state.card_of(object).expect("melded primary card"),
+                partner,
+            ),
+            EntryFace::ModalBack | EntryFace::Transformed if row.retained_base().1.modal_back => {
+                face.mana_cost.as_ref().map_or(0, |cost| cost.mana_value)
+            }
+            EntryFace::Front | EntryFace::Transformed | EntryFace::ModalBack => {
+                row.mana_value_cost().map_or(0, |cost| cost.mana_value)
+            }
+        };
+        predicate.matches_printing(face, row.kind(), mana_value, power, &[])
     }
 
     fn creature_count(&self, controller: PlayerId) -> usize {
@@ -811,7 +832,7 @@ impl Game {
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
         // Mana spent on the spell can give it a keyword (CR 106.6).
-        if let Some(spell) = self.stack_spell(object) {
+        if let Some(spell) = self.spell_on_stack(object) {
             keywords = keywords.union(spell.spent.keywords_gained());
         }
         for (_, owner, view) in self.static_sources() {
@@ -940,13 +961,20 @@ impl Game {
     }
 
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
+        // A creature with all creature types shares each listed one.
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+        let mut all = 0;
         for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-            for creature_type in &view.creature_types {
-                *counts.entry(creature_type.clone()).or_default() += 1;
+            match &view.creature_types {
+                CreatureTypes::All => all += 1,
+                CreatureTypes::Listed(listed) => {
+                    for creature_type in listed {
+                        *counts.entry(creature_type.clone()).or_default() += 1;
+                    }
+                }
             }
         }
-        counts.into_values().max().unwrap_or(0)
+        counts.into_values().max().unwrap_or(0) + all
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
@@ -1035,6 +1063,15 @@ impl Game {
         let source_id = || source.and_then(|source| self.lookup_current_permanent(source).ok());
         let source_permanent = || source_id().and_then(|id| self.state.permanents[id].as_ref());
         match condition {
+            Condition::OwnsMeldPair { partner } => source.is_some_and(|object| {
+                self.meld_partners(controller, object, partner)
+                    .next()
+                    .is_some()
+            }),
+            Condition::AtMostHalfStartingLife => {
+                let player = &self.state.players[controller.0];
+                player.life <= player.starting_life / 2
+            }
             Condition::Compare { left, op, right } => {
                 let context;
                 let frame = match frame {
@@ -1161,18 +1198,40 @@ impl Game {
             Condition::Not(condition) => {
                 !self.condition_holds(condition, controller, frame, source, triggering)
             }
-            Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
+            Condition::CastFromGraveyard => source
+                .and_then(|object| self.spell_on_stack(object))
+                .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
+            Condition::Kicked => frame.map_or_else(
+                || {
+                    source
+                        .and_then(|object| self.state.spell_entry(object))
+                        .is_some_and(|entry| entry.kicked)
+                },
+                |frame| frame.kicked,
+            ),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))
                 .is_some_and(|target| {
                     matches!(target, Target::Permanent(id)
                         if self.permanent_matches_predicate(id, predicate))
                 }),
-            Condition::SourceCountersAtLeast { kind, count } => {
-                source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
-            }
+            // A departed source answers from its last known information
+            // (CR 603.10a; Nine-Lives Familiar's intervening-if).
+            Condition::SourceCountersAtLeast { kind, count } => source_permanent()
+                .map(|permanent| permanent.counter_count(*kind))
+                .or_else(|| {
+                    source
+                        .and_then(|object| self.object_lki(object))
+                        .map(|lki| lki.counters.get(*kind))
+                })
+                .is_some_and(|n| n >= *count),
             Condition::SourceMatches(predicate) => {
-                source_id().is_some_and(|id| self.permanent_matches_predicate(id, predicate))
+                source.is_some_and(|object| match self.lookup_current_permanent(object) {
+                    Ok(id) => self.permanent_matches_predicate(id, predicate),
+                    Err(_) => self
+                        .object_lki(object)
+                        .is_some_and(|lki| super::layers::matches_departure(lki, predicate)),
+                })
             }
             Condition::SourceUnprepared => {
                 source_permanent().is_some_and(|p| self.prepared_copy(p.object).is_none())
@@ -1196,6 +1255,10 @@ impl Game {
                 ).unwrap_or(false))
             }
             Condition::Moved => frame.is_some_and(|frame| !frame.moved.is_empty()),
+            Condition::AttachedCountersAtLeast { kind, count } => frame
+                .and_then(|frame| self.frame_attached(frame))
+                .and_then(|id| self.state.permanents[id].as_ref())
+                .is_some_and(|permanent| permanent.counter_count(*kind) >= *count),
             Condition::TargetControlledByYou => {
                 let Some(Target::Permanent(permanent_id)) =
                     frame.and_then(EffectFrame::primary_target)
@@ -1296,11 +1359,10 @@ impl Game {
         if permanent.tapped {
             return false;
         }
-        if !permanent.summoning_sick {
-            return true;
-        }
-        let characteristics = self.characteristics(permanent_id);
-        !characteristics.is_creature() || characteristics.keywords.has(Keyword::Haste)
+        !permanent.summoning_sick
+            || !self
+                .characteristics(permanent_id)
+                .restricted_by_summoning_sickness()
     }
 
     /// Lethal-damage check (CR 704.5g) against the permanent's

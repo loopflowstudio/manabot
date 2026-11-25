@@ -46,12 +46,16 @@ fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<S
 fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     let source_allowed = place != Place::Elsewhere;
     match value {
-        Value::String(name) if matches!(name.as_str(), "Kicked" | "TargetDealtDamageThisTurn") => {
+        Value::String(name) if name == "TargetDealtDamageThisTurn" => {
             if place != Place::IfCondition {
                 found.push(path);
             }
         }
-        Value::String(name) if name == "SourceTapped" && !source_allowed => found.push(path),
+        Value::String(name)
+            if matches!(name.as_str(), "Kicked" | "SourceTapped") && !source_allowed =>
+        {
+            found.push(path)
+        }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
                 walk(item, format!("{path}/{index}"), place, found);

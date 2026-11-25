@@ -1752,8 +1752,7 @@ fn registered_mana_activations_consume_finite_payment_resources() {
                 assert!(
                     ability.tap_source
                         || ability.sacrifice_source
-                        || ability.once_each_turn
-                        || ability.exhaust
+                        || ability.is_use_limited()
                         || ability.tap_cost.as_ref().is_some_and(|cost| cost.count > 0),
                     "{} has no finite payment resource cost",
                     definition.name

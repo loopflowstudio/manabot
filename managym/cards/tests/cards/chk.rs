@@ -81,7 +81,7 @@ fn heartbeat_of_spring_adds_one_mana_of_a_produced_type_to_the_tapping_player() 
     for controller in [0, 1] {
         let (mut s, lands) = heartbeat_setup(controller, &["Forest"]);
         assert_eq!(
-            s.game_mut().cached_producible_mana(PlayerId(0)),
+            s.game().producible_mana(PlayerId(0)),
             Mana::parse("GG"),
             "controller {controller}"
         );
@@ -118,10 +118,7 @@ fn heartbeat_of_spring_copies_the_chosen_or_colorless_type() {
 
     let (mut s, _) = heartbeat_setup(0, &["Jasmine Dragon Tea Shop"]);
     s.allow_priority_floats();
-    assert_eq!(
-        s.game_mut().cached_producible_mana(PlayerId(0)),
-        Mana::parse("CC")
-    );
+    assert_eq!(s.game().producible_mana(PlayerId(0)), Mana::parse("CC"));
 }
 
 /// Each Heartbeat is its own triggered mana ability: after a land produces
