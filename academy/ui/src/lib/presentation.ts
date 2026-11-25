@@ -227,6 +227,25 @@ function validatePresentationKind(value: unknown, seq: number): void {
       requireInteger(value.count, 'kind.count', seq);
       requireInteger(value.total, 'kind.total', seq);
       return;
+    case 'searched':
+    case 'lost':
+      requireInteger(value.player, 'kind.player', seq);
+      return;
+    case 'looked':
+      requireInteger(value.player, 'kind.player', seq);
+      if (value.action !== 'scry' && value.action !== 'surveil') {
+        throw new Error(`Presentation event ${seq} has invalid kind.action`);
+      }
+      return;
+    case 'sacrificed':
+      if (!Array.isArray(value.objects)) {
+        throw new Error(`Presentation event ${seq} has invalid kind.objects`);
+      }
+      for (const object of value.objects) {
+        validateObjectRenderId(object, 'kind.objects[]', seq);
+      }
+      requireInteger(value.player, 'kind.player', seq);
+      return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
   }
@@ -358,6 +377,12 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'countered': return [{ kind: 'stack', id: kind.stack }];
     case 'passed': return [{ kind: 'player', id: kind.player }];
     case 'counters': return [object(kind.object)];
+    case 'searched':
+    case 'looked':
+    case 'lost':
+      return [{ kind: 'player', id: kind.player }];
+    case 'sacrificed':
+      return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
   }
 }
 

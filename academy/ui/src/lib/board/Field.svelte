@@ -24,6 +24,8 @@
     beat?: Set<number>;
     /** Damage dealt to each permanent since your last move. */
     damage: Map<number, number>;
+    /** Damage or counter deltas at the active cursor stop. */
+    stopDeltas?: ReadonlyMap<number, readonly { kind: 'damage' | 'counters'; text: string }[]>;
     /** Sources the automatic payer would tap, by permanent id. */
     planned: Map<number, PlannedSource> | null;
     /** Copies to take out of their piles: the pending payment's own plan. */
@@ -41,7 +43,7 @@
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
+  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, stopDeltas, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -107,6 +109,7 @@
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}
               dealt={damage.get(item.permanent.id) ?? 0}
+              stopDeltas={stopDeltas?.get(item.permanent.id) ?? []}
               planned={planned?.get(item.permanent.id) ?? null}
               paid={item.paid}
               side={toward === 'up' ? 'you' : 'opponent'}

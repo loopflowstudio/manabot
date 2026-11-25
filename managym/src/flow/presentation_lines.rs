@@ -5,7 +5,7 @@
 use crate::{
     cards::content_pack::default_content_pack,
     experience::{
-        ObjectRenderId, PlayerId as Seat, PresentationKind as Kind, PresentationLabels,
+        LookAction, ObjectRenderId, PlayerId as Seat, PresentationKind as Kind, PresentationLabels,
         RequiredNullable, StackRenderId, SubjectRef,
     },
     flow::{
@@ -138,6 +138,12 @@ impl Game {
 
     pub(super) fn pass_line(player: PlayerId) -> Vec<PresentationLine> {
         vec![PresentationLabels::default().line(Kind::Passed {
+            player: seat(player),
+        })]
+    }
+
+    pub(super) fn lost_line(player: PlayerId) -> Vec<PresentationLine> {
+        vec![PresentationLabels::default().line(Kind::Lost {
             player: seat(player),
         })]
     }
@@ -310,11 +316,44 @@ impl Game {
                 line.combat = true;
                 return vec![line];
             }
-            PermanentsDied { objects } => Kind::Died {
-                objects: objects
+            PermanentsDied { objects } => {
+                let sacrificed = self
+                    .presentation
+                    .as_deref()
+                    .map(|sink| sink.sacrificed.as_slice())
+                    .unwrap_or(&[]);
+                let objects: Vec<ObjectRenderId> = objects
                     .iter()
+                    .filter(|r| !sacrificed.contains(r))
                     .map(|r| self.named_permanent(*r, &mut labels))
-                    .collect(),
+                    .collect();
+                if objects.is_empty() {
+                    return vec![];
+                }
+                Kind::Died { objects }
+            }
+            PermanentSacrificed {
+                object_id,
+                controller,
+            } => {
+                let Some(object) = self.named_object(*object_id, viewer, &mut labels) else {
+                    return vec![];
+                };
+                Kind::Sacrificed {
+                    objects: vec![object],
+                    player: seat(*controller),
+                }
+            }
+            LibrarySearched { player } => Kind::Searched {
+                player: seat(*player),
+            },
+            Scried { player } => Kind::Looked {
+                player: seat(*player),
+                action: LookAction::Scry,
+            },
+            Surveilled { player } => Kind::Looked {
+                player: seat(*player),
+                action: LookAction::Surveil,
             },
             TurnStarted {
                 player,

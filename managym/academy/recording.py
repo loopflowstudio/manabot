@@ -521,7 +521,7 @@ class Recording:
         )
         boards = (
             deepcopy(event.get("boards", []))
-            if position.kind == "consequences"
+            if position.kind == "consequences" and not self.watch
             else []
         )
         return {

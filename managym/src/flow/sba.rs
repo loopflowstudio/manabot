@@ -65,6 +65,7 @@ impl Game {
 
     pub fn lose_game(&mut self, player: PlayerId) {
         if !self.is_game_over() && !self.protected_from_loss(player) {
+            self.presentation_lost(player, None);
             let mut losses = [LossCauses::default(); 2];
             losses[player.0].instructed = true;
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
@@ -100,6 +101,19 @@ impl Game {
             }
         }
         if losses.iter().any(|causes| causes.any()) {
+            for (seat, causes) in losses.iter().enumerate() {
+                if !causes.any() {
+                    continue;
+                }
+                let rule = if causes.life_total {
+                    Rule::ZeroLife
+                } else if causes.deck_empty {
+                    Rule::EmptyLibrary
+                } else {
+                    Rule::Poison
+                };
+                self.presentation_lost(PlayerId(seat), Some(rule));
+            }
             self.state.procedure = GameProcedure::Finished(GameOutcome::Losses { losses });
             return true;
         }

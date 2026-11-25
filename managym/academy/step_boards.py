@@ -36,7 +36,15 @@ Patch nodes (`patch`):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
+
+
+class WireStepBoard(TypedDict):
+    """One backward patch entry sent beside a frame or stored on a `TraceEvent`."""
+
+    first: int
+    last: int
+    patch: dict[str, Any]
 
 # The newest boards kept per batch: beats read out at most the last few moves.
 MAX_STEP_BOARDS = 24
@@ -95,12 +103,12 @@ def patch(base: Any, target: Any) -> dict[str, Any] | None:
 
 def wire_boards(
     boards: list[StepBoard], projection: dict[str, Any]
-) -> list[dict[str, Any]]:
+) -> list[WireStepBoard]:
     """`boards` (oldest first) as patches chained back from the frame's `projection`.
 
     Each entry is `{"first", "last", "patch"}`, oldest first, as `boards`.
     """
-    out: list[dict[str, Any]] = []
+    out: list[WireStepBoard] = []
     after = projection
     for board in reversed(boards):
         node = patch(after, board.projection)

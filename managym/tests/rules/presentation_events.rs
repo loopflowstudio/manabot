@@ -180,3 +180,205 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
             .is_none());
     }
 }
+
+/// Slice 4 remaining kinds: `sacrificed`, `searched`, `looked` (scry and
+/// surveil), and `lost` (`zero_life` and `empty_library`) from real games.
+#[test]
+fn remaining_kinds_searched_looked_sacrificed_and_lost_from_real_games() {
+    use managym::{
+        agent::action::{Action, ActionType},
+        experience::{LookAction, PresentationKind},
+        flow::presentation::Rule,
+        state::{game_object::PlayerId, target::Target, zone::ZoneType},
+    };
+
+    let cast_named = |scenario: &mut Scenario, name: &str| {
+        let index = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::CastSpell { object, .. } if scenario.game().state[*object].name == name))
+            .unwrap_or_else(|| panic!("CastSpell {name} not offered"));
+        scenario.step_action(index);
+    };
+
+    // 1. Evolving Wilds -> activated, sacrificed, ability_resolved, searched.
+    //    Opt -> cast, resolved, looked(scry), drew.
+    //    Wary Thespian -> cast, resolved, triggered, ability_resolved, looked(surveil).
+    let mut scenario = five_color_setup(&["Evolving Wilds", "Opt", "Wary Thespian"]);
+    scenario.force_permanent_on_battlefield(0, "Evolving Wilds");
+    scenario.force_card_in_hand(0, "Opt");
+    scenario.force_card_in_hand(0, "Wary Thespian");
+    scenario.game_mut().scenario_refresh_priority().unwrap();
+    scenario.game_mut().enable_presentation();
+
+    assert!(scenario.take_action_by_type(ActionType::PriorityActivateAbility));
+    for _ in 0..16 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Searched { .. }))
+        {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    cast_named(&mut scenario, "Opt");
+    for _ in 0..16 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told.iter().flat_map(|f| &f.lines).any(|l| {
+            matches!(
+                l.kind,
+                PresentationKind::Looked {
+                    action: LookAction::Scry,
+                    ..
+                }
+            )
+        }) {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    cast_named(&mut scenario, "Wary Thespian");
+    for _ in 0..20 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told.iter().flat_map(|f| &f.lines).any(|l| {
+            matches!(
+                l.kind,
+                PresentationKind::Looked {
+                    action: LookAction::Surveil,
+                    ..
+                }
+            )
+        }) {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    let facts = scenario.game().presentation_facts(PlayerId(0));
+    let opp_facts = scenario.game().presentation_facts(PlayerId(1));
+    let lines: Vec<_> = facts.iter().flat_map(|f| &f.lines).collect();
+    assert!(
+        lines.iter().any(|l| matches!(
+            &l.kind,
+            PresentationKind::Sacrificed { player, objects }
+                if player.0 == 0 && !objects.is_empty()
+                    && l.labels.objects.values().any(|n| n == "Evolving Wilds")
+        )),
+        "expected sacrificed Evolving Wilds in {lines:#?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| matches!(l.kind, PresentationKind::Searched { player } if player.0 == 0)),
+        "expected searched in {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| matches!(
+            l.kind,
+            PresentationKind::Looked {
+                player,
+                action: LookAction::Scry
+            } if player.0 == 0
+        )),
+        "expected scry looked in {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| matches!(
+            l.kind,
+            PresentationKind::Looked {
+                player,
+                action: LookAction::Surveil
+            } if player.0 == 0
+        )),
+        "expected surveil looked in {lines:#?}"
+    );
+    // Neither search nor scry/surveil leaks hidden card names to the opponent.
+    for fact in &opp_facts {
+        for line in &fact.lines {
+            if matches!(
+                line.kind,
+                PresentationKind::Searched { .. } | PresentationKind::Looked { .. }
+            ) {
+                assert!(line.labels.objects.is_empty());
+                assert!(line.labels.stacks.is_empty());
+            }
+        }
+    }
+
+    // 2. Lethal burn -> Lost with Rule::ZeroLife caused by the spell's resolution.
+    let mut burn = five_color_setup(&["Lightning Bolt"]);
+    burn.force_card_in_hand(0, "Lightning Bolt");
+    burn.game_mut().state.players[1].life = 3;
+    burn.game_mut().scenario_refresh_priority().unwrap();
+    burn.game_mut().enable_presentation();
+    cast_named(&mut burn, "Lightning Bolt");
+    let target_opp = burn
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::ChooseTarget { target: Target::Player(PlayerId(1)), .. }))
+        .expect("target player 1");
+    burn.step_action(target_opp);
+    for _ in 0..8 {
+        if burn.game().is_game_over() {
+            break;
+        }
+        burn.advance_default_action();
+    }
+    assert!(burn.game().is_game_over());
+    let burn_facts = burn.game().presentation_facts(PlayerId(0));
+    let lost_fact = burn_facts
+        .iter()
+        .find(|f| {
+            f.lines
+                .iter()
+                .any(|l| matches!(l.kind, PresentationKind::Lost { player } if player.0 == 1))
+        })
+        .expect("expected lost fact");
+    assert_eq!(lost_fact.rule, Some(Rule::ZeroLife));
+    assert!(lost_fact.cause.is_some());
+
+    // 3. Empty library draw -> Lost with Rule::EmptyLibrary.
+    let mut mill = five_color_setup(&["Opt"]);
+    mill.force_card_in_hand(0, "Opt");
+    let lib_cards: Vec<_> = mill
+        .game()
+        .state
+        .latest_objects()
+        .filter(|(id, obj)| {
+            obj.owner == PlayerId(0)
+                && mill.game().state.zones.zone_of(*id) == Some(ZoneType::Library)
+        })
+        .map(|(id, _)| id)
+        .collect();
+    for card in lib_cards {
+        mill.game_mut()
+            .state
+            .place_object(card, PlayerId(0), ZoneType::Exile);
+    }
+    mill.game_mut().scenario_refresh_priority().unwrap();
+    mill.game_mut().enable_presentation();
+    cast_named(&mut mill, "Opt");
+    for _ in 0..8 {
+        if mill.game().is_game_over() {
+            break;
+        }
+        mill.advance_default_action();
+    }
+    assert!(mill.game().is_game_over());
+    let mill_facts = mill.game().presentation_facts(PlayerId(0));
+    let empty_lost = mill_facts
+        .iter()
+        .find(|f| {
+            f.lines
+                .iter()
+                .any(|l| matches!(l.kind, PresentationKind::Lost { player } if player.0 == 0))
+        })
+        .expect("expected empty-library lost fact");
+    assert_eq!(empty_lost.rule, Some(Rule::EmptyLibrary));
+}

@@ -963,20 +963,50 @@ pub enum PresentationKind {
         count: i32,
         total: i32,
     },
+    /// A player searched their library (CR 701.23).
+    Searched {
+        player: PlayerId,
+    },
+    /// A player scried (CR 701.22) or surveilled (CR 701.25).
+    Looked {
+        player: PlayerId,
+        action: LookAction,
+    },
+    /// Permanents a player sacrificed (CR 701.17a).
+    Sacrificed {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// A player lost the game (CR 104.3).
+    Lost {
+        player: PlayerId,
+    },
 }
 
-/// The state-based action (CR 704.5) that did what an event tells, when no
-/// player chose it.
+/// Which library-looking keyword action `PresentationKind::Looked` tells.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LookAction {
+    Scry,
+    Surveil,
+}
+
+/// The state-based or turn-based action (CR 704.5, 504, 514) that did what an
+/// event tells, when no player chose it.
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PresentationRule {
     DrawStep,
+    Cleanup,
     LethalDamage,
     ZeroToughness,
     ZeroLoyalty,
     ZeroDefense,
     LegendRule,
     UnattachedAura,
+    ZeroLife,
+    EmptyLibrary,
+    Poison,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]

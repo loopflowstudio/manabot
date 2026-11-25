@@ -104,14 +104,17 @@
 
   // ———————————————— What the board draws
 
-  const transitionBoards = $derived.by(() => {
-    if (inStudy || !current || current.kind !== 'consequences' || !current.boards?.length) return [];
+  const transitionBoardsState = $derived.by(() => {
+    if (inStudy || !current || current.kind !== 'consequences' || !current.boards?.length) {
+      return { boards: [], error: null as string | null };
+    }
     try {
-      return stepBoards(current.observation, current.boards);
-    } catch {
-      return [];
+      return { boards: stepBoards(current.observation, current.boards), error: null };
+    } catch (reason) {
+      return { boards: [], error: reason instanceof Error ? reason.message : 'Board patch failed' };
     }
   });
+  const transitionBoards = $derived(transitionBoardsState.boards);
   const subBoard = $derived(
     !inStudy && subCursor !== null && current?.kind === 'consequences'
       ? boardAt(transitionBoards, subCursor)
@@ -189,6 +192,9 @@
       you: saidOf(heroSeat),
       opponent: saidOf(1 - heroSeat),
     });
+    if (transitionBoardsState.error) {
+      return `${reading} · Board unavailable for this step`;
+    }
     if (transitionBoards.length === 0) {
       const lastSeq = current.history.at(-1)?.seq ?? null;
       const shared = lastSeq !== null ? sharedLaterCount(history, subCursor, lastSeq) : 0;

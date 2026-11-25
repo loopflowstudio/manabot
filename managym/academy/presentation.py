@@ -43,6 +43,10 @@ CUES: dict[str, tuple[str, int, str | None]] = {
     "activated": ("emphasized", 550, None),
     "triggered": ("normal", 550, None),
     "counters": ("normal", 450, None),
+    "searched": ("normal", 450, None),
+    "looked": ("normal", 450, None),
+    "sacrificed": ("normal", 500, None),
+    "lost": ("critical", 700, None),
     "passed": ("ambient", 0, None),
     "attack_group": ("emphasized", 500, "combat.attack"),
     "blocked": ("normal", 450, "combat.block"),
@@ -83,18 +87,18 @@ class PresentationProjector:
             for index, line in enumerate(fact["lines"]):
                 kind = line["kind"]
                 name = kind["kind"]
-                # Multiple simultaneous discards or reveals share a line, but
-                # a new cause, board or intervening event starts a new one.
+                # Multiple simultaneous discards, sacrifices or reveals share a
+                # line, but a new cause, board or intervening event starts a new one.
                 previous = events[-1] if events else None
                 if (
                     previous is not None
-                    and name in {"discarded", "revealed"}
+                    and name in {"discarded", "sacrificed", "revealed"}
                     and previous["kind"]["kind"] == name
                     and previous["kind"]["player"] == kind["player"]
                     and previous.get("cause") == cause
                     and self.position(previous["seq"]) == fact["position"]
                 ):
-                    key = "objects" if name == "discarded" else "cards"
+                    key = "cards" if name == "revealed" else "objects"
                     previous["kind"][key].extend(kind[key])
                     for table, names in line["labels"].items():
                         previous.setdefault("labels", {}).setdefault(table, {}).update(

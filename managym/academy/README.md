@@ -166,12 +166,13 @@ with what followed from it indented beneath, and the rule that did it ("died ·
 lethal damage"). Select a line, or step with ← and →, to see the board as it
 was after it; Esc or Space returns to now without acting while the rail's
 pending choice stays live. After the opponent acts the board walks their
-unread board stops one kept board at a time (lines that happened at once in
-the rules share a stop) with a caption and scrubber under the board; clicking
+unread board stops one kept board at a time (lines noted inside one whole-state
+boundary, including simultaneous rules events or effects of one resolution,
+share a stop) with a caption and scrubber under the board; clicking
 a tick or resting on the caption holds, and **Show their turn again** replays
 the turn. Reloaded active games keep the lines with their card names intact
-and say **Board not kept for this step** for earlier ones; recordings retain
-per-line `boards` patches for Review, and recordings made before moves were
+and say **Board not kept for this step** for earlier ones; Play recordings retain
+per-line `boards` patches for Review (Watch stores none), and recordings made before moves were
 recorded as events read as a flat list. See
 [reading the history](../../docs/academy.md#reading-the-history)
 for controls, exact-subject inspection and Replay/Study behavior.

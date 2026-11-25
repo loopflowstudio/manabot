@@ -140,9 +140,37 @@ describe('tell', () => {
       ['zero_defense', 'defense 0'],
       ['legend_rule', 'legend rule'],
       ['unattached_aura', 'Aura had nothing to enchant'],
+      ['cleanup', 'cleanup'],
+      ['zero_life', '0 life'],
+      ['empty_library', 'drew from an empty library'],
+      ['poison', '10 poison counters'],
     ];
     for (const [rule, words] of rules) {
       expect(tellRule(rule)).toBe(words);
     }
+  });
+
+  it('words searched, looked (scry/surveil), sacrificed and lost with rules', () => {
+    expect(segmentText(tell(event(1, { kind: 'searched', player: 0 }), EMPTY, PLAYERS)))
+      .toBe('You searched your library');
+    expect(segmentText(tell(event(2, { kind: 'searched', player: 1 }), EMPTY, PLAYERS)))
+      .toBe('Heuristic searched their library');
+    expect(segmentText(tell(event(3, { kind: 'looked', player: 0, action: 'scry' }), EMPTY, PLAYERS)))
+      .toBe('You scried');
+    expect(segmentText(tell(event(4, { kind: 'looked', player: 1, action: 'surveil' }), EMPTY, PLAYERS)))
+      .toBe('Heuristic surveilled');
+    const sac = tell(
+      event(5, { kind: 'sacrificed', player: 0, objects: [{ entity: 7, incarnation: 0 }] }, {
+        labels: { objects: { '7:0': 'Evolving Wilds' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(sac)).toBe('You sacrificed Evolving Wilds');
+    expect(sac.find(s => s.card === 'Evolving Wilds')).toBeDefined();
+    expect(segmentText(tell(event(6, { kind: 'lost', player: 1 }, { rule: 'zero_life' }), EMPTY, PLAYERS)))
+      .toBe('Heuristic lost the game · 0 life');
+    expect(segmentText(tell(event(7, { kind: 'lost', player: 0 }, { rule: 'empty_library' }), EMPTY, PLAYERS)))
+      .toBe('You lost the game · drew from an empty library');
   });
 });

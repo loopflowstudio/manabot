@@ -68,7 +68,11 @@ export type FactKind =
   | 'land'
   | 'discarded'
   | 'revealed'
-  | 'drew';
+  | 'drew'
+  | 'searched'
+  | 'looked'
+  | 'sacrificed'
+  | 'lost';
 
 export interface RecentFact {
   seq: number;
@@ -367,6 +371,26 @@ export function recentView(
       case 'revealed': {
         const by = playerSide(frame, kind.player);
         push(by, 'revealed');
+        break;
+      }
+      case 'searched': {
+        const by = playerSide(frame, kind.player);
+        push(by, 'searched');
+        break;
+      }
+      case 'looked': {
+        const by = playerSide(frame, kind.player);
+        push(by, 'looked');
+        break;
+      }
+      case 'sacrificed': {
+        const by = playerSide(frame, kind.player);
+        push(by, 'sacrificed', null, kind.objects.map(o => o.entity));
+        break;
+      }
+      case 'lost': {
+        const by = playerSide(frame, kind.player);
+        push(by, 'lost');
         break;
       }
       case 'targeted':

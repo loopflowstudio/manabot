@@ -169,7 +169,10 @@
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
-              data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
+              data-travel-id={item.card ? `card:${item.card.id}` : `stack:${item.entry.id}`}
+              data-travel-source={item.entry.source_permanent !== undefined ? `perm:${item.entry.source_permanent}` : undefined}
+              data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'}
+              data-travel-name={item.card?.name ?? item.entry.label.split(' — ')[0]}
               aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>

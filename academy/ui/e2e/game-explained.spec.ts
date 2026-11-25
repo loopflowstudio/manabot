@@ -71,18 +71,21 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('live-cast-cursor.png') });
 
-  // 2. Damage board: stepping → shows Lightning Bolt off the stack and Gray Ogre on the battlefield with 3 damage.
+  // 2. Damage board: stepping → shows Lightning Bolt off the stack and Gray Ogre on the battlefield with 3 damage and −3 stop delta.
   await page.keyboard.press('ArrowRight');
   await expect(damageButton).toHaveAttribute('aria-current', 'true');
   await expect(page.getByTestId('stack-entry')).toHaveCount(0);
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(1);
+  await expect(page.locator('.half.opponent [data-testid=stop-delta][data-delta-kind=damage]').first()).toHaveText('−3');
   await expect(page.getByTestId('walk-caption')).toContainText('3 to Gray Ogre');
   await page.screenshot({ path: testInfo.outputPath('live-damage-cursor.png') });
 
-  // 3. Death board: stepping → shows Gray Ogre gone, rule named in caption and top bar reading.
+  // 3. Death board (reduced motion): Gray Ogre gone, rule chip reads where it was with ZERO death travel.
   await page.keyboard.press('ArrowRight');
   await expect(deathButton).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(0);
+  await expect(page.getByTestId('death-travel')).toHaveCount(0);
+  await expect(page.getByTestId('death-chip').first()).toContainText('lethal damage');
   await expect(page.getByTestId('turn-number')).toContainText('Your Lightning Bolt');
   await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
   await expect(page.getByTestId('walk-caption')).toContainText('lethal damage');
@@ -120,4 +123,63 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(0);
   await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
   await page.screenshot({ path: testInfo.outputPath('review-death-cursor.png') });
+});
+
+test('normal motion animates a death travelling to the graveyard within 180 ms with its rule', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'off'));
+  await page.routeWebSocket('**/ws/play', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      if (typeof message !== 'string') { server.send(message); return; }
+      const payload = JSON.parse(message);
+      if (payload.type === 'new_game') payload.config.seed = 11;
+      server.send(JSON.stringify(payload));
+    });
+  });
+
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByTestId('opponent-select').selectOption('random');
+  await selectDeck(page, 'hero', 'interactive');
+  await selectDeck(page, 'villain', 'interactive');
+  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  await expect(page.getByTestId('game')).toBeVisible();
+
+  expect(await playToDeath(page)).toBe(true);
+
+  const toggles = page.locator('[data-testid=consequence-toggle][aria-expanded="false"]');
+  for (let i = 0; i < await toggles.count(); i += 1) {
+    await toggles.nth(0).click();
+  }
+
+  const damageButton = page.locator('[data-testid=game-log] [data-testid=history-consequence] button[data-history-seq]').filter({ hasText: /3 damage to Gray Ogre/ }).first();
+  await damageButton.click();
+  await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(1);
+
+  // Step from damage to death: Gray Ogre travels to the opponent's graveyard within 180 ms with `lethal damage`.
+  await page.keyboard.press('ArrowRight');
+  const travel = page.getByTestId('death-travel').first();
+  await expect(travel).toBeVisible();
+  await expect(travel).toHaveAttribute('data-death-rule', 'lethal damage');
+  await expect(travel).toHaveAttribute('data-death-side', 'opponent');
+
+  const anim = await travel.evaluate(el => {
+    const running = el.getAnimations().find(a => a.id === 'death-travel');
+    const timing = running?.effect?.getComputedTiming();
+    const keyframes = running?.effect instanceof KeyframeEffect ? running.effect.getKeyframes() : [];
+    return {
+      found: Boolean(running),
+      duration: typeof timing?.duration === 'number' ? timing.duration : null,
+      toTranslate: String(keyframes.at(-1)?.translate ?? ''),
+    };
+  });
+  expect(anim.found).toBe(true);
+  expect(anim.duration).toBeLessThanOrEqual(180);
+  // Opponent's graveyard is on the left plate, so the card travels left (negative dx).
+  expect(anim.toTranslate).toMatch(/-\d+/);
+  await expect(page.getByTestId('death-chip').first()).toContainText('lethal damage');
+  await page.screenshot({ path: testInfo.outputPath('normal-death-travel.png') });
 });

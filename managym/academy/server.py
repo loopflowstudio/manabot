@@ -164,7 +164,7 @@ from .shared_table_protocol import (
     ViewerIdentity,
     ViewerRole,
 )
-from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
+from .step_boards import MAX_STEP_BOARDS, StepBoard, WireStepBoard, wire_boards
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -1999,7 +1999,7 @@ class GameSession:
                 -MAX_PRESENTATION_EVENTS:
             ]
         if live_events and self.trace is not None and self.trace.events:
-            trace_boards: list[dict[str, Any]] = []
+            trace_boards: list[WireStepBoard] = []
             if step_boards and self.obs is not None:
                 post_viewer = (
                     self.human_seat

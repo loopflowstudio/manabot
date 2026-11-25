@@ -96,6 +96,10 @@ UNION_VARIANTS = {
         "CounteredPresentation",
         "PassedPresentation",
         "CountersPresentation",
+        "SearchedPresentation",
+        "LookedPresentation",
+        "SacrificedPresentation",
+        "LostPresentation",
     ),
 }
 

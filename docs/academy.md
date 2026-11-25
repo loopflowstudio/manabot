@@ -1020,6 +1020,7 @@ chose it, it ends with the rule that did:
 | Aura had nothing to enchant | An Aura attached to nothing legal goes to the graveyard. |
 | 0 life | A player at 0 life or less loses. |
 | drew from an empty library | A player who drew from an empty library loses. |
+| 10 poison counters | A player with 10 or more poison counters loses. |
 | draw step, cleanup | The turn itself did it: the draw for the turn, the discard to hand size. |
 
 The history says why something happened in the game. Why a creature is a 4/4
@@ -1045,7 +1046,7 @@ before its effects land on the next line; when a folded spell has no
 consequences (such as a creature resolving cleanly), selecting it shows the
 resolved permanent on the board. Lines that happened at once in the rules (two
 creatures dying in one state-based check, a spell's cast and target, a
-sweeper's deaths) share one board.
+sweeper's deaths, or multiple effects of a single resolution) share one board.
 
 ← and → move the cursor one line at a time when no control has focus. Esc
 returns to now, and `?` opens keyboard help. The step bar follows the board
@@ -1104,7 +1105,8 @@ In Replay the same history is read from the recording. For a recorded game you
 played, the rail holds your full history across the game and selecting any
 line jumps to its transition and its per-line board inside that transition (a
 recording without kept per-line boards falls back to the transition's board
-and says which lines share it). For a watched bot game, history stays strictly
+and says which lines share it; a board patch that cannot be reconstructed says
+**Board unavailable for this step**). For a watched bot game, history stays strictly
 the selected acting viewer's track before that decision's cursor, and
 spectator reveal never adds names to it. **Try another line** has its own
 history, and **Return to recorded decision** restores the recording's.
@@ -1730,17 +1732,19 @@ it.
 
 **Boards.** With the sink enabled, the engine clones a read-only position
 (with no sink and no pending decision context) at each whole-state boundary
-inside a step where at least one non-pass fact was noted: after an effect
-instruction or event batch, after a stack object resolves, after a state-based
-batch, after a trigger round reaches the stack, and after a non-pass action or
-turn-based action. Priority passes never cut a position. Each fact records the
-index of the position cut after it, so lines noted inside one boundary share a
-board. Python projects each position for the recorded person's seat through
-the same `decision_surface_view` used for frames and chains `boards` patches
-(`first`, `last`, `patch`) back from the final frame, deduplicating equal
-boards. Traces retain each transition's mid-step `boards` patches beside
-`presentation` (outside replay identity) so Review draws per-line boards with
-the same patcher.
+inside a step where at least one non-pass fact was noted: before and after a
+non-pass action, after a stack object resolves, when stabilization begins
+(separating combat damage or a turn-based action from the state-based check
+after it), after a state-based batch, and after a trigger round reaches the
+stack. Priority passes never cut a position. Each fact records the index of the
+position cut after it, so lines noted inside one boundary (including multiple
+effects of a single resolution) share a board. Python projects each position
+for the recorded person's seat through the same `decision_surface_view` used
+for frames and chains `boards` patches (`first`, `last`, `patch`) back from the
+final frame, deduplicating equal boards. Play traces retain each transition's
+mid-step `boards` patches beside `presentation` (outside replay identity) so
+Review draws per-line boards with the same patcher; Watch keeps its own
+acting-viewer transport and stores no person-seat `boards`.
 
 **Names.** Each event's `labels` carry the viewer-safe names for every object
 and stack entry it mentions, at exact incarnation, across live updates,

@@ -17,6 +17,8 @@
     live: boolean;
     /** Damage this player was dealt since your last move. */
     damage?: number;
+    /** Damage dealt to this player at the active historical/walk stop. */
+    stopDamage?: number;
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
     side: 'you' | 'opponent';
@@ -24,7 +26,7 @@
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, caption, offers, live, damage = 0, stopDamage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -63,12 +65,12 @@
     {#if caption}<span class="type-caption caption text-ink-2">{caption}</span>{/if}
     {#if choosing}<span class="type-label choosing" data-testid="plate-choosing">Choosing…</span>{/if}
     <span class="life"><span class="numeral">{player.life}</span><span class="type-caption text-ink-2">life</span>
-      {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{/if}</span>
+      {#if damage}{#key damage}<span class="dealt" data-testid="player-damage">−{damage}<span class="sr-only"> since your last move</span></span>{/key}{:else if stopDamage}{#key stopDamage}<span class="dealt" data-testid="stop-delta" data-delta-kind="damage">−{stopDamage}</span>{/key}{/if}</span>
     {#if counters}<span class="type-caption">{counters}</span>{/if}
   </button>
   <ul class="zones">
     {#each zones as zone (zone.key)}
-      <li>
+      <li data-graveyard-side={zone.key === 'Graveyard' ? side : undefined}>
         {#if zone.cards && zone.cards.length}
           <button type="button" class="zone-open" onclick={event => onzone(zone.key, zone.cards!, event.currentTarget)}
             aria-label={`${zone.key}: ${zone.count}. Show cards`}>
@@ -120,7 +122,7 @@
   .dealt {
     align-self: center; margin-left: auto; padding: 0 5px; border-radius: var(--radius-sm);
     font: 600 16px/24px var(--font-sans); color: var(--bg); background: var(--damage);
-    animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
+    animation: land var(--motion-move) var(--motion-move-ease);
   }
   @keyframes land { from { transform: translateY(-40%) scale(1.2); opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .dealt { animation: none; } }

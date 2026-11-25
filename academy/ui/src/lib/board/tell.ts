@@ -54,12 +54,16 @@ export interface TellOptions {
 
 const RULE_WORDS: Record<PresentationRule, string> = {
   draw_step: 'draw step',
+  cleanup: 'cleanup',
   lethal_damage: 'lethal damage',
   zero_toughness: 'toughness 0',
   zero_loyalty: 'loyalty 0',
   zero_defense: 'defense 0',
   legend_rule: 'legend rule',
   unattached_aura: 'Aura had nothing to enchant',
+  zero_life: '0 life',
+  empty_library: 'drew from an empty library',
+  poison: '10 poison counters',
 };
 
 const COUNTER_WORDS: Record<string, string> = {
@@ -291,6 +295,24 @@ export function tell(
       const who = subjectName(kind.player, players);
       const cards = joinSegments(kind.cards.map(name => cardSeg(name)));
       return [txt(`${who} revealed `), ...cards];
+    }
+    case 'searched': {
+      const who = subjectName(kind.player, players);
+      const possessiveLibrary = who === 'You' ? 'your library' : 'their library';
+      return [txt(`${who} searched ${possessiveLibrary}`)];
+    }
+    case 'looked': {
+      const who = subjectName(kind.player, players);
+      return [txt(`${who} ${kind.action === 'scry' ? 'scried' : 'surveilled'}`)];
+    }
+    case 'sacrificed': {
+      const who = subjectName(kind.player, players);
+      const permanents = joinSegments(kind.objects.map(id => obj(id, 'a permanent')));
+      return [txt(`${who} sacrificed `), ...permanents, ...ruleClause(event.rule)];
+    }
+    case 'lost': {
+      const who = subjectName(kind.player, players);
+      return [txt(`${who} lost the game`), ...ruleClause(event.rule)];
     }
     case 'targeted': {
       const source = subjectSegment(kind.source, event, fallbackLabels, players, null, true);

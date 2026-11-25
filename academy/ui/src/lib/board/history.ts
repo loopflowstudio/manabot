@@ -121,6 +121,10 @@ const MODERN_KINDS = new Set([
   'countered',
   'counters',
   'drew',
+  'searched',
+  'looked',
+  'sacrificed',
+  'lost',
 ]);
 
 /** Exact definition of a player move: move kind with no cause and no rule. */
@@ -153,6 +157,7 @@ function objectEntities(event: PresentationEvent): number[] {
     case 'died':
     case 'destroyed':
     case 'discarded':
+    case 'sacrificed':
       return kind.objects.map(o => o.entity);
     case 'attack_group':
       return kind.attackers.map(o => o.entity);

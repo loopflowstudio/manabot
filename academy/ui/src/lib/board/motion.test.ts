@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Travel } from './motion';
+import { LONGEST_TRAVEL_MS, Travel } from './motion';
 
 // A card drawn on a fake page: a layout slot, plus the offset of the travel
 // animation in progress at `clock`. Only translation is modelled, linearly;
@@ -20,8 +20,13 @@ class FakeCard {
   dataset: Record<string, string>;
   slot: { x: number; y: number };
   animations: FakeAnimation[] = [];
-  constructor(id: string, name: string, slot: { x: number; y: number }) {
-    this.dataset = { travelId: id, travelName: name };
+  constructor(
+    id: string,
+    name: string,
+    slot: { x: number; y: number },
+    extra: Record<string, string> = {},
+  ) {
+    this.dataset = { travelId: id, travelName: name, ...extra };
     this.slot = slot;
   }
   running(): FakeAnimation[] {
@@ -67,8 +72,8 @@ describe('card travel', () => {
     travel.play(root, false);
     expect(cub.drawn()).toEqual({ x: 100, y: 100 });
 
-    // Halfway, another frame moves its slot again.
-    clock = 120;
+    // Halfway (90 ms of 180 ms), another frame moves its slot again.
+    clock = 90;
     expect(cub.drawn().x).toBeCloseTo(300);
     travel.snapshot(root);
     cub.slot = { x: 600, y: 100 };
@@ -82,6 +87,37 @@ describe('card travel', () => {
     expect(cub.drawn()).toEqual({ x: 600, y: 100 });
   });
 
+  it('keeps travel within 180 ms and leaves stack abilities from their source card', () => {
+    expect(LONGEST_TRAVEL_MS).toBeLessThanOrEqual(180);
+    clock = 0;
+    const reaper = new FakeCard('perm:14', 'Midnight Reaper', { x: 220, y: 140 }, { travelSide: 'opponent' });
+    const trigger = new FakeCard('stack:91', 'Midnight Reaper', { x: 960, y: 80 }, {
+      travelSide: 'opponent',
+      travelSource: 'perm:14',
+    });
+    const travel = new Travel();
+    travel.snapshot(page([reaper]));
+    expect(travel.seenBefore('perm:14')?.side).toBe('opponent');
+    travel.play(page([reaper, trigger]), false);
+
+    expect(trigger.running()).toHaveLength(1);
+    expect(trigger.running()[0].duration).toBeLessThanOrEqual(180);
+    expect(trigger.drawn()).toEqual({ x: 220, y: 140 });
+    clock = 180;
+    expect(trigger.running()).toHaveLength(0);
+    expect(trigger.drawn()).toEqual({ x: 960, y: 80 });
+  });
+
+  it('remembers a departed card position for death rule chips', () => {
+    clock = 0;
+    const ogre = new FakeCard('perm:19', 'Gray Ogre', { x: 340, y: 120 }, { travelSide: 'opponent' });
+    const travel = new Travel();
+    travel.snapshot(page([ogre]));
+    travel.play(page([]), true);
+    expect(travel.seenBefore('perm:19')?.rect.left).toBe(340);
+    expect(travel.knownPosition('perm:19')?.side).toBe('opponent');
+  });
+
   it('puts a travelling card home when the next frame does not animate', () => {
     clock = 0;
     const cub = new FakeCard('perm:9', 'Badgermole Cub', { x: 100, y: 100 });
@@ -91,7 +127,7 @@ describe('card travel', () => {
     cub.slot = { x: 500, y: 100 };
     travel.play(root, false);
 
-    clock = 120;
+    clock = 90;
     travel.snapshot(root);
     travel.play(root, true);
     expect(cub.running()).toHaveLength(0);

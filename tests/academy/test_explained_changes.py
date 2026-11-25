@@ -390,3 +390,160 @@ def test_turn_6_track_passes_activation_counters_and_review_index(
     assert body["track_history"] is True
     assert body["history"] == session.canonical_presentation[0]
 
+
+def test_remaining_kinds_searched_looked_sacrificed_and_lost_through_session(
+    tmp_path: Path,
+) -> None:
+    """Real GameSession games emit `sacrificed`, `searched`, `looked` (scry and
+    surveil) and `lost` (`zero_life`), validated against protocol v1."""
+    deck = {
+        "Island": 12,
+        "Forest": 12,
+        "Mountain": 12,
+        "Evolving Wilds": 6,
+        "Opt": 6,
+        "Wary Thespian": 6,
+        "Lightning Bolt": 6,
+    }
+    session = GameSession(trace_dir=tmp_path)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": deck,
+            "villain_deck": {"Mountain": 60},
+            "auto_pass": False,
+            "seed": 19,
+        }
+    )
+    assert session.env is not None
+    _command(session, "Keep hand", "keep")
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    session.env.scenario_force_battlefield(0, "Island", True)
+    session.env.scenario_force_battlefield(0, "Forest", True)
+    session.env.scenario_force_battlefield(0, "Forest", True)
+    session.env.scenario_force_battlefield(0, "Evolving Wilds", True)
+    session.env.scenario_force_card_in_hand(0, "Opt")
+    session.env.scenario_force_card_in_hand(0, "Wary Thespian")
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+
+    start = len(session.presentation_events)
+
+    def advance_until(predicate: Any, prefix: str, limit: int = 16) -> None:
+        for step in range(limit):
+            if predicate(session.presentation_events[start:]):
+                return
+            prompt = session._publish_current_prompt()
+            if prompt is None:
+                return
+            descriptions = [a["description"] for a in prompt.actions]
+            pick = next(
+                (
+                    d
+                    for d in descriptions
+                    if d.startswith("Pay")
+                    or "Select" in d
+                    or "top" in d
+                    or "graveyard" in d
+                    or d == "Pass priority"
+                ),
+                descriptions[0],
+            )
+            _command(session, pick, f"{prefix}-{step}")
+
+    prompt = session._publish_current_prompt()
+    assert prompt is not None
+    ew_label = next(
+        a["description"] for a in prompt.actions if "Evolving Wilds" in a["description"]
+    )
+    _command(session, ew_label, "ew-activate")
+    advance_until(
+        lambda evs: any(e["kind"]["kind"] == "searched" for e in evs), "ew"
+    )
+
+    _command(session, "Cast Opt", "cast-opt")
+    advance_until(
+        lambda evs: any(
+            e["kind"]["kind"] == "looked" and e["kind"]["action"] == "scry"
+            for e in evs
+        ),
+        "opt",
+    )
+
+    _command(session, "Cast Wary Thespian", "cast-thespian")
+    advance_until(
+        lambda evs: any(
+            e["kind"]["kind"] == "looked" and e["kind"]["action"] == "surveil"
+            for e in evs
+        ),
+        "thespian",
+    )
+
+    events = list(session.presentation_events[start:])
+    sacrificed = _first(events, "sacrificed")
+    searched = _first(events, "searched")
+    scry = next(
+        e
+        for e in events
+        if e["kind"]["kind"] == "looked" and e["kind"]["action"] == "scry"
+    )
+    surveil = next(
+        e
+        for e in events
+        if e["kind"]["kind"] == "looked" and e["kind"]["action"] == "surveil"
+    )
+
+    assert sacrificed["kind"]["player"] == 0
+    assert "Evolving Wilds" in sacrificed["labels"]["objects"].values()
+    assert searched["kind"] == {"kind": "searched", "player": 0}
+    assert "labels" not in searched
+    assert scry["kind"] == {"kind": "looked", "player": 0, "action": "scry"}
+    assert "labels" not in scry
+    assert surveil["kind"] == {"kind": "looked", "player": 0, "action": "surveil"}
+    assert "labels" not in surveil
+
+    # Burn lethal finishes the game and emits `lost` with rule `zero_life`.
+    burn = GameSession(trace_dir=tmp_path)
+    burn.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": {"Mountain": 24, "Lightning Bolt": 36},
+            "villain_deck": {"Mountain": 60},
+            "auto_pass": False,
+            "seed": 3,
+        }
+    )
+    assert burn.env is not None
+    _command(burn, "Keep hand", "burn-keep")
+    burn.env.scenario_clear_hand(0)
+    burn.env.scenario_clear_hand(1)
+    for _ in range(7):
+        burn.env.scenario_force_battlefield(0, "Mountain", True)
+        burn.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    burn.obs = burn.env.scenario_refresh()
+    burn.published_prompt = None
+    for idx in range(40):
+        prompt = burn._publish_current_prompt()
+        if prompt is None:
+            break
+        descriptions = [a["description"] for a in prompt.actions]
+        pick = next(
+            (
+                d
+                for d in descriptions
+                if d == "Cast Lightning Bolt"
+                or d.startswith("Target Villain")
+                or d.startswith("Target Seat 2")
+                or d.startswith("Pay")
+                or d == "Pass priority"
+            ),
+            descriptions[0],
+        )
+        _command(burn, pick, f"burn-{idx}")
+    lost = _first(burn.presentation_events, "lost")
+    assert lost["kind"] == {"kind": "lost", "player": 1}
+    assert lost["rule"] == "zero_life"
+    assert "cause" in lost
+
+

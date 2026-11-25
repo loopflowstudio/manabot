@@ -24,11 +24,12 @@
   import Inspect from './Inspect.svelte';
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
-  import { prefersReducedMotion, Travel } from './motion';
+  import { animateDeathTravel, prefersReducedMotion, Travel, type DeathMark } from './motion';
   import { region } from './region';
   import { BEAT_MS, scrubberStops, sharedLaterCount, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
   import { findBoard, type StepBoard } from './boards';
   import { buildHistory, cursorReading, lineAtCursor, stepCursor, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
+  import { eventObjectName, tellCounter, tellRule } from './tell';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
@@ -505,6 +506,48 @@
   const damage = $derived(cursor !== null ? NO_DAMAGE : recent.damage);
   const finished = $derived(result !== undefined && cursor === null);
 
+  // Per-stop damage and counter deltas shown on cards/plates while walking or looking back.
+  const activeSeqSet = $derived.by<ReadonlySet<number>>(() => {
+    if (cursor === null) return new Set();
+    if (walking && activeStop) return new Set(activeStop.seqs);
+    if (activeLine) return new Set(activeLine.line.seqs);
+    return new Set(activeStop?.seqs ?? [cursor]);
+  });
+  const stopDeltas = $derived.by(() => {
+    const objects = new Map<number, { kind: 'damage' | 'counters'; text: string }[]>();
+    const players = new Map<number, number>();
+    if (cursor === null || activeSeqSet.size === 0) return { objects, players };
+    const objectDamage = new Map<number, number>();
+    for (const event of presentation.events) {
+      if (!activeSeqSet.has(event.seq)) continue;
+      if (event.kind.kind === 'damage') {
+        if (event.kind.target.kind === 'object') {
+          const id = event.kind.target.id.entity;
+          objectDamage.set(id, (objectDamage.get(id) ?? 0) + event.kind.amount);
+        } else if (event.kind.target.kind === 'player') {
+          const id = event.kind.target.id;
+          const idx = id === boardProjection.agent.id || id === boardProjection.agent.player_index
+            ? boardProjection.agent.player_index
+            : id === boardProjection.opponent.id || id === boardProjection.opponent.player_index
+              ? boardProjection.opponent.player_index
+              : null;
+          if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
+        }
+      } else if (event.kind.kind === 'counters') {
+        const id = event.kind.object.entity;
+        const list = objects.get(id) ?? [];
+        list.push({ kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
+        objects.set(id, list);
+      }
+    }
+    for (const [id, amount] of objectDamage) {
+      const list = objects.get(id) ?? [];
+      list.unshift({ kind: 'damage', text: `−${amount}` });
+      objects.set(id, list);
+    }
+    return { objects, players };
+  });
+
   // Look up the kept board for `cursor`: a past board has no live offers, while
   // the rail stays live throughout.
   const cursorHit = $derived(cursor !== null ? findBoard(stepBoards, cursor) : null);
@@ -538,15 +581,90 @@
   // ———————————————— Motion
 
   let root = $state<HTMLElement | null>(null);
+  let boardEl = $state<HTMLElement | null>(null);
   const travel = new Travel();
-  // Cards travel between frames and between the boards beats are shown on.
+  let deathMarks = $state.raw<DeathMark[]>([]);
+
+  function runDeathTravel(element: HTMLElement, mark: DeathMark): { destroy: () => void } {
+    const animation = animateDeathTravel(element, mark);
+    return { destroy: () => { animation.cancel(); } };
+  }
+
+  // Cards travel between frames and between the boards stops are shown on.
   $effect.pre(() => {
     void boardProjection;
     travel.snapshot(root);
   });
   $effect(() => {
-    void boardProjection;
-    travel.play(root, prefersReducedMotion());
+    const proj = boardProjection;
+    const stopSeqs = activeSeqSet;
+    const cur = cursor;
+    const sinceRev = sinceRevision;
+    const pace = beatPace;
+    const events = presentation.events;
+    const matchId = frame.match_id;
+    const rev = frame.revision;
+    const reduced = prefersReducedMotion();
+    travel.play(root, reduced);
+
+    // Build death marks for creatures dying at this stop (or since your last move
+    // when staying on now under reduced motion / pace Off).
+    const onBoard = new Set([...proj.agent.battlefield, ...proj.opponent.battlefield].map(p => p.id));
+    const relevant: { event: typeof events[number]; index: number }[] = [];
+    if (cur !== null) {
+      events.forEach((event, index) => {
+        if (event.kind.kind === 'died' && stopSeqs.has(event.seq)) relevant.push({ event, index });
+      });
+    } else if ((reduced || pace === 'off') && sinceRev !== null) {
+      events.forEach((event, index) => {
+        if (event.kind.kind === 'died' && event.from_revision >= sinceRev) relevant.push({ event, index });
+      });
+    }
+    if (!relevant.length || !boardEl || !root) {
+      deathMarks = [];
+      return;
+    }
+    const boardRect = boardEl.getBoundingClientRect();
+    const marks: DeathMark[] = [];
+    for (const { event, index } of relevant) {
+      if (event.kind.kind !== 'died') continue;
+      const labels = presentation.labelsAt(index);
+      const rule = event.rule ? tellRule(event.rule) : null;
+      for (const obj of event.kind.objects) {
+        if (onBoard.has(obj.entity)) continue;
+        const travelKey = `perm:${obj.entity}`;
+        const before = travel.seenBefore(travelKey);
+        const known = travel.knownPosition(travelKey);
+        const side: 'you' | 'opponent' = known?.side
+          ?? (proj.agent.graveyard.some(c => c.id === obj.entity) ? 'you' : 'opponent');
+        const fallbackRow = root.querySelector<HTMLElement>(`.half.${side} .row.creatures`)?.getBoundingClientRect();
+        const rect = known?.rect ?? fallbackRow;
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+        const x = known ? rect.left - boardRect.left : rect.left - boardRect.left + rect.width / 2 - 44;
+        const y = known ? rect.top - boardRect.top : rect.top - boardRect.top + rect.height / 2 - 20;
+        const width = known ? rect.width : 88;
+        const height = known ? rect.height : 40;
+        const gyRect = root.querySelector<HTMLElement>(`[data-graveyard-side="${side}"]`)?.getBoundingClientRect();
+        const toDx = gyRect ? (gyRect.left + gyRect.width / 2) - (boardRect.left + x + width / 2) : 0;
+        const toDy = gyRect ? (gyRect.top + gyRect.height / 2) - (boardRect.top + y + height / 2) : 0;
+        const name = eventObjectName(event, obj, labels) ?? known?.name ?? 'Creature';
+        marks.push({
+          entity: obj.entity,
+          name,
+          rule,
+          side,
+          x,
+          y,
+          width,
+          height,
+          toDx,
+          toDy,
+          key: `${matchId}:${cur ?? rev}:${event.seq}:${obj.entity}`,
+          animate: !reduced && before !== null,
+        });
+      }
+    }
+    deathMarks = marks;
   });
 
   // Battlefield frames are printed cards, upright or tapped on their side;
@@ -903,23 +1021,25 @@
   </header>
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (clicking an earlier board returns to now; Esc and Space do the same from the keyboard) -->
-  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
+  <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
     data-board={cursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
     onclick={event => { if (cursor !== null && !(event.target instanceof Element && event.target.closest('.zone'))) returnToNow(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
+        stopDamage={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
+        stopDamage={stopDeltas.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -968,6 +1088,26 @@
           {/each}
         </div>
       </section>
+    {/if}
+    {#if deathMarks.length}
+      <div class="death-layer" aria-hidden="true">
+        {#each deathMarks as mark (mark.key)}
+          {#if mark.animate}
+            <div class="death-travel" data-testid="death-travel" data-death-object={mark.entity} data-death-rule={mark.rule ?? ''}
+              data-death-side={mark.side}
+              style:left={`${mark.x}px`} style:top={`${mark.y}px`} style:width={`${mark.width}px`} style:height={`${mark.height}px`}
+              use:runDeathTravel={mark}>
+              <span class="death-travel-name">{mark.name}</span>
+              {#if mark.rule}<span class="death-travel-rule">{mark.rule}</span>{/if}
+            </div>
+          {/if}
+          <span class="death-chip" class:delayed={mark.animate} data-testid="death-chip" data-death-object={mark.entity}
+            data-death-rule={mark.rule ?? ''}
+            style:left={`${mark.x + mark.width / 2}px`} style:top={`${mark.y + mark.height / 2}px`}>
+            {mark.rule ?? `${mark.name} died`}
+          </span>
+        {/each}
+      </div>
     {/if}
   </div>
 
@@ -1070,7 +1210,7 @@
   <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
-  <Lines {lines} {root} revision={frame.revision} />
+  <Lines {lines} {root} revision={`${frame.revision}:${cursor ?? 'now'}`} />
 </div>
 
 {#if menuAt}
@@ -1279,8 +1419,27 @@
   .inspect-toggle:hover { color: var(--text); background: var(--bg-field); }
   .inspect-toggle[aria-pressed='true'] { color: var(--text); background: var(--bg-field); }
 
+  .death-layer { position: absolute; inset: 0; pointer-events: none; z-index: var(--layer-panel); overflow: hidden; }
+  .death-travel {
+    position: absolute; display: flex; flex-direction: column; justify-content: space-between; padding: 4px;
+    border-radius: var(--radius-card); border: 1px solid var(--damage);
+    background: var(--bg-surface); box-shadow: var(--shadow-raised); color: var(--text);
+  }
+  .death-travel-name { font: 600 12px/16px var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .death-travel-rule {
+    align-self: flex-start; padding: 0 5px; border-radius: var(--radius-sm);
+    font: 600 12px/16px var(--font-sans); color: var(--bg); background: var(--damage);
+  }
+  .death-chip {
+    position: absolute; transform: translate(-50%, -50%); padding: 1px 6px; border-radius: var(--radius-sm);
+    font: 600 12px/16px var(--font-sans); white-space: nowrap;
+    color: var(--damage); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--damage), var(--shadow-raised);
+  }
+  .death-chip.delayed { animation: death-chip-in var(--motion-move) ease-out; }
+  @keyframes death-chip-in { from { opacity: 0; } to { opacity: 1; } }
+
   @media (prefers-reduced-motion: reduce) {
     .hand-card, .board { transition: none; }
-    .menu, .preview, .result-card, .keys { animation: none; }
+    .menu, .preview, .result-card, .keys, .death-chip.delayed { animation: none; }
   }
 </style>

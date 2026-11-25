@@ -59,6 +59,8 @@
     beat?: boolean;
     /** Damage it was dealt since your last move, shown as it lands. */
     dealt?: number;
+    /** Damage or counter changes at the active cursor stop ("−3", "+1/+1 · 2"). */
+    stopDeltas?: readonly { kind: 'damage' | 'counters'; text: string }[];
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
     /** What it has committed to the pending cost: "tapped to crew". */
@@ -87,7 +89,7 @@
 
   let {
     name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
-    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null,
+    toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, stopDeltas = [], planned = null, paid = null,
     count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, onactivate, onpreview,
   }: Props = $props();
 
@@ -257,7 +259,7 @@
       </span>
       {#if chips.length}
         <span class="chips" style:--below={`${hasPt ? LINE[plate] + 4 : 3}px`}>
-          {#each chips as chip (chip.key)}<i class={`chip ${chip.kind}`} class:granted={chip.granted}>{chip.text}</i>{/each}
+          {#each chips as chip (`${chip.key}:${chip.text}`)}<i class={`chip ${chip.kind}`} class:granted={chip.granted}>{chip.text}</i>{/each}
         </span>
       {/if}
       {#if hasPt}
@@ -272,7 +274,15 @@
       {#if recorded && (recorded.p !== null || recorded.chosen)}
         <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
       {/if}
-      {#if dealt}{#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
+      {#if dealt}
+        {#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}
+      {:else if stopDeltas.length}
+        <span class="stop-deltas" aria-hidden="true">
+          {#each stopDeltas as delta (`${delta.kind}:${delta.text}`)}
+            <span class={`stop-delta ${delta.kind}`} data-testid="stop-delta" data-delta-kind={delta.kind}>{delta.text}</span>
+          {/each}
+        </span>
+      {/if}
     </span>
   </button>
 </div>
@@ -351,8 +361,10 @@
     color: var(--text); background: var(--bg-surface); box-shadow: 0 0 0 1px var(--border);
   }
   .chip.combat, .chip.counter { font-weight: 600; }
-  .chip.damage { font-weight: 600; color: var(--damage); }
+  .chip.damage { font-weight: 600; color: var(--damage); animation: bump var(--motion-move) var(--motion-move-ease); }
+  .chip.counter { animation: bump var(--motion-move) var(--motion-move-ease); }
   .chip.granted { box-shadow: 0 0 0 1px var(--gain); }
+  @keyframes bump { from { transform: scale(1.14); } }
 
   /* Lift: what a legal offer acts on is raised; the selected card higher, with an ink edge. */
   .tcard.legal { --rise: -6px; box-shadow: var(--lift); }
@@ -402,9 +414,22 @@
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
     font: 600 20px/28px var(--font-sans); color: var(--bg);
     padding: 0 6px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
-    animation: land calc(var(--motion-move) * 1.6) var(--motion-move-ease);
+    animation: land var(--motion-move) var(--motion-move-ease);
   }
+  .stop-deltas {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
+  }
+  .stop-delta {
+    font: 600 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
+    padding: 0 5px; border-radius: var(--radius-sm); box-shadow: var(--shadow-raised);
+    animation: land var(--motion-move) var(--motion-move-ease);
+  }
+  .stop-delta.damage { color: var(--bg); background: var(--damage); }
+  .stop-delta.counters { color: var(--bg); background: var(--gain); }
   @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
+  .stop-delta { animation-name: delta-land; }
+  @keyframes delta-land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);
     font-family: var(--font-sans); font-weight: 600; font-variant-numeric: tabular-nums;
@@ -416,6 +441,6 @@
   .pt.hurt { color: var(--damage); }
   @media (prefers-reduced-motion: reduce) {
     .slot, .tcard { transition: none; }
-    .dealt { animation: none; }
+    .dealt, .stop-delta, .chip.damage, .chip.counter { animation: none; }
   }
 </style>

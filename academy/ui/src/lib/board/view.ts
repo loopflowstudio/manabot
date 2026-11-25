@@ -230,6 +230,48 @@ function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[], 
   };
 }
 
+/**
+ * Order blockers opposite the attackers they block so combat pairs stand
+ * across the centre line without crossing block lines. Leaves both rows in
+ * their original order whenever no blocks are declared.
+ */
+function alignCombatRows(a: SideView, b: SideView): void {
+  const hasBlock = (sideView: SideView): boolean =>
+    sideView.creatures.some(pile => pile.items.some(item => item.permanent.blocking !== undefined));
+  const [defender, attacker] = hasBlock(a) ? [a, b] : hasBlock(b) ? [b, a] : [null, null];
+  if (!defender || !attacker) return;
+
+  const blockedIds = new Set<number>();
+  for (const pile of defender.creatures) {
+    for (const item of pile.items) {
+      if (item.permanent.blocking !== undefined) blockedIds.add(item.permanent.blocking);
+    }
+  }
+  const blockedAttackers: Pile[] = [];
+  const unblockedAttackers: Pile[] = [];
+  const idleAttackers: Pile[] = [];
+  for (const pile of attacker.creatures) {
+    if (pile.items.some(item => blockedIds.has(item.permanent.id))) blockedAttackers.push(pile);
+    else if (pile.items.some(item => item.permanent.attacking)) unblockedAttackers.push(pile);
+    else idleAttackers.push(pile);
+  }
+  attacker.creatures = [...blockedAttackers, ...unblockedAttackers, ...idleAttackers];
+
+  const rank = new Map<number, number>();
+  attacker.creatures.forEach((pile, index) => {
+    for (const item of pile.items) rank.set(item.permanent.id, index);
+  });
+  const blockers: { pile: Pile; targetRank: number; order: number }[] = [];
+  const idleDefenders: Pile[] = [];
+  defender.creatures.forEach((pile, order) => {
+    const target = pile.items.find(item => item.permanent.blocking !== undefined)?.permanent.blocking;
+    if (target !== undefined) blockers.push({ pile, targetRank: rank.get(target) ?? Number.MAX_SAFE_INTEGER, order });
+    else idleDefenders.push(pile);
+  });
+  blockers.sort((x, y) => x.targetRank - y.targetRank || x.order - y.order);
+  defender.creatures = [...blockers.map(entry => entry.pile), ...idleDefenders];
+}
+
 /** Stack entries in display order (top first) with their spell cards. */
 function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => PlacedOffer[]): StackItem[] {
   const cards = [...frame.projection.agent.stack, ...frame.projection.opponent.stack];
@@ -346,6 +388,7 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
     .flatMap(entry => (entry.object ? [[entry.object.display_id, entry.phrase] as const] : [])));
   const you = side(agent, offersAt, paid);
   const them = side(opponent, offersAt, paid);
+  alignCombatRows(you, them);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));
   const hand = agent.hand.filter(card => !onStack.has(card.id))

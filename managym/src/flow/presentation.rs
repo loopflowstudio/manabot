@@ -48,12 +48,14 @@ use crate::{
 /// name a fact taken in an earlier step.
 pub type FactId = u32;
 
-/// A state-based action (CR 704.5) that moved a permanent, in words a
-/// person reads.
+/// A state-based or turn-based action (CR 704.5, 504, 514) that moved a
+/// permanent, discarded a card or ended the game, in words a person reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rule {
     DrawStep,
+    /// CR 514.1.
+    Cleanup,
     /// CR 704.5g.
     LethalDamage,
     /// CR 704.5f.
@@ -66,6 +68,12 @@ pub enum Rule {
     LegendRule,
     /// CR 704.5m.
     UnattachedAura,
+    /// CR 704.5a.
+    ZeroLife,
+    /// CR 704.5b.
+    EmptyLibrary,
+    /// CR 704.5c.
+    Poison,
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +87,7 @@ enum Note {
     },
     Stack,
     Pass,
+    Lost,
 }
 
 #[derive(Clone, Debug)]
@@ -105,8 +114,13 @@ pub struct PresentationSink {
     trigger_causes: Vec<(TriggerId, FactId)>,
     /// State-based reasons for the batch being performed.
     rules: Vec<(ObjectEventRef, Rule)>,
+    /// Permanents already told as sacrificed in the current batch so a
+    /// simultaneous `PermanentsDied` (finished Saga) does not tell them twice.
+    pub(super) sacrificed: Vec<ObjectEventRef>,
     /// The last damage fact dealt to each permanent since priority.
     damaged: Vec<(ObjectEventRef, FactId)>,
+    /// The last damage fact dealt to each player since priority.
+    player_damaged: [Option<FactId>; 2],
     /// Positions cut since the last take, oldest first.
     positions: Vec<Game>,
     /// Some fact has no position yet.
@@ -221,6 +235,17 @@ impl Game {
             } => self.permanent_event_ref(*permanent),
             _ => None,
         };
+        let damaged_player = match event {
+            GameEvent::DamageDealt {
+                target: DamageTarget::Player(player),
+                ..
+            } => Some(*player),
+            _ => None,
+        };
+        let sacrificed = match event {
+            GameEvent::PermanentSacrificed { object_id, .. } => self.object_event_ref(*object_id),
+            _ => None,
+        };
         let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer));
         let sink = self.presentation.as_deref_mut().expect("checked above");
         // Combat damage is one fact: the observation tells it by the
@@ -252,6 +277,12 @@ impl Game {
         let id = sink.push_caused(damage, rule, Note::Event(event.clone()), lines);
         if let Some(object) = damaged {
             sink.damaged.push((object, id));
+        }
+        if let Some(player) = damaged_player {
+            sink.player_damaged[player.0] = Some(id);
+        }
+        if let Some(object) = sacrificed {
+            sink.sacrificed.push(object);
         }
     }
 
@@ -317,12 +348,45 @@ impl Game {
         fact.rule = draw_step.then_some(Rule::DrawStep);
     }
 
+    /// Note a player losing the game (CR 104.3, 704.5a–c).
+    pub(crate) fn presentation_lost(&mut self, player: PlayerId, rule: Option<Rule>) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::lost_line(player));
+        let fallback = (rule == Some(Rule::ZeroLife))
+            .then(|| sink.player_damaged[player.0])
+            .flatten();
+        sink.push_caused(fallback, rule, Note::Lost, lines);
+    }
+
+    /// Tag the just-emitted hand-to-graveyard discard as a cleanup-step rule action.
+    pub(crate) fn presentation_cleanup_discard(&mut self) {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return;
+        };
+        if let Some(fact) = sink.facts.last_mut() {
+            if matches!(
+                fact.note,
+                Note::Event(GameEvent::CardMoved {
+                    from: Some(ZoneType::Hand),
+                    to: ZoneType::Graveyard,
+                    ..
+                })
+            ) {
+                fact.rule = Some(Rule::Cleanup);
+            }
+        }
+    }
+
     /// Stabilization reached priority: the resolution's consequences end.
     pub(crate) fn presentation_settled(&mut self) {
         if let Some(sink) = self.presentation.as_deref_mut() {
             sink.resolution = None;
             sink.rules.clear();
+            sink.sacrificed.clear();
             sink.damaged.clear();
+            sink.player_damaged = [None, None];
         }
     }
 
@@ -345,14 +409,14 @@ impl Game {
         if self.presentation.is_none() || self.state.pending_triggers.len() <= from {
             return;
         }
-        let died = match event {
+        let (departed_obj, died) = match event {
             GameEvent::CardMoved {
                 departed: Some(departed),
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
-            } => self.object_event_ref(*departed),
-            _ => None,
+            } => (Some(*departed), self.object_event_ref(*departed)),
+            _ => (None, None),
         };
         let Some(sink) = self.presentation.as_deref_mut() else {
             return;
@@ -360,6 +424,8 @@ impl Game {
         let death = |fact: &&Fact| {
             matches!(&fact.note, Note::Event(GameEvent::PermanentsDied { objects })
                 if objects.iter().any(|object| Some(*object) == died))
+                || matches!(&fact.note, Note::Event(GameEvent::PermanentSacrificed { object_id, .. })
+                    if Some(*object_id) == departed_obj)
         };
         let same = |fact: &&Fact| match &fact.note {
             Note::Event(told) => told == event,
@@ -412,6 +478,7 @@ impl Game {
             return Vec::new();
         };
         sink.facts.clear();
+        sink.sacrificed.clear();
         sink.land_play = None;
         sink.uncut = false;
         std::mem::take(&mut sink.positions)

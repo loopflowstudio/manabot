@@ -85,7 +85,7 @@ async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
 test('the board walks the opponent turn with a steady-height caption and scrubber; Space returns to now and number keys act', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
   await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
@@ -133,9 +133,13 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   await page.getByTestId('walk-replay').click();
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'true');
   await expect(board).toHaveAttribute('data-board', 'step');
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.getByTestId('walk-caption').hover();
   await expect(page.getByTestId('walk-caption')).toHaveAttribute('data-holding', 'true');
-  await page.screenshot({ path: testInfo.outputPath('walk-holding.png') });
+  await page.screenshot({ path: testInfo.outputPath('walk-holding-wash.png') });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: testInfo.outputPath('walk-holding-night.png') });
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.mouse.move(2, 2);
 
   // Clicking a scrubber tick puts the cursor on that stop and holds (walking = false).
@@ -154,7 +158,7 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
 test('clicking the earlier board returns to now; selecting a history line and arrows step kept boards', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
   await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);

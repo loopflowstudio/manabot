@@ -527,19 +527,29 @@ export const PRESENTATION_KIND_NAMES = [
   'countered',
   'passed',
   'counters',
+  'searched',
+  'looked',
+  'sacrificed',
+  'lost',
 ] as const;
 
 export const PRESENTATION_RULES = [
   'draw_step',
+  'cleanup',
   'lethal_damage',
   'zero_toughness',
   'zero_loyalty',
   'zero_defense',
   'legend_rule',
   'unattached_aura',
+  'zero_life',
+  'empty_library',
+  'poison',
 ] as const;
-/** The state-based action (CR 704.5) that did what an event tells. */
+/** The state-based or turn-based action (CR 704.5, 504, 514) that did what an event tells. */
 export type PresentationRule = (typeof PRESENTATION_RULES)[number];
+
+export type LookAction = 'scry' | 'surveil';
 
 /**
  * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
@@ -644,6 +654,24 @@ export type PresentationKind =
       count: number;
       /** The permanent's count of that kind after. */
       total: number;
+    }
+  | {
+      kind: 'searched';
+      player: number;
+    }
+  | {
+      kind: 'looked';
+      player: number;
+      action: LookAction;
+    }
+  | {
+      kind: 'sacrificed';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'lost';
+      player: number;
     };
 
 export interface PresentationEvent {

@@ -870,6 +870,28 @@ class CountersPresentation(ProtocolModel):
     total: Int32
 
 
+class SearchedPresentation(ProtocolModel):
+    kind: Literal["searched"]
+    player: UInt8
+
+
+class LookedPresentation(ProtocolModel):
+    kind: Literal["looked"]
+    player: UInt8
+    action: Literal["scry", "surveil"]
+
+
+class SacrificedPresentation(ProtocolModel):
+    kind: Literal["sacrificed"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class LostPresentation(ProtocolModel):
+    kind: Literal["lost"]
+    player: UInt8
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -889,18 +911,26 @@ PresentationKind: TypeAlias = Annotated[
     | AbilityResolvedPresentation
     | CounteredPresentation
     | PassedPresentation
-    | CountersPresentation,
+    | CountersPresentation
+    | SearchedPresentation
+    | LookedPresentation
+    | SacrificedPresentation
+    | LostPresentation,
     Field(discriminator="kind"),
 ]
 
 PresentationRule: TypeAlias = Literal[
     "draw_step",
+    "cleanup",
     "lethal_damage",
     "zero_toughness",
     "zero_loyalty",
     "zero_defense",
     "legend_rule",
     "unattached_aura",
+    "zero_life",
+    "empty_library",
+    "poison",
 ]
 
 

@@ -1887,6 +1887,14 @@
         "agent_player_id"
       ]
     },
+    "LookAction": {
+      "description": "Which library-looking keyword action `PresentationKind::Looked` tells.",
+      "type": "string",
+      "enum": [
+        "scry",
+        "surveil"
+      ]
+    },
     "ObjectRenderId": {
       "type": "object",
       "properties": {
@@ -2679,6 +2687,101 @@
             "count",
             "total"
           ]
+        },
+        {
+          "description": "A player searched their library (CR 701.23).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "searched"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
+          "description": "A player scried (CR 701.22) or surveilled (CR 701.25).",
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/LookAction"
+            },
+            "kind": {
+              "type": "string",
+              "const": "looked"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player",
+            "action"
+          ]
+        },
+        {
+          "description": "Permanents a player sacrificed (CR 701.17a).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sacrificed"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
+        },
+        {
+          "description": "A player lost the game (CR 104.3).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "lost"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
         }
       ]
     },
@@ -2701,16 +2804,20 @@
       "additionalProperties": false
     },
     "PresentationRule": {
-      "description": "The state-based action (CR 704.5) that did what an event tells, when no\nplayer chose it.",
+      "description": "The state-based or turn-based action (CR 704.5, 504, 514) that did what an\nevent tells, when no player chose it.",
       "type": "string",
       "enum": [
         "draw_step",
+        "cleanup",
         "lethal_damage",
         "zero_toughness",
         "zero_loyalty",
         "zero_defense",
         "legend_rule",
-        "unattached_aura"
+        "unattached_aura",
+        "zero_life",
+        "empty_library",
+        "poison"
       ]
     },
     "PromptView": {

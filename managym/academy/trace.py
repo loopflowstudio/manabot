@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 
 import managym
 from managym.academy.append_json import encode_list, splice
+from managym.academy.step_boards import WireStepBoard
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
 from managym.experience_projection import redact_observation
@@ -201,7 +202,7 @@ class TraceEvent:
     presentation: list[dict[str, Any]] = field(default_factory=list)
     # Per-line mid-step boards for Review, patched back from the transition's
     # post-step board for the recorded person's seat (outside replay identity).
-    boards: list[dict[str, Any]] = field(default_factory=list)
+    boards: list[WireStepBoard] = field(default_factory=list)
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None

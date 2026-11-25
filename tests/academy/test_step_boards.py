@@ -284,3 +284,33 @@ def test_auto_passes_emit_null_caused_by() -> None:
     ]
     assert auto_passes, "expected at least one priority-stop auto-pass"
     assert all(ev["caused_by"] is None for ev in auto_passes)
+
+
+def test_watch_reads_never_carry_person_seat_boards(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Watch mode never records or returns person-seat `boards` patches."""
+    from managym.academy import trace as trace_store
+    from managym.academy.recording import Recording
+    from managym.academy.watch import WatchRequest, create_watch, step_watch
+
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    created = create_watch(WatchRequest(players=["random", "random"], seed=5))
+    trace_id = created["id"]
+    try:
+        revision = 0
+        for _ in range(12):
+            result = step_watch(trace_id, created["token"], revision)
+            revision = result["revision"]
+            if result.get("game_over"):
+                break
+    finally:
+        server._drop_session(trace_id, "test")
+
+    payload = trace_store.load_trace(trace_id, tmp_path)
+    assert all("boards" not in ev for ev in payload["events"])
+    recording = Recording(trace_id, payload)
+    for pos in recording.positions:
+        if pos.kind == "consequences":
+            assert recording.read(pos.key)["boards"] == []
+
