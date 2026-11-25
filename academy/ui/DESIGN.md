@@ -93,10 +93,11 @@ bar and in a data bar's fill.
   popovers and menus (`--shadow-sheet`, `--shadow-surface` on pages). An
   edge or ring may be drawn with a zero-blur `box-shadow` in a token colour.
 - Floating panels are opaque: the result card, trays, the inspect popover,
-  menus and the keys sheet use a solid `--bg-surface`, never a translucent
-  mix. One layering order holds on the board, lowest first: cards, the
-  lines between cards and targets, floating panels, sheets. It is written once
-  in `Board.svelte`'s styles; do not add z-indexes outside it.
+  menus, the keys sheet and the drag drop-zone label use a solid `--bg-surface`,
+  never a translucent mix. One layering order holds on the board, lowest first:
+  cards, the lines between cards and targets, floating panels, the active drag
+  layer (ghost, drop zone and marquee, `--layer-drag`), and sheets. It is
+  written once in `Board.svelte`'s styles; do not add z-indexes outside it.
 
 ## Space and motion
 

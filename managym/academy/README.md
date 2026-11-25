@@ -116,7 +116,11 @@ offer by number. `boardView` places each offer exactly once in that list and
 at least once on the card or player it acts on, as a prompt button (pass, pay,
 declines and combat answers without another creature) or in a tray for subjects
 the board does not draw. A card with one offer commits it on click; several
-open at the card. Number keys, Space (primary) and F6 act from the keyboard. Rows size
+open at the card. Pointer drag routes through the same offer and combat-draft
+paths: drag playable cards from hand onto the battlefield, pull lines from
+sources to legal targets or blockers to attackers, and drag a marquee across
+battlefield rows to add drafted attackers. Number keys, Space (primary) and F6
+act from the keyboard. Rows size
 their cards with `fitRow`, piling identical permanents, keeping a tapped card's
 sideways width and wrapping before scrolling. See [playing on the board](../../docs/academy.md#playing-on-the-board).
 Priority stops are set on the bottom step bar (off, every time or once)
