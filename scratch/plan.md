@@ -1,13 +1,26 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
-Base `cf73d9778f`. MTG-420 (PR #593, head `c133c0308f` on 2026-11-24) is still
-open; `lf sync main` once it merges, before slice 3 (emblem sources) and before
-any slice touches `activated_this_turn`/`activation_used`, which #593 extends
-("per-object activation limits").
+Base `cf73d9778f`. MTG-420 (PR #593, head `c133c0308f`) still open and main
+unmoved on 2026-11-24. `lf sync main` once it merges, before slice 3 (emblem
+sources need its persistent ability-source representation). Slice 1 keeps its
+quota in its own `loyalty_activated_this_turn` field and does not extend
+`activated_this_turn`/`activation_used`, so it need not wait; expect only a
+textual conflict at the reset site when syncing.
 
-The first completed cohort covers the ten FRA Commons and Annex lands in slice 8.
-Resume slice 1 after the MTG-420 sync. Slice 2's attack declarations can
-also be exercised with the existing constructed planeswalker if #593 is open.
+Done: slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
+pending-authority ledger notes (`cc77598c9e`).
+
+## Passes remaining
+
+1. Slices 1 + 2: loyalty abilities/quota/timing override and attack targets,
+   proved on The Theorist (definition may land early as the test subject) and
+   a constructed planeswalker. Teaches whether the action-row and wire changes
+   for `AttackTarget` hold the pinned pilot and Engine Budget.
+2. Slices 3 + 4 (after #593 sync): emblems and empower/Jace token cards.
+3. Slices 5 + 6: granted loyalty abilities, zero-loyalty exception, loyalty
+   activation events and their cards.
+4. Slice 7 planeswalkers and the rest of slice 8; ledger, fixtures, debug
+   nextest, budget.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text
@@ -338,11 +351,8 @@ printing is KLD — her definition goes in `kld.rs`, not `fra.rs`).
 
 ### Slice 8 — Adjacent planeswalker-aware composition
 
-Commons/Annex lands ×10 are implemented in `cards/src/fra.rs`. The native
-land-play and payment cases use a constructed planeswalker until the first
-printed planeswalker joins the catalog. Academy admitted a four-of-each
-deck at seed 7, accepted “Keep hand” and “Play Fatehold Annex”, and restored
-the same projection on reconnect.
+Commons/Annex lands are done (above); their native tests use a constructed
+planeswalker until a printed one joins the catalog.
 
 Still to build are Teyo ×2 ("put a loyalty counter on it if it's a
 planeswalker" — `If` over the target's type), Your Fate Ends Here, Terminal
