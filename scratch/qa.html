@@ -1,40 +1,53 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><title>MTG-436 QA</title>
-<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2rem auto;padding:0 1rem}pre{background:#f4f1ea;padding:.6rem;overflow-x:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.3rem .5rem;text-align:left;vertical-align:top}.ok{color:#2a6b2a}.warn{color:#8a5a00}</style>
-<h1>MTG-436 QA: published API contract and consumer path</h1>
-<p>2026-11-24, at <code>db7565ea1f</code>. Each temporary edit was reverted with <code>git checkout</code>, and the tree was clean at the end. No fixes were needed.</p>
+<meta charset="utf-8">
+<title>MTG-436 QA: published library API</title>
+<style>body{font:15px/1.5 system-ui;max-width:56rem;margin:2rem auto;padding:0 1rem}pre{background:#f4f1ea;padding:.6rem;overflow-x:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.3rem .5rem;text-align:left;vertical-align:top}</style>
+<h1>MTG-436 QA: published library API (second pass, HEAD 3e59b3abe5)</h1>
+<p>This pass came after the callback, stub-deprecation and defining-module commits. I acted as a contributor in the checkout and as a library consumer in a fresh Python 3.12 venv built from wheels. I fixed nothing because nothing in scope broke. The only change is the updated <code>.lf/qa/public-api.md</code> note.</p>
 
 <h2>Contributor: <code>scripts/public_api.py</code></h2>
 <table>
-<tr><th>Scenario</th><th>Result</th></tr>
-<tr><td>Clean <code>check</code></td><td class="ok">"public API matches tests/public_api.json", 0.85 s</td></tr>
-<tr><td>Rename <code>open_collector(num_envs=)</code> to <code>envs</code></td><td class="ok">check and plain record exit 1 with the two BREAKING lines and the 0.2.x guidance</td></tr>
-<tr><td>Add an optional parameter</td><td class="ok"><code>ADDED … optional parameter qa_extra added</code>; it suggests <code>record</code></td></tr>
-<tr><td>Drop <code>RewardConfig</code> from <code>__all__</code></td><td class="ok"><code>BREAKING manabot.infra.config.RewardConfig: removed</code></td></tr>
-<tr><td>Drop the <code>RewardConfig.land_play_reward</code> field</td><td class="ok"><code>BREAKING …land_play_reward: removed</code></td></tr>
-<tr><td>Stub: <code>catalog_tokens(strict: bool)</code> / <code>(*, strict: bool = False)</code></td><td class="ok">BREAKING required parameter / ADDED optional parameter</td></tr>
-<tr><td>Rename <code>UniformDecks</code>→<code>UniformDeckPool</code>, convert 12 callers, keep a <code>__getattr__</code> alias</td><td class="ok">ADDED class + "deprecated"; <code>record</code> passes under <code>-W error::DeprecationWarning</code>; check then matches</td></tr>
-<tr><td>Remove that alias while on 0.2.5</td><td class="ok"><code>DEPRECATED_REMOVED</code>; plain record refuses; <code>--allow-break</code> without a reason is rejected; with a reason, it is recorded in <code>breaks</code></td></tr>
-<tr><td>Bump the root pyproject to 0.3.0, then remove the alias</td><td class="ok">plain record accepts it; <code>line: "0.3"</code>, <code>breaks: []</code>; check matches</td></tr>
-<tr><td>Rename an internal <code>Collector</code> field (opaque handle)</td><td class="ok">still matches</td></tr>
+<tr><th>Edit (reverted after each)</th><th>check</th><th>plain record</th></tr>
+<tr><td>none</td><td><code>public API matches tests/public_api.json</code> (0.8 s)</td><td>n/a</td></tr>
+<tr><td>remove <code>close_collector</code> from <code>__all__</code></td><td><code>BREAKING …close_collector: removed</code>, exit 1</td><td>refused, exit 1</td></tr>
+<tr><td>rename <code>open_collector(num_envs=)</code> to <code>envs</code></td><td><code>parameter num_envs removed</code> + <code>required parameter envs added</code></td><td>refused</td></tr>
+<tr><td>remove the <code>MatchConfig.decklists</code> field</td><td><code>BREAKING manabot.infra.config.MatchConfig.decklists: removed</code></td><td>refused</td></tr>
+<tr><td>rename the <code>validate_world</code> field validator</td><td>matches (callbacks are internal)</td><td>n/a</td></tr>
+<tr><td>rename the opaque <code>Collector.num_envs</code> field</td><td>matches</td><td>n/a</td></tr>
+<tr><td>stub: add an optional parameter to <code>catalog_tokens</code></td><td><code>ADDED …: optional parameter include_backs added</code>, exit 1</td><td>accepted; check then matches</td></tr>
+<tr><td>stub: inline <code># Deprecated: …</code> comment</td><td><code>ADDED managym.catalog_tokens: deprecated</code></td><td>records <code>"deprecated": true</code></td></tr>
+<tr><td>break + <code>--allow-break</code> with no or empty <code>--reason</code></td><td colspan=2>argparse error, exit 2</td></tr>
+<tr><td>break + <code>--allow-break --reason "QA probe"</code></td><td colspan=2>records the change text and reason under <code>breaks</code>, then check matches</td></tr>
 </table>
+<p>First attempt at the field edit: removing <code>hero_sideboard</code> raised a Pydantic import error, because a validator names that field. That was my mistake in choosing a field, not a fault in the check. The note now says which field to drop.</p>
 
-<h2>Library consumer: installed wheels, CPython 3.12</h2>
-<p>I installed a fresh <code>/tmp</code> venv from the local <code>manabot-0.2.5</code> wheel, the cp312 engine wheel (built after the last engine commit, with a stub byte-identical to the checkout's) and CPU Torch 2.15. Everything ran from <code>/tmp</code> under <code>python -I</code>.</p>
+<h2>Consumer: installed wheels, Python 3.12</h2>
+<pre>uv build --wheel --package manabot -o .runs/qa-436
+uv venv --python 3.12 /tmp/qa436/venv
+uv pip install managym-0.2.5-cp312-…whl manabot-0.2.5-py3-none-any.whl  (CPU Torch 2.15.0)</pre>
 <ul>
-<li class="ok">All 15 published modules import, and every name in each <code>__all__</code> resolves (7/7/2/5/1/2/2/1/1/1/1/2/7/2/6 names, matching the README table).</li>
-<li class="ok">The README <code>## Library API</code> example, run verbatim under <code>-W error::DeprecationWarning</code>, prints <code>2 1.0 0.0133</code> in 3.7 s and leaves only <code>policy.safetensors</code> in the cwd.</li>
+<li>I walked the installed package and found 18 modules defining <code>__all__</code>. They are the 15 <code>PUBLIC_MODULES</code>, the exempt <code>manabot.sim.search.flat</code> shim, and managym's own <code>_managym</code>/<code>possible_worlds</code> seen through the <code>manabot.managym</code> alias. Every listed name resolves; missing: [].</li>
+<li>With warnings turned into errors, accessing <code>ObservationEncoder</code> raises its <code>0.3.0</code> DeprecationWarning, as designed.</li>
+<li>The README <code>## Library API</code> example under <code>-W error::DeprecationWarning</code> printed <code>2 1.0 -0.0027</code> in 3.5 s.</li>
+<li><code>venv/bin/python -I scripts/public_api.py check</code> against the installed 3.12 modules printed <code>public API matches</code>, so the snapshot is the same across interpreters.</li>
 </ul>
 
-<h2>Tests</h2>
-<pre>uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py tests/test_package_boundaries.py tests/infra/test_ci_selection.py -q
-114 passed, 1 skipped in 11.88s</pre>
+<h2>Returning user / internal callers</h2>
+<p>Outside the 15 modules, the diff removes only internal <code>__all__</code> lists and reorders one import block in <code>belief/population.py</code>. No import path changed.</p>
+<p>In the belief suite, 5 of 121 tests fail locally (<code>test_keystone_demo…</code>, <code>test_real_population_learning…</code>, two in <code>test_player.py</code>, <code>test_native_projection_preserves_canonical_receipt_bytes</code>). Exactly the same five fail with main's <code>manabot/belief</code> and <code>semantic/learning.py</code> swapped in, so they come from before this change, most likely the local native extension or environment.</p>
 
-<h2>What works / not reached / still wrong</h2>
-<ul>
-<li><b>Works:</b> every break, addition, deprecation and rollover path above, plus the installed consumer path on 3.12.</li>
-<li><b>Not reached:</b> a 3.13 installed consumer. The cp313 wheel in <code>managym/target/wheels</code> is a 39 KB build with no extension, and I didn't rebuild one, because the checkout tests already cover 3.13.</li>
-<li class="warn"><b>Minor, a design choice, not fixed:</b> <code>from manabot.env.observation import *</code> emits the <code>ObservationEncoder</code> DeprecationWarning, because the 0.3.0-deprecated names are listed in <code>__all__</code>. A star-importer who never touches them still sees the warning. Dropping them from <code>__all__</code> would avoid it, at the cost of the contract no longer marking them as published-and-deprecated.</li>
-<li><b>Outside this change:</b> the README's <code>## Local-update search</code> example writes to <code>.runs/policy.safetensors</code>, so it fails outside a checkout.</li>
-</ul>
-</html>
+<h2>CI selection</h2>
+<p><code>printf 'manabot/README.md\0' | bash .github/ci/select-tests.sh</code> gives <code>integration=true</code>, and an unrelated doc gives all false.</p>
+
+<h2>Acceptance suite</h2>
+<p><code>pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py tests/test_package_boundaries.py tests/infra/test_ci_selection.py</code>: 118 passed, 1 skipped (MLX), 12 s. Ruff check and format are clean on the 30 changed Python files.</p>
+
+<h2>Result</h2>
+<p><b>Works:</b> every contributor and consumer path above.</p>
+<p><b>Not reached:</b> a cp313 wheel with the extension (the local cp313 wheel has no <code>.so</code>; the checkout's in-place cp313 extension covered 3.13); Linux.</p>
+<p><b>Still wrong, worst first:</b></p>
+<ol>
+<li>The five belief failures above. They come from before this change and are out of scope.</li>
+<li>Ruff I001 in <code>manabot/verify/representation.py</code>, which this branch doesn't touch.</li>
+<li>Cosmetic: a newly deprecated symbol is reported as <code>ADDED …: deprecated</code>. It reads fine, but a <code>DEPRECATED</code> label would be clearer.</li>
+</ol>
