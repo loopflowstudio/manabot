@@ -681,9 +681,10 @@ casting-only conformance receipts retain their original revisions.
 1. Integrated replay and privacy checks (below), including recorded Watch
    playback of a partial attack declaration and of the departed-Clone
    interaction.
-2. The paired local Engine Budget passed at `b62f8b7ece` after the
-   damage-history change. Gate still owns the hosted result. See the
-   [engine measurement](#engine-measurement--2026-11-24).
+2. **Performance acceptance is open.** The paired local Engine Budget
+   passed at `b62f8b7ece`. At review head `538ee6ca30` it missed on
+   headless throughput and worst reply with matching behavior. Gate owns
+   the same-runner Ubuntu comparison. [Performance review](#performance-review-at-538ee6ca30)
 3. The four Academy failures and the `test_learn_evidence.py` opening
    `ParityDivergence` (seat 1 viewer digests only) in `scratch/questions.md`:
    gate confirms whether they also fail on main.
@@ -717,10 +718,10 @@ graveyard caller), and any other unpeeled wrapper fails a debug assertion.
 **Next: `gate`.** Full debug suite (nextest `--profile ci`), the integrated
 Watch replay/privacy checks in item 1, the hosted Engine Budget, and the
 Academy and `test_learn_evidence.py` comparisons against main in item 3. The
-chosen-tap payment slice (implementation order item 2) is a measured
-improvement, not an acceptance blocker: the local budget already passes. Do
-it after gate only if the hosted budget fails or the branch stays open for
-review; otherwise leave it as its own Task.
+chosen-tap payment slice (implementation order item 2) targets repeated
+work in Lathril's first payment decision. Its potential gain still needs a
+paired measurement. Revisit it here if a hosted regression implicates
+payment setup. Otherwise carry it as separate work.
 
 ## Directed interactions for integrated validation
 
@@ -839,7 +840,7 @@ The 216 paired control cells agree on reported outputs (including simulated coun
 
    The [damage-history measurement archive](damage-history-measurements.zip) contains the eight before/after fixture files, raw budget samples, scheduling counters, paired comparison, debug results and Academy replay check.
 
-2. **Planned measured slice (not an acceptance blocker; see Next above).** Build the chosen-tap payment inputs once per pending decision. Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
+2. **Chosen-tap payment follow-up.** Build the chosen-tap payment inputs once per pending decision. Lathril with 10 / 11 / 12 other Elves offered exactly that many first taps. The first tap cost .059 / .069 / .062 ms. Its bounded search used 1,800 / 2,200 / 2,640 payment plans, 11,600 / 14,520 / 17,760 search calls and 8,882,212 / 10,953,488 / 13,277,404 allocated bytes. Every one of the 40 / 44 / 48 simulations reached the four-step horizon. Replace the outer `tap_component_candidates` scan followed by a full `tap_activation_payment_possible` setup per offered permanent in `flow/action.rs`. Prepare the announced model, ordered candidates, obligations and pool once for this decision in `flow/mana.rs`, then apply the existing selected-tap witness check to each exact object. Keep execution-time validation against current state, reserved source and grantor, life, restricted mana, help and other costs. The first slice can reduce allocation traffic while retaining the solver calls and witnesses. Check every tap's offers (size 10 ends at two because native skipping pays the final forced tap), receipts, station, mixed mana/tap feasibility, and `payment_search_preserves_witnesses_and_counted_tap_membership`. Keep it only for lower allocation traffic and improved same-runner tap search with identical behavior. A count-only solver shortcut would need a separate equivalence proof.
 
 Fumigate examined 29 / 89 / 305 trigger sources for one match. At 16 the measured resolution still took .042 ms. Keep that observation for a workload where simultaneous departures dominate before changing pre-batch LKI matching. First-gain matching examined exactly one source per offer on both listener boards. Neither result justifies another history store. Keep all choices, overflow errors and configured capacity behavior, native trivial skipping and debug cache assertions through both planned slices.
 
@@ -855,3 +856,28 @@ The [measurement archive](engine-measurements.zip) retains the JSONL timing/allo
 ```sh
 gh workflow run engine-budget.yml --ref jack/mtg-418-unify-event-history-and-contextual-queries-for
 ```
+
+### Performance review at `538ee6ca30`
+
+**Advance to the hosted Engine Budget at gate. Keep performance acceptance open.** On the M4 Max, the locked release build at review head missed two checks against `f299750a45`. The earlier local pass remains evidence for its measured revision. Reopen the failing workload for profiling if the hosted comparison reproduces a miss. Budget reference adoption remains a separate reviewed operation.
+
+| Curated UR Lessons / GW Allies | Reference | Review head | Result under the existing 10% allowance |
+|---|---:|---:|---|
+| Headless steps/s | 40,105.5 | 32,707.9 | Fail, 18.4% lower throughput |
+| Search-64 worst reply | 1.979 s | 2.200 s | Fail, 11.2% longer |
+| Search-64 total | 77.149 s | 77.663 s | Pass, 0.7% longer |
+
+Both executables used identical benchmark and curated deck sources. All 541 tracked reference files under `managym/` and `content/` matched the reference commit. Each of the four runs reproduced the 512-game decision digest and all three full BLAKE3 search-score digests, action-count sequences, simulation counts and cap counts from the earlier runs. Search totals in execution order were 66.301 / 66.706 / 87.593 / 89.025 s. Both sides slowed later in the run, and both candidate throughput samples were below both reference samples. The timings establish the local misses. They leave their cause unresolved. The [measurement archive](damage-history-measurements.zip) retains the source and executable identities, raw samples, scheduling counters, comparison and focused test results under `review-538ee6ca30/`.
+
+The damage-history comparison isolates the engine change from `6db13f2f33` to `b62f8b7ece` with the same final fixtures on both sides. At review head all 803 release allocation rows matched the optimized capture exactly, including work counters, output counts and allocation bytes. The aggregate behavior digests also matched the pre-change timing and allocation runs. The 216 control cells produced `cf2d681b252692f9b2092a3d98ad9eeee934ff52d6dc525738cd32e5ce88a504`, and the 587 card cells produced `6902efa4337c14408cb8899003ad6e2a8f5aca32f37e9abedc94fe525b0f804f`.
+
+Those digests cover ordered actions, resulting step states, payment witnesses and search scores. The observation layer records row and action counts. After the optimization, the encoder began calling helpers that read the same stack X and turn-state width. The trigger-wrapper change affects nested graveyard conditions. The catalog's sole graveyard wrapper is Wolfbat's outer condition, and its second-draw fixture passed. In total, 28 focused debug tests passed at review head, including fixed-viewer bytes and privacy, Hatcher/Ooze/Hellkite snapshots, canonical replay, fork isolation and the stale-board assertions. The earlier Academy receipt covered 1,050 viewer checks at the optimized revision.
+
+| Size-16 bounded search | Before → after damage-history change | Remaining work |
+|---|---:|---|
+| Diverse board, damage | 2.271 → 1.081 ms, 11.30 → 5.10 MB allocated | Same eight simulations |
+| Diverse board, cast choice | 15.837 → 16.000 ms, 80.19 MB allocated in both runs | Sizes 4 / 8 / 16 examine 800 / 2,016 / 6,528 trigger sources over 40 / 72 / 136 simulations |
+
+The duplicate-creature damage step at size 16 took 53% less time and allocated 24% fewer bytes. The diverse cast-choice search shows the limit of that gain. Fumigate's simultaneous departures still examine 305 sources for one match at size 16, costing 0.032 ms in the optimized run. Blast's priority search grows from 16 to 291 payment plans across sizes 4 to 16 as simulations rise from 16 to 40. Both first-gain boards examine one source per listener, and Connoisseur retains two order choices. The buffered collection readings above establish absolute producer throughput only.
+
+Lathril's first tap remains the best isolated payment opportunity. With 10 → 12 eligible Elves, simulations rose 20% while solver calls rose 53% and allocated bytes rose 49%. The damage change saved zero allocation bytes at that checkpoint. Each legal tap currently rebuilds the same payment model and candidate list. The scoped follow-up above keeps a separate feasibility check for every offered Elf. The curated search profile has yet to establish how much time ordinary games spend in that setup.
