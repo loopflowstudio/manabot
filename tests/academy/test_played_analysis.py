@@ -1,6 +1,7 @@
 """Analysis: a policy reads your decisions of a played game after the fact."""
 
 from collections.abc import Iterator, Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -147,7 +148,7 @@ def test_an_analysis_reads_every_one_of_your_decisions(
     runner = runner_for(registry, ReadingFactory(), attempt)
     decisions = list(analyse_game(attempt, 0, runner, seed=5))
     events = attempt.trace["events"]
-    assert [d.event for d in decisions] == analysed_events(attempt, 0)
+    assert [d.event for d in decisions] == analysed_events(attempt.trace, 0)
     assert all(events[d.event]["actor"] == "hero" for d in decisions)
     for decision in decisions:
         offers = len(events[decision.event]["actions"])
@@ -353,3 +354,122 @@ def test_see_its_line_plays_the_policys_first_choice_on_from_a_decision(
     assert len(client.get(f"/api/traces/{trace_id}/analyses").json()["analyses"]) == 1
     unanalysed = client.post(path, json={"event": -1}, headers=headers())
     assert unanalysed.status_code == 404
+
+
+# ———————————————— Analysis while you play
+
+
+@dataclass
+class Delivered:
+    """The pilot's side of `publish`: every live message, each delivered at once."""
+
+    messages: list[dict[str, Any]] = field(default_factory=list)
+
+    def __call__(self, message: dict[str, Any]) -> "Future[bool]":
+        self.messages.append(message)
+        done: Future[bool] = Future()
+        done.set_result(True)
+        return done
+
+    def reading(self, revision: int, timeout: float = 10.0) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            for message in self.messages:
+                assert "stopped" not in message, message
+                if message.get("revision") == revision:
+                    return message
+            time.sleep(0.005)
+        raise AssertionError(f"no reading for revision {revision}")
+
+
+def commit_first(game: server.GameSession, index: int) -> dict[str, Any]:
+    frame = game.current_message()["frame"]
+    result = game.hero_command(
+        {
+            "command_id": f"live.{index}",
+            "match_id": frame["match_id"],
+            "expected_revision": frame["revision"],
+            "prompt_id": frame["prompt"]["id"],
+            "offer_id": frame["offers"][0]["id"],
+            "answers": [],
+        }
+    )
+    assert result["status"] == "accepted"
+    return game.current_message()["frame"]
+
+
+def test_shown_analysis_reads_each_decision_live_and_marks_it(
+    registry: PolicyRegistry, tmp_path: Path
+) -> None:
+    key = registry.register(ReadingFactory())
+    game = server.GameSession(tmp_path)
+    game.new_game(
+        {
+            "hero_deck": BOLT,
+            "villain_deck": BOLT,
+            "villain_type": "random",
+            "seed": 11,
+            "auto_pass": False,
+        }
+    )
+    commit_first(game, 0)
+    commit_first(game, 1)
+    delivered = Delivered()
+    state = game.show_analysis(True, None, delivered)
+    assert state["shown"] and state["policy"]["sha256"] == key
+    message = game.current_message()
+    assert message["analysis"] == {"policy": state["policy"]}
+    readings = []
+    for index in range(2, 6):
+        frame = message["frame"]
+        if frame["status"] == "game_over":
+            break
+        reading = delivered.reading(frame["revision"])
+        assert len(reading["annotation"]["probabilities"]) == len(frame["offers"])
+        readings.append(reading)
+        message = {"frame": commit_first(game, index)}
+    game.show_analysis(False, None, delivered)
+    assert "analysis" not in game.current_message()
+    commit_first(game, 9)
+    play(game, random.Random(4))
+
+    attempt = game.attempt_store.load_attempt(game.match_id)
+    assert attempt is not None
+    events = attempt.trace["events"]
+    shown = [i for i, event in enumerate(events) if event.get("analysis_shown")]
+    assert shown == [reading["event"] for reading in readings]
+    assert all(events[i]["actor"] == "hero" for i in shown)
+    # The live reading is the reading an analysis after the game makes.
+    after = {
+        decision.event: decision
+        for decision in analyse_game(
+            attempt, 0, runner_for(registry, ReadingFactory(), attempt), seed=11
+        )
+    }
+    for reading in readings:
+        saved = after[reading["event"]]
+        assert reading["annotation"] == saved.annotation.model_dump(mode="json")
+        assert reading["after"] == saved.after
+
+
+def test_a_game_played_without_analysis_stores_no_mark(
+    registry: PolicyRegistry, tmp_path: Path
+) -> None:
+    registry.register(ReadingFactory())
+    attempt = finished(tmp_path)
+    with sqlite3.connect(tmp_path / "play.sqlite") as db:
+        (stored,) = db.execute("SELECT trace_json FROM attempts").fetchone()
+    assert "analysis_shown" not in stored
+    assert attempt.trace["events"]
+
+
+def test_showing_analysis_needs_a_policy_that_can_read_the_game(
+    registry: PolicyRegistry, tmp_path: Path
+) -> None:
+    game = server.GameSession(tmp_path)
+    game.new_game(
+        {"hero_deck": BOLT, "villain_deck": BOLT, "villain_type": "random", "seed": 1}
+    )
+    with pytest.raises(server.TableDispatchError, match="No registered policy"):
+        game.show_analysis(True, None, Delivered())
+    assert game.show_analysis(False, None, Delivered())["policies"] == []

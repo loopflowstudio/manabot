@@ -204,6 +204,9 @@ class TraceEvent:
     analysis_observation: dict[str, Any] | None = None
     # When the step was committed, UTC ISO 8601. None in traces that predate it.
     committed_at: str | None = None
+    # The person committed this decision with a policy's live reading of it
+    # shown (`LiveAnalysis`). Stored only when true; absent reads as false.
+    analysis_shown: bool = False
     # How an imported record re-dealt the position before this step
     # (`BRANCHING_INTERVENTIONS` kinds, in order); never its seeds or viewers.
     branched: list[str] | None = None
@@ -297,13 +300,18 @@ class Trace:
 
 
 def event_record(event: TraceEvent) -> dict[str, Any]:
-    """One event as its stored record (borrowed, like `Trace.to_record`)."""
-    return {
+    """One event as its stored record (borrowed, like `Trace.to_record`).
+    `analysis_shown` is written only when true, so a game played without
+    analysis keeps its row."""
+    record = {
         **{item.name: getattr(event, item.name) for item in fields(event)},
         "bot_decision": (
             None if event.bot_decision is None else asdict(event.bot_decision)
         ),
     }
+    if not event.analysis_shown:
+        del record["analysis_shown"]
+    return record
 
 
 def utc_now_iso() -> str:

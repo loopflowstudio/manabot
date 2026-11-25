@@ -6,6 +6,7 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from collections.abc import Awaitable, Iterable
 from contextlib import ExitStack, suppress
 from copy import deepcopy
@@ -91,8 +92,10 @@ from .analysis import (
     AnalysedDecision,
     AnalysisChoices,
     AnalysisStop,
+    LiveAnalysis,
     agent_line,
     analysed_events,
+    analysing_policies,
     analysis_choices,
     run_analysis,
 )
@@ -170,6 +173,7 @@ from .shared_table_protocol import (
     ReturnFromBranchMessage,
     ReturnToLiveMessage,
     SetStopsMessage,
+    ShowAnalysisMessage,
     ShareBeliefMessage,
     TableCapability,
     TableSnapshot,
@@ -897,6 +901,9 @@ class GameSession:
         self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
+        # A policy reading the person's decisions, while they show it; off at
+        # the start of every game (`show_analysis`).
+        self._live_analysis: LiveAnalysis | None = None
         self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -1743,8 +1750,16 @@ class GameSession:
                 bot_decision=self._bot_decision,
                 analysis_observation=analysis_observation,
                 committed_at=trace_store.utc_now_iso(),
+                analysis_shown=(
+                    actor == "hero"
+                    and not auto
+                    and self._live_analysis is not None
+                    and self._live_analysis.shown(len(self.trace.events))
+                ),
             )
         )
+        if self._live_analysis is not None:
+            self._live_analysis.advance(action_index)
         self.obs = next_obs
         self._bot_decision = None
         self._advance_protocol_revision()
@@ -2129,6 +2144,8 @@ class GameSession:
                 ]["revision"]
             ),
         )
+        if self._live_analysis is not None and self.trace is not None:
+            self._live_analysis.decide(len(self.trace.events), self.revision)
         return self.published_prompt
 
     def _build_decision_context(
@@ -2384,6 +2401,8 @@ class GameSession:
             payload["deck_names"] = frame["deck_names"]
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
+        if self._live_analysis is not None:
+            payload["analysis"] = {"policy": self._live_analysis.policy}
         payload.update(transient)
         payload["mirror_retry"] = self.mirror_retry
         return payload
@@ -2818,7 +2837,81 @@ class GameSession:
             )
 
     def _close_policies(self) -> None:
+        self._end_live_analysis()
         close_policies((self.villain_policy, *(self.watch_policies or ())))
+
+    def _end_live_analysis(self) -> None:
+        if self._live_analysis is not None:
+            self._live_analysis.close()
+            self._live_analysis = None
+
+    def show_analysis(
+        self,
+        shown: bool,
+        policy: str | None,
+        publish: Callable[[dict[str, Any]], concurrent.futures.Future[bool]],
+    ) -> dict[str, Any]:
+        """Show or hide a policy's reading of the person's decisions in this game.
+
+        Showing starts a `LiveAnalysis` from the game so far; its readings go
+        to `publish`, never into a frame. Hiding stops it: decisions from the
+        next one on are not marked `analysis_shown`.
+        """
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+        if self.watch_mode:
+            raise TableDispatchError("conflict", "A watched game has no seat of yours.")
+        self._end_live_analysis()
+        choices = analysing_policies(self.trace.config, policy_registry())
+        state: dict[str, Any] = {
+            "type": "analysis_state",
+            "shown": False,
+            "policy": None,
+            "policies": choices.policies,
+        }
+        if not shown:
+            return state
+        if not choices.policies:
+            raise TableDispatchError(
+                "not_found", "No registered policy can read this game."
+            )
+        key = policy or choices.default or choices.policies[0]["sha256"]
+        chosen = next((p for p in choices.policies if p["sha256"] == key), None)
+        if chosen is None:
+            raise TableDispatchError("not_found", "That policy cannot read this game.")
+        config = self.trace.config
+        setup = config.to_rust()
+        seat = self.human_seat
+        events = [
+            {
+                "actor": event.actor,
+                "auto": event.auto,
+                "action": event.action,
+                "action_description": event.action_description,
+            }
+            for event in self.trace.events
+        ]
+        snapshot = RetainedAttempt(
+            {
+                "config": config.to_record(),
+                "events": events,
+                "end_reason": "active",
+                "winner": None,
+            },
+            json.dumps(self.env.content_pack_manifest()),
+        )
+        self._live_analysis = LiveAnalysis(
+            snapshot,
+            seat,
+            chosen,
+            lambda: policy_registry().load(
+                key, setup, seat=seat, seed=int(config.seed or 0)
+            ),
+            publish,
+        )
+        if self.published_prompt is not None:
+            self._live_analysis.decide(len(self.trace.events), self.revision)
+        return {**state, "shown": True, "policy": chosen}
 
     def close(self, end_reason: str) -> None:
         try:
@@ -3210,6 +3303,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
     "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
     "set_stops": TableCapability.CONFIGURE_MATCH,
+    "show_analysis": TableCapability.SUBMIT_LIVE_COMMAND,
     "transfer_pilot": TableCapability.TRANSFER_PILOT,
     "author_belief": TableCapability.AUTHOR_BELIEF,
     "share_belief": TableCapability.SHARE_BELIEF,
@@ -3320,8 +3414,13 @@ def _dispatch_table_request(
     participant: ParticipantLease,
     request: Any,
     committed: Callable[[dict[str, Any]], None] | None = None,
+    publish_analysis: Callable[[dict[str, Any]], concurrent.futures.Future[bool]]
+    | None = None,
 ) -> tuple[dict[str, Any], bool]:
-    """Authorize and execute one closed operation under the table lock."""
+    """Authorize and execute one closed operation under the table lock.
+
+    `publish_analysis` delivers a live analysis's readings to the pilot
+    without waiting (`_send_live_analysis`)."""
     if isinstance(request, CommandMessage):
         command_id = request.command.command_id
         if command_id in record.game.accepted_commands:
@@ -3387,6 +3486,12 @@ def _dispatch_table_request(
             ),
             True,
         )
+    if isinstance(request, ShowAnalysisMessage):
+        if publish_analysis is None:
+            raise TableDispatchError("conflict", "Analysis needs a live connection.")
+        return record.game.show_analysis(
+            request.shown, request.policy, publish_analysis
+        ), False
     if isinstance(request, TransferPilotMessage):
         target = record.participants.get(request.target_viewer_id)
         if target is None or target is participant:
@@ -3542,6 +3647,22 @@ async def _publish_work(record: SessionRecord, status: WorkStatus) -> None:
                 )
 
 
+async def _send_live_analysis(record: SessionRecord, message: dict[str, Any]) -> bool:
+    """Send a live analysis reading to the pilot; true once it was sent."""
+    sent = False
+    for participant in list(record.participants.values()):
+        socket = participant.websocket
+        if participant.role != ViewerRole.PILOT or socket is None:
+            continue
+        try:
+            await socket.send_json(message)
+            sent = True
+        except Exception:
+            if participant.websocket is socket:
+                participant.websocket = None
+    return sent
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -3681,6 +3802,15 @@ async def play_socket(websocket: WebSocket) -> None:
                             loop,
                         ).result()
 
+                    def publish_analysis(
+                        message: dict[str, Any],
+                        record: SessionRecord = record,
+                    ) -> concurrent.futures.Future[bool]:
+                        # From the analysis worker: never waits for delivery.
+                        return asyncio.run_coroutine_threadsafe(
+                            _send_live_analysis(record, message), loop
+                        )
+
                     def publish_work(status: WorkStatus) -> None:
                         # Called while the worker is paused at a safe boundary.
                         asyncio.run_coroutine_threadsafe(
@@ -3706,6 +3836,7 @@ async def play_socket(websocket: WebSocket) -> None:
                             participant,
                             parsed,
                             committed,
+                            publish_analysis,
                         )
                         failed = record.game.mirror_retry is not None
                         dispatched = True
@@ -4374,7 +4505,7 @@ def get_analysis_policies(trace_id: str) -> dict[str, Any]:
         "default": choices.default,
         "unavailable": choices.unavailable,
         "events": analysed_events(
-            attempt, attempt.trace["config"].get("human_seat", 0)
+            attempt.trace, attempt.trace["config"].get("human_seat", 0)
         ),
     }
 
@@ -4415,7 +4546,7 @@ def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
             raise HTTPException(409, str(exc)) from exc
         _ANALYSING.add(trace_id)
     analysis = store.start_analysis(
-        trace_id, seat, descriptor.record(), len(analysed_events(attempt, seat))
+        trace_id, seat, descriptor.record(), len(analysed_events(attempt.trace, seat))
     )
 
     def run() -> None:
