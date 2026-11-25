@@ -27,6 +27,16 @@ from managym import (
 )
 from managym.disclosure import DecklistDisclosure
 
+__all__ = [
+    "ObservationConfig",
+    "MatchConfig",
+    "ModelConfig",
+    "RewardConfig",
+    "UnsupportedPolicyInput",
+    "PolicyInputVersion",
+    "POLICY_INPUT_VERSION",
+]
+
 # The policy input a fresh configuration selects. Input v11 gives each game
 # thing one object row (cards outside the battlefield and stack, permanents
 # with their characteristics, a stack segment) and carries v10's turn state.

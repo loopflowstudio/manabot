@@ -14,6 +14,11 @@ from numpy.typing import NDArray
 
 from manabot.policy.spans import ObservationSelection
 
+__all__ = [
+    "PackedActions",
+    "ActionRows",
+]
+
 
 class ActionValidator(Protocol):
     """Numerical admission of retained behavior, preserving backend evidence."""

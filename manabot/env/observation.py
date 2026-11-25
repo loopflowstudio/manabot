@@ -27,6 +27,7 @@ import warnings
 
 import gymnasium as gym
 import numpy as np
+from typing_extensions import deprecated
 
 from manabot.infra.config import ObservationConfig
 import managym
@@ -41,6 +42,16 @@ from managym.enums import (  # noqa: F401
     StepEnum,
     ZoneEnum,
 )
+
+__all__ = [
+    "ObservationSpace",
+    "column",
+    "columns",
+    "column_names",
+    "width",
+    "encode_observation",
+    "ObservationEncoder",  # noqa: F822 — warning alias supplied by __getattr__
+]
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
@@ -247,6 +258,7 @@ class ObservationSpace(gym.spaces.Space):
         )
         return shortcut(self)
 
+    @deprecated("dense observation compatibility; removed in 0.3.0", category=None)
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed dense buffers for this space, with `leading_dims` before each shape.
 
@@ -255,6 +267,7 @@ class ObservationSpace(gym.spaces.Space):
         return self.layout.allocate(*leading_dims)
 
     @property
+    @deprecated("dense observation compatibility; removed in 0.3.0", category=None)
     def encoder(self) -> "ObservationSpace":
         """Deprecated: the space is its own layout."""
         warnings.warn(
@@ -266,6 +279,7 @@ class ObservationSpace(gym.spaces.Space):
         )
         return self
 
+    @deprecated("dense observation compatibility; removed in 0.3.0", category=None)
     def encode(self, obs: managym.Observation) -> ObservationBuffers:
         """Deprecated: call `encode_observation(space, obs)`."""
         warnings.warn(
@@ -353,6 +367,7 @@ def step_buffers(n: int) -> dict[str, np.ndarray]:
     }
 
 
+@deprecated("use managym.encode_observation_batch; removed in 0.3.0", category=None)
 def encode_observation(
     space: ObservationSpace, obs: managym.Observation
 ) -> dict[str, np.ndarray]:
