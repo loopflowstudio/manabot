@@ -102,6 +102,8 @@ def test_rollover_only_drops_previously_deprecated_api() -> None:
     assert override.breaks[0].changes == ["DEPRECATED_REMOVED lib.C.old: removed"]
     assert update("record", override, modules, "0.3.0", None).breaks == []
     assert update("record", baseline, modules, "0.3.0", None).line == "0.3"
+    with pytest.raises(ValueError, match="release line 0.2 -> 0.3"):
+        update("check", baseline, baseline.modules, "0.3.0", None)
     with pytest.raises(ValueError, match="BREAKING lib.C.keep"):
         update("record", baseline, {"lib": {"C": Symbol(kind="class")}}, "0.3.0", None)
 

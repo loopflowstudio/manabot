@@ -937,10 +937,8 @@ uv run python scripts/public_api.py check
 #   BREAKING manabot.training.rollout.collection.open_collector: required parameter envs added
 #
 #   main is on the 0.2.x patch line (pyproject.toml: 0.2.5).
-#   Do not break published APIs on 0.2.x: restore the old API or keep a
-#   DeprecationWarning alias targeting 0.3.0.
-#   Only if a break on 0.2.x is unavoidable:
-#     uv run python scripts/public_api.py record --allow-break --reason '<why>'
+#   Restore the published API or keep a DeprecationWarning alias targeting 0.3.0.
+#   Only for an unavoidable break: uv run python scripts/public_api.py record --allow-break --reason '<why>'
 ```
 
 Plain `scripts/public_api.py record` accepts only non-breaking additions while

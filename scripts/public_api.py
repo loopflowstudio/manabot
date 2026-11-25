@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 import tomllib
 from types import ModuleType
-from typing import Literal, TypeAliasType, get_origin, get_overloads
+from typing import Literal, TypeAliasType, get_origin
 import warnings
 
 from pydantic import BaseModel, Field
@@ -51,6 +51,11 @@ OPAQUE_TYPES = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Schema
+# -----------------------------------------------------------------------------
+
+
 class Symbol(BaseModel, extra="forbid"):
     kind: Literal[
         "function",
@@ -71,7 +76,6 @@ class Symbol(BaseModel, extra="forbid"):
     ]
     deprecated: bool = False
     signature: str | None = None
-    overloads: list[str] = Field(default_factory=list)
     required: bool | None = None
     value: int | None = None
     members: dict[str, "Symbol"] = Field(default_factory=dict)
@@ -88,11 +92,16 @@ class Contract(BaseModel, extra="forbid"):
     modules: dict[str, dict[str, Symbol]]
 
 
+# -----------------------------------------------------------------------------
+# Extraction
+# -----------------------------------------------------------------------------
+
+
 def signature_text(parameters: list[Parameter]) -> str:
     shape = [
         p.replace(
             annotation=Parameter.empty,
-            default=(Parameter.empty if p.default is Parameter.empty else None),
+            default=Parameter.empty if p.default is Parameter.empty else None,
         )
         for p in parameters
     ]
@@ -108,7 +117,7 @@ def stub_parameters(args: ast.arguments) -> list[Parameter]:
             Parameter.POSITIONAL_ONLY
             if i < len(args.posonlyargs)
             else Parameter.POSITIONAL_OR_KEYWORD,
-            default=Parameter.empty if i < required else None,
+            default=Parameter.empty if i < required else ...,
         )
         for i, arg in enumerate(positional)
     ]
@@ -119,7 +128,7 @@ def stub_parameters(args: ast.arguments) -> list[Parameter]:
             Parameter(
                 arg.arg,
                 Parameter.KEYWORD_ONLY,
-                default=Parameter.empty if default is None else None,
+                default=Parameter.empty if default is None else ...,
             )
         )
     if args.kwarg:
@@ -131,13 +140,9 @@ def callable_symbol(
     function: Callable[..., object],
     kind: Literal["method", "staticmethod", "classmethod", "function"],
 ) -> Symbol:
-    def shape(fn: Callable[..., object]) -> str:
-        return signature_text(list(inspect.signature(fn).parameters.values()))
-
     return Symbol(
         kind=kind,
-        signature=shape(function),
-        overloads=sorted({shape(fn) for fn in get_overloads(function)}),
+        signature=signature_text(list(inspect.signature(function).parameters.values())),
         deprecated=bool(getattr(function, "__deprecated__", False)),
     )
 
@@ -201,8 +206,11 @@ def resolve(module: ModuleType, name: str) -> tuple[object, bool]:
 
 
 def python_exports(module: ModuleType) -> dict[str, Symbol]:
+    names = getattr(module, "__all__", None)
+    if names is None:
+        raise ValueError(f"{module.__name__} does not define __all__")
     result: dict[str, Symbol] = {}
-    for name in module.__all__:
+    for name in names:
         if name.startswith("_") or name in result:
             raise ValueError(f"invalid name in {module.__name__}.__all__: {name}")
         value, warned = resolve(module, name)
@@ -219,33 +227,46 @@ def python_exports(module: ModuleType) -> dict[str, Symbol]:
     return result
 
 
-def stub_function(
-    node: ast.FunctionDef, members: dict[str, Symbol], *, method: bool
-) -> None:
-    decorators = {
+def decorator_names(node: ast.FunctionDef | ast.ClassDef) -> set[str]:
+    return {
         ast.unparse(d.func if isinstance(d, ast.Call) else d)
         for d in node.decorator_list
     }
-    kind = "method" if method else "function"
+
+
+def is_stub_deprecated(
+    node: ast.FunctionDef | ast.ClassDef, decorators: set[str]
+) -> bool:
+    doc = ast.get_docstring(node) or ""
+    return "deprecated" in decorators or doc.startswith("Deprecated")
+
+
+def stub_function(node: ast.FunctionDef, *, method: bool) -> Symbol:
+    decorators = decorator_names(node)
+    if "overload" in decorators:
+        raise ValueError(
+            f"unsupported @overload on public stub declaration: {node.name}"
+        )
+    kind: Literal["method", "function", "property", "staticmethod", "classmethod"] = (
+        "method" if method else "function"
+    )
     for decorator in ("property", "staticmethod", "classmethod"):
         if decorator in decorators:
             kind = decorator
-    symbol = members.setdefault(node.name, Symbol(kind=kind))
-    doc = ast.get_docstring(node) or ""
-    symbol.deprecated |= "deprecated" in decorators or doc.startswith("Deprecated")
-    if kind == "property":
-        return
-    signature = signature_text(stub_parameters(node.args))
-    if "overload" in decorators:
-        if signature not in symbol.overloads:
-            symbol.overloads.append(signature)
-    else:
-        symbol.signature = signature
+    return Symbol(
+        kind=kind,
+        signature=None
+        if kind == "property"
+        else signature_text(stub_parameters(node.args)),
+        deprecated=is_stub_deprecated(node, decorators),
+    )
 
 
 def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
     bases = [ast.unparse(b) for b in node.bases]
-    kind = "enum" if "IntEnum" in bases else "class"
+    kind: Literal["enum", "class", "typed_dict"] = (
+        "enum" if "IntEnum" in bases else "class"
+    )
     members: dict[str, Symbol] = {}
     for base in bases:
         if (
@@ -260,7 +281,7 @@ def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
         if isinstance(item, ast.FunctionDef) and (
             item.name == "__init__" or not item.name.startswith("_")
         ):
-            stub_function(item, members, method=True)
+            members[item.name] = stub_function(item, method=True)
         elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
             if kind == "typed_dict":
                 optional = (
@@ -275,25 +296,30 @@ def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
             members[ast.unparse(item.targets[0])] = Symbol(
                 kind="enum_member", value=ast.literal_eval(item.value)
             )
-    return Symbol(kind=kind, members=members)
+    return Symbol(
+        kind=kind,
+        members=members,
+        deprecated=is_stub_deprecated(node, decorator_names(node)),
+    )
 
 
 def native_exports() -> dict[str, Symbol]:
     module = import_module("managym")
     source = (ROOT / "managym/__init__.pyi").read_text()
+    lines = source.splitlines()
     exports: dict[str, Symbol] = {}
     for node in ast.parse(source).body:
         if isinstance(node, ast.ClassDef):
             exports[node.name] = stub_class(node, exports)
         elif isinstance(node, ast.FunctionDef):
-            stub_function(node, exports, method=False)
+            exports[node.name] = stub_function(node, method=False)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             exports[node.target.id] = Symbol(kind="value")
         elif isinstance(node, ast.Assign):
             name = ast.unparse(node.targets[0])
             exports[name] = Symbol(
                 kind="type_alias",
-                deprecated="Deprecated" in source.splitlines()[node.lineno - 1],
+                deprecated="Deprecated" in lines[node.lineno - 1],
             )
         elif isinstance(node, ast.ImportFrom) and (
             node.level or (node.module or "").startswith("managym.")
@@ -316,6 +342,11 @@ def native_exports() -> dict[str, Symbol]:
                         f"managym.{name}.{member}: runtime enum value differs from stub ({entry.value})"
                     )
     return exports
+
+
+# -----------------------------------------------------------------------------
+# Compatibility
+# -----------------------------------------------------------------------------
 
 
 @dataclasses.dataclass(frozen=True)
@@ -366,9 +397,12 @@ def signature_changes(path: str, before: str, after: str) -> Iterator[Change]:
         ]
 
     positions = positional(old)
-    if positional(new)[: len(positions)] != positions or (
-        any(p.kind == Parameter.VAR_POSITIONAL for p in old.values())
-        and positional(new) != positions
+    if all(name in new and new[name].kind == old[name].kind for name in positions) and (
+        positional(new)[: len(positions)] != positions
+        or (
+            any(p.kind == Parameter.VAR_POSITIONAL for p in old.values())
+            and positional(new) != positions
+        )
     ):
         yield Change("BREAKING", path, "positional parameter order changed")
 
@@ -418,18 +452,6 @@ def changes(
                 yield from signature_changes(path, old.signature, current.signature)
             else:
                 yield Change("BREAKING", path, "call signature changed")
-        if old.overloads != current.overloads:
-            for variant in old.overloads:
-                if not any(
-                    all(
-                        c.status == "ADDED"
-                        for c in signature_changes(path, variant, candidate)
-                    )
-                    for candidate in current.overloads
-                ):
-                    yield Change("BREAKING", path, f"overload {variant} removed")
-            for variant in sorted(set(current.overloads) - set(old.overloads)):
-                yield Change("ADDED", path, f"overload {variant} added")
         yield from changes(old.members, current.members, path)
 
 
@@ -463,11 +485,17 @@ def update(
             f"Only for an unavoidable break: {RECORD} --allow-break --reason '<why>'"
         )
     if command == "check" and (rollover or modules != baseline.modules):
-        raise ValueError(f"{details}\nUpdate the {line} contract with: {RECORD}")
+        summary = details or f"release line {baseline.line} -> {line}"
+        raise ValueError(f"{summary}\nUpdate the {line} contract with: {RECORD}")
     breaks = [] if rollover else list(baseline.breaks)
     if blocked and reason:
         breaks.append(RecordedBreak(reason=reason, changes=blocked))
     return Contract(line=line, modules=modules, breaks=breaks)
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
 
 
 def main() -> int:
@@ -478,13 +506,9 @@ def main() -> int:
     record.add_argument("--allow-break", action="store_true")
     record.add_argument("--reason")
     args = parser.parse_args()
-    reason = getattr(args, "reason", None)
-    if args.command == "record" and (
-        args.allow_break != (reason is not None)
-        or reason is not None
-        and not reason.strip()
-    ):
-        parser.error("--allow-break requires --reason '<why>' and vice versa")
+    reason = args.reason.strip() if args.command == "record" and args.reason else None
+    if args.command == "record" and args.allow_break != (reason is not None):
+        parser.error("--allow-break requires a non-empty --reason '<why>'")
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     try:
         try:
@@ -505,7 +529,7 @@ def main() -> int:
             print("recorded tests/public_api.json")
         else:
             print("public API matches tests/public_api.json")
-    except (AttributeError, ValueError) as exc:
+    except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0

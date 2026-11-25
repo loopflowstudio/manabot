@@ -5,9 +5,6 @@
     "manabot.backends.torch.arrays": {
       "on_device": {
         "kind": "function",
-        "overloads": [
-          "(batch, device)"
-        ],
         "signature": "(batch, device)"
       }
     },
@@ -20,10 +17,6 @@
     "manabot.backends.torch.checkpoint": {
       "load_checkpoint": {
         "kind": "function",
-        "overloads": [
-          "(path, *, bucketed_shapes=..., live_tokens=...)",
-          "(path, *, include_belief_binding, bucketed_shapes=..., live_tokens=...)"
-        ],
         "signature": "(path, *, include_belief_binding=..., bucketed_shapes=..., live_tokens=...)"
       },
       "save_checkpoint": {
