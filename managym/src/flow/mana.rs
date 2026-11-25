@@ -310,16 +310,14 @@ impl PurposeProjection {
         }
     }
 
-    fn restrictions_equivalent(
-        &mut self,
-        a: &Option<ManaRestriction>,
-        b: &Option<ManaRestriction>,
-    ) -> bool {
-        match (a, b) {
-            (None, None) => true,
-            (Some(ra), Some(rb)) => ra == rb || self.mask(ra) == self.mask(rb),
-            _ => false,
-        }
+    fn classes_equivalent(&mut self, a: &ManaClass, b: &ManaClass) -> bool {
+        a.expiry == b.expiry
+            && a.effect == b.effect
+            && match (&a.restriction, &b.restriction) {
+                (None, None) => true,
+                (Some(ra), Some(rb)) => ra == rb || self.mask(ra) == self.mask(rb),
+                _ => false,
+            }
     }
 
     /// The single shared `ManaClass` when every mode carries exactly one class
@@ -343,10 +341,7 @@ impl PurposeProjection {
             return false;
         }
         if let ([(ca, aa)], [(cb, ab)]) = (a.classes(), b.classes()) {
-            return aa == ab
-                && ca.expiry == cb.expiry
-                && ca.effect == cb.effect
-                && self.restrictions_equivalent(&ca.restriction, &cb.restriction);
+            return aa == ab && self.classes_equivalent(ca, cb);
         }
         self.project_mana(a) == self.project_mana(b)
     }
@@ -359,12 +354,11 @@ impl PurposeProjection {
             return false;
         }
         if let (Some(ca), Some(cb)) = (Self::uniform_class(a), Self::uniform_class(b)) {
-            return ca.expiry == cb.expiry
-                && ca.effect == cb.effect
-                && a.iter()
-                    .zip(b.iter())
-                    .all(|(x, y)| x.mana == y.mana && x.classes()[0].1 == y.classes()[0].1)
-                && self.restrictions_equivalent(&ca.restriction, &cb.restriction);
+            return a
+                .iter()
+                .zip(b.iter())
+                .all(|(x, y)| x.mana == y.mana && x.classes()[0].1 == y.classes()[0].1)
+                && self.classes_equivalent(ca, cb);
         }
         self.project_choices(a) == self.project_choices(b)
     }
@@ -393,13 +387,11 @@ impl PurposeProjection {
                         Err(index) => classes.insert(index, (projected, *amounts)),
                     }
                 }
-                let classes = match classes.len() {
-                    0 => ProjectedClasses::None,
-                    1 => {
-                        let (class, amounts) = classes.pop().unwrap();
-                        ProjectedClasses::One(class, amounts)
-                    }
-                    _ => ProjectedClasses::Many(classes.into_boxed_slice()),
+                let classes = if classes.len() == 1 {
+                    let (class, amounts) = classes.pop().unwrap();
+                    ProjectedClasses::One(class, amounts)
+                } else {
+                    ProjectedClasses::Many(classes.into_boxed_slice())
                 };
                 ProjectedMana {
                     mana: mana.mana,
@@ -439,7 +431,7 @@ impl PurposeProjection {
     /// borrowing a `PurposeProjection` only when restricted outputs actually
     /// differ in raw representation (excluding `untapped`, which search
     /// canonicalizes in `PaymentResources`).
-    fn sources_equivalent_with<'a>(
+    fn sources_equivalent<'a>(
         projection: impl FnOnce() -> Option<&'a mut PurposeProjection>,
         a: &ManaSource,
         b: &ManaSource,
@@ -454,7 +446,7 @@ impl PurposeProjection {
         {
             return false;
         }
-        let mut need_fixed_proj = false;
+        let mut fixed_pair = None;
         if a.fixed != b.fixed {
             let (Some(af), Some(bf)) = (&a.fixed, &b.fixed) else {
                 return false;
@@ -462,7 +454,7 @@ impl PurposeProjection {
             if af.mana != bf.mana || (!mana_has_restriction(af) && !mana_has_restriction(bf)) {
                 return false;
             }
-            need_fixed_proj = true;
+            fixed_pair = Some((af, bf));
         }
         let mut need_ability_proj = false;
         for (x, y) in a.abilities.iter().zip(&b.abilities) {
@@ -486,16 +478,13 @@ impl PurposeProjection {
                 need_ability_proj = true;
             }
         }
-        if !need_fixed_proj && !need_ability_proj {
+        if fixed_pair.is_none() && !need_ability_proj {
             return true;
         }
         let Some(proj) = projection() else {
             return false;
         };
-        if need_fixed_proj {
-            let (Some(af), Some(bf)) = (&a.fixed, &b.fixed) else {
-                unreachable!()
-            };
+        if let Some((af, bf)) = fixed_pair {
             if !proj.mana_equivalent(af, bf) {
                 return false;
             }
@@ -509,14 +498,67 @@ impl PurposeProjection {
         }
         true
     }
+}
 
-    fn sources_equivalent(
-        projection: Option<&mut PurposeProjection>,
-        a: &ManaSource,
-        b: &ManaSource,
-        candidates: &[&Arc<Vec<PermanentId>>],
-    ) -> bool {
-        Self::sources_equivalent_with(|| projection, a, b, candidates)
+/// Memoizes a per-source answer across purpose-equivalent sources, lazily
+/// building a `PurposeProjection` only when restricted outputs differ in raw
+/// representation.
+struct SourceClassCache<'a, V> {
+    model: &'a PaymentModel<'a>,
+    obligations: &'a [Obligation],
+    extra: &'a [SpendingContext],
+    candidates: Vec<&'a Arc<Vec<PermanentId>>>,
+    projection: Option<PurposeProjection>,
+    classes: Vec<(usize, u8, V)>,
+}
+
+impl<'a, V: Copy> SourceClassCache<'a, V> {
+    fn new(
+        model: &'a PaymentModel<'a>,
+        obligations: &'a [Obligation],
+        extra: &'a [SpendingContext],
+    ) -> Self {
+        Self {
+            candidates: model
+                .tap_candidate_sets(obligations.iter().filter_map(Obligation::tap_candidates)),
+            model,
+            obligations,
+            extra,
+            projection: None,
+            classes: Vec::new(),
+        }
+    }
+
+    /// Cached value for an equivalent representative, or `None` if
+    /// `source_index` starts a new equivalence class.
+    fn get(&mut self, source_index: usize, convoker_key: u8) -> Option<V> {
+        let source = &self.model.sources[source_index];
+        self.classes
+            .iter()
+            .find(|(rep_index, rep_ck, _)| {
+                let rep = &self.model.sources[*rep_index];
+                rep.untapped == source.untapped
+                    && *rep_ck == convoker_key
+                    && PurposeProjection::sources_equivalent(
+                        || {
+                            Some(self.projection.get_or_insert_with(|| {
+                                PurposeProjection::for_model(
+                                    self.model,
+                                    self.obligations,
+                                    self.extra,
+                                )
+                            }))
+                        },
+                        rep,
+                        source,
+                        &self.candidates,
+                    )
+            })
+            .map(|(_, _, value)| *value)
+    }
+
+    fn insert(&mut self, source_index: usize, convoker_key: u8, value: V) {
+        self.classes.push((source_index, convoker_key, value));
     }
 }
 
@@ -836,15 +878,20 @@ impl PaymentResources {
         })
     }
 
+    #[inline]
+    fn source_state(&self, index: usize) -> (bool, bool, u64) {
+        (
+            self.present[index],
+            self.untapped[index],
+            self.used_mask(index),
+        )
+    }
+
     /// Allocation-free O(1) total order over one source's resource state for
     /// canonicalizing interchangeable sources.
     #[inline]
     fn cmp_source(&self, a: usize, b: usize) -> std::cmp::Ordering {
-        (self.present[a], self.untapped[a], self.used_mask(a)).cmp(&(
-            self.present[b],
-            self.untapped[b],
-            self.used_mask(b),
-        ))
+        self.source_state(a).cmp(&self.source_state(b))
     }
 
     fn use_ability(&mut self, source: usize, ability: usize) {
@@ -961,6 +1008,18 @@ struct SearchState<M = Mana, C = ManaChoices> {
 type PaymentSearchState = SearchState;
 type ProjectedSearchState = SearchState<ProjectedMana, ProjectedChoices>;
 
+impl PaymentSearchState {
+    fn with_resources(&self, resources: PaymentResources) -> Self {
+        Self {
+            resources,
+            pool: self.pool.clone(),
+            life: self.life,
+            obligations: self.obligations.clone(),
+            prefix: self.prefix,
+        }
+    }
+}
+
 /// Equivalence and purpose-projection state allocated only once a search
 /// grows past `PaymentSearch::GROWTH`, keeping ordinary small searches small
 /// on the stack and free of extra table setup/teardown.
@@ -977,9 +1036,87 @@ struct SearchEquivalence {
     order_buf: Vec<usize>,
 }
 
+impl SearchEquivalence {
+    /// Whether an earlier sibling in the same equivalence group with identical
+    /// resource state was already tried and failed in the current ascending
+    /// source loop. Preserves the first concrete witness in source order
+    /// because `prev < index` is always tried first.
+    #[inline]
+    fn has_tried_sibling(&self, resources: &PaymentResources, index: usize) -> bool {
+        let Some(&group_id) = self.source_group.get(index) else {
+            return false;
+        };
+        if group_id == u32::MAX {
+            return false;
+        }
+        let target = resources.source_state(index);
+        self.groups[group_id as usize]
+            .iter()
+            .take_while(|&&prev| prev < index)
+            .any(|&prev| resources.source_state(prev) == target)
+    }
+
+    /// Sort interchangeable source groups in `resources`. Returns `None` when
+    /// every group is already in non-decreasing order so the caller avoids
+    /// cloning the state.
+    fn canonical_resources(&mut self, resources: &PaymentResources) -> Option<PaymentResources> {
+        let mut permuted: Option<PaymentResources> = None;
+        let has_masks = !resources.used_masks.is_empty();
+        for group in &self.groups {
+            // Source-order success usually consumes an already sorted prefix.
+            // Permute only for branches that need one.
+            if group
+                .windows(2)
+                .all(|pair| resources.cmp_source(pair[0], pair[1]) != std::cmp::Ordering::Greater)
+            {
+                continue;
+            }
+            self.order_buf.clear();
+            self.order_buf.extend_from_slice(group);
+            self.order_buf
+                .sort_unstable_by(|&a, &b| resources.cmp_source(a, b));
+            let dst = permuted.get_or_insert_with(|| resources.clone());
+            for (&to, &from) in group.iter().zip(self.order_buf.iter()) {
+                dst.present[to] = resources.present[from];
+                dst.untapped[to] = resources.untapped[from];
+                if has_masks {
+                    dst.used_masks[to] = resources.used_masks[from];
+                }
+            }
+        }
+        permuted
+    }
+
+    /// Insert `state` into `projected_visited` when projection is active and
+    /// `state` carries restrictions. Returns `Some(fresh)` if routed to
+    /// `projected_visited`, or `None` when `state` belongs in exact `visited`.
+    fn insert_projected(&mut self, state: &PaymentSearchState) -> Option<bool> {
+        if self.projection.is_none() || !state_has_restriction(state) {
+            return None;
+        }
+        let resources = self
+            .canonical_resources(&state.resources)
+            .unwrap_or_else(|| state.resources.clone());
+        let projection = self.projection.as_mut().unwrap();
+        let pool = projection.project_mana(&state.pool);
+        let obligations = state
+            .obligations
+            .iter()
+            .map(|obligation| obligation.map_choices(|c| projection.project_choices(c)))
+            .collect();
+        Some(self.projected_visited.insert(ProjectedSearchState {
+            resources,
+            pool,
+            life: state.life,
+            obligations,
+            prefix: state.prefix,
+        }))
+    }
+}
+
 /// Live branch state held during `witness`: shared in `Arc` when inserted
-/// unmodified into `VisitedStates::Exact`, and kept unboxed on the stack when
-/// resources are permuted or projected into `VisitedStates::Projected`.
+/// unmodified into `PaymentSearch::visited`, and kept unboxed on the stack when
+/// resources are permuted or projected into `SearchEquivalence::projected_visited`.
 enum LiveState {
     Owned(PaymentSearchState),
     Shared(Arc<PaymentSearchState>),
@@ -1114,32 +1251,11 @@ impl PaymentSearch {
         groups
     }
 
-    /// Whether an earlier sibling in the same equivalence group with identical
-    /// `(present, untapped, used_mask)` was already tried and failed in the
-    /// current ascending source loop. Preserves the first concrete witness in
-    /// source order because `prev < index` is always tried first.
     #[inline]
     fn has_tried_sibling(&self, resources: &PaymentResources, index: usize) -> bool {
-        let Some(eq) = self.equivalence.as_deref() else {
-            return false;
-        };
-        let Some(&group_id) = eq.source_group.get(index) else {
-            return false;
-        };
-        if group_id == u32::MAX {
-            return false;
-        }
-        let present = resources.present[index];
-        let untapped = resources.untapped[index];
-        let used = resources.used_mask(index);
-        eq.groups[group_id as usize]
-            .iter()
-            .take_while(|&&prev| prev < index)
-            .any(|&prev| {
-                resources.present[prev] == present
-                    && resources.untapped[prev] == untapped
-                    && resources.used_mask(prev) == used
-            })
+        self.equivalence
+            .as_deref()
+            .is_some_and(|eq| eq.has_tried_sibling(resources, index))
     }
 
     fn classify_sources(
@@ -1167,7 +1283,7 @@ impl PaymentSearch {
             let equivalent = representatives.iter_mut().find(|(representative, _)| {
                 let other = &model.sources[*representative];
                 PurposeProjection::sources_equivalent(
-                    projection.as_mut(),
+                    || projection.as_mut(),
                     source,
                     other,
                     &candidates,
@@ -1195,65 +1311,6 @@ impl PaymentSearch {
             projection,
             projected_visited: FastHashSet::default(),
             order_buf: Vec::new(),
-        }
-    }
-
-    /// Sort interchangeable source groups in `resources`. Returns `None` when
-    /// every group is already in non-decreasing order so the caller avoids
-    /// cloning the state.
-    fn canonicalize_resources(
-        groups: &[Vec<usize>],
-        order_buf: &mut Vec<usize>,
-        resources: &PaymentResources,
-    ) -> Option<PaymentResources> {
-        let mut permuted: Option<PaymentResources> = None;
-        let has_masks = !resources.used_masks.is_empty();
-        for group in groups {
-            // Source-order success usually consumes an already sorted prefix.
-            // Permute only for branches that need one.
-            if group
-                .windows(2)
-                .all(|pair| resources.cmp_source(pair[0], pair[1]) != std::cmp::Ordering::Greater)
-            {
-                continue;
-            }
-            order_buf.clear();
-            order_buf.extend_from_slice(group);
-            order_buf.sort_unstable_by(|&a, &b| resources.cmp_source(a, b));
-            let dst = permuted.get_or_insert_with(|| resources.clone());
-            for (&to, &from) in group.iter().zip(order_buf.iter()) {
-                dst.present[to] = resources.present[from];
-                dst.untapped[to] = resources.untapped[from];
-                if has_masks {
-                    dst.used_masks[to] = resources.used_masks[from];
-                }
-            }
-        }
-        permuted
-    }
-
-    /// The state with each class's resources in sorted order and pool/output
-    /// restrictions projected onto the reachable `SpendingContext`s.
-    fn canonicalize_projected(
-        groups: &[Vec<usize>],
-        projection: &mut PurposeProjection,
-        order_buf: &mut Vec<usize>,
-        state: &PaymentSearchState,
-    ) -> ProjectedSearchState {
-        let resources = Self::canonicalize_resources(groups, order_buf, &state.resources)
-            .unwrap_or_else(|| state.resources.clone());
-        let pool = projection.project_mana(&state.pool);
-        let obligations = state
-            .obligations
-            .iter()
-            .map(|obligation| obligation.map_choices(|c| projection.project_choices(c)))
-            .collect();
-        ProjectedSearchState {
-            resources,
-            pool,
-            life: state.life,
-            obligations,
-            prefix: state.prefix,
         }
     }
 
@@ -1330,30 +1387,14 @@ impl PaymentSearch {
         let exact = std::mem::take(&mut self.visited);
         self.visited.reserve(exact.len() + 1);
         for key in exact {
-            if let Some(projection) = eq
-                .projection
-                .as_mut()
-                .filter(|_| state_has_restriction(&key))
-            {
-                eq.projected_visited.insert(Self::canonicalize_projected(
-                    &eq.groups,
-                    projection,
-                    &mut eq.order_buf,
-                    &key,
-                ));
-            } else if let Some(resources) =
-                Self::canonicalize_resources(&eq.groups, &mut eq.order_buf, &key.resources)
-            {
-                self.visited.insert(Arc::new(PaymentSearchState {
-                    resources,
-                    pool: key.pool.clone(),
-                    life: key.life,
-                    obligations: key.obligations.clone(),
-                    prefix: key.prefix,
-                }));
-            } else {
-                self.visited.insert(key);
+            if eq.insert_projected(&key).is_some() {
+                continue;
             }
+            let key = match eq.canonical_resources(&key.resources) {
+                Some(resources) => Arc::new(key.with_resources(resources)),
+                None => key,
+            };
+            self.visited.insert(key);
         }
     }
 
@@ -1369,40 +1410,24 @@ impl PaymentSearch {
             self.equivalence = Some(Box::new(eq));
             self.rekey_visited();
         }
-        let live = if let Some(eq) = self.equivalence.as_deref_mut() {
-            if let Some(projection) = eq
-                .projection
-                .as_mut()
-                .filter(|_| state_has_restriction(&state))
-            {
-                let key =
-                    Self::canonicalize_projected(&eq.groups, projection, &mut eq.order_buf, &state);
-                if !eq.projected_visited.insert(key) {
-                    return None;
+        let live = 'insert: {
+            if let Some(eq) = self.equivalence.as_deref_mut() {
+                if let Some(fresh) = eq.insert_projected(&state) {
+                    if !fresh {
+                        return None;
+                    }
+                    break 'insert LiveState::Owned(state);
                 }
-                LiveState::Owned(state)
-            } else if let Some(resources) =
-                Self::canonicalize_resources(&eq.groups, &mut eq.order_buf, &state.resources)
-            {
-                let key = Arc::new(PaymentSearchState {
-                    resources,
-                    pool: state.pool.clone(),
-                    life: state.life,
-                    obligations: state.obligations.clone(),
-                    prefix: state.prefix,
-                });
-                if !self.visited.insert(key) {
-                    return None;
+                if let Some(resources) = eq.canonical_resources(&state.resources) {
+                    if !self
+                        .visited
+                        .insert(Arc::new(state.with_resources(resources)))
+                    {
+                        return None;
+                    }
+                    break 'insert LiveState::Owned(state);
                 }
-                LiveState::Owned(state)
-            } else {
-                let shared = Arc::new(state);
-                if !self.visited.insert(shared.clone()) {
-                    return None;
-                }
-                LiveState::Shared(shared)
             }
-        } else {
             let shared = Arc::new(state);
             if !self.visited.insert(shared.clone()) {
                 return None;
@@ -2452,7 +2477,7 @@ impl PaymentModel<'_> {
                 return true;
             }
             if let Some(direct) = Self::direct_shape(rest, true) {
-                return self.direct_payable_with_any_choice(pool, choices, &direct);
+                return self.direct_covers(pool, choices, &direct, |_| false);
             }
             return choices.iter().any(|choice| {
                 let mut next = pool.clone();
@@ -2485,48 +2510,52 @@ impl PaymentModel<'_> {
         false
     }
 
-    fn direct_payable_with_any_choice(
+    /// Whether `pool`, the non-skipped untapped fixed sources (plus split taps),
+    /// and optionally one mode from `choices` cover `payment`.
+    fn direct_covers(
         &self,
         pool: &Mana,
         choices: &[Mana],
         payment: &DirectPayment,
+        skip: impl Fn(usize) -> bool,
     ) -> bool {
-        if payment.split.is_none() {
-            if pool.can_pay(payment.cost) {
-                return true;
-            }
-            let mut base = pool.clone();
-            for source in self.sources.iter() {
-                if source.untapped {
-                    if let Some(output) = &source.fixed {
-                        base.add(output);
-                    }
-                }
-            }
-            if base.can_pay(payment.cost) {
-                return true;
-            }
-            return choices.iter().any(|choice| {
-                let mut total = base.clone();
-                total.add(choice);
-                total.can_pay(payment.cost)
-            });
+        if payment.split.is_none() && pool.can_pay(payment.cost) {
+            return true;
         }
         let mut base = pool.clone();
         let mut spare_taps = 0_u32;
-        for tap in self.direct_taps(payment) {
-            if let Some(output) = tap.output {
-                base.add(output);
+        if payment.split.is_none() {
+            let mut added = false;
+            for (index, source) in self.sources.iter().enumerate() {
+                if !skip(index) && source.untapped {
+                    if let Some(output) = &source.fixed {
+                        base.add(output);
+                        added = true;
+                    }
+                }
             }
-            spare_taps += u32::from(tap.spare());
+            if added && base.can_pay(payment.cost) {
+                return true;
+            }
+        } else {
+            for (index, tap) in self.direct_taps(payment).enumerate() {
+                if skip(index) {
+                    continue;
+                }
+                if let Some(output) = tap.output {
+                    base.add(output);
+                }
+                spare_taps += u32::from(tap.spare());
+            }
         }
         let covers = |total: &Mana| -> bool {
             total.can_pay(payment.cost)
-                && u32::from(total.usable_total(payment.cost))
-                    .checked_sub(payment.cost.mana_value.into())
-                    .is_some_and(|slack| slack + spare_taps >= payment.split_generic())
+                && (payment.split.is_none()
+                    || u32::from(total.usable_total(payment.cost))
+                        .checked_sub(payment.cost.mana_value.into())
+                        .is_some_and(|slack| slack + spare_taps >= payment.split_generic()))
         };
-        if covers(&base) {
+        if payment.split.is_some() && covers(&base) {
             return true;
         }
         choices.iter().any(|choice| {
@@ -2549,11 +2578,7 @@ impl PaymentModel<'_> {
     ) -> bool {
         let mut after_fee = pool.clone();
         let mut tapped_bits = 0_u64;
-        let mut tapped_wide: Vec<bool> = Vec::new();
-        let wide = self.sources.len() > 64;
-        if wide {
-            tapped_wide.resize(self.sources.len(), false);
-        }
+        let mut tapped_wide = Vec::new();
         for (index, source) in self.sources.iter().enumerate() {
             if after_fee.can_pay(fee) {
                 break;
@@ -2568,10 +2593,10 @@ impl PaymentModel<'_> {
                 continue;
             }
             after_fee.add(output);
-            if wide {
-                tapped_wide[index] = true;
-            } else {
+            if index < 64 {
                 tapped_bits |= 1_u64 << index;
+            } else {
+                tapped_wide.push(index);
             }
         }
         if !after_fee.can_pay(fee) {
@@ -2589,54 +2614,12 @@ impl PaymentModel<'_> {
             after_fee.spend(&choice.unit);
             rem = choice.remaining;
         }
-        let is_tapped = |index: usize| {
-            if wide {
-                tapped_wide[index]
-            } else {
+        self.direct_covers(&after_fee, choices, rest, |index| {
+            if index < 64 {
                 tapped_bits & (1_u64 << index) != 0
+            } else {
+                tapped_wide.contains(&index)
             }
-        };
-        let mut base = after_fee;
-        if rest.split.is_none() {
-            for (index, source) in self.sources.iter().enumerate() {
-                if !is_tapped(index) && source.untapped {
-                    if let Some(output) = &source.fixed {
-                        base.add(output);
-                    }
-                }
-            }
-            if base.can_pay(rest.cost) {
-                return true;
-            }
-            return choices.iter().any(|choice| {
-                let mut total = base.clone();
-                total.add(choice);
-                total.can_pay(rest.cost)
-            });
-        }
-        let mut spare_taps = 0_u32;
-        for (index, tap) in self.direct_taps(rest).enumerate() {
-            if is_tapped(index) {
-                continue;
-            }
-            if let Some(output) = tap.output {
-                base.add(output);
-            }
-            spare_taps += u32::from(tap.spare());
-        }
-        let covers = |total: &Mana| -> bool {
-            total.can_pay(rest.cost)
-                && u32::from(total.usable_total(rest.cost))
-                    .checked_sub(rest.cost.mana_value.into())
-                    .is_some_and(|slack| slack + spare_taps >= rest.split_generic())
-        };
-        if covers(&base) {
-            return true;
-        }
-        choices.iter().any(|choice| {
-            let mut total = base.clone();
-            total.add(choice);
-            covers(&total)
         })
     }
 
@@ -2708,23 +2691,7 @@ impl PaymentModel<'_> {
     }
 
     fn direct_payable(&self, pool: &Mana, payment: &DirectPayment) -> bool {
-        if payment.split.is_none() {
-            if pool.can_pay(payment.cost) {
-                return true;
-            }
-            let mut total = pool.clone();
-            let mut added = false;
-            for source in self.sources.iter() {
-                if source.untapped {
-                    if let Some(output) = &source.fixed {
-                        total.add(output);
-                        added = true;
-                    }
-                }
-            }
-            return added && total.can_pay(payment.cost);
-        }
-        Self::direct_margin(pool, self.direct_taps(payment), payment).is_some()
+        self.direct_covers(pool, &[], payment, |_| false)
     }
 
     /// The witness the search returns first, built without searching.
@@ -3429,23 +3396,14 @@ impl Game {
                 &pending_obligations,
             )
         };
-        let candidates = if dedup {
-            base.tap_candidate_sets(
-                pending_obligations
-                    .iter()
-                    .filter_map(Obligation::tap_candidates),
-            )
-        } else {
-            Vec::new()
-        };
-        let mut projection: Option<PurposeProjection> = None;
-        let mut classes: Vec<(usize, u8, u64)> = Vec::new();
+        let mut cache =
+            dedup.then(|| SourceClassCache::<u64>::new(&base, &pending_obligations, &[]));
         let mut actions = Vec::new();
         for (source_index, source) in base.sources.iter().enumerate() {
             if source.abilities.is_empty() {
                 continue;
             }
-            if !dedup {
+            let Some(cache) = cache.as_mut() else {
                 for (pos, ability) in source.abilities.iter().enumerate() {
                     if check_ability(source_index, pos) {
                         actions.push(Action::ActivateAbility {
@@ -3456,25 +3414,9 @@ impl Game {
                     }
                 }
                 break;
-            }
+            };
             let ck = self.convoker_key(convoke, source);
-            let existing = classes.iter().position(|(rep_index, rep_ck, _)| {
-                let rep = &base.sources[*rep_index];
-                rep.untapped == source.untapped
-                    && *rep_ck == ck
-                    && PurposeProjection::sources_equivalent_with(
-                        || {
-                            Some(projection.get_or_insert_with(|| {
-                                PurposeProjection::for_model(&base, &pending_obligations, &[])
-                            }))
-                        },
-                        rep,
-                        source,
-                        &candidates,
-                    )
-            });
-            let feasible_mask = if let Some(class_index) = existing {
-                let cached = classes[class_index].2;
+            let feasible_mask = if let Some(cached) = cache.get(source_index, ck) {
                 #[cfg(debug_assertions)]
                 for (pos, ability) in source.abilities.iter().enumerate() {
                     assert!(pos < 64, "source has >= 64 activated mana abilities");
@@ -3497,7 +3439,7 @@ impl Game {
                         mask |= 1_u64 << pos;
                     }
                 }
-                classes.push((source_index, ck, mask));
+                cache.insert(source_index, ck, mask);
                 mask
             };
             for (pos, ability) in source.abilities.iter().enumerate() {
@@ -3721,17 +3663,13 @@ impl Game {
                 .filter(|source| source.untapped && source.fixed.is_some())
                 .nth(1)
                 .is_some();
-        let candidates = if dedup {
-            model.tap_candidate_sets(
-                all_obligations
-                    .iter()
-                    .filter_map(Obligation::tap_candidates),
+        let mut cache = dedup.then(|| {
+            SourceClassCache::<bool>::new(
+                &model,
+                &all_obligations,
+                std::slice::from_ref(&cost.purpose),
             )
-        } else {
-            Vec::new()
-        };
-        let mut projection: Option<PurposeProjection> = None;
-        let mut classes: Vec<(usize, u8, bool)> = Vec::new();
+        });
         let mut offered_units = 0_u16;
         let mut actions = Vec::new();
         for (source_index, source) in model.sources.iter().enumerate() {
@@ -3765,28 +3703,9 @@ impl Game {
             };
             if fixed_only {
                 debug_assert!(payable(), "a fixed tap changed aggregate affordability");
-            } else if dedup {
+            } else if let Some(cache) = cache.as_mut() {
                 let ck = self.convoker_key(convoke, source);
-                let existing = classes.iter().position(|(rep_index, rep_ck, _)| {
-                    let rep = &model.sources[*rep_index];
-                    *rep_ck == ck
-                        && PurposeProjection::sources_equivalent_with(
-                            || {
-                                Some(projection.get_or_insert_with(|| {
-                                    PurposeProjection::for_model(
-                                        &model,
-                                        &all_obligations,
-                                        std::slice::from_ref(&cost.purpose),
-                                    )
-                                }))
-                            },
-                            rep,
-                            source,
-                            &candidates,
-                        )
-                });
-                let legal = if let Some(class_index) = existing {
-                    let cached = classes[class_index].2;
+                let legal = if let Some(cached) = cache.get(source_index, ck) {
                     debug_assert_eq!(
                         cached,
                         payable(),
@@ -3795,7 +3714,7 @@ impl Game {
                     cached
                 } else {
                     let result = payable();
-                    classes.push((source_index, ck, result));
+                    cache.insert(source_index, ck, result);
                     result
                 };
                 if !legal {
