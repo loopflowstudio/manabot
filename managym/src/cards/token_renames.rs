@@ -59,6 +59,17 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Structure, "ManaUse", None),
     (Variant, "Effect::WinWithDistinctGates", None),
     (Variant, "Effect::SearchLandsOpponentSplits", None),
+    (Variant, "Effect::FightLastTarget", Some("Effect::Fight")),
+    (
+        Variant,
+        "Effect::RevealUntilToHand",
+        Some("Effect::RevealUntil"),
+    ),
+    (
+        Structure,
+        "/Effect::RevealUntilToHand",
+        Some("/Effect::RevealUntil"),
+    ),
     (Variant, "TriggerCondition::AttacksAlone", None),
     (Variant, "TriggerCondition::AttacksWithAnother", None),
     (Variant, "TriggerCondition::BeginningOfEachUpkeep", None),

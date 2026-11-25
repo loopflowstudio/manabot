@@ -201,6 +201,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "spell",
     "target",
     "target clauses",
+    "target divisions",
     "target eligibility",
     "this way",
     "token definition",
@@ -590,6 +591,7 @@ impl<'a> Projection<'a> {
                 source,
                 ability_index,
                 targets,
+                target_divisions,
                 x,
                 ..
             } => {
@@ -603,6 +605,9 @@ impl<'a> Projection<'a> {
                 }
                 self.field("ability", ability_index);
                 self.field("X", x);
+                if !target_divisions.is_empty() {
+                    self.field("target divisions", target_divisions);
+                }
                 for target in targets {
                     self.target("target", *target);
                 }

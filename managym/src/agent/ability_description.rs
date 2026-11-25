@@ -228,13 +228,7 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
                 Per::Object => format!("{} attacks", subject_description(subject, attached)),
                 Per::Batch => format!("{} attack", one_or_more(subject, "permanents", attached)),
             };
-            use crate::state::ability::AttackedSubject;
-            let attack = match attacked {
-                AttackedSubject::Any => attack,
-                AttackedSubject::Player(who) => format!("{attack} {}", actor_noun(*who)),
-                AttackedSubject::PlaneswalkerControlledBy(who) => format!("{attack} a planeswalker controlled by {}", actor_noun(*who)),
-                AttackedSubject::YouOrYourPlaneswalker => format!("{attack} you or a planeswalker you control"),
-            };
+            let attack = attack_with_subject(attack, *attacked);
             let prefix = nth.map_or_else(|| "Whenever".to_string(), |n| format!("On attack {n} this turn, when"));
             match attackers {
                 AttackSize::Any => format!("{prefix} {attack}"),
@@ -484,6 +478,20 @@ fn actor_noun(who: Actor) -> &'static str {
         Actor::You => "you",
         Actor::Opponent => "an opponent",
         Actor::AnyPlayer => "a player",
+    }
+}
+
+fn attack_with_subject(attack: String, attacked: crate::state::ability::AttackedSubject) -> String {
+    use crate::state::ability::AttackedSubject;
+    match attacked {
+        AttackedSubject::Any => attack,
+        AttackedSubject::Player(who) => format!("{attack} {}", actor_noun(who)),
+        AttackedSubject::PlaneswalkerControlledBy(who) => {
+            format!("{attack} a planeswalker controlled by {}", actor_noun(who))
+        }
+        AttackedSubject::YouOrYourPlaneswalker => {
+            format!("{attack} you or a planeswalker you control")
+        }
     }
 }
 
@@ -1578,26 +1586,10 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
                 DelayedEvent::YouCastSpell(predicate) => format!("you cast a {}", predicate_description(predicate, "spell")),
                 DelayedEvent::Attacks { subject, per, attacked } => {
                     let who = match per {
-                        Per::Batch => format!("one or more {} attack", subject_description(subject, "")),
+                        Per::Batch => format!("{} attack", one_or_more(subject, "permanents", "")),
                         Per::Object => format!("{} attacks", subject_description(subject, "")),
                     };
-                    let actor_text = |actor: Actor| match actor {
-                        Actor::You => "you",
-                        Actor::Opponent => "an opponent",
-                        Actor::AnyPlayer => "a player",
-                    };
-                    match attacked {
-                        crate::state::ability::AttackedSubject::Any => who,
-                        crate::state::ability::AttackedSubject::Player(actor) => {
-                            format!("{who} {}", actor_text(*actor))
-                        }
-                        crate::state::ability::AttackedSubject::PlaneswalkerControlledBy(actor) => {
-                            format!("{who} a planeswalker {} controls", actor_text(*actor))
-                        }
-                        crate::state::ability::AttackedSubject::YouOrYourPlaneswalker => {
-                            format!("{who} you or a planeswalker you control")
-                        }
-                    }
+                    attack_with_subject(who, *attacked)
                 }
             },
             match expiry {
@@ -1620,7 +1612,14 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
         Reveal { what } => format!("Reveal {}", selector_description(triggering, what)),
-        RevealUntilToHand { predicate, to_battlefield } => format!("Reveal cards from the top of your library until you reveal a {} card. Put that card {} and the rest on the bottom of your library in a random order", predicate_description(predicate, "card"), if *to_battlefield { "onto the battlefield" } else { "into your hand" }),
+        RevealUntil { predicate, to } => format!(
+            "Reveal cards from the top of your library until you reveal a {} card. Put that card {} and the rest on the bottom of your library in a random order",
+            predicate_description(predicate, "card"),
+            match to {
+                ZoneType::Battlefield => "onto the battlefield",
+                _ => "into your hand",
+            }
+        ),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
         SearchDistinctNames { predicate, count, end } => {
             let search = format!("Search your library for up to {count} {} with different names and reveal them", predicate_description(predicate, "card"));
@@ -1653,7 +1652,6 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         CreateToken { token, count, tapped_and_attacking, .. } => format!("Create X {} tokens, where X is {}{}",default_content_pack().token_name(token),value_description(triggering, count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(triggering, amount)),
-        FightLastTarget => "The first target fights the last target".into(),
         Fight { first, second } => format!("{} fights {}", selector_description(triggering, first), selector_description(triggering, second)),
         ShuffleLibrary => "Shuffle your library".into(),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),

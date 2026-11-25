@@ -872,6 +872,10 @@ impl Game {
                 ..
             } => {
                 frame.x = *remaining;
+                frame.context = parent
+                    .chosen()
+                    .get(slots[*next])
+                    .map(|t| self.target_reference(*t, viewer));
                 match parent.as_ref() {
                     crate::flow::game::DivisionParent::Spell {
                         object,
@@ -893,9 +897,6 @@ impl Game {
                             target_divisions,
                             viewer,
                         );
-                        frame.context = chosen
-                            .get(slots[*next])
-                            .map(|t| self.target_reference(*t, viewer));
                     }
                     crate::flow::game::DivisionParent::Activation(targeting) => {
                         frame.source = self.activation_reference(targeting.source, viewer);
@@ -907,10 +908,6 @@ impl Game {
                             &targeting.target_divisions,
                             viewer,
                         );
-                        frame.context = targeting
-                            .chosen
-                            .get(slots[*next])
-                            .map(|t| self.target_reference(*t, viewer));
                     }
                 }
             }

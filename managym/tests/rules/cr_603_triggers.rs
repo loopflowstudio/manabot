@@ -311,6 +311,7 @@ fn trigger_mode_needs_as_many_legal_targets_as_its_clause_minimum() {
                 }],
                 vec![Effect::gain_life(1)],
             ],
+            min: 0,
             up_to: None,
             unchosen: false,
         }],
@@ -352,6 +353,7 @@ fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
         }),
         effects: vec![Effect::TriggerModes {
             modes: vec![vec![Effect::gain_life(1)], vec![Effect::gain_life(2)]],
+            min: 0,
             up_to: None,
             unchosen: false,
         }],

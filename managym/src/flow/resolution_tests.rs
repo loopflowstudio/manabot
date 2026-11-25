@@ -4789,13 +4789,15 @@ fn end_turn_resumes_its_state_based_check_before_cleanup() {
         panic!("expected a spell copy");
     };
     spell(&mut game, "Time Stop");
-    game.exile_top_cards_to_play(
-        player,
-        1,
-        crate::state::ability::PlayWindow::ThisTurn,
-        false,
-        None,
-    );
+    for exiled in game.exile_top_cards(player, 1, false) {
+        game.grant_play_from_exile(
+            player,
+            exiled,
+            crate::state::ability::PlayWindow::ThisTurn,
+            false,
+            None,
+        );
+    }
     let playable = game.exile_playable_objects(player).next().unwrap();
     game.resolve_top_of_stack();
     game.publish_action_space(game.suspended_decision_action_space().unwrap());

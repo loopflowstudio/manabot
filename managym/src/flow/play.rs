@@ -1232,25 +1232,32 @@ impl Game {
         if slots.is_empty() {
             return self.finish_division_parent(player, parent);
         }
-        let chosen_len = match &parent {
-            DivisionParent::Spell { chosen, .. } => chosen.len(),
-            DivisionParent::Activation(targeting) => targeting.chosen.len(),
-        };
-        let divisions = match &mut parent {
-            DivisionParent::Spell {
-                target_divisions, ..
-            } => target_divisions,
-            DivisionParent::Activation(targeting) => &mut targeting.target_divisions,
-        };
+        let chosen_len = parent.chosen().len();
+        let divisions = parent.divisions_mut();
         if divisions.len() < chosen_len {
             divisions.resize(chosen_len, 0);
         }
-        if slots.len() == 1 {
-            divisions[slots[0]] = total;
+        self.advance_division(player, slots, 0, total, parent)
+    }
+
+    /// Auto-assign remaining slots when no choice remains, otherwise suspend on
+    /// `PendingChoice::DivideAmount`.
+    fn advance_division(
+        &mut self,
+        player: PlayerId,
+        slots: Vec<usize>,
+        next: usize,
+        remaining: i32,
+        mut parent: DivisionParent,
+    ) -> Result<(), AgentError> {
+        let rem_targets = (slots.len() - next) as i32;
+        if rem_targets == 1 {
+            parent.divisions_mut()[slots[next]] = remaining;
             return self.finish_division_parent(player, parent);
         }
-        if total <= slots.len() as i32 {
-            for &slot in &slots {
+        if remaining <= rem_targets {
+            let divisions = parent.divisions_mut();
+            for &slot in &slots[next..] {
                 divisions[slot] = 1;
             }
             return self.finish_division_parent(player, parent);
@@ -1258,8 +1265,8 @@ impl Game {
         self.pending_choice = Some(PendingChoice::DivideAmount {
             player,
             slots,
-            next: 0,
-            remaining: total,
+            next,
+            remaining,
             parent: Box::new(parent),
         });
         Ok(())
@@ -1274,8 +1281,8 @@ impl Game {
         let Some(PendingChoice::DivideAmount {
             player,
             slots,
-            mut next,
-            mut remaining,
+            next,
+            remaining,
             mut parent,
         }) = self.pending_choice.take()
         else {
@@ -1294,34 +1301,8 @@ impl Game {
             });
             return Err(AgentError("illegal division amount".into()));
         }
-        let divisions = match parent.as_mut() {
-            DivisionParent::Spell {
-                target_divisions, ..
-            } => target_divisions,
-            DivisionParent::Activation(targeting) => &mut targeting.target_divisions,
-        };
-        divisions[slots[next]] = amount;
-        remaining -= amount;
-        next += 1;
-        let rem_after = (slots.len() - next) as i32;
-        if rem_after == 1 {
-            divisions[slots[next]] = remaining;
-            return self.finish_division_parent(player, *parent);
-        }
-        if remaining <= rem_after {
-            for &slot in &slots[next..] {
-                divisions[slot] = 1;
-            }
-            return self.finish_division_parent(player, *parent);
-        }
-        self.pending_choice = Some(PendingChoice::DivideAmount {
-            player,
-            slots,
-            next,
-            remaining,
-            parent,
-        });
-        Ok(())
+        parent.divisions_mut()[slots[next]] = amount;
+        self.advance_division(player, slots, next + 1, remaining - amount, *parent)
     }
 
     fn finish_division_parent(
@@ -2332,16 +2313,7 @@ impl Game {
             let total = self
                 .announcement_division_total(&value, targeting.player, source_object, targeting.x)
                 .max(0);
-            let slots: Vec<usize> = (0..targeting.chosen.len())
-                .filter(|slot| {
-                    targeting
-                        .target_req_indices
-                        .get(*slot)
-                        .copied()
-                        .unwrap_or(0)
-                        == targeting.requirement
-                })
-                .collect();
+            let slots = targeting.clause_slots(targeting.requirement);
             let player = targeting.player;
             return self.begin_division(
                 player,

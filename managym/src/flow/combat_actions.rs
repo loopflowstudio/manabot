@@ -206,23 +206,32 @@ impl Game {
         self.state.permanents[permanent_id].is_some() && !self.is_phased_out(permanent_id)
     }
 
+    fn is_valid_permanent_defender(&self, object: crate::state::game_object::ObjectId) -> bool {
+        self.state.permanent_of(object).is_some_and(|id| {
+            self.still_in_combat(id)
+                && self.characteristics(id).types.is_planeswalker()
+                && self.state.permanents[id].as_ref().unwrap().controller
+                    == self.non_active_player()
+        })
+    }
+
     pub(crate) fn remove_invalid_defenders(&mut self) {
         let Some(combat) = &self.state.combat else {
             return;
         };
-        let mut removed = Vec::new();
-        for (attacker, target) in &combat.attack_targets {
-            let AttackTarget::Permanent(object) = *target else {
-                continue;
-            };
-            if !combat.attackers_without_defender.contains(attacker)
-                && !self.state.permanent_of(object).is_some_and(|id| {
-                    self.still_in_combat(id) && self.characteristics(id).types.is_planeswalker()
-                })
-            {
-                removed.push(object);
-            }
-        }
+        let removed: Vec<_> = combat
+            .attack_targets
+            .iter()
+            .filter_map(|&(attacker, target)| match target {
+                AttackTarget::Permanent(object)
+                    if !combat.attackers_without_defender.contains(&attacker)
+                        && !self.is_valid_permanent_defender(object) =>
+                {
+                    Some(object)
+                }
+                _ => None,
+            })
+            .collect();
         if let Some(combat) = self.state.combat.as_mut() {
             for object in removed {
                 combat.remove_defender(object);
@@ -242,20 +251,15 @@ impl Game {
         let mut choices = assignments.iter().copied();
         let mut events = Vec::new();
 
-        for &(attacker_id, attacked) in &combat.attack_targets {
-            let defender = match attacked {
-                AttackTarget::Player(player) => Some(ProposedDamageTarget::Player(player)),
-                AttackTarget::Permanent(object) => self
-                    .state
-                    .permanent_of(object)
-                    .filter(|&id| {
-                        !combat.attackers_without_defender.contains(&attacker_id)
-                            && self.still_in_combat(id)
-                            && self.characteristics(id).types.is_planeswalker()
-                            && self.state.permanents[id].as_ref().unwrap().controller
-                                == self.non_active_player()
-                    })
-                    .map(|_| ProposedDamageTarget::Object(object)),
+        for attacker_id in combat.attackers() {
+            let defender = match combat.defender(attacker_id) {
+                Some(AttackTarget::Player(player)) => Some(ProposedDamageTarget::Player(player)),
+                Some(AttackTarget::Permanent(object))
+                    if self.is_valid_permanent_defender(object) =>
+                {
+                    Some(ProposedDamageTarget::Object(object))
+                }
+                _ => None,
             };
             if !self.still_in_combat(attacker_id) {
                 continue;

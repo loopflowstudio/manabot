@@ -435,6 +435,24 @@ pub enum DivisionParent {
     Activation(ActivatedTargeting),
 }
 
+impl DivisionParent {
+    pub(crate) fn chosen(&self) -> &[Target] {
+        match self {
+            Self::Spell { chosen, .. } => chosen,
+            Self::Activation(targeting) => &targeting.chosen,
+        }
+    }
+
+    pub(crate) fn divisions_mut(&mut self) -> &mut Vec<i32> {
+        match self {
+            Self::Spell {
+                target_divisions, ..
+            } => target_divisions,
+            Self::Activation(targeting) => &mut targeting.target_divisions,
+        }
+    }
+}
+
 impl ActivatedTargeting {
     /// Add `target` to clause `requirement`, the clause now being chosen.
     pub fn choose(&mut self, target: Target, requirement: usize) {
@@ -446,15 +464,18 @@ impl ActivatedTargeting {
         }
     }
 
+    /// Indices into `chosen` belonging to clause `requirement`.
+    pub fn clause_slots(&self, requirement: usize) -> Vec<usize> {
+        (0..self.chosen.len())
+            .filter(|slot| self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement)
+            .collect()
+    }
+
     /// The targets already chosen for clause `requirement`.
     pub fn clause_targets(&self, requirement: usize) -> Vec<Target> {
-        self.chosen
-            .iter()
-            .enumerate()
-            .filter(|(slot, _)| {
-                self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement
-            })
-            .map(|(_, target)| *target)
+        self.clause_slots(requirement)
+            .into_iter()
+            .map(|slot| self.chosen[slot])
             .collect()
     }
 }

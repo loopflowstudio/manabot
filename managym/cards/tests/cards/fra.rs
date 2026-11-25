@@ -2055,8 +2055,14 @@ fn jace_reality_sculptor_loyalty_abilities() {
 fn auto_setup(names: &[&str]) -> crate::support::game::Scenario {
     let mut s = crate::support::game::five_color_setup(names);
     s.game_mut().mana_payment = [managym::state::player::ManaPayment::Auto; 2];
-    s.set_player_mana_pool(0, "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG");
-    s.set_player_mana_pool(1, "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG");
+    s.set_player_mana_pool(
+        0,
+        "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG",
+    );
+    s.set_player_mana_pool(
+        1,
+        "CCCCCCCCCCCCCCCCWWWWWWWWUUUUUUUUBBBBBBBBRRRRRRRRGGGGGGGG",
+    );
     s
 }
 
@@ -2204,7 +2210,10 @@ fn your_fate_ends_here_destroys_mv3_plus_and_surveils() {
     let spell = force_new_card_in_hand(&mut s, 0, "Your Fate Ends Here");
     cast_card(&mut s, spell);
     assert!(
-        !has_action(&s, |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(mv2))),
+        !has_action(
+            &s,
+            |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(mv2))
+        ),
         "MV 2 creature is not a legal target"
     );
     assert!(s.choose_target(Target::Permanent(mv4_pw)));
@@ -2328,7 +2337,10 @@ fn fulminous_forte_modes() {
     assert_eq!(counters_of(&s, own_pw, CounterKind::Loyalty), 5);
     assert_eq!(counters_of(&s, opp_pw, CounterKind::Loyalty), 5);
     assert_eq!(
-        s.game().state.permanents[opp_giant].as_ref().unwrap().damage,
+        s.game().state.permanents[opp_giant]
+            .as_ref()
+            .unwrap()
+            .damage,
         1
     );
 
@@ -2506,7 +2518,12 @@ fn awaken_the_inferno_damage_counter_and_landcycling() {
         state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType},
     };
 
-    let mut s = auto_setup(&["Awaken the Inferno", "Hill Giant", "Vivien Reid", "Mountain"]);
+    let mut s = auto_setup(&[
+        "Awaken the Inferno",
+        "Hill Giant",
+        "Vivien Reid",
+        "Mountain",
+    ]);
     let own_giant = s.force_permanent_on_battlefield(0, "Hill Giant");
     let opp_pw = place_pw(&mut s, 1, "Vivien Reid");
     set_counters(&mut s, opp_pw, CounterKind::Loyalty, 7);
@@ -2895,7 +2912,9 @@ fn identity_echo_exiles_and_puts_revealed_onto_battlefield() {
         inspect::{card_of, counters_of, now, zone_of},
         play::{activate, settle},
     };
-    use managym::state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType};
+    use managym::state::{
+        game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType,
+    };
 
     let mut s = auto_setup(&["Identity Echo", "Hill Giant", "Ajani Resolute", "Plains"]);
     let echo = s.force_permanent_on_battlefield(0, "Identity Echo");
@@ -3004,7 +3023,12 @@ fn vindictive_triumph_exiles_and_returns_mv3_or_less() {
     settle(&mut s);
     let stolen = s.battlefield_permanents_named(0, "Teyo, Lightshield Expert");
     assert_eq!(stolen.len(), 1);
-    assert!(s.game().state.permanents[stolen[0]].as_ref().unwrap().tapped);
+    assert!(
+        s.game().state.permanents[stolen[0]]
+            .as_ref()
+            .unwrap()
+            .tapped
+    );
     assert_eq!(
         s.game().state.permanents[stolen[0]]
             .as_ref()
@@ -3050,9 +3074,7 @@ fn entrust_the_spark_sacrifices_and_fetches_planeswalker() {
         .actions
         .iter()
         .find_map(|a| match a {
-            Action::SelectCard { object, .. }
-                if s.game().state[*object].name == "Vivien Reid" =>
-            {
+            Action::SelectCard { object, .. } if s.game().state[*object].name == "Vivien Reid" => {
                 Some(*object)
             }
             _ => None,
@@ -3089,9 +3111,7 @@ fn loyal_tutor_reveals_shuffles_and_puts_on_top() {
         .actions
         .iter()
         .find_map(|a| match a {
-            Action::SelectCard { object, .. }
-                if s.game().state[*object].name == "Vivien Reid" =>
-            {
+            Action::SelectCard { object, .. } if s.game().state[*object].name == "Vivien Reid" => {
                 Some(*object)
             }
             _ => None,

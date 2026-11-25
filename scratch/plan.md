@@ -40,19 +40,16 @@ semantic-conformance cases.
 
 ## Passes remaining
 
-No implementation slice remains. Gate:
+No implementation slice remains. Compress resolved the shape findings
+(`FightLastTarget` folded into `Effect::Fight`, `RevealUntilToHand` renamed
+to `Effect::RevealUntil { predicate, to }`, with `token_renames.rs` entries),
+simplified target-division and defender paths, and registered `GrantPlay` /
+`SacrificedBy` / `"target divisions"`. Gate:
 - Debug nextest (`CARGO_BUILD_JOBS=2 cargo nextest run --profile ci
   --test-threads 2`), Engine Budget, the pinned pilot (record with
   `--reason` if the attack row or Way/loyalty tokens moved), and the
   pre-existing CI failures above. Keep main's MTG-420 receipts at their
   original revision.
-- Shape review findings (realign, pass 9), for gate or compress:
-  `Effect::FightLastTarget` now duplicates `Effect::Fight { first, second }`
-  (a verb twin the Effect rule forbids); express it as `Fight` over target
-  selectors, adding a token rename if its learning token moves.
-  `Effect::RevealUntilToHand { to_battlefield }` names one destination and
-  holds another; rename it for both (token rename entry) or give it a `to`
-  zone.
 
 ## Consumer invariants (every slice)
 

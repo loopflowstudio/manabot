@@ -283,22 +283,6 @@ impl Game {
         exiled
     }
 
-    /// "Exile the top `count` cards of your library [face down]. You may
-    /// play them [this turn | until the end of your next turn | for as long
-    /// as they remain exiled] [if `condition`]."
-    pub(crate) fn exile_top_cards_to_play(
-        &mut self,
-        player: PlayerId,
-        count: usize,
-        until: PlayWindow,
-        face_down: bool,
-        condition: Option<&crate::state::ability::Condition>,
-    ) {
-        for exiled in self.exile_top_cards(player, count, face_down) {
-            self.grant_play_from_exile(player, exiled, until, face_down, condition);
-        }
-    }
-
     /// Whether `player` may foretell `card` now: a card with foretell in
     /// their hand, during their turn, with {2} available (CR 702.143a).
     pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {

@@ -231,6 +231,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "Shuffle",
                 "Bending",
                 "Created",
+                "SacrificedBy",
                 "ExileLinked",
             ][..],
         ),
@@ -267,6 +268,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
                 "HaveAbilitiesOf",
                 "ExileNamed",
                 "CounterAbility",
+                "GrantPlay",
             ][..],
         ),
     ] {

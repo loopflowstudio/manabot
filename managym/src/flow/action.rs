@@ -409,15 +409,7 @@ impl Game {
                 let rest = remaining - mode as i32;
                 let recipient = if *last {
                     let id = self.state.permanent_of(*attacker)?;
-                    match self
-                        .state
-                        .combat
-                        .as_ref()?
-                        .attack_targets
-                        .iter()
-                        .find(|(source, _)| *source == id)?
-                        .1
-                    {
+                    match self.state.combat.as_ref()?.defender(id)? {
                         super::combat::AttackTarget::Permanent(object) => {
                             format!("to {}", self.observed_object_name(object))
                         }
@@ -440,13 +432,7 @@ impl Game {
                 ..
             }) = &self.pending_choice =>
             {
-                let target = match parent.as_ref() {
-                    super::game::DivisionParent::Spell { chosen, .. } => chosen.get(slots[*next]),
-                    super::game::DivisionParent::Activation(targeting) => {
-                        targeting.chosen.get(slots[*next])
-                    }
-                };
-                let target_name = match target {
+                let target_name = match parent.chosen().get(slots[*next]) {
                     Some(Target::Player(seat)) => format!("Seat {}", seat.0 + 1),
                     Some(Target::Permanent(id)) => self
                         .permanent_object(*id)
@@ -1091,15 +1077,7 @@ impl Game {
             } => {
                 let rem_targets = (slots.len() - *next) as i32;
                 let max_amt = (*remaining - (rem_targets - 1)).max(1);
-                let target = match parent.as_ref() {
-                    super::game::DivisionParent::Spell { chosen, .. } => {
-                        chosen.get(slots[*next]).copied()
-                    }
-                    super::game::DivisionParent::Activation(targeting) => {
-                        targeting.chosen.get(slots[*next]).copied()
-                    }
-                };
-                let focus = match target {
+                let focus = match parent.chosen().get(slots[*next]).copied() {
                     Some(Target::Permanent(id)) => self.state.permanents[id]
                         .as_ref()
                         .map(|perm| vec![perm.id])

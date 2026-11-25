@@ -185,13 +185,20 @@ fn bushwhack() -> CardDefinition {
                     vec![
                         Effect::TargetClause {
                             requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
-                            effects: vec![],
+                            effects: vec![Effect::Remember {
+                                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            }],
                         },
                         Effect::TargetClause {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::Fight {
+                                first: ObjectSelector::Remembered,
+                                second: ObjectSelector::Target(
+                                    TargetSpec::CreatureOpponentControls,
+                                ),
+                            }],
                         },
                     ],
                 ],

@@ -3361,9 +3361,9 @@ fn spinner_of_souls() -> CardDefinition {
                 },
                 effects: vec![Effect::Modal {
                     modes: vec![
-                        vec![Effect::RevealUntilToHand {
+                        vec![Effect::RevealUntil {
                             predicate: CardPredicate::creature(),
-                            to_battlefield: false,
+                            to: ZoneType::Hand,
                         }],
                         vec![],
                     ],

@@ -1805,15 +1805,13 @@ pub enum Effect {
         what: ObjectSelector,
     },
     /// "Reveal cards from the top of your library until you reveal a
-    /// [predicate] card. Put that card into your hand [or onto the battlefield]
-    /// and the rest on the bottom of your library in a random order." The cards
-    /// stay in the library while revealed; with no match, every card is revealed
-    /// and the library is put back in a random order.
-    RevealUntilToHand {
+    /// [predicate] card. Put that card into `to` (hand or battlefield) and the
+    /// rest on the bottom of your library in a random order." The cards stay in
+    /// the library while revealed; with no match, every card is revealed and
+    /// the library is put back in a random order.
+    RevealUntil {
         predicate: CardPredicate,
-        /// Put the revealed matching card onto the battlefield instead of into hand.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        to_battlefield: bool,
+        to: ZoneType,
     },
     /// The target player reveals their hand (it becomes public knowledge);
     /// the effect's controller chooses a matching card and that player
@@ -2106,9 +2104,6 @@ pub enum Effect {
         amount: EffectValue,
     },
 
-    /// The first chosen creature fights the last (CR 701.14); records the
-    /// excess damage dealt to the last.
-    FightLastTarget,
     /// `first` fights `second` (CR 701.14); records the excess damage dealt to
     /// `second`. Neither deals damage if either is absent or not a creature.
     Fight {
@@ -2732,7 +2727,7 @@ impl Effect {
             | Effect::Earthbend { .. }
             | Effect::Discard { .. }
             | Effect::Reveal { .. }
-            | Effect::RevealUntilToHand { .. }
+            | Effect::RevealUntil { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
             | Effect::ApplyContinuous { .. }
@@ -2782,7 +2777,6 @@ impl Effect {
             | Effect::EachPlayerSacrificesCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
-            | Effect::FightLastTarget
             | Effect::Fight { .. }
             | Effect::Scry { .. }
             | Effect::ManifestDread

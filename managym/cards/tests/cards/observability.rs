@@ -816,7 +816,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
         Effect::Reveal { .. } => "Effect::Reveal",
-        Effect::RevealUntilToHand { .. } => "Effect::RevealUntilToHand",
+        Effect::RevealUntil { .. } => "Effect::RevealUntil",
         Effect::If { .. } => "Effect::If",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
@@ -888,7 +888,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CounterAbility { .. } => "Effect::CounterAbility",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
-        Effect::FightLastTarget => "Effect::FightLastTarget",
         Effect::Fight { .. } => "Effect::Fight",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
         Effect::GrantPlay { .. } => "Effect::GrantPlay",
@@ -897,7 +896,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 103;
+const EFFECT_VARIANTS: usize = 102;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -990,9 +989,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Reveal {
             what: ObjectSelector::Selected,
         },
-        Effect::RevealUntilToHand {
+        Effect::RevealUntil {
             predicate: CardPredicate::creature(),
-            to_battlefield: false,
+            to: ZoneType::Hand,
         },
         Effect::If {
             condition: Condition::YourTurn,
@@ -1248,7 +1247,6 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::AddOneColorManaValue {
             amount: EffectValue::GreatestSharedCreatureType,
         },
-        Effect::FightLastTarget,
     ]
 }
 

@@ -1110,11 +1110,7 @@ fn hexhaven_battalion() -> CardDefinition {
                 discard_source: true,
                 mana_cost: ManaCost::parse("{2}"),
                 effects: vec![Effect::search_library(
-                    CardPredicate {
-                        card_type: Some(CardType::Land),
-                        supertype: Some("Basic".into()),
-                        ..Default::default()
-                    },
+                    CardPredicate::basic_land(),
                     1.into(),
                     vec![Effect::return_to_hand(ObjectSelector::Selected)],
                 )],
@@ -1562,10 +1558,7 @@ fn vraskas_final_mercy() -> CardDefinition {
 
 /// "Planeswalkers you control" (CR 306), the scope every Way grants to.
 fn planeswalker() -> CardPredicate {
-    CardPredicate {
-        card_type: Some(CardType::Planeswalker),
-        ..Default::default()
-    }
+    CardPredicate::card_type(CardType::Planeswalker)
 }
 
 /// "Planeswalkers you control have \"[ability]\"": a layer-6 grant (CR
@@ -1855,10 +1848,7 @@ fn way_of_the_paradox() -> CardDefinition {
 
 fn avatar_of_burgeoning_echoes() -> CardDefinition {
     let text_box = "Landfall — Whenever a land you control enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−10]: Put a +1/+1 counter on target creature for each land you control.\"";
-    let land = CardPredicate {
-        card_type: Some(CardType::Land),
-        ..Default::default()
-    };
+    let land = CardPredicate::card_type(CardType::Land);
     CardDefinition {
         key: "fra.avatar_of_burgeoning_echoes",
         scryfall_id: "5905995b-7a20-4602-a7cc-90aa5089a082",
@@ -2691,11 +2681,7 @@ fn awaken_the_inferno() -> CardDefinition {
                 discard_source: true,
                 mana_cost: ManaCost::parse("{2}"),
                 effects: vec![Effect::search_library(
-                    CardPredicate {
-                        card_type: Some(CardType::Land),
-                        supertype: Some("Basic".into()),
-                        ..Default::default()
-                    },
+                    CardPredicate::basic_land(),
                     1.into(),
                     vec![Effect::return_to_hand(ObjectSelector::Selected)],
                 )],
@@ -3093,9 +3079,9 @@ fn identity_echo() -> CardDefinition {
                     Effect::exile(ObjectSelector::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate::creature_or_planeswalker(),
                     })),
-                    Effect::RevealUntilToHand {
+                    Effect::RevealUntil {
                         predicate: CardPredicate::creature_or_planeswalker(),
-                        to_battlefield: true,
+                        to: ZoneType::Battlefield,
                     },
                 ],
                 ..Default::default()

@@ -3858,16 +3858,16 @@ impl Game {
     }
 
     /// Reveal cards from the top of `player`'s library until one matches
-    /// `predicate`; it goes to their hand (or returns a battlefield-entry
-    /// proposal when `to_battlefield` is set) and the cards revealed before it
-    /// go to the bottom in a random order. The cards never leave the library
-    /// while revealed, so the match leaves a public position and a single
-    /// passed card keeps every fact below it and is publicly known on the bottom.
+    /// `predicate`; it moves to `to` (hand immediately, or battlefield as a
+    /// returned entry proposal) and the cards revealed before it go to the
+    /// bottom in a random order. The cards never leave the library while
+    /// revealed, so the match leaves a public position and a single passed
+    /// card keeps every fact below it and is publicly known on the bottom.
     pub(crate) fn reveal_until(
         &mut self,
         player: PlayerId,
         predicate: &CardPredicate,
-        to_battlefield: bool,
+        to: ZoneType,
     ) -> Option<crate::flow::proposed_event::ProposedEvent> {
         let from_top: Vec<ObjectId> = self.library_from_top(player).collect();
         let hit = from_top
@@ -3883,29 +3883,27 @@ impl Game {
         let mut battlefield_move = None;
         if let Some(index) = hit {
             let found = from_top[index];
-            if to_battlefield {
-                self.emit(GameEvent::CardRevealed {
-                    owner: player,
-                    definition: self.state[found].definition_id,
-                });
-                battlefield_move = Some(self.zone_move_proposal(
-                    found,
-                    ZoneType::Battlefield,
-                    ZoneEntry {
-                        controller: Some(player),
-                        inspected_library_departure: true,
-                        ..ZoneEntry::default()
-                    },
-                ));
-            } else {
-                self.reveal_object_to_hand(
-                    found,
-                    player,
-                    ZoneEntry {
-                        inspected_library_departure: true,
-                        ..ZoneEntry::default()
-                    },
-                );
+            let entry = ZoneEntry {
+                inspected_library_departure: true,
+                ..ZoneEntry::default()
+            };
+            match to {
+                ZoneType::Battlefield => {
+                    self.emit(GameEvent::CardRevealed {
+                        owner: player,
+                        definition: self.state[found].definition_id,
+                    });
+                    battlefield_move = Some(self.zone_move_proposal(
+                        found,
+                        ZoneType::Battlefield,
+                        ZoneEntry {
+                            controller: Some(player),
+                            ..entry
+                        },
+                    ));
+                }
+                ZoneType::Hand => self.reveal_object_to_hand(found, player, entry),
+                other => unreachable!("RevealUntil expects Hand or Battlefield, got {other:?}"),
             }
         }
         match passed.as_slice() {

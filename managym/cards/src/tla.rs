@@ -3159,13 +3159,20 @@ fn earth_rumble() -> CardDefinition {
                                 1,
                                 TargetSpec::CreatureYouControl,
                             ),
-                            effects: vec![],
+                            effects: vec![Effect::Remember {
+                                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            }],
                         },
                         Effect::TargetClause {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::Fight {
+                                first: ObjectSelector::Remembered,
+                                second: ObjectSelector::Target(
+                                    TargetSpec::CreatureOpponentControls,
+                                ),
+                            }],
                         },
                     ],
                 },
@@ -9293,7 +9300,19 @@ fn the_last_agni_kai() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![
-                Effect::FightLastTarget,
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::Remember {
+                        what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    }],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+                    effects: vec![Effect::Fight {
+                        first: ObjectSelector::Remembered,
+                        second: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    }],
+                },
                 Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::ExcessDamage,
@@ -9303,10 +9322,6 @@ fn the_last_agni_kai() -> CardDefinition {
                     ObjectSelector::You,
                     Modification::KeepUnspentMana(Color::Red),
                 ),
-            ],
-            targeting: vec![
-                TargetRequirement::one(TargetSpec::CreatureYouControl),
-                TargetRequirement::one(TargetSpec::CreatureOpponentControls),
             ],
             text_box: text_box.into(),
             ..Default::default()
