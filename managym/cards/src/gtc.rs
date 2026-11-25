@@ -112,6 +112,10 @@ fn aurelia_the_warleader() -> CardDefinition {
 
 fn consuming_aberration() -> CardDefinition {
     let text_box = "Consuming Aberration's power and toughness are each equal to the number of cards in your opponents' graveyards.\nWhenever you cast a spell, each opponent reveals cards from the top of their library until they reveal a land card, then puts those cards into their graveyard.";
+    let count = LayerValue::count(LayerCount::Graveyard {
+        who: Actor::Opponent,
+        predicate: CardPredicate::default(),
+    });
     CardDefinition {
         key: "gtc.consuming_aberration",
         scryfall_id: "6354de66-f7f8-4e33-98d0-52624d3d7828",
@@ -121,14 +125,8 @@ fn consuming_aberration() -> CardDefinition {
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Horror".into()],
             statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
-                power: Some(LayerValue::count(LayerCount::Graveyard {
-                    who: Actor::Opponent,
-                    predicate: CardPredicate::default(),
-                })),
-                toughness: Some(LayerValue::count(LayerCount::Graveyard {
-                    who: Actor::Opponent,
-                    predicate: CardPredicate::default(),
-                })),
+                power: Some(count.clone()),
+                toughness: Some(count),
             }])],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),

@@ -959,7 +959,6 @@ fn high_society_hunter() -> CardDefinition {
 }
 
 fn leyline_axe() -> CardDefinition {
-    use managym_state::card::{StaticKeywordGrant, StaticScope};
     CardDefinition {
         key: "fdn.leyline_axe",
         scryfall_id: "b9c03336-a321-4c06-94d1-809f328fabd8",
@@ -4233,6 +4232,7 @@ fn banner_of_kinship() -> CardDefinition {
         chosen_type_of_source: true,
         ..CardPredicate::creature()
     };
+    let bonus = LayerValue::count(LayerCount::SourceCounters(CounterKind::Fellowship));
     CardDefinition {
         key: "fdn.banner_of_kinship",
         scryfall_id: "a14c16c0-4053-46b0-8fa6-be8b4a7a1c8a",
@@ -4255,10 +4255,8 @@ fn banner_of_kinship() -> CardDefinition {
                 StaticScope::YouControl(chosen),
                 None,
                 vec![Modification::ModifyPt {
-                    power: LayerValue::count(LayerCount::SourceCounters(CounterKind::Fellowship)),
-                    toughness: LayerValue::count(LayerCount::SourceCounters(
-                        CounterKind::Fellowship,
-                    )),
+                    power: bonus.clone(),
+                    toughness: bonus,
                 }],
             )],
             text_box: text_box.into(),

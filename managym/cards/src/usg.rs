@@ -99,6 +99,7 @@ fn duress() -> CardDefinition {
 
 fn blanchwood_armor() -> CardDefinition {
     let text_box = "Enchant creature\nEnchanted creature gets +1/+1 for each Forest you control.";
+    let bonus = LayerValue::count(LayerCount::YouControl(CardPredicate::subtype("Forest")));
     CardDefinition {
         key: "usg.blanchwood_armor",
         scryfall_id: "9b5f3776-74f4-4626-833b-e1b0921d3cbc",
@@ -111,12 +112,8 @@ fn blanchwood_armor() -> CardDefinition {
                 StaticScope::Attached,
                 None,
                 vec![Modification::ModifyPt {
-                    power: LayerValue::count(LayerCount::YouControl(CardPredicate::subtype(
-                        "Forest",
-                    ))),
-                    toughness: LayerValue::count(LayerCount::YouControl(CardPredicate::subtype(
-                        "Forest",
-                    ))),
+                    power: bonus.clone(),
+                    toughness: bonus,
                 }],
             )],
             spell_effects: vec![Effect::enchant(TargetSpec::Creature)],

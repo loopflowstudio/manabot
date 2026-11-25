@@ -861,12 +861,25 @@ impl Game {
             )
     }
 
+    pub(super) fn graveyard_card_types(&self) -> i32 {
+        (0..self.state.players.len())
+            .map(PlayerId)
+            .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
+            .flat_map(|card| self.state[self.state.object_of(card)].types.types.iter())
+            .collect::<BTreeSet<_>>()
+            .len() as i32
+    }
+
     fn off_battlefield_layer_value(
         &self,
         value: &LayerValue,
         printing: &PrintedCharacteristics,
         controller: PlayerId,
     ) -> i32 {
+        let controlled = |predicate| {
+            self.layer_views(self.iter_battlefield_permanents(controller))
+                .filter(move |(id, view)| matches_view(self, *id, predicate, view, None, None))
+        };
         match value {
             LayerValue::Fixed(n) => *n,
             LayerValue::ManaValue => i32::from(
@@ -875,34 +888,21 @@ impl Game {
                     .as_ref()
                     .map_or(0, |cost| cost.mana_value),
             ),
-            LayerValue::GraveyardCardTypes { offset } => [PlayerId(0), PlayerId(1)]
-                .into_iter()
-                .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
-                .flat_map(|card| self.state[self.state.object_of(card)].types.types.iter())
-                .collect::<BTreeSet<_>>()
-                .len() as i32
-                + offset,
+            LayerValue::GraveyardCardTypes { offset } => self.graveyard_card_types() + offset,
             LayerValue::Count(count) => match count.as_ref() {
-                LayerCount::YouControl(predicate) => self
-                    .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
-                    .count() as i32,
+                LayerCount::YouControl(predicate) => controlled(predicate).count() as i32,
                 LayerCount::Graveyard { who, predicate } => (0..self.state.players.len())
                     .map(PlayerId)
                     .filter(|player| who.includes(controller, *player))
                     .map(|player| self.count_graveyard_matching(player, predicate) as i32)
                     .sum(),
-                LayerCount::ColorsAmong(predicate) => self
-                    .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
+                LayerCount::ColorsAmong(predicate) => controlled(predicate)
                     .fold(BTreeSet::new(), |mut colors, (_, view)| {
                         colors.extend(view.colors.iter().copied());
                         colors
                     })
                     .len() as i32,
-                LayerCount::CountersOn { kind, predicate } => self
-                    .layer_views(self.iter_battlefield_permanents(controller))
-                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
+                LayerCount::CountersOn { kind, predicate } => controlled(predicate)
                     .filter_map(|(id, _)| self.state.permanents[id].as_ref())
                     .map(|p| p.counter_count(*kind))
                     .sum(),

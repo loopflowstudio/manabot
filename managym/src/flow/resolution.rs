@@ -262,6 +262,17 @@ impl Game {
 
     /// Resolve a quantity against the frame's targets, payments and instruction results.
     pub(crate) fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+        self.effect_value_with_chosen_type(value, frame, None)
+    }
+
+    /// Resolve a quantity, supplying `chosen_type` when an entering permanent
+    /// has already chosen a creature type before reaching the battlefield.
+    pub(super) fn effect_value_with_chosen_type(
+        &self,
+        value: &EffectValue,
+        frame: &EffectFrame,
+        chosen_type: Option<&str>,
+    ) -> i32 {
         let controller = frame.controller;
         let paid_properties = |how, property| {
             frame
@@ -305,7 +316,20 @@ impl Game {
                 .filter(|object| {
                     in_zone.is_none_or(|zone| self.state.zones.zone_of(*object) == Some(zone))
                         && predicate.as_ref().is_none_or(|predicate| {
-                            self.object_matches_predicate(*object, predicate)
+                            if let (Some(chosen), Some(id)) =
+                                (chosen_type, self.state.permanent_of(*object))
+                            {
+                                super::layers::matches_view(
+                                    self,
+                                    id,
+                                    predicate,
+                                    &self.layer_view(id),
+                                    None,
+                                    Some(chosen),
+                                )
+                            } else {
+                                self.object_matches_predicate(*object, predicate)
+                            }
                         })
                 })
                 .count() as i32,
@@ -390,17 +414,26 @@ impl Game {
                 .source_permanent_id(frame)
                 .map_or(0, |source| self.attached_creature_power(source)),
             EffectValue::AttackingMatching { predicate } => self
-                .iter_battlefield_permanents(controller)
-                .filter(|id| {
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(id, view)| {
                     self.state.permanents[*id]
                         .as_ref()
                         .is_some_and(|permanent| permanent.attacking)
-                        && self.permanent_matches_predicate(*id, predicate)
+                        && super::layers::matches_view(
+                            self,
+                            *id,
+                            predicate,
+                            view,
+                            None,
+                            chosen_type,
+                        )
                 })
                 .count() as i32,
-            EffectValue::Half(inner) => self.effect_value(inner, frame).div_euclid(2),
+            EffectValue::Half(inner) => self
+                .effect_value_with_chosen_type(inner, frame, chosen_type)
+                .div_euclid(2),
             EffectValue::Scaled { factor, value } => {
-                factor.saturating_mul(self.effect_value(value, frame))
+                factor.saturating_mul(self.effect_value_with_chosen_type(value, frame, chosen_type))
             }
             EffectValue::Fixed(value) => *value,
             EffectValue::CreaturesWithCounters => self
@@ -412,9 +445,12 @@ impl Game {
                             .is_some_and(|p| p.counter_count(CounterKind::PlusOnePlusOne) > 0)
                 })
                 .count() as i32,
-            EffectValue::BattlefieldMatching { predicate } => {
-                self.count_battlefield_matching(controller, predicate) as i32
-            }
+            EffectValue::BattlefieldMatching { predicate } => self
+                .layer_views(self.iter_battlefield_permanents(controller))
+                .filter(|(id, view)| {
+                    super::layers::matches_view(self, *id, predicate, view, None, chosen_type)
+                })
+                .count() as i32,
             EffectValue::GraveyardMatching { base, predicate } => {
                 base.saturating_add(self.count_graveyard_matching(controller, predicate) as i32)
             }
@@ -429,7 +465,14 @@ impl Game {
                 .layer_views(self.iter_battlefield_permanents(controller))
                 .filter(|(id, view)| {
                     view.is_creature()
-                        && super::layers::matches_view(self, *id, predicate, view, None, None)
+                        && super::layers::matches_view(
+                            self,
+                            *id,
+                            predicate,
+                            view,
+                            None,
+                            chosen_type,
+                        )
                 })
                 .map(|(_, view)| view.power)
                 .max()

@@ -172,24 +172,6 @@ impl CardPredicate {
         self.chosen_type_of_source || self.any_of.iter().any(Self::reads_chosen_type)
     }
 
-    /// Bind `chosen_type_of_source` to a concrete subtype when evaluating
-    /// outside a battlefield source permanent (e.g., pending entry replacements).
-    pub fn bind_chosen_type(&self, chosen: Option<&str>) -> Self {
-        let mut bound = self.clone();
-        if bound.chosen_type_of_source {
-            if let Some(name) = chosen {
-                bound.chosen_type_of_source = false;
-                bound.subtype = Some(name.into());
-            }
-        }
-        bound.any_of = bound
-            .any_of
-            .iter()
-            .map(|alt| alt.bind_chosen_type(chosen))
-            .collect();
-        bound
-    }
-
     /// Whether matching needs the asking ability's source permanent.
     pub fn reads_source(&self) -> bool {
         self.namesake

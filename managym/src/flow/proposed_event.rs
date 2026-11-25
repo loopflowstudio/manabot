@@ -523,30 +523,18 @@ impl ReplacementCandidate {
             }
             ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
             ReplacementEffect::EntersPrepared => "Enter prepared".into(),
-            ReplacementEffect::PreventCombatDamage
-            | ReplacementEffect::ModifyDamage {
-                combat: Some(true),
-                transform: DamageTransform::PreventAll,
-                ..
-            } => "Prevent all combat damage".into(),
+            ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::PreventAll,
-                ..
-            } => "Prevent all damage".into(),
-            ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::Prevent(amount),
-                ..
-            } => {
-                format!("Prevent {amount} damage")
-            }
-            ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::Double,
-                ..
-            } => "Double the damage".into(),
-            ReplacementEffect::ModifyDamage {
-                transform: DamageTransform::Add(_),
-                ..
-            } => "Increase the damage".into(),
+                combat, transform, ..
+            } => match transform {
+                DamageTransform::PreventAll if *combat == Some(true) => {
+                    "Prevent all combat damage".into()
+                }
+                DamageTransform::PreventAll => "Prevent all damage".into(),
+                DamageTransform::Prevent(amount) => format!("Prevent {amount} damage"),
+                DamageTransform::Double => "Double the damage".into(),
+                DamageTransform::Add(_) => "Increase the damage".into(),
+            },
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
             ReplacementEffect::EntersWithCounters { kind, count, .. } => {
@@ -1669,42 +1657,21 @@ impl Game {
                                 combat: kind,
                                 ..
                             } => {
-                                let source_matches = if dmg_source.this {
-                                    *damage_source == Some(source)
-                                } else {
-                                    (dmg_source.by == Actor::AnyPlayer
-                                        || source_controller.is_some_and(|p| {
-                                            dmg_source.by.includes(permanent.controller, p)
-                                        }))
-                                        && dmg_source.predicate.as_ref().is_none_or(|predicate| {
-                                            damage_source.is_some_and(|dmg| {
-                                                self.spell_matches_predicate(dmg, predicate)
-                                            })
-                                        })
-                                };
-                                let recipient_matches = if recipient.this {
-                                    *target == ProposedDamageTarget::Object(source)
-                                } else {
-                                    recipient
-                                        .by
-                                        .includes(permanent.controller, affected_controller)
-                                        && match target {
-                                            ProposedDamageTarget::Player(_) => recipient.players,
-                                            ProposedDamageTarget::Object(object) => {
-                                                (!recipient.except_source || *object != source)
-                                                    && recipient.permanents.as_ref().is_some_and(
-                                                        |predicate| {
-                                                            self.object_matches_predicate(
-                                                                *object, predicate,
-                                                            )
-                                                        },
-                                                    )
-                                            }
-                                        }
-                                };
                                 kind.is_none_or(|c| c == *combat)
-                                    && source_matches
-                                    && recipient_matches
+                                    && self.damage_source_matches(
+                                        dmg_source,
+                                        permanent.controller,
+                                        source,
+                                        *damage_source,
+                                        source_controller,
+                                    )
+                                    && self.damage_recipient_matches(
+                                        recipient,
+                                        permanent.controller,
+                                        source,
+                                        *target,
+                                        affected_controller,
+                                    )
                             }
                             _ => false,
                         };
@@ -2004,6 +1971,47 @@ impl Game {
         }
     }
 
+    fn damage_source_matches(
+        &self,
+        filter: &DamageSource,
+        controller: PlayerId,
+        replacement_source: ObjectId,
+        damage_source: Option<ObjectId>,
+        source_controller: Option<PlayerId>,
+    ) -> bool {
+        if filter.this {
+            return damage_source == Some(replacement_source);
+        }
+        (filter.by == Actor::AnyPlayer
+            || source_controller.is_some_and(|p| filter.by.includes(controller, p)))
+            && filter.predicate.as_ref().is_none_or(|predicate| {
+                damage_source.is_some_and(|dmg| self.spell_matches_predicate(dmg, predicate))
+            })
+    }
+
+    fn damage_recipient_matches(
+        &self,
+        recipient: &DamageRecipient,
+        controller: PlayerId,
+        replacement_source: ObjectId,
+        target: ProposedDamageTarget,
+        affected_controller: PlayerId,
+    ) -> bool {
+        if recipient.this {
+            return target == ProposedDamageTarget::Object(replacement_source);
+        }
+        recipient.by.includes(controller, affected_controller)
+            && match target {
+                ProposedDamageTarget::Player(_) => recipient.players,
+                ProposedDamageTarget::Object(object) => {
+                    (!recipient.except_source || object != replacement_source)
+                        && recipient.permanents.as_ref().is_some_and(|predicate| {
+                            self.object_matches_predicate(object, predicate)
+                        })
+                }
+            }
+    }
+
     /// Automatic and player-chosen replacements consume their identity together
     /// with the transformation, so neither path can offer it a second time.
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
@@ -2040,14 +2048,34 @@ impl Game {
                 *to = ZoneType::Exile;
                 entry.adventure_player = entry.resolving_adventure.take();
             }
+            (ProposedEvent::Damage { amount, .. }, ReplacementEffect::PreventCombatDamage) => {
+                *amount = 0
+            }
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventCombatDamage
-                | ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::PreventAll,
-                    ..
-                },
-            ) => *amount = 0,
+                ReplacementEffect::ModifyDamage { transform, .. },
+            ) => match transform {
+                DamageTransform::PreventAll => *amount = 0,
+                DamageTransform::Prevent(prevented) => {
+                    *amount = amount.saturating_sub_unsigned(*prevented).max(0);
+                }
+                DamageTransform::Double => *amount = amount.saturating_mul(2),
+                // Damage reduced to zero is no longer dealt (release notes).
+                DamageTransform::Add(additional) if *amount > 0 => {
+                    let mut frame = super::decision::EffectFrame::new(
+                        self.source_controller(candidate.identity.source)
+                            .unwrap_or(PlayerId(0)),
+                        Vec::new(),
+                    );
+                    frame.bind_source(
+                        Some(candidate.identity.source),
+                        Some(candidate.identity.source),
+                    );
+                    let added = self.effect_value(additional, &frame).max(0);
+                    *amount = amount.saturating_add(added);
+                }
+                DamageTransform::Add(_) => {}
+            },
             (
                 ProposedEvent::CreateTokens { count, .. },
                 ReplacementEffect::MultiplyTokens { multiplier },
@@ -2092,25 +2120,6 @@ impl Game {
                     entry.counters.change(kind, replaced - count);
                 }
             }
-
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::Prevent(prevented),
-                    ..
-                },
-            ) => {
-                *amount = amount.saturating_sub_unsigned(*prevented).max(0);
-            }
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::Double,
-                    ..
-                },
-            ) => {
-                *amount = amount.saturating_mul(2);
-            }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersPrepared) => {
                 entry.prepared = true;
             }
@@ -2128,33 +2137,9 @@ impl Game {
                     Vec::new(),
                 );
                 frame.x = entry.spell.as_ref().map_or(0, |spell| spell.x);
-                let bound = entry
-                    .chosen_creature_type
-                    .map(|chosen| count.bind_chosen_type(Some(chosen)));
-                let value = bound.as_ref().unwrap_or(count);
-                entry
-                    .counters
-                    .change(*kind, self.effect_value(value, &frame).max(0));
-            }
-            // Damage reduced to zero is no longer dealt (release notes).
-            (
-                ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::ModifyDamage {
-                    transform: DamageTransform::Add(additional),
-                    ..
-                },
-            ) if *amount > 0 => {
-                let mut frame = super::decision::EffectFrame::new(
-                    self.source_controller(candidate.identity.source)
-                        .unwrap_or(PlayerId(0)),
-                    Vec::new(),
-                );
-                frame.bind_source(
-                    Some(candidate.identity.source),
-                    Some(candidate.identity.source),
-                );
-                let added = self.effect_value(additional, &frame).max(0);
-                *amount = amount.saturating_add(added);
+                let amount =
+                    self.effect_value_with_chosen_type(count, &frame, entry.chosen_creature_type);
+                entry.counters.change(*kind, amount.max(0));
             }
             _ => {}
         }

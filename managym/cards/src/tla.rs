@@ -1196,6 +1196,10 @@ fn avatar_aang() -> CardDefinition {
 
 fn avatar_destiny() -> CardDefinition {
     let text_box = "Enchant creature you control\nEnchanted creature gets +1/+1 for each creature card in your graveyard and is an Avatar in addition to its other types.\nWhen enchanted creature dies, mill cards equal to its power. Return this card to its owner's hand and up to one creature card milled this way to the battlefield under your control.";
+    let bonus = LayerValue::count(LayerCount::Graveyard {
+        who: Actor::You,
+        predicate: CardPredicate::creature(),
+    });
 
     CardDefinition {
         key: "tla.avatar_destiny",
@@ -1210,14 +1214,8 @@ fn avatar_destiny() -> CardDefinition {
                     StaticScope::Attached,
                     None,
                     vec![Modification::ModifyPt {
-                        power: LayerValue::count(LayerCount::Graveyard {
-                            who: Actor::You,
-                            predicate: CardPredicate::creature(),
-                        }),
-                        toughness: LayerValue::count(LayerCount::Graveyard {
-                            who: Actor::You,
-                            predicate: CardPredicate::creature(),
-                        }),
+                        power: bonus.clone(),
+                        toughness: bonus,
                     }],
                 ),
                 StaticAbility::TypeGrant(StaticTypeGrant {
@@ -2850,6 +2848,7 @@ fn destined_confrontation() -> CardDefinition {
 
 fn diligent_zookeeper() -> CardDefinition {
     let text_box = "Each non-Human creature you control gets +1/+1 for each of its creature types, to a maximum of 10.";
+    let bonus = LayerValue::count(LayerCount::CreatureTypes { max: 10 });
 
     CardDefinition {
         key: "tla.diligent_zookeeper",
@@ -2869,8 +2868,8 @@ fn diligent_zookeeper() -> CardDefinition {
                 }),
                 None,
                 vec![Modification::ModifyPt {
-                    power: LayerValue::count(LayerCount::CreatureTypes { max: 10 }),
-                    toughness: LayerValue::count(LayerCount::CreatureTypes { max: 10 }),
+                    power: bonus.clone(),
+                    toughness: bonus,
                 }],
             )],
             text_box: text_box.into(),

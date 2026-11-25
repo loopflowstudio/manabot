@@ -6728,14 +6728,15 @@ fn counted_bonuses_read_counters_on_the_source() {
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let recipient = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = card_of(&s, source);
+    let bonus = LayerValue::count(LayerCount::SourceCounters(CounterKind::Charge));
     s.game_mut().state[card]
         .statics
         .push(StaticAbility::continuous(
             StaticScope::OtherYouControl(CardPredicate::creature()),
             None,
             vec![Modification::ModifyPt {
-                power: LayerValue::count(LayerCount::SourceCounters(CounterKind::Charge)),
-                toughness: LayerValue::count(LayerCount::SourceCounters(CounterKind::Charge)),
+                power: bonus.clone(),
+                toughness: bonus,
             }],
         ));
     crate::support::game::set_counters(&mut s, recipient, CounterKind::Charge, 5);

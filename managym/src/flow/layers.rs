@@ -882,9 +882,19 @@ impl<'a> Context<'a> {
                             Operation::Modify(Modification::Control) => {
                                 Operation::Control(self.controller(node.source))
                             }
-                            Operation::Modify(m) => Operation::Modify(
-                                m.map_amount(|n| LayerValue::Fixed(self.value(n, node.source, id))),
-                            ),
+                            Operation::Modify(m) => {
+                                let object = self.game.live_permanent(id).object;
+                                let controller = self.controller(node.source);
+                                Operation::Modify(m.map_amount(|n| {
+                                    LayerValue::Fixed(self.layer_value(
+                                        n,
+                                        object,
+                                        controller,
+                                        Some(node.source),
+                                        Some(id),
+                                    ))
+                                }))
+                            }
                             op => op.clone(),
                         };
                         Instruction {
@@ -906,32 +916,20 @@ impl<'a> Context<'a> {
     fn controller(&self, id: PermanentId) -> PlayerId {
         self.objects[&id].controller
     }
-    fn value(&self, value: &LayerValue, source: PermanentId, id: PermanentId) -> i32 {
+    fn layer_value(
+        &self,
+        value: &LayerValue,
+        object: ObjectId,
+        controller: PlayerId,
+        source: Option<PermanentId>,
+        affected: Option<PermanentId>,
+    ) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => i32::from(
-                self.game
-                    .object_mana_value(self.game.live_permanent(id).object),
-            ),
-            LayerValue::GraveyardCardTypes { offset } => self.graveyard_card_types(*offset),
-            LayerValue::Count(count) => {
-                self.count(count, self.controller(source), Some(source), Some(id))
-            }
+            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object)),
+            LayerValue::GraveyardCardTypes { offset } => self.game.graveyard_card_types() + offset,
+            LayerValue::Count(count) => self.count(count, controller, source, affected),
         }
-    }
-    fn graveyard_card_types(&self, offset: i32) -> i32 {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
-            .flat_map(|card| {
-                self.game.state[self.game.state.object_of(card)]
-                    .types
-                    .types
-                    .iter()
-            })
-            .collect::<BTreeSet<_>>()
-            .len() as i32
-            + offset
     }
     fn count(
         &self,
@@ -940,6 +938,10 @@ impl<'a> Context<'a> {
         source: Option<PermanentId>,
         affected: Option<PermanentId>,
     ) -> i32 {
+        let controlled = |p| {
+            self.controlled(controller)
+                .filter(move |(id, _)| self.matches(*id, p, source))
+        };
         match count {
             LayerCount::CreatureTypes { max } => {
                 let Some(id) = affected else {
@@ -952,9 +954,7 @@ impl<'a> Context<'a> {
                     (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(*max)
                 }
             }
-            LayerCount::ColorsAmong(p) => self
-                .controlled(controller)
-                .filter(|(id, _)| self.matches(*id, p, source))
+            LayerCount::ColorsAmong(p) => controlled(p)
                 .flat_map(|(_, o)| o.view.colors.iter().copied())
                 .collect::<BTreeSet<_>>()
                 .len() as i32,
@@ -963,16 +963,11 @@ impl<'a> Context<'a> {
                 .filter(|player| who.includes(controller, *player))
                 .map(|player| self.graveyard_count(player, predicate))
                 .sum(),
-            LayerCount::YouControl(p) => self
-                .controlled(controller)
-                .filter(|(id, _)| self.matches(*id, p, source))
-                .count() as i32,
+            LayerCount::YouControl(p) => controlled(p).count() as i32,
             LayerCount::SourceCounters(kind) => source.map_or(0, |source| {
                 self.game.live_permanent(source).counter_count(*kind)
             }),
-            LayerCount::CountersOn { kind, predicate } => self
-                .controlled(controller)
-                .filter(|(id, _)| self.matches(*id, predicate, source))
+            LayerCount::CountersOn { kind, predicate } => controlled(predicate)
                 .map(|(id, _)| self.game.live_permanent(id).counter_count(*kind))
                 .sum(),
         }
@@ -993,14 +988,7 @@ impl<'a> Context<'a> {
                     let card = &self.game.state[object];
                     card.pt_cda().and_then(|(power, _)| power).map_or_else(
                         || card.power.unwrap_or(0),
-                        |value| match value {
-                            LayerValue::Fixed(n) => *n,
-                            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object)),
-                            LayerValue::GraveyardCardTypes { offset } => {
-                                self.graveyard_card_types(*offset)
-                            }
-                            LayerValue::Count(count) => self.count(count, card.owner, None, None),
-                        },
+                        |value| self.layer_value(value, object, card.owner, None, None),
                     )
                 })
             })
