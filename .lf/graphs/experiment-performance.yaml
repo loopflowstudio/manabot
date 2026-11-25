@@ -1,13 +1,11 @@
 - loop:
+    - experiment-measure
     - loop:
-        - experiment-measure
         - loop:
-            - loop:
-                - cmd: sync
-                - implement                      # one measured improvement; updates scratch/plan.md and decides: next slice or review
-            - experiment-performance-review      # decides: another bottleneck, or done
-        - compress
-        - pr-publish
-        - interactive: ship-review
-    - graph: deliver
-    - interactive: verify
+            - cmd: sync
+            - experiment-implement               # one measured improvement; updates scratch/plan.md and decides: next slice or review
+        - experiment-performance-review          # decides: another bottleneck, or done
+    - compress
+    - pr-publish
+    - interactive: ship-review
+- graph: deliver
