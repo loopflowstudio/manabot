@@ -378,6 +378,16 @@ Done:
   not traced. Batch values are int32: a history definition id of `2**32 - 1`
   that dense float buffers accepted is refused.
 
+Remaining before merge: the last-release name is stale. Main tagged
+`v0.2.6` (merged here in `1ae0fcd137`), which still supports v9/v10, but the
+refusals, docs, CLAUDE.md, AGENTS.md, `.lf/qa` and `release/v0.3.0/NOTES.md`
+say "v0.2.5 is the last release supporting v9-v10" (questions 22). Replace it
+with the last 0.2.x tag at merge time (`git tag --list 'v0.2.*'`), leaving
+`release/v0.2.*` notes and `tests/fixtures/etude_sdk_025` alone, then rebuild
+the extension and rerun `tests/model/test_policy_input_rejection.py`,
+`tests/env/test_observation_batch_archive.py`, `tests/sim/test_local_update.py`
+and `tests/eval/test_etude_player_migration.py`.
+
 Remaining (gate/CI): debug `cargo nextest run --profile ci`
 (`CARGO_BUILD_JOBS=2`, `--test-threads 2`), clippy at CI settings, the six
 full Python suites, and tracing the merchant-payment failure against base.

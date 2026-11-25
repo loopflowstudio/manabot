@@ -135,3 +135,11 @@ reversible before merge.
     of a log) keeps its four tables. `observation_extents::Join` keeps only the
     object joins the batch archive validates (`Extent`/`Span` served the dense
     extent scanner).
+
+22. **Last 0.2.x release name (realign after Pass 4).** The branch names
+    `v0.2.5` as the last release supporting v9-v10 (refusal messages in
+    `manabot/infra/config.py`, `layout_bindings.rs`, `archive.rs`,
+    `flat_mc.py`, docs, CLAUDE.md). Main has since tagged `v0.2.6`, which still
+    reads v9/v10, and the PR is held for the 0.3.0 cut, so a later 0.2.x could
+    follow. Assumed: name whatever 0.2.x tag is last when the PR merges
+    (currently `v0.2.6`); the sweep is in the plan's remaining work.
