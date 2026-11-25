@@ -759,6 +759,15 @@ live rows. Companion validity masks derive from those counts. Object joins
 retain the layout's coordinates. The default overflow policy rejects excess
 actions. With `"first-legal"`, `action_counts` gives the retained prefix.
 
+`ObservationBatch` supports `pickle`, `copy.copy` and `copy.deepcopy`. Pickling
+transports the layout, batch size and immutable byte tables without copying or
+densifying live spans, preserving shared buffers across batches (such as after
+`blank_decision_memory()`). Unpickling validates the v11 layout, table keys,
+`seat_axis` flags, monotonic in-bounds span offsets and packed byte lengths,
+raising `ValueError` on corrupt data. `ObservationBatch` has no public
+raw-bytes constructor; batches originate from native encoding or pickle
+restoration.
+
 `layout.csr_fields[key]` lists each record field's name, dtype and logical
 column index in byte order. IDs, joins, enums, unscaled counts and full signed
 words use int32. Flags use uint8 and scaled scalars use float32. In a dense
