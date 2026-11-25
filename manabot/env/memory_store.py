@@ -7,7 +7,9 @@ Per-stream record views share host features with learner chunk assembly; raw
 chunk certificates remain the authority and no neural state enters these views.
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from hashlib import sha256
 import sys
@@ -47,6 +49,9 @@ class Chunk:
 
     key: str
     rows: tuple[np.ndarray, ...]
+
+    def __reduce__(self) -> tuple[type, tuple[str, tuple[np.ndarray, ...]]]:
+        return Chunk, (self.key, self.rows)
 
     def __post_init__(self) -> None:
         if len(self.rows) != 4 or not 0 < len(self.rows[0]) <= _CHUNK_ROWS:
@@ -110,7 +115,10 @@ class Tail:
     chunk: Chunk
     cursor: MemoryCursor = field(init=False)
     # Cache only the current vocabulary on this node; no cross-game owner.
-    features: ChunkFeatures
+    features: ChunkFeatures = field(default_factory=ChunkFeatures)
+
+    def __reduce__(self) -> tuple[type, tuple[str, Tail | None, Chunk]]:
+        return Tail, (self.key, self.previous, self.chunk)
 
     def __post_init__(self) -> None:
         key = sha256(
@@ -142,6 +150,13 @@ class Prefix:
         default_factory=lambda: RecordVersion(), compare=False
     )
 
+    def __reduce__(
+        self,
+    ) -> tuple[Callable[..., Prefix], tuple[PrefixIdentity, tuple[Tail, ...]]]:
+        # Memoize each predecessor first. Even a long game uses bounded pickle stack depth.
+        chain = tuple(self.tail.chunks()) if self.tail else ()
+        return restore_prefix, (self.identity, chain)
+
     @property
     def counts(self) -> tuple[int, ...]:
         c = self.tail.cursor if self.tail else MemoryCursor()
@@ -154,6 +169,15 @@ class Prefix:
     @property
     def detail_count(self) -> int:
         return self.counts[1]
+
+
+def restore_prefix(identity: PrefixIdentity, chain: tuple[Tail, ...]) -> Prefix:
+    previous = None
+    for node in chain:
+        if not isinstance(node, Tail) or node.previous is not previous:
+            raise ValueError("disconnected decision-memory prefix")
+        previous = node
+    return Prefix(identity, previous)
 
 
 @dataclass(eq=False, slots=True, weakref_slot=True)
@@ -331,6 +355,14 @@ class PrefixObservation(dict[str, np.ndarray]):
         self.prefixes = tuple(prefixes)
         self.memory_capacities = capacities
 
+    def __reduce__(
+        self,
+    ) -> tuple[
+        type[PrefixObservation],
+        tuple[dict[str, np.ndarray], tuple[Prefix, ...], MemoryCapacities],
+    ]:
+        return PrefixObservation, (dict(self), self.prefixes, self.memory_capacities)
+
     def materialize(self) -> "CompactObservation":
         return CompactObservation(self, self.prefixes, self.memory_capacities)
 
@@ -343,11 +375,31 @@ class CompactObservation(PrefixObservation):
         rows: Mapping[str, np.ndarray],
         prefixes: Sequence[Prefix],
         capacities: MemoryCapacities,
-        *,
         memory: Mapping[str, np.ndarray] | None = None,
     ) -> None:
         super().__init__(rows, prefixes, capacities)
         self.update(gather_memory(self.prefixes) if memory is None else memory)
+
+    def __reduce__(
+        self,
+    ) -> tuple[
+        type[CompactObservation],
+        tuple[
+            dict[str, np.ndarray],
+            tuple[Prefix, ...],
+            MemoryCapacities,
+            dict[str, np.ndarray],
+        ],
+    ]:
+        # An explicit dense export may have been edited since its prefixes were captured.
+        ordinary = {key: rows for key, rows in self.items() if key not in MEMORY_FIELDS}
+        memory = {key: self[key] for key in MEMORY_FIELDS if key in self}
+        return CompactObservation, (
+            ordinary,
+            self.prefixes,
+            self.memory_capacities,
+            memory,
+        )
 
 
 def select_rows(
@@ -471,7 +523,7 @@ class MemoryStore:
             if tail.previous is not previous or tail.chunk is not chunk:
                 raise ValueError("decision-memory prefix hash collision")
             return tail
-        tail = Tail(key, previous, chunk, ChunkFeatures())
+        tail = Tail(key, previous, chunk)
         self._tails[key] = tail
         return tail
 
