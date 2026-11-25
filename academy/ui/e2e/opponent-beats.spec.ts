@@ -7,6 +7,7 @@
  * it treats `aria-disabled` as not yet enabled.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
 
 /**
  * Start a seeded game against the random opponent, counting the commands sent.
@@ -44,6 +45,7 @@ async function playUntil<T>(page: Page, until: () => Promise<T | null | false>, 
     const result = await until();
     if (result) return result;
     if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
