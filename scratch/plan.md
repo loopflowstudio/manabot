@@ -684,7 +684,12 @@ left is not building:
   the process (a key per registered-policy set and deck pair). Acceptable for
   a local server; revisit if hosted play registers policies often.
 
-Next: the Review pass below, then gate. Deferred to gate/CI: a clean run of the policy e2e spec
+The Review rail pass below is built (5502c707e5, 1cea80b665; realign
+2026-11-25: `npm test` 667 passed, shots meet 8 moves / 3 options). One
+polish nit from its shot: the selected option row wraps ("✓Play Mountain
+you") where the others are one line, so the fourth option is half cut.
+
+Next: gate. Deferred to gate/CI: a clean run of the policy e2e spec
 (`study-review.spec.ts`), the configured-launch e2e, `test:e2e:release`,
 timing with a current-world checkpoint, and the control-fixture schema test
 that already fails on the base commit.
