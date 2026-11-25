@@ -82,18 +82,77 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   once per node, boxed `permanent_defenders` keeps `GameEvent` at 56 bytes,
   flat `attacks_this_turn` + sparse `attacked_permanents`. Focused debug
   nextest 149/149.
-- Performance slices P5–P6 (`7955be5849`): untracked
-  `TrackedState::mark_dealt_damage` / `record_life_change`, fine-grained
-  `revisions.counters` with `LayerBoard::reads_counters`, and cached
-  `Node::source_permanent` in `flow/layers.rs`. `attack-planeswalkers`
-  `step:damage` boards `3/7/15/31` → `1/1/1/1`; `block | search` at N=32
-  `4,620` → `714` boards (5.4/sim, linear like `duplicate-creatures`).
-  Release vs `main` `6203fff202`, identical digests: `bench_steps` −0.65%,
-  `bench_search` −2.59%, `bench_search --layers` −5.40% instructions.
-  Focused debug nextest 88/88 (`managym`) and 266/266 (`managym-cards`).
+- Performance slices P5–P6 (`7955be5849`, compressed in `ba30625410`/`5a3416e943`):
+  untracked `TrackedState::mark_dealt_damage` / `record_life_change`,
+  fine-grained `revisions.counters` with `LayerBoard.reads` (`StateReads`),
+  and cached `NodeSource` (`permanent: Option<PermanentId>`) in `flow/layers.rs`.
 - Synced main through #610 (`f5684725db`, merge `fcc96be003`/`0c3821e06d`):
   Academy-side, plus one `experience.rs` field and matching protocol schema
-  additions. No checks run after the merge; they fall to gate.
+  additions. No Python/Academy/schema checks run after the merge; they fall to gate.
+
+## Engine performance review — Pass 2 (post-compress `5a3416e943` vs `main` `fcc96be003`)
+
+Measured on Apple M4 Max (contended host; load-invariant `/usr/bin/time -l`
+instructions retired, cycles elapsed, and 1 ms `/usr/bin/sample` CPU profiles
+govern). Both sides built as uninstrumented release binaries (`--release --locked`,
+no `benchmark` feature) on the same machine after the #610 merge and P5–P6
+compress (`ba30625410`).
+
+### Supported gains (uninstrumented release, identical digests)
+
+- `bench_steps` (512 games, 118,559 steps, 0 capped, digest `10601622128491155944`):
+  ABBA median `46.763B` (`46.814B`, `46.713B`) → `46.320B` (`46.322B`, `46.319B`)
+  instructions retired (**−0.95%**, `−0.44B`).
+- `bench_steps --layers` (16 games, 1,308 steps, digest `1064912348938184597`):
+  `0.6487B` → `0.6403B` instructions (**−1.28%**, **−1.33%** cycles).
+- `bench_search --layers` (seed 244, 8 dec., 1,344 sims, digest `17627308883250227726`,
+  BLAKE3 `0eaa372c...`): `17.263B` → `16.333B` instructions (**−5.39%**,
+  **−4.46%** cycles).
+- `bench_search` (seeds 1–3, 40 dec. each, 0 caps, `7,680 / 8,064 / 7,424` sims,
+  digests `13638875039089371439` / `5466143068363283977` / `9998925852575961750`
+  and BLAKE3 `2f29dd10...` / `09de41e9...` / `9692421a...` unchanged):
+  `1,028.10B` → `999.74B` instructions (**−2.76%**, `−28.36B`),
+  `245.61B` → `238.50B` cycles (**−2.90%**), user `96.28s → 91.12s`.
+
+### CPU profile & stress-state scaling
+
+- **1 ms `/usr/bin/sample` on `bench_search`** (`10,781` base vs `10,702` cand samples):
+  P6 eliminated `Context::exists` (`0.36%` inclusive pre-P6 → `0.00%`);
+  `Context::evaluate` fell `46.91% → 42.48%` (`−4.43pp` inclusive), `layer_board`
+  `42.79% → 40.87%` (`−1.92pp`), `Context::targets` `3.39% → 2.29%` (`−1.11pp`),
+  `Context::apply` `10.00% → 9.19%` (`−0.81pp`), `drain_pending_events`
+  `36.31% → 34.98%` (`−1.33pp`). `bench_steps` (`1,307` vs `1,668` samples) shows
+  no branch-introduced regression.
+- **`bench_states --features benchmark --allocations`**:
+  - `attack-planeswalkers` (`N = 4, 8, 16, 32`): `damage | step:damage` boards
+    `3 / 7 / 15 / 31` → `1 / 1 / 1 / 1` (`339 / 389 / 323 / 480` allocs,
+    `0.047 / 0.053 / 0.056 / 0.128 ms`); `block | search` at `N = 32` dropped
+    `4,620` → `714` boards (`5.41`/sim across 132 sims, linear like
+    `duplicate-creatures` `668` boards / `132` sims = `5.06`/sim; 16→32 bytes
+    `2.81x` vs `duplicate-creatures` `3.09x`).
+  - `way-grants`, `divided-damage`, `keep-one-each-type`: 1 board per
+    `characteristics`, 0 boards per `step:activate` on `way-grants`, 23–28 clone
+    allocs. Existing guards (`duplicate-creatures`, `diverse-statics`,
+    `herald-statics`, `triggers` at `N = 8, 16`) match baseline `step:damage`
+    board counts (`6 / 1 / 2 / 6`) with linear N=8→16 growth.
+
+### Invariants, negative results & ruled-out bottlenecks
+
+- **Debug invariants verified (`debug_assertions` ON)**: audited `StateReads` /
+  `ReadSet` / `TrackedState` (`mark_dealt_damage`, `record_life_change`,
+  `change_counters`, `ActivatedAbilitiesCostLess` → `dynamic_activations`);
+  passed `managym --lib` (413), `managym-state` (18), `managym-cards --test cards`
+  (1,414), `rules_tests` (214, 2 ignored), `match_state_hash_tests` (11),
+  `conformance_tests` (2), `semantic_conformance_tests` (7), and `scenario_tests` (20).
+- **Ruled out / no open branch bottleneck**: P5 and P6 closed the two bottlenecks
+  flagged in Pass 1 (`attack-planeswalkers` `O(N)` damage rebuilds and `Context::exists`
+  `permanent_of` lookups). The remaining top `bench_search` shares (`Context::evaluate`
+  42.5%, `priority_action_space` 24.2%, `_platform_memmove` 7.3%,
+  `perform_state_based_batch` 7.1%) are shared baseline engine costs, all lower or
+  flat in absolute instructions vs `main`; `finish_state_based_batch`'s `+0.42pp`
+  relative sample share (`1.52% → 1.94%`) is sampling variance/shrunk-total shift
+  (the only branch change there is a single enum arm `ObjectKind::Emblem => false`).
+  No further MTG-430 optimization pass is warranted; advance to gate/CI.
 
 ## Remaining
 
