@@ -35,11 +35,28 @@ Done:
   and the five fixtures (444 choices kept labels/IDs, 109 attack frames kept
   bytes).
 
+- Slices 5 and 6: Way grants through `StaticAbility::Continuous` +
+  `GrantActivated` (program abilities sharing the holder's quota),
+  `StaticAbility::StateBasedActionDoesntApply { ZeroLoyalty }`,
+  `GameEvent::LoyaltyAbilityActivated` (from the stacked ability's
+  `loyalty_change`), `TriggerCondition::ActivatesLoyaltyAbility { who,
+  min_counters_removed }`, `EffectValue::LoyaltyActivationsThisTurn` and the
+  v11 `player_turn_state.loyalty_abilities_activated` column (appended). Activation
+  targeting records each target's clause (`target_req_indices` on
+  `ActivatedTargeting` and `Operation::Activation`); the positional
+  `target_clause_indices` and `ActivatedAbilityDefinition::target_spec` are
+  deleted. Cards: the eight remaining Ways, Avatar of Burgeoning Echoes,
+  Kiora of Salt and Sand, Sanctum Lurker, Gideon the Oathless; tokens
+  `token.beast_4_4_g_trample`, `token.leviathan_8_8_u_hexproof`.
+  Lesson: a declined up-to clause made the next clause's target count as
+  clause 0, so Warlord re-asked for its player. Positions never name clauses.
+
 ## Passes remaining
 
-1. Next: slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
-   loyalty activation events and their cards.
-2. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
+1. Slice 7 and the rest of slice 8 close the planeswalker cohort. Slice 7
+   also takes Ajani Unrelenting (−3 "except for tokens you control" needs a
+   controller-scoped exception) and Garruk, Curse Breaker (−4
+   until-your-next-turn attack trigger), moved from slice 6. At gate run
    debug nextest, Engine Budget and the pinned pilot, recording a reason if
    its output moves. Keep main’s MTG-420 receipts at their original revision.
 

@@ -238,6 +238,7 @@ impl Game {
             EffectValue::LifeTotal(who)
             | EffectValue::LifeGainedThisTurn(who)
             | EffectValue::LifeLostThisTurn(who)
+            | EffectValue::LoyaltyActivationsThisTurn(who)
             | EffectValue::LifeAboveStarting(who) => self
                 .selected_players(who, frame)
                 .into_iter()
@@ -249,6 +250,9 @@ impl Game {
                     }
                     EffectValue::LifeGainedThisTurn(_) => {
                         self.state.turn.history[player.0].life_gained as i32
+                    }
+                    EffectValue::LoyaltyActivationsThisTurn(_) => {
+                        self.state.turn.history[player.0].loyalty_abilities_activated as i32
                     }
                     _ => self.state.turn.history[player.0].life_lost as i32,
                 })

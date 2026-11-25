@@ -113,6 +113,7 @@ fn stack(
                 attached: None,
                 target_req_indices: Vec::new(),
                 x: 0,
+                loyalty_change: None,
                 granted_by: None,
                 paid: Default::default(),
             })

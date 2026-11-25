@@ -320,6 +320,7 @@ columns! { turn_state {
     12: PERMANENTS_LEFT => ("permanents_left", ValueLayout::COUNT),
     13: NONLAND_PERMANENTS_LEFT => ("nonland_permanents_left", ValueLayout::COUNT),
     14: WARPED_THIS_TURN => ("warped_this_turn", ValueLayout::FLAG),
+    15: LOYALTY_ABILITIES_ACTIVATED => ("loyalty_abilities_activated", ValueLayout::COUNT),
 } }
 
 columns! { card {

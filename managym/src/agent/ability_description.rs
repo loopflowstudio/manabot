@@ -313,6 +313,26 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
         }
         TriggerCondition::LosesLife { who } => format!("Whenever {} life", actor_does(*who, "lose", "loses")),
         TriggerCondition::GainsLife { who, nth } => format!("Whenever {} life{}", actor_does(*who,"gain","gains"), nth.map_or_else(String::new, |n| format!(" for the {} time each turn",ordinal(n)))),
+        TriggerCondition::ActivatesLoyaltyAbility {
+            who,
+            min_counters_removed,
+        } => {
+            let activates = format!(
+                "Whenever {} a loyalty ability",
+                actor_does(*who, "activate", "activates")
+            );
+            match min_counters_removed {
+                0 => activates,
+                n => format!(
+                    "{activates}, if {} removed {} or more loyalty counters to activate it",
+                    match who {
+                        Actor::You => "you",
+                        Actor::Opponent | Actor::AnyPlayer => "that player",
+                    },
+                    n
+                ),
+            }
+        }
         TriggerCondition::Draws { who, nth: None } => {
             format!("Whenever {} a card", actor_does(*who, "draw", "draws"))
         }
@@ -1250,6 +1270,12 @@ fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
         ),
         EffectValue::LifeGainedThisTurn(who) => {
             format!("life gained this turn by {}", player_description(who))
+        }
+        EffectValue::LoyaltyActivationsThisTurn(who) => {
+            format!(
+                "loyalty abilities activated this turn by {}",
+                player_description(who)
+            )
         }
         EffectValue::LifeLostThisTurn(who) => {
             format!("life lost this turn by {}", player_description(who))

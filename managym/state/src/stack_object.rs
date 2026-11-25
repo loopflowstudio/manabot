@@ -95,6 +95,10 @@ pub struct ActivatedAbilityOnStack {
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: i32,
+    /// A loyalty ability's signed loyalty-counter change paid as its cost
+    /// (CR 606.4); `None` for any other ability.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loyalty_change: Option<i32>,
     /// For an ability granted by an attached permanent: that exact object and
     /// its grant, fixed at activation (`ability_index` names the grantee's list).
     #[serde(skip_serializing_if = "Option::is_none")]

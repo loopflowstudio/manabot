@@ -356,6 +356,9 @@ class PlayerTurnHistoryView(ProtocolModel):
     permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    loyalty_abilities_activated: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 

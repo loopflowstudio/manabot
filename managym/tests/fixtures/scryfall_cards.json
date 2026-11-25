@@ -13295,5 +13295,183 @@
       "G"
     ],
     "loyalty": "5"
+  },
+  "Avatar of Burgeoning Echoes": {
+    "name": "Avatar of Burgeoning Echoes",
+    "mana_cost": "{G}{U}",
+    "type_line": "Creature — Avatar",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Surveil",
+      "Empower Jace",
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−10]: Put a +1/+1 counter on target creature for each land you control.\"",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Gideon the Oathless": {
+    "name": "Gideon the Oathless",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Creature — Human Mercenary",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Ward"
+    ],
+    "oracle_text": "Ward—Discard a card.\nWhenever a creature an opponent controls enters, Gideon deals 1 damage to that player.\nWhenever an opponent activates a loyalty ability, Gideon deals 1 damage to that player.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Kiora of Salt and Sand": {
+    "name": "Kiora of Salt and Sand",
+    "mana_cost": "{1}{G}{U}",
+    "type_line": "Legendary Creature — Merfolk Noble",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever you attack, if you've activated a loyalty ability this turn, untap target attacking creature. It can't be blocked this turn.\nPlaneswalkers you control have \"[−8]: Create an 8/8 blue Leviathan creature token with hexproof.\"",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Sanctum Lurker": {
+    "name": "Sanctum Lurker",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Horror",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "When this creature enters, empower Jace 1.\nPlaneswalkers you control aren't put into their owners' graveyards for having 0 loyalty.\nPlaneswalkers you control have \"[+2]: This planeswalker deals 1 damage to each opponent and you gain 1 life.\"",
+    "colors": [
+      "B"
+    ]
+  },
+  "Way of the Cryomancer": {
+    "name": "Way of the Cryomancer",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Cryomancer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−3]: When you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.\"",
+    "colors": [
+      "U"
+    ]
+  },
+  "Way of the Deathbringer": {
+    "name": "Way of the Deathbringer",
+    "mana_cost": "{2}{B}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Deathbringer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: You may sacrifice a creature. If you do, create a 4/4 green Beast creature token with trample.\"",
+    "colors": [
+      "B"
+    ]
+  },
+  "Way of the Healer": {
+    "name": "Way of the Healer",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Healer enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−2]: Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1.\"",
+    "colors": [
+      "W"
+    ]
+  },
+  "Way of the Mind Sculptor": {
+    "name": "Way of the Mind Sculptor",
+    "mana_cost": "{4}{U}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Mind Sculptor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, if you removed two or more loyalty counters to activate it, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Way of the Paradox": {
+    "name": "Way of the Paradox",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Paradox enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you activate a loyalty ability, you gain 1 life. You may play an additional land this turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Way of the Pyromancer": {
+    "name": "Way of the Pyromancer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Pyromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[+1]: Add {R}.\"",
+    "colors": [
+      "R"
+    ]
+  },
+  "Way of the Warlord": {
+    "name": "Way of the Warlord",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Warlord enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: This planeswalker deals 2 damage to up to one target creature or planeswalker and 2 damage to target player.\"",
+    "colors": [
+      "R"
+    ]
+  },
+  "Way of the Wildspeaker": {
+    "name": "Way of the Wildspeaker",
+    "mana_cost": "{4}{G}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil",
+      "Empower Jace"
+    ],
+    "oracle_text": "When Way of the Wildspeaker enters, empower Jace 7. (Put seven loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: Create a 4/4 green Beast creature token with trample.\"",
+    "colors": [
+      "G"
+    ]
   }
 }

@@ -1239,6 +1239,8 @@ fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE
         row[turn_state::NONLAND_PERMANENTS_LEFT] =
             Integer(i64::from(history.nonland_permanents_left));
         row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
+        row[turn_state::LOYALTY_ABILITIES_ACTIVATED] =
+            Integer(i64::from(history.loyalty_abilities_activated));
     }
     row[turn_state::LIFE_LOST] = Scalar(player.turn_history.life_lost as f32 / 20.0);
     row[turn_state::SPELLS_CAST] = Scalar(player.spells_cast as f32 / 10.0);

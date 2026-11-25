@@ -283,6 +283,15 @@ pub enum TriggerCondition {
         who: Actor,
         nth: Option<u32>,
     },
+    /// "Whenever [who] activates a loyalty ability" (CR 606); with
+    /// `min_counters_removed`, only an activation whose cost removed at
+    /// least that many loyalty counters ("if you removed two or more loyalty
+    /// counters to activate it"). The activating player is "that player".
+    ActivatesLoyaltyAbility {
+        who: Actor,
+        #[serde(skip_serializing_if = "crate::is_zero")]
+        min_counters_removed: u32,
+    },
     /// "Whenever [who] loses life" (CR 119.3): once per committed decrease
     /// of a life total, damage included; prevented or replaced loss that
     /// leaves the total unchanged is no event. The life actually lost is the
@@ -979,6 +988,9 @@ pub enum EffectValue {
     LifeTotal(PlayerSelector),
     LifeGainedThisTurn(PlayerSelector),
     LifeLostThisTurn(PlayerSelector),
+    /// Loyalty abilities the players activated this turn (CR 606,
+    /// `PlayerTurnHistory::loyalty_abilities_activated`).
+    LoyaltyActivationsThisTurn(PlayerSelector),
     /// How much more life the players have than their starting life totals
     /// (CR 103.4): "at least 10 life more than your starting life total";
     /// negative when below it.
@@ -3154,6 +3166,7 @@ impl EffectValue {
             Self::LifeTotal(who)
             | Self::LifeLostThisTurn(who)
             | Self::LifeGainedThisTurn(who)
+            | Self::LoyaltyActivationsThisTurn(who)
             | Self::LifeAboveStarting(who) => {
                 !matches!(who, PlayerSelector::You | PlayerSelector::EachOpponent)
             }
@@ -3316,6 +3329,7 @@ impl TriggerCondition {
             | Self::LosesLife { .. }
             | Self::BeginningOf { .. }
             | Self::Performs { .. }
+            | Self::ActivatesLoyaltyAbility { .. }
             | Self::PutIntoGraveyard { .. }
             | Self::DealsCombatDamage { .. }
             | Self::CardsLeaveYourGraveyard

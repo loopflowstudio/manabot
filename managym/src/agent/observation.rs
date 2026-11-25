@@ -2347,8 +2347,10 @@ impl Observation {
                 Some(*player),
             )],
             // Internal trigger-plumbing events; the underlying state changes
-            // are already visible via CardMoved / permanent state.
+            // are already visible via CardMoved / permanent state. A loyalty
+            // activation is its stack row and the player's turn-state count.
             GameEvent::CardDrawn { .. }
+            | GameEvent::LoyaltyAbilityActivated { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentUntapped { .. }
             | GameEvent::PermanentTargeted { .. }

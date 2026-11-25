@@ -1833,9 +1833,10 @@ impl Game {
             ability_index,
             x,
             chosen: Vec::new(),
+            target_req_indices: Vec::new(),
             requirement: 0,
         };
-        if ability.target_spec().is_some() {
+        if !ability.target_requirements().is_empty() {
             if !self.activation_targets_available(player, source, ability_index, ability, x) {
                 return Err(AgentError("no legal ability targets".into()));
             }
@@ -1869,6 +1870,7 @@ impl Game {
                             requirement: index,
                             x,
                             chosen: Vec::new(),
+                            target_req_indices: Vec::new(),
                         })
                         .len()
                         >= requirement.min
@@ -1904,25 +1906,6 @@ impl Game {
     }
 
     /// The targets already chosen for clause `requirement`.
-    pub(crate) fn activation_clause_chosen(
-        &self,
-        source: ActivationSource,
-        ability_index: usize,
-        requirement: usize,
-        chosen: &[Target],
-    ) -> Vec<Target> {
-        let Some(ability) = self.activation_ability(source, ability_index) else {
-            return Vec::new();
-        };
-        let indices = ability.target_clause_indices(chosen.len());
-        chosen
-            .iter()
-            .enumerate()
-            .filter(|(slot, _)| indices.get(*slot).copied().unwrap_or(0) == requirement)
-            .map(|(_, target)| *target)
-            .collect()
-    }
-
     /// The exact object an activation of `source` comes from, as its stacked
     /// ability will record it; `None` once a permanent source has left.
     fn activation_ability_source(&self, source: ActivationSource) -> Option<AbilitySource> {
@@ -1944,8 +1927,8 @@ impl Game {
             source,
             ability_index,
             requirement,
-            ref chosen,
             x,
+            ..
         } = *targeting;
         let Some(clause) = self.activation_target_requirement(source, ability_index, requirement)
         else {
@@ -1954,7 +1937,7 @@ impl Game {
         let Some(ability_source) = self.activation_ability_source(source) else {
             return Vec::new();
         };
-        let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
+        let chosen = targeting.clause_targets(requirement);
         let candidates: Vec<Target> = self
             .legal_clause_targets(&clause, player, ability_source)
             .filter(|target| {
@@ -2018,16 +2001,13 @@ impl Game {
             source,
             ability_index,
             requirement,
-            ref chosen,
             ..
         } = targeting;
         let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
         let clause = self
             .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        let count = self
-            .activation_clause_chosen(source, ability_index, requirement, chosen)
-            .len();
+        let count = targeting.clause_targets(requirement).len();
         if chooser != actor || count < clause.min {
             return Err(AgentError("target required".into()));
         }
@@ -2054,10 +2034,8 @@ impl Game {
         let clause = self
             .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        targeting.chosen.push(target);
-        let count = self
-            .activation_clause_chosen(source, ability_index, requirement, &targeting.chosen)
-            .len();
+        targeting.choose(target, requirement);
+        let count = targeting.clause_targets(requirement).len();
         if count >= clause.max || self.activated_ability_targets(&targeting).is_empty() {
             return self.next_activation_clause(targeting);
         }
@@ -2092,6 +2070,7 @@ impl Game {
                 source: targeting.source,
                 ability_index: targeting.ability_index,
                 targets: targeting.chosen,
+                target_req_indices: targeting.target_req_indices,
                 x: targeting.x,
             },
         )
@@ -2146,7 +2125,7 @@ impl Game {
 
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
-            target_req_indices: ability.target_clause_indices(targets.len()),
+            target_req_indices: Vec::new(),
             effects: ability.effects,
             program,
             source_transforms,
@@ -2161,6 +2140,7 @@ impl Game {
                 .as_ref()
                 .and_then(|p| p.attached_to),
             x,
+            loyalty_change: ability.loyalty.map(|cost| cost.counter_change(x)),
             granted_by: ability.granted_by,
             paid: PaymentReceipt::default(),
         })
@@ -2186,7 +2166,7 @@ impl Game {
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
-            target_req_indices: ability.target_clause_indices(targets.len()),
+            target_req_indices: Vec::new(),
             effects: ability.effects,
             program: false,
             source_transforms: 0,
@@ -2199,6 +2179,7 @@ impl Game {
             targets,
             attached: None,
             x: 0,
+            loyalty_change: None,
             granted_by: None,
             paid: PaymentReceipt::default(),
         })

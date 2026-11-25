@@ -85,14 +85,14 @@ impl From<ObjectLki> for TriggerSourceSnapshot {
 /// state triggers (CR 603.8), which are asked of their source, never an
 /// event.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct EventKinds(u32);
+struct EventKinds(u64);
 
 impl EventKinds {
     const NONE: Self = Self(0);
-    const STATE_TRIGGER: Self = Self(1 << 31);
+    const STATE_TRIGGER: Self = Self(1 << 63);
 
     fn of(kind: EventKind) -> Self {
-        Self(1 << kind as u32)
+        Self(1 << kind as u64)
     }
 
     fn contains(self, kind: EventKind) -> bool {
@@ -161,6 +161,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             EventKinds::of(EventKind::LifeChanged)
         }
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
+        TriggerCondition::ActivatesLoyaltyAbility { .. } => {
+            EventKinds::of(EventKind::LoyaltyAbilityActivated)
+        }
         TriggerCondition::NthCounter { .. }
         | TriggerCondition::PutsCounters { .. }
         | TriggerCondition::PutsCountersOn { .. }
@@ -1335,6 +1338,7 @@ impl Game {
             },
             GameEvent::SpellCast { caster, .. } => Some(*caster),
             GameEvent::CardDrawn { player, .. } => Some(*player),
+            GameEvent::LoyaltyAbilityActivated { player, .. } => Some(*player),
             GameEvent::LifeChanged { player, .. } => Some(*player),
             GameEvent::DamageDealt {
                 target: DamageTarget::Player(player),
@@ -2241,6 +2245,19 @@ impl Game {
                 },
             ) => {
                 who.includes(source_controller, *player) && nth.is_none_or(|n| n == *nth_this_turn)
+            }
+            (
+                TriggerCondition::ActivatesLoyaltyAbility {
+                    who,
+                    min_counters_removed,
+                },
+                GameEvent::LoyaltyAbilityActivated {
+                    player,
+                    counters_removed,
+                    ..
+                },
+            ) => {
+                who.includes(source_controller, *player) && counters_removed >= min_counters_removed
             }
             (
                 TriggerCondition::BeginningOf { step, whose },

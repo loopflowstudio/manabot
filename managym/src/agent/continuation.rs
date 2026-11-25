@@ -857,22 +857,19 @@ impl Game {
                 frame.spell_profile = spell_profile_code(cast.profile);
             }
             PendingChoice::ActivatedTarget(crate::flow::game::ActivatedTargeting {
+                player: _,
                 source,
                 ability_index,
                 chosen,
+                target_req_indices,
                 requirement,
                 x,
-                ..
             }) => {
                 frame.x = *x;
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.active_clause = Some(*requirement);
-                let clauses = self
-                    .activation_ability(*source, *ability_index)
-                    .map(|ability| ability.target_clause_indices(chosen.len()))
-                    .unwrap_or_default();
-                frame.targets = self.clause_targets(chosen, &clauses, viewer);
+                frame.targets = self.clause_targets(chosen, target_req_indices, viewer);
             }
             PendingChoice::ActivationX {
                 permanent,
@@ -1121,12 +1118,13 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                target_req_indices,
                 x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.x = *x;
-                frame.targets = self.clause_targets(targets, &[], viewer);
+                frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
         }
     }

@@ -3923,6 +3923,11 @@
           "title": "Life Lost",
           "type": "integer"
         },
+        "loyalty_abilities_activated": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "mana_spent_casting": {
           "description": "Mana spent by this player to cast spells this turn.",
           "type": "integer",

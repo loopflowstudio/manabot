@@ -403,10 +403,39 @@ pub struct ActivatedTargeting {
     pub source: ActivationSource,
     pub ability_index: usize,
     pub chosen: Vec<Target>,
+    /// The clause of each chosen target; empty while every target is clause
+    /// 0. Clauses are chosen in order, but an optional clause can be left
+    /// empty, so a target's position does not name its clause.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_req_indices: Vec<usize>,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub requirement: usize,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: i32,
+}
+
+impl ActivatedTargeting {
+    /// Add `target` to clause `requirement`, the clause now being chosen.
+    pub fn choose(&mut self, target: Target, requirement: usize) {
+        self.chosen.push(target);
+        if requirement > 0 || !self.target_req_indices.is_empty() {
+            // Every earlier target without a recorded clause is clause 0.
+            self.target_req_indices.resize(self.chosen.len() - 1, 0);
+            self.target_req_indices.push(requirement);
+        }
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    pub fn clause_targets(&self, requirement: usize) -> Vec<Target> {
+        self.chosen
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| {
+                self.target_req_indices.get(*slot).copied().unwrap_or(0) == requirement
+            })
+            .map(|(_, target)| *target)
+            .collect()
+    }
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks

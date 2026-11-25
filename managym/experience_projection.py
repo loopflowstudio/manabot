@@ -266,6 +266,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "permanents_left": history.permanents_left,
         "nonland_permanents_left": history.nonland_permanents_left,
         "warped_this_turn": history.warped_this_turn,
+        "loyalty_abilities_activated": history.loyalty_abilities_activated,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}

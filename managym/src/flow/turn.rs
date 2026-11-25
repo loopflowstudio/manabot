@@ -132,6 +132,10 @@ pub struct PlayerTurnHistory {
     pub nonland_permanents_left: u32,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub warped_this_turn: bool,
+    /// Loyalty abilities this player activated (CR 606), wherever their
+    /// sources are now.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub loyalty_abilities_activated: u32,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its

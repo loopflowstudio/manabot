@@ -10,7 +10,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TriggerCondition},
-        card::{Keyword, StaticAbility},
+        card::{Keyword, StateBasedAction, StaticAbility},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -160,9 +160,24 @@ impl Game {
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
         let mut candidates = Vec::new();
-        for (permanent_id, characteristics) in
-            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-        {
+        let views: Vec<_> = self
+            .layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .collect();
+        let loyalty_exemptions: Vec<_> = views
+            .iter()
+            .flat_map(|(id, view)| {
+                view.static_abilities
+                    .iter()
+                    .filter_map(move |ability| match ability {
+                        StaticAbility::StateBasedActionDoesntApply {
+                            action: StateBasedAction::ZeroLoyalty,
+                            scope,
+                        } => Some((*id, scope)),
+                        _ => None,
+                    })
+            })
+            .collect();
+        for (permanent_id, characteristics) in views.iter().map(|(id, view)| (*id, view)) {
             let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
@@ -171,7 +186,11 @@ impl Game {
             // CR 704.5i/v. No supported battle has a defeat trigger; if one
             // is introduced, its pending trigger must delay this battle SBA.
             let zero_counters = (characteristics.types.is_planeswalker()
-                && permanent.counter_count(CounterKind::Loyalty) == 0)
+                && permanent.counter_count(CounterKind::Loyalty) == 0
+                && !loyalty_exemptions.iter().any(|(source, scope)| {
+                    let controller = self.state.permanents[*source].as_ref().unwrap().controller;
+                    self.static_scope_applies(scope, *source, controller, permanent_id)
+                }))
                 || (characteristics.types.is_battle()
                     && permanent.counter_count(CounterKind::Defense) == 0);
             let legend_loser = legend_losers.contains(&permanent.object);

@@ -812,32 +812,8 @@ impl ActivatedAbilityDefinition {
     }
 
     /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
-    /// Of several clauses each names a fixed number of targets, so a target's
-    /// position names its clause (`target_clause_indices`).
     pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        if self.target_spec().is_none() {
-            return Vec::new();
-        }
         effect_target_requirements(&self.effects)
-    }
-
-    /// The clause of each of the first `count` chosen targets; empty for a
-    /// single clause, whose targets are all clause 0.
-    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
-        let requirements = self.target_requirements();
-        if requirements.len() < 2 {
-            return Vec::new();
-        }
-        requirements
-            .iter()
-            .enumerate()
-            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
-            .take(count)
-            .collect()
-    }
-
-    pub fn target_spec(&self) -> Option<&TargetSpec> {
-        self.effects.iter().find_map(Effect::target_spec)
     }
 }
 
@@ -1253,6 +1229,21 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
+    /// "[Scope] aren't put into their owners' graveyards for [state]": the
+    /// one state-based action stops applying to what the scope covers; every
+    /// other state-based action, destruction and the legend rule still do.
+    StateBasedActionDoesntApply {
+        action: StateBasedAction,
+        scope: StaticScope,
+    },
+}
+
+/// A state-based action a static ability can exempt permanents from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum StateBasedAction {
+    /// A planeswalker with 0 loyalty is put into its owner's graveyard
+    /// (CR 704.5i).
+    ZeroLoyalty,
 }
 
 impl StaticAbility {

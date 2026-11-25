@@ -350,6 +350,10 @@ def _turn_history(player: managym.Player) -> str:
         )
     if history.warped_this_turn:
         parts.append("cast a spell for warp")
+    if count := history.loyalty_abilities_activated:
+        parts.append(
+            f"activated {count} loyalty abilit{'y' if count == 1 else 'ies'}"
+        )
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
     if amount := history.mana_spent_casting:

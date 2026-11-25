@@ -1017,6 +1017,7 @@ class PlayerTurnHistory:
     permanents_left: int
     nonland_permanents_left: int
     warped_this_turn: bool
+    loyalty_abilities_activated: int
     life_lost: int
 
 class RestrictedMana:

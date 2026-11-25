@@ -185,6 +185,7 @@ export interface PlayerTurnHistory {
   permanents_left?: number;
   nonland_permanents_left?: number;
   warped_this_turn?: boolean;
+  loyalty_abilities_activated?: number;
   mana_spent_casting?: number;
 }
 

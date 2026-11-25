@@ -58,6 +58,8 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         dog_1_1_w(),
         beast_3_3_g(),
         beast_4_4_g(),
+        beast_4_4_g_trample(),
+        leviathan_8_8_u_hexproof(),
         villain(),
         zeppelin(),
         zombie(),
@@ -705,6 +707,43 @@ fn beast_4_4_g() -> TokenDefinition {
             4,
             [Color::Green],
         ),
+    )
+}
+
+fn beast_4_4_g_trample() -> TokenDefinition {
+    token(
+        "token.beast_4_4_g_trample",
+        "859bda9a-fa90-4ad3-b0c1-6fc62e27c12f",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Trample]),
+            ..creature(
+                face("Beast", [CardType::Creature], &["Beast"], "Trample"),
+                4,
+                4,
+                [Color::Green],
+            )
+        },
+    )
+}
+
+fn leviathan_8_8_u_hexproof() -> TokenDefinition {
+    token(
+        "token.leviathan_8_8_u_hexproof",
+        "a4339d5a-7c07-4326-b0e6-d2519332803d",
+        PrintedCharacteristics {
+            keywords: Keywords::of(&[Keyword::Hexproof]),
+            ..creature(
+                face(
+                    "Leviathan",
+                    [CardType::Creature],
+                    &["Leviathan"],
+                    "Hexproof",
+                ),
+                8,
+                8,
+                [Color::Blue],
+            )
+        },
     )
 }
 

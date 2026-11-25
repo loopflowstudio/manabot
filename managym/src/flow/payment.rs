@@ -43,6 +43,9 @@ pub enum Operation {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        /// The clause of each target (`ActivatedTargeting::target_req_indices`).
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        target_req_indices: Vec<usize>,
         /// The announced value of X (CR 602.2b, 601.2b).
         #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: i32,
@@ -1218,9 +1221,10 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                target_req_indices,
                 x,
             } => {
-                let ability = match *source {
+                let mut ability = match *source {
                     ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
                         player,
                         permanent,
@@ -1236,6 +1240,7 @@ impl Game {
                         targets.clone(),
                     )?,
                 };
+                ability.target_req_indices = target_req_indices.clone();
                 let source_object = ability.source_object;
                 let counter_cost = |kind, delta| ProposedEvent::CounterChange {
                     provenance: CounterProvenance::new(EventCause::Cost),

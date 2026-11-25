@@ -1110,6 +1110,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "permanents_left": "leave the battlefield",
         "nonland_permanents_left": "nonland)",
         "warped_this_turn": "cast a spell for warp",
+        "loyalty_abilities_activated": "activated N loyalty abilities",
         "mana_spent_casting": "spent N mana casting spells",
         "life_gains": "gained life N times",
         "life_lost": "lost N life",

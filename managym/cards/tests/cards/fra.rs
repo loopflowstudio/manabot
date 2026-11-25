@@ -1151,3 +1151,445 @@ fn chandras_red_mana_uses_the_stack_and_her_damage_targets_a_creature() {
     settle(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Graveyard));
 }
+
+/// The Way cycle's printed index for a planeswalker's first granted ability:
+/// grants follow its own abilities in timestamp order.
+fn printed_abilities(
+    s: &crate::support::game::Scenario,
+    walker: managym::state::game_object::PermanentId,
+) -> usize {
+    let object = crate::support::inspect::card_of(s, walker);
+    s.game().state[object].activated_abilities.len()
+}
+
+/// A Way grants every planeswalker its controller controls a loyalty ability
+/// that shares the holder's one loyalty activation each turn and leaves with
+/// the Way. Four Ways over six planeswalkers offer every grant on each.
+#[test]
+fn way_grants_share_the_holders_loyalty_quota_and_leave_with_the_way() {
+    use crate::support::{
+        game::{five_color_setup, move_card, set_counters},
+        inspect::{card_of, counters_of, keywords, offer_labels},
+        play::{activate, offers_ability, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{card::Keyword, permanent::CounterKind, zone::ZoneType},
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    let walkers = [
+        theorist,
+        "Ajani Resolute",
+        "Vivien Reid",
+        "Kaito, Cunning Infiltrator",
+        "Chandra, Torch of Defiance",
+    ];
+    let ways = [
+        "Way of the Wildspeaker",
+        "Way of the Healer",
+        "Way of the Warlord",
+        "Way of the Deathbringer",
+    ];
+    let mut names = walkers.to_vec();
+    names.extend(ways);
+    names.push("Way of the Mentor");
+    let mut s = five_color_setup(&names);
+    let jace = s.force_permanent_on_battlefield(0, theorist);
+    let wildspeaker = s.force_permanent_on_battlefield(0, ways[0]);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 6);
+    let granted = printed_abilities(&s, jace);
+    assert_eq!(granted, 3);
+    assert!(offers_ability(&mut s, jace, granted));
+    assert!(offer_labels(&s)
+        .iter()
+        .any(|label| label.contains("[−4]") && label.contains("Beast")));
+    activate(&mut s, jace, granted);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 2);
+    settle(&mut s);
+    let beasts = s.battlefield_permanents_named(0, "Beast");
+    assert_eq!(beasts.len(), 1);
+    assert!(keywords(&s, beasts[0]).has(Keyword::Trample));
+    assert!(!(0..=granted).any(|index| offers_ability(&mut s, jace, index)));
+
+    // A printed activation spends the same quota as the granted one.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 6);
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert!(!offers_ability(&mut s, jace, granted));
+
+    // The grant ends when the Way leaves the battlefield.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(offers_ability(&mut s, jace, granted));
+    let object = card_of(&s, wildspeaker);
+    move_card(&mut s, object, ZoneType::Graveyard);
+    assert!(!offers_ability(&mut s, jace, granted));
+    assert_eq!(
+        s.game().characteristics(jace).activated_abilities.len(),
+        granted
+    );
+
+    // Four Ways over six planeswalkers: every holder offers every grant.
+    for way in ways {
+        s.force_permanent_on_battlefield(0, way);
+    }
+    let mut holders = vec![jace];
+    for walker in &walkers[1..] {
+        let holder = s.force_permanent_on_battlefield(0, walker);
+        set_counters(&mut s, holder, CounterKind::Loyalty, 10);
+        holders.push(holder);
+    }
+    // The sixth planeswalker is the Jace token Way of the Mentor empowers.
+    crate::support::play::enter_and_settle(&mut s, "Way of the Mentor");
+    holders.extend(s.battlefield_permanents_named(0, "Jace"));
+    assert_eq!(holders.len(), 6);
+    for walker in &holders {
+        set_counters(&mut s, *walker, CounterKind::Loyalty, 10);
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for walker in holders {
+        let printed = printed_abilities(&s, walker);
+        let offered: Vec<_> = s
+            .action_space()
+            .actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::ActivateAbility {
+                    permanent,
+                    ability_index,
+                    ..
+                } if *permanent == walker && *ability_index >= printed => Some(*ability_index),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(offered, (printed..printed + 4).collect::<Vec<_>>());
+    }
+}
+
+/// Way of the Warlord's two target clauses are independent: the player is
+/// still dealt damage when no creature or planeswalker is chosen.
+#[test]
+fn warlord_grant_hits_the_player_with_or_without_a_creature_target() {
+    use crate::support::{
+        game::{five_color_setup, set_counters},
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        state::{
+            game_object::{PlayerId, Target},
+            permanent::CounterKind,
+        },
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    for target_ogre in [false, true] {
+        let mut s = five_color_setup(&[theorist, "Way of the Warlord", "Gray Ogre"]);
+        let jace = s.force_permanent_on_battlefield(0, theorist);
+        s.force_permanent_on_battlefield(0, "Way of the Warlord");
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        set_counters(&mut s, jace, CounterKind::Loyalty, 4);
+        let life = s.life(1);
+        activate(&mut s, jace, 3);
+        if target_ogre {
+            assert!(s.choose_target(Target::Permanent(ogre)));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        assert!(s.choose_target(Target::Player(PlayerId(1))));
+        settle(&mut s);
+        assert_eq!(s.life(1), life - 2);
+        assert_eq!(s.game().state.permanents[ogre].is_none(), target_ogre);
+        assert!(s.game().state.permanents[jace].is_none());
+    }
+}
+
+/// Granted abilities whose instructions already compose: Healer's Cadet and
+/// surveil, Pyromancer's {R} on the stack, Deathbringer's optional sacrifice,
+/// Cryomancer's copy of the next instant and Avatar's counters per land.
+#[test]
+fn way_grants_resolve_through_their_holders() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library, set_counters},
+        inspect::{card_of, counters_of},
+        play::{
+            activate, cast_owned, choose, fork_choosing, fork_selecting, play_land, resolve_top,
+            settle, target_opponent,
+        },
+    };
+    use managym::{
+        agent::action::Action,
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    let setup = |way: &str, extra: &[&str]| {
+        let mut names = vec![theorist, way];
+        names.extend(extra);
+        let mut s = five_color_setup(&names);
+        let jace = s.force_permanent_on_battlefield(0, theorist);
+        s.force_permanent_on_battlefield(0, way);
+        set_counters(&mut s, jace, CounterKind::Loyalty, 10);
+        (s, jace)
+    };
+
+    let (mut s, jace) = setup("Way of the Healer", &[]);
+    activate(&mut s, jace, 3);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Cadet").len(), 1);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 8);
+
+    let (mut s, jace) = setup("Way of the Pyromancer", &[]);
+    s.set_player_mana_pool(0, "");
+    s.allow_priority_floats();
+    activate(&mut s, jace, 3);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 11);
+
+    let (mut s, jace) = setup("Way of the Deathbringer", &["Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    activate(&mut s, jace, 3);
+    resolve_top(&mut s);
+    let mut sacrificed = fork_selecting(&s, card_of(&s, ogre));
+    settle(&mut sacrificed);
+    assert!(sacrificed.game().state.permanents[ogre].is_none());
+    assert_eq!(sacrificed.battlefield_permanents_named(0, "Beast").len(), 1);
+    let mut kept = fork_choosing(&s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut kept);
+    assert!(kept.game().state.permanents[ogre].is_some());
+    assert!(kept.battlefield_permanents_named(0, "Beast").is_empty());
+
+    let (mut s, jace) = setup("Way of the Cryomancer", &["Lightning Bolt"]);
+    activate(&mut s, jace, 3);
+    settle(&mut s);
+    let total = s.life(0) + s.life(1);
+    s.set_player_mana_pool(0, "R");
+    cast_owned(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    settle(&mut s);
+    assert_eq!(s.life(0) + s.life(1), total - 6, "the Bolt and its copy");
+
+    let (mut s, jace) = setup("Avatar of Burgeoning Echoes", &[]);
+    let avatar = s.battlefield_permanents_named(0, "Avatar of Burgeoning Echoes")[0];
+    move_from_library(&mut s, 0, "Forest", ZoneType::Hand);
+    play_land(&mut s, "Forest");
+    settle(&mut s);
+    let tokens = s.battlefield_permanents_named(0, "Jace");
+    assert_eq!(tokens.len(), 1, "landfall empowers a Jace token");
+    assert_eq!(counters_of(&s, tokens[0], CounterKind::Loyalty), 2);
+    let lands: usize = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+        .iter()
+        .map(|land| s.battlefield_permanents_named(0, land).len())
+        .sum();
+    activate(&mut s, jace, 3);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::ChooseTarget { target: managym::state::game_object::Target::Permanent(p), .. } if *p == avatar),
+    );
+    settle(&mut s);
+    assert_eq!(
+        counters_of(&s, avatar, CounterKind::PlusOnePlusOne),
+        lands as i32
+    );
+}
+
+/// Sanctum Lurker keeps planeswalkers at 0 loyalty, grants them a +2 they
+/// can still activate, and exempts nothing else: the legend rule applies,
+/// and they die once the Lurker leaves.
+#[test]
+fn sanctum_lurker_keeps_zero_loyalty_planeswalkers_until_it_leaves() {
+    use crate::support::{
+        game::{five_color_setup, move_card},
+        inspect::{card_of, counters_of},
+        play::{activate, cast_owned, enter_and_settle, settle, target_opponent},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{permanent::CounterKind, zone::ZoneType},
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&["Sanctum Lurker", theorist, "Lightning Bolt"]);
+    enter_and_settle(&mut s, "Sanctum Lurker");
+    let jace = s.battlefield_permanents_named(0, "Jace")[0];
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 1);
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 0);
+    assert!(
+        s.game().state.permanents[jace].is_some(),
+        "0 loyalty is kept"
+    );
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let life = (s.life(0), s.life(1));
+    activate(&mut s, jace, 2);
+    settle(&mut s);
+    assert_eq!((s.life(0), s.life(1)), (life.0 + 1, life.1 - 1));
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 2);
+
+    let first = s.force_permanent_on_battlefield(0, theorist);
+    let second = s.force_permanent_on_battlefield(0, theorist);
+    s.set_player_mana_pool(0, "R");
+    cast_owned(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    settle(&mut s);
+    assert_eq!(
+        [first, second]
+            .iter()
+            .filter(|walker| s.game().state.permanents[**walker].is_some())
+            .count(),
+        1,
+        "the legend rule still applies"
+    );
+
+    let lurker = s.battlefield_permanents_named(0, "Sanctum Lurker")[0];
+    crate::support::game::set_counters(&mut s, jace, CounterKind::Loyalty, 0);
+    let object = card_of(&s, lurker);
+    move_card(&mut s, object, ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "R");
+    cast_owned(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    settle(&mut s);
+    assert!(s.game().state.permanents[jace].is_none());
+}
+
+/// Loyalty activations are events: Mind Sculptor draws only for one that
+/// removed two or more counters, Paradox gains life and a land play for
+/// each, printed or granted, and the turn's count reaches the policy.
+#[test]
+fn loyalty_activation_triggers_read_the_cost_paid() {
+    use crate::support::{
+        game::{five_color_setup, move_from_library, set_counters},
+        inspect::hand,
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, TURN_STATE_DIM},
+            observation_layout::turn_state,
+        },
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&[
+        theorist,
+        "Ajani Resolute",
+        "Way of the Mind Sculptor",
+        "Way of the Paradox",
+        "Way of the Wildspeaker",
+    ]);
+    s.force_permanent_on_battlefield(0, "Way of the Mind Sculptor");
+    s.force_permanent_on_battlefield(0, "Way of the Paradox");
+    s.force_permanent_on_battlefield(0, "Way of the Wildspeaker");
+    let jace = s.force_permanent_on_battlefield(0, theorist);
+    let ajani = s.force_permanent_on_battlefield(0, "Ajani Resolute");
+    set_counters(&mut s, jace, CounterKind::Loyalty, 6);
+    set_counters(&mut s, ajani, CounterKind::Loyalty, 6);
+    let lands: Vec<_> = (0..3)
+        .map(|_| move_from_library(&mut s, 0, "Forest", ZoneType::Hand))
+        .collect();
+    let (cards, life) = (hand(&s, 0).len(), s.life(0));
+
+    // +1 removes nothing: no draw, one life and one land play.
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), cards);
+    // Ajani's 0 gains a life too; its own trigger adds a loyalty counter.
+    activate(&mut s, ajani, 0);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), cards);
+    assert_eq!(s.life(0), life + 3);
+    assert_eq!(
+        s.game().state.turn.history[0].loyalty_abilities_activated,
+        2
+    );
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(
+        input.player_turn_state[turn_state::LOYALTY_ABILITIES_ACTIVATED],
+        2.0
+    );
+    assert_eq!(input.player_turn_state.len(), 2 * TURN_STATE_DIM);
+    for land in &lands {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::PlayLand { object, .. } if object == land),
+        );
+    }
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::PlayLand { .. })));
+
+    // A granted [−4] removes four: Mind Sculptor draws.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    assert_eq!(
+        s.game().state.turn.history[0].loyalty_abilities_activated,
+        0
+    );
+    let cards = hand(&s, 0).len();
+    activate(&mut s, jace, 3);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), cards + 1);
+}
+
+/// Kiora's attack trigger checks the turn's loyalty activations; her grant
+/// makes a hexproof Leviathan. Gideon punishes each opposing creature entry
+/// and loyalty activation.
+#[test]
+fn kiora_and_gideon_read_loyalty_activations() {
+    use crate::support::{
+        game::{clear_summoning_sickness, five_color_setup, set_counters},
+        inspect::{keywords, observed, tapped},
+        play::{activate, attack_with, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, permanent::CounterKind},
+    };
+    let theorist = "The Theorist, Jace Beleren";
+    for activated in [false, true] {
+        let mut s = five_color_setup(&[theorist, "Kiora of Salt and Sand", "Gray Ogre"]);
+        s.force_permanent_on_battlefield(0, "Kiora of Salt and Sand");
+        let jace = s.force_permanent_on_battlefield(0, theorist);
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        clear_summoning_sickness(&mut s, ogre);
+        set_counters(&mut s, jace, CounterKind::Loyalty, 8);
+        if activated {
+            activate(&mut s, jace, 3);
+            settle(&mut s);
+            let leviathans = s.battlefield_permanents_named(0, "Leviathan");
+            assert_eq!(leviathans.len(), 1);
+            assert!(keywords(&s, leviathans[0]).has(Keyword::Hexproof));
+        }
+        s.advance_to_step(StepKind::DeclareAttackers);
+        attack_with(&mut s, ogre);
+        settle(&mut s);
+        assert_eq!(!tapped(&s, ogre), activated);
+        assert_eq!(observed(&s, ogre).cant_be_blocked_this_turn, activated);
+    }
+
+    let mut s = five_color_setup(&[theorist, "Gideon the Oathless"]);
+    s.force_permanent_on_battlefield(0, "Gideon the Oathless");
+    let jace = s.force_permanent_on_battlefield(1, theorist);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 3);
+    s.advance_to_active_step(1, StepKind::Main);
+    let life = s.life(1);
+    activate(&mut s, jace, 0);
+    settle(&mut s);
+    assert_eq!(
+        s.life(1),
+        life - 2,
+        "one for the activation, one for the Illusion"
+    );
+}

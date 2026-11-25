@@ -65,3 +65,19 @@
 - Emblems use a public “Emblem — <planeswalker>” label. Their rules name
   stays empty in naming and predicate evaluation. Chandra’s first +1 uses
   the paid resolution cast decision and the exact exiled object.
+
+- Way grants use `StaticAbility::Continuous` over `YouControl(planeswalker)`
+  with `Modification::GrantActivated`, the path Tomik's static grant uses.
+  They stack as program abilities (`granted_by: None`), so the policy sees
+  their effects as tokens. No granted Way ability reads its grantor, and a
+  catalog join would put an index the frame can't name on the grantee's
+  list. `AttachedHas` stays because folding it into the same static would
+  change TLA's stored learning tokens and move the pinned pilot.
+- "If you removed two or more loyalty counters to activate it" is a field
+  of the event (`ActivatesLoyaltyAbility { min_counters_removed }`), not an
+  intervening-if. Trigger-time intervening-if checks cannot read the event's
+  amount, and the cost paid cannot change before resolution.
+- Ajani Unrelenting and Garruk, Curse Breaker move to slice 7. Ajani's −3
+  ("each creature except for tokens you control") needs a controller-scoped
+  exception, which `CardPredicate` lacks. Garruk's −4 is an until-your-next-turn
+  attack trigger.

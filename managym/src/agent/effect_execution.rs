@@ -587,6 +587,7 @@ impl<'a> Projection<'a> {
                 ability_index,
                 targets,
                 x,
+                ..
             } => {
                 match source {
                     ActivationSource::Permanent(id) => {

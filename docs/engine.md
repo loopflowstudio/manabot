@@ -1081,6 +1081,23 @@ creates a Ninja for its controller when either player casts a spell. Both
 players can inspect each emblem and its rules text under **Emblems** on the
 controller’s player plate in Academy.
 
+A Way such as Way of the Wildspeaker gives each planeswalker you control
+another loyalty ability, listed after its own. A holder that uses the granted
+ability has spent its activation for the turn, and the ability is gone as soon
+as the Way leaves the battlefield. Way of the Warlord’s ability has two target
+choices: you may skip the creature or planeswalker and still deal 2 damage to
+the player. While you control Sanctum Lurker, your planeswalkers stay on the
+battlefield with no loyalty counters. Destruction and the legend rule still
+remove them.
+
+Each loyalty activation is an event once its cost is paid. Way of the Paradox
+and Gideon the Oathless trigger on any activation. Way of the Mind Sculptor
+triggers only when the cost removed two or more loyalty counters.
+Kiora of Salt and Sand reads how many loyalty abilities you activated this
+turn. Input v11 shows that count in the `loyalty_abilities_activated` column
+of `player_turn_state`, and the text observation lists it under the player's
+turn.
+
 ### Attacking a planeswalker
 
 Each attacker can attack the defending player or one of that player’s

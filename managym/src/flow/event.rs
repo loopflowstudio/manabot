@@ -135,6 +135,16 @@ pub enum GameEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         attacker: Option<PermanentId>,
     },
+    /// A player activated a loyalty ability (CR 606) once its costs were
+    /// paid (CR 602.2i): its exact source and the loyalty counters that
+    /// payment removed (none for a [+N] or [0] cost).
+    LoyaltyAbilityActivated {
+        player: PlayerId,
+        #[serde(rename = "source_card")]
+        source_object: ObjectId,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        counters_removed: u32,
+    },
     /// A player drew a card; `nth_this_turn` counts that player's draws
     /// this turn (resets each turn).
     CardDrawn {
@@ -279,6 +289,7 @@ pub enum EventKind {
     CardsLeftGraveyard,
     SourceDealtDamage,
     PermanentUntapped,
+    LoyaltyAbilityActivated,
 }
 
 impl GameEvent {
@@ -305,6 +316,7 @@ impl GameEvent {
             GameEvent::SpellCountered { .. } => EventKind::SpellCountered,
             GameEvent::AbilityCountered { .. } => EventKind::AbilityCountered,
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
+            GameEvent::LoyaltyAbilityActivated { .. } => EventKind::LoyaltyAbilityActivated,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
             GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,

@@ -321,6 +321,7 @@ impl Game {
                     source: ActivationSource::Permanent(*permanent),
                     ability_index: *ability_index,
                     targets: Vec::new(),
+                    target_req_indices: Vec::new(),
                     x: 0,
                 };
                 let owed = self.cost_components(player, &operation);

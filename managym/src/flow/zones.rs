@@ -621,6 +621,9 @@ impl Game {
                 self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
             }
         }
+        if let GameEvent::LoyaltyAbilityActivated { player, .. } = &event {
+            self.state.turn.history[player.0].loyalty_abilities_activated += 1;
+        }
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);

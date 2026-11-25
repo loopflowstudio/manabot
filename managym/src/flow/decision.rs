@@ -1455,9 +1455,20 @@ impl Game {
                             Target::StackAbility(ability.id),
                             ability.controller,
                         );
+                        let loyalty = ability.loyalty_change.map(|change| {
+                            GameEvent::LoyaltyAbilityActivated {
+                                player: ability.controller,
+                                source_object: ability.source_object,
+                                counters_removed: (-change).max(0) as u32,
+                            }
+                        });
                         self.push_to_stack(
                             crate::state::stack_object::StackObject::ActivatedAbility(ability),
                         );
+                        // CR 602.2i: the ability is activated once on the stack and paid for.
+                        if let Some(event) = loyalty {
+                            self.emit(event);
+                        }
                     }
                     FrameCompletion::TurnFaceUp(object) => {
                         if self.state.permanent_of(object).is_some() {

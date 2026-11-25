@@ -725,6 +725,7 @@ impl Game {
                     source,
                     ability_index,
                     targets: Vec::new(),
+                    target_req_indices: Vec::new(),
                     x: 0,
                 };
                 if let Some(cost) = &ability.sacrifice {
@@ -825,6 +826,7 @@ impl Game {
                         source,
                         ability_index,
                         targets: Vec::new(),
+                        target_req_indices: Vec::new(),
                         x: 0,
                     };
                     if self.can_pay_announced_activation(
@@ -971,7 +973,6 @@ impl Game {
                     player,
                     source,
                     ability_index,
-                    chosen,
                     requirement,
                     ..
                 } = targeting;
@@ -987,9 +988,7 @@ impl Game {
                     .collect();
                 let clause =
                     self.activation_target_requirement(*source, *ability_index, *requirement)?;
-                let in_clause = self
-                    .activation_clause_chosen(*source, *ability_index, *requirement, chosen)
-                    .len();
+                let in_clause = targeting.clause_targets(*requirement).len();
                 if in_clause >= clause.min {
                     actions.push(Action::Decline { player: chooser });
                 }

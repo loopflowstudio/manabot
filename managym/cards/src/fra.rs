@@ -2,14 +2,16 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, CompareOp, Condition, Effect, EffectValue, KeywordAction, LibraryEnd,
-        ObjectSelector, Per, PlayerSelector, Scope, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject, TurnStep,
+        Ability, Actor, CompareOp, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+        Effect, EffectValue, KeywordAction, LibraryEnd, ObjectSelector, PaymentCost, Per,
+        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
         InsetSpell, Keyword, Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect,
-        Restriction, StaticAbility, StaticContinuous, StaticRestriction, StaticScope,
+        Restriction, StateBasedAction, StaticAbility, StaticContinuous, StaticRestriction,
+        StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost, ManaRestriction},
@@ -101,6 +103,18 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         vraskas_final_mercy(),
         way_of_the_mentor(),
         way_of_the_necromancer(),
+        way_of_the_cryomancer(),
+        way_of_the_deathbringer(),
+        way_of_the_healer(),
+        way_of_the_pyromancer(),
+        way_of_the_warlord(),
+        way_of_the_wildspeaker(),
+        way_of_the_mind_sculptor(),
+        way_of_the_paradox(),
+        avatar_of_burgeoning_echoes(),
+        kiora_of_salt_and_sand(),
+        sanctum_lurker(),
+        gideon_the_oathless(),
     ]
 }
 
@@ -1513,27 +1527,415 @@ fn vraskas_final_mercy() -> CardDefinition {
     }
 }
 
-fn way_of_the_mentor() -> CardDefinition {
-    let text_box = "When Way of the Mentor enters, empower Jace 5. (Put five loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever you gain life, put a loyalty counter on each planeswalker you control.";
+/// "Planeswalkers you control" (CR 306), the scope every Way grants to.
+fn planeswalker() -> CardPredicate {
+    CardPredicate {
+        card_type: Some(CardType::Planeswalker),
+        ..Default::default()
+    }
+}
+
+/// "Planeswalkers you control have \"[ability]\"": a layer-6 grant (CR
+/// 613.1f) each holder activates as its own loyalty ability, sharing that
+/// holder's one loyalty activation each turn (CR 606.3).
+fn planeswalkers_you_control_have(ability: ActivatedAbilityDefinition) -> StaticAbility {
+    StaticAbility::continuous(
+        StaticScope::YouControl(planeswalker()),
+        None,
+        vec![Modification::GrantActivated(Box::new(ability))],
+    )
+}
+
+/// The reminder text of "empower Jace N" in the Way cycle's first ability.
+fn empower_reminder(name: &str, count: &str) -> String {
+    format!(
+        "When {name} enters, empower Jace {count_digit}. (Put {count} loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")",
+        count_digit = match count {
+            "two" => "2",
+            "five" => "5",
+            "seven" => "7",
+            _ => unreachable!("no Way empowers {count}"),
+        },
+    )
+}
+
+/// A Way: a legendary enchantment that empowers Jace as it enters, then
+/// either grants planeswalkers you control a loyalty ability or watches them.
+struct Way {
+    key: &'static str,
+    scryfall_id: &'static str,
+    name: &'static str,
+    mana_cost: &'static str,
+    empower: &'static str,
+    text: &'static str,
+    abilities: Vec<Ability>,
+    statics: Vec<StaticAbility>,
+}
+
+fn way(way: Way) -> CardDefinition {
+    let amount = match way.empower {
+        "two" => 2,
+        "five" => 5,
+        "seven" => 7,
+        _ => unreachable!("no Way empowers {}", way.empower),
+    };
+    let text_box = format!("{}\n{}", empower_reminder(way.name, way.empower), way.text);
+    let mut abilities = vec![Ability::enters(Effect::empower_jace(amount))];
+    abilities.extend(way.abilities);
     CardDefinition {
-        key: "fra.way_of_the_mentor",
-        scryfall_id: "1a59d5b1-12d6-486b-bd29-ca371359addd",
+        key: way.key,
+        scryfall_id: way.scryfall_id,
         printed: PrintedCharacteristics {
-            name: "Way of the Mentor".into(),
-            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            name: way.name.into(),
+            mana_cost: Some(ManaCost::parse(way.mana_cost)),
             types: CardTypes::new([CardType::Enchantment]),
             supertypes: vec!["Legendary".into()],
             text_box: text_box.into(),
-            abilities: vec![
-                Ability::enters(Effect::empower_jace(5)),
-                Ability::when_you_gain_life(Effect::PutCounters {
-                    on: ObjectSelector::each_you_control(CardPredicate {
-                        card_type: Some(CardType::Planeswalker),
-                        ..Default::default()
-                    }),
-                    kind: CounterKind::Loyalty,
-                    amount: 1.into(),
-                }),
+            abilities,
+            statics: way.statics,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn way_of_the_mentor() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_mentor",
+        scryfall_id: "1a59d5b1-12d6-486b-bd29-ca371359addd",
+        name: "Way of the Mentor",
+        mana_cost: "{2}{W}",
+        empower: "five",
+        text: "Whenever you gain life, put a loyalty counter on each planeswalker you control.",
+        abilities: vec![Ability::when_you_gain_life(Effect::put_counters(
+            ObjectSelector::each_you_control(planeswalker()),
+            CounterKind::Loyalty,
+            1,
+        ))],
+        statics: Vec::new(),
+    })
+}
+
+fn way_of_the_necromancer() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_necromancer",
+        scryfall_id: "a0ff9689-ea49-4fff-b37c-4abbaeb0f73d",
+        name: "Way of the Necromancer",
+        mana_cost: "{1}{B}",
+        empower: "two",
+        text: "Whenever a creature you control dies, put a loyalty counter on each planeswalker you control.",
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::you_control(CardPredicate::creature()),
+            },
+            intervening_if: None,
+            effects: vec![Effect::put_counters(
+                ObjectSelector::each_you_control(planeswalker()),
+                CounterKind::Loyalty,
+                1,
+            )],
+        }],
+        statics: Vec::new(),
+    })
+}
+
+fn way_of_the_cryomancer() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_cryomancer",
+        scryfall_id: "838b0efb-7398-4df9-8fdf-b8af43b47938",
+        name: "Way of the Cryomancer",
+        mana_cost: "{2}{U}",
+        empower: "five",
+        text: "Planeswalkers you control have \"[−3]: When you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.\"",
+        abilities: Vec::new(),
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(
+                -3,
+                vec![Effect::CreateDelayedTrigger {
+                    remember: None,
+                    event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::instant_or_sorcery())),
+                    frequency: DelayedFrequency::Once,
+                    expiry: DelayedExpiry::ThisTurn,
+                    effects: vec![Effect::CopyTriggeringObject],
+                }],
+            ),
+        )],
+    })
+}
+
+fn way_of_the_deathbringer() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_deathbringer",
+        scryfall_id: "12dd46b2-e892-4660-b120-55766fd4d878",
+        name: "Way of the Deathbringer",
+        mana_cost: "{2}{B}",
+        empower: "five",
+        text: "Planeswalkers you control have \"[−2]: You may sacrifice a creature. If you do, create a 4/4 green Beast creature token with trample.\"",
+        abilities: Vec::new(),
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(
+                -2,
+                vec![
+                    Effect::may_sacrifice(CardPredicate::creature(), false),
+                    Effect::if_you_do(vec![Effect::create_tokens("token.beast_4_4_g_trample", 1)]),
+                ],
+            ),
+        )],
+    })
+}
+
+fn way_of_the_healer() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_healer",
+        scryfall_id: "50326a2a-7e10-464b-a97e-e880bda0558c",
+        name: "Way of the Healer",
+        mana_cost: "{3}{W}",
+        empower: "five",
+        text: "Planeswalkers you control have \"[−2]: Create a 2/2 colorless Wizard Soldier creature token named Cadet. Surveil 1.\"",
+        abilities: Vec::new(),
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(
+                -2,
+                vec![
+                    Effect::create_tokens("token.cadet", 1),
+                    Effect::Surveil { count: 1 },
+                ],
+            ),
+        )],
+    })
+}
+
+fn way_of_the_pyromancer() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_pyromancer",
+        scryfall_id: "c1a00020-7c14-4503-a057-5763704bb83e",
+        name: "Way of the Pyromancer",
+        mana_cost: "{1}{R}",
+        empower: "two",
+        text: "Planeswalkers you control have \"[+1]: Add {R}.\"",
+        abilities: Vec::new(),
+        // A loyalty ability is never a mana ability (CR 605.1a): it uses the stack.
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(1, vec![Effect::add_mana(Mana::parse("R"))]),
+        )],
+    })
+}
+
+fn way_of_the_warlord() -> CardDefinition {
+    let creature_or_planeswalker = TargetSpec::Permanent {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    way(Way {
+        key: "fra.way_of_the_warlord",
+        scryfall_id: "6d86e410-20c4-4248-96bf-5780ece6274a",
+        name: "Way of the Warlord",
+        mana_cost: "{2}{R}",
+        empower: "five",
+        text: "Planeswalkers you control have \"[−4]: This planeswalker deals 2 damage to up to one target creature or planeswalker and 2 damage to target player.\"",
+        abilities: Vec::new(),
+        // Two independent target clauses (CR 601.2c): the player is still
+        // dealt damage when no creature or planeswalker is chosen.
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(
+                -4,
+                vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, creature_or_planeswalker.clone()),
+                        effects: vec![Effect::deal_damage(
+                            2,
+                            ObjectSelector::Target(creature_or_planeswalker),
+                        )],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Player),
+                        effects: vec![Effect::DealDamageToPlayer {
+                            player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
+                            amount: 2.into(),
+                        }],
+                    },
+                ],
+            ),
+        )],
+    })
+}
+
+fn way_of_the_wildspeaker() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_wildspeaker",
+        scryfall_id: "a252cb01-537b-4afe-9abc-81a98c4a1439",
+        name: "Way of the Wildspeaker",
+        mana_cost: "{4}{G}",
+        empower: "seven",
+        text: "Planeswalkers you control have \"[−4]: Create a 4/4 green Beast creature token with trample.\"",
+        abilities: Vec::new(),
+        statics: vec![planeswalkers_you_control_have(
+            ActivatedAbilityDefinition::loyalty(
+                -4,
+                vec![Effect::create_tokens("token.beast_4_4_g_trample", 1)],
+            ),
+        )],
+    })
+}
+
+fn way_of_the_mind_sculptor() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_mind_sculptor",
+        scryfall_id: "5838af68-66c3-4fe8-ab89-0a1721b0cfeb",
+        name: "Way of the Mind Sculptor",
+        mana_cost: "{4}{U}",
+        empower: "five",
+        text: "Whenever you activate a loyalty ability, if you removed two or more loyalty counters to activate it, draw a card.",
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActivatesLoyaltyAbility {
+                who: Actor::You,
+                min_counters_removed: 2,
+            },
+            intervening_if: None,
+            effects: vec![Effect::DrawCards { count: 1.into() }],
+        }],
+        statics: Vec::new(),
+    })
+}
+
+fn way_of_the_paradox() -> CardDefinition {
+    way(Way {
+        key: "fra.way_of_the_paradox",
+        scryfall_id: "98dc5470-507a-4364-8480-42607255e56c",
+        name: "Way of the Paradox",
+        mana_cost: "{2}{G}",
+        empower: "five",
+        text: "Whenever you activate a loyalty ability, you gain 1 life. You may play an additional land this turn.",
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActivatesLoyaltyAbility {
+                who: Actor::You,
+                min_counters_removed: 0,
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::gain_life(1),
+                Effect::until_end_of_turn(ObjectSelector::You, Modification::AdditionalLandPlay),
+            ],
+        }],
+        statics: Vec::new(),
+    })
+}
+
+fn avatar_of_burgeoning_echoes() -> CardDefinition {
+    let text_box = "Landfall — Whenever a land you control enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−10]: Put a +1/+1 counter on target creature for each land you control.\"";
+    let land = CardPredicate {
+        card_type: Some(CardType::Land),
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "fra.avatar_of_burgeoning_echoes",
+        scryfall_id: "5905995b-7a20-4602-a7cc-90aa5089a082",
+        printed: PrintedCharacteristics {
+            name: "Avatar of Burgeoning Echoes".into(),
+            mana_cost: Some(ManaCost::parse("{G}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Avatar".into()],
+            power: Some(2),
+            toughness: Some(3),
+            text_box: text_box.into(),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(land.clone()),
+                Effect::empower_jace(2),
+            )],
+            statics: vec![planeswalkers_you_control_have(
+                ActivatedAbilityDefinition::loyalty(
+                    -10,
+                    vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        CounterKind::PlusOnePlusOne,
+                        ObjectSelector::each_you_control(land).count(),
+                    )],
+                ),
+            )],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn kiora_of_salt_and_sand() -> CardDefinition {
+    let text_box = "Whenever you attack, if you've activated a loyalty ability this turn, untap target attacking creature. It can't be blocked this turn.\nPlaneswalkers you control have \"[−8]: Create an 8/8 blue Leviathan creature token with hexproof.\"";
+    let attacking = TargetSpec::Permanent {
+        predicate: CardPredicate {
+            attacking: true,
+            ..CardPredicate::creature()
+        },
+    };
+    CardDefinition {
+        key: "fra.kiora_of_salt_and_sand",
+        scryfall_id: "8151f5f5-e9f6-4fbe-b543-f456ebf22aa5",
+        printed: PrintedCharacteristics {
+            name: "Kiora of Salt and Sand".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Merfolk".into(), "Noble".into()],
+            power: Some(2),
+            toughness: Some(4),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate::creature()),
+                    Per::Batch,
+                ),
+                intervening_if: Some(Condition::compare(
+                    EffectValue::LoyaltyActivationsThisTurn(PlayerSelector::You),
+                    CompareOp::Ge,
+                    1,
+                )),
+                effects: vec![
+                    Effect::untap(ObjectSelector::Target(attacking.clone())),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(attacking),
+                        Modification::CantBeBlocked,
+                    ),
+                ],
+            }],
+            statics: vec![planeswalkers_you_control_have(
+                ActivatedAbilityDefinition::loyalty(
+                    -8,
+                    vec![Effect::create_tokens("token.leviathan_8_8_u_hexproof", 1)],
+                ),
+            )],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn sanctum_lurker() -> CardDefinition {
+    let text_box = "When this creature enters, empower Jace 1. (Put a loyalty counter on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control aren't put into their owners' graveyards for having 0 loyalty.\nPlaneswalkers you control have \"[+2]: This planeswalker deals 1 damage to each opponent and you gain 1 life.\"";
+    CardDefinition {
+        key: "fra.sanctum_lurker",
+        scryfall_id: "2185c08f-bb4d-49d5-8b6c-c629a48bb61c",
+        printed: PrintedCharacteristics {
+            name: "Sanctum Lurker".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Horror".into()],
+            power: Some(3),
+            toughness: Some(2),
+            text_box: text_box.into(),
+            abilities: vec![Ability::enters(Effect::empower_jace(1))],
+            statics: vec![
+                StaticAbility::StateBasedActionDoesntApply {
+                    action: StateBasedAction::ZeroLoyalty,
+                    scope: StaticScope::YouControl(planeswalker()),
+                },
+                planeswalkers_you_control_have(ActivatedAbilityDefinition::loyalty(
+                    2,
+                    vec![
+                        Effect::DealDamageToPlayer {
+                            player: PlayerSelector::EachOpponent,
+                            amount: 1.into(),
+                        },
+                        Effect::gain_life(1),
+                    ],
+                )),
             ],
             ..Default::default()
         },
@@ -1541,32 +1943,37 @@ fn way_of_the_mentor() -> CardDefinition {
     }
 }
 
-fn way_of_the_necromancer() -> CardDefinition {
-    let text_box = "When Way of the Necromancer enters, empower Jace 2. (Put two loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nWhenever a creature you control dies, put a loyalty counter on each planeswalker you control.";
+fn gideon_the_oathless() -> CardDefinition {
+    let text_box = "Ward—Discard a card.\nWhenever a creature an opponent controls enters, Gideon deals 1 damage to that player.\nWhenever an opponent activates a loyalty ability, Gideon deals 1 damage to that player.";
+    let damage_that_player = || Effect::DealDamageToPlayer {
+        player: PlayerSelector::TriggeringPlayer,
+        amount: 1.into(),
+    };
     CardDefinition {
-        key: "fra.way_of_the_necromancer",
-        scryfall_id: "a0ff9689-ea49-4fff-b37c-4abbaeb0f73d",
+        key: "fra.gideon_the_oathless",
+        scryfall_id: "c985b0d1-25bd-4069-aab7-a566ff27a8f6",
         printed: PrintedCharacteristics {
-            name: "Way of the Necromancer".into(),
-            mana_cost: Some(ManaCost::parse("{1}{B}")),
-            types: CardTypes::new([CardType::Enchantment]),
+            name: "Gideon the Oathless".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Mercenary".into()],
+            power: Some(3),
+            toughness: Some(3),
             text_box: text_box.into(),
+            statics: vec![StaticAbility::Ward(PaymentCost::Discard)],
             abilities: vec![
-                Ability::enters(Effect::empower_jace(2)),
+                Ability::when_enters(
+                    TriggerSubject::matching(Actor::Opponent, CardPredicate::creature(), false),
+                    vec![damage_that_player()],
+                ),
                 Ability::Triggered {
-                    condition: TriggerCondition::Dies {
-                        subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    condition: TriggerCondition::ActivatesLoyaltyAbility {
+                        who: Actor::Opponent,
+                        min_counters_removed: 0,
                     },
                     intervening_if: None,
-                    effects: vec![Effect::PutCounters {
-                        on: ObjectSelector::each_you_control(CardPredicate {
-                            card_type: Some(CardType::Planeswalker),
-                            ..Default::default()
-                        }),
-                        kind: CounterKind::Loyalty,
-                        amount: 1.into(),
-                    }],
+                    effects: vec![damage_that_player()],
                 },
             ],
             ..Default::default()

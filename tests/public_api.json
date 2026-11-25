@@ -3296,6 +3296,9 @@
           "life_lost": {
             "kind": "attribute"
           },
+          "loyalty_abilities_activated": {
+            "kind": "attribute"
+          },
           "mana_spent_casting": {
             "kind": "attribute"
           },

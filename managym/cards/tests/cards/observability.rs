@@ -624,7 +624,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 8] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 35] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -661,6 +661,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
         permanents_left: _,
         nonland_permanents_left: _,
         warped_this_turn: _,
+        loyalty_abilities_activated: _,
 
         life_lost: _,
     } = history[0];
@@ -718,6 +719,9 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
         ),
         (
             "history.warped_this_turn", Seen::Via("player turn state"),
+        ),
+        (
+            "history.loyalty_abilities_activated", Seen::Via("player turn state"),
         ),
         (
             "history.mana_spent_casting",
@@ -1256,6 +1260,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
         TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
+        TriggerCondition::ActivatesLoyaltyAbility { .. } => {
+            "TriggerCondition::ActivatesLoyaltyAbility"
+        }
         TriggerCondition::GainsLife { .. } => "TriggerCondition::GainsLife",
         TriggerCondition::LosesLife { .. } => "TriggerCondition::LosesLife",
         TriggerCondition::PutsCountersOn { .. } => "TriggerCondition::PutsCountersOn",
@@ -1305,6 +1312,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::Draws {
             who: Actor::AnyPlayer,
             nth: None,
+        },
+        TriggerCondition::ActivatesLoyaltyAbility {
+            who: Actor::You,
+            min_counters_removed: 2,
         },
         TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
         TriggerCondition::Performs {
@@ -1859,6 +1870,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "avatar_aang_draws_on_each_bending_and_transforms_after_all_four",
         ),
+        StaticAbility::StateBasedActionDoesntApply { .. } => witnessed(
+            "StaticAbility::StateBasedActionDoesntApply",
+            Seen::Via("the exempt planeswalker's permanent row stays with zero loyalty counter facts"),
+            "Sanctum Lurker",
+            "fra",
+            "sanctum_lurker_keeps_zero_loyalty_planeswalkers_until_it_leaves",
+        ),
         StaticAbility::SpellsHave { .. } => witnessed(
             "StaticAbility::SpellsHave",
             Seen::Actions("a spell castable only with the granted help is offered; then its taps or exiles, each a receipt reference"),
@@ -2138,6 +2156,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::SpellsHave {
             predicate: CardPredicate::default(),
             cost: AdditionalCost::Delve,
+        },
+        StaticAbility::StateBasedActionDoesntApply {
+            action: managym::state::card::StateBasedAction::ZeroLoyalty,
+            scope: StaticScope::YouControl(CardPredicate::default()),
         },
         StaticAbility::SpellsFromOutsideHandCostLess(1),
         StaticAbility::SpellsCostLessMana(ManaCost::parse("{W}{U}{B}{R}{G}")),
@@ -3589,6 +3611,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         permanents_left => [column(PlayerTurnState, turn_state::PERMANENTS_LEFT)],
         nonland_permanents_left => [column(PlayerTurnState, turn_state::NONLAND_PERMANENTS_LEFT)],
         warped_this_turn => [column(PlayerTurnState, turn_state::WARPED_THIS_TURN)],
+        loyalty_abilities_activated => [column(PlayerTurnState, turn_state::LOYALTY_ABILITIES_ACTIVATED)],
 
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));

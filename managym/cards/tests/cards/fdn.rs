@@ -1420,7 +1420,14 @@ fn linden_and_chart_read_the_completed_attack_declaration() {
 
     *s.game_mut() = partial;
     assert_eq!(s.action_space(), &offer);
-    let chosen: Vec<_> = s.game().state.combat.as_ref().unwrap().attackers().collect();
+    let chosen: Vec<_> = s
+        .game()
+        .state
+        .combat
+        .as_ref()
+        .unwrap()
+        .attackers()
+        .collect();
     assert_eq!(chosen.len(), 1);
     assert_eq!(
         crate::support::inspect::permanent(&s, chosen[0]).tapped,
