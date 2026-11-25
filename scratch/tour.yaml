@@ -1,7 +1,11 @@
-at: 0605ac68f7bf451a26f9512605e86e441caa9f23
+at: 67edf49fb17ad6b2313d94f7ae264624de3e3b5c
 first:
   - path: docs/engine.md
-    why: Public enum values and runnable observation round trip
+    why: Public turn order, observation JSON and chooser policies
+  - path: docs/observation-and-model.md
+    why: Where to read characteristics and object identity
+  - path: managym/__init__.pyi
+    why: Python signatures and observation types after removal
   - path: managym/src/flow/turn.rs
     why: Rules order, public names and historical integer codes
   - path: managym/src/agent/observation_json.rs
@@ -10,8 +14,16 @@ first:
     why: Stable policy indices for both damage steps
   - path: managym/src/agent/decision_memory.rs
     why: Committed decisions use the same stored indices
+  - path: managym/src/python/bindings.rs
+    why: Observation accessors and game setup at the Python boundary
+  - path: managym/src/python/vector_env_bindings.rs
+    why: Scalar and vector environments share seat policy validation
+  - path: managym/recording.py
+    why: Current constructor and historical policy reader
+  - path: tests/env/test_captured_vector_bookkeeping.py
+    why: Replay of both current and historical policy records
+  - path: tests/verify/test_native_observation_contract.py
+    why: Modified wire keywords reach card and permanent tensors
   - path: tests/verify/test_opponent_decision_memory.py
     why: Live double strike through cleanup and policy admission
-  - path: tests/env/test_observation.py
-    why: Every retained turn code through both public readers
 hide: []
