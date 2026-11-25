@@ -1,95 +1,93 @@
-at: 5244ab5b3a789eee31eb44d1034bbabb98034ae5
+at: 8dd6f5814907c16d69be6f07b72de258e7d07b18
 first:
-  - path: managym/README.md
-    why: Player choices for fights, sacrifices, and kicked spells
-  - path: managym/cards/src/grn.rs
-    why: Indrik targets its opponent before choosing whether to fight
-  - path: managym/cards/src/isd.rs
-    why: Tribute reads toughness from the sacrificed creature
-  - path: managym/cards/src/stx.rs
-    why: Brew binds its caster’s sacrifices for the optional return
-  - path: managym/cards/src/m20.rs
-    why: Drakuseth's other targets take damage at once
-  - path: managym/cards/src/eld.rs
-    why: Prince's blink; Run Away Together's controller relation
-  - path: managym/cards/src/fdn.rs
-    why: Resilience's kicked bounds; Annihilation's attached Equipment
-  - path: managym/state/src/ability.rs
-    why: Target relations, fights, sacrifices and simultaneous instructions
-  - path: managym/src/flow/retarget.rs
-    why: Choose new targets as one legal assignment
-  - path: managym/src/flow/play.rs
-    why: Relations and kicker decide which casts are legal
-  - path: managym/src/flow/decision.rs
-    why: Commit simultaneous sacrifices and retain departures and arrivals
-  - path: managym/src/flow/resolution.rs
-    why: Read last known toughness and resolve both fight participants
-  - path: managym/cards/tests/cards/stx.rs
-    why: Check simultaneous choice timing and the excluded graveyard card
-  - path: managym/cards/tests/cards/grn.rs
-    why: Accept, decline or remove the fighter in response
-  - path: managym/src/flow/target_authority_tests.rs
-    why: A copy swaps targets; a single change cannot
-  - path: managym/cards/tests/cards/m20.rs
-    why: Drakuseth with 16 creatures a side
   - path: docs/engine.md
-    why: What each viewer sees during a split and what a divided spell retains
-  - path: managym/cards/src/rna.rs
-    why: Biogenic separates cast-time division from two counter instructions
-  - path: managym/src/flow/knowledge.rs
-    why: Preserve face-up witnesses during hidden-world sampling
-  - path: managym/src/agent/effect_execution.rs
-    why: Project pile membership and target shares for the current viewer
-  - path: managym/cards/tests/cards/fdn.rs
-    why: Both pile choices at every split size and after restoring
-  - path: managym/cards/tests/cards/rna.rs
-    why: Lost shares and a copy’s retargeted distribution
-  - path: managym/state/src/permanent.rs
-    why: The answer belongs to one battlefield incarnation
+    why: Viewer-safe pile splits and cast-time target division contracts
+  - path: managym/README.md
+    why: Storm copies, kicker bounds, shared sacrifices, and divisions
+  - path: managym/state/src/ability.rs
+    why: Target relations, GrantPlay, LibraryTop, composite ward, Repeat, Fight
   - path: managym/state/src/card.rs
-    why: Choices and restrictions attached to a printing
-  - path: managym/cards/src/neo.rs
-    why: Two lands bind mana to different choices
-  - path: managym/cards/src/xln.rs
-    why: Spyglass inspects a hand before naming
-  - path: managym/src/flow/proposed_event.rs
-    why: Order entrants, retain answers and commit them together
-  - path: managym/state/src/subtype.rs
-    why: All legal creature types
-  - path: managym/src/flow/layers.rs
-    why: Read the source's choice for creature characteristics
-  - path: managym/src/flow/triggers.rs
-    why: Compare a spell with its watcher’s chosen color
+    why: Entry choices, Changeling, spell division, nonmana activation ban
+  - path: managym/state/src/permanent.rs
+    why: EntryChoice stored per battlefield incarnation; Wish counters
   - path: managym/state/src/mana.rs
-    why: Record which spells and activations can spend mana
-  - path: managym/src/flow/mana.rs
-    why: Bind the restriction when producing mana
-  - path: managym/src/flow/statics.rs
-    why: Check activation prohibitions in the source's zone
-  - path: managym/src/agent/observation_encoder.rs
-    why: Public choices become facts about individual permanents
-  - path: managym/experience_projection.py
-    why: Carry the same answers into Academy
-  - path: managym/cards/tests/cards/xln.rs
-    why: Private look timing, order, forks and stale Commands
-  - path: managym/cards/tests/cards/neo.rs
-    why: Check mana restrictions and suppressed land choices
-  - path: tests/semantic/test_text_observation.py
-    why: Reconnect at the pile choice and replay an announced target share
-  - path: managym/cards/src/war.rs
-    why: Bolt Bend's single target and conditional discount
+    why: ManaExpiry durations and creature-subtype spend predicates
+  - path: managym/state/src/predicate.rs
+    why: Chosen-value, keyword, and graveyard-arrival predicates
   - path: managym/state/src/stack_object.rs
-    why: The choices preserved when a spell leaves
-  - path: managym/cards/tests/cards/war.rs
-    why: Legal spells and mana actually spent on Bolt Bend
+    why: Retained target shares and departed-spell copiable snapshots
+  - path: managym/state/src/subtype.rs
+    why: Complete CR 205.3m creature-type list for entry prompts
+  - path: managym/src/flow/proposed_event.rs
+    why: Simultaneous entry choices, hand looks, and land overwrites
+  - path: managym/src/flow/retarget.rs
+    why: Whole-assignment retargeting and departed-spell stack copying
+  - path: managym/src/flow/triggers.rs
+    why: Clause target relations and graveyard intervening-if triggers
+  - path: managym/src/flow/play.rs
+    why: Kicker target bounds, target division, and Spyglass checks
+  - path: managym/src/flow/payment.rs
+    why: Multi-component resolution payments for composite ward costs
+  - path: managym/src/flow/decision.rs
+    why: Entry choices, pile splits, simultaneous sacrifices, and retargets
+  - path: managym/src/flow/resolution.rs
+    why: Target shares, LibraryTop/Unselected, GrantPlay, Repeat, and Fight
+  - path: managym/src/flow/layers.rs
+    why: Chosen creature type, Changeling, and PredicateSource matching
+  - path: managym/src/flow/statics.rs
+    why: Source-relative predicates, graveyard arrivals, and Spyglass bans
+  - path: managym/src/flow/mana.rs
+    why: Chosen-color/type mana output and per-step/combat/turn expiry
+  - path: managym/src/flow/turn.rs
+    why: Unified graveyard arrivals and casts-before-triggering lookup
+  - path: managym/src/flow/zones.rs
+    why: Departed-spell copiable capture and graveyard arrival recording
+  - path: managym/src/flow/knowledge.rs
+    why: Public library reveals and face-up pile witnesses
+  - path: managym/src/agent/observation_layout.rs
+    why: V11 put_into_graveyard_this_turn column and entry-choice fact kinds
+  - path: managym/src/agent/observation_encoder.rs
+    why: Encode entry-choice facts and v11 graveyard-arrival column
+  - path: managym/src/agent/effect_execution.rs
+    why: Project entry choices, pile splits, and target shares
+  - path: manabot/policy/prepare.py
+    why: Route chosen_name facts into the name vocabulary
+  - path: managym/experience_projection.py
+    why: Surface permanent entry choices to Academy
+  - path: academy/ui/src/lib/board/Plate.svelte
+    why: Display private known-hand counts and chosen labels
+  - path: managym/cards/src/fdn.rs
+    why: Foundations cards using piles, GrantPlay, relations, and Abyssal Harvester
+  - path: managym/cards/src/neo.rs
+    why: Uncharted Haven and Secluded Courtyard entry-choice lands
+  - path: managym/cards/src/xln.rs
+    why: Sorcerous Spyglass hand look and nonmana activation lock
+  - path: managym/cards/src/rna.rs
+    why: Biogenic Upgrade cast-time division and counter doubling
+  - path: managym/cards/src/war.rs
+    why: Bolt Bend single-target retargeting and conditional discount
+  - path: managym/cards/src/eld.rs
+    why: Heraldic Banner, Charming Prince, Run Away Together, Wishclaw
+  - path: managym/src/flow/target_authority_tests.rs
+    why: Whole-assignment target swaps vs single-slot retargeting
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Directed tests for Curator, Harvester, and Foundations tail
+  - path: managym/cards/tests/cards/xln.rs
+    why: Spyglass private look timing, order, and simultaneous entries
+  - path: managym/cards/tests/cards/neo.rs
+    why: Entry-choice mana restrictions and Zhao land-type suppression
+  - path: tests/semantic/test_text_observation.py
+    why: Text play and Academy replay for choices, piles, shares
 hide:
   - path: managym/academy/fixtures/choice-navigation-opening-v1.json
-    why: Five navigation frames regenerated from recorded Commands
+    why: Regenerated Academy opening frames
   - path: managym/academy/fixtures/convoke-demo-opening-v1.json
-    why: Replayed demo digests
+    why: Regenerated demo digests
   - path: managym/academy/fixtures/learn-demo-opening-v1.json
-    why: Replayed demo digests
+    why: Regenerated demo digests
   - path: managym/academy/fixtures/precision-demo-opening-v1.json
-    why: Replayed demo digests
+    why: Regenerated demo digests
   - path: managym/academy/fixtures/precision-mana-demo-opening-v1.json
-    why: Replayed demo digests
+    why: Regenerated demo digests
+  - path: managym/tests/fixtures/scryfall_cards.json
+    why: Appended Scryfall printing metadata for added cards
