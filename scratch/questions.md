@@ -45,3 +45,14 @@
 - At resolution `DifferentControllerFrom` makes every target of the named
   clause illegal along with the relating one. Run Away Together's named
   clause has one target; a multi-target host would need per-pair marking.
+- Genesis Wave moves `Selected` to the battlefield and `Unselected` to the
+  graveyard. Today an unattached Aura enters and goes to the graveyard via SBA
+  704.5m; if CR 303.4f/g non-cast Aura attachment is added later so an Aura
+  with no legal object stays in the library, Genesis Wave will need a selector
+  for revealed cards still in the library rather than `Unselected` alone.
+- `Keyword::Changeling` is the first non-evergreen `Keyword` variant, so it
+  has no dedicated card/permanent column; it is observed through its definition
+  tokens (`Keyword::changeling`) and `all_creature_types` / subtype rules.
+- `Player.combat_mana_pool` and `PooledManaClassData.combat` are retained for
+  patch-clean observation compatibility while `ManaClass.expiry` replaces
+  `ManaClass.combat` inside the engine and payment search.

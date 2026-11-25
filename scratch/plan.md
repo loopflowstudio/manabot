@@ -1,17 +1,15 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Twenty-one of the 56 scoped Foundations rows have directed implementation
-evidence. Slices 1, 2, 3, 4, 5 and 7 are complete. Demonic Pact and Maze’s
-End already had working definitions.
+Thirty-two of the 56 scoped Foundations rows have directed implementation
+evidence. Slices 1, 2, 3, 4, 5, 6, 7 and 8 are complete. Demonic Pact and
+Maze’s End already had working definitions.
 
-**Next pass: Slices 6 + 8** — library-top selection, kicked entries,
-composite ward, mana expiry, Changeling and the keyword predicate (11
-cards).
+**Next pass: Slices 9 + 10** — the 23 compose-only cards and Abyssal
+Harvester, then the integrated validation below (24 cards).
 
-Remaining passes (21 implemented, 35 pending):
+Remaining passes (32 implemented, 24 pending):
 
-1. Slices 6 + 8 (11 cards).
-2. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
+1. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
    integrated validation below.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
@@ -165,36 +163,30 @@ positions. Both bundled pinned pilots passed; the optional u1952 checkpoint
 was unconfigured. Current-world admission and the Engine Budget comparison
 remain for the integrated gate.
 
-### Slice 6 — Library-top selection (3 cards)
+### Slice 6 — Library-top selection (complete)
 
-Cards: Gutless Plunderer, Strongbox Raider, Genesis Wave.
+Gutless Plunderer, Strongbox Raider and Genesis Wave have directed play tests
+and ledger evidence.
 
-- `ObjectSelector::LibraryTop(Box<EffectValue>)`: the top N cards of the
-  resolving player's library, fixed when the instruction runs. It records the
-  private look, uses the Library selection origin, and limits hidden sampling
-  to those positions.
-- `ObjectSelector::Unselected`: the enclosing `SelectCards`' `from`, minus
-  `Selected` and minus anything no longer present. It is available in
-  `effects` and in `if_declined`.
-- `SelectCards.max_mana_value: Option<Box<EffectValue>>`, matching
-  `LookAndSelect` and `Each`.
-- `Effect::GrantPlay { what: ObjectSelector, until: PlayWindow }`. Convert
-  `ExileTopCardsToPlay` (1 card) and `GrantGraveyardCastThisTurn` (2 cards)
-  where their semantics match, then delete them.
-
-Checks:
-
-- Genesis Wave with X = 5: chosen permanents enter in one batch (each sees
-  the others' entry triggers), and the rest go to the graveyard.
-- Plunderer: keeping one card leaves it on top and mills nothing else. It is
-  not a mill of the kept card and not a surveil.
-- Raider: play the chosen card through the end of your next turn, but not
-  the other card.
-- Viewer privacy holds for the looked-at cards until they are revealed or
-  milled.
-- Stress: Genesis Wave with X = 16.
-- Deletes: `ExileTopCardsToPlay` and `GrantGraveyardCastThisTurn` if fully
-  converted.
+- `ObjectSelector::LibraryTop(Box<EffectValue>)` reads the top N cards of the
+  resolving player's library, pins them in `Decision::SelectCards { looked, pool }`,
+  records private library knowledge, uses `SelectionOrigin::Library`, and
+  exposes them only to the deciding viewer until revealed or moved.
+- `ObjectSelector::Unselected` reads the enclosing `SelectCards`' `from` domain
+  minus `Selected` (live objects only), available in both `effects` and
+  `if_declined`.
+- `SelectCards.max_mana_value: Option<Box<EffectValue>>` bounds candidates at
+  resolution (Genesis Wave).
+- `Effect::GrantPlay` replaced and deleted `Effect::ExileTopCardsToPlay` and
+  `Effect::GrantGraveyardCastThisTurn` across all 7 existing callers (Flameshape,
+  Redcap Gutter-Dweller, Kellan, The Legend of Roku, Zuko, Zul Ashur, Sphinx of
+  Forgotten Lore) plus Strongbox Raider. `Effect::Move.face_down` carries
+  face-down exile for Flameshape.
+- Note on Auras under Genesis Wave: if a future change implements CR 303.4g
+  (an Aura with no legal object stays in its previous zone instead of entering
+  unattached), Genesis Wave will need its post-entry graveyard move to include
+  chosen cards that stayed in the library (tracked in `scratch/questions.md`).
+- Stress position (`Genesis Wave X = 16`) remains for the integrated gate.
 
 ### Slice 7 — Last-known values and shared sacrifice (complete)
 
@@ -205,48 +197,31 @@ Blasphemous Edict uses the same predicate-and-count instruction. The result
 keeps the departed battlefield object for properties and the graveyard
 successor for selection.
 
-### Slice 8 — Kicked entries, payment obligations and new vocabulary (8 cards)
+### Slice 8 — Kicked entries, payment obligations and new vocabulary (complete)
 
-Cards: Gnarlid Colony, Gatekeeper of Malakir, Ovika, Savage Ventmaw, Three
-Tree Mascot, Mystical Teachings, Wishclaw Talisman, Ballyrush Banneret.
+Gnarlid Colony, Gatekeeper of Malakir, Ovika, Savage Ventmaw, Three Tree
+Mascot, Mystical Teachings, Wishclaw Talisman and Ballyrush Banneret have
+directed play tests and ledger evidence (plus `token.phyrexian_goblin_1_1_r`).
 
-- **Kicked on entry.** `kicked` travels on `ZoneEntry` / `Permanent` like
-  `cast_x`, and onto pending triggers and their frames. The entry filter
-  (`proposed_event.rs:1275`) and intervening-if answer `Condition::Kicked`
-  from it (Gnarlid Colony, Gatekeeper of Malakir).
-- **Composite ward.** `PaymentProgress` owes a list of components (mana, then
-  life), so ward can be "{3}, Pay 3 life" (Ovika). Prefer a list over a
-  `ManaAndLife` variant.
-- **Mana expiry.** `ManaClass.combat: bool` becomes
-  `expiry: Step | EndOfCombat | EndOfTurn`, which `clear_mana_pools` respects
-  (Savage Ventmaw). This deletes the bool and its 45 references.
-- **Changeling** (CR 702.73) is every creature type in every zone: the layer-4
-  subtype view, printed-spell matching (`predicate.rs:256`, `:314`), the
-  `SpellSnapshot` used by spend restrictions, and distinct-type counts. Never
-  list all subtypes on the card.
-- **Keyword predicate.** `CardPredicate.keyword: Option<Keyword>` (Mystical
-  Teachings' "card with flash"). Replace the `flying` and `deathtouch` bools
-  with it; `not_flying` stays.
-- **Data only.** `CounterKind::Wish` (Wishclaw) and the `Kithkin` subtype
-  (Ballyrush).
-
-Checks:
-
-- Gnarlid Colony: kicked enters with 2 counters, unkicked with none.
-- Gatekeeper: unkicked does not trigger at all.
-- Ovika: ward is satisfied only by both {3} and 3 life, and a player at 2
-  life cannot pay it.
-- Ventmaw: its mana survives into the second main phase and empties at
-  cleanup. Ordinary mana still empties at the end of each step.
-- Mascot: it counts as an Elf for Adaptive Automaton, Courtyard and
-  Ballyrush. Its mana ability works once per turn.
-- Ballyrush: a Kithkin Soldier spell costs 1 less, not 2.
-- Wishclaw: after the opponent gains control, they can activate it on their
-  own turn only.
-- Stress: 8 Ventmaw-style end-of-turn pools mixed with combat and restricted
-  mana (class count in payment search), and Changelings under 8 chosen-type
-  anthems.
-- Deletes: `ManaClass.combat` and `CardPredicate.{flying, deathtouch}`.
+- **Kicked on entry.** `EntersWithPlusOneCounters` evaluates its condition
+  against the entering spell's `kicked` and `x` (`proposed_event.rs`);
+  Gatekeeper reuses the existing kicked intervening-if trigger propagation.
+- **Composite ward.** `PaymentProgress.owed` is a `Vec<CostComponent>` built
+  from `PaymentCost::All`; `can_pay_resolution_tail` prevents starting an
+  unpayable composite cost (2 life vs `{3}, Pay 3 life`), and
+  `advance_resolution_payment` pays trailing no-choice life immediately after
+  mana commits.
+- **Mana expiry.** `ManaClass.expiry: ManaExpiry { Step, EndOfCombat, EndOfTurn }`
+  replaced `ManaClass.combat: bool`, and `clear_mana_pools(step)` partitions
+  surviving vs expiring units via `ManaPool::split_expiring`.
+- **Changeling.** `Keyword::Changeling` gives all creature types in every zone
+  via `PrintedCharacteristics::has_subtype`, `layers.rs` (`CreatureTypes::All`),
+  `SpellSnapshot`, and `GreatestSharedCreatureType`.
+- **Keyword predicate.** `CardPredicate.keyword: Option<Keyword>` replaced
+  `flying` and `deathtouch` (retired tokens recorded in `token_renames.rs`).
+- **Data.** Added `CounterKind::Wish` and `token.phyrexian_goblin_1_1_r`.
+- Stress positions (8 Ventmaw-style pools + Changelings under 8 chosen-type
+  anthems) remain for the integrated gate.
 
 ### Slice 9 — Cards that compose today (23 cards)
 
@@ -331,4 +306,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-35 scoped rows remain pending, including Abyssal Harvester.
+24 scoped rows remain pending, including Abyssal Harvester.
