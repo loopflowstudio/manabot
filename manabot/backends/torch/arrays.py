@@ -15,6 +15,10 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
+__all__ = [
+    "on_device",
+]
+
 if TYPE_CHECKING:
     from manabot.policy.prepare import CatalogPrograms, Prepared
 
