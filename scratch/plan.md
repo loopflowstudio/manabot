@@ -69,94 +69,24 @@ modal skip, exact resolution payments (Ward {2} with Village + Sol Ring still
 offers the Village). 25 `source_taps` tests passed in debug; fourteen Forests
 under Great Divide Guide gave 29 payment actions for Firebrand Archer.
 
-Pass 2: interchangeable-source classification (`managym/src/flow/mana/interchangeable.rs`,
-plus reference checks in `decision.rs`, `payment.rs`, `state/src/payment.rs`),
-single-unit determined-source skip in `useful_payment_taps`, and
-determined-completion color-modal skip in `equivalent_mana_choices`. All 30
+Pass 2 (`93bc6923e5`): interchangeable-source classification, single-unit
+determined-source skip in `useful_payment_taps`, determined-completion
+color-modal skip in `equivalent_mana_choices`. All 30
 `source_taps` tests pass in debug, including Sol Ring and Anthem guards,
 identical basics/Guildgates, `Plains × 2 + Kyoshi Village` for `{1}{G}`,
 `Village + 3 Plains` for `{1}{W}`, and targeted/enchanted/animated Plains.
 
-## Remaining determinism rule
+## Determinism rule (built)
 
-### Pass 2 — interchangeable sources (steer `5d5904ae` (b))
-- Answer to the audit: no, identical sources alone should not force a stop.
-- Partition the useful simple sources into classes of **game-indistinguishable
-  permanents**. Two permanents `a` and `b` belong to the same class only if
-  ALL of the following hold:
-  1. Equal `ManaSource` payment profile (`fixed`, `abilities`, `waterbend`,
-     `keyword`).
-  2. Same `owner`, same `controller`, same `is_token`, same printed `card_def_id`,
-     and neither is face-down (`!object.is_face_down() && !permanent.manifested`).
-  3. Equal layered `Characteristics` (`self.characteristics(a) == self.characteristics(b)`).
-  4. Equal `Permanent` state: both untapped, equal `summoning_sick`,
-     `counters.is_empty()`, `damage == 0 && !dealt_damage_this_turn && !deathtouch_damage`,
-     not attacking/blocking/in combat, `attached_to.is_none()`,
-     `spent_abilities.is_empty() && activated_this_turn.is_empty()`,
-     `transforms == 0`, equal `entered_this_turn(turn)` (or equal `entry_turn`),
-     and equal `spell_entry`.
-  5. **No external live reference names either permanent or its object:**
-     no other permanent attached to it (`attached_to == Some(obj)`), no
-     `StackObject` (spell, activated ability, triggered ability) or
-     `PendingTrigger` targeting or binding it, no `ContinuousEffect`,
-     `DelayedTrigger`, `CastGrant`, or active `SuspendedResolution` /
-     `EffectFrame` referencing it.
-  Anything the predicate cannot vouch for is a singleton class — failure mode is
-  conservatively an extra prompt, never a skipped choice (e.g. a Plains targeted
-  by land destruction on the stack stays its own class so the player can tap it
-  in response).
-- A class `C` is **fully needed** when removing one member of `C`
-  (`model.after_tap(rep)`) makes the remaining obligations unpayable with the
-  current pool (`!after.payable(pool, obligations, SourcePolicy::All)`).
-- The payment is determined when:
-  1. Automatic payment can fund the cost, and there is no other legal
-     activation, help payment, extra float or spend-effect/color choice.
-  2. At most **one** class `U` is not fully needed.
-  3. For the new count-based shortcut, every useful output of **every**
-     participating source produces exactly one spendable unit and leaves no
-     surplus. This includes mandatory fixed sources. Keep the existing
-     exact-payment proof for multi-unit production. If the existing pool
-     could change what is spent or left floating, retain the choice.
-  4. With a fixed number of units to produce, subtract the number of
-     mandatory taps. The remainder is the number of members tapped from
-     the single optional class. Use the same proof for a residual color
-     choice before comparing its class counts.
-- Handles: `Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`,
-  `Plains + Plains + Kyoshi Village` for `{1}{G}` (via surplus-pruned
-  `automatic_choice_taps`), `3 identical Guildgates` for `{1}{R}`.
-- Preserves stops: `Kyoshi Village + 3 Plains` for `{1}{W}` (two non-forced
-  classes), `2 Mountains + 2 Forests` for `{2}{R}`, `Plains #1 (targeted on
-  stack) + Plains #2` for `{W}`, enchanted/animated Plains among basics.
-- When a stop IS real, every permanent keeps its own offer (`managym/README.md`:
-  "eight Forests are eight actions"); offers are never merged.
-
-### Color modal (`Decision::ManaChoice`) auto-skip
-When a manual seat with `skip_trivial == true` reaches `Decision::ManaChoice`
-with `> 1` legal modes (after `mana_choice_completes_payment` filtering):
-- Only eligible during an announced mana payment (`resume.is_none()`,
-  `self.paying()` is `Some((payer, payment, CostComponent::Mana { .. }))` with
-  `payer == player`, `production` is `ManaProduction::Output` with no
-  color-dependent triggered mana bonus, `!operation_reads_spent_colors`, and
-  all legal modes share the same `SpendEffect`). Never at priority!
-- For each legal mode `m`, simulate `commit_produced_mana`'s effect on
-  `(cost, pool)`. Every legal mode must be completely consumed (leaving the
-  exact same remaining `pool`, so zero chosen surplus floats).
-- Skip the modal (taking `automatic_payment_action`'s ranked pick and
-  incrementing `skip_trivial_count`) when **either**:
-  1. **Immediate state equivalence (Pass 1):** every legal mode leaves the
-     **exact same** remaining `ManaCost` and `pool` (e.g. tapping `Kyoshi
-     Village` toward `{2}` with `Plains + Island` left — both `{G}` and `{W}`
-     leave `{1}` owed, empty pool, identical untapped lands).
-  2. **Determined completion (Pass 2):** every legal mode leaves a remaining
-     `(cost, pool)` that satisfies the payment-determinism rule above with the
-     same tapped count **in each indistinguishable class**, the same floating
-     pool and equivalent spend effects (e.g. tapping `Kyoshi Village` toward `{1}{W}` with 3
-     identical `Plains` left — `{G}` leaves `{W}` and `{W}` leaves `{1}`, and
-     both auto-finish with 1 Plains tapped and 2 Plains untapped).
-- Keeps the modal whenever colors diverge in remaining options (e.g. `Kyoshi
-  Village` tapped toward `{1}{G}` with `Plains + Forest` left: `{G}` leaves
-  `{1}` choosing Plains vs Forest, `{W}` leaves `{G}` forcing Forest), whenever
-  surplus floats, on converge spells, or at priority.
+Answer to steer `5d5904ae` (b): identical sources alone do not force a stop.
+Implemented in `managym/src/flow/mana/interchangeable.rs` (class predicate:
+same payment profile, owner, controller, token status, definition, layered
+characteristics and permanent state, and no attachment/stack/trigger/effect/
+grant reference; anything unvouched is a singleton) and
+`equivalent_mana_choices` (color modal skips when every color reaches a
+determined completion with equal per-class tap counts). The count shortcut
+applies only when every participating source makes one unit per useful tap
+(Sol Ring guard). When a stop is real, every permanent keeps its own offer.
 
 ## Consumer contracts
 
@@ -209,7 +139,7 @@ Drafted in place before implementation (recheck wording against final implementa
 ## Passes
 
 1. Done — `72a12fa277` (see Built).
-2. Done — interchangeable sources and determined-completion modal skip (see Built).
+2. Done — `93bc6923e5` (see Built).
 3. **Next — Records & Academy tests.**
    - `tests/academy/test_dual_land_payment.py` (exact-cost two-drop with Village + Plains skips; Village + 3 Plains shows `"Tap Kyoshi Village for {G}/{W}"`, three `"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`).
    - Recheck `managym/README.md` ("Manual mana sources") and `docs/academy.md`.
