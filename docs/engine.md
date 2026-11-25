@@ -756,8 +756,19 @@ Discard the arrays after a failure.
 aliases that warn and are removed in 0.3.0. Replace the first with
 `encode_observation(space, obs)` and the second with
 `managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
-`space.encoder` (now the space itself) and `ObservationEncoder` (now
-`ObservationSpace`) warn and are removed in 0.3.0 too.
+`space.encoder` (now the space itself), `ObservationEncoder` (now
+`ObservationSpace`), and the legacy encoder shortcut attributes on
+`ObservationSpace` (`max_actions`, `cards_per_player`, `perms_per_player`,
+`max_events`, `max_stack_objects`, `max_focus_objects`, `*_dim` widths,
+`library_shape`, and the `num_*` enum counts) warn and are removed in 0.3.0
+too. Read capacities from `space.config`, table shapes and widths from
+`space.shapes`, and enum counts from `managym.enums` instead:
+
+```python
+space = ObservationSpace()
+max_actions = space.config.max_actions    # replaces space.encoder.max_actions
+action_dim = space.shapes["actions"][-1]  # replaces space.encoder.action_dim
+```
 
 ### Reading arrays by name
 
