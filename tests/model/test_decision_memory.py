@@ -1,6 +1,6 @@
 """Whole-prefix memories reach both heads and survive ordinary policy tooling."""
 
-from dataclasses import asdict, replace
+from dataclasses import replace
 import json
 from pathlib import Path
 from typing import Literal
@@ -16,13 +16,14 @@ from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.decision_memory import blank_memory
+from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import gather_memory
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.policy.admission import admit
 from manabot.policy.prepare import RecordNamespace, record_key
+from manabot.policy.spans import ObservationSelection
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     close_collector,
@@ -37,14 +38,14 @@ from managym.decision_memory import (
     DecisionReference,
     PublicChoice,
 )
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.memory_rows import MemoryRows, memory_rows, retained
 
 
 def encode_with_records(
     space: ObservationSpace,
     obs: managym.Observation,
     records: list[DecisionRecord],
-) -> dict[str, np.ndarray]:
+) -> managym.ObservationBatch:
     """`obs` restored with `records` as its decision memory, encoded natively.
 
     A decoded log starts a fresh lineage, so the whole log is written.
@@ -53,11 +54,26 @@ def encode_with_records(
     payload["decision_memory"] = TypeAdapter(list[DecisionRecord]).dump_python(
         records, mode="json"
     )
-    encoded = dict(
-        observation_arrays(space, managym.Observation.from_json(json.dumps(payload)))
+    batch = encode_policy_batch(
+        space, [managym.Observation.from_json(json.dumps(payload))]
     )
-    assert int(encoded["decision_records"].any(axis=1).sum()) == len(records)
-    return encoded
+    counts = rows_of(space, batch).spans.tables["decision_records"].counts
+    assert int(counts.sum()) == len(records)
+    return batch
+
+
+type MemoryInput = managym.ObservationBatch | ObservationSelection
+
+
+def blank(batch: managym.ObservationBatch) -> managym.ObservationBatch:
+    return batch.blank_decision_memory()
+
+
+def rows_of(
+    space: ObservationSpace, *batches: managym.ObservationBatch
+) -> ObservationSelection:
+    """Concatenate single-row batches in order."""
+    return ObservationSelection(space, tuple((batch, 0) for batch in batches))
 
 
 def memory_root() -> tuple[ObservationSpace, managym.Observation]:
@@ -74,7 +90,7 @@ def memory_root() -> tuple[ObservationSpace, managym.Observation]:
     return space, env.observation_for_player(env.current_agent_index())
 
 
-def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+def memory_input() -> tuple[ObservationSpace, managym.ObservationBatch]:
     space, obs = memory_root()
     record = DecisionRecord(
         actor=2,
@@ -103,8 +119,7 @@ def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
             references=[],
         ),
     )
-    encoded = encode_with_records(space, obs, [record])
-    return space, {key: value[None] for key, value in encoded.items()}
+    return space, encode_with_records(space, obs, [record])
 
 
 def policy(
@@ -147,9 +162,12 @@ def policy(
 
 
 def forward(
-    model: ActorCritic, obs: dict[str, np.ndarray]
+    model: ActorCritic, obs: MemoryInput, *, objectless: bool = False
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    return model.forward_distribution(on_device(model.prepare(obs), "cpu"))
+    prepared = model.prepare(obs)
+    if objectless:
+        prepared = replace(prepared, focus_mask=np.zeros_like(prepared.focus_mask))
+    return model.forward_distribution(on_device(prepared, "cpu"))
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -161,9 +179,8 @@ def test_decision_memory_changes_probabilities_value_and_both_encoder_gradients(
     model = policy(space, encoder, summaries)
     # Make every legal action objectless. Their distinct native action features
     # remain, proving the actor can read memory through the selected board join.
-    obs["action_focus"] = np.full_like(obs["action_focus"], -1)
-    logits, value = forward(model, obs)
-    blank_logits, blank_value = forward(model, blank_memory(obs))
+    logits, value = forward(model, obs, objectless=True)
+    blank_logits, blank_value = forward(model, blank(obs), objectless=True)
     assert not torch.allclose(
         logits.softmax(-1), blank_logits.softmax(-1), atol=1e-8, rtol=0
     )
@@ -198,8 +215,7 @@ def test_decision_memory_live_compact_buckets_and_empty_rows_agree(
     encoder: Literal["transformer", "gru"], summaries: int, aggregation: str
 ) -> None:
     space, one = memory_input()
-    blank = blank_memory(one)
-    mixed = {key: np.concatenate((value, blank[key]), 0) for key, value in one.items()}
+    mixed = rows_of(space, one, blank(one))
     reference = policy(space, encoder, summaries, aggregation=aggregation).eval()
     expected = forward(reference, mixed)
     for live, bucketed in ((False, True), (True, False), (True, True)):
@@ -251,33 +267,16 @@ def test_decision_memory_checkpoint_round_trip(
         torch.testing.assert_close(a, b, atol=1e-5, rtol=1e-5)
 
 
-def test_decision_memory_rejects_missing_companions_and_unowned_details() -> None:
-    space, obs = memory_input()
-    model = policy(space, "gru", 1)
-    with pytest.raises(ValueError, match="companion"):
-        model.prepare(
-            {
-                key: value
-                for key, value in obs.items()
-                if key != "decision_reference_details"
-            }
-        )
-    obs["decision_records"][0, 0, 14] = 1
-    with pytest.raises(ValueError, match="partition"):
-        model.prepare(obs)
-
-
 def test_decision_memory_rejects_noncanonical_words_with_the_same_catalog_join() -> (
     None
 ):
     space, obs = memory_input()
-    model = policy(space, "gru", 1)
-    header = obs["decision_records"][0, 0]
+    rows = memory_rows(space, obs)
     # Catalog keys keep the low u32, so adding 2**32 aliases the admitted
     # name. Each float is still exact, but the high word is no longer u16.
-    header[12] += 65536
+    rows["decision_records"][0, 12] += 65536
     with pytest.raises(ValueError, match="integer words"):
-        model.prepare(obs)
+        retained(space, [(obs, 0)], [rows])
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -368,14 +367,12 @@ def test_control_retains_logs_without_using_them(tmp_path: Path) -> None:
     model = ActorCritic(space, config).eval()
     assert model.decision_memory is None
     assert model.prepare(obs).memory is None
-    blank = blank_memory(obs)
     for actual, expected in zip(
-        forward(model, obs), forward(model, blank), strict=True
+        forward(model, obs), forward(model, blank(obs)), strict=True
     ):
         torch.testing.assert_close(actual, expected, atol=0, rtol=0)
     # A log-enabled trunk reserves the exact vocabulary read by its branches.
     # The true history-disabled incumbent remains a separate throughput control.
-    ordinary = {k: v for k, v in obs.items() if not k.startswith("decision_")}
     path = tmp_path / "control.safetensors"
     save_checkpoint(model, space, path, player_configs=Match().to_rust())
     restored, restored_space = load_checkpoint(str(path))
@@ -384,14 +381,6 @@ def test_control_retains_logs_without_using_them(tmp_path: Path) -> None:
         forward(restored.eval(), obs), forward(model, obs), strict=True
     ):
         torch.testing.assert_close(actual, expected, atol=0, rtol=0)
-    with pytest.raises(ValueError, match="contract"):
-        model.prepare(ordinary)
-    malformed = {
-        **obs,
-        "decision_reference_details": obs["decision_reference_details"][:, :1],
-    }
-    with pytest.raises(ValueError):
-        model.prepare(malformed)
 
 
 @pytest.mark.parametrize(
@@ -408,15 +397,16 @@ def test_control_retains_logs_without_using_them(tmp_path: Path) -> None:
 def test_memory_admission_rejects_invalid_live_and_padding_values(
     field: str, value: float, padding: bool
 ) -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _shared_reference_input()
-    obs[field][0, -1 if padding else 0, 0] = value
+    space, batch, rows = _shared_reference_input()
+    rows[field][-1 if padding else 0, 0] = value
     with pytest.raises(ValueError):
-        admit_memory(obs)
+        retained(space, [(batch, 0)], [rows])
 
 
-def _shared_reference_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+def _shared_reference_input() -> tuple[
+    ObservationSpace, managym.ObservationBatch, MemoryRows
+]:
+    """One record with two references, and its editable memory tables."""
     space, root = memory_root()
     reference = DecisionReference(
         role=2,
@@ -460,18 +450,15 @@ def _shared_reference_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
             references=[],
         ),
     )
-    encoded = encode_with_records(space, root, [record])
-    return space, {key: value[None] for key, value in encoded.items()}
+    batch = encode_with_records(space, root, [record])
+    return space, batch, memory_rows(space, batch)
 
 
 def test_decision_memory_snapshot_routes_preserve_groups_repetitions_and_empty_viewer() -> (
     None
 ):
-    space, one = _shared_reference_input()
-    blank = blank_memory(one)
-    raw = {
-        key: np.concatenate((value, blank[key], value), 0) for key, value in one.items()
-    }
+    space, one, _ = _shared_reference_input()
+    raw = rows_of(space, one, blank(one), one)
     model = policy(space, "gru", 1)
     rows = model.prepare(raw).memory
     assert rows is not None
@@ -489,24 +476,25 @@ def test_decision_memory_snapshot_routes_preserve_groups_repetitions_and_empty_v
 def test_decision_memory_distinguishes_previously_colliding_bindings(
     change: str,
 ) -> None:
-    space, original = _shared_reference_input()
+    space, batch, original = _shared_reference_input()
     changed = {key: value.copy() for key, value in original.items()}
     if change == "numeric_binding":
         details = changed["decision_reference_details"]
-        details[0, :2, 2:4] = details[0, 1::-1, 2:4]
+        details[:2, 2:4] = details[1::-1, 2:4]
     elif change == "reference_binding":
         references = changed["decision_references"]
         # Swap bound power and toughness words, preserving their numeric sum.
-        references[0, 0, 2:6] = references[0, 0, [4, 5, 2, 3]]
+        references[0, 2:6] = references[0, [4, 5, 2, 3]]
     elif change == "group":
-        changed["decision_records"][0, 0, 15:18] = [0, 3, 0]
-        changed["decision_members"][0, :3, 1] = [0, 1, 2]
+        changed["decision_records"][0, 15:18] = [0, 3, 0]
+        changed["decision_members"][:3, 1] = [0, 1, 2]
     else:
-        changed["decision_records"][0, 0, 16] = 1
-        changed["decision_members"][0, 2] = 0
+        changed["decision_records"][0, 16] = 1
+        changed["decision_members"][2] = 0
     model = policy(space, "gru", 1)
 
-    def summary(raw: dict[str, np.ndarray]) -> torch.Tensor:
+    def summary(rows: MemoryRows) -> torch.Tensor:
+        raw = retained(space, [(batch, 0)], [rows])
         prepared = on_device(model.prepare(raw), "cpu")
         assert prepared.memory is not None and model.decision_memory is not None
         state = model._gather_object_embeddings(prepared)
@@ -525,13 +513,13 @@ def test_definition_only_and_full_snapshot_use_identical_semantic_features() -> 
     from manabot.env.decision_memory import integer_words
     from managym.decision_memory import definition_programs
 
-    space, full = _shared_reference_input()
+    space, batch, full = _shared_reference_input()
     definition = managym.catalog_tokens()["registry_names"].index("Lightning Bolt")
     program = definition_programs()[definition].tokens
     references = full["decision_references"]
-    references[0, 0, 1] = definition + 1
-    references[0, 0, 2:6] = 0
-    mana = full["decision_reference_details"][0, 2:8].copy()
+    references[0, 1] = definition + 1
+    references[0, 2:6] = 0
+    mana = full["decision_reference_details"][2:8].copy()
     details = full["decision_reference_details"]
     details.fill(0)
     encoded = np.array(
@@ -541,21 +529,25 @@ def test_definition_only_and_full_snapshot_use_identical_semantic_features() -> 
         ],
         np.float32,
     )
-    details[0, : len(encoded)] = encoded
-    details[0, len(encoded) : len(encoded) + 6] = mana
-    references[0, 0, 11] = len(encoded) + 6
+    details[: len(encoded)] = encoded
+    details[len(encoded) : len(encoded) + 6] = mana
+    references[0, 11] = len(encoded) + 6
     short = {key: value.copy() for key, value in full.items()}
-    short["decision_references"][0, 0, 11] = 6
-    short["decision_references"][0, 0, 13] = 1
+    short["decision_references"][0, 11] = 6
+    short["decision_references"][0, 13] = 1
     short["decision_reference_details"].fill(0)
-    short["decision_reference_details"][0, :6] = mana
+    short["decision_reference_details"][:6] = mana
     model = policy(space, "gru", 1)
-    full_rows = array_fields(model.prepare(full), np.ndarray)
-    short_rows = array_fields(model.prepare(short), np.ndarray)
+    full_input = retained(space, [(batch, 0)], [full])
+    short_input = retained(space, [(batch, 0)], [short])
+    full_rows = array_fields(model.prepare(full_input), np.ndarray)
+    short_rows = array_fields(model.prepare(short_input), np.ndarray)
     assert full_rows.keys() == short_rows.keys()
     for key in full_rows:
         np.testing.assert_array_equal(full_rows[key], short_rows[key], err_msg=key)
-    for a, b in zip(forward(model, full), forward(model, short), strict=True):
+    for a, b in zip(
+        forward(model, full_input), forward(model, short_input), strict=True
+    ):
         torch.testing.assert_close(a, b, atol=0, rtol=0)
 
 
@@ -571,32 +563,28 @@ def test_definition_only_and_full_snapshot_use_identical_semantic_features() -> 
 def test_shared_snapshot_admission_rejects_orphan_slices_and_invalid_joins(
     field: str,
 ) -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _shared_reference_input()
+    space, batch, rows = _shared_reference_input()
     if field == "decision_records":
-        obs[field][0, 0, 14] = 1
+        rows[field][0, 14] = 1
     elif field == "decision_reference_details":
-        obs[field][0, 9, 5] = 1
+        rows[field][9, 5] = 1
     elif field == "decision_references":
-        obs[field][0, 0, 10] = 1
+        rows[field][0, 10] = 1
     else:
-        obs[field][0, 0, 0] = 2
+        rows[field][0, 0] = 2
     with pytest.raises(ValueError):
-        admit_memory(obs)
+        retained(space, [(batch, 0)], [rows])
 
 
 def test_snapshot_unknown_after_public_reference_keeps_its_owned_empty_program() -> (
     None
 ):
-    from manabot.policy.decision_memory import admit_memory
-
-    space, obs = _shared_reference_input()
-    obs["decision_references"][0, 1, 10] = 8
-    obs["decision_references"][0, 1, 12] = 1
-    obs["decision_records"][0, 0, 17] = 1
-    obs["decision_members"][0, 3] = [2, 0]
-    admit_memory(obs)
+    space, batch, edited = _shared_reference_input()
+    edited["decision_references"][1, 10] = 8
+    edited["decision_references"][1, 12] = 1
+    edited["decision_records"][0, 17] = 1
+    edited["decision_members"][3] = [2, 0]
+    obs = retained(space, [(batch, 0)], [edited])
     rows = policy(space, "gru", 1).prepare(obs).memory
     assert rows is not None and len(rows.reference_numbers) == 2
     assert not rows.reference_numbers[1].any()
@@ -604,44 +592,45 @@ def test_snapshot_unknown_after_public_reference_keeps_its_owned_empty_program()
 
 
 def test_snapshot_boolean_tokens_reject_non_boolean_values() -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _shared_reference_input()
-    obs["decision_reference_details"][0, 0, 1] = 5
-    obs["decision_reference_details"][0, 0, 3] = 2
+    space, batch, rows = _shared_reference_input()
+    rows["decision_reference_details"][0, 1] = 5
+    rows["decision_reference_details"][0, 3] = 2
     with pytest.raises(ValueError, match="boolean"):
-        admit_memory(obs)
+        retained(space, [(batch, 0)], [rows])
 
 
-def _two_reference_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
-    space, obs = _shared_reference_input()
-    refs, details = obs["decision_references"], obs["decision_reference_details"]
-    refs[0, 1] = refs[0, 0]
-    refs[0, 1, [3, 5, 10]] = [3, 4, 8]
-    details[0, 8:16] = details[0, :8]
-    details[0, 8:10, 3] = [5, 11]
-    obs["decision_records"][0, 0, 15:18] = [2, 1, 1]
-    obs["decision_members"][0, :4] = [[1, 0], [2, 1], [1, 0], [2, 0]]
-    return space, obs
+def _two_reference_input() -> tuple[
+    ObservationSpace, managym.ObservationBatch, MemoryRows
+]:
+    space, batch, rows = _shared_reference_input()
+    refs, details = rows["decision_references"], rows["decision_reference_details"]
+    refs[1] = refs[0]
+    refs[1, [3, 5, 10]] = [3, 4, 8]
+    details[8:16] = details[:8]
+    details[8:10, 3] = [5, 11]
+    rows["decision_records"][0, 15:18] = [2, 1, 1]
+    rows["decision_members"][:4] = [[1, 0], [2, 1], [1, 0], [2, 0]]
+    return space, batch, rows
 
 
 @pytest.mark.parametrize("change", ["between_references", "response_choice_swap"])
 def test_bound_references_and_groups_distinguish_equal_additive_totals(
     change: str,
 ) -> None:
-    space, before = _two_reference_input()
+    space, batch, before = _two_reference_input()
     after = {key: value.copy() for key, value in before.items()}
     if change == "between_references":
         refs = after["decision_references"]
-        refs[0, :2, 2:4] = refs[0, 1::-1, 2:4]
+        refs[:2, 2:4] = refs[1::-1, 2:4]
     else:
-        after["decision_members"][0, 2:4, 0] = [2, 1]
+        after["decision_members"][2:4, 0] = [2, 1]
     # Both references still occur twice, all group sizes and group-local
     # positions stay fixed, and each field's numeric total is unchanged.
     # The former independent linear sums could not distinguish these inputs.
     model = policy(space, "gru", 1)
 
-    def summary(raw: dict[str, np.ndarray]) -> torch.Tensor:
+    def summary(rows: MemoryRows) -> torch.Tensor:
+        raw = retained(space, [(batch, 0)], [rows])
         prepared = on_device(model.prepare(raw), "cpu")
         assert prepared.memory is not None and model.decision_memory is not None
         state = model._gather_object_embeddings(prepared)
@@ -658,28 +647,29 @@ def test_bound_references_and_groups_distinguish_equal_additive_totals(
 def test_definition_shortcut_rejects_ineligible_registered_rows_before_lookup() -> None:
     from managym.decision_memory import definition_programs
 
-    space, obs = _shared_reference_input()
+    space, batch, rows = _shared_reference_input()
     definition = next(
         index for index, row in enumerate(definition_programs()) if not row.eligible
     )
-    mana = obs["decision_reference_details"][0, 2:8].copy()
-    obs["decision_reference_details"].fill(0)
-    obs["decision_reference_details"][0, :6] = mana
-    obs["decision_references"][0, 0, [1, 11, 13]] = [definition + 1, 6, 1]
+    mana = rows["decision_reference_details"][2:8].copy()
+    rows["decision_reference_details"].fill(0)
+    rows["decision_reference_details"][:6] = mana
+    rows["decision_references"][0, [1, 11, 13]] = [definition + 1, 6, 1]
     # Even a no-head control must reject this malformed representation.
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     with pytest.raises(ValueError, match="ineligible.*shortcut"):
-        control.prepare(obs)
+        control.prepare(retained(space, [(batch, 0)], [rows]))
 
 
 def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> None:
     from managym.decision_memory import definition_programs
 
-    space, obs = _shared_reference_input()
+    space, batch, rows = _shared_reference_input()
     definition = next(
         index for index, row in enumerate(definition_programs()) if not row.eligible
     )
-    obs["decision_references"][0, 0, 1] = definition + 1
+    rows["decision_references"][0, 1] = definition + 1
+    obs = retained(space, [(batch, 0)], [rows])
     config = ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16)
     torch.manual_seed(223)
     control = ActorCritic(space, config).eval()
@@ -687,7 +677,7 @@ def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> N
         on_device(control.prepare(obs, inference=True), "cpu")
     )
     expected = control.forward_distribution(
-        on_device(control.prepare(blank_memory(obs), inference=True), "cpu")
+        on_device(control.prepare(blank(batch), inference=True), "cpu")
     )
     for a, b in zip(actual, expected, strict=True):
         torch.testing.assert_close(a, b, atol=0, rtol=0)
@@ -732,79 +722,56 @@ def test_no_head_selected_programs_ignore_admitted_historical_definitions() -> N
 def test_memory_admission_rejects_malformed_owned_tables(
     field: str, row: int, column: int, value: float
 ) -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _two_reference_input()
-    obs[field][0, row, column] = value
+    space, batch, rows = _two_reference_input()
+    retained(space, [(batch, 0)], [rows])
+    rows[field][row, column] = value
     with pytest.raises(ValueError):
-        admit_memory(obs)
+        retained(space, [(batch, 0)], [rows])
 
 
 @pytest.mark.parametrize("change", ["first_occurrence", "unreachable", "interleaved"])
 def test_memory_admission_requires_reachable_snapshots_in_first_occurrence_order(
     change: str,
 ) -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _two_reference_input()
+    space, batch, rows = _two_reference_input()
     if change == "first_occurrence":
-        obs["decision_members"][0, :4, 0] = [2, 1, 2, 1]
+        rows["decision_members"][:4, 0] = [2, 1, 2, 1]
     elif change == "unreachable":
-        obs["decision_members"][0, :4, 0] = 1
+        rows["decision_members"][:4, 0] = 1
     else:
-        obs["decision_reference_details"][0, [1, 2]] = obs[
-            "decision_reference_details"
-        ][0, [2, 1]]
+        details = rows["decision_reference_details"]
+        details[[1, 2]] = details[[2, 1]]
     with pytest.raises(ValueError):
-        admit_memory(obs)
+        retained(space, [(batch, 0)], [rows])
 
 
 def test_memory_admission_preserves_own_records_coalescing_and_empty_groups() -> None:
-    from manabot.policy.decision_memory import admit_memory
-
-    _, obs = _two_reference_input()
-    headers = obs["decision_records"]
-    headers[0, 0, [3, 9]] = [3, 2]  # three coalesced opponent decisions
-    headers[0, 1] = headers[0, 0]
-    headers[0, 1, [1, 3, 7, 9, 14, 18]] = [1, 1, 3, 3, 4, 1]
-    headers[0, 1, 15:18] = 0  # own record with no members
+    space, batch, rows = _two_reference_input()
+    headers = rows["decision_records"]
+    headers[0, [3, 9]] = [3, 2]  # three coalesced opponent decisions
+    headers[1] = headers[0]
+    headers[1, [1, 3, 7, 9, 14, 18]] = [1, 1, 3, 3, 4, 1]
+    headers[1, 15:18] = 0  # own record with no members
     # Available zero/false selectors differ from unavailable selectors.
-    headers[0, 1, [63, 66, 69, 72]] = 1
-    blank = blank_memory(obs)
-    mixed = {
-        key: np.concatenate((blank[key], value, value), 0) for key, value in obs.items()
-    }
-    admit_memory(mixed)
-    # Compact capacities and noncontiguous views have the same contract.
-    compact = dict(mixed)
-    for key, count in zip(
-        (
-            "decision_records",
-            "decision_reference_details",
-            "decision_references",
-            "decision_members",
-        ),
-        (2, 16, 2, 4),
-        strict=True,
-    ):
-        compact[key] = mixed[key][:, :count]
-    admit_memory(compact)
-    admit_memory({key: value[::-1] for key, value in compact.items()})
+    headers[1, [63, 66, 69, 72]] = 1
+    empty = memory_rows(space, blank(batch))
+    retained(space, [(batch, 0)] * 3, [empty, rows, rows])
     # Spans must remain contiguous across the actor boundary too.
-    mixed["decision_records"][1, 1, 7] = 4
+    headers[1, 7] = 4
     with pytest.raises(ValueError, match="span"):
-        admit_memory(mixed)
+        retained(space, [(batch, 0)], [rows])
 
 
 @pytest.mark.parametrize("include_own", [False, True])
 def test_no_head_admission_respects_own_seat_configuration(include_own: bool) -> None:
     from manabot.env.observation import ObservationSpace
 
-    space, obs = _shared_reference_input()
+    space, batch, rows = _shared_reference_input()
     space = ObservationSpace(
         space.config.model_copy(update={"decision_memory_include_own": include_own})
     )
-    obs["decision_records"][0, 0, 18] = 1
+    rows["decision_records"][0, 18] = 1
+    obs = retained(space, [(batch, 0)], [rows])
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     if include_own:
         assert control.prepare(obs).memory is None
@@ -823,8 +790,10 @@ def test_no_head_admission_respects_own_seat_configuration(include_own: bool) ->
     ],
 )
 def test_no_head_admission_rejects_changed_companion_capacity(field: str) -> None:
-    space, obs = _shared_reference_input()
-    obs[field] = np.pad(obs[field], ((0, 0), (0, 1), (0, 0)))
+    space, batch, rows = _shared_reference_input()
+    capacities = [space.shapes[key][0] for key in MEMORY_FIELDS]
+    capacities[MEMORY_FIELDS.index(field)] += 1
+    obs = retained(space, [(batch, 0)], [rows], capacities=tuple(capacities))
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     with pytest.raises(ValueError, match="capacity mismatch"):
         control.prepare(obs)
@@ -842,8 +811,6 @@ def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
         env.step(0)
     games = [early, env]
     batch = managym.encode_observation_batch(games, space.layout)
-    dense = space.allocate(len(games))
-    managym.encode_observations_into(games, space.layout, dense, len(games))
     dtype = np.dtype(
         [
             (name, dtype)
@@ -860,7 +827,20 @@ def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
     model = policy(space, "gru", 1)
     packed = model.prepare(batch)
     assert packed.memory is not None
-    np.testing.assert_equal(asdict(packed), asdict(model.prepare(dense)))
+    # The same rows restored from an archive (folded as retained prefixes)
+    # give the policy the same outputs.
+    selection = ObservationSelection(space, ((batch, 0), (batch, 1)))
+    archived = retained(
+        space,
+        selection.coordinates,
+        [
+            {key: selection.project(key)[row] for key in MEMORY_FIELDS}
+            for row in range(2)
+        ],
+    )
+    model.eval()
+    for a, b in zip(forward(model, batch), forward(model, archived), strict=True):
+        torch.testing.assert_close(a, b, atol=1e-5, rtol=1e-5)
     spec = model._admission_spec()
     key = record_key(RecordNamespace.TOKEN, records["kind"][:1])[0]
     keys = spec.tables.record_name_keys

@@ -329,27 +329,32 @@ Done:
   evaluation is reproducible at `14a168309f`. Historical v4 eligibility
   captures: questions 17.
 
-Remaining (dense names still found by grep after Pass 3: 15 `manabot` files,
-led by `training/rollout/collection.py`, `env/memory_store.py`,
-`policy/buckets.py`; plus `managym/__init__.pyi`, `recording.py`, `replay.py`
-and ~30 test files):
+- **3b. Dense Python admission, preparation and rollout** (`5f66e3e99c`,
+  `d752654715`, `1daaf1ce9b`): `admit_native` is `admit`; `prepare`,
+  admission and bucketing read `ObservationSpans` only; `ObservationRows`,
+  `PrefixObservation`, `CompactObservation`, `select_rows`, dense
+  `MemoryStore` capture, `PackedActions.fields` and the `ObservationSpace`
+  dense helpers (`allocate`, `encode`, `encoder`, `contains`,
+  `encode_observation`, `allocate_vector_buffers`, `ObservationBuffers`) are
+  deleted. Retained-memory chunk featurization keeps its padded row-dict
+  featurizer (`_prepare_memory_rows`); that is retained-prefix storage, not
+  transport. Tests read encodings through `tests/fixtures/observation_rows.py`
+  (`ObservationSelection.project`), which matched the dense encoder exactly
+  over 120 live decisions with decision memory. Taught: no `manabot` caller
+  reaches the native dense entry points. Only `SnapshotVector` and
+  `BufferedStreams` still implement `write_observations_for_players`, because
+  the runtime-checkable vector protocol names it and `RecordedVectorEnv`
+  supplies `observations_for_players` only through `__getattr__`; Pass 4
+  changes that protocol together with `recording.py`.
 
-**3b. Dense Python admission, preparation and rollout retirement.** Delete
-dense admission and preparation together (`policy/admission.py`,
-`policy/prepare.py`, `policy/buckets.py` `BucketedObservation`), rename
-`admit_native` to `admit` across backends and callers, and move dense preparer
-tests that exercise surviving behavior to packed batches. Delete the dense
-collector fallback (`training/rollout/collection.py`, `admission.py`,
-`producers.py`, `numerics.py`) with its `ObservationRows`, `PrefixObservation`,
-`CompactObservation`, `select_rows` and dense `MemoryStore` slicing. Keep v11
-archive format-1 admission and saved checkpoint readings. Teaches whether any
-Python caller still needs the native dense entry points before Pass 4 removes
-them.
+Remaining:
 
 **4. Native dense transport deleted + docs/guards.** The Rust list in "What
 goes"; slot admission via scratch `PackedRows`; Rust tests read rows through
 one `inspect.rs` reader over `encode_rows`; `recording.py`, `replay.py`, stubs;
-remaining dense tests; decide questions 11. Debug
+remaining dense tests (native-transport tests kept running on
+`space.layout.allocate` in 3b); the `write_observations_for_players` protocol
+methods in `SnapshotVector`/`BufferedStreams`; decide questions 11. Debug
 `cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
 and clippy. Then `AGENTS.md`, `.lf/qa/*.md`, 0.3.0 release-notes entry, and a
 boundary test asserting removed names are absent.

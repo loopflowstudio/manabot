@@ -16,10 +16,10 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.belief.encoding import BeliefRows
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.policy import admission
-from manabot.policy.buckets import BucketedObservation
+from manabot.policy.spans import ObservationSelection, ObservationSpans
 from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import (
     RolloutBatch,
@@ -28,9 +28,9 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-from tests.fixtures.rollout_arrays import projected_fields
+import managym
 from tests.model.policy_fixture import recipe
-from tests.model.prepared_routes import device_input, host_inputs
+from tests.model.prepared_routes import device_input
 
 
 def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
@@ -55,23 +55,17 @@ def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
     return agent, collect(collector, agent, 8)
 
 
-def _observation(batch: RolloutBatch) -> dict[str, torch.Tensor]:
-    rows = batch.observations(np.arange(batch.actions.size))
-    return {
-        key: torch.from_numpy(value).float()
-        if key == "action_focus"
-        else torch.from_numpy(value)
-        for key, value in projected_fields(rows.observation).items()
-    }
+def _observation(batch: RolloutBatch) -> ObservationSelection:
+    return batch.observations(np.arange(batch.actions.size)).observation
 
 
 def test_forward_rejects_unadmitted_and_foreign_observations() -> None:
     agent, batch = _policy()
     obs = _observation(batch)
     with pytest.raises(TypeError, match="Prepared"):
-        agent(obs)
+        agent(obs)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="Prepared"):
-        agent.get_action_and_value(obs)
+        agent.get_action_and_value(obs)  # type: ignore[arg-type]
     admitted = device_input(agent, obs)
     # A copy with the same configuration (a restored or bootstrap model) reads it.
     agent(admitted)
@@ -122,7 +116,7 @@ def test_admitted_forward_performs_no_validation_reads(grad: bool) -> None:
             agent.forward_distribution(admitted)
     else:
         with PolicyInference(agent) as scope, torch.no_grad():
-            prepared = scope.prepare(host_inputs(obs))
+            prepared = scope.prepare(obs)
             agent(prepared)  # The first forward encodes the cached catalog.
             with _validation_reads() as reads:
                 agent(prepared)
@@ -134,38 +128,24 @@ def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
     admit = admission.admit
-    admit = admission.admit
 
     def admitted_rows(epochs: int) -> list[int]:
-        monkeypatch.setattr(admission, "admit", admit)
         monkeypatch.setattr(admission, "admit", admit)
         agent, batch = _policy(history=False)
         rows: list[int] = []
 
-        def counting_checks(
-            obs: ObservationBuffers,
-            spec: admission.Spec,
-            legal: np.ndarray,
-            *,
-            bucketed: bool,
-            belief: BeliefRows[np.ndarray] | None = None,
-        ) -> BucketedObservation | None:
-            rows.append(len(legal))
-            return admit(obs, spec, legal, bucketed=bucketed, belief=belief)
-
-        def counting_native(
-            obs: object,
+        def counting(
+            obs: managym.ObservationBatch | ObservationSelection,
             spec: admission.Spec,
             *,
             bucketed: bool,
             belief: BeliefRows[np.ndarray] | None = None,
-        ) -> object:
-            result = admit(obs, spec, bucketed=bucketed, belief=belief)  # type: ignore[arg-type]
+        ) -> ObservationSpans:
+            result = admit(obs, spec, bucketed=bucketed, belief=belief)
             rows.append(len(result.tables["actions"].counts))
             return result
 
-        monkeypatch.setattr(admission, "admit", counting_checks)
-        monkeypatch.setattr(admission, "admit", counting_native)
+        monkeypatch.setattr(admission, "admit", counting)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(
