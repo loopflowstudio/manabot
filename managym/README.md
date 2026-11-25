@@ -912,6 +912,80 @@ retired codes 5, 6 and 7 keep their historical meanings.
 observation projection and hidden-world sampling share that chain for caller
 ancestry and inspection permissions.
 
+### Indistinguishable objects
+
+When several legal actions in one decision differ only in which of several
+game-indistinguishable objects they name, the engine offers one action for the
+class and keeps the first in its existing emission order. Every consumer —
+policies, search, Python callers and Academy — sees the shorter action space:
+
+- **Hand plays and discards.** Two identical unpinned Forests in hand with a
+  land drop open yield one `PlayLand`; two castable copies of the same creature
+  card yield one `CastSpell`. Discarding one card from a hand of two identical
+  unpinned cards folds to one action and is skipped under `skip_trivial` with no
+  prompt.
+- **Mana taps, targets and costs.** Paying `{1}{W}` manually with Kyoshi Village
+  and three identical untapped Plains offers three actions instead of five (see
+  [manual mana sources](#manual-mana-sources)); floating mana with eight
+  identical untapped Forests offers one `TapForMana`. Targeting a creature an
+  opponent controls among three identical unreferenced tokens offers one
+  `ChooseTarget`, and paying convoke, sacrifice, discard, crew, exile or delve
+  costs with identical copies offers one choice per class.
+- **Combat.** Attack and block declarations ask about one creature at a time.
+  After one creature declines to attack (or block), later indistinguishable
+  copies in that declaration are not offered that choice, so their forced
+  decline is skipped — three identical tokens produce four attacker-count lines
+  (0, 1, 2 or 3) instead of eight yes/no paths. Indistinguishable attackers
+  with the same defender and no blockers yet fold to one `DeclareBlocker`
+  target.
+- **Distinguishing state stays separate.** If one of two Forests is enchanted,
+  targeted on the stack or carries a counter, or if one of two identical hand
+  cards is pinned by a reveal (`ObjectBinding.known_to`), it stays in its own
+  class and keeps its own offer.
+
+Two objects in the same zone (or outside-game sideboard entries for
+`LearnTakeLesson`) are interchangeable when all of the following hold:
+
+- **Same object state.** Same zone, owner, controller, definition, object kind
+  and form, neither face down, and — on the battlefield — equal layered
+  characteristics and permanent state. A settled permanent's `spell_entry`
+  compares only whether it was paid, whether it was kicked and its X value.
+  Plain non-creature, non-animating lands ignore summoning sickness and turn of
+  entry; creatures, non-lands, self-animating lands (such as Soulstone
+  Sanctuary) and permanents with `power_up` abilities compare both.
+- **No live rules reference.** Neither object is named anywhere in live rules
+  state outside its own zone slot, its own record, or the current decision's
+  candidate list (already-chosen targets or selections still distinguish them).
+  Historical logs and a settled permanent's payment receipt do not distinguish
+  objects.
+- **No layer-ordering timestamp or hidden identity.** Face-down objects never
+  fold in any zone. Battlefield permanents with any layered static ability
+  (printed or granted) or any keyword counter never fold; equal ordinary
+  counters (such as three tokens each carrying one `+1/+1` counter) still fold.
+  Hand and graveyard order and card `incarnation` are not distinguishing.
+- **Eligible decision.** Folding applies to `PlayLand`, `CastSpell`,
+  `ActivateCardAbility`, `Foretell`, `ActivateAbility`, `TurnFaceUp`,
+  `TapForMana`, `WaterbendTap`, permanent and graveyard `ChooseTarget`,
+  `LearnDiscard`, `LearnTakeLesson`, cost-component selections, `DeclareBlocker`
+  over interchangeable attackers, and `SelectCard` over Battlefield, Hand,
+  Graveyard, face-up Exile or outside-game Sideboard. Positional and
+  order-sensitive choices never fold: Library cards, Stack objects as fold
+  members, `ChooseMode`, `ScryCard`, `OrderLibrary`, `ChooseTrigger`,
+  `DistributeCounters`, `PassPriority`, `PayCost` and `Decline`. Multi-pick
+  permutation orders (picking A then C versus C then A) and assigning two
+  interchangeable blockers across two different attackers in either order remain
+  separate.
+
+Surviving actions keep their relative order, `ActionSpace`'s shape and policy
+input layouts are unchanged, and a space folded to one action is skipped under
+`skip_trivial` like any forced choice (and counts as no choice for loop
+detection). Experience frames list any folded copies on the surviving
+`InteractionOffer.aliases` (omitted when empty) so Academy can keep every copy
+on the board or in hand interactive while sending the one canonical Command, and
+compound offers lower folded members through those aliases. A Command naming an
+offer id removed by folding is rejected as unknown; recordings written before
+this change replay by action index only at their own engine revision.
+
 ### Automatic source preference
 
 Pay `{1}{G}` with an empty mana pool and two untapped Mountains and a Forest:
@@ -954,16 +1028,15 @@ at once with no payment prompt. With four identical untapped Mountains for
 likewise pays without prompting — tapping Kyoshi Village and one Plains,
 leaving the other Plains untapped.
 
-With Kyoshi Village and three untapped Plains for `{1}{W}`, choosing between
-the dual land and a Plains is a real difference, so the payment stops and
-offers every useful source beside `PayCost`:
+With Kyoshi Village and three identical untapped Plains for `{1}{W}`, choosing
+between the dual land and a Plains is a real difference, so the payment stops
+and offers one action per class of
+[indistinguishable](#indistinguishable-objects) useful sources beside `PayCost`:
 
 ```text
 0  ActivateAbility  Tap Kyoshi Village for {G}/{W}
 1  TapForMana       Tap Plains for {W}
-2  TapForMana       Tap Plains for {W}
-3  TapForMana       Tap Plains for {W}
-4  PayCost          Pay the cost
+2  PayCost          Pay the cost
 ```
 
 Selecting action 0 taps Kyoshi Village and skips the `{G}`/`{W}` modal because
@@ -998,8 +1071,10 @@ the color modal, because `{G}` leaves a choice between Plains and Forest while
   bonuses that alter a choice ability's output), extra taps under
   `mana_floats="usable"` or `"all"`, and costs needing help taps keep the
   payment open.
-- **Actions and wording.** When a payment stops, every useful permanent keeps
-  its own offer (identical sources are not merged) and must make progress
+- **Actions and wording.** When a payment stops, each class of
+  [indistinguishable](#indistinguishable-objects) useful permanents gets one
+  offer (its other copies travel in `InteractionOffer.aliases` on Academy
+  frames) and must make progress
   while leaving the announced costs and saved payments payable. Fixed-source
   taps stay `TapForMana` (policy action `TapForCost` with
   `pays_directly=False`, Command verb `tap_for_mana`); simple choice-of-color
@@ -1046,14 +1121,14 @@ source can trigger an ability.
 The engine inspects the listed actions without checking individual mana colors.
 Manual payment with usable or all floats also offers extra payment-time taps.
 
-With two untapped Forests and a creature spell in hand, the first seat's
-priority space is what it was, followed by one tap per source:
+With two identical untapped Forests and a creature spell in hand, the first
+seat's priority space is what it was, followed by one tap per class of
+[indistinguishable](#indistinguishable-objects) sources:
 
 ```text
 0  CastSpell     Badgermole Cub
 1  PassPriority
 2  TapForMana    Forest
-3  TapForMana    Forest
 ```
 
 Taking action 2 taps that Forest and adds `{G}` to the seat's pool. The seat
@@ -1063,8 +1138,9 @@ or phase, as any floating mana does. There is no undo.
 
 - **The space only grows at its end.** Every action offered without the option
   keeps its index, `PassPriority` included; taps follow in battlefield order,
-  one per source, identical sources included (eight Forests are eight
-  actions). Under `action_overflow="first-legal"` the taps are the first
+  one per equivalence class (eight identical untapped Forests are one action; a
+  Forest that is enchanted, targeted or otherwise distinguished keeps its own
+  offer). Under `action_overflow="first-legal"` the taps are the first
   actions dropped.
 - **Manual payments.** During cast, activation and resolution payments,
   extra fixed-source taps follow the ordinary payment choices. A tap must
@@ -1183,7 +1259,13 @@ plan on a clone (`managym/src/flow/combat_preview.rs`). Each step is one
 ordinary action at the decision it will be asked at, with that decision's
 revision and fingerprint; stepping them in order declares exactly the plan.
 Creatures with a single legal answer are answered by the engine without a
-step, as in play. A block plan names blocker → attacker pairs
+step, as in play. When [indistinguishable](#indistinguishable-objects)
+creatures are declared, after one declines to attack or block later identical
+copies are not offered that choice; `preview_combat` normalizes a plan onto the
+copies the engine asks and resolves folded attacker targets, so drafting any
+subset of identical creatures (such as the second and third of three identical
+tokens) succeeds and `declared_attackers` / `declared_blocks` report the
+canonical copies declared. A block plan names blocker → attacker pairs
 (`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
 from here. The plan is refused, with a reason, when a planned creature is
 never asked, a planned answer is not offered (a required block) or the

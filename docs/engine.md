@@ -61,6 +61,11 @@ if let Some(space) = action_space {
 - `skip_trivial` is on everywhere by default: training, evaluation, Academy and
   benchmarks. Turning it off is for explicit debugging and the constructed-position
   diagnostic fixtures only.
+- Before the single-action check, actions that differ only in which of several
+  game-indistinguishable objects they name fold into one offer, so a choice
+  among identical copies — such as discarding one card from two identical
+  unpinned cards in hand — collapses to one action and is skipped as forced
+  ([indistinguishable objects](../managym/README.md#indistinguishable-objects)).
 - Every decision count in these docs excludes forced choices. Decisions per
   game and learner decisions both mean real choices.
 - The readable conformance path surfaces every singleton action so the

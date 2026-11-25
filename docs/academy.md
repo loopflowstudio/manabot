@@ -635,8 +635,17 @@ braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
 outlined plate. Identical permanents with the same effective abilities, status
 and choices share a pile, its count after the top copy's name ("Forest ×4"; the
-copies beneath show no name of their own), and each copy remains its own
-control. Crowded rows shrink their cards and wrap onto a further line before
+copies beneath show no name of their own). When copies on the board or in hand
+are game-indistinguishable — nothing in the rules targets, enchants, pins or
+otherwise distinguishes them — the engine offers one legal choice for the group
+rather than one per copy. Every copy in the pile or in hand stays interactive
+and sends that one offered Command when clicked or dragged, piles stay whole,
+and **All legal choices** (as well as out-of-board trays for graveyard, exile
+and sideboard picks) lists one row for the group. For example, with two
+identical castable copies of a creature card in hand, **All legal choices**
+shows one cast row and clicking or dragging either card casts it; any copy that
+differs — an enchanted or targeted Forest, a creature with a counter, or a hand
+card pinned by a reveal — keeps its own offer and its own row. Crowded rows shrink their cards and wrap onto a further line before
 anything scrolls, and each half gives the crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
@@ -800,10 +809,13 @@ attacker still draws a blocking line and submits that block. The prompt reads
 the whole plan ("Attack with 3 · not with
 Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
 nothing is declared while drafting. The engine still asks about one creature
-at a time: Academy's read-only combat preview replays the draft on a copy of
-the game and returns the exact answers that declare it, or the first one it
-refuses and why (a lone blocker of a creature with menace, a creature that
-cannot attack). Confirm (Space) sends those answers one by one; if the game
+at a time — skipping later identical copies after an earlier copy declines to
+attack or block, and offering one target per group of identical unblocked
+attackers. Academy's read-only combat preview replays the draft on a copy of
+the game, maps any subset picked from a pile of identical creatures onto the
+copies the engine asks, and returns the exact answers that declare it, or the
+first one it refuses and why (a lone blocker of a creature with menace, a
+creature that cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
 where the game stands. While a priority stop updates, your draft and selected
 blocker stay in place. If the first declaration is refused at the same
@@ -873,7 +885,9 @@ each land you may tap is raised.
 
 1. To accept the plan, press Space or the primary button.
 2. Point at another land to preview "tap this one, then pay the rest
-   automatically": that land becomes `1` and the marks move. The prompt, the
+   automatically": that land becomes `1` and the marks move. Pointing at any
+   copy in a pile of identical lands previews tapping the copy the engine will
+   tap. The prompt, the
    **Pay** button and the line under it keep describing Pay's own plan, so the
    rail holds still under the pointer.
 3. Click a land to tap it. It shows as tapped, its mana appears on your plate,
@@ -889,11 +903,12 @@ Kyoshi Village and one Plains, `{2}{R}` with four identical Mountains, or
 `{1}{G}` with Kyoshi Village and two Plains all finish without stopping
 (tapping only Kyoshi Village and one Plains in the last case).
 
-When a real choice stays open — such as Kyoshi Village and three Plains for
-`{1}{W}` — **All legal choices** labels simple choice-of-color taps to match
-basics: `Tap Kyoshi Village for {G}/{W}` (or `Tap Birds of Paradise for any
-color`) beside `Tap Plains for {W}` and `Pay the cost`. Selecting a
-choice-of-color source asks you to pick a color only when its colors lead to
+When a real choice stays open — such as Kyoshi Village and three identical
+Plains for `{1}{W}` — **All legal choices** lists three rows:
+`Tap Kyoshi Village for {G}/{W}` (or `Tap Birds of Paradise for any color`), one
+`Tap Plains for {W}` shared by all three Plains, and `Pay the cost`. Clicking
+any of the three Plains on the board taps a Plains and finishes the payment.
+Selecting a choice-of-color source asks you to pick a color only when its colors lead to
 different remaining options, spent colors or floating mana; if every color
 finishes the same way, the color prompt is skipped. Non-simple mana abilities (sacrificing a
 Treasure, paying life, or paying a filter fee) keep `Activate ability: <Name>`
@@ -1826,8 +1841,13 @@ The live board does not fetch or display that example as current-game analysis.
 
 Academy numbers every choice in the rail and places it on its card, in
 live play, Replay, Watch and Study alike; there is no filter. Selecting a
-choice sends its original offer through the revision-bound Command path, and
-duplicate labels remain separate choices. Human usability acceptance (ETU-77)
+choice sends its original offer through the revision-bound Command path.
+Game-indistinguishable copies fold at the engine into one offer with its plain
+label (no count suffix): the rail lists one row, and every matching copy on the
+board or in hand carries that same offer through its `aliases` and sends its
+canonical Command. Distinct objects that happen to share a label (such as a
+plain Forest beside an enchanted or targeted one) remain separate offers and
+separate rows. Human usability acceptance (ETU-77)
 remains open.
 
 [managym/academy/fixtures/choice-navigation-w17-token-cards.json](../managym/academy/fixtures/choice-navigation-w17-token-cards.json)

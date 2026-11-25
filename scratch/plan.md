@@ -291,6 +291,18 @@ Readers:
 Surviving: MTG-439's skip behavior and labels, action order among survivors,
 `ActionSpace`'s shape, policy input layout, Command and recording formats.
 
+## Docs
+
+Written in place ahead of implementation so Pass 1–4 read and keep them
+aligned:
+
+- `managym/README.md` (`### Indistinguishable objects`, `### Manual mana sources`,
+  `### Mana taps at priority and during payment`,
+  `### Previewing a whole combat declaration`)
+- `docs/academy.md` (`### Playing on the board`, `### Previewing payments`,
+  `## Choice navigation`)
+- `docs/engine.md` (`### Forced decisions`)
+
 ## Passes
 
 1. **Predicate, oracle, permanents.** The census (live references only,
