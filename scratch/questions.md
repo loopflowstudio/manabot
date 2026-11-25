@@ -186,3 +186,27 @@ Slice 6 choices (2026-11-24, headless):
   Games and My record read it from `numbers_json` with no new column. A game
   whose numbers cannot be computed shows no count, though the events keep
   the mark.
+
+Playing on and the acceptance spec (2026-11-25, headless):
+
+- Playing on is a new Play game whose opening moves are the record's, not a
+  `StudyForkProvider` over a walk: it reuses Play whole (opponent, Show
+  analysis, recording, Review, numbers) and needs no retained roots.
+- It starts at the decision itself; you choose there, including the policy's
+  choice if you want it. There is no "start from its choice" button, and no
+  mode where the policy keeps choosing in your seat (See its line shows that,
+  read-only).
+- Only your own finished games, at your deliberate decisions. Automated
+  passes in the prefix are replayed as Commands (every window surfaces during
+  the prefix), so the new game's early events are not marked `auto`.
+- Prefix events get a new `committed_at` (the time they were replayed).
+- A played-on game is left out of My record and marked in Games; its Review
+  names the source game. Its numbers count the replayed moves too.
+- The live move list of a played-on game starts at the decision, as a play
+  demo's does; Review lists the whole game.
+- The Play page asks with a notice and **Play on** button rather than
+  starting on load, because the tab may be resuming another game. No
+  confirm dialog; the notice says it stops the current game.
+- The acceptance spec plays Bolt decks (Mountain/Lightning Bolt) against the
+  Reader, not Lessons v Allies, so each game is a few turns. Its pick loop
+  sometimes bolts its own face; the assertions do not depend on who wins.

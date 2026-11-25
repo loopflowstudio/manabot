@@ -697,6 +697,51 @@ Next: items 1 and 2 together in one pass. The spec's second test exercises
 slice 6 end to end, and the line's playable branch gets its browser proof in
 the same run.
 
+## Status (2026-11-25, items 1 and 2)
+
+Built (4a7bd65826, 1aa4489707, 3d60679df2):
+
+- **Playing on** is a Play game whose opening moves are the record's, the
+  second option above. `new_game {"played_from": {trace_id, event}}` takes
+  the source's setup and seed and `GameSession._play_recorded_prefix` replays
+  the first `event` steps through the Command path. The opponent's moves go
+  through the existing `_villain_offer_policy` hook, the person's through
+  `hero_command`, with every window surfaced. It reuses the play-demo prefix
+  path (`_preparing_demo`, one save at the end). `Trace.played_from` records
+  the source. `GameNumbers.played_from` keeps the game out of My record.
+  Review shows **Play on from here** at your decisions, and "Played on from an
+  earlier game" in a played-on game. Games rows read "played on from another
+  game". Test: `tests/academy/test_played_on.py` (3 tests: the same moves and
+  boards up to the decision with priority stops on, own stops after; owner,
+  opponent step and active game refused; left out of My record).
+- **`academy/ui/e2e/study-review.spec.ts`**, in `playwright.policy.config.ts`.
+  The fixture server registers the Reader (`ReadingFactory`) and a `study`
+  launch on Bolt decks, so a game is 5–8 turns. Test 1 covers acceptance
+  (a)–(f), Games (turns, one record row), then playing on from the last
+  analysed decision to the end, with "Played on from" in its Review and the
+  record still one row. Test 2 shows analysis at one decision: "analysis
+  shown" once in Review, "analysis shown at 1 decision" and With analysis 1
+  in Games. Both passed here (2.3 min together, 33 s–1.2 min for test 1).
+
+What it taught:
+
+- A finished game replays into a live session exactly: boards and action
+  names match step for step, including automated passes (applied as
+  Commands, since every window surfaces during the prefix).
+- The prompt published during the prefix was cached with the prefix's
+  "every window" stops. It is now published again after the prefix (tested).
+- The default Lessons v Allies game against the Reader ran past turn 36, too
+  long for a browser test, so the spec uses Bolt decks.
+- The new game's live move list starts empty: the prefix's presentation is
+  setup, as for play demos, so its beats are not replayed. Review of the new
+  game lists every move.
+- "Lets the agent keep choosing in their seat" is not built. Its line
+  (read-only) and Show analysis in the played-on game cover reading what it
+  would do (questions.md).
+
+Remaining: item 3 (one admission cache off the game lock) and item 4 (left
+unbuilt). Then gate.
+
 ## Slices
 
 1. **(built)** **A played game plays again.** `record_of`, the walk's self-check
@@ -726,9 +771,9 @@ the same run.
 3. **(built)** **The game in numbers.** The reducer, `numbers_json`, the summary on the
    result card and Review's Menu, Games' columns and the My games record
    table with intervals.
-4. **(built, read-only)** **See its line.** From an analysed decision, the
+4. **(built)** **See its line.** From an analysed decision, the
    agent's choice played and its line to the end of the next turn, plus key
-   moments. Remaining: play on yourself from it (Remaining, item 1).
+   moments; **Play on from here** at any of your decisions (2026-11-25).
 5. **(built)** **Watch: revealed hands and branch boundaries** (MTG-423). Independent of
    slices 1–4; may go first if slice 1 stalls.
 6. **(built)** **Analysis while you play.** The toggle, the catch-up walk, the live
