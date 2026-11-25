@@ -1,12 +1,19 @@
 """Default art uses only explicit visible-name requests, with no test network."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+import importlib.metadata
+import io
 import json
 from pathlib import Path
+from urllib.request import Request
 
 from fastapi.testclient import TestClient
 import pytest
 
-from managym.academy import server
+import managym
+from managym import recording
+from managym.academy import card_art, server
 from managym.academy.card_art import CardArt, art_slug, printings
 
 JPEG = b"\xff\xd8test-image"
@@ -82,3 +89,65 @@ def test_seeded_cache_works_without_fetcher(tmp_path: Path) -> None:
 
     art = CardArt(tmp_path, fetch=unexpected)
     assert art.image(art_slug(NAME), "art").read_bytes() == JPEG
+
+
+def _without_installed_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A source launch: no `managym` distribution metadata on the path."""
+    version = importlib.metadata.version
+    distribution = importlib.metadata.distribution
+
+    def missing_version(name: str) -> str:
+        if name == "managym":
+            raise importlib.metadata.PackageNotFoundError(name)
+        return version(name)
+
+    def missing_distribution(name: str) -> importlib.metadata.Distribution:
+        if name == "managym":
+            raise importlib.metadata.PackageNotFoundError(name)
+        return distribution(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing_version)
+    monkeypatch.setattr(importlib.metadata, "distribution", missing_distribution)
+
+
+@contextmanager
+def _response(body: bytes) -> Iterator[io.BytesIO]:
+    yield io.BytesIO(body)
+
+
+def test_source_launch_fetches_uncached_art(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _without_installed_metadata(monkeypatch)
+    requests: list[Request] = []
+
+    def scryfall(request: Request, timeout: float) -> object:
+        requests.append(request)
+        if request.get_header("Accept") == "application/json":
+            return _response(json.dumps({"artist": "Test Artist"}).encode())
+        return _response(JPEG)
+
+    monkeypatch.setattr(card_art, "urlopen", scryfall)
+    art = CardArt(tmp_path, enabled=True)
+    monkeypatch.setattr(server, "card_art", lambda: art)
+    with TestClient(server.app) as client:
+        response = client.get(f"/api/card-art/full/{art_slug(NAME)}.jpg")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == JPEG
+    assert [request.get_header("Accept") for request in requests] == [
+        "application/json",
+        "image/jpeg",
+    ]
+    assert {request.get_header("User-agent") for request in requests} == {
+        f"managym-academy/{managym.__version__}"
+    }
+
+
+def test_source_launch_records_the_engine_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _without_installed_metadata(monkeypatch)
+    assert managym.__version__ == managym._managym.__version__
+    identities = recording.runtime_identities.__wrapped__()
+    assert identities["managym_version"] == managym.__version__

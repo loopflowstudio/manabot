@@ -8,10 +8,22 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
+/**
+ * Start a seeded game against the random opponent, counting the commands sent.
+ * Seed 1 reaches a past board (an opponent window of several moves) at the
+ * fourth decision under `playUntil`'s choices.
+ */
 async function startAgainstRandom(page: Page, sent: { count: number }): Promise<void> {
-  page.on('websocket', socket => socket.on('framesent', frame => {
-    if (String(frame.payload).includes('"type":"command"')) sent.count += 1;
-  }));
+  await page.routeWebSocket('**/ws/play', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      if (typeof message !== 'string') { server.send(message); return; }
+      const payload = JSON.parse(message);
+      if (payload.type === 'new_game') payload.config.seed = 1;
+      if (payload.type === 'command') sent.count += 1;
+      server.send(JSON.stringify(payload));
+    });
+  });
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');
@@ -19,12 +31,15 @@ async function startAgainstRandom(page: Page, sent: { count: number }): Promise<
   await expect(page.getByTestId('game')).toBeVisible();
 }
 
-/** Decide until `until` holds, preferring lands, spells and attacks so the game moves. */
+/**
+ * Decide until `until` holds, preferring lands, spells and attacks so the game
+ * moves. Throws, naming why, when the game ends or the budget runs out first.
+ */
 async function playUntil(page: Page, until: () => Promise<boolean>, limit: number): Promise<number> {
   for (let decisions = 0; decisions < limit; decisions += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await until()) return decisions;
-    if (await page.getByTestId('result-card').isVisible()) return decisions;
+    if (await page.getByTestId('result-card').isVisible()) throw new Error(`the game ended after ${decisions} decisions before the awaited state`);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     let pick = labels.findIndex(label => /Play (Island|Mountain)|Cast |Attack with /.test(label));
@@ -34,7 +49,7 @@ async function playUntil(page: Page, until: () => Promise<boolean>, limit: numbe
     await rows.nth(Math.max(0, pick)).click();
     await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision')), { timeout: 30_000 }).toBeGreaterThan(revision);
   }
-  return limit;
+  throw new Error(`no awaited state within the ${limit}-decision budget`);
 }
 
 /** What the page showed in the instant before a press during a beat. */
@@ -42,15 +57,18 @@ interface Seen { text: string; inPanel: boolean; held: boolean; onStep: boolean;
 
 /**
  * Press during a beat in one task, so the beat cannot end between reading the
- * page and the press: a held number key, or activation of the first choice
- * with or without a pointer. Null when no beat was showing.
+ * page and the press: a held number key, activation of the first choice with
+ * or without a pointer, or a pointer press on a card of the past board. Null
+ * when no beat was showing (for `board`, no beat on a past board).
  */
-async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'): Promise<Seen | null> {
+async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation' | 'board'): Promise<Seen | null> {
   return page.evaluate(how => {
     const beat = document.querySelector('[data-testid=beat]');
     if (!beat) return null;
     const row = document.querySelector<HTMLElement>('[data-testid=action-option]')!;
     const board = document.querySelector('[data-testid=game-board]')!;
+    const card = board.querySelector<HTMLElement>('[data-testid=board-card]');
+    if (how === 'board' && (board.getAttribute('data-board') !== 'step' || !card)) return null;
     const seen = {
       text: beat.textContent ?? '',
       inPanel: beat.closest('[data-testid=action-panel]') !== null,
@@ -62,9 +80,10 @@ async function pressDuringBeat(page: Page, how: 'key' | 'pointer' | 'activation'
     if (how === 'key') {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }));
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, repeat: true }));
-    } else if (how === 'pointer') {
-      row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    } else if (how === 'pointer' || how === 'board') {
+      const target = how === 'board' ? card! : row;
+      target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
     } else row.click();
     return seen;
   }, how);
@@ -124,13 +143,15 @@ test('pressing the board or activating a choice ends the reading without acting'
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
   const board = page.getByTestId('game-board');
-  await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
-  await expect(board).toHaveAttribute('data-board', 'step');
-  await page.screenshot({ path: test.info().outputPath('step-board.png') });
-  const before = sent.count;
+  let before = 0;
+  let pressed: Seen | null = null;
   // A press on a past board commits nothing: its cards had no offers when pressed.
-  const card = board.getByTestId('board-card').first();
-  await card.click();
+  await playUntil(page, async () => {
+    before = sent.count;
+    pressed = await pressDuringBeat(page, 'board');
+    return pressed !== null;
+  }, 160);
+  expect((pressed as Seen | null)?.onStep).toBe(true);
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('beat')).toHaveCount(0);
   expect(sent.count).toBe(before);

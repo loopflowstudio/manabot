@@ -1363,6 +1363,7 @@ WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 # Most options one naming prompt offers; larger scopes publish groups first.
+__version__: str
 NAME_BRANCHING: int
 
 class VisibleReference:
