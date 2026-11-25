@@ -84,7 +84,7 @@ of rows and `A` for padded legal offers.
 | Piece | What it does |
 | --- | --- |
 | `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`; the required `numerics` session (`backend.collection.CollectionSession(device=..., seed=..., precision=...)`) owns the device, precision and private sampling RNG. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
-| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
+| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (real game terminals only), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping unfinished tails, and `outcome_probabilities` `[T,E,3]` for a categorical critic. Optional `trajectories` (`TrajectorySpan` table) and aligned provenance fields (`episode_source`, `snapshot_id`, `branch_group_id`, `is_root_decision`, `sample_weight`) separate horizon cuts from terminals and carry snapshot metadata without mutating the batch. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. `RolloutBatch.concatenate(batches)` merges packed `[rows, 1]` batches without densifying native spans. |
 | `AdmittedRollout(agent, batch)` (`backend.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched via shared `AdmittedRows.prefetch_minibatches`. `next_observation(device)` returns inference-prepared bootstrap rows — one per column for legacy batches, or the indexed frozen viewer observations when `trajectories` is set (`None` when there are no bootstrap observations) — independently of autograd mode. The batch must not change afterwards. |
 
 In v11 the collector retains immutable native observations. Legal offers,
@@ -94,6 +94,49 @@ shards in training order, including repeats. At a snapshot horizon the collector
 freezes each contributing seat's view before assigning that stream another
 root. Decision-memory rows share their captured prefixes across the rollout.
 Use `batch.observations(indexes)` for editable NumPy projections.
+
+When collection runs in separate worker processes, send each collected
+`RolloutBatch` directly over `pickle` (such as a `spawn` `multiprocessing.Queue`)
+and merge the worker results with `RolloutBatch.concatenate` before admission
+or learning:
+
+```python
+from manabot.training.rollout.collection import RolloutBatch
+
+# Each spawn worker sends its packed [rows, 1] batch over a queue:
+#   queue.put(collect(collector, agent, decisions))
+
+batches = [queue.get() for _ in range(num_workers)]
+batch = RolloutBatch.concatenate(batches)
+print(batch.actions.shape, bool(batch.dones[-1, 0]))
+# (1920, 1) True
+```
+
+`RolloutBatch`, `ObservationSpace`, `managym.ObservationBatch`,
+`ObservationSelection`, `PackedActions` and decision-memory `Prefix` chains
+all pickle directly without densifying native spans. Pickling drops ephemeral
+caches (`ObservationSelection` cached properties and `Prefix` serving/feature
+caches), reconstructs `ObservationSpace` from its `ObservationConfig`, and
+preserves shared native batches and memory chunks through pickle's memo table.
+Restoring malformed table boundaries, a disconnected memory chain or a prefix
+over its declared capacity raises `ValueError`.
+
+`RolloutBatch.concatenate(batches)` merges one or more packed `[rows, 1]`
+batches — either complete-game batches (`trajectories=None`, every part ending
+on a terminal row with `next_done` all true, keeping the last part's `next_obs`
+and `next_done`) or explicit-trajectory batches (`trajectories` present on
+every part). For explicit trajectories, it shifts span `start`/`stop` and
+bootstrap indexes, joins `next_obs` across parts that carry bootstrap rows
+(skipping terminal-only parts whose `next_obs` is empty), and re-offsets
+non-negative `branch_group_id` values across parts so sibling groups from
+different workers do not collide in RLOO baselines. `RecordedObservations.concatenate`
+and `PackedActions.concatenate` provide the matching piece-level merges.
+Recorded indexes advance by the full size of each worker’s observation store.
+A paired collector can retain both learners’ observations in that store even
+when the worker returns one learner’s batch.
+Empty inputs, multi-column `[T, E]` batches (even in a one-element list),
+mixed native and dense transports, differing `ObservationConfig`s or memory
+capacities, and mismatched optional fields raise `ValueError`.
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only

@@ -14,6 +14,11 @@ from numpy.typing import NDArray
 
 from manabot.policy.spans import ObservationSelection
 
+__all__ = [
+    "PackedActions",
+    "ActionRows",
+]
+
 
 class ActionValidator(Protocol):
     """Numerical admission of retained behavior, preserving backend evidence."""
@@ -109,6 +114,8 @@ class PackedActions:
 
     @classmethod
     def concatenate(cls, rows: Sequence["PackedActions"]) -> "PackedActions":
+        if not rows:
+            raise ValueError("cannot concatenate empty packed action rows")
         first = rows[0]
         if any(
             row.capacity != first.capacity
@@ -127,14 +134,8 @@ class PackedActions:
                 for key in first.fields
             },
             np.concatenate([row.log_probabilities for row in rows]),
-            ObservationSelection(
-                first.native.space,
-                tuple(
-                    coord
-                    for row in rows
-                    if row.native is not None
-                    for coord in row.native.coordinates
-                ),
+            ObservationSelection.concatenate(
+                [row.native for row in rows if row.native is not None]
             )
             if first.native is not None
             else None,
