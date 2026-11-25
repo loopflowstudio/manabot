@@ -38,15 +38,35 @@ SEED = 40902
 TARGET_UPDATES = 2_000
 HELD_OUT = "tla-trophies-colab-held-out-32"
 HELD_OUT_EXTRA = "tla-trophies-colab-held-out-extra-128"
-HELD_OUT_EXTRA_AFTER_UPDATES = 400
-HELD_OUT_EXTRA_PAIRS = range(32, 160)
+EXTRA_AFTER_UPDATES = 400
+EXTRA_PAIRS = range(32, 160)
 HALF_TRAINING = "tla-trophies-colab-half-training-32"
+HALF_TRAINING_EXTRA = "tla-trophies-colab-half-training-extra-128"
 HALF_TRAINING_SEATINGS = tuple(f"Colab half-training deal {i + 1}" for i in range(32))
+HALF_TRAINING_EXTRA_SEATINGS = tuple(
+    f"Colab half-training deal {i + 1}" for i in EXTRA_PAIRS
+)
 LARGE_VS_SMALL = "tla-trophies-colab-w160l8-vs-w64-32"
+LARGE_VS_SMALL_EXTRA = "tla-trophies-colab-w160l8-vs-w64-extra-128"
 LARGE_VS_SMALL_SEATINGS = tuple(f"Colab w160l8 vs w64 deal {i + 1}" for i in range(32))
+LARGE_VS_SMALL_EXTRA_SEATINGS = tuple(
+    f"Colab w160l8 vs w64 deal {i + 1}" for i in EXTRA_PAIRS
+)
 LARGE_VS_SMALL_EQUAL_TIME = "tla-trophies-colab-w160l8-vs-w64-equal-time-32"
+LARGE_VS_SMALL_EQUAL_TIME_EXTRA = (
+    "tla-trophies-colab-w160l8-vs-w64-equal-time-extra-128"
+)
 LARGE_VS_SMALL_EQUAL_TIME_SEATINGS = tuple(
     f"Colab w160l8 vs w64 equal-time deal {i + 1}" for i in range(32)
+)
+LARGE_VS_SMALL_EQUAL_TIME_EXTRA_SEATINGS = tuple(
+    f"Colab w160l8 vs w64 equal-time deal {i + 1}" for i in EXTRA_PAIRS
+)
+EXTRA_PREFIXES = (
+    f"{HELD_OUT_EXTRA}-",
+    f"{HALF_TRAINING_EXTRA}-",
+    f"{LARGE_VS_SMALL_EXTRA}-",
+    f"{LARGE_VS_SMALL_EQUAL_TIME_EXTRA}-",
 )
 
 
@@ -209,6 +229,59 @@ def size_evaluations(
             }
         )
 
+    def extra_against(
+        prefix: str,
+        checkpoints: Sequence[CheckpointRecord],
+        seating_names: tuple[str, ...] | None = None,
+        opponent: Fraction | Aligned | CheckpointPlayer | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> list[EvalJob]:
+        eligible = sorted(
+            (c for c in checkpoints if c.at.get("updates", 0) > EXTRA_AFTER_UPDATES),
+            key=lambda c: c.at["updates"],
+            reverse=True,
+        )
+        if not eligible:
+            return []
+        names = seating_names or tuple(f"Held-out pair {i + 1}" for i in EXTRA_PAIRS)
+        seatings = tuple(
+            benchmark.seatings[0].model_copy(
+                update={
+                    "name": label,
+                    "config": trophies.Deal(
+                        first=i * 2, second=i * 2 + 1, seed=40900 + i
+                    ),
+                    "games": 1,
+                    "seeds": "one",
+                    "tags": tags,
+                    **(
+                        {}
+                        if opponent is None
+                        else {"players": (benchmark.seatings[0].players[0], opponent)}
+                    ),
+                }
+            )
+            for i, label in zip(EXTRA_PAIRS, names, strict=True)
+        )
+        return [
+            shared.model_copy(
+                update={
+                    "name": f"{prefix}-u{int(ckpt.at['updates'])}",
+                    "tournament": benchmark.model_copy(
+                        update={
+                            "name": f"{prefix}-u{int(ckpt.at['updates'])}",
+                            "environment": env,
+                            "seatings": seatings,
+                            "rollups": CARD_ROLLUPS,
+                        }
+                    ),
+                    "checkpoints": (ckpt,),
+                    "max_hours": 3,
+                }
+            )
+            for ckpt in eligible
+        ]
+
     trained_updates = {
         c.at["updates"] for c in shared.checkpoints if c.at.get("updates", 0) > 0
     }
@@ -218,51 +291,14 @@ def size_evaluations(
         if c.at.get("updates", 0) > 0 and (c.at["updates"] / 2) in trained_updates
     ]
     half = Fraction(clock="updates", value=0.5, trained=True)
-    jobs = [against(f"{HELD_OUT}-{size}", shared.checkpoints)]
-    post_400 = sorted(
-        (
-            c
-            for c in shared.checkpoints
-            if c.at.get("updates", 0) > HELD_OUT_EXTRA_AFTER_UPDATES
+    jobs = [
+        against(f"{HELD_OUT}-{size}", shared.checkpoints),
+        *extra_against(
+            f"{HELD_OUT_EXTRA}-{size}",
+            shared.checkpoints,
+            tags=(f"{HELD_OUT_EXTRA}-{size}",),
         ),
-        key=lambda c: c.at["updates"],
-        reverse=True,
-    )
-    if post_400:
-        extra_seatings = tuple(
-            benchmark.seatings[0].model_copy(
-                update={
-                    "name": f"Held-out pair {i + 1}",
-                    "config": trophies.Deal(
-                        first=i * 2, second=i * 2 + 1, seed=40900 + i
-                    ),
-                    "games": 1,
-                    "seeds": "one",
-                    "tags": (f"{HELD_OUT_EXTRA}-{size}",),
-                }
-            )
-            for i in HELD_OUT_EXTRA_PAIRS
-        )
-        for ckpt in post_400:
-            update = int(ckpt.at["updates"])
-            name = f"{HELD_OUT_EXTRA}-{size}-u{update}"
-            jobs.append(
-                shared.model_copy(
-                    update={
-                        "name": name,
-                        "tournament": benchmark.model_copy(
-                            update={
-                                "name": name,
-                                "environment": env,
-                                "seatings": extra_seatings,
-                                "rollups": CARD_ROLLUPS,
-                            }
-                        ),
-                        "checkpoints": (ckpt,),
-                        "max_hours": 2,
-                    }
-                )
-            )
+    ]
     if half_checkpoints:
         jobs.append(
             against(
@@ -272,21 +308,39 @@ def size_evaluations(
                 half,
             )
         )
+        jobs.extend(
+            extra_against(
+                f"{HALF_TRAINING_EXTRA}-{size}",
+                half_checkpoints,
+                HALF_TRAINING_EXTRA_SEATINGS,
+                half,
+            )
+        )
     if size == "w160l8":
         trained = [c for c in shared.checkpoints if c.at.get("updates", 0) > 0]
         if trained:
+            aligned_w64 = Aligned(clock="updates", job="w64")
             jobs.append(
                 against(
                     LARGE_VS_SMALL,
                     trained,
                     LARGE_VS_SMALL_SEATINGS,
-                    Aligned(clock="updates", job="w64"),
+                    aligned_w64,
+                )
+            )
+            jobs.extend(
+                extra_against(
+                    LARGE_VS_SMALL_EXTRA,
+                    trained,
+                    LARGE_VS_SMALL_EXTRA_SEATINGS,
+                    aligned_w64,
                 )
             )
             small_checkpoints = [
                 c for run in small_runs for c in run.checkpoints
             ]
             small_ended = bool(small_runs) and all(run.ended for run in small_runs)
+            equal_time_pairs: list[tuple[CheckpointRecord, CheckpointRecord]] = []
             for large_ckpt in trained:
                 seconds = large_ckpt.at.get("training_seconds")
                 if seconds is None:
@@ -294,12 +348,26 @@ def size_evaluations(
                 partner = equal_time_partner(seconds, small_checkpoints, small_ended)
                 if partner is None:
                     continue
+                equal_time_pairs.append((large_ckpt, partner))
                 update = int(large_ckpt.at["updates"])
                 jobs.append(
                     against(
                         f"{LARGE_VS_SMALL_EQUAL_TIME}-u{update}",
                         (large_ckpt,),
                         LARGE_VS_SMALL_EQUAL_TIME_SEATINGS,
+                        checkpoint_player(partner.ref),
+                    )
+                )
+            for large_ckpt, partner in sorted(
+                equal_time_pairs,
+                key=lambda pair: pair[0].at["updates"],
+                reverse=True,
+            ):
+                jobs.extend(
+                    extra_against(
+                        LARGE_VS_SMALL_EQUAL_TIME_EXTRA,
+                        (large_ckpt,),
+                        LARGE_VS_SMALL_EQUAL_TIME_EXTRA_SEATINGS,
                         checkpoint_player(partner.ref),
                     )
                 )
@@ -320,11 +388,11 @@ def eval_jobs(state: ExperimentState) -> list[EvalJob]:
         job
         for size in SIZES
         for job in by_size[size]
-        if not job.name.startswith(f"{HELD_OUT_EXTRA}-")
+        if not job.name.startswith(EXTRA_PREFIXES)
     ]
-    # Interleave extra post-400 heuristic jobs latest-first across sizes.
+    # Interleave extra post-400 eval jobs latest-first across sizes.
     extras_by_size = [
-        [job for job in by_size[size] if job.name.startswith(f"{HELD_OUT_EXTRA}-")]
+        [job for job in by_size[size] if job.name.startswith(EXTRA_PREFIXES)]
         for size in ("w160l8", "w64")
     ]
     extras = [
@@ -350,14 +418,20 @@ def report() -> Report:
         score=Score(table="plays", value="score", reference=0.5, range=(0.0, 1.0)),
         evals=(
             Curve(title="Score against the heuristic", matches=held_out),
-            head_to_head("Against itself at half its updates", HALF_TRAINING_SEATINGS),
+            head_to_head(
+                "Against itself at half its updates",
+                (*HALF_TRAINING_SEATINGS, *HALF_TRAINING_EXTRA_SEATINGS),
+            ),
             head_to_head(
                 "Large (w160l8) against Small (w64) at equal training time",
-                LARGE_VS_SMALL_EQUAL_TIME_SEATINGS,
+                (
+                    *LARGE_VS_SMALL_EQUAL_TIME_SEATINGS,
+                    *LARGE_VS_SMALL_EQUAL_TIME_EXTRA_SEATINGS,
+                ),
             ),
             head_to_head(
                 "Large (w160l8) against Small (w64) at equal updates",
-                LARGE_VS_SMALL_SEATINGS,
+                (*LARGE_VS_SMALL_SEATINGS, *LARGE_VS_SMALL_EXTRA_SEATINGS),
             ),
             *behaviour_curves(matches=held_out),
         ),
