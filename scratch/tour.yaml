@@ -1,33 +1,39 @@
-at: af9f2510eddf07b0221f2ba1c36a006d08ca45e4
+at: e41607db147fd0e0ff0675b8cb9cb81a63f31654
 first:
   - path: docs/academy.md
     why: How a player reads and inspects battlefield state
   - path: academy/ui/DESIGN.md
-    why: Chip priority, colours, spiral and overflow
+    why: Chip priority, colours, spiral, compact labels and overflow
+  - path: managym/academy/README.md
+    why: Wire contract for AbilityGrantView and RestrictionView
+  - path: managym/state/src/ability.rs
+    why: Unified Layer 6 AbilitySource provenance enum
   - path: managym/src/experience.rs
     why: Optional permanent fields carried by Academy frames
   - path: managym/src/flow/layers.rs
-    why: Preserves grant provenance through ability loss and regrant
+    why: Tracks AbilitySource through ability loss, counters and grants
+  - path: managym/src/flow/statics.rs
+    why: Exposes external static restriction sources without hot-path allocs
   - path: managym/src/permanent_details.rs
-    why: Projects effective triggers, Defender and restrictions
+    why: Projects effective triggers, Defender, grants and restriction sources
   - path: managym/src/flow/combat_actions.rs
     why: Shares restriction checks with combat legality
   - path: managym/experience_projection.py
     why: Joins visible permanents by public ID
   - path: academy/ui/src/lib/board/badges.ts
-    why: One vocabulary for board, speech, inspection and piles
+    why: Exact provenance, compact fallbacks and overflow-aware row packing
   - path: academy/ui/src/lib/board/BoardCard.svelte
-    why: Fits whole chips in the measured art area
+    why: Renders explicit chip rows sharing space beside P/T (yielding to Watch policy)
   - path: academy/ui/src/lib/board/Inspect.svelte
-    why: Full explanations include every hidden chip
+    why: Full explanations include every hidden chip and named source
   - path: academy/ui/src/lib/board/view.ts
     why: Distinct battlefield states stay in separate piles
   - path: managym/cards/tests/cards/tla.rs
-    why: Conditions, grants, tokens and hidden identities
+    why: Self-conditional grants, Sokka/Kyoshi/Aura sources, counters and tokens
   - path: tests/academy/test_decision_surface.py
     why: Reconnected viewers see the resolved Lesson
   - path: academy/ui/e2e/card-badges.spec.ts
-    why: Both themes, face outage and crowded boards
+    why: Both themes, real-game 1280x800 boards, Watch policy pill and crowded rows
   - path: protocol/advice-v1.schema.json
     why: Exporter also captures previously omitted advice fields
 hide:
