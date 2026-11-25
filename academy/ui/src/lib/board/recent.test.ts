@@ -56,6 +56,35 @@ describe('recentMarks', () => {
     expect(marks.resolved).toEqual([{ id: 44, name: 'Allies at Last' }]);
     expect([...marks.touched].sort((a, b) => a - b)).toEqual([93, 95, 98, 137]);
   });
+
+  it('clears creature damage badges after a turn boundary or once damage wears off, while keeping player damage', () => {
+    const base = bolt.recovery.presentation_tail[0];
+    const damagedFrame = withBoard(bolt.recovery.frame, projection => {
+      projection.agent.battlefield = [permanent(60, 'Beetle-Headed Merchants', { controller_id: 0, damage: 2 })];
+    });
+    const healedFrame = withBoard(bolt.recovery.frame, projection => {
+      projection.agent.battlefield = [permanent(60, 'Beetle-Headed Merchants', { controller_id: 0, damage: 0 })];
+    });
+    const eventsSameTurn: PresentationEvent[] = [
+      { ...base, seq: 20, from_revision: 3, to_revision: 4,
+        kind: { kind: 'damage', source: null, target: { kind: 'object', id: { entity: 60, incarnation: 1 } }, amount: 2 } },
+      { ...base, seq: 21, from_revision: 3, to_revision: 4,
+        kind: { kind: 'damage', source: null, target: { kind: 'player', id: 0 }, amount: 2 } },
+    ];
+    // Same turn while damage is still on the creature: both creature and player badges appear.
+    const sameTurn = recentMarks(damagedFrame, 3, eventsSameTurn, () => emptyLabels);
+    expect(sameTurn.damage.objects.get(60)).toBe(2);
+    expect(sameTurn.damage.players.get(0)).toBe(2);
+
+    // After a new turn starts (cleanup wore damage off): creature damage badge clears, player damage stays.
+    const eventsNextTurn: PresentationEvent[] = [
+      ...eventsSameTurn,
+      { ...base, seq: 22, from_revision: 4, to_revision: 5, kind: { kind: 'turn_started', player: 0, turn_number: 7 } },
+    ];
+    const nextTurn = recentMarks(healedFrame, 3, eventsNextTurn, () => emptyLabels);
+    expect(nextTurn.damage.objects.size).toBe(0);
+    expect(nextTurn.damage.players.get(0)).toBe(2);
+  });
 });
 
 describe('boardLines', () => {

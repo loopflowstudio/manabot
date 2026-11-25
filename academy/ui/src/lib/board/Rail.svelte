@@ -17,7 +17,7 @@
   import type { ExperienceFrame } from '$lib/types';
   import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
   import type { Segment } from './tell';
-  import { committed, offerText, type PrimaryLabel } from './prompt';
+  import { committed, offerChoiceLabel, offerText, type PrimaryLabel } from './prompt';
   import { targetNames, type ResolvedSpell } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import ManaText from './ManaText.svelte';
@@ -343,15 +343,16 @@
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
+        {@const choiceText = offerChoiceLabel(placed, view.list, frame.projection)}
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${offerText(placed.offer)}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            aria-label={`${choiceText}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
             disabled={!live} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={offerText(placed.offer)} /></span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={choiceText} /></span>
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}

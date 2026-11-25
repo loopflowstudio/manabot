@@ -154,7 +154,19 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   const beforeNum = sent.count;
   await page.keyboard.press('1');
   await expect.poll(() => sent.count, { timeout: 15_000 }).toBe(beforeNum + 1);
+  // Once any resulting walk finishes (or is skipped with Space), the recap is visible at now.
+  if (await page.getByTestId('walk-bar').getAttribute('data-walking') === 'true') {
+    await page.keyboard.press('Space');
+  }
   await expect(page.getByTestId('recent')).toBeVisible();
+
+  // Pace control defaults to Study (1.4s), switches to Quick (0.7s) and Off.
+  const pace = page.getByTestId('walk-pace');
+  await expect(pace.locator('[data-pace=study]')).toHaveAttribute('aria-pressed', 'true');
+  await pace.locator('[data-pace=quick]').click();
+  await expect(pace.locator('[data-pace=quick]')).toHaveAttribute('aria-pressed', 'true');
+  await pace.locator('[data-pace=off]').click();
+  await expect(pace.locator('[data-pace=off]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('clicking the earlier board returns to now; selecting a history line and arrows step kept boards', async ({ page }, testInfo) => {
@@ -195,6 +207,10 @@ test('clicking the earlier board returns to now; selecting a history line and ar
   await page.keyboard.press('Escape');
   await expect(board).toHaveAttribute('data-board', 'frame');
   await expect(page.getByTestId('turn-number')).not.toContainText('Esc for now');
+
+  // After Esc clears a clicked history line, Space must not jump back to that history line.
+  await page.keyboard.press('Space');
+  await expect(board).toHaveAttribute('data-board', 'frame');
 });
 
 test('reduced motion does not auto-walk, while scrubber and Show their turn again still work by hand', async ({ page }) => {
@@ -223,7 +239,8 @@ test('a reload never walks turns already shown, and the next opponent turn still
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
-  await playUntil(page, async () => (await page.locator('[data-testid=recent-fact].theirs').count()) > 0, 120);
+  await playUntil(page, async () => (await page.locator('[data-testid=walk-bar][data-walking=true]').count()) > 0, 120);
+  await page.keyboard.press('Space');
   await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false', { timeout: 30_000 });
   const shownLines = await page.locator('[data-testid=game-log] button[data-history-seq]').count();
 

@@ -284,6 +284,7 @@ function alignCombatRows(a: SideView, b: SideView): void {
 function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => PlacedOffer[]): StackItem[] {
   const cards = [...frame.projection.agent.stack, ...frame.projection.opponent.stack];
   const used = new Set<number>();
+  // `projection.stack_objects` is already top-first (managym observation.rs iterates stack_objects.rev()).
   const entries = frame.projection.stack_objects ?? [];
   const items: StackItem[] = entries.map(entry => {
     const card = entry.kind === 'spell'
@@ -294,18 +295,20 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
     return { entry, card, offers };
   });
   // Spells the projection lists without a stack entry (historical frames).
+  const fallbackSpells: StackItem[] = [];
   for (const card of cards) {
     if (used.has(card.id)) continue;
-    items.push({ entry: { id: -card.id - 1, kind: 'spell', controller: card.owner_id, label: card.name }, card,
+    fallbackSpells.push({ entry: { id: -card.id - 1, kind: 'spell', controller: card.owner_id, label: card.name }, card,
       offers: offersAt({ kind: 'object', id: card.id }) });
   }
+  if (fallbackSpells.length) items.push(...fallbackSpells.reverse());
   const announced = announcement(frame);
   if (announced) {
     const { source, kind } = announced;
     // A spell's card is drawn here rather than in its zone (hand, graveyard, exile); an ability's source stays on the battlefield.
     const players = [frame.projection.agent, frame.projection.opponent];
     const card = kind === 'spell' ? inspectableCards(players).find(candidate => candidate.id === source.display_id) ?? null : null;
-    items.push({
+    items.unshift({
       entry: { id: -source.display_id - 1, kind, controller: frame.projection.decision_context!.actor, label: source.label,
         ...(kind === 'activated_ability' ? { source_permanent: source.display_id } : {}) },
       card,
@@ -313,7 +316,7 @@ function stackItems(frame: ExperienceFrame, offersAt: (anchor: Anchor) => Placed
       announcing: kind,
     });
   }
-  return items.reverse();
+  return items;
 }
 
 /** The spell or ability the acting viewer is announcing, if any. */

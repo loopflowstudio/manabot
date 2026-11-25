@@ -27,6 +27,7 @@
  */
 
 import type { Observation, PresentationEvent, PresentationLabels } from '$lib/types';
+import type { StepBoard } from './boards';
 import { eventObjectName, tellRule } from './tell';
 
 export interface SeenCard {
@@ -172,16 +173,33 @@ export class Travel {
   }
 }
 
+function priorPermanentInfo(
+  stepBoards: readonly StepBoard[],
+  beforeSeq: number,
+  entity: number,
+): { side: 'you' | 'opponent'; name: string | null } | null {
+  for (let i = stepBoards.length - 1; i >= 0; i -= 1) {
+    const board = stepBoards[i];
+    if (board.first >= beforeSeq) continue;
+    const own = board.projection.agent.battlefield.find(p => p.id === entity);
+    if (own) return { side: 'you', name: own.name ?? null };
+    const opp = board.projection.opponent.battlefield.find(p => p.id === entity);
+    if (opp) return { side: 'opponent', name: opp.name ?? null };
+  }
+  return null;
+}
+
 /**
- * Build death marks (travel ghost + rule chip) for creatures dying on the
- * active cursor stop (or since the last decision when staying on now under
- * reduced motion).
+ * Build death marks (travel ghost + inline ghost slot with rule) for creatures
+ * dying on the active cursor stop (or since the last decision when staying on
+ * now under reduced motion).
  */
 export function collectDeathMarks(params: {
   root: HTMLElement | null;
   boardEl: HTMLElement | null;
   travel: Travel;
   projection: Observation;
+  stepBoards?: readonly StepBoard[];
   events: readonly PresentationEvent[];
   labelsAt: (index: number) => PresentationLabels;
   activeSeqs: ReadonlySet<number>;
@@ -191,7 +209,7 @@ export function collectDeathMarks(params: {
   revision: number;
   reduced: boolean;
 }): DeathMark[] {
-  const { root, boardEl, travel, projection, events, labelsAt, activeSeqs, cursor, sinceRevision, matchId, revision, reduced } = params;
+  const { root, boardEl, travel, projection, stepBoards = [], events, labelsAt, activeSeqs, cursor, sinceRevision, matchId, revision, reduced } = params;
   const relevant: { event: PresentationEvent; index: number }[] = [];
   if (cursor !== null) {
     events.forEach((event, index) => {
@@ -216,21 +234,22 @@ export function collectDeathMarks(params: {
       const travelKey = `perm:${obj.entity}`;
       const before = travel.seenBefore(travelKey);
       const known = travel.knownPosition(travelKey);
+      const prior = known?.side ? null : priorPermanentInfo(stepBoards, event.seq, obj.entity);
       const side: 'you' | 'opponent' = known?.side
+        ?? prior?.side
         ?? (projection.agent.graveyard.some(c => c.id === obj.entity) ? 'you' : 'opponent');
       const fallbackRow = root.querySelector<HTMLElement>(`.half.${side} .row.creatures`)?.getBoundingClientRect();
       const rect = known?.rect ?? fallbackRow;
-      if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-      const x = known ? rect.left - boardRect.left : rect.left - boardRect.left + rect.width / 2 - 44;
-      const y = known ? rect.top - boardRect.top : rect.top - boardRect.top + rect.height / 2 - 20;
-      const width = known ? rect.width : 88;
-      const height = known ? rect.height : 40;
+      const x = known && rect ? rect.left - boardRect.left : rect ? rect.left - boardRect.left + rect.width / 2 - 44 : 0;
+      const y = known && rect ? rect.top - boardRect.top : rect ? rect.top - boardRect.top + rect.height / 2 - 20 : 0;
+      const width = known && rect ? rect.width : 88;
+      const height = known && rect ? rect.height : 40;
       const gyRect = root.querySelector<HTMLElement>(`[data-graveyard-side="${side}"]`)?.getBoundingClientRect();
       const toDx = gyRect ? (gyRect.left + gyRect.width / 2) - (boardRect.left + x + width / 2) : 0;
       const toDy = gyRect ? (gyRect.top + gyRect.height / 2) - (boardRect.top + y + height / 2) : 0;
       marks.push({
         entity: obj.entity,
-        name: eventObjectName(event, obj, labels) ?? known?.name ?? 'Creature',
+        name: eventObjectName(event, obj, labels) ?? known?.name ?? prior?.name ?? 'Creature',
         rule,
         side,
         x,

@@ -21,6 +21,8 @@
     stopDamage?: number;
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
+    /** Highlighted while hovering a target choice naming this player. */
+    pointed?: boolean;
     side: 'you' | 'opponent';
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
@@ -28,7 +30,7 @@
     deckOpen?: boolean;
   }
 
-  let { player, name, caption, offers, live, damage = 0, stopDamage = 0, choosing = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { player, name, caption, offers, live, damage = 0, stopDamage = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -57,6 +59,7 @@
     type="button"
     class="who"
     class:legal={live && offers.length > 0}
+    class:pointed
     aria-disabled={!offers.length}
     data-offer-count={offers.length}
     aria-label={label}
@@ -109,6 +112,7 @@
   .who { display: block; text-align: left; border-radius: var(--radius-sm); padding: 2px 4px; margin: -2px -4px; background: none; border: 0; color: inherit; }
   .who[aria-disabled=true] { cursor: default; }
   .who.legal { box-shadow: 0 0 0 2px var(--legal); cursor: pointer; }
+  .who.pointed { outline: 2px dashed var(--damage); outline-offset: 2px; box-shadow: 0 0 0 2px var(--accent); }
   /* Kind and deck wrap to a second line rather than cut a long deck name. */
   .caption { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .choosing { display: block; margin-top: 2px; color: var(--warning-text); }

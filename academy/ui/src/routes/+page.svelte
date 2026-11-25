@@ -26,6 +26,7 @@
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
+  import { loadWalkPace, saveWalkPace, type WalkPace } from '$lib/board/beats';
   import { trackMarks } from '$lib/board/history';
   import { spentOnce } from '$lib/board/phases';
   import {
@@ -58,6 +59,12 @@
   let stopsPending = $state<number | null>(null);
   let autoTap = $state(loadAutoTap());
   let fullControl = $state<FullControlMode>('off');
+  let walkPace = $state<WalkPace>(loadWalkPace());
+
+  function setWalkPace(pace: WalkPace): void {
+    walkPace = pace;
+    saveWalkPace(pace);
+  }
 
   function toggleAutoTap(): void {
     if (fullControl !== 'off') {
@@ -444,6 +451,14 @@
     <div class="menu-panel" role="region" aria-label="Session, stops and tools">
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
       {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+      <div class="pace-setting" role="group" aria-label="Move pace" data-testid="menu-walk-pace">
+        <span class="type-caption text-ink-2">Move pace</span>
+        <div class="pace-options">
+          <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'study'} class:btn-secondary={walkPace !== 'study'} aria-pressed={walkPace === 'study'} onclick={() => setWalkPace('study')}>Study (1.4 s)</button>
+          <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'quick'} class:btn-secondary={walkPace !== 'quick'} aria-pressed={walkPace === 'quick'} onclick={() => setWalkPace('quick')}>Quick (0.7 s)</button>
+          <button type="button" class="btn btn-sm" class:btn-primary={walkPace === 'off'} class:btn-secondary={walkPace !== 'off'} aria-pressed={walkPace === 'off'} onclick={() => setWalkPace('off')}>Off</button>
+        </div>
+      </div>
       <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
       <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
       <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
@@ -508,6 +523,8 @@
       ontoggleautotap={toggleAutoTap}
       onfullcontrol={mode => { fullControl = mode; }}
       onautotap={handleAutoTap}
+      {walkPace}
+      onwalkpace={setWalkPace}
     />
   {:else if atHome}
     {@render notices()}
@@ -628,4 +645,6 @@
   }
   .menu-panel > :global(*) { width: 100%; }
   .menu-panel > a { width: auto; }
+  .pace-setting { display: grid; gap: 6px; }
+  .pace-options { display: flex; flex-wrap: wrap; gap: 6px; }
 </style>

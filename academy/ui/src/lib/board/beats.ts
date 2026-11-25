@@ -151,6 +151,8 @@ export interface WalkStop {
   opponentAction: boolean;
   /** True when this stop belongs solely to the person's own move or draw step. */
   yoursOnly: boolean;
+  /** True when every line in this stop is only a turn-based draw step. */
+  drawStepOnly: boolean;
   /** Kept board range key (`first:last`) when kept without fallback; null otherwise. */
   boardKey: string | null;
 }
@@ -190,6 +192,7 @@ export function walkStops(
       }
       prev.opponentAction = prev.opponentAction || opponentAction;
       prev.yoursOnly = prev.yoursOnly && yoursOnly;
+      prev.drawStepOnly = prev.drawStepOnly && isDrawStep;
       continue;
     }
     stops.push({
@@ -203,27 +206,32 @@ export function walkStops(
       subjects: [...new Set(line.subjects)],
       opponentAction,
       yoursOnly,
+      drawStepOnly: isDrawStep,
       boardKey,
     });
   }
   return stops;
 }
 
+/** Whether the track has at least one non-draw-step stop worth scrubbing or replaying. */
+export function hasWalkableTurn(stops: readonly WalkStop[]): boolean {
+  return stops.some(stop => !stop.drawStepOnly);
+}
+
 /**
- * Unread stops after `shownSeq` to walk automatically when the opponent acted.
- * Returns empty when the opponent did not act in the unread tail (the person's
- * own moves and draw step alone never trigger an automatic walk).
+ * Unread stops after `shownSeq` to walk automatically (both the person's own
+ * moves and the opponent's moves, in order). A bare turn-start draw step with
+ * no other moves or consequences does not trigger an automatic walk.
  */
 export function unreadWalkStops(stops: readonly WalkStop[], shownSeq: number): WalkStop[] {
   const unseen = stops.filter(stop => stop.seqs.some(s => s > shownSeq));
-  const firstOpponent = unseen.findIndex(stop => stop.opponentAction);
-  if (firstOpponent < 0) return [];
-  return unseen.slice(firstOpponent).filter(stop => !stop.yoursOnly);
+  if (unseen.every(stop => stop.drawStepOnly)) return [];
+  return unseen;
 }
 
 /**
  * The turn's stops shown on the bottom scrubber: the cursor's own turn while
- * looking back, else the latest turn in which the opponent acted.
+ * looking back, else the latest turn with a non-draw-step move or consequence.
  */
 export function scrubberStops(
   stops: readonly WalkStop[],
@@ -236,7 +244,7 @@ export function scrubberStops(
   }
   if (targetTurn === null) {
     for (let i = stops.length - 1; i >= 0; i -= 1) {
-      if (stops[i].opponentAction) {
+      if (!stops[i].drawStepOnly) {
         targetTurn = stops[i].turn;
         break;
       }
@@ -269,5 +277,33 @@ export function sharedLaterCount(
 
 // ———————————————————————————————————————— Pace
 
-/** How long each stop stays while walking, in milliseconds. */
-export const BEAT_MS = 700;
+export type WalkPace = 'study' | 'quick' | 'off';
+
+export const PACE_MS: Record<WalkPace, number | null> = {
+  study: 1400,
+  quick: 700,
+  off: null,
+};
+
+/** Default duration each stop stays while walking, in milliseconds (Study pace). */
+export const BEAT_MS = PACE_MS.study!;
+
+const PACE_STORAGE_KEY = 'academy.table.pace';
+
+export function loadWalkPace(): WalkPace {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PACE_STORAGE_KEY) : null;
+    if (raw === 'study' || raw === 'quick' || raw === 'off') return raw;
+  } catch { /* Default to Study pace when storage is unavailable. */ }
+  return 'study';
+}
+
+export function saveWalkPace(pace: WalkPace): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(PACE_STORAGE_KEY, pace);
+  } catch { /* Preference persistence is best-effort. */ }
+}
+
+export function paceMs(pace: WalkPace): number | null {
+  return PACE_MS[pace];
+}

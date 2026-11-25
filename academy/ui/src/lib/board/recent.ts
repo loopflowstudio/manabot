@@ -110,12 +110,13 @@ export function targetNames(entry: StackEntryView, frame: ExperienceFrame, names
   });
 }
 
-/** Standing lines: stack entries to their targets, blockers to attackers. */
+/** Standing lines: stack entries to their targets, blockers to attackers, and hovered target preview. */
 export function boardLines(
   frame: ExperienceFrame,
   events: readonly PresentationEvent[],
   resolved: readonly ResolvedSpell[] = [],
   since: number | null = null,
+  pointedTarget: Endpoint | null = null,
 ): BoardLine[] {
   const onStack = stackIds(frame);
   const onBoard = battlefieldIds(frame);
@@ -152,6 +153,9 @@ export function boardLines(
       const to = endpoint(target.object.subject, frame, onBoard, onStack)
         ?? (onBoard.has(target.object.display_id) ? { kind: 'object', id: target.object.display_id } as const : null);
       if (to) add({ from: { kind: 'stack', id: context.source.display_id }, to, kind: 'target' });
+    }
+    if (pointedTarget && frame.action_space === 'CHOOSE_TARGET') {
+      add({ from: { kind: 'stack', id: context.source.display_id }, to: pointedTarget, kind: 'target' });
     }
   }
   for (const permanent of [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield]) {
@@ -194,6 +198,10 @@ export function recentMarks(
     if (event.from_revision < since) return;
     const kind = event.kind;
     switch (kind.kind) {
+      case 'turn_started':
+        // Creature damage wears off at cleanup; never carry stale creature damage badges into the next turn.
+        marks.damage.objects.clear();
+        break;
       case 'targeted':
         if (kind.target.kind === 'object') marks.touched.add(kind.target.id.entity);
         break;
@@ -231,6 +239,14 @@ export function recentMarks(
         break;
     }
   });
+  // Only show creature damage deltas while the creature still bears damage on this board.
+  const currentDamage = new Map<number, number>();
+  for (const permanent of [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield]) {
+    currentDamage.set(permanent.id, permanent.damage ?? 0);
+  }
+  for (const id of [...marks.damage.objects.keys()]) {
+    if ((currentDamage.get(id) ?? 0) <= 0) marks.damage.objects.delete(id);
+  }
   marks.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));
   return marks;
 }

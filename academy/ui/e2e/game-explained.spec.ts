@@ -321,3 +321,153 @@ test('triggered ability on the stack draws its target arrow and names itself in 
   await page.waitForTimeout(150);
   await page.screenshot({ path: testInfo.outputPath('ability-target-arrow-night.png') });
 });
+
+test('a combat with three or more creatures shows the structured combat table on its damage stop', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+
+  const recovery = structuredClone(boltFixture.recovery);
+  recovery.reason = 'initial_connect';
+  recovery.frame.match_id = 'combat-table-proof';
+  recovery.frame.revision = 30;
+  recovery.frame.frame_hash = 'combat-table-30';
+  recovery.frame.projection.turn = {
+    turn_number: 6,
+    phase: 'COMBAT',
+    step: 'COMBAT_END',
+    active_player_id: 1,
+    agent_player_id: 0,
+  };
+  recovery.frame.projection.agent.life = 12;
+  recovery.frame.projection.opponent.life = 20;
+  recovery.frame.projection.agent.stack = [];
+  recovery.frame.projection.opponent.stack = [];
+  recovery.frame.projection.stack_objects = [];
+  recovery.frame.projection.agent.battlefield = [
+    {
+      id: 20,
+      name: 'Beetle-Headed Merchants',
+      controller_id: 0,
+      tapped: false,
+      power: 5,
+      toughness: 4,
+      damage: 3,
+      summoning_sick: false,
+      plus1_counters: 0,
+      types: { is_creature: true, is_land: false },
+    },
+  ] as typeof recovery.frame.projection.agent.battlefield;
+  recovery.frame.projection.opponent.battlefield = [
+    {
+      id: 11,
+      name: 'Wandering Musicians',
+      controller_id: 1,
+      tapped: true,
+      power: 2,
+      toughness: 5,
+      damage: 0,
+      summoning_sick: false,
+      plus1_counters: 0,
+      types: { is_creature: true, is_land: false },
+    },
+  ] as typeof recovery.frame.projection.opponent.battlefield;
+  recovery.frame.offers = [
+    {
+      id: 1,
+      actor: 0,
+      verb: 'pass_priority',
+      source: null,
+      label: 'Pass priority',
+      help: null,
+      choices: [],
+      confirm_label: 'Pass priority',
+      action_type: 'PRIORITY_PASS_PRIORITY',
+      focus: [],
+    },
+  ];
+  recovery.frame.action_space = 'PRIORITY';
+  recovery.frame.prompt = {
+    id: 1,
+    actor: 0,
+    kind: 'priority',
+    title: 'Priority',
+    instruction: 'Pass priority.',
+  };
+  const ev = (seq: number, kind: PresentationEvent['kind'], extra: Partial<PresentationEvent> = {}): PresentationEvent => ({
+    seq,
+    from_revision: 29,
+    to_revision: 30,
+    caused_by: null,
+    group: 1,
+    importance: 'normal',
+    suggested_ms: 0,
+    sound: null,
+    kind,
+    ...extra,
+  });
+  recovery.presentation_tail = [
+    ev(0, { kind: 'turn_started', player: 1, turn_number: 6 }),
+    ev(1, { kind: 'attack_group', attackers: [{ entity: 10, incarnation: 1 }, { entity: 11, incarnation: 1 }], defender: { kind: 'player', id: 0 } }, {
+      labels: { objects: { '10:1': 'Earth Kingdom Jailer', '11:1': 'Wandering Musicians' } },
+    }),
+    ev(2, { kind: 'blocked', attacker: { entity: 10, incarnation: 1 }, blockers: [{ entity: 20, incarnation: 1 }] }, {
+      labels: { objects: { '10:1': 'Earth Kingdom Jailer', '20:1': 'Beetle-Headed Merchants' } },
+    }),
+    ev(3, { kind: 'damage', source: { kind: 'object', id: { entity: 10, incarnation: 1 } }, target: { kind: 'object', id: { entity: 20, incarnation: 1 } }, amount: 3 }, {
+      labels: { objects: { '10:1': 'Earth Kingdom Jailer', '20:1': 'Beetle-Headed Merchants' } },
+    }),
+    ev(4, { kind: 'damage', source: { kind: 'object', id: { entity: 20, incarnation: 1 } }, target: { kind: 'object', id: { entity: 10, incarnation: 1 } }, amount: 5 }, {
+      labels: { objects: { '20:1': 'Beetle-Headed Merchants', '10:1': 'Earth Kingdom Jailer' } },
+    }),
+    ev(5, { kind: 'damage', source: { kind: 'object', id: { entity: 11, incarnation: 1 } }, target: { kind: 'player', id: 0 }, amount: 2 }, {
+      labels: { objects: { '11:1': 'Wandering Musicians' } },
+    }),
+    ev(6, { kind: 'died', objects: [{ entity: 10, incarnation: 1 }] }, {
+      cause: 4,
+      rule: 'lethal_damage',
+      labels: { objects: { '10:1': 'Earth Kingdom Jailer' } },
+    }),
+  ];
+  recovery.presentation_cursor = 0;
+
+  await page.routeWebSocket('**/ws/play', socket => {
+    socket.onMessage(raw => {
+      const message = JSON.parse(String(raw)) as { type?: string };
+      if (message.type === 'new_game' || message.type === 'resume') {
+        socket.send(JSON.stringify({
+          type: 'observation',
+          table: tableSnapshot(),
+          data: recovery.frame.projection,
+          actions: [],
+          session_id: 'combat-table-session',
+          resume_token: 'combat-table-token',
+          recovery,
+        }));
+      }
+    });
+  });
+
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await expect(page.getByTestId('game')).toBeVisible();
+
+  // Clicking the combat damage line opens the structured combat table for the 3-creature fight.
+  const dmgLine = page.locator('[data-testid=game-log] button[data-history-seq]').filter({ hasText: /Earth Kingdom Jailer dealt 3/ }).first();
+  await dmgLine.click();
+  const table = page.getByTestId('combat-table');
+  await expect(table).toBeVisible();
+  await expect(table).toHaveAttribute('data-creatures', '3');
+  await expect(table.getByTestId('combat-table-row')).toHaveCount(2);
+  await expect(table).toContainText('Earth Kingdom Jailer');
+  await expect(table).toContainText('Beetle-Headed Merchants');
+  await expect(table).toContainText('Wandering Musicians');
+  await expect(table).toContainText('died · lethal damage');
+  await expect(table).toContainText('you −2');
+
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('combat-table-wash.png') });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('combat-table-night.png') });
+});

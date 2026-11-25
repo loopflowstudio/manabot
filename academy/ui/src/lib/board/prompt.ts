@@ -6,10 +6,10 @@
  * own instruction stays available behind the prompt's details; this line adds
  * no rules and chooses nothing.
  */
-import type { ExperienceFrame } from '$lib/types';
+import type { ExperienceFrame, Observation, PermanentState } from '$lib/types';
 import type { PaymentPreview } from '$lib/payment-preview';
 import { payLabel, paymentPlan } from './payment';
-import { stackName, type BoardView } from './view';
+import { stackName, type BoardView, type PlacedOffer } from './view';
 
 function anyCards(view: BoardView): boolean {
   const permanents = [view.you, view.opponent].flatMap(side => [...side.creatures, ...side.support])
@@ -114,6 +114,67 @@ export interface PrimaryLabel {
  */
 export function offerText(offer: { verb?: string; label: string }): string {
   return offer.verb === 'pay' ? offer.label.replace(/^Pay the cost/, 'Auto pay') : offer.label;
+}
+
+/**
+ * Disambiguate rail choice labels when two or more legal choices share the
+ * same base text and point at distinct battlefield permanents (e.g. two
+ * creatures with the same name). Unique labels are returned unchanged.
+ */
+export function offerChoiceLabel(
+  placed: PlacedOffer,
+  list: readonly PlacedOffer[],
+  projection: Observation,
+): string {
+  const base = offerText(placed.offer);
+  if (placed.anchor.kind !== 'object') return base;
+  const peers = list.filter(
+    candidate => candidate.anchor.kind === 'object' && offerText(candidate.offer) === base,
+  );
+  if (peers.length <= 1) return base;
+
+  const yours = new Map(projection.agent.battlefield.map(p => [p.id, p]));
+  const theirs = new Map(projection.opponent.battlefield.map(p => [p.id, p]));
+  const lookup = (id: number): { perm: PermanentState; side: 'yours' | 'theirs' } | null => {
+    const own = yours.get(id);
+    if (own) return { perm: own, side: 'yours' };
+    const opp = theirs.get(id);
+    return opp ? { perm: opp, side: 'theirs' } : null;
+  };
+
+  const infos = peers.map(peer => ({
+    id: peer.offer.id,
+    info: peer.anchor.kind === 'object' ? lookup(peer.anchor.id) : null,
+  }));
+  const present = infos.flatMap(entry => (entry.info ? [entry.info] : []));
+  // Only disambiguate battlefield permanents (not identical basic lands in hand).
+  if (present.length === 0) return base;
+  const sidesDiffer = new Set(present.map(entry => entry.side)).size > 1;
+  const ptsDiffer = new Set(present.map(entry => `${entry.perm.power}/${entry.perm.toughness}`)).size > 1;
+  const tappedDiffer = new Set(present.map(entry => Boolean(entry.perm.tapped))).size > 1;
+
+  const describe = (entry: { perm: PermanentState; side: 'yours' | 'theirs' } | null): string => {
+    if (!entry) return '';
+    const { perm, side } = entry;
+    const parts: string[] = [];
+    if (sidesDiffer) parts.push(side);
+    if (ptsDiffer && perm.power !== null && perm.toughness !== null) parts.push(`${perm.power}/${perm.toughness}`);
+    if (perm.damage) parts.push(`${perm.damage} dmg`);
+    if (perm.plus1_counters) parts.push(`+${perm.plus1_counters}/+${perm.plus1_counters}`);
+    if (perm.attacking) parts.push('attacking');
+    if (perm.blocking !== undefined) parts.push('blocking');
+    if (tappedDiffer && perm.tapped) parts.push('tapped');
+    return parts.join(' · ');
+  };
+
+  const tags = infos.map(entry => describe(entry.info));
+  const myIdx = infos.findIndex(entry => entry.id === placed.offer.id);
+  if (myIdx < 0) return base;
+  const myTag = tags[myIdx];
+  const sameTagIndices = tags.flatMap((tag, i) => (tag === myTag ? [i] : []));
+  const ordinal = sameTagIndices.length > 1 ? `#${sameTagIndices.indexOf(myIdx) + 1}` : '';
+  const suffix = [myTag, ordinal].filter(Boolean).join(' ');
+  return suffix ? `${base} (${suffix})` : base;
 }
 
 /**

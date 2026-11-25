@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { Observation, PresentationEvent } from '$lib/types';
 import {
+  BEAT_MS,
+  PACE_MS,
   cursorView,
+  hasWalkableTurn,
+  paceMs,
   scrubberStops,
   sharedLaterCount,
   unreadWalkStops,
@@ -112,22 +116,56 @@ describe('walk stops over kept boards', () => {
     expect(singleLine.caption).toBe("Tiger-Seal's trigger resolved");
   });
 
-  it('plays nothing for the person\'s own moves or an empty opponent draw step alone', () => {
+  it('walks the person\'s own moves just like the opponent\'s, while skipping a bare draw step alone', () => {
     const events: PresentationEvent[] = [
       ev(1, { kind: 'turn_started', player: 0, turn_number: 1 }),
-      ev(2, { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 }, {
+      ev(2, { kind: 'cast', object: { entity: 10, incarnation: 1 }, controller: 0, stack: 10 }, {
         caused_by: 'cmd-1',
-        labels: { objects: { '10:1': 'Island' } },
+        labels: { objects: { '10:1': 'Lightning Strike' }, stacks: { '10': 'Lightning Strike' } },
       }),
-      ev(3, { kind: 'turn_started', player: 1, turn_number: 2 }),
-      ev(4, { kind: 'drew', player: 1 }, { rule: 'draw_step' }),
+      ev(3, { kind: 'targeted', source: { kind: 'stack', id: 10 }, target: { kind: 'object', id: { entity: 19, incarnation: 1 } } }, {
+        cause: 2,
+        group: 2,
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' } },
+      }),
+      ev(4, { kind: 'resolved', stack: 10 }, {
+        cause: 2,
+        group: 2,
+        labels: { stacks: { '10': 'Lightning Strike' } },
+      }),
+      ev(5, { kind: 'damage', source: { kind: 'stack', id: 10 }, target: { kind: 'object', id: { entity: 19, incarnation: 1 } }, amount: 3 }, {
+        cause: 4,
+        group: 2,
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' }, stacks: { '10': 'Lightning Strike' } },
+      }),
+      ev(6, { kind: 'died', objects: [{ entity: 19, incarnation: 1 }] }, {
+        cause: 4,
+        group: 2,
+        rule: 'lethal_damage',
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' } },
+      }),
+      ev(7, { kind: 'turn_started', player: 1, turn_number: 2 }),
+      ev(8, { kind: 'drew', player: 1 }, { rule: 'draw_step' }),
+    ];
+    const boards: StepBoard[] = [
+      { first: 2, last: 3, projection: obs('cast') },
+      { first: 4, last: 5, projection: obs('damage') },
+      { first: 6, last: 6, projection: obs('died') },
     ];
     const turns = buildHistory(events, () => EMPTY, PLAYERS);
-    const stops = walkStops(turns, []);
-    expect(unreadWalkStops(stops, 0)).toEqual([]);
+    const stops = walkStops(turns, boards);
+    // Your own spell walks cast -> damage -> death.
+    expect(unreadWalkStops(stops, 1).map(s => s.seq)).toEqual([2, 5, 6, 8]);
+    // A bare draw step alone after everything else was already shown does not walk.
+    expect(unreadWalkStops(stops, 6)).toEqual([]);
+    expect(hasWalkableTurn(stops)).toBe(true);
+    expect(BEAT_MS).toBe(1400);
+    expect(PACE_MS).toEqual({ study: 1400, quick: 700, off: null });
+    expect(paceMs('quick')).toBe(700);
+    expect(paceMs('off')).toBeNull();
   });
 
-  it('selects the cursor turn or the latest opponent turn for the scrubber', () => {
+  it('selects the cursor turn or the latest turn with a move for the scrubber', () => {
     const events: PresentationEvent[] = [
       ev(1, { kind: 'turn_started', player: 0, turn_number: 1 }),
       ev(2, { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 }, {
@@ -146,7 +184,7 @@ describe('walk stops over kept boards', () => {
     ];
     const turns = buildHistory(events, () => EMPTY, PLAYERS);
     const stops = walkStops(turns, []);
-    // At now (cursor null), scrubber shows Turn 2 (the opponent's latest turn).
+    // At now (cursor null), scrubber shows Turn 2 (latest turn with a non-draw-step move).
     expect(scrubberStops(stops, null)).toMatchObject({ turn: 2 });
     expect(scrubberStops(stops, null).stops.map(s => s.seq)).toEqual([4]);
     // Looking back at Turn 1 shows Turn 1's stops.

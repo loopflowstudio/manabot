@@ -345,6 +345,17 @@ describe('the spell being cast', () => {
     expect(permanents(view).map(item => item.permanent.id)).toContain(land.id);
   });
 
+  it('keeps stack_objects in top-first authority order so index 0 truly resolves next', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    frame.projection.decision_context = undefined;
+    frame.projection.stack_objects = [
+      { id: 202, kind: 'triggered_ability', controller: 0, label: 'Momo, Friendly Flier — trigger' },
+      { id: 201, kind: 'triggered_ability', controller: 1, label: 'Jet, Freedom Fighter — trigger' },
+    ];
+    const view = boardView(frame, PLAYERS);
+    expect(view.stack.map(item => item.entry.id)).toEqual([202, 201]);
+  });
+
   it('draws blockers opposite the attackers they block without reordering idle boards', () => {
     const frame = structuredClone(navigation.DECLARE_BLOCKER.frame);
     const makeCreature = (id: number, name: string, controller: number, extra: Record<string, unknown> = {}) => ({

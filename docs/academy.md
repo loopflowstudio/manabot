@@ -1064,23 +1064,27 @@ again** always respond directly. Reconnecting or reloading returns the cursor
 to now and shows the actual pending decision; turns already told are not
 walked again.
 
-**After the opponent acts,** the board starts at their first unread board stop
-and walks forward one kept board at a time: first Lightning Strike on the
-stack targeting Earth Kingdom Jailer, then Jailer on the battlefield with 3
-damage, then Jailer gone with **lethal damage** where it was, then a
-death trigger on the stack. Passes are never a stop, and lines that
-happened at once share one stop. Under the board, in a steady-height bar that
-never shifts the board or your hand once the opponent has acted, sits one
-caption telling that stop's line or lines with any rule, and a scrubber with a
-tick for each stop of the turn (heavier at the first stop of each move). Click
-a tick to put the cursor on that stop and hold; rest the pointer on the
-caption to hold the walk while you read it; select **Show their turn again**
-to replay from that turn's first stop. The rail highlights the matching
-history line throughout. **Menu → Opponent's moves** sets the pace: **Quick**
-(0.7 s a stop, the default), **Slow** (1.4 s) or **Off**. With **Off** or
-reduced motion the board stays on now and nothing walks automatically, while
-the scrubber, captions, **Show their turn again** and **Since your last move**
-all still work by hand.
+**Every move lands on the table.** After any move—yours or the opponent's—the
+board starts at the first unread board stop and walks forward one kept board at
+a time: first Lightning Strike on the stack targeting Earth Kingdom Jailer, then
+Jailer on the battlefield with 3 damage, then Jailer gone with a dashed slot
+reading **lethal damage** where it died, then a death trigger on the stack.
+Passes are never a stop, bare turn-start draw steps alone do not walk, and lines
+that happened at once share one stop. When a combat involves three or more
+creatures, the combat damage stop also opens a compact breakdown table
+(Attacker, Blocked by, Dealt, Took, Result) whose rows raise their combatants on
+hover and pause the walk while you read it; smaller combats keep the single-line
+caption. Under the board, in a steady-height bar that never shifts the board or
+your hand once a move has occurred, sits one caption telling that stop's line or
+lines with any rule, a pace control (**1.4s** Study default, **Quick** 0.7 s, or
+**Off**, also in **Game → Move pace**), **Replay turn** to replay from that
+turn's first stop, and a scrubber with a tick for each stop of the turn (heavier
+at the first stop of each move). Click a tick to put the cursor on that stop and
+hold; rest the pointer on the caption or combat table to hold the walk while you
+read it. The rail highlights the matching history line throughout. With **Off**
+or reduced motion the board stays on now and nothing walks automatically, while
+the scrubber, captions, **Replay turn**, the combat table and **Since your last
+move** all still work by hand.
 
 **Motion** is the drawn difference between one board stop and the next,
 180 ms at most, and never holds a choice:
