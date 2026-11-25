@@ -18,11 +18,21 @@ fn card_render_id(game: &Game, object: ObjectId) -> ObjectRenderId {
         .into()
 }
 
-fn group_card(game: &Game, object: ObjectId) -> GroupCard {
-    GroupCard {
-        item: card_render_id(game, object),
-        label: game.observed_object_name(object),
-    }
+fn group_cards(game: &Game, objects: &[ObjectId]) -> Vec<GroupCard> {
+    objects
+        .iter()
+        .map(|&object| GroupCard {
+            item: card_render_id(game, object),
+            label: game.observed_object_name(object),
+        })
+        .collect()
+}
+
+fn render_ids(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> Vec<ObjectRenderId> {
+    objects
+        .into_iter()
+        .map(|object| card_render_id(game, object))
+        .collect()
 }
 
 fn render_to_object_map(game: &Game, objects: &[ObjectId]) -> HashMap<ObjectRenderId, ObjectId> {
@@ -33,13 +43,153 @@ fn render_to_object_map(game: &Game, objects: &[ObjectId]) -> HashMap<ObjectRend
         .collect()
 }
 
-fn refuse_card(game: &Game, id: ObjectRenderId, reason: &str) -> PlanCheck {
-    let label = game.render_card_label(id);
-    PlanCheck::Refused(GroupRefusal {
-        item: Some(id),
-        reason: format!("{label} {reason}"),
-        label,
-    })
+fn resolve_card(
+    lookup: &HashMap<ObjectRenderId, ObjectId>,
+    id: ObjectRenderId,
+    missing_err: &str,
+) -> Result<ObjectId, AgentError> {
+    lookup
+        .get(&id)
+        .copied()
+        .ok_or_else(|| AgentError(missing_err.into()))
+}
+
+struct CardPlanReasons {
+    committed: &'static str,
+    missing: &'static str,
+    duplicate: &'static str,
+}
+
+fn validate_card_plan<'a>(
+    game: &Game,
+    items: &[GroupCard],
+    committed: impl IntoIterator<Item = &'a ObjectRenderId>,
+    planned: impl IntoIterator<Item = &'a ObjectRenderId>,
+    require_all: bool,
+    reasons: CardPlanReasons,
+) -> PlanCheck {
+    let remaining: HashSet<_> = items.iter().map(|card| card.item).collect();
+    let committed_set: HashSet<_> = committed.into_iter().copied().collect();
+    let mut seen = HashSet::new();
+    let refuse = |id: ObjectRenderId, suffix: &str| {
+        let label = game.render_card_label(id);
+        PlanCheck::Refused(GroupRefusal {
+            item: Some(id),
+            reason: format!("{label} {suffix}"),
+            label,
+        })
+    };
+    for &id in planned {
+        if !remaining.contains(&id) {
+            let reason = if committed_set.contains(&id) {
+                reasons.committed
+            } else {
+                reasons.missing
+            };
+            return refuse(id, reason);
+        }
+        if !seen.insert(id) {
+            return refuse(id, reasons.duplicate);
+        }
+    }
+    if require_all && seen.len() < remaining.len() {
+        return PlanCheck::Incomplete;
+    }
+    PlanCheck::Ready
+}
+
+#[derive(Clone, Copy)]
+enum LibraryStep {
+    Scry {
+        object: ObjectId,
+        render_id: ObjectRenderId,
+        to_bottom: bool,
+    },
+    Select {
+        object: ObjectId,
+        render_id: ObjectRenderId,
+        refusal_suffix: &'static str,
+    },
+    DeclineSurveil,
+}
+
+fn step_library(
+    planned: &[LibraryStep],
+    next_index: &mut usize,
+    live: &Game,
+    position: &Game,
+) -> NextStep {
+    let Some(&step) = planned.get(*next_index) else {
+        return NextStep::Done;
+    };
+    *next_index += 1;
+    let Some(space) = position.action_space() else {
+        return NextStep::Done;
+    };
+    match step {
+        LibraryStep::Scry {
+            object,
+            render_id,
+            to_bottom,
+        } => match space.actions.iter().position(|action| {
+            matches!(
+                action,
+                Action::ScryCard {
+                    object: offered,
+                    to_bottom: offered_bottom,
+                    ..
+                } if *offered == object && *offered_bottom == to_bottom
+            )
+        }) {
+            Some(action_index) => NextStep::Step {
+                action_index,
+                item: Some(render_id),
+            },
+            None => {
+                let label = live.observed_object_name(object);
+                NextStep::Refuse(GroupRefusal {
+                    item: Some(render_id),
+                    reason: format!("{label} cannot be placed there."),
+                    label,
+                })
+            }
+        },
+        LibraryStep::Select {
+            object,
+            render_id,
+            refusal_suffix,
+        } => match space.actions.iter().position(|action| {
+            matches!(action, Action::SelectCard { object: offered, .. } if *offered == object)
+        }) {
+            Some(action_index) => NextStep::Step {
+                action_index,
+                item: Some(render_id),
+            },
+            None => {
+                let label = live.observed_object_name(object);
+                NextStep::Refuse(GroupRefusal {
+                    item: Some(render_id),
+                    reason: format!("{label} {refusal_suffix}"),
+                    label,
+                })
+            }
+        },
+        LibraryStep::DeclineSurveil => match space
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::Decline { .. }))
+        {
+            Some(action_index) => NextStep::Step {
+                action_index,
+                item: None,
+            },
+            None => NextStep::Refuse(GroupRefusal {
+                item: None,
+                label: "Surveil".to_string(),
+                reason: "Cannot finish surveil now.".to_string(),
+            }),
+        },
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -49,7 +199,7 @@ fn refuse_card(game: &Game, id: ObjectRenderId, reason: &str) -> PlanCheck {
 pub(crate) struct ScryGroup;
 
 pub(crate) struct ScryProgress {
-    planned: Vec<(ObjectId, ObjectRenderId, bool)>,
+    planned: Vec<LibraryStep>,
     next_index: usize,
     committed_top: Vec<ObjectRenderId>,
     committed_bottom: Vec<ObjectRenderId>,
@@ -73,15 +223,11 @@ impl GroupKind for ScryGroup {
             return None;
         }
         Some(GroupSpec::Scry {
-            items: remaining.iter().map(|&o| group_card(game, o)).collect(),
-            committed_top: top.iter().map(|&o| card_render_id(game, o)).collect(),
+            items: group_cards(game, remaining),
+            committed_top: render_ids(game, top.iter().copied()),
             // `Decision::Scry` commits `bottom.iter().rev()` to index 0, so
             // `bottom.last()` sits above `bottom[0]`. Expose top-of-bottom first.
-            committed_bottom: bottom
-                .iter()
-                .rev()
-                .map(|&o| card_render_id(game, o))
-                .collect(),
+            committed_bottom: render_ids(game, bottom.iter().rev().copied()),
         })
     }
 
@@ -101,25 +247,18 @@ impl GroupKind for ScryGroup {
         else {
             unreachable!("matches_plan already verified variant");
         };
-        let remaining: HashSet<_> = items.iter().map(|card| card.item).collect();
-        let mut seen = HashSet::new();
-        for &id in top.iter().chain(bottom.iter()) {
-            if !remaining.contains(&id) {
-                let reason = if committed_top.contains(&id) || committed_bottom.contains(&id) {
-                    "has already been placed."
-                } else {
-                    "is not in the pending scry."
-                };
-                return refuse_card(game, id, reason);
-            }
-            if !seen.insert(id) {
-                return refuse_card(game, id, "can only be placed once.");
-            }
-        }
-        if seen.len() < remaining.len() {
-            return PlanCheck::Incomplete;
-        }
-        PlanCheck::Ready
+        validate_card_plan(
+            game,
+            items,
+            committed_top.iter().chain(committed_bottom.iter()),
+            top.iter().chain(bottom.iter()),
+            true,
+            CardPlanReasons {
+                committed: "has already been placed.",
+                missing: "is not in the pending scry.",
+                duplicate: "can only be placed once.",
+            },
+        )
     }
 
     fn start(
@@ -147,20 +286,24 @@ impl GroupKind for ScryGroup {
         };
         let lookup = render_to_object_map(game, remaining);
         let mut planned = Vec::with_capacity(top.len() + bottom.len());
-        for &id in top {
-            let object = *lookup
-                .get(&id)
-                .ok_or_else(|| AgentError("card is not in the pending scry".into()))?;
-            planned.push((object, id, false));
+        for &render_id in top {
+            let object = resolve_card(&lookup, render_id, "card is not in the pending scry")?;
+            planned.push(LibraryStep::Scry {
+                object,
+                render_id,
+                to_bottom: false,
+            });
         }
         // `Decision::Scry` repositions `bottom.iter().rev()` to index 0, so
         // emitting `plan.bottom` in reverse commits `plan.bottom[0]` above
         // `plan.bottom.last()`, matching `OrderLibrary { end: Bottom }`.
-        for &id in bottom.iter().rev() {
-            let object = *lookup
-                .get(&id)
-                .ok_or_else(|| AgentError("card is not in the pending scry".into()))?;
-            planned.push((object, id, true));
+        for &render_id in bottom.iter().rev() {
+            let object = resolve_card(&lookup, render_id, "card is not in the pending scry")?;
+            planned.push(LibraryStep::Scry {
+                object,
+                render_id,
+                to_bottom: true,
+            });
         }
         Ok(ScryProgress {
             planned,
@@ -186,38 +329,7 @@ impl GroupKind for ScryGroup {
         _plan: &GroupPlan,
         progress: &mut Self::Progress,
     ) -> NextStep {
-        let Some(&(object, render_id, to_bottom)) = progress.planned.get(progress.next_index)
-        else {
-            return NextStep::Done;
-        };
-        progress.next_index += 1;
-        let Some(space) = position.action_space() else {
-            return NextStep::Done;
-        };
-        let index = space.actions.iter().position(|action| {
-            matches!(
-                action,
-                Action::ScryCard {
-                    object: offered,
-                    to_bottom: offered_bottom,
-                    ..
-                } if *offered == object && *offered_bottom == to_bottom
-            )
-        });
-        match index {
-            Some(action_index) => NextStep::Step {
-                action_index,
-                item: Some(render_id),
-            },
-            None => {
-                let label = live.observed_object_name(object);
-                NextStep::Refuse(GroupRefusal {
-                    item: Some(render_id),
-                    reason: format!("{label} cannot be placed there."),
-                    label,
-                })
-            }
-        }
+        step_library(&progress.planned, &mut progress.next_index, live, position)
     }
 
     fn finish(
@@ -254,13 +366,8 @@ impl GroupKind for ScryGroup {
 
 pub(crate) struct SurveilGroup;
 
-enum SurveilStep {
-    Graveyard(ObjectId, ObjectRenderId),
-    FinishKeep,
-}
-
 pub(crate) struct SurveilProgress {
-    planned: Vec<SurveilStep>,
+    planned: Vec<LibraryStep>,
     next_index: usize,
     committed_graveyard: Vec<ObjectRenderId>,
     remaining: Vec<ObjectRenderId>,
@@ -290,8 +397,8 @@ impl GroupKind for SurveilGroup {
             return None;
         }
         Some(GroupSpec::Surveil {
-            items: remaining.iter().map(|&o| group_card(game, o)).collect(),
-            committed_graveyard: graveyard.iter().map(|&o| card_render_id(game, o)).collect(),
+            items: group_cards(game, &remaining),
+            committed_graveyard: render_ids(game, graveyard.iter().copied()),
         })
     }
 
@@ -310,22 +417,18 @@ impl GroupKind for SurveilGroup {
         else {
             unreachable!("matches_plan already verified variant");
         };
-        let remaining: HashSet<_> = items.iter().map(|card| card.item).collect();
-        let mut seen = HashSet::new();
-        for &id in graveyard {
-            if !remaining.contains(&id) {
-                let reason = if committed_graveyard.contains(&id) {
-                    "is already marked for the graveyard."
-                } else {
-                    "is not in the pending surveil."
-                };
-                return refuse_card(game, id, reason);
-            }
-            if !seen.insert(id) {
-                return refuse_card(game, id, "can only be chosen once.");
-            }
-        }
-        PlanCheck::Ready
+        validate_card_plan(
+            game,
+            items,
+            committed_graveyard,
+            graveyard,
+            false,
+            CardPlanReasons {
+                committed: "is already marked for the graveyard.",
+                missing: "is not in the pending surveil.",
+                duplicate: "can only be chosen once.",
+            },
+        )
     }
 
     fn start(
@@ -360,16 +463,18 @@ impl GroupKind for SurveilGroup {
             .collect();
         let lookup = render_to_object_map(game, &remaining_objects);
         let mut planned = Vec::with_capacity(graveyard.len() + 1);
-        for &id in graveyard {
-            let object = *lookup
-                .get(&id)
-                .ok_or_else(|| AgentError("card is not in the pending surveil".into()))?;
-            planned.push(SurveilStep::Graveyard(object, id));
+        for &render_id in graveyard {
+            let object = resolve_card(&lookup, render_id, "card is not in the pending surveil")?;
+            planned.push(LibraryStep::Select {
+                object,
+                render_id,
+                refusal_suffix: "cannot be put into the graveyard.",
+            });
         }
         // When every remaining card goes to the graveyard, the final SelectCard
         // finishes Surveil automatically without an explicit Decline step.
         if graveyard.len() < remaining_objects.len() {
-            planned.push(SurveilStep::FinishKeep);
+            planned.push(LibraryStep::DeclineSurveil);
         }
         Ok(SurveilProgress {
             planned,
@@ -395,51 +500,7 @@ impl GroupKind for SurveilGroup {
         _plan: &GroupPlan,
         progress: &mut Self::Progress,
     ) -> NextStep {
-        let Some(step) = progress.planned.get(progress.next_index) else {
-            return NextStep::Done;
-        };
-        progress.next_index += 1;
-        let Some(space) = position.action_space() else {
-            return NextStep::Done;
-        };
-        match *step {
-            SurveilStep::Graveyard(object, render_id) => {
-                let index = space.actions.iter().position(|action| {
-                    matches!(action, Action::SelectCard { object: offered, .. } if *offered == object)
-                });
-                match index {
-                    Some(action_index) => NextStep::Step {
-                        action_index,
-                        item: Some(render_id),
-                    },
-                    None => {
-                        let label = live.observed_object_name(object);
-                        NextStep::Refuse(GroupRefusal {
-                            item: Some(render_id),
-                            reason: format!("{label} cannot be put into the graveyard."),
-                            label,
-                        })
-                    }
-                }
-            }
-            SurveilStep::FinishKeep => {
-                let index = space
-                    .actions
-                    .iter()
-                    .position(|action| matches!(action, Action::Decline { .. }));
-                match index {
-                    Some(action_index) => NextStep::Step {
-                        action_index,
-                        item: None,
-                    },
-                    None => NextStep::Refuse(GroupRefusal {
-                        item: None,
-                        label: "Surveil".to_string(),
-                        reason: "Cannot finish surveil now.".to_string(),
-                    }),
-                }
-            }
-        }
+        step_library(&progress.planned, &mut progress.next_index, live, position)
     }
 
     fn finish(
@@ -479,7 +540,7 @@ pub(crate) struct OrderLibraryGroup;
 
 pub(crate) struct OrderLibraryProgress {
     end: LibraryEnd,
-    planned: Vec<(ObjectId, ObjectRenderId)>,
+    planned: Vec<LibraryStep>,
     next_index: usize,
     committed: Vec<ObjectRenderId>,
 }
@@ -503,11 +564,8 @@ impl GroupKind for OrderLibraryGroup {
         }
         Some(GroupSpec::OrderLibrary {
             end: (*end).into(),
-            items: remaining.iter().map(|&o| group_card(game, o)).collect(),
-            committed: object_ids[..*next]
-                .iter()
-                .map(|&o| card_render_id(game, o))
-                .collect(),
+            items: group_cards(game, remaining),
+            committed: render_ids(game, object_ids[..*next].iter().copied()),
         })
     }
 
@@ -525,25 +583,18 @@ impl GroupKind for OrderLibraryGroup {
         else {
             unreachable!("matches_plan already verified variant");
         };
-        let remaining: HashSet<_> = items.iter().map(|card| card.item).collect();
-        let mut seen = HashSet::new();
-        for &id in order {
-            if !remaining.contains(&id) {
-                let reason = if committed.contains(&id) {
-                    "has already been ordered."
-                } else {
-                    "is not in the pending library order."
-                };
-                return refuse_card(game, id, reason);
-            }
-            if !seen.insert(id) {
-                return refuse_card(game, id, "can only be ordered once.");
-            }
-        }
-        if seen.len() < remaining.len() {
-            return PlanCheck::Incomplete;
-        }
-        PlanCheck::Ready
+        validate_card_plan(
+            game,
+            items,
+            committed,
+            order,
+            true,
+            CardPlanReasons {
+                committed: "has already been ordered.",
+                missing: "is not in the pending library order.",
+                duplicate: "can only be ordered once.",
+            },
+        )
     }
 
     fn start(
@@ -566,11 +617,17 @@ impl GroupKind for OrderLibraryGroup {
         };
         let lookup = render_to_object_map(game, &object_ids[*next..]);
         let mut planned = Vec::with_capacity(order.len());
-        for &id in order {
-            let object = *lookup
-                .get(&id)
-                .ok_or_else(|| AgentError("card is not in the pending library order".into()))?;
-            planned.push((object, id));
+        for &render_id in order {
+            let object = resolve_card(
+                &lookup,
+                render_id,
+                "card is not in the pending library order",
+            )?;
+            planned.push(LibraryStep::Select {
+                object,
+                render_id,
+                refusal_suffix: "cannot be ordered next.",
+            });
         }
         Ok(OrderLibraryProgress {
             end: *end,
@@ -599,30 +656,7 @@ impl GroupKind for OrderLibraryGroup {
         _plan: &GroupPlan,
         progress: &mut Self::Progress,
     ) -> NextStep {
-        let Some(&(object, render_id)) = progress.planned.get(progress.next_index) else {
-            return NextStep::Done;
-        };
-        progress.next_index += 1;
-        let Some(space) = position.action_space() else {
-            return NextStep::Done;
-        };
-        let index = space.actions.iter().position(|action| {
-            matches!(action, Action::SelectCard { object: offered, .. } if *offered == object)
-        });
-        match index {
-            Some(action_index) => NextStep::Step {
-                action_index,
-                item: Some(render_id),
-            },
-            None => {
-                let label = live.observed_object_name(object);
-                NextStep::Refuse(GroupRefusal {
-                    item: Some(render_id),
-                    reason: format!("{label} cannot be ordered next."),
-                    label,
-                })
-            }
-        }
+        step_library(&progress.planned, &mut progress.next_index, live, position)
     }
 
     fn finish(

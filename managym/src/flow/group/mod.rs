@@ -199,6 +199,28 @@ pub struct GroupPreview {
     pub outcome: Option<GroupOutcome>,
 }
 
+impl GroupPreview {
+    fn incomplete(group: Group, steps: Vec<GroupStep>) -> Self {
+        Self {
+            group,
+            steps,
+            refused: None,
+            complete: false,
+            outcome: None,
+        }
+    }
+
+    fn refused(group: Group, steps: Vec<GroupStep>, refusal: GroupRefusal) -> Self {
+        Self {
+            group,
+            steps,
+            refused: Some(refusal),
+            complete: false,
+            outcome: None,
+        }
+    }
+}
+
 pub(crate) enum PlanCheck {
     Ready,
     Incomplete,
@@ -253,6 +275,53 @@ enum ActiveKind {
     Scry,
     Surveil,
     OrderLibrary,
+}
+
+impl ActiveKind {
+    fn describe(self, game: &Game, viewer: PlayerId) -> Option<GroupSpec> {
+        match self {
+            Self::DeclareAttackers => CombatGroup::attackers().describe(game, viewer),
+            Self::DeclareBlockers => CombatGroup::blockers().describe(game, viewer),
+            Self::Scry => ScryGroup.describe(game, viewer),
+            Self::Surveil => SurveilGroup.describe(game, viewer),
+            Self::OrderLibrary => OrderLibraryGroup.describe(game, viewer),
+        }
+    }
+
+    fn preview(
+        self,
+        live: &Game,
+        viewer: PlayerId,
+        revision: u64,
+        fingerprint: String,
+        plan: &GroupPlan,
+    ) -> Result<GroupPreview, AgentError> {
+        match self {
+            Self::DeclareAttackers => drive_preview(
+                live,
+                &CombatGroup::attackers(),
+                viewer,
+                revision,
+                fingerprint,
+                plan,
+            ),
+            Self::DeclareBlockers => drive_preview(
+                live,
+                &CombatGroup::blockers(),
+                viewer,
+                revision,
+                fingerprint,
+                plan,
+            ),
+            Self::Scry => drive_preview(live, &ScryGroup, viewer, revision, fingerprint, plan),
+            Self::Surveil => {
+                drive_preview(live, &SurveilGroup, viewer, revision, fingerprint, plan)
+            }
+            Self::OrderLibrary => {
+                drive_preview(live, &OrderLibraryGroup, viewer, revision, fingerprint, plan)
+            }
+        }
+    }
 }
 
 fn active_kind(game: &Game, viewer: PlayerId) -> Option<ActiveKind> {
@@ -317,13 +386,13 @@ fn crossed_hidden_boundary(
     if position.state.rng != *rng_before {
         return true;
     }
-    for index in events_before..position.state.events.len() {
-        if matches!(
+    if (events_before..position.state.events.len()).any(|index| {
+        matches!(
             position.state.events.get(index),
             Some(GameEvent::CardDrawn { .. } | GameEvent::CardRevealed { .. })
-        ) {
-            return true;
-        }
+        )
+    }) {
+        return true;
     }
     let visible_now = visible_hidden_objects(position, viewer);
     visible_now.iter().any(|id| !visible_at_start.contains(id))
@@ -349,23 +418,9 @@ fn drive_preview<K: GroupKind>(
         spec,
     };
     match kind.validate(live, &group.spec, plan) {
-        PlanCheck::Incomplete => {
-            return Ok(GroupPreview {
-                group,
-                steps: Vec::new(),
-                refused: None,
-                complete: false,
-                outcome: None,
-            });
-        }
+        PlanCheck::Incomplete => return Ok(GroupPreview::incomplete(group, Vec::new())),
         PlanCheck::Refused(refusal) => {
-            return Ok(GroupPreview {
-                group,
-                steps: Vec::new(),
-                refused: Some(refusal),
-                complete: false,
-                outcome: None,
-            });
+            return Ok(GroupPreview::refused(group, Vec::new(), refusal));
         }
         PlanCheck::Ready => {}
     }
@@ -379,15 +434,7 @@ fn drive_preview<K: GroupKind>(
     while !position.is_game_over() && kind.continues(&position, viewer, &progress) {
         match kind.next_step(live, &position, viewer, plan, &mut progress) {
             NextStep::Done => break,
-            NextStep::Refuse(refusal) => {
-                return Ok(GroupPreview {
-                    group,
-                    steps,
-                    refused: Some(refusal),
-                    complete: false,
-                    outcome: None,
-                });
-            }
+            NextStep::Refuse(refusal) => return Ok(GroupPreview::refused(group, steps, refusal)),
             NextStep::Step { action_index, item } => {
                 let frame = position
                     .semantic_decision_frame()
@@ -411,13 +458,7 @@ fn drive_preview<K: GroupKind>(
                         &visible_at_start,
                     )
                 {
-                    return Ok(GroupPreview {
-                        group,
-                        steps,
-                        refused: None,
-                        complete: false,
-                        outcome: None,
-                    });
+                    return Ok(GroupPreview::incomplete(group, steps));
                 }
             }
         }
@@ -439,14 +480,7 @@ impl Game {
     /// game is over, `viewer` is not the chooser, or the pending decision is
     /// not a supported group above its domain activation threshold.
     pub fn group(&self, viewer: PlayerId) -> Option<Group> {
-        let active = active_kind(self, viewer)?;
-        let spec = match active {
-            ActiveKind::DeclareAttackers => CombatGroup::attackers().describe(self, viewer)?,
-            ActiveKind::DeclareBlockers => CombatGroup::blockers().describe(self, viewer)?,
-            ActiveKind::Scry => ScryGroup.describe(self, viewer)?,
-            ActiveKind::Surveil => SurveilGroup.describe(self, viewer)?,
-            ActiveKind::OrderLibrary => OrderLibraryGroup.describe(self, viewer)?,
-        };
+        let spec = active_kind(self, viewer)?.describe(self, viewer)?;
         let frame = self.semantic_decision_frame().ok()?;
         if frame.actor as usize != viewer.0 {
             return None;
@@ -481,48 +515,7 @@ impl Game {
         }
         let active =
             active_kind(self, viewer).ok_or_else(|| AgentError("no active group".into()))?;
-        match active {
-            ActiveKind::DeclareAttackers => drive_preview(
-                self,
-                &CombatGroup::attackers(),
-                viewer,
-                frame.revision,
-                frame.fingerprint,
-                plan,
-            ),
-            ActiveKind::DeclareBlockers => drive_preview(
-                self,
-                &CombatGroup::blockers(),
-                viewer,
-                frame.revision,
-                frame.fingerprint,
-                plan,
-            ),
-            ActiveKind::Scry => drive_preview(
-                self,
-                &ScryGroup,
-                viewer,
-                frame.revision,
-                frame.fingerprint,
-                plan,
-            ),
-            ActiveKind::Surveil => drive_preview(
-                self,
-                &SurveilGroup,
-                viewer,
-                frame.revision,
-                frame.fingerprint,
-                plan,
-            ),
-            ActiveKind::OrderLibrary => drive_preview(
-                self,
-                &OrderLibraryGroup,
-                viewer,
-                frame.revision,
-                frame.fingerprint,
-                plan,
-            ),
-        }
+        active.preview(self, viewer, frame.revision, frame.fingerprint, plan)
     }
 
     /// Validate `plan` on a clone, then execute its compiled sequential steps

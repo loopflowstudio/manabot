@@ -286,14 +286,13 @@ impl Game {
 
     /// The attackers `blocker` may block now, and whether it must block.
     fn block_options(&self, blocker: PermanentId) -> (Vec<PermanentId>, bool) {
-        let attackers = self
-            .state
-            .combat
-            .as_ref()
-            .map(|combat| combat.attackers.clone())
-            .unwrap_or_default();
-        let options: Vec<_> = attackers
-            .into_iter()
+        let Some(combat) = self.state.combat.as_ref() else {
+            return (Vec::new(), false);
+        };
+        let options: Vec<_> = combat
+            .attackers
+            .iter()
+            .copied()
             .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
             .collect();
         let required: Vec<_> = options
@@ -350,9 +349,8 @@ impl Game {
             .enumerate()
             .filter_map(|(slot, permanent)| permanent.as_ref().map(|_| PermanentId(slot)))
             .find(|permanent| {
-                self.permanent_event_ref(*permanent).is_some_and(|event| {
-                    event.entity.0 == id.entity && event.incarnation == id.incarnation
-                })
+                self.permanent_event_ref(*permanent)
+                    .is_some_and(|event| ObjectRenderId::from(event) == id)
             })
     }
 

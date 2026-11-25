@@ -9,43 +9,38 @@ plan atomically without touching the action space or observation contract.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import Field, TypeAdapter
 
 import managym
-from managym.experience import ObjectRenderId
+from managym.experience import ObjectRenderId, ProtocolModel
 
 LibraryEnd = Literal["top", "bottom"]
 
 
-class PlannedBlock(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PlannedBlock(ProtocolModel):
     blocker: ObjectRenderId
     attacker: ObjectRenderId
 
 
-class GroupCard(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class GroupCard(ProtocolModel):
     item: ObjectRenderId
     label: str
 
 
-class AttackerItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AttackerItem(ProtocolModel):
     item: ObjectRenderId
     label: str
     must_attack: bool
 
 
-class BlockerItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BlockerItem(ProtocolModel):
     item: ObjectRenderId
     label: str
     can_block: list[ObjectRenderId]
     must_block: bool
 
 
-class _GroupAddress(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class _GroupAddress(ProtocolModel):
     revision: int
     fingerprint: str
 
@@ -92,39 +87,34 @@ type Group = Annotated[
 ]
 
 
-class DeclareAttackersPlan(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class DeclareAttackersPlan(ProtocolModel):
     kind: Literal["declare_attackers"] = "declare_attackers"
     attackers: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class DeclareBlockersPlan(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class DeclareBlockersPlan(ProtocolModel):
     kind: Literal["declare_blockers"] = "declare_blockers"
     blocks: list[PlannedBlock] = Field(default_factory=list)
 
 
-class ScryPlan(BaseModel):
+class ScryPlan(ProtocolModel):
     """`top` is drawn-first; `bottom` is top-to-bottom of the bottom group."""
 
-    model_config = ConfigDict(extra="forbid")
     kind: Literal["scry"] = "scry"
     top: list[ObjectRenderId] = Field(default_factory=list)
     bottom: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class SurveilPlan(BaseModel):
+class SurveilPlan(ProtocolModel):
     """Cards to put into the graveyard; all remaining looked-at cards stay on top."""
 
-    model_config = ConfigDict(extra="forbid")
     kind: Literal["surveil"] = "surveil"
     graveyard: list[ObjectRenderId] = Field(default_factory=list)
 
 
-class OrderLibraryPlan(BaseModel):
+class OrderLibraryPlan(ProtocolModel):
     """Remaining cards in desired order, drawn-first at index 0."""
 
-    model_config = ConfigDict(extra="forbid")
     kind: Literal["order_library"] = "order_library"
     order: list[ObjectRenderId] = Field(default_factory=list)
 
@@ -139,51 +129,44 @@ type GroupPlan = Annotated[
 ]
 
 
-class GroupStep(BaseModel):
+class GroupStep(ProtocolModel):
     """One sequential native step compiled from a grouped plan."""
 
-    model_config = ConfigDict(extra="forbid")
     revision: int
     fingerprint: str
     action_index: int
     item: ObjectRenderId | None
 
 
-class GroupRefusal(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class GroupRefusal(ProtocolModel):
     item: ObjectRenderId | None
     label: str
     reason: str
 
 
-class DeclareAttackersOutcome(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class DeclareAttackersOutcome(ProtocolModel):
     kind: Literal["declare_attackers"] = "declare_attackers"
     attackers: list[ObjectRenderId]
 
 
-class DeclareBlockersOutcome(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class DeclareBlockersOutcome(ProtocolModel):
     kind: Literal["declare_blockers"] = "declare_blockers"
     blocks: list[PlannedBlock]
 
 
-class ScryOutcome(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ScryOutcome(ProtocolModel):
     kind: Literal["scry"] = "scry"
     top: list[ObjectRenderId]
     bottom: list[ObjectRenderId]
 
 
-class SurveilOutcome(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SurveilOutcome(ProtocolModel):
     kind: Literal["surveil"] = "surveil"
     graveyard: list[ObjectRenderId]
     kept: list[ObjectRenderId]
 
 
-class OrderLibraryOutcome(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class OrderLibraryOutcome(ProtocolModel):
     kind: Literal["order_library"] = "order_library"
     end: LibraryEnd
     order: list[ObjectRenderId]
@@ -199,8 +182,7 @@ type GroupOutcome = Annotated[
 ]
 
 
-class GroupPreview(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class GroupPreview(ProtocolModel):
     group: Group
     steps: list[GroupStep]
     refused: GroupRefusal | None

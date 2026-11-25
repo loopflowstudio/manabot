@@ -238,9 +238,9 @@
   );
   const combatGroup = $derived(isCombatGroup(activeGroup) ? activeGroup : null);
   const arrangeGroup = $derived(isArrangeGroup(activeGroup) ? activeGroup : null);
-  const drafting = $derived(combatGroup !== null);
-  const joint = $derived(combatGroup !== null);
-  const grouping = $derived(activeGroup !== null);
+  const activeArrangeDraft = $derived(
+    arrangeGroup && arrangeDraft?.kind === arrangeGroup.kind ? arrangeDraft : null,
+  );
 
   function dismissRejection(): void {
     if (groupRejection) dismissedRejectionId = groupRejection.command_id;
@@ -255,20 +255,10 @@
       armed = null;
       previewed = null;
       if (combatGroup) {
-        const saved = loadGroupDraft<Draft>({
-          match_id: combatGroup.match_id,
-          frame_hash: combatGroup.frame_hash,
-          kind: combatGroup.kind,
-        });
-        draft = sanitizeCombatDraft(saved, combatGroup);
+        draft = sanitizeCombatDraft(loadGroupDraft<Draft>(combatGroup), combatGroup);
         arrangeDraft = null;
       } else if (arrangeGroup) {
-        const saved = loadGroupDraft<ArrangeDraft>({
-          match_id: arrangeGroup.match_id,
-          frame_hash: arrangeGroup.frame_hash,
-          kind: arrangeGroup.kind,
-        });
-        arrangeDraft = sanitizeArrangeDraft(saved, arrangeGroup);
+        arrangeDraft = sanitizeArrangeDraft(loadGroupDraft<ArrangeDraft>(arrangeGroup), arrangeGroup);
         draft = EMPTY_DRAFT;
       } else {
         draft = EMPTY_DRAFT;
@@ -279,8 +269,8 @@
 
   const activePlan = $derived.by((): GroupPlan | null => {
     if (combatGroup) return combatPlanOf(draft, combatGroup);
-    if (arrangeGroup && arrangeDraft && isArrangeComplete(arrangeDraft, arrangeGroup)) {
-      return arrangePlanOf(arrangeDraft, arrangeGroup);
+    if (arrangeGroup && activeArrangeDraft && isArrangeComplete(activeArrangeDraft, arrangeGroup)) {
+      return arrangePlanOf(activeArrangeDraft, arrangeGroup);
     }
     return null;
   });
@@ -314,11 +304,8 @@
 
   // Persist the active draft in tab sessionStorage, scoped to `(match_id, frame_hash, kind)`.
   $effect(() => {
-    if (combatGroup) {
-      saveGroupDraft({ match_id: combatGroup.match_id, frame_hash: combatGroup.frame_hash, kind: combatGroup.kind }, draft);
-    } else if (arrangeGroup && arrangeDraft && arrangeDraft.kind === arrangeGroup.kind) {
-      saveGroupDraft({ match_id: arrangeGroup.match_id, frame_hash: arrangeGroup.frame_hash, kind: arrangeGroup.kind }, arrangeDraft);
-    }
+    if (combatGroup) saveGroupDraft(combatGroup, draft);
+    else if (arrangeGroup && activeArrangeDraft) saveGroupDraft(arrangeGroup, activeArrangeDraft);
   });
 
   /** The preview answers this exact draft, not an earlier one. */
@@ -338,19 +325,13 @@
     }
     return null;
   });
-  const combatReady = $derived(
-    combatGroup !== null && exactPreview !== null && exactPreview.complete && exactPreview.refused === null && activeRefusal === null,
-  );
-  const arrangeReady = $derived(
-    arrangeGroup !== null && arrangeDraft !== null && isArrangeComplete(arrangeDraft, arrangeGroup)
-    && exactPreview !== null && exactPreview.complete && exactPreview.refused === null && activeRefusal === null,
+  const groupReady = $derived(
+    exactPreview !== null && exactPreview.complete && activeRefusal === null,
   );
 
   const words = $derived(combatGroup ? draftWords(combatGroup, draft, names) : null);
   const arrangeSummary = $derived(
-    arrangeGroup && arrangeDraft && arrangeDraft.kind === arrangeGroup.kind
-      ? arrangeWords(arrangeDraft, arrangeGroup)
-      : null,
+    arrangeGroup && activeArrangeDraft ? arrangeWords(activeArrangeDraft, arrangeGroup) : null,
   );
   const attackerItems = $derived(
     new Map(combatGroup?.kind === 'declare_attackers' ? combatGroup.declarable.map(c => [c.item.entity, c]) : []),
@@ -366,6 +347,8 @@
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     const refusedId = activeRefusal?.item?.entity ?? null;
+    const withRefusal = (id: number, base: string): string =>
+      refusedId === id && activeRefusal ? `${base}. ${activeRefusal.reason}` : base;
     if (combatGroup.kind === 'declare_attackers') {
       for (const [id, creature] of attackerItems) {
         const inDraft = draft.attackers.includes(id);
@@ -375,7 +358,7 @@
           : creature.must_attack
             ? 'must attack; press to add it to the attack'
             : 'can attack; press to add it to the attack';
-        notes.set(id, refusedId === id && activeRefusal ? `${base}. ${activeRefusal.reason}` : base);
+        notes.set(id, withRefusal(id, base));
       }
     } else {
       const blocks = new Map(draft.blocks);
@@ -389,7 +372,7 @@
             : creature.must_block
               ? 'must block; press, then the attacker it blocks'
               : 'can block; press, then the attacker it blocks';
-        notes.set(id, refusedId === id && activeRefusal ? `${base}. ${activeRefusal.reason}` : base);
+        notes.set(id, withRefusal(id, base));
       }
       const placing = placingBlocker === null ? null : blockerItems.get(placingBlocker);
       for (const attacker of placing?.can_block ?? []) {
@@ -444,9 +427,7 @@
   }
 
   function confirmGroup(): void {
-    if (!live || pending || !activePlan || !ongroupact) return;
-    if (combatGroup && !combatReady) return;
-    if (arrangeGroup && !arrangeReady) return;
+    if (!live || pending || !activePlan || !groupReady || !ongroupact) return;
     endReadOut();
     menuAt = null;
     hush();
@@ -455,14 +436,14 @@
   }
 
   /** The frame as the board draws it: with the drafted declaration, while there is one. */
-  const drafted = $derived(joint ? drawDraft(frame, draft) : frame);
+  const drafted = $derived(combatGroup ? drawDraft(frame, draft) : frame);
   const view = $derived(boardView(drafted, players));
   const whose = $derived(heading ?? (frame.status === 'game_over' ? 'Game over'
     : !frame.prompt ? 'Waiting'
       : frame.prompt.actor === projection.agent.player_index
         ? you.name === 'You' ? (live ? 'Your decision' : 'Your decision · waiting') : `${possessive(you.name)} decision`
         : `${possessive(said)} decision`));
-  const targeting = $derived(canDrag && !joint && (frame.action_space === 'CHOOSE_TARGET'
+  const targeting = $derived(canDrag && !combatGroup && (frame.action_space === 'CHOOSE_TARGET'
     || frame.action_space === 'DECLARE_BLOCKER' || frame.offers.some(offer => offer.subjects?.some(s => s.role === 'target'))));
   const fieldSources = $derived.by(() => {
     if (canDrag && combatGroup?.kind === 'declare_blockers') return new Set(blockerItems.keys());
@@ -535,11 +516,14 @@
   const payKnownPlan = $derived(paymentPlan(payKnown, frame));
   const unpiled = $derived((payKnownPlan ?? payPlanned)?.sources ?? null);
   const primaryText = $derived(primaryLabel(frame, view, payKnown));
-  const line = $derived(combatGroup && words ? (activeRefusal ? activeRefusal.reason : words.plan)
-    : arrangeGroup && arrangeSummary ? (activeRefusal ? activeRefusal.reason : arrangeSummary.planLine)
-      : promptLine(frame, view, !readOnly));
+  const line = $derived(
+    activeGroup && activeRefusal ? activeRefusal.reason
+      : combatGroup && words ? words.plan
+        : arrangeGroup && arrangeSummary ? arrangeSummary.planLine
+          : promptLine(frame, view, !readOnly),
+  );
   // How to answer with the live input; a recording has none.
-  const hint = $derived(grouping || readOnly ? null : promptHint(frame, view));
+  const hint = $derived(activeGroup || readOnly ? null : promptHint(frame, view));
   const paymentNote = $derived(!payOffer ? null
     : payment?.error && previewing === payOffer ? 'The payment preview is unavailable; Pay still pays automatically.'
       : payKnown && payKnown.state !== 'exact' && payKnown.state !== 'not_applicable' ? payKnown.explanation : null);
@@ -618,7 +602,7 @@
   const boardProjection = $derived(drawn.projection);
   const boardNames = $derived(beatBoard ? new Map([...beatBoard.agent.battlefield, ...beatBoard.opponent.battlefield]
     .map(permanent => [permanent.id, permanent.name ?? 'permanent'])) : names);
-  const asked = $derived(joint ? new Set<number>() : board.asked);
+  const asked = $derived(combatGroup ? new Set<number>() : board.asked);
   const owners = $derived(turnOwners(frame, presentation.events));
   // The turn the top bar and stop bar name: the beat's own while one plays. A
   // beat's board may be a later turn's (one engine step can run from an attack
@@ -633,7 +617,7 @@
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && !readingOut && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || grouping));
+  const acting = $derived(live && !readingOut && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || activeGroup !== null));
   /** The pointer press that ended a read-out; its click acts on nothing. */
   let endedByPress = false;
   /** The click that ends a drag is the drop, not a press of what it lands on. */
@@ -658,7 +642,7 @@
     const id = Number(source.dataset.stackEntry ?? source.dataset.objectId);
     const drag: ConnectDrag = source.dataset.stackEntry !== undefined
       ? { kind: 'connect', from: { kind: 'entry', id }, style: 'target', target: null }
-      : drafting
+      : combatGroup
         ? { kind: 'connect', from: { kind: 'object', id }, style: 'block', blocker: id, target: null }
         : { kind: 'connect', from: { kind: 'object', id }, style: frame.action_space === 'DECLARE_BLOCKER' ? 'block' : 'target', target: null };
     gesture = press(drag, event.pointerId, frame.revision, start);
@@ -862,7 +846,7 @@
 
   function onPermanent(item: PermanentItem, element: HTMLElement): void {
     if (onDraft(item.permanent.id)) return;
-    if (joint) return;
+    if (combatGroup) return;
     activate(item.permanent.name ?? 'Permanent', item.offers, element);
   }
   function previewPermanent(item: PermanentItem | null, element: HTMLElement | null): void {
@@ -957,7 +941,7 @@
   // its slot steps back, and releasing it over the battlefield is a click on
   // it. Released anywhere else, or on Escape, it settles back with nothing sent.
   function pressHand(event: PointerEvent, item: HandItem): void {
-    if (!canDrag || readingOut || grouping || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
+    if (!canDrag || readingOut || activeGroup || event.button !== 0 || !event.isPrimary || !playable(item.offers)) return;
     const opener = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-testid=board-card]');
     if (!opener) return;
     const rect = opener.getBoundingClientRect();
@@ -967,7 +951,7 @@
   /** Resolve the element under the pointer against the same offers and preview used for clicks. */
   function connectTarget(drag: ConnectDrag, hit: Element | null): ConnectDrag {
     if (drag.blocker !== undefined) {
-      const permanent = drafting ? hit?.closest<HTMLElement>('.rows [data-testid=board-card]') : null;
+      const permanent = combatGroup ? hit?.closest<HTMLElement>('.rows [data-testid=board-card]') : null;
       const id = permanent ? Number(permanent.dataset.objectId) : null;
       const legal = id !== null && blockerItems.get(drag.blocker)?.can_block.some(attacker => attacker.entity === id);
       return { ...drag, target: legal ? { endpoint: { kind: 'object', id } } : null };
@@ -1133,7 +1117,7 @@
   let ctrlShift = false;
 
   $effect(() => {
-    if (recording || !live || readingOut || result || grouping || !onautotap) return;
+    if (recording || !live || readingOut || result || activeGroup || !onautotap) return;
     if (fullControl === 'once') {
       if (frame.action_space === 'PAY_OR_NOT') {
         wasPayingInOnce = true;
@@ -1261,14 +1245,14 @@
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       // Live grouped decisions fold raw single-step offers under a collapsed disclosure, not numbered shortcuts.
-      if (!menuAt && grouping) return;
+      if (!menuAt && activeGroup) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
     }
     // An open card menu takes Space as a press of its focused item.
     if (event.key === ' ' && menuAt) return;
-    if (event.key === ' ' && !ownsSpace(event.target) && grouping) { event.preventDefault(); confirmGroup(); return; }
+    if (event.key === ' ' && !ownsSpace(event.target) && activeGroup) { event.preventDefault(); confirmGroup(); return; }
     if (event.key === ' ' && !ownsSpace(event.target) && view.primary && live) {
       event.preventDefault();
       act(view.primary);
@@ -1423,15 +1407,15 @@
       </div>
     {/if}
 
-    {#if arrangeGroup && arrangeDraft && arrangeDraft.kind === arrangeGroup.kind && !finished}
+    {#if arrangeGroup && activeArrangeDraft && !finished}
       <ArrangePanel
         group={arrangeGroup}
-        draft={arrangeDraft}
+        draft={activeArrangeDraft}
         {cardNames}
         {live}
         {pending}
         {readingOut}
-        ready={arrangeReady}
+        ready={groupReady}
         refused={activeRefusal}
         onchange={updateArrangeDraft}
         onconfirm={confirmGroup}
@@ -1463,9 +1447,9 @@
   {#snippet combatControls()}
     <div class="combat-draft" data-testid="combat-draft" data-kind={combatGroup?.kind === 'declare_attackers' ? 'attackers' : 'blockers'}>
       {#if words}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={combatReady}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={groupReady}
           aria-label={`Confirm: ${activeRefusal ? activeRefusal.reason : words.plan}`} title={words.plan}
-          disabled={!live || pending || !combatReady} aria-disabled={readingOut || undefined} onclick={confirmGroup}>
+          disabled={!live || pending || !groupReady} aria-disabled={readingOut || undefined} onclick={confirmGroup}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each counts as group (group.ids[0])}

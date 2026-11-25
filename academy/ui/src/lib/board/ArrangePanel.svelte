@@ -78,12 +78,8 @@
   const committedSummary = $derived.by((): { heading: string; parts: string[] } | null => {
     if (group.kind === 'scry') {
       const parts: string[] = [];
-      if (group.committed_top.length) {
-        parts.push(`Top: ${group.committed_top.map(cardLabel).join(', ')}`);
-      }
-      if (group.committed_bottom.length) {
-        parts.push(`Bottom: ${group.committed_bottom.map(cardLabel).join(', ')}`);
-      }
+      if (group.committed_top.length) parts.push(`Top: ${group.committed_top.map(cardLabel).join(', ')}`);
+      if (group.committed_bottom.length) parts.push(`Bottom: ${group.committed_bottom.map(cardLabel).join(', ')}`);
       return parts.length ? { heading: 'Already placed', parts } : null;
     }
     if (group.kind === 'surveil') {
@@ -105,6 +101,84 @@
     };
   }
 </script>
+
+{#snippet cardIdentity(card: GroupCard)}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus previews the card) -->
+  <span class="card-id" tabindex="0" {...hoverCard(card)}>
+    <Thumb name={card.label} />
+    <span class="card-name">{card.label}</span>
+  </span>
+{/snippet}
+
+{#snippet orderedBucket(
+  title: string,
+  testId: string,
+  emptyText: string,
+  ids: readonly number[],
+  options: {
+    single?: boolean;
+    onMove: (entityId: number, delta: -1 | 1) => void;
+    upLabel: (label: string) => string;
+    downLabel: (label: string) => string;
+    swap?: { text: string; ariaLabel: (label: string) => string; onSwap: (entityId: number) => void };
+    removeLabel: (label: string) => string;
+    onRemove: (entityId: number) => void;
+  },
+)}
+  <section class="bucket" class:single={options.single} aria-label={title} data-testid={testId}>
+    <h3 class="type-label text-ink-2">{title}</h3>
+    {#if ids.length === 0}
+      <p class="type-caption text-ink-3 empty">{emptyText}</p>
+    {:else}
+      <ol class="card-list">
+        {#each ids as entityId, index (entityId)}
+          {@const card = byId.get(entityId)!}
+          <li
+            class="card-row"
+            class:refused={refused?.item?.entity === entityId}
+            data-testid="arrange-card"
+            data-card-id={entityId}
+          >
+            <span class="rank type-caption">{index + 1}</span>
+            {@render cardIdentity(card)}
+            <span class="row-actions">
+              <button
+                type="button"
+                class="step"
+                disabled={disabled || index === 0}
+                aria-label={options.upLabel(card.label)}
+                onclick={() => options.onMove(entityId, -1)}
+              >↑</button>
+              <button
+                type="button"
+                class="step"
+                disabled={disabled || index === ids.length - 1}
+                aria-label={options.downLabel(card.label)}
+                onclick={() => options.onMove(entityId, 1)}
+              >↓</button>
+              {#if options.swap}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  disabled={disabled}
+                  aria-label={options.swap.ariaLabel(card.label)}
+                  onclick={() => options.swap!.onSwap(entityId)}
+                >{options.swap.text}</button>
+              {/if}
+              <button
+                type="button"
+                class="step"
+                disabled={disabled}
+                aria-label={options.removeLabel(card.label)}
+                onclick={() => options.onRemove(entityId)}
+              >×</button>
+            </span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
+  </section>
+{/snippet}
 
 <section
   class="arrange-panel"
@@ -137,11 +211,7 @@
             data-testid="arrange-card"
             data-card-id={card.item.entity}
           >
-            <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions (focus previews the card) -->
-            <span class="card-id" tabindex="0" {...hoverCard(card)}>
-              <Thumb name={card.label} />
-              <span class="card-name">{card.label}</span>
-            </span>
+            {@render cardIdentity(card)}
             <span class="row-actions">
               {#if draft.kind === 'scry'}
                 <button
@@ -179,117 +249,42 @@
 
   {#if draft.kind === 'scry'}
     <div class="buckets">
-      <section class="bucket" aria-label="Top of library — drawn first at top" data-testid="arrange-bucket-top">
-        <h3 class="type-label text-ink-2">Top of library — drawn first at top</h3>
-        {#if draft.top.length === 0}
-          <p class="type-caption text-ink-3 empty">No cards on top</p>
-        {:else}
-          <ol class="card-list">
-            {#each draft.top as entityId, index (entityId)}
-              {@const card = byId.get(entityId)!}
-              <li
-                class="card-row"
-                class:refused={refused?.item?.entity === entityId}
-                data-testid="arrange-card"
-                data-card-id={entityId}
-              >
-                <span class="rank type-caption">{index + 1}</span>
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-                <span class="card-id" tabindex="0" {...hoverCard(card)}>
-                  <Thumb name={card.label} />
-                  <span class="card-name">{card.label}</span>
-                </span>
-                <span class="row-actions">
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled || index === 0}
-                    aria-label={`Move ${card.label} up in top`}
-                    onclick={() => onchange(scryMove(draft, 'top', entityId, -1))}
-                  >↑</button>
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled || index === draft.top.length - 1}
-                    aria-label={`Move ${card.label} down in top`}
-                    onclick={() => onchange(scryMove(draft, 'top', entityId, 1))}
-                  >↓</button>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs"
-                    disabled={disabled}
-                    aria-label={`Move ${card.label} to bottom`}
-                    onclick={() => onchange(scryPlace(draft, entityId, 'bottom'))}
-                  >Bottom</button>
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled}
-                    aria-label={`Unplace ${card.label}`}
-                    onclick={() => onchange(scryPlace(draft, entityId, 'unplaced'))}
-                  >×</button>
-                </span>
-              </li>
-            {/each}
-          </ol>
-        {/if}
-      </section>
-
-      <section class="bucket" aria-label="Bottom of library — top-most at top" data-testid="arrange-bucket-bottom">
-        <h3 class="type-label text-ink-2">Bottom of library — top-most at top</h3>
-        {#if draft.bottom.length === 0}
-          <p class="type-caption text-ink-3 empty">No cards on bottom</p>
-        {:else}
-          <ol class="card-list">
-            {#each draft.bottom as entityId, index (entityId)}
-              {@const card = byId.get(entityId)!}
-              <li
-                class="card-row"
-                class:refused={refused?.item?.entity === entityId}
-                data-testid="arrange-card"
-                data-card-id={entityId}
-              >
-                <span class="rank type-caption">{index + 1}</span>
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-                <span class="card-id" tabindex="0" {...hoverCard(card)}>
-                  <Thumb name={card.label} />
-                  <span class="card-name">{card.label}</span>
-                </span>
-                <span class="row-actions">
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled || index === 0}
-                    aria-label={`Move ${card.label} up in bottom`}
-                    onclick={() => onchange(scryMove(draft, 'bottom', entityId, -1))}
-                  >↑</button>
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled || index === draft.bottom.length - 1}
-                    aria-label={`Move ${card.label} down in bottom`}
-                    onclick={() => onchange(scryMove(draft, 'bottom', entityId, 1))}
-                  >↓</button>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs"
-                    disabled={disabled}
-                    aria-label={`Move ${card.label} to top`}
-                    onclick={() => onchange(scryPlace(draft, entityId, 'top'))}
-                  >Top</button>
-                  <button
-                    type="button"
-                    class="step"
-                    disabled={disabled}
-                    aria-label={`Unplace ${card.label}`}
-                    onclick={() => onchange(scryPlace(draft, entityId, 'unplaced'))}
-                  >×</button>
-                </span>
-              </li>
-            {/each}
-          </ol>
-        {/if}
-      </section>
+      {@render orderedBucket(
+        'Top of library — drawn first at top',
+        'arrange-bucket-top',
+        'No cards on top',
+        draft.top,
+        {
+          onMove: (entityId, delta) => onchange(scryMove(draft, 'top', entityId, delta)),
+          upLabel: label => `Move ${label} up in top`,
+          downLabel: label => `Move ${label} down in top`,
+          swap: {
+            text: 'Bottom',
+            ariaLabel: label => `Move ${label} to bottom`,
+            onSwap: entityId => onchange(scryPlace(draft, entityId, 'bottom')),
+          },
+          removeLabel: label => `Unplace ${label}`,
+          onRemove: entityId => onchange(scryPlace(draft, entityId, 'unplaced')),
+        },
+      )}
+      {@render orderedBucket(
+        'Bottom of library — top-most at top',
+        'arrange-bucket-bottom',
+        'No cards on bottom',
+        draft.bottom,
+        {
+          onMove: (entityId, delta) => onchange(scryMove(draft, 'bottom', entityId, delta)),
+          upLabel: label => `Move ${label} up in bottom`,
+          downLabel: label => `Move ${label} down in bottom`,
+          swap: {
+            text: 'Top',
+            ariaLabel: label => `Move ${label} to top`,
+            onSwap: entityId => onchange(scryPlace(draft, entityId, 'top')),
+          },
+          removeLabel: label => `Unplace ${label}`,
+          onRemove: entityId => onchange(scryPlace(draft, entityId, 'unplaced')),
+        },
+      )}
     </div>
   {:else if draft.kind === 'surveil'}
     <div class="buckets">
@@ -306,11 +301,7 @@
                 data-testid="arrange-card"
                 data-card-id={card.item.entity}
               >
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-                <span class="card-id" tabindex="0" {...hoverCard(card)}>
-                  <Thumb name={card.label} />
-                  <span class="card-name">{card.label}</span>
-                </span>
+                {@render cardIdentity(card)}
                 <span class="row-actions">
                   <button
                     type="button"
@@ -340,11 +331,7 @@
                 data-testid="arrange-card"
                 data-card-id={entityId}
               >
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-                <span class="card-id" tabindex="0" {...hoverCard(card)}>
-                  <Thumb name={card.label} />
-                  <span class="card-name">{card.label}</span>
-                </span>
+                {@render cardIdentity(card)}
                 <span class="row-actions">
                   <button
                     type="button"
@@ -361,58 +348,20 @@
       </section>
     </div>
   {:else if draft.kind === 'order_library'}
-    <section
-      class="bucket single"
-      aria-label={words.bucketTitle ?? 'Order cards'}
-      data-testid="arrange-bucket-order"
-    >
-      <h3 class="type-label text-ink-2">{words.bucketTitle}</h3>
-      {#if draft.order.length === 0}
-        <p class="type-caption text-ink-3 empty">Place each card above in the order you want</p>
-      {:else}
-        <ol class="card-list">
-          {#each draft.order as entityId, index (entityId)}
-            {@const card = byId.get(entityId)!}
-            <li
-              class="card-row"
-              class:refused={refused?.item?.entity === entityId}
-              data-testid="arrange-card"
-              data-card-id={entityId}
-            >
-              <span class="rank type-caption">{index + 1}</span>
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-              <span class="card-id" tabindex="0" {...hoverCard(card)}>
-                <Thumb name={card.label} />
-                <span class="card-name">{card.label}</span>
-              </span>
-              <span class="row-actions">
-                <button
-                  type="button"
-                  class="step"
-                  disabled={disabled || index === 0}
-                  aria-label={`Move ${card.label} up`}
-                  onclick={() => onchange(orderMove(draft, entityId, -1))}
-                >↑</button>
-                <button
-                  type="button"
-                  class="step"
-                  disabled={disabled || index === draft.order.length - 1}
-                  aria-label={`Move ${card.label} down`}
-                  onclick={() => onchange(orderMove(draft, entityId, 1))}
-                >↓</button>
-                <button
-                  type="button"
-                  class="step"
-                  disabled={disabled}
-                  aria-label={`Remove ${card.label} from order`}
-                  onclick={() => onchange(orderPlace(draft, entityId, false))}
-                >×</button>
-              </span>
-            </li>
-          {/each}
-        </ol>
-      {/if}
-    </section>
+    {@render orderedBucket(
+      words.bucketTitle ?? 'Order cards',
+      'arrange-bucket-order',
+      'Place each card above in the order you want',
+      draft.order,
+      {
+        single: true,
+        onMove: (entityId, delta) => onchange(orderMove(draft, entityId, delta)),
+        upLabel: label => `Move ${label} up`,
+        downLabel: label => `Move ${label} down`,
+        removeLabel: label => `Remove ${label} from order`,
+        onRemove: entityId => onchange(orderPlace(draft, entityId, false)),
+      },
+    )}
   {/if}
 
   {#if refused}

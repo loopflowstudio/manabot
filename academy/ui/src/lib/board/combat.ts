@@ -120,16 +120,15 @@ export function combatPlanOf(
   group: CombatGroup,
 ): DeclareAttackersPlan | DeclareBlockersPlan {
   const ids = new Map<number, ObjectRenderId>();
+  const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
   if (group.kind === 'declare_attackers') {
     for (const creature of group.declarable) ids.set(creature.item.entity, creature.item);
-    const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
     return { kind: 'declare_attackers', attackers: draft.attackers.map(id) };
   }
   for (const creature of group.declarable) {
     ids.set(creature.item.entity, creature.item);
     for (const attacker of creature.can_block) ids.set(attacker.entity, attacker);
   }
-  const id = (entity: number): ObjectRenderId => ids.get(entity) ?? { entity, incarnation: 0 };
   return {
     kind: 'declare_blockers',
     blocks: draft.blocks.map(([blocker, attacker]) => ({ blocker: id(blocker), attacker: id(attacker) })),

@@ -1646,14 +1646,10 @@ class GameSession:
         self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
-    def hero_command(
-        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
-    ) -> dict[str, Any]:
-        """Validate and apply one revision-bound protocol-v1 command.
-
-        Offer IDs are lowered through ``PublishedPrompt``. The client never
-        chooses or replays a raw engine action index on this path.
-        """
+    def _validate_submission_header(
+        self, raw: Any
+    ) -> tuple[str, PublishedPrompt] | dict[str, Any]:
+        """Validate session, command_id, duplicate receipt, match, revision and prompt."""
         if self.env is None or self.obs is None or self.trace is None:
             raise ValueError("No active game session. Send new_game first.")
         if not isinstance(raw, dict):
@@ -1686,25 +1682,17 @@ class GameSession:
             return self._reject_command(raw, "stale_revision", recover=True)
         if raw.get("prompt_id") != context.prompt_id:
             return self._reject_command(raw, "stale_prompt", recover=True)
+        return command_id, context
 
-        offer_id = raw.get("offer_id")
-        if context.action_by_offer.get(offer_id) is None:
-            return self._reject_command(raw, "unknown_offer", recover=True)
-        if raw.get("answers") != []:
-            return self._reject_command(raw, "invalid_selection", recover=False)
-        if self.obs.game_over:
-            return self._reject_command(raw, "authority_busy", recover=True)
-        if not _is_hero_turn(self.obs, self.human_seat):
-            return self._reject_command(raw, "not_actor", recover=False)
-
-        try:
-            command = Command.model_validate(raw).model_dump(mode="json")
-        except Exception:
-            return self._reject_command(raw, "invalid_command", recover=False)
-
-        base_revision = context.revision
-        batch_cursor = self.presentation.next_seq
-        self._apply_bound_command(context, command, source="client")
+    def _finish_client_command(
+        self,
+        command_id: str,
+        base_revision: int,
+        batch_cursor: int,
+        *,
+        committed: Callable[[dict[str, Any]], None] | None,
+    ) -> dict[str, Any]:
+        """Record the human-transition receipt, emit early commit, and advance bots."""
         # The receipt names the human transition, before any opponent proposal.
         # A later failure must not make an accepted Command appear unexecuted.
         committed_frame = self._experience_frame()
@@ -1726,6 +1714,42 @@ class GameSession:
         self._advance()
         self._last_presentation_cursor = batch_cursor
         return self._accepted_outcome(base_revision, batch_cursor, receipt)
+
+    def hero_command(
+        self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
+        """Validate and apply one revision-bound protocol-v1 command.
+
+        Offer IDs are lowered through ``PublishedPrompt``. The client never
+        chooses or replays a raw engine action index on this path.
+        """
+        validated = self._validate_submission_header(raw)
+        if isinstance(validated, dict):
+            return validated
+        command_id, context = validated
+        assert self.obs is not None
+
+        offer_id = raw.get("offer_id")
+        if context.action_by_offer.get(offer_id) is None:
+            return self._reject_command(raw, "unknown_offer", recover=True)
+        if raw.get("answers") != []:
+            return self._reject_command(raw, "invalid_selection", recover=False)
+        if self.obs.game_over:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if not _is_hero_turn(self.obs, self.human_seat):
+            return self._reject_command(raw, "not_actor", recover=False)
+
+        try:
+            command = Command.model_validate(raw).model_dump(mode="json")
+        except Exception:
+            return self._reject_command(raw, "invalid_command", recover=False)
+
+        base_revision = context.revision
+        batch_cursor = self.presentation.next_seq
+        self._apply_bound_command(context, command, source="client")
+        return self._finish_client_command(
+            command_id, base_revision, batch_cursor, committed=committed
+        )
 
     def live_group(self) -> dict[str, Any] | None:
         """Return the active grouped-decision descriptor for the published prompt."""
@@ -1771,37 +1795,15 @@ class GameSession:
         self, raw: Any, *, committed: Callable[[dict[str, Any]], None] | None = None
     ) -> dict[str, Any]:
         """Validate a grouped plan on a clone, then execute its sequential steps."""
-        if self.env is None or self.obs is None or self.trace is None:
-            raise ValueError("No active game session. Send new_game first.")
-        if not isinstance(raw, dict):
-            raise ValueError("command must be an object.")
+        validated = self._validate_submission_header(raw)
+        if isinstance(validated, dict):
+            return validated
+        command_id, context = validated
+        assert self.env is not None and self.obs is not None
 
-        command_id = raw.get("command_id")
-        if not isinstance(command_id, str) or not command_id:
-            raise ValueError("command_id must be a non-empty string.")
-        if command_id.startswith(("authority.", "compound-")):
-            return self._reject_command(raw, "reserved_command_id", recover=False)
-
-        receipt = self.accepted_commands.get(command_id)
-        if receipt is not None:
-            return {
-                "type": "command_outcome",
-                "status": "duplicate",
-                "receipt": deepcopy(receipt),
-                "recovery": self.current_recovery("duplicate_command"),
-            }
-
-        if raw.get("match_id") != self.match_id:
-            return self._reject_command(raw, "wrong_match", recover=False)
-
-        context = self.published_prompt
         pending = self._pending_decision
-        if context is None or pending is None:
+        if pending is None:
             return self._reject_command(raw, "authority_busy", recover=True)
-        if raw.get("expected_revision") != context.revision:
-            return self._reject_command(raw, "stale_revision", recover=True)
-        if raw.get("prompt_id") != context.prompt_id:
-            return self._reject_command(raw, "stale_prompt", recover=True)
         if (
             raw.get("frame_hash") != context.frame["frame_hash"]
             or pending.frame.frame_hash != context.frame["frame_hash"]
@@ -1878,25 +1880,9 @@ class GameSession:
             }
             self._apply_bound_command(step_context, step_command, source="client")
 
-        committed_frame = self._experience_frame()
-        receipt = {
-            "command_id": command_id,
-            "actor": self.human_seat,
-            "accepted_at": base_revision,
-            "resulting_revision": self.revision,
-            "resulting_frame_hash": committed_frame["frame_hash"],
-        }
-        self.accepted_commands[command_id] = receipt
-        while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
-            self.accepted_commands.pop(next(iter(self.accepted_commands)))
-
-        if committed is not None:
-            committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
-            base_revision = self.revision
-            batch_cursor = self.presentation.next_seq
-        self._advance()
-        self._last_presentation_cursor = batch_cursor
-        return self._accepted_outcome(base_revision, batch_cursor, receipt)
+        return self._finish_client_command(
+            command_id, base_revision, batch_cursor, committed=committed
+        )
 
     def _accepted_outcome(
         self, base_revision: int, cursor: int, receipt: dict[str, Any]
@@ -5579,25 +5565,23 @@ async def get_payment_preview(
 def _incomplete_group_message(preview: GroupPreview, plan: GroupPlan) -> str:
     """Describe what remains unplaced when a grouped preview is incomplete."""
     group_spec = preview.group
-    missing: list[str] = []
+    placed_items: tuple[Any, ...] | list[Any] | None = None
     if isinstance(group_spec, ScryGroup) and isinstance(plan, ScryPlan):
-        placed = {(item.entity, item.incarnation) for item in (*plan.top, *plan.bottom)}
-        missing = [
-            card.label
-            for card in group_spec.items
-            if (card.item.entity, card.item.incarnation) not in placed
-        ]
+        placed_items = (*plan.top, *plan.bottom)
     elif isinstance(group_spec, OrderLibraryGroup) and isinstance(
         plan, OrderLibraryPlan
     ):
-        placed = {(item.entity, item.incarnation) for item in plan.order}
+        placed_items = plan.order
+    if placed_items is not None:
+        assert isinstance(group_spec, (ScryGroup, OrderLibraryGroup))
+        placed = {(item.entity, item.incarnation) for item in placed_items}
         missing = [
             card.label
             for card in group_spec.items
             if (card.item.entity, card.item.incarnation) not in placed
         ]
-    if missing:
-        return f"Place remaining cards before confirming: {', '.join(missing)}."
+        if missing:
+            return f"Place remaining cards before confirming: {', '.join(missing)}."
     return "Grouped plan is incomplete."
 
 

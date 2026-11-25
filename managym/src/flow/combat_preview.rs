@@ -135,11 +135,20 @@ impl Game {
         };
 
         // Preserve cross-field refusal messages from the flat `CombatPlan` shape.
-        if kind == DeclarationKind::Attackers && !plan.blocks.is_empty() {
+        let wrong_field = match kind {
+            DeclarationKind::Attackers => plan
+                .blocks
+                .first()
+                .map(|block| (block.blocker, "is not blocking now: this is an attack.")),
+            DeclarationKind::Blockers => plan
+                .attackers
+                .first()
+                .map(|&id| (id, "is not attacking now: this is a block.")),
+        };
+        if let Some((id, suffix)) = wrong_field {
             let group = self
                 .group(viewer)
                 .ok_or_else(|| AgentError("not a combat declaration".into()))?;
-            let id = plan.blocks[0].blocker;
             let label = self.permanent_render_label(id);
             return Ok(CombatPreview {
                 kind,
@@ -147,26 +156,7 @@ impl Game {
                 steps: Vec::new(),
                 refused: Some(DeclarationRefusal {
                     creature: id,
-                    reason: format!("{label} is not blocking now: this is an attack."),
-                    label,
-                }),
-                declared_attackers: Vec::new(),
-                declared_blocks: Vec::new(),
-            });
-        }
-        if kind == DeclarationKind::Blockers && !plan.attackers.is_empty() {
-            let group = self
-                .group(viewer)
-                .ok_or_else(|| AgentError("not a combat declaration".into()))?;
-            let id = plan.attackers[0];
-            let label = self.permanent_render_label(id);
-            return Ok(CombatPreview {
-                kind,
-                declarable: declarable_from_spec(&group.spec),
-                steps: Vec::new(),
-                refused: Some(DeclarationRefusal {
-                    creature: id,
-                    reason: format!("{label} is not attacking now: this is a block."),
+                    reason: format!("{label} {suffix}"),
                     label,
                 }),
                 declared_attackers: Vec::new(),
