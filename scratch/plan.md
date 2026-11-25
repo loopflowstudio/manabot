@@ -48,6 +48,13 @@ Done:
   deleted. Cards: the eight remaining Ways, Avatar of Burgeoning Echoes,
   Kiora of Salt and Sand, Sanctum Lurker, Gideon the Oathless; tokens
   `token.beast_4_4_g_trample`, `token.leviathan_8_8_u_hexproof`.
+  Commits `6429f0f54a`, `553ce2b149`, fixtures `d83da6e53b`, tour
+  `370c804c4d`; six directed FRA tests (quota and leaving, Warlord, granted
+  resolution, Lurker, activation triggers with Paradox lands, Kiora/Gideon).
+  The pass recorded no test-run results; gate reruns them. Not built: the
+  stress state (4 different Ways + 6 planeswalkers, granted abilities ×
+  holders in activation enumeration and layer rebuild), which moves to the
+  remaining pass. `AttachedHas` stays (see questions.md).
   Lesson: a declined up-to clause made the next clause's target count as
   clause 0, so Warlord re-asked for its player. Positions never name clauses.
 
@@ -61,12 +68,16 @@ semantic-conformance cases.
 
 ## Passes remaining
 
-1. Slice 7 and the rest of slice 8 close the planeswalker cohort. Slice 7
-   also takes Ajani Unrelenting (−3 "except for tokens you control" needs a
-   controller-scoped exception) and Garruk, Curse Breaker (−4
-   until-your-next-turn attack trigger), moved from slice 6. At gate run
-   debug nextest, Engine Budget and the pinned pilot, recording a reason if
-   its output moves. Keep main’s MTG-420 receipts at their original revision.
+1. Slice 7: the seven remaining planeswalkers (four FDN, Ajani Unrelenting,
+   both Garruks, Jace Reality Sculptor) with divided damage and keep-one-of-
+   each-type. Ajani Unrelenting's −3 "except for tokens you control" needs a
+   controller-scoped exception; Garruk, Curse Breaker's −4 an
+   until-your-next-turn attack trigger. Also the Way stress state left over
+   from slice 5. Teaches whether division offers stay linear.
+2. Slice 8's remaining ~30 adjacent cards plus the integrated interaction
+   checks, then close the ledger. At gate run debug nextest, Engine Budget and
+   the pinned pilot, recording a reason if its output moves. Keep main’s
+   MTG-420 receipts at their original revision.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text
@@ -138,68 +149,8 @@ targets, `0674982740`, fixtures `5ecb50ceee`) are built; their design is in
 `--reason` if the attack row moved) and Engine Budget (`bench_steps` digest
 expected unchanged; curated decks attack no planeswalker).
 
-### Slice 4 — Empower (built: `4966204033`, fixtures `2327a41b94`)
-
-Open defect: no replacement can divert a battlefield-to-exile move, so
-Overwrite's diverted-exile case stays untested until one exists.
-
-### Slice 5 — Granted loyalty abilities and zero-loyalty exception
-
-- "Planeswalkers you control have [−N]: …": `StaticAbility::Continuous` over
-  `Each { planeswalkers you control }` with `Modification::GrantActivated`
-  of a loyalty ability; the stacked ability keeps `AbilityGrant` grantor
-  identity; "this planeswalker" in granted text is the holder (`This`).
-  Verify the layer path accepts a controlled-set scope; if only
-  `AttachedHas` exists, generalise it to a selector scope (reshape, do not
-  add a `PlaneswalkersYouControlHave` variant).
-- Activation targeting needs independent target clauses (Way of the Warlord:
-  up to one creature/planeswalker AND a player). Extend the activated
-  ability's targeting to the spell's `targeting: Vec<TargetRequirement>`
-  shape; delete the single-requirement accessor.
-- Zero-loyalty exception: `StaticAbility::StateBasedActionDoesntApply
-  { action: StateBasedAction::ZeroLoyalty, affected: CardPredicate }`
-  (Sanctum Lurker), read only by the 704.5i check — destruction, damage and
-  the legend rule still apply.
-
-Cards: Way of the Cryomancer (−3 delayed "next instant/sorcery you cast this
-turn" copy — reuse copy/retarget), Way of the Deathbringer (`if_you_do` Beast),
-Way of the Healer, Way of the Pyromancer (+1 Add {R} on the stack), Way of the
-Warlord, Way of the Wildspeaker, Avatar of Burgeoning Echoes (−10), Kiora of
-Salt and Sand (−8 Leviathan; attack trigger in slice 6), Sanctum Lurker,
-Tomik (static grant from slice 2),
-Way of the Mind Sculptor/Paradox bodies (triggers in slice 6).
-
-Checks: granted ability shares the holder's one-per-turn quota with its
-printed ones; granted ability disappears when the Way leaves; Jace token with
-Sanctum Lurker survives at 0, dies to damage-destroy/legend rule as normal;
-Warlord with no creature target still hits the player.
-Stress state: 4 different Ways + 6 planeswalkers (granted abilities × holders
-in the activation enumeration and layer rebuild).
-
-Deletes: the single-target activated-ability accessor (replaced by clauses);
-`AttachedHas` if fully subsumed by the selector-scoped grant.
-
-### Slice 6 — Loyalty activation events
-
-- `GameEvent::LoyaltyAbilityActivated { player, source, counters_removed }`
-  emitted by activation (after costs, CR 602.2i), with the cost receipt.
-- `TriggerCondition::ActivatesLoyaltyAbility { who: Actor }` (one template;
-  "whenever you/an opponent activates a loyalty ability"). "If you removed two
-  or more loyalty counters to activate it" reads the event's receipt through an
-  `ActiveIf` condition on a triggering value, not a new variant.
-- History: loyalty activations this turn per player in the existing turn
-  history (`Condition::Compare` over a new `EffectValue::LoyaltyActivationsThisTurn`).
-
-Cards: Ajani Unrelenting (static trigger), Gideon the Oathless, Way of the
-Mind Sculptor, Way of the Paradox (cumulative `AdditionalLandPlay`), Kiora of
-Salt and Sand (attack condition) and Garruk, Curse Breaker's ETB draw.
-
-Checks: granted and printed loyalty activations both fire; Mind Sculptor's
-−X with X=1 doesn't draw, X=2 does; Paradox allows two extra lands after two
-activations in one turn (each planeswalker once); Kiora condition false
-before any activation.
-
-Deletes: none.
+Open defect (slice 4): no replacement can divert a battlefield-to-exile move,
+so Overwrite's diverted-exile case stays untested until one exists.
 
 ### Slice 7 — Remaining planeswalker cards and two primitives
 
