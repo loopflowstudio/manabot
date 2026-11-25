@@ -1961,11 +1961,11 @@ impl Game {
         controller: PlayerId,
     ) -> bool {
         match condition {
-            Some(crate::state::ability::Condition::CastFrom { zone, owner }) => entry
-                .cast_from
-                .is_some_and(|from| {
+            Some(crate::state::ability::Condition::CastFrom { zone, owner }) => {
+                entry.cast_from.is_some_and(|from| {
                     self.cast_from_matches(object, controller, from, *zone, *owner)
-                }),
+                })
+            }
             Some(condition) => self.check_static_condition(condition, controller),
             None => true,
         }

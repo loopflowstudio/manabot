@@ -852,13 +852,10 @@ impl Game {
     /// Power as printed, with a characteristic-defining ability evaluated
     /// for `you` (CR 604.3) instead of the printed star's placeholder.
     fn printed_power(&self, printing: &PrintedCharacteristics, you: PlayerId) -> i32 {
-        printing
-            .pt_cda()
-            .and_then(|(power, _)| power)
-            .map_or_else(
-                || printing.power.unwrap_or(0),
-                |value| self.off_battlefield_layer_value(value, printing, you),
-            )
+        printing.pt_cda().and_then(|(power, _)| power).map_or_else(
+            || printing.power.unwrap_or(0),
+            |value| self.off_battlefield_layer_value(value, printing, you),
+        )
     }
 
     pub(super) fn graveyard_card_types(&self) -> i32 {
@@ -1448,9 +1445,8 @@ impl Game {
         owner: Option<crate::state::ability::Actor>,
     ) -> bool {
         required.is_none_or(|zone| zone == from)
-            && owner.is_none_or(|who| {
-                who.includes(controller, self.state.entry_object(object).owner)
-            })
+            && owner
+                .is_none_or(|who| who.includes(controller, self.state.entry_object(object).owner))
     }
 
     pub(super) fn chosen_type_for(

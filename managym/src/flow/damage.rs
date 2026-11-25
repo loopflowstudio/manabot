@@ -292,7 +292,12 @@ impl Game {
         }
         self.object_lki(source)
             .map(|lki| lki.controller)
-            .or_else(|| self.state.objects.provenance(source).map(|(_, owner, _)| owner))
+            .or_else(|| {
+                self.state
+                    .objects
+                    .provenance(source)
+                    .map(|(_, owner, _)| owner)
+            })
     }
 
     #[cfg(test)]

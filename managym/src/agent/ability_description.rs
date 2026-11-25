@@ -643,8 +643,15 @@ fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
                 format!("this spell was cast from {}", zone_phrase(*zone))
             }
             (Some(zone), Some(who @ (Actor::You | Actor::Opponent))) => {
-                let owner = if *who == Actor::You { "your" } else { "an opponent's" };
-                format!("you cast it from {owner} {}", format!("{zone:?}").to_lowercase())
+                let owner = if *who == Actor::You {
+                    "your"
+                } else {
+                    "an opponent's"
+                };
+                format!(
+                    "you cast it from {owner} {}",
+                    format!("{zone:?}").to_lowercase()
+                )
             }
         },
         Condition::Not(condition) => match condition.as_ref() {

@@ -521,8 +521,13 @@ impl Game {
     /// replacement options have already been evaluated (at or before cursor).
     fn pending_hand_discards(
         &self,
-    ) -> impl Iterator<Item = (bool, ObjectId, Option<crate::flow::proposed_event::DiscardCause>)> + '_
-    {
+    ) -> impl Iterator<
+        Item = (
+            bool,
+            ObjectId,
+            Option<crate::flow::proposed_event::DiscardCause>,
+        ),
+    > + '_ {
         self.pending_batches().flat_map(|batch| {
             batch
                 .events

@@ -5202,7 +5202,7 @@ mod event_result_tests {
                 EventBinding::None,
                 [
                     game.zone_move_proposal(first, ZoneType::Library, Default::default()),
-                    game.zone_move_proposal(discard, ZoneType::Graveyard, Default::default()),
+                    game.discard_proposal(discard, DiscardCause::effect(&frame)),
                 ],
             );
             let first = game.move_object(first, ZoneType::Library);

@@ -267,14 +267,17 @@ fn every_registered_real_card_matches_scryfall() {
 
         // Printed power/toughness ("*" = CDA).
         let cda = def.pt_cda();
-        let power = engine_pt(def.power, cda.is_some());
+        let power = engine_pt(def.power, cda.is_some_and(|(power, _)| power.is_some()));
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
                 fx.power
             ));
         }
-        let toughness = engine_pt(def.toughness, cda.is_some_and(|(_, toughness)| toughness));
+        let toughness = engine_pt(
+            def.toughness,
+            cda.is_some_and(|(_, toughness)| toughness.is_some()),
+        );
         if toughness != scryfall_pt(fx.toughness.as_ref()) {
             failures.push(format!(
                 "{name}: toughness {toughness:?} != Scryfall {:?}",

@@ -321,6 +321,17 @@ match_state_hash, possible_worlds, prepared_possible_worlds, rules (205), scenar
 search_state_contract, search, source_taps and the study protocol targets. After the
 fix for (1), rerun `conformance_tests`. It may expose further drift.
 
+## Decomposition review fixes
+
+All five findings from the `1f160b09eb` review are fixed:
+
+1. `managym/tests/conformance_tests.rs`: updated `pt_cda()` power/toughness checks to `.is_some()` (`conformance_tests` 2/2 passed; no Scryfall drift).
+2. `tests/semantic/test_static_ability_tokens.py`: pointed First-Time Flyer at `StaticAbility::Continuous` and Suki, Kyoshi Warrior at `Modification::SetBasePt` (17/17 passed).
+3. `managym/cards/tests/cards/tla.rs`: asserted no block is offered for a lone Gray Ogre against menace Callous Inspector (CR 702.110b) while keeping the 19-life check (`cards` 1402/1402 passed).
+4. `managym/src/flow/decision.rs`: built the discard proposal with `discard_proposal(..., DiscardCause::effect(&frame))` (`managym --lib` 406/406 passed).
+5. `conformance/semantic-kernel-w17-v6/evidence-battlefield-history-v1.json`: replayed all 14 drifted cases. Thirteen kept identical command counts and terminal outcomes (shifted definition ids and match-state hashes only). `sacrifice-163` moved from 268 to 311 commands (still terminal) because of the intended slice-2 menace blocking fix (turn 28, Callous Inspector attacks into three blockers; after Ally #1 commits and Unlucky Cabbage Merchant declines, Ally #2 is forced to partner instead of being offered an illegal singleton pass). Re-recorded `evidence-battlefield-history-v1.json` (14 cases / 3,193 commands; `semantic_conformance_tests` 20/20 passed).
+6. Rebuilt the release extension against HEAD and regenerated the authored-match authority receipt (`conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-battlefield-history.json`, same 174 commands, summary and terminal players/board; updated catalog/state digests) and parity receipt (`conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json`, plus `AUTHORITY_SHA256`/`TERMINAL_STATE` in `conformance/authored_match_parity.py`). `test_authored_match_authority.py` (3/3) and `test_authored_match_parity.py` (5/5) passed.
+
 ## Remaining
 
 Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,

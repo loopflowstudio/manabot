@@ -10,9 +10,7 @@
 
 use managym::state::{
     ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
-    card::{
-        CardType, PrintedCharacteristics, StaticAbility, StaticScope, StaticTypeGrant,
-    },
+    card::{CardType, PrintedCharacteristics, StaticAbility, StaticScope, StaticTypeGrant},
     effect::Modification,
     permanent::CounterKind,
     predicate::CardPredicate,

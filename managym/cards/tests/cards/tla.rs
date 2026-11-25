@@ -11372,7 +11372,17 @@ fn printed_trample_first_strike_lifelink_and_menace_affect_combat() {
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
         s.advance_to_active_step(0, StepKind::DeclareBlockers);
-        s.declare_block();
+        if name == "Callous Inspector" {
+            assert!(
+                !s.action_space().actions.iter().any(|a| matches!(
+                    a,
+                    Action::DeclareBlocker { attacker: Some(id), .. } if *id == attacker
+                )),
+                "lone Gray Ogre should not be offered a block against menace Callous Inspector"
+            );
+        } else {
+            s.declare_block();
+        }
         s.advance_to_active_step(0, StepKind::EndOfCombat);
         match name {
             "Earth King's Lieutenant" => assert_eq!(s.life(1), 18),

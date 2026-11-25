@@ -905,7 +905,10 @@ impl<'a> Context<'a> {
             })
             .collect()
     }
-    fn controlled(&self, controller: PlayerId) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
+    fn controlled(
+        &self,
+        controller: PlayerId,
+    ) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
         self.objects
             .iter()
             .filter(move |(&id, object)| {

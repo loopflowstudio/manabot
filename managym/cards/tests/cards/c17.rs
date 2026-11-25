@@ -175,14 +175,16 @@ fn phased_out_blocker_leaves_combat_while_attacker_stays_blocked() {
             .action_space()
             .actions
             .iter()
-            .position(|a| matches!(
-                a,
-                Action::DeclareBlocker {
-                    blocker: b,
-                    attacker: Some(at),
-                    ..
-                } if *b == blocker && *at == attacker
-            ))
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::DeclareBlocker {
+                        blocker: b,
+                        attacker: Some(at),
+                        ..
+                    } if *b == blocker && *at == attacker
+                )
+            })
             .expect("block offer");
         s.step_action(block_index);
         pass_until(&mut s, ActionSpaceKind::Priority);
@@ -208,7 +210,10 @@ fn phased_out_blocker_leaves_combat_while_attacker_stays_blocked() {
             .find(|p| p.id == s.game().state.permanents[blocker].as_ref().unwrap().id.0 as i32)
             .expect("blocker row");
         assert!(attacker_row.blocked, "attacker remains blocked");
-        assert_eq!(blocker_row.blocking, None, "phased-out blocker leaves combat");
+        assert_eq!(
+            blocker_row.blocking, None,
+            "phased-out blocker leaves combat"
+        );
 
         s.advance_to_active_step(0, StepKind::End);
         assert_eq!(
