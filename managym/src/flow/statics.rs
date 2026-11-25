@@ -593,7 +593,9 @@ impl Game {
             object_id,
             predicate,
             || self.object_pt(object_id).0,
-            source.and_then(|s| self.live_permanent(s).chosen.as_deref()),
+            source
+                .filter(|_| predicate.reads_source())
+                .and_then(|s| self.live_permanent(s).chosen.as_deref()),
         )
     }
 
