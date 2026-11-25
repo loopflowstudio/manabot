@@ -37,8 +37,14 @@ its counting argument and calls the shared predicate.
 Two objects are interchangeable when all three hold:
 
 1. **Same thing.** Same zone, owner, controller, `definition_id`, `kind()`,
-   `form`, face-down state, and — on the battlefield — equal layered
-   `characteristics` and an equal `Permanent` record field by field.
+   `form`, neither face down, and — on the battlefield — equal layered
+   `characteristics` and an equal `Permanent` record field by field, except
+   `spell_entry`, which compares only `(payment.is_some(), kicked, x)`.
+   A face-down object (`Object::is_face_down`, any zone) never folds:
+   `ObjectForm.backing` holds its hidden printing, so comparing it leaks
+   hidden state and changes determinized root spaces, and ignoring it merges
+   different cards. Outside-game sideboard objects (`LearnTakeLesson`) have
+   no zone; they compare `(owner, definition_id)` through `entry_object`.
 2. **Nothing names either one.** Neither id appears anywhere in rules state
    outside its own zone slot and record.
 3. **The decision being asked does not order them.** Only decisions on the
@@ -68,14 +74,26 @@ list above is what that approach produced after one careful Task).
 
 Rulings made here, each a line in `scratch/questions.md`:
 
+- **Census reads live references only.** Exact `ObjectId` (slot +
+  generation) and `PermanentId`, never bare slots; `CardId` fields resolve
+  through `state.object_of`. Live: pending events, effects, stack, active
+  `Payment`, `EffectFrame`, `PendingChoice`, `CastPermissions`,
+  `exile_links`, `object_counters`, `TurnState`, `CombatState`. Vouched as
+  history and skipped: `events`, `observation_events`, `object_lki`,
+  `spell_lki`, zone/object/permanent storage, `library_order_pins`, and a
+  settled permanent's `spell_entry.payment` (its only reads are on a pending
+  `CardMoved{Battlefield}`, `triggers.rs:1156`; `payment.is_some()`,
+  `triggers.rs:1838`; `kicked`, `statics.rs:1231`). Walking it would mark
+  every land that ever paid for a live permanent as named forever.
 - **Candidate lists are not names.** The current decision's own offer lists
   (`ChooseTargets.legal_targets`, `SelectCards.candidates`,
   `attackers_to_declare`, `blockers_to_declare`) do not distinguish their
   members; what is already chosen (`chosen`, `selected`, `this_way`) does.
   Each such field is vouched individually in the census.
 - **Timestamps.** `Permanent.timestamp` orders layer effects (CR 613.7), so
-  two copies with any static ability, or any keyword counter, are never
-  interchangeable. Copies without them ignore timestamp. Equal ordinary
+  two copies with any layered static ability
+  (`characteristics(p).static_abilities`, so granted statics count) or any
+  keyword-counter timestamp are never interchangeable. Copies without them ignore timestamp. Equal ordinary
   counters compare equal (three tokens each with one +1/+1 counter fold).
 - **Summoning sickness and turn of entry** keep MTG-439's rule (plain lands
   ignore both; creatures, non-lands, self-animating lands and `power_up`
@@ -93,9 +111,16 @@ Rulings made here, each a line in `scratch/questions.md`:
 
 ### Where folding happens
 
-One place: `Game::tick` (`flow/tick.rs:103`), on the space each decision
-builds, before the automatic-payment and `skip_trivial` checks, for both
-`skip_trivial` settings (so `ConformancePair` stays in lockstep). The first
+One helper, `fold_action_space`, returning `(ActionSpace, Aliases)`, and
+one publisher, `publish_action_space(space, aliases)`, which overwrites the
+aliases on every call and clears them at game over. Every site that
+publishes a built space folds first: `Game::tick` (`flow/tick.rs:103`,
+before the automatic-payment and `skip_trivial` checks, for both
+`skip_trivial` settings so `ConformancePair` stays in lockstep),
+`refresh_sampled_decision` (`flow/search.rs:238-292`, folding before its
+`unchanged` comparison so `decision_epoch` does not spuriously advance),
+`flow/search.rs:367`, and `scenario_refresh_priority` / naming
+(`flow/scenario.rs:83,230`). The first
 action of each class in the existing emission order stays, so surviving
 actions keep their relative order. A space folded to one action is skipped
 like any forced decision, and is correctly treated as no choice for the
@@ -107,6 +132,11 @@ Folded by action: `PlayLand`, `CastSpell`, `ActivateCardAbility`, `Foretell`
 card; `SelectCard`, `LearnDiscard`, `LearnTakeLesson`; cost-component picks
 (sacrifice, discard, crew, exile from hand, delve); `DeclareBlocker` over
 interchangeable attackers.
+
+`SelectCard` is emitted by 14+ decisions, opening hands and `Pay`; it
+folds only for candidates in Battlefield, Hand, Graveyard, face-up Exile
+or outside-game Sideboard (never Library or Stack), and never under the
+decisions below.
 
 Never folded: `ChooseMode` (index is the mode, `flow/mana.rs:2258`),
 `ScryCard`, `OrderLibrary` picks, `ChooseTrigger` (choice order is the
@@ -128,6 +158,18 @@ Attackers already declared compare by combat role (same defender, no
 blockers yet) rather than failing on combat membership, so "block token A"
 and "block token B" fold.
 
+Declines are not recorded today (`declare_attacker(_, false)` is a
+no-op), so `CombatState` gains `declined_attackers` / `declined_blockers`,
+hashed in `CanonicalCombat` (`state/hash.rs:154`) with
+`MATCH_STATE_HASH_VERSION` 31 → 32. That bump also adds the missing
+`TurnState.graveyard_from_battlefield` to `CanonicalTurn`. The census
+vouches the decline lists as non-names. Compound
+`AtomicCommand::DeclareAttackers` and `structured_blocker_offers`
+(`agent/structured_offer.rs:1519-1590`) lower by exact creature id; they
+re-home a plan's marks onto the creature being asked and resolve folded
+attacker targets through aliases, or `[A:no, B:yes]` hits `WrongDecision`.
+Menace, must-attack and must-block are checked after normalization.
+
 Left offered: two interchangeable blockers assigned to two different
 attackers in either order (needs a declaration-start snapshot in combat
 state).
@@ -136,7 +178,9 @@ Academy's board draft lets a person pick any subset of a pile. The engine's
 `Game::combat_preview` (`flow/combat_preview.rs:104-199`) is where a draft
 becomes steps, and it normalizes there: when the creature being asked is not
 in the plan but an interchangeable, not-yet-asked creature is, the plan's
-mark moves to the one being asked. The browser's draft, toggles, marquee and
+mark moves to the one being asked; a blocker's planned attacker that was
+folded into another resolves to the offered one; `undeclared` compares
+modulo equivalence. The browser's draft, toggles, marquee and
 pile counter stay as they are; `undeclared` no longer refuses such a plan.
 
 ### Aliases
@@ -144,12 +188,18 @@ pile counter stay as they are; `undeclared` no longer refuses such a plan.
 `Game` keeps, beside `current_action_space`, the folded members of each
 surviving action: `(action index, object)` pairs, boxed, cloned with the
 game, outside the rules-state witness — the shape of
-`semantic_object_candidates` (`flow/game.rs:880`). `ActionSpace` itself is
+`semantic_object_candidates` (`flow/game.rs:880`). They are written only by
+`publish_action_space`, taken and restored with `current_action_space` on a
+`step` error (`tick.rs:27,42`), and carried in `GameSnapshot`
+(`agent/env/snapshot.rs:112,199`) outside `SearchStateWitness`. `ActionSpace` itself is
 unchanged, so its serialization, `PartialEq` use in search
 (`flow/search.rs:284`) and every digest input keep their form.
 
 Readers:
 
+- `boardView` puts alias anchors only on drawn objects (battlefield and
+  hand); `view.list` and `view.tray` stay one per offer, so graveyard,
+  exile and sideboard aliases never duplicate tray cards.
 - `decision_offer_subjects` (`agent/decision_context.rs:83`) emits them as a
   new optional `aliases` list on experience `InteractionOffer`
   (`agent/experience.rs:212`), omitted when empty. The native
@@ -219,8 +269,6 @@ Readers:
   objects as fold members; trigger ordering.
 - A count or "×3" on the folded offer's label; hand grouping in the UI.
 - Deduplicating compound offer candidates.
-- Tightening `resolution_cast_candidates` and `revealed_hand_objects`
-  (`flow/decision.rs:3489-3571`), which already fold by definition alone.
 
 ## What goes
 
@@ -229,6 +277,11 @@ Readers:
   `all_unbound_board_wide`, and `Payment::names_mana_source` /
   `may_name_mana_source` once the census covers them.
   `determined_source_counts` and `can_become_creature` survive.
+- The definition-only dedups in `resolution_cast_candidates` and
+  `revealed_hand_objects` (`flow/decision.rs:3437,3554`): they ignore
+  `known_to`, counters and exile links, and strip copies before aliases
+  exist, so the second copy in hand is unclickable. The shared folder
+  replaces them (Pass 2).
 - README's "identical sources are not merged" and "eight Forests are eight
   actions" (`managym/README.md:1001-1003,1064-1067`); `docs/academy.md:1828-1830`
   ("duplicate labels remain separate choices") and the per-copy offer wording
@@ -240,8 +293,11 @@ Surviving: MTG-439's skip behavior and labels, action order among survivors,
 
 ## Passes
 
-1. **Predicate, oracle, permanents.** The census and
-   `Game::interchangeable`; folding at `tick` for `TapForMana`,
+1. **Predicate, oracle, permanents.** The census (live references only,
+   settled `spell_entry` rule, face-down exclusion) and
+   `Game::interchangeable`; `fold_action_space` + `publish_action_space(space,
+   aliases)` at every publish site, aliases in `step` rollback and
+   `GameSnapshot`; folding for `TapForMana`,
    `ActivateAbility`, `WaterbendTap`, `TurnFaceUp`; the mana module moved
    onto it; alias pairs stored. Two proofs this pass exists to produce:
    - *Soundness.* A debug-build oracle test: over seeded Academy-matchup
@@ -258,15 +314,46 @@ Surviving: MTG-439's skip behavior and labels, action order among survivors,
      prefilter is tightened before any further pass.
 2. **Cards and selections.** Hand and graveyard objects: `PlayLand`,
    `CastSpell`, card abilities, `Foretell`, targets, `SelectCard`, discard,
-   Learn, cost components, delve. Constructed tests for each row of the
+   Learn (sideboard via `entry_object`), cost components, delve, with the
+   zone and decision gate on `SelectCard`; the two definition-only dedups
+   in `decision.rs` deleted. Constructed tests for each row of the
    table and each distinguishing case (pinned reveal, cast permission,
-   `graveyard_from_battlefield`, chosen-so-far in a multi-target spell).
+   `graveyard_from_battlefield`, chosen-so-far in a multi-target spell,
+   face-down manifests, granted static ability).
    Compound lowering through aliases. Oracle extended to these spaces.
-3. **Combat.** Declined-earlier rule for attackers and blockers, combat-role
-   comparison for block targets, `combat_preview` normalization.
+3. **Combat.** Decline lists in `CombatState` and the hash (v32, with
+   `graveyard_from_battlefield`), declined-earlier rule for attackers and
+   blockers, combat-role comparison for block targets, normalization in
+   `combat_preview` and compound lowering.
 4. **Academy and records.** `aliases` on the wire and schemas, UI anchoring,
    piles and payment preview, `managym/README.md` and `docs/academy.md`,
    conformance re-record, fixtures, Engine Budget baseline.
+
+## Concept review (28865774d1) — choices made for review
+
+Each finding is now in the design above. Headless; the recommended option
+was taken for each, none confirmed by a person:
+
+- **1a** face-down objects never fold. Passed over: fold when the chooser
+  shares information and backings match (complex, timing leaks).
+- **2a** settled `spell_entry` compares `(payment.is_some(), kicked, x)`
+  and is history for the census. Passed over: full comparison, which stops
+  cast creatures and used lands from ever folding.
+- **3a** one fold/publish seam at every publish site, aliases in rollback
+  and snapshots, and the `decision.rs` definition dedups deleted. Passed
+  over: keeping those dedups (no aliases for resolution casts or revealed
+  hand discards).
+- **4a** combat stays in this Task with the hash bump, because the Task's
+  outcome names attackers and blockers. Passed over: 4b, single-decision
+  folding only and combat as its own Task. Pass 3 is the last engine pass,
+  so 4b remains possible by dropping it without reworking 1, 2 or 4.
+- **5a** incarnation and hand/graveyard order ignored; layered statics or
+  keyword counters block folding. Passed over: comparing incarnation (5b),
+  relaxing the timestamp rule (5c).
+- Smaller findings taken as written: exact-id census with `CardId`
+  resolution; `SelectCard` zone/decision gate; `LearnTakeLesson` through
+  `entry_object`; drawn-only alias anchors; bucketing before census with
+  a small flat reference set.
 
 ## Acceptance check at gate
 

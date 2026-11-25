@@ -10,7 +10,7 @@ questions are in that Task's branch history.
 - **Incarnation is not compared.** Two identical hand cards with different
   zone histories fold, though the owner's observation shows different
   `incarnation` values. Is that number meant to be strategic information?
-- **Permanents with static abilities or keyword counters never fold**
+- **Permanents with layered (including granted) static abilities or keyword counters never fold**
   (timestamps order their effects). Could be relaxed to "no other effect's
   timestamp lies between".
 - **Hand and graveyard order are not compared.**
@@ -27,6 +27,9 @@ questions are in that Task's branch history.
 - **Not measured at kickoff:** how often real games offer interchangeable
   duplicates. No build cache existed in this checkout; Pass 1 reports the
   share of decisions folded and mean actions per decision.
-- **Outside this Task, found while reading:** `TurnState.graveyard_from_battlefield`
-  is read by rules but absent from `CanonicalTurn` (`managym/src/flow/hash.rs:79-151`),
-  so no state digest sees it.
+- **`TurnState.graveyard_from_battlefield`** is read by rules but absent from
+  `CanonicalTurn` (`managym/src/state/hash.rs:79-151`). Bundled into Pass 3's
+  hash bump; becomes its own fix if Pass 3 is split off (concept-review 4b).
+- **Concept review options 1a–5a** were taken headless as recommended; see
+  the plan's concept-review section. 4a (combat in this Task, hash v32) is
+  the one with the largest cost.
