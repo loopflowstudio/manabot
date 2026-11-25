@@ -29,6 +29,10 @@ import managym
 from managym import Deck
 from managym.disclosure import DecklistSampling
 
+__all__ = [
+    "UniformDecks",
+]
+
 
 class UniformDecks(StrictModel):
     """Uniform population entries in experiment order, with explicit pair semantics.
