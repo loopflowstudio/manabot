@@ -16,6 +16,12 @@ cleared.
 
 ## Slice 11 — Concept-Alignment Pass (from `scratch/concept-review.html`)
 
+Behavior review (2026-11-25, head `bc39f13ca3`): none of Slice 11 is built yet —
+`Retarget` projects no `"new target"`, `Player.combat_mana_pool` and
+`clear_combat_mana_pools` remain (`flow/mana.rs:2969,3476`), `KeepPermanents`
+still emits `keep_creatures` (`decision_context.rs:527-528`), and `prompt.ts`
+has no cases for the new decision kinds. These four items are the open defects.
+
 Build in this order; each piece is independently testable and preserves
 patch-clean 0.2.x compatibility and pinned-pilot tokens:
 
