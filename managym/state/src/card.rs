@@ -57,6 +57,7 @@ impl CardTypes {
     }
 
     /// Creatures and kindreds share the creature subtype list (CR 205.3m).
+    #[inline]
     pub fn has_creature_subtypes(&self) -> bool {
         self.is_creature() || self.types.contains(&CardType::Kindred)
     }
@@ -256,6 +257,7 @@ impl<const WORDS: usize> Default for KeywordBits<WORDS> {
 }
 
 impl<const WORDS: usize> KeywordBits<WORDS> {
+    #[inline]
     fn has(self, index: usize) -> bool {
         self.0[index / 64] & (1_u64 << (index % 64)) != 0
     }
@@ -290,6 +292,7 @@ impl Keywords {
         result
     }
 
+    #[inline]
     pub fn has(self, keyword: Keyword) -> bool {
         self.0.has(keyword as usize)
     }
@@ -1686,6 +1689,7 @@ struct DefinitionWire<'a> {
 
 impl PrintedCharacteristics {
     /// CR 702.73a: changeling defines the creature types of this face in every zone.
+    #[inline]
     pub fn has_all_creature_types(&self) -> bool {
         self.keywords.has(Keyword::Changeling)
     }
@@ -1700,6 +1704,7 @@ impl PrintedCharacteristics {
         }
     }
 
+    #[inline]
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|name| name == subtype)
             || (self.has_all_creature_types() && super::subtype::is_creature_type(subtype))
@@ -2020,6 +2025,7 @@ impl PrintedCharacteristics {
         })
     }
 
+    #[inline]
     pub fn ward(&self) -> Option<&PaymentCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Ward(cost) => Some(cost),

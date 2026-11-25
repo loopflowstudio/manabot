@@ -73,11 +73,16 @@ struct StaticEntry {
     timestamp: PublicId,
     ability: StaticAbility,
 }
+const DIRTY_TYPES: u8 = 1 << 0;
+const DIRTY_ACTIVATIONS: u8 = 1 << 1;
+const DIRTY_STATICS: u8 = 1 << 2;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
     pub view: Arc<Characteristics>,
     pub controller: PlayerId,
     statics: Vec<StaticEntry>,
+    dirty: u8,
 }
 #[derive(Clone)]
 pub(super) struct Context<'a> {
@@ -90,15 +95,25 @@ pub(super) struct Context<'a> {
     pub reads_life: bool,
 }
 
+#[derive(Clone)]
+enum NodeKind {
+    Static(Arc<SourcePlan>),
+    Resolved {
+        layer: Layer,
+        operation: Operation<i32>,
+    },
+}
+
 /// An effect keeps one identity across layers. `targets` is populated on its
-/// first application to objects (CR 613.6). Resolved records already own targets.
+/// first application to objects (CR 613.6). Resolved records already bind
+/// `source` and carry resolved `i32` amounts.
 #[derive(Clone)]
 struct Node {
     source: PermanentId,
     key: Vec<usize>,
     timestamp: PublicId,
     targets: Option<Vec<PermanentId>>,
-    plan: Arc<SourcePlan>,
+    kind: NodeKind,
 }
 
 /// Definition-derived instructions, shared across revisions and search forks.
@@ -111,10 +126,46 @@ struct SourcePlan {
     reads: ReadSet,
 }
 
-impl std::ops::Deref for Node {
-    type Target = SourcePlan;
-    fn deref(&self) -> &Self::Target {
-        &self.plan
+impl Node {
+    fn cda(&self) -> bool {
+        match &self.kind {
+            NodeKind::Static(plan) => plan.cda,
+            NodeKind::Resolved { .. } => false,
+        }
+    }
+
+    fn reads(&self) -> ReadSet {
+        match &self.kind {
+            NodeKind::Static(plan) => plan.reads,
+            NodeKind::Resolved { .. } => ReadSet::default(),
+        }
+    }
+
+    fn has_layer(&self, layer: Layer) -> bool {
+        match &self.kind {
+            NodeKind::Static(plan) => plan.parts.iter().any(|(part, _)| *part == layer),
+            NodeKind::Resolved { layer: part, .. } => *part == layer,
+        }
+    }
+
+    fn has_later_layer(&self, layer: Layer) -> bool {
+        match &self.kind {
+            NodeKind::Static(plan) => plan.parts.iter().any(|(part, _)| *part > layer),
+            NodeKind::Resolved { .. } => false,
+        }
+    }
+
+    fn is_static_unbound(&self) -> bool {
+        matches!(self.kind, NodeKind::Static(_)) && self.targets.is_none()
+    }
+
+    fn is_unconditional_attached_or_self(&self) -> bool {
+        matches!(
+            &self.kind,
+            NodeKind::Static(plan)
+                if plan.condition.is_none()
+                    && matches!(plan.scope, StaticScope::This | StaticScope::Attached)
+        )
     }
 }
 
@@ -329,22 +380,23 @@ impl Node {
         source: PermanentId,
         key: Vec<usize>,
         timestamp: PublicId,
-        part: (Layer, Operation),
+        layer: Layer,
+        operation: Operation<i32>,
     ) -> Self {
         Self {
             source,
             key,
             timestamp,
-            targets: Some(vec![source]),
-            plan: Arc::new(SourcePlan::on_source(vec![part]).summarize()),
+            targets: None,
+            kind: NodeKind::Resolved { layer, operation },
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Operation {
+enum Operation<N = LayerValue> {
     Control(PlayerId),
-    Modify(Modification<LayerValue>),
+    Modify(Modification<N>),
     LandType(String),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
@@ -362,7 +414,7 @@ const KEYWORDS: u16 = 32;
 const POWER: u16 = 64;
 const ABILITIES: u16 = 128;
 
-impl Operation {
+impl<N> Operation<N> {
     fn writes(&self) -> u16 {
         match self {
             Self::Control(_) => CONTROL,
@@ -402,7 +454,7 @@ impl Operation {
 #[derive(Clone, Debug, PartialEq)]
 struct Instruction {
     target: PermanentId,
-    operation: Operation,
+    operation: Operation<i32>,
 }
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
@@ -478,9 +530,10 @@ impl<'a> Context<'a> {
             // (CR 702.26b); its own view still takes the records on it.
             if !game.is_phased_out(id) {
                 for node in &seed.nodes {
-                    context.reads_mana |= node.reads.mana;
-                    context.reads_tapped |= node.reads.tapped;
-                    context.reads_life |= node.reads.life;
+                    let reads = node.reads();
+                    context.reads_mana |= reads.mana;
+                    context.reads_tapped |= reads.tapped;
+                    context.reads_life |= reads.life;
                     nodes.push(node.clone());
                 }
             }
@@ -493,10 +546,8 @@ impl<'a> Context<'a> {
                             .get(&kind)
                             .copied()
                             .unwrap_or(p.timestamp),
-                        (
-                            Layer::Ability,
-                            Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
-                        ),
+                        Layer::Ability,
+                        Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
                     ));
                 }
             }
@@ -509,13 +560,14 @@ impl<'a> Context<'a> {
                 } else if record.modification == Modification::Control {
                     Operation::Control(record.controller)
                 } else {
-                    Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
+                    Operation::Modify(record.modification.clone())
                 };
                 nodes.push(Node::resolved(
                     id,
                     vec![slot, usize::MAX, i],
                     record.timestamp,
-                    (layer, operation),
+                    layer,
+                    operation,
                 ));
             }
         }
@@ -529,9 +581,7 @@ impl<'a> Context<'a> {
                     .iter()
                     .enumerate()
                     .filter(|(i, node)| {
-                        !applied.contains(i)
-                            && node.parts.iter().any(|(part, _)| *part == layer)
-                            && context.exists(node)
+                        !applied.contains(i) && node.has_layer(layer) && context.exists(node)
                     })
                     .map(|(i, _)| i)
                     .collect();
@@ -545,7 +595,7 @@ impl<'a> Context<'a> {
                 for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
                     let index = pending[selected];
                     if nodes[index].targets.is_none()
-                        && nodes[index].parts.iter().any(|(part, _)| *part > layer)
+                        && nodes[index].has_later_layer(layer)
                         && !instructions[selected].is_empty()
                     {
                         // Instructions already resolved the affected set. Retain
@@ -583,9 +633,20 @@ impl<'a> Context<'a> {
             }
         }
         for (&id, object) in &mut context.objects {
-            if !retain_sources || !Arc::ptr_eq(object, &seeds[id.0].as_ref().unwrap().object) {
+            if object.dirty != 0 {
                 let record = &game.state[game.live_permanent(id).object];
                 Self::finish_object(Arc::make_mut(object), record);
+            }
+            #[cfg(debug_assertions)]
+            {
+                let mut expected = (**object).clone();
+                expected.dirty = DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
+                let record = &game.state[game.live_permanent(id).object];
+                Self::finish_object(&mut expected, record);
+                debug_assert_eq!(
+                    expected.view, object.view,
+                    "incremental finish_object diverged from full recomputation"
+                );
             }
         }
         context
@@ -633,6 +694,7 @@ impl<'a> Context<'a> {
                     ability: ability.clone(),
                 })
                 .collect(),
+            dirty: 0,
         };
         Self::finish_abilities(&mut object);
         let nodes = object
@@ -650,22 +712,44 @@ impl<'a> Context<'a> {
     }
 
     fn finish_object(object: &mut LayerObject, record: &Object) {
+        let dirty = object.dirty;
+        object.dirty = 0;
         let view = Arc::make_mut(&mut object.view);
-        view.is_animated = view.is_creature() && !record.types.is_creature();
-        // During the pass `CreatureTypes::All` marks a record granting all
-        // creature types; a listed set is derived from the final subtypes.
-        view.creature_types = if !view.types.has_creature_subtypes() {
-            CreatureTypes::default()
-        } else if view.creature_types.is_all() {
-            CreatureTypes::All
-        } else {
-            CreatureTypes::among(&view.subtypes)
-        };
-        Self::finish_abilities(object);
+        if dirty & DIRTY_TYPES != 0 {
+            view.is_animated = view.is_creature() && !record.types.is_creature();
+            // During the pass `CreatureTypes::All` marks a record granting all
+            // creature types; a listed set is derived from the final subtypes.
+            view.creature_types = if !view.types.has_creature_subtypes() {
+                CreatureTypes::default()
+            } else if view.creature_types.is_all() {
+                CreatureTypes::All
+            } else {
+                CreatureTypes::among(&view.subtypes)
+            };
+        }
+        if dirty & (DIRTY_TYPES | DIRTY_ACTIVATIONS) != 0 {
+            Self::finish_activation_purposes(view);
+        }
+        if dirty & DIRTY_STATICS != 0 {
+            view.static_abilities = object
+                .statics
+                .iter()
+                .map(|entry| entry.ability.clone())
+                .collect();
+        }
     }
 
     fn finish_abilities(object: &mut LayerObject) {
         let view = Arc::make_mut(&mut object.view);
+        Self::finish_activation_purposes(view);
+        view.static_abilities = object
+            .statics
+            .iter()
+            .map(|entry| entry.ability.clone())
+            .collect();
+    }
+
+    fn finish_activation_purposes(view: &mut Characteristics) {
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
@@ -694,11 +778,6 @@ impl<'a> Context<'a> {
                 }
             }
         }
-        view.static_abilities = object
-            .statics
-            .iter()
-            .map(|entry| entry.ability.clone())
-            .collect();
     }
     fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
         // Occurrence provenance preserves duplicate grants, including statics
@@ -710,9 +789,10 @@ impl<'a> Context<'a> {
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
-                        self.reads_mana |= node.reads.mana;
-                        self.reads_tapped |= node.reads.tapped;
-                        self.reads_life |= node.reads.life;
+                        let reads = node.reads();
+                        self.reads_mana |= reads.mana;
+                        self.reads_tapped |= reads.tapped;
+                        self.reads_life |= reads.life;
                         nodes.push(node);
                     }
                 }
@@ -736,7 +816,7 @@ impl<'a> Context<'a> {
         }
         let timestamp_order = |&a: &usize| {
             let node = &nodes[pending[a]];
-            (!node.cda, node.timestamp, &node.key)
+            (!node.cda(), node.timestamp, &node.key)
         };
         // A disjoint read/write pair cannot change the other's instructions.
         // Summaries are conservative; true dependencies still use CR 613.8's
@@ -747,17 +827,16 @@ impl<'a> Context<'a> {
             .collect();
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
-            let reads = node.reads.fields | if node.targets.is_none() { ABILITIES } else { 0 };
+            let reads = node.reads().fields | if node.is_static_unbound() { ABILITIES } else { 0 };
             // An unconditional attachment reads only its own controller
             // in layer 2. Independent Auras can apply in one timestamp pass.
             if layer == Layer::Control
-                && node.condition.is_none()
-                && matches!(node.scope, StaticScope::This | StaticScope::Attached)
+                && node.is_unconditional_attached_or_self()
                 && !instructions[b].iter().any(|i| i.target == node.source)
             {
                 return false;
             }
-            a != b && node.cda == nodes[pending[b]].cda && reads & writes[b] != 0
+            a != b && node.cda() == nodes[pending[b]].cda() && reads & writes[b] != 0
         };
         let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
             && !instructions
@@ -792,7 +871,7 @@ impl<'a> Context<'a> {
             };
             after.apply(&nodes[index], &instructions[b]);
             for (a, &other) in pending.iter().enumerate() {
-                if a != b && nodes[other].cda == nodes[index].cda {
+                if a != b && nodes[other].cda() == nodes[index].cda() {
                     if !cfg!(debug_assertions) && !plausible(a, b) {
                         continue;
                     }
@@ -833,24 +912,25 @@ impl<'a> Context<'a> {
     }
 
     fn exists(&self, node: &Node) -> bool {
-        node.targets.is_some()
+        matches!(node.kind, NodeKind::Resolved { .. })
+            || node.targets.is_some()
             || self
                 .objects
                 .get(&node.source)
                 .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key))
     }
-    fn targets(&self, node: &Node) -> Vec<PermanentId> {
+    fn targets(&self, node: &Node, plan: &SourcePlan) -> Vec<PermanentId> {
         if let Some(targets) = &node.targets {
             return targets.clone();
         }
-        if node
+        if plan
             .condition
             .as_ref()
             .is_some_and(|c| !self.condition(c, node.source))
         {
             return Vec::new();
         }
-        match node.scope {
+        match plan.scope {
             StaticScope::Attached => {
                 return self
                     .game
@@ -864,46 +944,65 @@ impl<'a> Context<'a> {
         self.objects
             .keys()
             .copied()
-            .filter(|&id| self.scope(&node.scope, node.source, id))
+            .filter(|&id| self.scope(&plan.scope, node.source, id))
             .collect()
     }
     fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
+        let plan = match &node.kind {
+            NodeKind::Resolved {
+                layer: part_layer,
+                operation,
+            } => {
+                return (*part_layer == layer)
+                    .then(|| {
+                        vec![Instruction {
+                            target: node.source,
+                            operation: operation.clone(),
+                        }]
+                    })
+                    .unwrap_or_default();
+            }
+            NodeKind::Static(plan) => plan,
+        };
         if !self.exists(node) {
             return Vec::new();
         }
-        self.targets(node)
-            .into_iter()
-            .flat_map(|id| {
-                node.parts
-                    .iter()
-                    .filter(move |(part, _)| *part == layer)
-                    .map(move |(_, op)| {
-                        let operation = match op {
-                            Operation::Modify(Modification::Control) => {
-                                Operation::Control(self.controller(node.source))
-                            }
-                            Operation::Modify(m) => {
-                                let object = self.game.live_permanent(id).object;
-                                let controller = self.controller(node.source);
-                                Operation::Modify(m.map_amount(|n| {
-                                    LayerValue::Fixed(self.layer_value(
-                                        n,
-                                        object,
-                                        controller,
-                                        Some(node.source),
-                                        Some(id),
-                                    ))
-                                }))
-                            }
-                            op => op.clone(),
-                        };
-                        Instruction {
-                            target: id,
-                            operation,
-                        }
-                    })
-            })
-            .collect()
+        let targets = self.targets(node, plan);
+        if targets.is_empty() {
+            return Vec::new();
+        }
+        let controller = self.controller(node.source);
+        let mut out = Vec::with_capacity(targets.len());
+        for id in targets {
+            for (part, op) in &plan.parts {
+                if *part != layer {
+                    continue;
+                }
+                let operation = match op {
+                    Operation::Modify(Modification::Control) => Operation::Control(controller),
+                    Operation::Modify(m) => Operation::Modify(m.resolve(|n| {
+                        self.layer_value(
+                            n,
+                            || self.game.live_permanent(id).object,
+                            controller,
+                            Some(node.source),
+                            Some(id),
+                        )
+                    })),
+                    Operation::Control(player) => Operation::Control(*player),
+                    Operation::LandType(subtype) => Operation::LandType(subtype.clone()),
+                    Operation::Inherit => Operation::Inherit,
+                    Operation::CatalogTrigger(ability) => {
+                        Operation::CatalogTrigger(ability.clone())
+                    }
+                };
+                out.push(Instruction {
+                    target: id,
+                    operation,
+                });
+            }
+        }
+        out
     }
     fn controlled(
         &self,
@@ -922,14 +1021,14 @@ impl<'a> Context<'a> {
     fn layer_value(
         &self,
         value: &LayerValue,
-        object: ObjectId,
+        object: impl FnOnce() -> ObjectId,
         controller: PlayerId,
         source: Option<PermanentId>,
         affected: Option<PermanentId>,
     ) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object)),
+            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object())),
             LayerValue::GraveyardCardTypes { offset } => self.game.graveyard_card_types() + offset,
             LayerValue::Count(count) => self.count(count, controller, source, affected),
         }
@@ -991,7 +1090,7 @@ impl<'a> Context<'a> {
                     let card = &self.game.state[object];
                     card.pt_cda().and_then(|(power, _)| power).map_or_else(
                         || card.power.unwrap_or(0),
-                        |value| self.layer_value(value, object, card.owner, None, None),
+                        |value| self.layer_value(value, || object, card.owner, None, None),
                     )
                 })
             })
@@ -1307,7 +1406,7 @@ impl<'a> Context<'a> {
             key: entry.key.clone(),
             timestamp: entry.timestamp,
             targets: None,
-            plan: Arc::new(plan.summarize()),
+            kind: NodeKind::Static(Arc::new(plan.summarize())),
         })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
@@ -1333,6 +1432,7 @@ impl<'a> Context<'a> {
                     if !view.is_land() {
                         continue;
                     }
+                    object.dirty |= DIRTY_TYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
                     view.subtypes
                         .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
                     view.subtypes.push(subtype.clone());
@@ -1343,6 +1443,9 @@ impl<'a> Context<'a> {
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
+                        if !definition.activated_abilities.is_empty() {
+                            object.dirty |= DIRTY_ACTIVATIONS;
+                        }
                         view.activated_abilities
                             .extend(definition.activated_abilities.clone());
                         view.triggered_abilities.extend(
@@ -1370,10 +1473,12 @@ impl<'a> Context<'a> {
                     }
                     Modification::AllCreatureTypes => {
                         // A later grant of every type overrides an earlier set list.
+                        object.dirty |= DIRTY_TYPES;
                         view.creature_types = CreatureTypes::All;
                         view.creature_types_set = false;
                     }
                     Modification::SetCreatureTypes(types) => {
+                        object.dirty |= DIRTY_TYPES;
                         view.creature_types = CreatureTypes::default();
                         view.creature_types_set = true;
                         view.subtypes.retain(|s| !is_creature_type(s));
@@ -1381,6 +1486,7 @@ impl<'a> Context<'a> {
                         view.added_subtypes.retain(|s| !is_creature_type(s));
                     }
                     Modification::AddSubtypes(types) => {
+                        object.dirty |= DIRTY_TYPES;
                         if view.is_land() {
                             let gained = intrinsic_mana_ability(|name| {
                                 types.iter().any(|subtype| subtype == name)
@@ -1395,8 +1501,12 @@ impl<'a> Context<'a> {
                             }
                         }
                     }
-                    Modification::AddTypes(types) => view.types.types.extend(types.iter().copied()),
+                    Modification::AddTypes(types) => {
+                        object.dirty |= DIRTY_TYPES;
+                        view.types.types.extend(types.iter().copied());
+                    }
                     Modification::SetTypes { types, subtypes } => {
+                        object.dirty |= DIRTY_TYPES;
                         // CR 205.1a, 205.3d: a subtype survives while it
                         // corresponds to a remaining type and the effect sets
                         // no subtype of its kind (a basic land imprisoned as a
@@ -1431,6 +1541,7 @@ impl<'a> Context<'a> {
                         }
                     }
                     Modification::BecomeCreature => {
+                        object.dirty |= DIRTY_TYPES;
                         view.types.types.insert(CardType::Creature);
                     }
                     Modification::Nonlegendary => view.is_legendary = false,
@@ -1442,15 +1553,27 @@ impl<'a> Context<'a> {
                     Modification::LoseKeywords(keywords) => {
                         view.keywords = view.keywords.without(*keywords);
                         if keywords.has(Keyword::Hexproof) {
+                            let before = object.statics.len();
                             object.statics.retain(|entry| {
                                 !matches!(entry.ability, StaticAbility::HexproofFrom(_))
                             });
+                            if object.statics.len() != before {
+                                object.dirty |= DIRTY_STATICS;
+                            }
                         }
                     }
                     Modification::LoseNonManaAbilities => {
+                        if !object.statics.is_empty() {
+                            object.dirty |= DIRTY_STATICS;
+                        }
                         lose_nonmana_abilities(view, &mut object.statics)
                     }
-                    Modification::LoseAllAbilities => lose_all_abilities(view, &mut object.statics),
+                    Modification::LoseAllAbilities => {
+                        if !object.statics.is_empty() {
+                            object.dirty |= DIRTY_STATICS;
+                        }
+                        lose_all_abilities(view, &mut object.statics)
+                    }
                     Modification::Firebending(n) => {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
@@ -1460,6 +1583,7 @@ impl<'a> Context<'a> {
                         });
                     }
                     Modification::GrantActivated(ability) => {
+                        object.dirty |= DIRTY_ACTIVATIONS;
                         view.activated_abilities.push((**ability).clone())
                     }
                     Modification::GrantTriggered(ability) => {
@@ -1470,6 +1594,7 @@ impl<'a> Context<'a> {
                         })
                     }
                     Modification::GrantStatic(ability) => {
+                        object.dirty |= DIRTY_STATICS;
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
@@ -1487,24 +1612,21 @@ impl<'a> Context<'a> {
                         });
                     }
                     Modification::SetBasePt { power, toughness } => {
-                        if let Some(LayerValue::Fixed(p)) = power {
+                        if let Some(p) = power {
                             view.power = *p;
                         }
-                        if let Some(LayerValue::Fixed(t)) = toughness {
+                        if let Some(t) = toughness {
                             view.toughness = *t;
                         }
                     }
-                    Modification::ModifyPt {
-                        power: LayerValue::Fixed(p),
-                        toughness: LayerValue::Fixed(t),
-                    } => {
-                        view.power += p;
-                        view.toughness += t;
+                    Modification::ModifyPt { power, toughness } => {
+                        view.power += power;
+                        view.toughness += toughness;
                     }
                     Modification::SwitchPt => std::mem::swap(&mut view.power, &mut view.toughness),
-                    _ => unreachable!("layer instruction is resolved"),
+                    _ => unreachable!("non-layer modification in layer instruction"),
                 },
-                _ => unreachable!("layer instruction is resolved"),
+                Operation::Control(_) => unreachable!("control handled above"),
             }
         }
     }

@@ -534,6 +534,7 @@ impl CreatureTypes {
     }
 
     /// The listed creature types; none for all creature types.
+    #[inline]
     pub fn listed(&self) -> &[String] {
         match self {
             Self::Listed(listed) => listed,
@@ -541,10 +542,12 @@ impl CreatureTypes {
         }
     }
 
+    #[inline]
     pub fn is_all(&self) -> bool {
         matches!(self, Self::All)
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Listed(listed) if listed.is_empty())
     }

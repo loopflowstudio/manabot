@@ -868,8 +868,9 @@ impl Game {
         for requirement in spell.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, object, cast.profile, &requirement)
-                    .is_empty()
+                    .legal_spell_targets(player, object, spell, &requirement)
+                    .next()
+                    .is_none()
             {
                 return None;
             }

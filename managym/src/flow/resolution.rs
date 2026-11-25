@@ -27,13 +27,14 @@ use crate::{
             ObjectSelector, PlayerSelector, Scope, TargetRequirement, TargetSpec,
         },
         card::{
-            CardDefId, CardTypes, Keyword, PrintedCharacteristics, SourceQuality, StaticAbility,
+            CardDefId, CardType, CardTypes, Keyword, PrintedCharacteristics, SourceQuality,
+            StaticAbility,
         },
         effect::{Affected, CopyException, EffectDuration, Modification},
         game_object::{
             AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        mana::{Colors, ManaCost},
+        mana::{Color, Colors, ManaCost},
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
@@ -47,23 +48,96 @@ use crate::{
 
 /// Characteristics of the spell or ability source, with its decision's
 /// controller. An ability keeps its controller even if its source changes hands.
+/// Stored as compact bitmasks so target legality checks never allocate.
+#[derive(Clone, Copy)]
 pub(crate) struct TargetingSource {
     pub(super) controller: PlayerId,
-    colors: Colors,
-    types: CardTypes,
+    colors: u8,
+    types: u16,
+}
+
+#[inline]
+const fn color_bit(color: Color) -> u8 {
+    1u8 << (color as u8)
+}
+
+#[inline]
+const fn card_type_bit(card_type: CardType) -> u16 {
+    match card_type {
+        CardType::Creature => 1 << 0,
+        CardType::Instant => 1 << 1,
+        CardType::Sorcery => 1 << 2,
+        CardType::Planeswalker => 1 << 3,
+        CardType::Land => 1 << 4,
+        CardType::Enchantment => 1 << 5,
+        CardType::Artifact => 1 << 6,
+        CardType::Kindred => 1 << 7,
+        CardType::Battle => 1 << 8,
+    }
+}
+
+fn colors_mask(colors: &Colors) -> u8 {
+    colors.iter().fold(0u8, |mask, &color| mask | color_bit(color))
+}
+
+fn printed_colors_mask(face: &PrintedCharacteristics) -> u8 {
+    if let Some(colors) = &face.color_override {
+        return colors_mask(colors);
+    }
+    let Some(cost) = &face.mana_cost else {
+        return 0;
+    };
+    let mut mask = 0u8;
+    for pair in &cost.hybrid {
+        for &color in pair {
+            mask |= color_bit(color);
+        }
+    }
+    for color in [
+        Color::White,
+        Color::Blue,
+        Color::Black,
+        Color::Red,
+        Color::Green,
+    ] {
+        if cost.cost[color as usize] > 0 {
+            mask |= color_bit(color);
+        }
+    }
+    mask
+}
+
+fn types_mask(types: &CardTypes) -> u16 {
+    types
+        .types
+        .iter()
+        .fold(0u16, |mask, &card_type| mask | card_type_bit(card_type))
 }
 
 impl TargetingSource {
     pub(crate) fn printed(controller: PlayerId, face: &PrintedCharacteristics) -> Self {
         Self {
             controller,
-            colors: face.colors(),
-            types: face.types.clone(),
+            colors: printed_colors_mask(face),
+            types: types_mask(&face.types),
         }
     }
 
+    fn from_characteristics(controller: PlayerId, colors: &Colors, types: &CardTypes) -> Self {
+        Self {
+            controller,
+            colors: colors_mask(colors),
+            types: types_mask(types),
+        }
+    }
+
+    #[inline]
     pub(super) fn matches(&self, quality: SourceQuality) -> bool {
-        quality.matches(&self.colors, &self.types)
+        match quality {
+            SourceQuality::Everything => true,
+            SourceQuality::Color(color) => (self.colors & color_bit(color)) != 0,
+            SourceQuality::CardType(card_type) => (self.types & card_type_bit(card_type)) != 0,
+        }
     }
 }
 
@@ -151,26 +225,19 @@ impl Game {
     ) -> TargetingSource {
         if let Some(id) = self.state.permanent_of(source) {
             let view = self.layer_view(id);
-            TargetingSource {
-                controller,
-                colors: view.colors.clone(),
-                types: view.types.clone(),
-            }
+            TargetingSource::from_characteristics(controller, &view.colors, &view.types)
         } else if let Some(lki) = self.object_lki(source) {
-            TargetingSource {
+            TargetingSource::from_characteristics(
                 controller,
-                colors: lki.battlefield.colors.clone(),
-                types: lki.battlefield.types.clone(),
-            }
+                &lki.battlefield.colors,
+                &lki.battlefield.types,
+            )
         } else if let Some(spell) = self.state.spell_lki.get(&source) {
-            TargetingSource {
+            TargetingSource::from_characteristics(
                 controller,
-                colors: spell.colors.clone(),
-                types: self
-                    .recorded_spell_printing(source, spell.profile)
-                    .types
-                    .clone(),
-            }
+                &spell.colors,
+                &self.recorded_spell_printing(source, spell.profile).types,
+            )
         } else {
             TargetingSource::printed(controller, self.state.source_base(source).1)
         }
@@ -3089,8 +3156,8 @@ impl Game {
             spec,
             &TargetingSource {
                 controller,
-                colors: Default::default(),
-                types: Default::default(),
+                colors: 0,
+                types: 0,
             },
         )
     }

@@ -132,28 +132,33 @@ impl Characteristics {
         (self.power, self.toughness)
     }
 
+    #[inline]
     pub fn is_creature(&self) -> bool {
         self.types.is_creature()
     }
 
     /// Whether it has every creature type. Mid-pass, `CreatureTypes::All`
     /// marks the grant, which requires a corresponding card type (CR 205.3d).
+    #[inline]
     pub fn has_all_creature_types(&self) -> bool {
-        self.types.has_creature_subtypes() && self.creature_types.is_all()
+        self.creature_types.is_all() && self.types.has_creature_subtypes()
     }
 
     /// Whether a summoning-sick permanent with these characteristics can't
     /// attack or pay {T} (CR 302.6): it is a creature without haste.
+    #[inline]
     pub fn restricted_by_summoning_sickness(&self) -> bool {
         self.is_creature() && !self.keywords.has(Keyword::Haste)
     }
 
     /// Printed or granted land.
+    #[inline]
     pub fn is_land(&self) -> bool {
         self.types.is_land()
     }
 
     /// Whether it has this subtype, counting all creature types.
+    #[inline]
     pub fn has_subtype(&self, subtype: &str) -> bool {
         self.subtypes.iter().any(|s| s == subtype)
             || (self.has_all_creature_types() && is_creature_type(subtype))
@@ -417,26 +422,24 @@ impl Game {
                 .board
                 .clone();
             // Most games have no layer-2 instruction. When another write
-            // invalidated the board, inspect live sources before rebuilding
-            // every layer solely to check control. Granted statics start
-            // in layer 6, after control has been determined.
+            // invalidated the board, scan permanents directly before rebuilding
+            // every layer solely to check control. A phased-out control source
+            // conservatively falls through to `layer_board`, which handles
+            // phasing accurately. Granted statics start in layer 6, after
+            // control has been determined.
             if cached.is_none()
                 && !self
                     .state
                     .effects
                     .iter()
                     .any(|e| e.modification == Modification::Control)
-                && ![PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|seat| self.iter_battlefield_permanents(seat))
-                    .any(|id| {
-                        let p = self.state.permanents[id].as_ref().unwrap();
-                        p.control_differs_from_entry
-                            || self.state[p.object].statics.iter().any(|ability| {
-                                matches!(ability, StaticAbility::Continuous(effect)
+                && !self.state.permanents.iter().flatten().any(|p| {
+                    p.control_differs_from_entry
+                        || self.state[p.object].statics.iter().any(|ability| {
+                            matches!(ability, StaticAbility::Continuous(effect)
                                 if effect.modifications.contains(&Modification::Control))
-                            })
-                    })
+                        })
+                })
             {
                 return;
             }

@@ -65,9 +65,15 @@ struct TargetSelection {
 
 impl CastChoices {
     pub(crate) fn spell(self, object: &Object) -> &Arc<PrintedCharacteristics> {
-        crate::cards::content_pack::default_content_pack()
-            .spell_definition(object, self.profile)
-            .expect("offered spell profile")
+        if self.profile == SpellProfile::BackFace && object.modal_back {
+            crate::cards::content_pack::default_content_pack()
+                .spell_definition(object, self.profile)
+                .expect("offered spell profile")
+        } else {
+            object
+                .front_or_inset(self.profile)
+                .expect("offered spell profile")
+        }
     }
 
     pub(super) fn matches_spell(
@@ -2223,6 +2229,23 @@ impl Game {
         })
     }
 
+    /// Legal targets for one targeting requirement of `object` with already
+    /// resolved `face`, excluding `object` itself from stack-spell targets.
+    pub(crate) fn legal_spell_targets<'a>(
+        &'a self,
+        player: PlayerId,
+        object: ObjectId,
+        face: &PrintedCharacteristics,
+        requirement: &'a TargetRequirement,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.targets_for_characteristics(
+            requirement,
+            AbilitySource::new(object, None),
+            super::resolution::TargetingSource::printed(player, face),
+        )
+        .filter(move |target| *target != Target::StackSpell(object))
+    }
+
     /// Legal targets for one targeting requirement of `card`, cast by
     /// `player`. The card being cast is excluded from stack-spell targets
     /// (it is not on the stack yet while targets are chosen).
@@ -2233,15 +2256,15 @@ impl Game {
         profile: SpellProfile,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        let face = crate::cards::content_pack::default_content_pack()
-            .spell_definition(&self.state[object], profile)
-            .expect("offered spell profile");
-        self.targets_for_characteristics(
-            requirement,
-            AbilitySource::new(object, None),
-            super::resolution::TargetingSource::printed(player, face),
-        )
-        .filter(|target| *target != Target::StackSpell(object))
-        .collect()
+        let card = &self.state[object];
+        let face = if profile == SpellProfile::BackFace && card.modal_back {
+            crate::cards::content_pack::default_content_pack()
+                .spell_definition(card, profile)
+                .expect("offered spell profile")
+        } else {
+            card.front_or_inset(profile).expect("offered spell profile")
+        };
+        self.legal_spell_targets(player, object, face, requirement)
+            .collect()
     }
 }
