@@ -937,7 +937,11 @@ impl Game {
         let alternative = self.alternative_cost_available(player, object, cast);
         let optional = card.optional_cost().is_some() || card.bargain();
         if (alternative || optional) && self.can_pay_cast(player, object, kicked) {
-            if self.can_pay_cast(player, object, cast) {
+            if self.can_pay_cast(player, object, cast)
+                && self
+                    .cast_with_available_targets(player, object, cast)
+                    .is_some_and(|available| !available.kicked)
+            {
                 None
             } else {
                 Some(kicked)
@@ -968,6 +972,29 @@ impl Game {
             || card
                 .alternative_mana()
                 .is_some_and(|(_, condition)| self.check_static_condition(condition, player))
+    }
+
+    /// Some kicker costs replace a mandatory target with “any number”. With
+    /// no such target available, only the kicked announcement can be made.
+    pub(crate) fn cast_with_available_targets(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        mut cast: CastChoices,
+    ) -> Option<CastChoices> {
+        for requirement in cast.spell(&self.state[object]).target_requirements() {
+            if requirement.min == 0 || (cast.kicked && requirement.up_to_if_kicked.is_some()) {
+                continue;
+            }
+            if self
+                .legal_targets_for_requirement(player, object, &requirement)
+                .is_empty()
+            {
+                requirement.up_to_if_kicked?;
+                cast.kicked = true;
+            }
+        }
+        Some(cast)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -1080,11 +1107,11 @@ impl Game {
                         .target_requirements_for_mode(Some(*mode))
                         .iter()
                         .all(|req| {
-                            req.min == 0
+                            req.min_for(cast.x, cast.kicked) == 0
                                 || self
                                     .legal_targets_for_requirement(player, object, req)
                                     .len()
-                                    >= req.min
+                                    >= req.min_for(cast.x, cast.kicked)
                         })
                 })
                 .collect()
@@ -1171,8 +1198,8 @@ impl Game {
                     self.target_leaves_cost_payable(player, object, cast, &chosen, *target)
                 })
                 .collect::<Vec<_>>();
-            if legal.is_empty() || requirement.max_for(cast.x) == 0 {
-                if requirement.min_for(cast.x) == 0 {
+            if legal.is_empty() || requirement.max_for(cast.x, cast.kicked) == 0 {
+                if requirement.min_for(cast.x, cast.kicked) == 0 {
                     requirement_index += 1;
                     continue;
                 }
@@ -1290,7 +1317,7 @@ impl Game {
             .filter(|i| **i == requirement_index)
             .count();
 
-        if chosen_in_req >= requirement.max_for(cast.x) {
+        if chosen_in_req >= requirement.max_for(cast.x, cast.kicked) {
             return self.advance_target_selection(
                 player,
                 object,
@@ -1380,7 +1407,7 @@ impl Game {
             .iter()
             .filter(|i| **i == requirement_index)
             .count();
-        if chosen_in_req < requirement.min_for(cast.x) {
+        if chosen_in_req < requirement.min_for(cast.x, cast.kicked) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 object,

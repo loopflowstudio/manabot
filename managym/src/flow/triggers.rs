@@ -827,7 +827,8 @@ impl Game {
         // owns restrictions at selection (CR 601.2c) and resolution (608.2b).
         if matches!(
             target_spec,
-            TargetSpec::PermanentYouControl { .. }
+            TargetSpec::PermanentYouOwn { .. }
+                | TargetSpec::PermanentYouControl { .. }
                 | TargetSpec::Permanent { .. }
                 | TargetSpec::Creature
                 | TargetSpec::AnyTarget

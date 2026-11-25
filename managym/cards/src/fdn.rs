@@ -19,6 +19,7 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        divine_resilience(),
         curator_of_destinies(),
         fishing_pole(),
         ravenous_amulet(),
@@ -763,7 +764,10 @@ fn blasphemous_edict() -> CardDefinition {
                     predicate: CardPredicate::creature(),
                 },
             }],
-            spell_effects: vec![Effect::EachPlayerSacrificesCreatures { count: 13 }],
+            spell_effects: vec![Effect::EachPlayerSacrifices {
+                predicate: CardPredicate::creature(),
+                count: 13,
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -4009,6 +4013,7 @@ fn raise_the_past() -> CardDefinition {
             // each other enter (CR 603.6a).
             spell_effects: vec![Effect::return_to_battlefield(
                 ObjectSelector::ZoneMatching {
+                    except: None,
                     zone: ZoneType::Graveyard,
                     owner: Actor::You,
                     predicate: CardPredicate {
@@ -4044,6 +4049,32 @@ fn curator_of_destinies() -> CardDefinition {
                 effects: vec![Effect::SeparatePiles { look: 5 }],
             }],
             text_box: "This spell can't be countered.\nFlying\nWhen this creature enters, look at the top five cards of your library and separate them into a face-down pile and a face-up pile. An opponent chooses one of those piles. Put that pile into your hand and the other into your graveyard.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn divine_resilience() -> CardDefinition {
+    let text_box = "Kicker {2}{W} (You may pay an additional {2}{W} as you cast this spell.)\nTarget creature you control gains indestructible until end of turn. If this spell was kicked, instead any number of target creatures you control gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)";
+    CardDefinition {
+        key: "fdn.divine_resilience",
+        scryfall_id: "f3a08245-a535-4d24-b8c0-78759bb9c4b0",
+        printed: PrintedCharacteristics {
+            name: "Divine Resilience".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}{W}"))],
+            targeting: vec![TargetRequirement {
+                up_to_if_kicked: Some(TargetRequirement::ANY_NUMBER),
+                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+            }],
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::Targets(TargetSpec::CreatureYouControl),
+                Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+            )],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

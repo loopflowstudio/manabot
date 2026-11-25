@@ -985,6 +985,7 @@ impl Game {
             objects,
         );
         rebind(frame.moved.iter_mut(), objects);
+        rebind(frame.moved_from.iter_mut(), objects);
         rebind(frame.this_way.iter_mut(), objects);
         rebind(frame.created.iter_mut(), objects);
         self.rebind_completion_selection(&mut frame.completion, rebinding);

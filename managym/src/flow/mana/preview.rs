@@ -248,7 +248,7 @@ impl Game {
                             .filter(|index| **index == *requirement_index)
                             .count()
                             + 1
-                            >= requirements[*requirement_index].max_for(cast.x);
+                            >= requirements[*requirement_index].max_for(cast.x, cast.kicked);
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
                             "Choose the remaining targets before previewing this target-dependent cost."));

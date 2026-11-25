@@ -214,6 +214,20 @@ impl Game {
                 ObjectSelector::Triggering => self.target_property(frame.context_target, *property),
                 ObjectSelector::Target(_) => self.target_property(primary(), *property),
                 ObjectSelector::Paid(how) => aggregate.evaluate(paid_properties(*how, *property)),
+                ObjectSelector::Moved => aggregate.evaluate(
+                    frame
+                        .moved_from
+                        .iter()
+                        .filter_map(|id| {
+                            self.object_lki(*id)
+                                .map(|lki| self.departed_property(lki, *property))
+                        })
+                        .chain(
+                            self.selected_permanents(of, frame)
+                                .into_iter()
+                                .map(|id| self.live_property(id, *property)),
+                        ),
+                ),
                 _ => aggregate.evaluate(
                     self.selected_permanents(of, frame)
                         .into_iter()
@@ -908,13 +922,18 @@ impl Game {
             if let Some((predicate, except, optional)) = effect.chosen() {
                 // What a sacrifice moves answers a following "if you do"; a
                 // declined or impossible choice moves nothing.
+                let excluded = self
+                    .excluded_objects(except, frame)
+                    .filter_map(|object| self.state.permanent_of(object))
+                    .collect();
                 if matches!(effect, Effect::Sacrifice { .. } | Effect::Move { .. }) {
                     frame.moved.clear();
+                    frame.moved_from.clear();
                 }
                 let decision = Decision::ChooseObject {
                     player: frame.controller,
                     predicate: predicate.clone(),
-                    excluded: self.excepted_permanent(except, frame),
+                    excluded,
                     optional,
                     effect: Box::new(effect.clone()),
                 };
@@ -1054,6 +1073,7 @@ impl Game {
                 // the previous instruction moved (flicker's return).
                 let selected = self.select(what, frame);
                 frame.moved.clear();
+                frame.moved_from.clear();
                 let source = frame.source_ref();
                 // "Until this leaves the battlefield" (CR 603.6e pragmatics,
                 // Banisher Priest ruling): the exact source must still be on
@@ -1467,7 +1487,7 @@ impl Game {
                     return Some(Decision::ChooseObject {
                         player: frame.controller,
                         predicate: CardPredicate::creature(),
-                        excluded: self.source_permanent_id(frame),
+                        excluded: self.source_permanent_id(frame).into_iter().collect(),
                         optional: false,
                         effect: Box::new(effect.clone()),
                     });
@@ -1904,26 +1924,19 @@ impl Game {
                 frame.batch = Some(self.event_batch(EventBinding::LifeLost, events));
                 None
             }
-            Effect::FightLastTarget => {
-                // CR 701.14b: if either creature is an illegal target, has
-                // left the battlefield or is no longer a creature, neither
-                // deals damage.
-                let [first, .., last] = frame.targets.as_slice() else {
-                    return None;
+            Effect::Fight { first, second } => {
+                // Both exact creatures must still be present (CR 701.14b).
+                frame.excess_damage = 0;
+                let fighter = |what| {
+                    let [object] = *self.select(what, frame).as_slice() else {
+                        return None;
+                    };
+                    let id = self.lookup_current_permanent(object).ok()?;
+                    (!self.is_phased_out(id) && self.permanent_is_battlefield_creature(id))
+                        .then_some((object, id))
                 };
-                let (Target::Permanent(first), Target::Permanent(last)) =
-                    (first.target, last.target)
-                else {
-                    return None;
-                };
-                if !frame.targets.iter().all(|slot| slot.legal)
-                    || !self.permanent_is_battlefield_creature(first)
-                    || !self.permanent_is_battlefield_creature(last)
-                {
-                    return None;
-                }
-                let first_ref = self.permanent_object(first)?;
-                let last_ref = self.permanent_object(last)?;
+                let (first_ref, first) = fighter(first)?;
+                let (last_ref, last) = fighter(second)?;
                 // Each deals damage equal to its power at once (CR 701.14a).
                 let first_power = self.characteristics(first).power;
                 let last_power = self.characteristics(last).power;
@@ -2234,17 +2247,18 @@ impl Game {
                 Vec::new(),
                 frame,
             ),
-            Effect::EachPlayerKeepsCreatures { max_total_power } => self.keep_creatures(
+            Effect::EachPlayerKeepsCreatures { max_total_power } => self.keep_permanents(
                 self.active_player(),
-                *max_total_power,
-                None,
+                crate::flow::decision::KeepLimit::TotalCreaturePower(*max_total_power),
                 Vec::new(),
                 frame,
             ),
-            Effect::EachPlayerSacrificesCreatures { count } => self.keep_creatures(
+            Effect::EachPlayerSacrifices { predicate, count } => self.keep_permanents(
                 self.active_player(),
-                i32::MAX,
-                Some(*count),
+                crate::flow::decision::KeepLimit::AllBut {
+                    count: *count,
+                    predicate: Box::new(predicate.clone()),
+                },
                 Vec::new(),
                 frame,
             ),
@@ -2661,12 +2675,25 @@ impl Game {
             ObjectSelector::ExactSource => frame
                 .source_ref()
                 .and_then(|source| self.state.live(source))
+                .filter(|object| {
+                    self.state
+                        .permanent_of(*object)
+                        .is_none_or(|id| !self.is_phased_out(id))
+                })
                 .into_iter()
                 .collect(),
             ObjectSelector::This => self.source_objects(frame),
             ObjectSelector::Target(_) => self
                 .present_primary_target(frame)
                 .and_then(|target| self.target_object(target))
+                .into_iter()
+                .collect(),
+            ObjectSelector::ClauseTarget(index) => frame
+                .targets
+                .iter()
+                .find(|slot| slot.requirement == *index && slot.legal)
+                .filter(|slot| self.target_is_present(slot.target))
+                .and_then(|slot| self.target_object(slot.target))
                 .into_iter()
                 .collect(),
             ObjectSelector::Targets(_) => frame
@@ -2782,7 +2809,7 @@ impl Game {
                     frame.source(),
                     self.present_primary_target(frame),
                 );
-                let excepted = self.excepted_permanent(*except, frame);
+                let excepted = self.excluded_objects(*except, frame);
                 let source = self.source_permanent_id(frame);
                 let exact = exact_mana_value
                     .as_ref()
@@ -2793,7 +2820,6 @@ impl Game {
                 players
                     .into_iter()
                     .flat_map(|player| self.iter_battlefield_permanents(player))
-                    .filter(|id| Some(*id) != excepted)
                     .filter(|id| self.permanent_matches_with_source(*id, predicate, source))
                     .filter(|id| {
                         exact.is_none_or(|value| self.permanent_mana_value(*id) == value)
@@ -2801,6 +2827,7 @@ impl Game {
                                 .is_none_or(|max| self.permanent_mana_value(*id) <= max)
                     })
                     .filter_map(|id| self.permanent_object(id))
+                    .filter(|object| !excepted.clone().any(|id| id == *object))
                     .filter(|object| {
                         max_mana_value
                             .is_none_or(|max| i32::from(self.object_mana_value(*object)) <= max)
@@ -2808,6 +2835,7 @@ impl Game {
                     .collect()
             }
             ObjectSelector::ZoneMatching {
+                except,
                 zone,
                 owner,
                 predicate,
@@ -2816,11 +2844,13 @@ impl Game {
                     matches!(zone, ZoneType::Graveyard | ZoneType::Exile),
                     "ZoneMatching reads a public card zone"
                 );
+                let excluded = self.excluded_objects(*except, frame);
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .filter(|player| owner.includes(frame.controller, *player))
                     .flat_map(|player| self.state.zone_cards(*zone, player))
                     .map(|card| self.state.object_of(card))
+                    .filter(|object| !excluded.clone().any(|id| id == *object))
                     .filter(|object| self.object_matches_predicate(*object, predicate))
                     .collect()
             }
@@ -2849,20 +2879,25 @@ impl Game {
         }
     }
 
-    /// The permanent an `Except` leaves out: the source, or the clause's
-    /// chosen target while it is a permanent.
-    pub(crate) fn excepted_permanent(
+    /// Exact objects excluded by a selector, before the next instruction changes its results.
+    fn excluded_objects<'a>(
         &self,
         except: Option<Except>,
-        frame: &EffectFrame,
-    ) -> Option<PermanentId> {
-        match except? {
-            Except::This => self.source_permanent_id(frame),
-            Except::Target => match self.present_primary_target(frame) {
-                Some(Target::Permanent(id)) => Some(id),
-                _ => None,
-            },
-        }
+        frame: &'a EffectFrame,
+    ) -> impl Iterator<Item = ObjectId> + Clone + 'a {
+        let one = match except {
+            Some(Except::This) => frame.source_ref(),
+            Some(Except::Target) => self
+                .present_primary_target(frame)
+                .and_then(|target| self.target_object(target)),
+            Some(Except::Moved) | None => None,
+        };
+        let moved = if except == Some(Except::Moved) {
+            frame.moved.as_slice()
+        } else {
+            &[]
+        };
+        one.into_iter().chain(moved.iter().copied())
     }
 
     /// A battlefield permanent's mana value (CR 202.3): that of its card;
@@ -3131,6 +3166,10 @@ impl Game {
         };
         match spec {
             TargetSpec::Permanent { predicate } => self.permanent_matches_predicate(id, predicate),
+            TargetSpec::PermanentYouOwn { predicate } => {
+                self.state[permanent.object].owner == controller
+                    && self.permanent_matches_predicate(id, predicate)
+            }
             TargetSpec::PermanentYouControl { predicate } => {
                 permanent.controller == controller
                     && self.permanent_matches_predicate(id, predicate)

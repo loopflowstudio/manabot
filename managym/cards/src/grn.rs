@@ -1,7 +1,7 @@
 //! Guilds of Ravnica.
 use managym_state::ability::{
-    Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
-    TriggerSubject,
+    Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+    TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
     CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -11,6 +11,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        affectionate_indrik(),
         thousand_year_storm(),
         healer_s_hawk(),
         midnight_reaper(),
@@ -170,6 +171,42 @@ fn thousand_year_storm() -> CardDefinition {
                 }],
             }],
             text_box: "Whenever you cast an instant or sorcery spell, copy it for each other instant and sorcery spell you've cast before it this turn. You may choose new targets for the copies.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn affectionate_indrik() -> CardDefinition {
+    let text_box = "When this creature enters, you may have it fight target creature you don't control. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "grn.affectionate_indrik",
+        scryfall_id: "b4c8ddc1-d95c-499f-b1d1-f608f8f07b02",
+        printed: PrintedCharacteristics {
+            name: "Affectionate Indrik".into(),
+            mana_cost: Some(ManaCost::parse("{5}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Beast".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::SelectCards {
+                    from: ObjectSelector::ExactSource,
+                    predicate: CardPredicate::creature(),
+                    min: 0,
+                    max: 1.into(),
+                    effects: vec![Effect::Fight {
+                        first: ObjectSelector::Selected,
+                        second: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    }],
+                    if_declined: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

@@ -296,6 +296,7 @@ fn foundations_5e_bake_into_a_pie() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let card = card_of(&s, ogre);
     cast(&mut s, "Bake into a Pie");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
     assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard));
@@ -333,4 +334,42 @@ fn entry_choice_heraldic_banner() {
         s.game().characteristics(banner).activated_abilities[0].mana_choices(),
         Some(vec![Mana::parse("R")])
     );
+}
+
+#[test]
+fn charming_prince_can_blink_its_owners_stolen_creature_until_the_next_end_step() {
+    use crate::support::{
+        game::enters_battlefield_with_triggers,
+        inspect::{card_of, offered_targets, permanent},
+        play::resolve_top,
+    };
+    use managym::{flow::turn::StepKind, state::game_object::Target};
+    let mut s = five_color_setup(&["Charming Prince", "Agent of Treachery", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let card = card_of(&s, ogre);
+    enters_battlefield_with_triggers(&mut s, 1, "Agent of Treachery");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).controller, PlayerId(1));
+    enters_battlefield_with_triggers(&mut s, 0, "Charming Prince");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let root = s.snapshot();
+    choose_mode(&mut s, 0);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    s.restore(&root);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    s.assert_life(0, 23);
+    s.restore(&root);
+    choose_mode(&mut s, 2);
+    assert_eq!(offered_targets(&s), [Target::Permanent(ogre)]);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    resolve_top(&mut s);
+    assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    let returned = permanent_of(&s, card).unwrap();
+    assert_ne!(returned, ogre);
+    assert_eq!(permanent(&s, returned).controller, PlayerId(0));
 }

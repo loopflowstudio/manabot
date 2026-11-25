@@ -1185,7 +1185,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::CastDuringResolution { .. } => 17,
         Decision::ExileLinked { .. } => 18,
         Decision::DistributeCounters { .. } => 19,
-        Decision::KeepCreatures { .. } => 20,
+        Decision::KeepPermanents { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::ManifestDread { .. } => 33,
         Decision::Surveil { .. } => 22,
@@ -1564,7 +1564,7 @@ mod tests {
             Decision::ChooseObject {
                 player,
                 predicate: predicate.clone(),
-                excluded: None,
+                excluded: Vec::new(),
                 optional: false,
                 effect: Box::new(crate::state::ability::Effect::tap(
                     crate::state::ability::ObjectSelector::chosen(predicate.clone()),
@@ -1682,10 +1682,9 @@ mod tests {
                 player,
                 remaining: 1,
             },
-            Decision::KeepCreatures {
+            Decision::KeepPermanents {
                 player,
-                max_total_power: 0,
-                sacrifice: None,
+                limit: crate::flow::decision::KeepLimit::TotalCreaturePower(0),
                 kept: vec![],
             },
             Decision::ChooseToExile {

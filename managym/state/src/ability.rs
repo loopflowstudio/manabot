@@ -1163,6 +1163,8 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
+    /// The legal target of a specified single-target clause, independent of the cursor.
+    ClauseTarget(usize),
     /// All eligible targets of the active clause, acted on by one instruction
     /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
     /// run a separate instruction sequence or commit a separate event per slot.
@@ -1250,6 +1252,8 @@ pub enum ObjectSelector {
     /// owner, unlike `Each`'s permanents by controller; a hidden zone is
     /// `Zone`, whose selection keeps sampling provenance.
     ZoneMatching {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        except: Option<Except>,
         zone: ZoneType,
         owner: Actor,
         predicate: CardPredicate,
@@ -1272,11 +1276,13 @@ pub enum Scope {
     DamagedBySourceInCombat,
 }
 
-/// The one permanent a `Chosen` or `Each` selector leaves out.
+/// Objects omitted from a selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Except {
     /// "another": the source permanent.
     This,
+    /// Exact arrivals of the preceding movement ("another permanent card").
+    Moved,
     /// "all other": the clause's chosen target (Avatar's Wrath).
     Target,
 }
@@ -1353,6 +1359,7 @@ impl ObjectSelector {
             } => Some(&TARGET_PLAYER),
             Self::This
             | Self::ExactSource
+            | Self::ClauseTarget(_)
             | Self::Triggering
             | Self::Attached
             | Self::CreatedThisWay
@@ -1877,7 +1884,8 @@ pub enum Effect {
     /// "Each player sacrifices `count` creatures of their choice": the active
     /// player chooses first (CR 101.4), a player with no more than `count`
     /// sacrifices them all, and the sacrifices are one event.
-    EachPlayerSacrificesCreatures {
+    EachPlayerSacrifices {
+        predicate: CardPredicate,
         count: usize,
     },
     /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
@@ -2042,9 +2050,11 @@ pub enum Effect {
         creature_purposes: Vec<crate::mana::CreatureManaPurpose>,
     },
 
-    /// The first chosen creature fights the last (CR 701.14); records the
-    /// excess damage dealt to the last.
-    FightLastTarget,
+    /// Two creatures fight simultaneously (CR 701.14). The second receives measured excess damage.
+    Fight {
+        first: ObjectSelector,
+        second: ObjectSelector,
+    },
     /// Shuffle the resolving player's library (CR 701.20).
     ShuffleLibrary,
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
@@ -2119,6 +2129,9 @@ static TARGET_PLAYER: TargetSpec = TargetSpec::Player;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TargetSpec {
+    PermanentYouOwn {
+        predicate: CardPredicate,
+    },
     PermanentYouControl {
         predicate: CardPredicate,
     },
@@ -2196,6 +2209,9 @@ pub struct TargetRequirement {
     /// `min` 0, or "X targets", exactly X, with any other `min`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub max_x: bool,
+    /// Kicker replaces the ordinary bound with “up to N”, including zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub up_to_if_kicked: Option<usize>,
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
@@ -2255,6 +2271,7 @@ impl TargetRequirement {
             max: 1,
             another: false,
             max_x: false,
+            up_to_if_kicked: None,
             total_mana_value_x: false,
             same_graveyard: false,
             opponent_chooses: false,
@@ -2275,8 +2292,10 @@ impl TargetRequirement {
     }
 
     /// The fewest targets this requirement allows with X announced as `x`.
-    pub fn min_for(&self, x: u8) -> usize {
-        if self.exact_x() {
+    pub fn min_for(&self, x: u8, kicked: bool) -> usize {
+        if kicked && self.up_to_if_kicked.is_some() {
+            0
+        } else if self.exact_x() {
             usize::from(x)
         } else {
             self.min
@@ -2284,8 +2303,10 @@ impl TargetRequirement {
     }
 
     /// The most targets this requirement allows with X announced as `x`.
-    pub fn max_for(&self, x: u8) -> usize {
-        if self.max_x {
+    pub fn max_for(&self, x: u8, kicked: bool) -> usize {
+        if let Some(max) = self.up_to_if_kicked.filter(|_| kicked) {
+            max
+        } else if self.max_x {
             usize::from(x)
         } else {
             self.max
@@ -2461,7 +2482,11 @@ impl Effect {
     ) -> Option<T> {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().find_map(f),
-            Effect::PutCountersFrom { from, on } => f(from).or_else(|| f(on)),
+            Effect::PutCountersFrom { from, on }
+            | Effect::Fight {
+                first: from,
+                second: on,
+            } => f(from).or_else(|| f(on)),
             Effect::DealDamage { what, by, .. } => f(what).or_else(|| by.as_ref().and_then(f)),
             Effect::SelectCards { from: selector, .. }
             | Effect::PutCounters { on: selector, .. }
@@ -2681,10 +2706,10 @@ impl Effect {
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
-            | Effect::EachPlayerSacrificesCreatures { .. }
+            | Effect::EachPlayerSacrifices { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
-            | Effect::FightLastTarget
+            | Effect::Fight { .. }
             | Effect::Scry { .. }
             | Effect::ManifestDread
             | Effect::SeparatePiles { .. }
@@ -2716,6 +2741,14 @@ impl Effect {
             on,
             kind,
             amount: amount.into(),
+        }
+    }
+
+    /// The creatures targeted by the first and second clauses fight.
+    pub fn fight_last_target() -> Self {
+        Self::Fight {
+            first: ObjectSelector::ClauseTarget(0),
+            second: ObjectSelector::ClauseTarget(1),
         }
     }
 

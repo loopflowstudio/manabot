@@ -599,6 +599,8 @@ pub(crate) enum EventBinding {
     ThisWay,
     /// A Destroy instruction, including when its zone moves end in exile.
     Destroyed,
+    /// Only sacrifices made by the resolving player bind the following instruction.
+    OwnSacrifices,
     LifeLost,
     Damage {
         result: Option<usize>,

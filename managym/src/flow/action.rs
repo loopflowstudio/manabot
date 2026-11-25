@@ -917,16 +917,7 @@ impl Game {
         {
             return None;
         }
-        // Every mandatory targeting requirement needs a legal target.
-        for requirement in spell.target_requirements() {
-            if requirement.min > 0
-                && self
-                    .legal_targets_for_requirement(player, object, &requirement)
-                    .is_empty()
-            {
-                return None;
-            }
-        }
+        let cast = self.cast_with_available_targets(player, object, cast)?;
 
         // Permission opens the zone. An absent payable cost is distinct from {0}.
         let cost = self.effective_spell_cost(player, object, cast, None)?;
@@ -1102,8 +1093,8 @@ impl Game {
                     .filter(|i| **i == *requirement_index)
                     .count();
                 let min_met = requirements.get(*requirement_index).is_some_and(|req| {
-                    chosen_in_req >= req.min_for(cast.x)
-                        && req.max_for(cast.x) > req.min_for(cast.x)
+                    chosen_in_req >= req.min_for(cast.x, cast.kicked)
+                        && req.max_for(cast.x, cast.kicked) > req.min_for(cast.x, cast.kicked)
                 });
                 if min_met {
                     actions.push(Action::Decline { player: *player });

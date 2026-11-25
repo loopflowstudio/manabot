@@ -12907,5 +12907,72 @@
     "colors": [
       "G"
     ]
+  },
+  "Affectionate Indrik": {
+    "name": "Affectionate Indrik",
+    "mana_cost": "{5}{G}",
+    "type_line": "Creature — Beast",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Fight"
+    ],
+    "oracle_text": "When this creature enters, you may have it fight target creature you don't control. (Each deals damage equal to its power to the other.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Charming Prince": {
+    "name": "Charming Prince",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Noble",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "When this creature enters, choose one —\n• Scry 2.\n• You gain 3 life.\n• Exile another target creature you own. Return it to the battlefield under your control at the beginning of the next end step.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Deadly Brew": {
+    "name": "Deadly Brew",
+    "mana_cost": "{B}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each player sacrifices a creature or planeswalker of their choice. If you sacrificed a permanent this way, you may return another permanent card from your graveyard to your hand.",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Divine Resilience": {
+    "name": "Divine Resilience",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2}{W} (You may pay an additional {2}{W} as you cast this spell.)\nTarget creature you control gains indestructible until end of turn. If this spell was kicked, instead any number of target creatures you control gain indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy them.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Tribute to Hunger": {
+    "name": "Tribute to Hunger",
+    "mana_cost": "{2}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent sacrifices a creature of their choice. You gain life equal to that creature's toughness.",
+    "colors": [
+      "B"
+    ]
   }
 }

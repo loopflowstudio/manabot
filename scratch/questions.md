@@ -31,3 +31,7 @@
 - Biogenic Upgrade uses one simultaneous counter batch for distribution and
   another for doubling. Each recipient reads its own pre-batch counter count.
   Sequential child programs would split one instruction into separate events.
+- Divine Resilience uses a kicked “up to” bound. This changes both the minimum
+  and maximum. Its zero-target cast is legal on an empty battlefield when the
+  kicker is payable. Deadly Brew applies `Except::Moved` in the public-zone
+  selector so the ordinary graveyard selection keeps its existing behavior.

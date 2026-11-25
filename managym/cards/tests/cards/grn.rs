@@ -217,3 +217,59 @@ fn foundations_stack_copy_storm_counts_only_earlier_matching_casts() {
         );
     }
 }
+
+#[test]
+fn affectionate_indrik_fights_only_when_accepted_and_both_creatures_remain() {
+    use crate::support::{
+        game::move_card,
+        inspect::{now, offered_cards, permanent, zone_of},
+        play::{choose, enter_until_target, resolve_top, select_card},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, zone::ZoneType},
+    };
+    let mut s = five_color_setup(&["Affectionate Indrik", "Craw Wurm"]);
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let indrik = enter_until_target(&mut s, "Affectionate Indrik");
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    let root = s.snapshot();
+    for (accept, gone) in [(false, false), (true, false), (true, true)] {
+        s.restore(&root);
+        if gone {
+            let current = crate::support::inspect::now(&s, indrik);
+            move_card(&mut s, current, ZoneType::Hand);
+        }
+        resolve_top(&mut s);
+        if gone {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+        } else {
+            assert_eq!(
+                offered_cards(&s),
+                [now(&s, indrik)],
+                "{:?}",
+                s.action_space().actions
+            );
+            if accept {
+                select_card(&mut s, indrik);
+            } else {
+                choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+            }
+        }
+        settle(&mut s);
+        if accept && !gone {
+            assert_eq!(zone_of(&s, indrik), Some(ZoneType::Graveyard));
+            assert!(s.game().state.permanents[wurm].is_none());
+        } else {
+            assert_eq!(permanent(&s, wurm).damage, 0);
+            assert_eq!(
+                zone_of(&s, indrik),
+                Some(if gone {
+                    ZoneType::Hand
+                } else {
+                    ZoneType::Battlefield
+                })
+            );
+        }
+    }
+}

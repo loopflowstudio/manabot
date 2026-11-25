@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        charming_prince(),
         heraldic_banner(),
         syr_alin_the_lions_claw(),
         bake_into_a_pie(),
@@ -374,6 +375,56 @@ fn heraldic_banner() -> CardDefinition {
                     toughness: 0.into(),
                 }],
             })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn charming_prince() -> CardDefinition {
+    let text_box = "When this creature enters, choose one —\n• Scry 2.\n• You gain 3 life.\n• Exile another target creature you own. Return it to the battlefield under your control at the beginning of the next end step.";
+    CardDefinition {
+        key: "eld.charming_prince",
+        scryfall_id: "dcb94950-3f3e-4876-84f8-d5e4d9cfecee",
+        printed: PrintedCharacteristics {
+            name: "Charming Prince".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    unchosen: false,
+                    up_to: None,
+                    modes: vec![
+                        vec![Effect::Scry { count: 2 }],
+                        vec![Effect::gain_life(3)],
+                        vec![Effect::another_target(
+                            TargetSpec::PermanentYouOwn {
+                                predicate: CardPredicate::creature(),
+                            },
+                            |spec| {
+                                vec![
+                                    Effect::exile(ObjectSelector::Target(spec)),
+                                    Effect::at_next_end_step(
+                                        ObjectSelector::Moved,
+                                        vec![Effect::return_to_battlefield(
+                                            ObjectSelector::Remembered,
+                                            false,
+                                        )],
+                                    ),
+                                ]
+                            },
+                        )],
+                    ],
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -8854,3 +8854,53 @@ fn curator_of_destinies_keeps_the_split_private_and_resolves_either_pile() {
         }
     }
 }
+
+#[test]
+fn divine_resilience_targets_one_creature_or_any_number_when_kicked() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::top_spell,
+        play::{cast_card, castable, choose},
+    };
+    use managym::{agent::action::Action, state::player::ManaPayment};
+    let mut s = five_color_setup(&["Divine Resilience", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let spell = move_from_library(&mut s, 0, "Divine Resilience", ZoneType::Hand);
+    let empty = s.snapshot();
+    s.set_player_mana_pool(0, "W");
+    assert!(!castable(&mut s, spell));
+    s.restore(&empty);
+    assert!(castable(&mut s, spell));
+    cast_card(&mut s, spell);
+    spend_colorless(&mut s);
+    assert!(top_spell(&s).kicked);
+    assert!(top_spell(&s).targets.is_empty());
+    s.restore(&empty);
+
+    let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let b = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let root = s.snapshot();
+    for (kicked, count) in [(false, 1), (true, 0), (true, 1), (true, 2)] {
+        s.restore(&root);
+        cast_card(&mut s, spell);
+        choose(&mut s, |action| {
+            if kicked {
+                matches!(action, Action::PayCost { .. })
+            } else {
+                matches!(action, Action::Decline { .. })
+            }
+        });
+        for target in [a, b].into_iter().take(count) {
+            assert!(s.choose_target(Target::Permanent(target)));
+        }
+        if kicked && count < 2 {
+            choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+        }
+        spend_colorless(&mut s);
+        assert_eq!(top_spell(&s).targets.len(), count);
+        settle(&mut s);
+        for (i, target) in [a, b].into_iter().enumerate() {
+            assert_eq!(keywords(&s, target).has(Keyword::Indestructible), i < count);
+        }
+    }
+}

@@ -122,7 +122,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "inspected",
     "instructions",
     "iteration instructions",
-    "kept creature",
+    "kept permanent",
     "kept on top",
     "last known attacking",
     "last known characteristics",
@@ -150,7 +150,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "spending option",
     "cost sacrifice",
     "maximum total power",
-    "creatures each player sacrifices",
+    "permanents each player sacrifices",
     "may copy",
     "mode",
     "moved",
@@ -1414,6 +1414,9 @@ pub(crate) fn project_frame(
     }
     out.objects("selected", &effect.selected);
     out.objects("moved", &effect.moved);
+    for &object in &effect.moved_from {
+        out.retained_object(object);
+    }
     out.objects("this way", &effect.this_way);
     out.objects("created", &effect.created);
     if let Some(source) = &effect.selected_from {
@@ -1682,7 +1685,7 @@ pub(crate) fn project_decision(
         } => {
             out.field("choice", &(predicate, optional));
             out.effects("chosen instruction", std::slice::from_ref(effect));
-            if let Some(id) = excluded {
+            for id in excluded {
                 out.target("excluded", Target::Permanent(*id));
             }
         }
@@ -1742,18 +1745,17 @@ pub(crate) fn project_decision(
             }
         }
         Decision::Discard { remaining, .. } => out.field("discards remaining", remaining),
-        Decision::KeepCreatures {
-            max_total_power,
-            sacrifice,
-            kept,
-            ..
-        } => {
-            match sacrifice {
-                Some(count) => out.field("creatures each player sacrifices", count),
-                None => out.field("maximum total power", max_total_power),
+        Decision::KeepPermanents { limit, kept, .. } => {
+            match limit {
+                crate::flow::decision::KeepLimit::AllBut { count, predicate } => {
+                    out.field("permanents each player sacrifices", &(count, predicate));
+                }
+                crate::flow::decision::KeepLimit::TotalCreaturePower(max) => {
+                    out.field("maximum total power", max)
+                }
             }
             for id in kept {
-                out.target("kept creature", Target::Permanent(*id));
+                out.target("kept permanent", Target::Permanent(*id));
             }
         }
         Decision::ChooseToExile {

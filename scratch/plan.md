@@ -121,6 +121,27 @@ Cards: Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience,
 Charming Prince, Affectionate Indrik (with Primal Might in Slice 9 using the
 same fight).
 
+**Correction to the target-changing design.** CR 115.7d–e evaluates the
+completed set of new targets. A Drakuseth copy dealing four to A and three
+to B can instead deal four to B and three to A. Checking each edited slot
+against the old values of the remaining slots excludes that play.
+`flow/retarget.rs` reads the other slots from the live stack object and
+`flow/decision.rs` writes the replacement before offering the next slot.
+The new relations cannot simply filter that loop.
+
+Retain the original slots and pending choices in the copy's decision. Offer
+prefixes that admit a legal completion. Include swaps, unchanged targets
+that were already illegal and coupled changes (Fiery Annihilation can switch
+creature and Equipment together). Publish the final assignment and targeting
+events together. Single-target changes still validate against every unchanged
+slot. Keep offers per slot and check the 16-creature position before extending
+the relations to new cards. Drakuseth must deal damage to all recipients in
+one event. When Run Away Together sees the same controller on both targets
+at resolution, both slots become illegal. Fiery Annihilation leaves Equipment
+in play if its creature target becomes illegal, even if it remains attached.
+[Comprehensive Rules, 115.7](https://magic.wizards.com/en/rules) ·
+[Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes).
+
 - `TargetRequirement.relation: Option<TargetRelation>`, where
   `TargetRelation = DistinctFromEarlier | AttachedToEarlier(clause) | DifferentControllerFrom(clause)`.
   - Enforce it when spells, triggers and activations choose targets
@@ -201,27 +222,14 @@ Checks:
 - Deletes: `ExileTopCardsToPlay` and `GrantGraveyardCastThisTurn` if fully
   converted.
 
-### Slice 7 — Last-known values of moved objects and shared sacrifice (2 cards)
+### Slice 7 — Last-known values and shared sacrifice (complete)
 
-Cards: Tribute to Hunger, Deadly Brew.
-
-- `Property { of: Moved }` reads the departed permanents' LKI. Record the
-  moved-from ids beside `frame.moved`, which today holds the graveyard
-  successors and reads 0.
-- Generalize `EachPlayerSacrificesCreatures` to `EachPlayerSacrifices { predicate, count }`.
-  - It keeps the active player choosing first and one simultaneous event.
-  - The resolving player's own sacrifices bind to `Moved`, so
-    `Condition::Moved` answers "if you sacrificed".
-  - Convert its 1 card.
-- `Except::Moved` for "another permanent card" in a graveyard selection.
-
-Checks:
-
-- Tribute gains the sacrificed creature's toughness, including a pumped
-  toughness (LKI).
-- Deadly Brew with no creature of yours sacrifices nothing, offers no return,
-  and cannot return the sacrificed card.
-- Deletes: the `EachPlayerSacrificesCreatures` name.
+Tribute to Hunger gained six from a pumped Gray Ogre. Deadly Brew used both
+players’ choices before sacrificing together, accepted a planeswalker, and
+offered only another graveyard card after its controller sacrificed.
+Blasphemous Edict uses the same predicate-and-count instruction. The result
+keeps the departed battlefield object for properties and the graveyard
+successor for selection.
 
 ### Slice 8 — Kicked entries, payment obligations and new vocabulary (8 cards)
 

@@ -16,6 +16,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        deadly_brew(),
         teach_by_example(),
         campus_guide(),
         burrog_befuddler(),
@@ -351,6 +352,42 @@ fn teach_by_example() -> CardDefinition {
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![Effect::copy_next_spell_this_turn(CardPredicate::instant_or_sorcery())],
             text_box: "({U/R} can be paid with either {U} or {R}.)\nWhen you next cast an instant or sorcery spell this turn, copy that spell. You may choose new targets for the copy.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn deadly_brew() -> CardDefinition {
+    let text_box = "Each player sacrifices a creature or planeswalker of their choice. If you sacrificed a permanent this way, you may return another permanent card from your graveyard to your hand.";
+    CardDefinition {
+        key: "stx.deadly_brew",
+        scryfall_id: "87d33e48-90fc-4aac-b09a-68050bc053b5",
+        printed: PrintedCharacteristics {
+            name: "Deadly Brew".into(),
+            mana_cost: Some(ManaCost::parse("{B}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+
+            spell_effects: vec![
+                Effect::EachPlayerSacrifices {
+                    predicate: CardPredicate::creature_or_planeswalker(),
+                    count: 1,
+                },
+                Effect::if_you_do(vec![Effect::SelectCards {
+                    from: ObjectSelector::ZoneMatching {
+                        zone: ZoneType::Graveyard,
+                        owner: managym_state::ability::Actor::You,
+                        predicate: CardPredicate::permanent(),
+                        except: Some(managym_state::ability::Except::Moved),
+                    },
+                    predicate: CardPredicate::default(),
+                    min: 0,
+                    max: 1.into(),
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    if_declined: vec![],
+                }]),
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

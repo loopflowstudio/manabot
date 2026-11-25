@@ -3163,7 +3163,7 @@ fn earth_rumble() -> CardDefinition {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::fight_last_target()],
                         },
                     ],
                 },
@@ -9280,7 +9280,7 @@ fn the_last_agni_kai() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{1}{R}")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![
-                Effect::FightLastTarget,
+                Effect::fight_last_target(),
                 Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::ExcessDamage,

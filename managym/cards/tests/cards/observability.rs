@@ -503,6 +503,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
         ObjectSelector::ExactSource => "ObjectSelector::ExactSource",
         ObjectSelector::This => "ObjectSelector::This",
+        ObjectSelector::ClauseTarget(_) => "ObjectSelector::ClauseTarget",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
         ObjectSelector::Targets(_) => "ObjectSelector::Targets",
         ObjectSelector::TargetAndSameName(_) => "ObjectSelector::TargetAndSameName",
@@ -526,12 +527,13 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 22] {
+fn selector_witnesses() -> [ObjectSelector; 23] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
         ObjectSelector::Targets(TargetSpec::Creature),
+        ObjectSelector::ClauseTarget(0),
         ObjectSelector::TargetAndSameName(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
@@ -562,6 +564,7 @@ fn selector_witnesses() -> [ObjectSelector; 22] {
             exact_mana_value: None,
         },
         ObjectSelector::ZoneMatching {
+            except: None,
             zone: ZoneType::Graveyard,
             owner: Actor::AnyPlayer,
             predicate: CardPredicate::creature(),
@@ -584,6 +587,7 @@ fn scope_token(scope: Scope) -> &'static str {
 fn except_token(except: Except) -> &'static str {
     match except {
         Except::This => "Except::This",
+        Except::Moved => "Except::Moved",
         Except::Target => "Except::Target",
     }
 }
@@ -864,7 +868,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::EachPlayerSacrificesCreatures { .. } => "Effect::EachPlayerSacrificesCreatures",
+        Effect::EachPlayerSacrifices { .. } => "Effect::EachPlayerSacrifices",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::CopyTriggeringSpellForEach { .. } => "Effect::CopyTriggeringSpellForEach",
@@ -872,7 +876,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CounterAbility { .. } => "Effect::CounterAbility",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
-        Effect::FightLastTarget => "Effect::FightLastTarget",
+        Effect::Fight { .. } => "Effect::Fight",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
     }
 }
@@ -1149,7 +1153,10 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::EachPlayerSacrificesCreatures { count: 13 },
+        Effect::EachPlayerSacrifices {
+            predicate: CardPredicate::creature(),
+            count: 13,
+        },
         Effect::ExileMeldPair {
             partner: "Fang, Fearless l'Cie".into(),
         },
@@ -1213,7 +1220,7 @@ fn effect_witnesses() -> Vec<Effect> {
             creature_purposes: vec![],
             amount: EffectValue::GreatestSharedCreatureType,
         },
-        Effect::FightLastTarget,
+        Effect::fight_last_target(),
     ]
 }
 
@@ -2711,7 +2718,12 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         Scope::TargetPlayerControls,
         Scope::DamagedBySourceInCombat,
     ];
-    let excepts = [None, Some(Except::This), Some(Except::Target)];
+    let excepts = [
+        None,
+        Some(Except::This),
+        Some(Except::Target),
+        Some(Except::Moved),
+    ];
     for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
         let affected = ObjectSelector::Each {
             of: scope,

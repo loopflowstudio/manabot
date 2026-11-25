@@ -191,7 +191,7 @@ fn bushwhack() -> CardDefinition {
                             requirement: TargetRequirement::one(
                                 TargetSpec::CreatureOpponentControls,
                             ),
-                            effects: vec![Effect::FightLastTarget],
+                            effects: vec![Effect::fight_last_target()],
                         },
                     ],
                 ],

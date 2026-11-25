@@ -107,6 +107,19 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
     (Field, "opponent_picks", Some("picks")),
     (Field, "restricted", None),
     (Field, "spells", None),
+    (
+        Variant,
+        "Effect::EachPlayerSacrificesCreatures",
+        Some("Effect::EachPlayerSacrifices"),
+    ),
+    (Text, "creatures each player sacrifices", None),
+    (Text, "kept creature", None),
+    (Variant, "Effect::FightLastTarget", Some("Effect::Fight")),
+    (
+        Structure,
+        "/Effect::EachPlayerSacrificesCreatures",
+        Some("/Effect::EachPlayerSacrifices"),
+    ),
     (Text, "attached at activation", None),
     (Text, "land choices remaining", None),
     (Text, "selected lands", None),
@@ -117,6 +130,16 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
 /// The search now describes arbitrary distinct names and a structured ending;
 /// a payment's contributions are `contribution` facts.
 pub const RECORDS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "token",
+        "execution/6/kept creature",
+        Some("execution/6/kept permanent"),
+    ),
+    (
+        "token",
+        "execution/6/creatures each player sacrifices",
+        Some("execution/6/permanents each player sacrifices"),
+    ),
     (
         "token",
         "execution/1//ReplacementEffect::DoubleDamageToController",

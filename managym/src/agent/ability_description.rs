@@ -7,9 +7,9 @@ use crate::state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DamageKind, DamageRecipientFilter, DelayedEvent,
         DelayedExpiry, DelayedFrequency, DistinctSearchEnd, Effect, EffectValue, EntryCounters,
-        KeywordAction, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per,
-        PlayerSelector, Scope, SpellTargetFilter, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Except, KeywordAction, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector,
+        PaymentCost, Per, PlayerSelector, Scope, SpellTargetFilter, TargetSpec, TriggerCondition,
+        TriggerSubject, TurnStep,
     },
     card::{CardType, Keyword, Keywords},
     effect::{CopyException, EffectDuration, Modification},
@@ -877,6 +877,9 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
 
 fn target_description(t: &TargetSpec) -> String {
     let noun = match t {
+        TargetSpec::PermanentYouOwn { predicate } => {
+            format!("{} you own", predicate_description(predicate, "permanent"))
+        }
         TargetSpec::PermanentYouControl { predicate } => format!(
             "{} you control",
             predicate_description(predicate, "permanent")
@@ -951,6 +954,7 @@ fn player_description(player: &PlayerSelector) -> String {
 
 fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> String {
     match selector {
+        ObjectSelector::ClauseTarget(index) => format!("the target of clause {}", index + 1),
         ObjectSelector::ExactSource => "this object".into(),
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
@@ -1021,18 +1025,25 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
             }
         ),
         ObjectSelector::ZoneMatching {
+            except,
             zone,
             owner,
             predicate,
         } => {
             let zone = format!("{zone:?}").to_lowercase();
             format!(
-                "each {} in {}",
+                "each {} in {}{}",
                 predicate_description(predicate, "card"),
                 match owner {
                     Actor::You => format!("your {zone}"),
                     Actor::Opponent => format!("your opponents' {zone}s"),
                     Actor::AnyPlayer => format!("all {zone}s"),
+                },
+                match except {
+                    Some(Except::Moved) => " except the cards just moved",
+                    Some(Except::This) => " except this card",
+                    Some(Except::Target) => " except the target",
+                    None => "",
                 }
             )
         }
@@ -1531,7 +1542,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         ),
         RestoreController(_) => return None,
         EachPlayerKeepsCreatures { max_total_power } => format!("Each player chooses any number of creatures they control with total power {max_total_power} or less, then sacrifices all other creatures they control"),
-        EachPlayerSacrificesCreatures { count } => format!("Each player sacrifices {count} creatures of their choice"),
+        EachPlayerSacrifices { predicate, count } => format!("Each player sacrifices {count} of their choice ({})", predicate_description(predicate, "permanent")),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
@@ -1567,7 +1578,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         CreateToken { token, count, tapped_and_attacking, .. } => format!("Create X {} tokens, where X is {}{}",default_content_pack().token_name(token),value_description(triggering, count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(triggering, amount)),
-        FightLastTarget => "The first target fights the last target".into(),
+        Fight { first, second } => format!("{} fights {}", selector_description(triggering, first), selector_description(triggering, second)),
         ShuffleLibrary => "Shuffle your library".into(),
         Repeat { count, effect } => format!("Repeat {} times: {}", value_description(triggering, count), effects_description_in(triggering, std::slice::from_ref(effect))),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description_in(triggering, std::slice::from_ref(effect))),
