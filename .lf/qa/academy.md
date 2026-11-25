@@ -1,5 +1,10 @@
 Read when the change touches Academy (`managym/academy`, `academy/ui`): the table, replays, launch, recovery or browser scripts.
 
+- For the default Playwright config, choose unused `ACADEMY_API_PORT` and
+  `ACADEMY_FRONTEND_PORT`. The config reuses servers on the selected ports,
+  even from another checkout. Set `VIRTUAL_ENV` to the checkout's `.venv`
+  for the backend's `uv run --active`. Tab enters an unused board region on
+  its first control with an offer. Use arrow keys to move within the region.
 - Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
@@ -22,8 +27,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
   `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise `site.missing`).
   Plain `npm run build` uses adapter-auto and does not create that directory. Pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
-  port 8000 is often taken. Open READY's `open` address in Playwright. For a
-  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  port 8000 is often taken. Open READY's `open` address in Playwright to start
+  the game. To compare UI revisions, build each into its own directory and
+  point a separate CLI server at each build. Use the same decks, `--opponent
+  search --sims 16`, `--seed` and human choices to compare the same game.
+  Open each launch in its own browser context. For a multi-game evaluation
+  trace, call `manabot.eval.match.play_cell` with
   `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
