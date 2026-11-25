@@ -1,8 +1,11 @@
 //! Journey into Nyx.
 use managym_state::{
-    ability::{Ability, Actor, Effect, EffectValue, PlayerSelector, TriggerCondition, TurnStep},
+    ability::{
+        Ability, Actor, Effect, EffectValue, PlayerSelector, TargetSpec, TriggerCondition, TurnStep,
+    },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 use super::ths::temple;
@@ -12,6 +15,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         temple_of_epiphany(),
         temple_of_malady(),
         dictate_of_kruphix(),
+        banishing_light(),
     ]
 }
 
@@ -53,6 +57,31 @@ fn dictate_of_kruphix() -> CardDefinition {
                     }],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn banishing_light() -> CardDefinition {
+    let text_box = "When this enchantment enters, exile target nonland permanent an opponent controls until this enchantment leaves the battlefield.";
+    CardDefinition {
+        key: "jou.banishing_light",
+        scryfall_id: "fbaa4800-30cc-4a80-a6cc-9a24ada9eb40",
+        printed: PrintedCharacteristics {
+            name: "Banishing Light".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::enters(vec![Effect::exile_until_source_leaves(
+                TargetSpec::PermanentOpponentControls {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    },
+                },
+                1,
+            )])],
             text_box: text_box.into(),
             ..Default::default()
         },

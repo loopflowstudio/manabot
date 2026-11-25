@@ -58,7 +58,12 @@ fn gratuitous_violence_checks_the_departed_firebrands_effective_type_and_control
         activate(&mut s, firebrand, 0);
         assert!(s.choose_target(Target::Player(PlayerId(0))));
         assert_eq!(
-            s.game().object_lki(source).unwrap().was_creature(),
+            s.game()
+                .object_lki(source)
+                .unwrap()
+                .battlefield
+                .types
+                .is_creature(),
             creature
         );
         let mut returned = fork_choosing(&s, |a| matches!(a, Action::PassPriority { .. }));

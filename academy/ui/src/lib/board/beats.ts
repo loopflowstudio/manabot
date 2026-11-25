@@ -12,13 +12,16 @@
  * more than `GROUP_ABOVE` facts reads as sentences instead: one player's
  * consecutive moves become one ("Heuristic played Plains and attacked with
  * Ally"), as do consecutive consequences of one kind. The board plays them one
- * pace apart (`BeatPace`, a per-browser setting) and drops them all on Space, a
- * click, a commit or a new frame. Reduced motion, or the pace "off", plays
- * none: the recap already lists every fact.
+ * pace apart (`BeatPace`, a per-browser setting) and drops them all at the
+ * first input or a new frame. Reduced motion, or the pace "off", plays none:
+ * the recap already lists every fact.
  *
- * A beat is presentation only. It never holds or reorders a decision: the
- * rail stays live while beats play, and acting ends them.
+ * A beat is presentation only: it never reorders, hides or chooses a decision.
+ * The read-out comes before the decision, though: while a beat plays, the
+ * decision's controls wait, and the first input ends the read-out and does
+ * nothing else, so a person never answers a board they have not been shown.
  */
+import type { PresentationEvent } from '$lib/types';
 import type { RecentFact, Side } from './recent';
 
 export interface Beat {
@@ -63,6 +66,21 @@ export function beatsFor(facts: readonly RecentFact[], shown: number, names: Rec
   const beats = unseen.length > GROUP_ABOVE ? grouped(unseen, names)
     : unseen.map(fact => ({ seq: fact.seq, by: fact.by, text: fact.text, subjects: fact.subjects }));
   return beats.slice(-BEAT_LIMIT);
+}
+
+/**
+ * The turn the event `seq` happened in: the last turn start at or before it,
+ * or null when none is retained. A beat can be drawn on a later turn's board,
+ * since one engine step may run from an attack through damage into the next
+ * turn, and the authority keeps a board only after each step.
+ */
+export function turnAt(events: readonly PresentationEvent[], seq: number): number | null {
+  let turn: number | null = null;
+  for (const event of events) {
+    if (event.seq > seq) break;
+    if (event.kind.kind === 'turn_started') turn = event.kind.turn_number;
+  }
+  return turn;
 }
 
 // ———————————————————————————————————————— Pace

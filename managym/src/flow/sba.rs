@@ -6,6 +6,7 @@ use crate::{
         decision::{EffectFrame, FrameCompletion},
         game::{Game, GameOutcome, GameProcedure, LossCauses},
         proposed_event::{EventBinding, ProposedEvent},
+        statics::Characteristics,
     },
     state::{
         ability::{Ability, TriggerCondition},
@@ -175,7 +176,7 @@ impl Game {
             let legend_loser = legend_losers.contains(&permanent.object);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.
-            let illegal_aura = self.aura_attachment_illegal(permanent_id);
+            let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
             let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
             // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
             // above do not destroy, even when lethal damage also applies.
@@ -256,17 +257,34 @@ impl Game {
 
     pub(crate) fn finish_state_based_batch(&mut self) -> bool {
         let mut performed = false;
-        // CR 704.5n — An Equipment attached to an object that is gone or is
-        // no longer a creature becomes unattached and stays on the battlefield.
-        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+        // CR 704.5n, 704.5p, 301.5c — An attached permanent that is not an
+        // Aura becomes unattached and stays on the battlefield unless it is a
+        // noncreature Equipment attached to a creature: Equipment whose
+        // creature is gone or no longer a creature, an animated Equipment,
+        // and a former Aura alike (all read from layered characteristics).
+        let attached: Vec<PermanentId> = (0..self.state.permanents.len())
             .map(PermanentId)
             .filter(|&id| {
-                self.state.permanents[id].as_ref().is_some_and(|equipment| {
-                    equipment.attached_to.is_some()
-                        && self.state[equipment.object].enchant().is_none()
-                }) && self.attached_creature(id).is_none()
+                self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.attached_to.is_some())
             })
             .collect();
+        // Earlier actions of this batch may have moved permanents, so reading
+        // layered views rebuilds the board; skip it when nothing is attached.
+        let detached: Vec<PermanentId> = if attached.is_empty() {
+            Vec::new()
+        } else {
+            self.layer_views(attached.into_iter())
+                .filter(|(id, view)| {
+                    !view.has_subtype("Aura")
+                        && !(view.has_subtype("Equipment")
+                            && !view.is_creature()
+                            && self.attached_creature(*id).is_some())
+                })
+                .map(|(id, _)| id)
+                .collect()
+        };
         for permanent_id in detached {
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
@@ -370,14 +388,25 @@ impl Game {
         })
     }
 
-    /// Whether an Aura is unattached, or attached to itself or an object its
-    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
-    fn aura_attachment_illegal(&self, aura: PermanentId) -> bool {
+    /// Whether something that is an Aura now (its layered `view`) is
+    /// unattached, attached to itself or to an object its enchant ability
+    /// doesn't allow, has lost that ability, or is also a creature
+    /// (CR 303.4d, 704.5m).
+    fn aura_attachment_illegal(&self, aura: PermanentId, view: &Characteristics) -> bool {
+        if !view.has_subtype("Aura") {
+            return false;
+        }
+        if view.is_creature() {
+            return true;
+        }
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
         };
-        let Some(enchant) = self.state[permanent.object].enchant() else {
-            return false;
+        let enchant = self.state[permanent.object]
+            .enchant()
+            .filter(|_| !view.abilities_lost);
+        let Some(enchant) = enchant else {
+            return true;
         };
         !self.attached_permanent(aura).is_some_and(|object| {
             object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)

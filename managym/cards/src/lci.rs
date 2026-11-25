@@ -11,7 +11,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![eaten_by_piranhas(), mischievous_pup()]
+    vec![eaten_by_piranhas(), mischievous_pup(), self_reflection()]
 }
 
 fn mischievous_pup() -> CardDefinition {
@@ -81,6 +81,23 @@ fn eaten_by_piranhas() -> CardDefinition {
             )],
             spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn self_reflection() -> CardDefinition {
+    CardDefinition {
+        key: "lci.self_reflection",
+        scryfall_id: "1242203d-c9b5-4ab6-802e-e222f92291e9",
+        printed: PrintedCharacteristics {
+            name: "Self-Reflection".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::create_token_copies(ObjectSelector::Target(TargetSpec::CreatureYouControl), 1)],
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{3}{U}"))],
+            text_box: "Create a token that's a copy of target creature you control.\nFlashback {3}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)".into(),
             ..Default::default()
         },
         ..Default::default()

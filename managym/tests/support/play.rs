@@ -276,21 +276,29 @@ impl Scenario {
 
 /// Attack with `attacker` and decline every other offered attacker.
 pub fn attack_with(s: &mut Scenario, attacker: PermanentId) {
-    let mut attacked = false;
+    attack_with_group(s, &[attacker]);
+}
+
+/// Declare every requested attacker and decline the others.
+pub fn attack_with_group(s: &mut Scenario, attackers: &[PermanentId]) {
+    let mut declared = 0;
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let space = s.action_space().clone();
-        let index = space.actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker)
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if attackers.contains(permanent))
         });
         match index {
             Some(index) => {
                 s.step_action(index);
-                attacked = true;
+                declared += 1;
             }
             None => s.decline_attack(),
         }
     }
-    assert!(attacked, "expected to attack");
+    assert_eq!(
+        declared,
+        attackers.len(),
+        "expected every attacker to attack"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -455,6 +463,15 @@ pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     let id = move_to_hand(s, name);
     cast_card(s, id);
     now(s, id)
+}
+
+pub fn cast_clone_as(s: &mut Scenario, creature: PermanentId) -> ObjectId {
+    let clone = cast(s, "Clone");
+    spend_colorless(s);
+    resolve_top(s);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+    clone
 }
 
 /// Cast `id` from whichever zone currently permits it, refreshing priority.
@@ -874,7 +891,10 @@ pub fn resolve_until_priority(s: &mut Scenario) {
 /// Commit the chosen legal action through the public semantic Command API,
 /// checking that a fork commits identically, the source is untouched until
 /// it commits, and the spent Command is then stale. Return the committed fork.
-pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) -> Scenario {
+pub fn command(
+    s: &mut Scenario,
+    predicate: impl Fn(&Action) -> bool,
+) -> (Scenario, managym::decision::Command) {
     use managym::{decision::Command, search_state::witness};
     let index = s
         .action_space()
@@ -900,7 +920,12 @@ pub fn command(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) -> Scenari
         s.game_mut().execute_semantic_command(&command).is_err(),
         "stale Command rejected"
     );
-    Scenario { game: fork }
+    assert_eq!(
+        witness(s.game()),
+        witness(&fork),
+        "stale Command changed state"
+    );
+    (Scenario { game: fork }, command)
 }
 
 /// Answer the topmost stacked ability with a scenario permanent's counter

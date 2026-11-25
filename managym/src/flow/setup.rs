@@ -158,7 +158,6 @@ impl Game {
                 priority: PriorityState::default(),
                 stack_objects: Vec::new(),
                 combat: None,
-                mana_cache: [None, None],
                 events: Default::default(),
                 pending_events: Default::default(),
                 observation_events: Default::default(),

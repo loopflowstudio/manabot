@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { BEAT_LIMIT, beatsFor, loadBeatPace, saveBeatPace } from './beats';
+import type { PresentationEvent } from '$lib/types';
+import { BEAT_LIMIT, beatsFor, loadBeatPace, saveBeatPace, turnAt } from './beats';
 import type { FactKind, RecentFact } from './recent';
 
 const NAMES = { you: 'You', opponent: 'Heuristic' };
@@ -66,5 +67,26 @@ describe('beat pace', () => {
     expect(loadBeatPace()).toBe('quick');
     delete (globalThis as { localStorage?: unknown }).localStorage;
     expect(loadBeatPace()).toBe('quick');
+  });
+});
+
+describe('the turn a beat happened in', () => {
+  const event = (seq: number, kind: PresentationEvent['kind']): PresentationEvent =>
+    ({ seq, from_revision: 0, to_revision: 1, caused_by: null, group: seq, importance: 'normal', suggested_ms: 0, sound: null, kind } as PresentationEvent);
+  // One engine step: the opponent's attack and its damage, then the person's turn starts.
+  const events = [
+    event(10, { kind: 'turn_started', player: 1, turn_number: 10 }),
+    event(11, { kind: 'land_played' } as PresentationEvent['kind']),
+    event(12, { kind: 'turn_started', player: 0, turn_number: 11 }),
+  ];
+
+  it('is the last turn start at or before it, so an attack read out on the next turn\'s board names its own turn', () => {
+    expect(turnAt(events, 11)).toBe(10);
+    expect(turnAt(events, 12)).toBe(11);
+    expect(turnAt(events, 40)).toBe(11);
+  });
+
+  it('is unknown before the first retained turn start', () => {
+    expect(turnAt(events, 9)).toBeNull();
   });
 });

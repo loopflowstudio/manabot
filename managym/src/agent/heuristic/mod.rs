@@ -98,9 +98,6 @@ impl<'a> Board<'a> {
     fn own_turn(&self) -> bool {
         self.raw.turn.active_player_id == self.raw.agent.id
     }
-    fn mana_value(&self, p: &PermanentData) -> i32 {
-        p.characteristics.mana_cost.mana_value as i32
-    }
     fn lands(&self, untapped: bool) -> i32 {
         self.raw
             .agent_permanents
@@ -554,7 +551,7 @@ impl Heuristic {
                             0
                         },
                         p.power,
-                        b.mana_value(p),
+                        i32::from(p.mana_value()),
                     ]
                 }
             } else if b.objects.contains_key(&id) {
@@ -575,7 +572,7 @@ impl Heuristic {
         if self.attack_pool.is_none() {
             self.attack_pool = Some(
                 b.creatures(true)
-                    .filter(|p| !p.tapped && (!p.is_summoning_sick || p.keywords.haste))
+                    .filter(|p| !p.tapped && !p.is_summoning_sick)
                     .map(|p| p.id)
                     .collect(),
             );
@@ -666,14 +663,14 @@ impl Heuristic {
                 let (ad, bd) = fight(Body::of(a, (0, 0)), Body::of(bl, (0, 0)));
                 let rank = if ad && !bd {
                     3
-                } else if ad && b.mana_value(a) >= b.mana_value(bl) {
+                } else if ad && a.mana_value() >= bl.mana_value() {
                     2
                 } else if !bd {
                     1
                 } else {
                     continue;
                 };
-                pairs.push((rank, a.power, -b.mana_value(bl), bl.id, a.id));
+                pairs.push((rank, a.power, -i32::from(bl.mana_value()), bl.id, a.id));
             }
         }
         pairs.sort_by(|a, b| b.cmp(a));
@@ -693,7 +690,7 @@ impl Heuristic {
             .into_iter()
             .filter(|bl| !plan.contains_key(&bl.id))
             .collect();
-        spare.sort_by_key(|p| (b.mana_value(p), p.power));
+        spare.sort_by_key(|p| (p.mana_value(), p.power));
         let mut incoming: i32 = unblocked.iter().map(|a| a.power).sum();
         for a in unblocked {
             if incoming < b.raw.agent.life {

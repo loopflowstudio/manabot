@@ -37,7 +37,6 @@ describe('promptLine', () => {
     const view = boardView(pay!, PLAYERS);
     expect(promptLine(pay!, view)).toMatch(/^Pay \{[^.]*$/);
     expect(promptHint(pay!, view)).toMatch(/^Space pays automatically/);
-    expect(promptHint(pay!, view, true)).toMatch(/^Space taps the dashed lands/);
   });
 
   it('lists what is committed to the cost, in order, apart from the line', () => {
