@@ -260,8 +260,18 @@ fn sakashima_copies_a_legend_you_control_and_both_stay() {
     assert!(s
         .game()
         .characteristics(copy)
+        .exempt_sbas
+        .contains(managym::state::card::StateBasedAction::LegendRule));
+    assert!(s
+        .game()
+        .characteristics(copy)
         .static_abilities
-        .contains(&StaticAbility::LegendRuleDoesntApply));
+        .contains(&StaticAbility::StateBasedActionDoesntApply {
+            action: managym::state::card::StateBasedAction::LegendRule,
+            scope: managym::state::card::StaticScope::YouControl(
+                managym::state::predicate::CardPredicate::default()
+            ),
+        }));
 }
 
 #[test]

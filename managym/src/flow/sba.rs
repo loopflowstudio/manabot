@@ -10,7 +10,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TriggerCondition},
-        card::{Keyword, StaticAbility},
+        card::{Keyword, StateBasedAction, StaticAbility},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -34,14 +34,11 @@ impl Game {
             let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
             for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
             {
-                if characteristics
-                    .static_abilities
-                    .contains(&StaticAbility::LegendRuleDoesntApply)
+                if characteristics.is_legendary
+                    && !characteristics
+                        .exempt_sbas
+                        .contains(StateBasedAction::LegendRule)
                 {
-                    names.clear();
-                    break;
-                }
-                if characteristics.is_legendary {
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                     names
                         .entry(characteristics.name.clone())
@@ -172,7 +169,9 @@ impl Game {
             // is introduced, its pending trigger must delay this battle SBA.
             let zero_counters = (characteristics.types.is_planeswalker()
                 && permanent.counter_count(CounterKind::Loyalty) == 0
-                && !characteristics.exempt_from_zero_loyalty)
+                && !characteristics
+                    .exempt_sbas
+                    .contains(StateBasedAction::ZeroLoyalty))
                 || (characteristics.types.is_battle()
                     && permanent.counter_count(CounterKind::Defense) == 0);
             let legend_loser = legend_losers.contains(&permanent.object);
@@ -496,8 +495,14 @@ mod tests {
         game.state
             .place_object(object, PlayerId(0), ZoneType::Command);
 
-        assert!(game.characteristics(own_walker).exempt_from_zero_loyalty);
-        assert!(!game.characteristics(opp_walker).exempt_from_zero_loyalty);
+        assert!(game
+            .characteristics(own_walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
+        assert!(!game
+            .characteristics(opp_walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
         assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
         assert!(game.state.permanents[own_walker].is_some());
         assert!(game.state.permanents[opp_walker].is_none());
@@ -523,7 +528,10 @@ mod tests {
             Modification::LoseAllAbilities,
             EffectDuration::EndOfTurn,
         );
-        assert!(game.characteristics(walker).exempt_from_zero_loyalty);
+        assert!(game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
         assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
         assert!(game.state.permanents[walker].is_some());
 
@@ -536,7 +544,10 @@ mod tests {
             Modification::PhasedOut,
             EffectDuration::EndOfTurn,
         );
-        assert!(!game.characteristics(walker).exempt_from_zero_loyalty);
+        assert!(!game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
         assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
         assert!(game.state.permanents[walker].is_none());
 
@@ -557,8 +568,74 @@ mod tests {
             Modification::LoseAllAbilities,
             EffectDuration::EndOfTurn,
         );
-        assert!(!game.characteristics(walker).exempt_from_zero_loyalty);
+        assert!(!game
+            .characteristics(walker)
+            .exempt_sbas
+            .contains(StateBasedAction::ZeroLoyalty));
         assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
         assert!(game.state.permanents[walker].is_none());
+    }
+
+    #[test]
+    fn legend_rule_exemption_projects_per_permanent_through_layers() {
+        let deck = std::collections::BTreeMap::from([
+            ("Island".to_string(), 30),
+            ("Sakashima of a Thousand Faces".to_string(), 4),
+            ("Rhys the Redeemed".to_string(), 4),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("P1", deck.clone()),
+                PlayerConfig::new("P2", deck),
+            ],
+            202,
+            false,
+        );
+        let sakashima = game
+            .scenario_force_battlefield(PlayerId(0), "Sakashima of a Thousand Faces", false)
+            .unwrap();
+        let own_a = game
+            .scenario_force_battlefield(PlayerId(0), "Rhys the Redeemed", false)
+            .unwrap();
+        let own_b = game
+            .scenario_force_battlefield(PlayerId(0), "Rhys the Redeemed", false)
+            .unwrap();
+        let opp_a = game
+            .scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
+            .unwrap();
+        let opp_b = game
+            .scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
+            .unwrap();
+
+        assert!(game
+            .characteristics(own_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert!(game
+            .characteristics(own_b)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert!(!game
+            .characteristics(opp_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        // Only the opponent has a legend group; controller's Rhys pair is exempt.
+        assert_eq!(game.legend_groups().len(), 1);
+
+        // Removing Sakashima's abilities in layer 6 restores the legend rule for P0 too.
+        let affected = game.affected_permanent(sakashima).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game
+            .characteristics(own_a)
+            .exempt_sbas
+            .contains(StateBasedAction::LegendRule));
+        assert_eq!(game.legend_groups().len(), 2);
+        let _ = opp_b;
     }
 }

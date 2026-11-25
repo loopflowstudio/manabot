@@ -1691,13 +1691,6 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "fdn",
             "herald_protects_against_a_failed_draw_in_its_last_sba_batch",
         ),
-        StaticAbility::LegendRuleDoesntApply => witnessed(
-            "StaticAbility::LegendRuleDoesntApply",
-            Seen::Actions("no legend-rule choice is asked of its controller"),
-            "Sakashima of a Thousand Faces",
-            "cmr",
-            "sakashima_copies_a_legend_you_control_and_both_stay",
-        ),
         StaticAbility::AdditionalLandPlayEachPlayer => witnessed(
             "StaticAbility::AdditionalLandPlayEachPlayer",
             Seen::Actions("a second land play is offered"),
@@ -2125,7 +2118,6 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::AdditionalLandPlayEachPlayer,
         StaticAbility::AdditionalLandPlay,
         StaticAbility::CantLoseAndOpponentsCantWin,
-        StaticAbility::LegendRuleDoesntApply,
         StaticAbility::ActivatedAbilitiesCostLess {
             predicate: creature(),
             generic: 2,

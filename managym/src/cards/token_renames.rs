@@ -70,6 +70,7 @@ pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
         "/Effect::RevealUntilToHand",
         Some("/Effect::RevealUntil"),
     ),
+    (Variant, "StaticAbility::LegendRuleDoesntApply", None),
     (Variant, "TriggerCondition::AttacksAlone", None),
     (Variant, "TriggerCondition::AttacksWithAnother", None),
     (Variant, "TriggerCondition::BeginningOfEachUpkeep", None),

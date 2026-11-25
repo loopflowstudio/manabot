@@ -1164,8 +1164,6 @@ pub enum StaticAbility {
     /// "You may play an additional land on each of your turns" (CR 305.2):
     /// one more land play per such permanent, for its controller.
     AdditionalLandPlay,
-    /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
-    LegendRuleDoesntApply,
     CantLoseAndOpponentsCantWin,
     /// "Activated abilities of [predicate] you control cost {generic} less to
     /// activate. This effect can't reduce the mana in that cost to less than
@@ -1258,10 +1256,29 @@ pub enum StaticAbility {
 
 /// A state-based action a static ability can exempt permanents from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[repr(u8)]
 pub enum StateBasedAction {
     /// A planeswalker with 0 loyalty is put into its owner's graveyard
     /// (CR 704.5i).
-    ZeroLoyalty,
+    ZeroLoyalty = 0,
+    /// A player who controls two or more legendary permanents with the same
+    /// name chooses one and puts the rest into their owners' graveyards
+    /// (CR 704.5j).
+    LegendRule = 1,
+}
+
+/// Bitset of state-based actions a permanent is exempt from via layer 6.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StateBasedActions(u8);
+
+impl StateBasedActions {
+    pub fn insert(&mut self, action: StateBasedAction) {
+        self.0 |= 1u8 << (action as u8);
+    }
+
+    pub fn contains(self, action: StateBasedAction) -> bool {
+        (self.0 & (1u8 << (action as u8))) != 0
+    }
 }
 
 impl StaticAbility {

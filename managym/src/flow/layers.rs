@@ -1398,8 +1398,8 @@ impl<'a> Context<'a> {
                         program: false,
                     })
                 }
-                Operation::ExemptStateBasedAction(StateBasedAction::ZeroLoyalty) => {
-                    view.exempt_from_zero_loyalty = true;
+                Operation::ExemptStateBasedAction(action) => {
+                    view.exempt_sbas.insert(*action);
                 }
                 Operation::Modify(modification) => match modification {
                     Modification::SetName(name) => {

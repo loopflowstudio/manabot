@@ -1476,12 +1476,8 @@ impl Game {
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
-            let mut occurrences: Vec<(
-                Option<Target>,
-                Vec<ObjectBinding>,
-                Option<PlayerId>,
-                i32,
-            )> = Vec::new();
+            let mut occurrences: Vec<(Option<Target>, Vec<ObjectBinding>, Option<PlayerId>, i32)> =
+                Vec::new();
             match (&trigger.event, event) {
                 (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => {
                     occurrences.push((dead_creature, Vec::new(), None, 0));

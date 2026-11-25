@@ -433,7 +433,12 @@ fn batch_attack_trigger_binds_remembered_and_delayed_whenever_uses_shared_matche
     clear_summoning_sickness(&mut s, ogre_a);
     clear_summoning_sickness(&mut s, ogre_b);
     let opp_pw = s.force_permanent_on_battlefield(1, "Ajani, Caller of the Pride");
-    set_counters(&mut s, opp_pw, managym::state::permanent::CounterKind::Loyalty, 4);
+    set_counters(
+        &mut s,
+        opp_pw,
+        managym::state::permanent::CounterKind::Loyalty,
+        4,
+    );
     let opp_pw_obj = card_of(&s, opp_pw);
 
     // Printed Per::Batch attack trigger reading Remembered buffs only player-attackers.

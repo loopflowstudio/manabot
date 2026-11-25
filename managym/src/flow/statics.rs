@@ -90,8 +90,8 @@ pub struct Characteristics {
     pub abilities_lost: bool,
     /// Its printed ward cost (layer 6), unless it has lost its abilities.
     pub ward: Option<PaymentCost>,
-    /// Exempt from CR 704.5i (0-loyalty planeswalker SBA) via layer 6.
-    pub exempt_from_zero_loyalty: bool,
+    /// State-based actions this permanent is exempt from via layer 6.
+    pub exempt_sbas: crate::state::card::StateBasedActions,
     pub power: i32,
     pub toughness: i32,
     /// Effective activations in layer/timestamp order, with current costs.
