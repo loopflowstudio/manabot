@@ -376,6 +376,25 @@ game. The line is computed per request in the real game's world and never
 saved. Key moments are derived in the client from the analysis
 (`keyMoments`).
 
+### Playing on from a decision
+
+`new_game {"played_from": {"trace_id", "event"}, "player_token"}` starts a
+Play game from one of the person's deliberate decisions (`actor` hero, not
+`auto`) of their own game that is no longer being played; another reader's
+game, an opponent's step or an active game is refused (`played_from_*`). The
+new game takes the source's setup and seed (`setup_draft` plus the seed), and
+`_play_recorded_prefix` replays the first `event` steps through the ordinary
+Command path: the opponent's recorded actions through the offer-policy hook (a
+recurrent opponent is still asked, so it keeps its history) and the person's
+through `hero_command`, with every window surfaced so automated passes replay
+as recorded, now as Commands. Each step must name the recorded action; the
+first that does not stops the start with `played_from_diverged`. The prefix is
+persisted once, like a play demo's, and the game is then an ordinary recorded
+game against a fresh opponent policy. `Trace.played_from` names the source and
+step (written only when set); `GameNumbers.played_from` copies the step so
+`/api/traces/record` leaves the game out, and the recording index returns it
+with the turn it starts on.
+
 ### Analysis while you play
 
 The pilot's `show_analysis {"shown": true, "policy": <Policy ID or null>}`

@@ -1053,7 +1053,8 @@ it took, and how many of your choices were made with
 this browser, under **My record**: your completed games across sessions,
 grouped by opponent and by the two decks, with wins, losses and draws, the win
 rate with its 95% Wilson interval, and **With analysis**, the games among them
-with a choice made while analysis was shown.
+with a choice made while analysis was shown. A game
+[played on](#analysis) from another is listed but not counted there.
 Draws count as games, not wins. Rows that differ only in seat or disclosure are
 combined. These are counts of recorded games, not a rating. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
@@ -1166,6 +1167,16 @@ the real game's cards, not a forecast, and nothing about it is saved. Your
 opponent's moves are named once the game is over; in a game that stopped
 early they read **Opponent's move**. Priority passes fold into the move
 before them.
+
+**Play on from here**, at any of your decisions of a finished game you played,
+opens Play with that game's decks, cards and opponent and replays its moves up
+to the decision; **Play on** starts it, and from there you choose and the
+opponent plays as in any game. It is a new game in your history: Review names
+the game it came from, its row in Games reads **played on from another game**,
+and **My record** leaves it out, since its opening moves were not played in it.
+The moves before the decision are not listed in the new game's live move list;
+its Review lists them all. If this build no longer plays the old game the same
+way, Play says which step differs and nothing starts.
 
 **Analyse with…** in **Menu** runs any other registered trained policy; each
 run is saved beside the game, and **Shown** switches between them. Analyses
