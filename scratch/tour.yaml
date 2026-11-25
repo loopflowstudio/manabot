@@ -1,27 +1,27 @@
-at: 2327a41b948b4750551be48f7d5af56190697530
+at: eb842d8d5792e476ab48ff5b9e4e57082a6e26ad
 first:
   - path: docs/engine.md
-    why: Describes the token choice and its loyalty abilities
-  - path: managym/state/src/ability.rs
-    why: Composes empower from token creation and a controller choice
-  - path: managym/cards/src/tokens.rs
-    why: Defines the blue Jace planeswalker and its abilities
-  - path: managym/cards/src/fra.rs
-    why: Shows how each card composes empower with other instructions
-  - path: managym/src/flow/damage.rs
-    why: Measures excess damage against a planeswalker’s remaining loyalty
-  - path: managym/state/src/effect.rs
-    why: Binds Proxy’s protection to the next spell actually cast
-  - path: managym/src/agent/shared_effects.rs
-    why: Shows both players which stack object has protection
+    why: Shows what survives after a planeswalker leaves
+  - path: managym/cards/src/emblems.rs
+    why: Defines the four command-zone ability sources
+  - path: managym/src/flow/zones.rs
+    why: Creates each emblem directly in its controller's zone
+  - path: managym/src/flow/layers.rs
+    why: Applies static abilities from the exact source object
+  - path: managym/src/flow/triggers.rs
+    why: Matches cast triggers while preserving battlefield last-known information
+  - path: managym/src/flow/decision.rs
+    why: Offers Chandra's exiled spell during resolution
+  - path: managym/src/agent/observation_encoder.rs
+    why: Joins each public emblem to its ability facts
+  - path: academy/ui/src/lib/board/Plate.svelte
+    why: Opens the controller's visible emblems
   - path: managym/cards/tests/cards/fra.rs
-    why: Exercises all cards and chooses among four doubled tokens
+    why: Exercises all four walkers after their ultimates resolve
   - path: tests/academy/test_loyalty.py
-    why: Plays Mindseeker Oculus and cold-restores the resulting Jace
-  - path: scratch/plan.md
-    why: Identifies the live source changes needed for emblems
+    why: Plays Ajani and cold-restores the observed emblem
 hide:
   - path: managym/academy/fixtures/
     why: Regenerated from the recorded opening choices
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Oracle characteristics for the empower cohort
+    why: Oracle characteristics for the four planeswalkers
