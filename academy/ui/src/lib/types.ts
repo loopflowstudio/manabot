@@ -1,3 +1,4 @@
+import type { GameNumbers } from './numbers';
 export interface CardTypes {
   is_creature: boolean;
   is_land: boolean;
@@ -745,6 +746,8 @@ export interface GameSummary extends TraceSummary {
   game_number?: number | null;
   feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
+  /** The game's numbers once it is over and has been counted (`$lib/numbers`). */
+  numbers?: GameNumbers | null;
 }
 
 export interface TraceSummary {
@@ -940,6 +943,8 @@ export type ServerMessage = (
       resume_token?: string;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
+      /** Present while a live analysis is shown in this game. */
+      analysis?: { policy: import('./analysis').AnalysisPolicy };
     }
   | {
       type: 'game_over';
@@ -968,6 +973,8 @@ export type ServerMessage = (
         }
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
+  | import('./analysis').LiveAnalysisState
+  | import('./analysis').LiveAnalysisMessage
 ) & {
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;

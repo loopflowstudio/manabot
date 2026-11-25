@@ -10,7 +10,7 @@ from managym.card_capture import CapturedCards
 from managym.decision import Command, DecisionFrame
 from managym.recording import PlayerSetup, ScalarCapture, read_record, read_records
 from managym.replay import RecordedDecision, ReplayStop, walk
-from managym.statistics import Behaviour, CardPerformance, Reducer, reduce
+from managym.statistics import Behaviour, CardPerformance, Reducer, Totals, reduce
 from tests.fixtures.recorded_commands import record_until_object_candidate
 
 
@@ -154,3 +154,52 @@ def test_rejected_answers_and_stale_command_do_not_reach_live_reducers(
     assert capture.inputs.committed == 0
     capture.close()
     assert capture.rows() == [[0]]
+
+
+def test_totals_count_spells_draws_and_damage_live_and_replayed(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "bolts.jsonl"
+    env = managym.Env(seed=5)
+    capture = ScalarCapture(seed=5, games_path=path, reducers=[Totals()])
+    players = [
+        managym.PlayerConfig(
+            name=str(seat), decklist={"Mountain": 10, "Lightning Bolt": 10}
+        )
+        for seat in (0, 1)
+    ]
+    capture.reset(env, players)
+    casts = [0, 0]
+    while not env.is_game_over():
+        observation = env.observation_for_player(env.current_agent_index() or 0)
+        actions = observation.action_space.actions
+        # Cast whenever able. Every life point lost is Lightning Bolt damage,
+        # so damage taken is the life lost.
+        choice = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+            ),
+            0,
+        )
+        casts[int(observation.agent.player_index)] += (
+            actions[choice].action_type == managym.ActionEnum.PRIORITY_CAST_SPELL
+        )
+        capture.step(env, choice)
+    capture.close()
+    (live,) = capture.rows()
+    assert reduce(read_records(path), [Totals()]) == [live]
+    final = env.observation_for_player(0)
+    life = {
+        int(final.agent.player_index): final.agent.life,
+        int(final.opponent.player_index): final.opponent.life,
+    }
+    for row in live:
+        assert row.games == 1 and row.turns == final.turn.turn_number
+        assert row.damage_taken == 20 - life[row.seat]
+        assert row.spells_cast == casts[row.seat] > 0
+        assert row.cards_drawn > 0
+    assert sum(row.damage_dealt or 0 for row in live) <= sum(
+        row.damage_taken or 0 for row in live
+    )
