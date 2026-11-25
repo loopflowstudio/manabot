@@ -55,6 +55,7 @@ const STATES: &[(&str, &str)] = &[
     ("changeling-anthems", "N Three Tree Mascots (Changeling) per side under up to 8 differently chosen Adaptive Automatons and Ballyrush Banneret"),
     ("genesis-wave", "Genesis Wave cast for X = N over N+3 Forests; X-cost offer, top-N library reveal/selection and simultaneous battlefield/graveyard split"),
     ("ventmaw-pools", "N attacking Savage Ventmaws floating N EndOfTurn {R}{R}{R}{G}{G}{G} pools alongside lands and spells in hand"),
+    ("mixed-pools", "Savage Ventmaw (EndOfTurn), Firebending Student (EndOfCombat), Mountain (Step), Pyromancer's Goggles (CopySpell), Carnelian Orb of Dragonkind (SpellGainsKeyword) and Animal Attendant beside N Prophetic Prisms; mixed expiry and spend-effect classes in payment search"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
@@ -273,6 +274,27 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 "Sokka, Bold Boomeranger".into(),
                 "Pillar Launch".into(),
                 "Genesis Wave".into(),
+            ]);
+            seats[1].add("Mountain", 1);
+            seats[1].hand.push("Lightning Bolt".into());
+        }
+        "mixed-pools" => {
+            for card in [
+                "Savage Ventmaw",
+                "Firebending Student",
+                "Mountain",
+                "Pyromancer's Goggles",
+                "Carnelian Orb of Dragonkind",
+                "Animal Attendant",
+            ] {
+                seats[0].add(card, 1);
+            }
+            seats[0].add("Prophetic Prism", size);
+            seats[0].hand.extend([
+                "Arcane Epiphany".into(),
+                "Claws Out".into(),
+                "Abandon Attachments".into(),
+                "Pillar Launch".into(),
             ]);
             seats[1].add("Mountain", 1);
             seats[1].hand.push("Lightning Bolt".into());
@@ -600,7 +622,7 @@ fn build(recipe: &Recipe) -> Env {
         })
         .collect();
     let mut setup = GameSetup::from(players);
-    if recipe.state == "float-origins" {
+    if matches!(recipe.state.as_str(), "float-origins" | "mixed-pools") {
         setup.mana_floats[0] = ManaFloats::All;
     }
     let mut env = Env::new(7, true, false, false);
@@ -1076,18 +1098,35 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             result.push(("after-resolution".into(), resolved));
             return result;
         }
-        "ventmaw-pools" => {
-            // Declare every Savage Ventmaw attacking and resolve every attack
-            // trigger so the EndOfTurn mana pools are populated at priority.
-            let mut env = combat(root, false).expect("ventmaw-pools reaches DeclareAttackers");
+        "ventmaw-pools" | "mixed-pools" => {
+            // Declare every attacker and resolve attack triggers so non-step
+            // mana pools (EndOfTurn, and EndOfCombat for mixed-pools) are
+            // populated at combat priority.
+            let mut env = combat(root, false).expect("pool state reaches DeclareAttackers");
             for _ in 0..256 {
                 if env.action_space_kind() == Some(ActionSpaceKind::Priority)
                     && env.fixture_game_mut().state.stack_objects.is_empty()
                     && !env.fixture_game_mut().state.players[0]
                         .mana_pool
-                        .mana
+                        .mana()
+                        .classes()
                         .is_empty()
                 {
+                    if recipe.state == "mixed-pools" {
+                        // Float zero-cost fixed taps (Mountain, Goggles, Orb)
+                        // so Step, EndOfCombat, EndOfTurn and SpendEffect
+                        // classes coexist in the pool beside untapped Prisms.
+                        for _ in 0..16 {
+                            let offered = actions(&mut env);
+                            let Some(index) = offered
+                                .iter()
+                                .position(|a| matches!(a, Action::TapForMana { .. }))
+                            else {
+                                break;
+                            };
+                            env.step(index as i64).unwrap();
+                        }
+                    }
                     result.push(("pooled".into(), env));
                     return result;
                 }
@@ -1103,7 +1142,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                     .unwrap_or(0);
                 env.step(index as i64).unwrap();
             }
-            panic!("ventmaw-pools never resolved its attack triggers");
+            panic!("{} never resolved its attack triggers", recipe.state);
         }
         "lathril-elves" => {
             if recipe.size >= 10 {
@@ -1538,7 +1577,7 @@ fn main() {
         let sizes = match (name, &sizes) {
             (_, Some(given)) => given.clone(),
             ("lathril-elves", None) => vec![10, 11, 12],
-            ("restricted-filter" | "distinct-restrictions", None) => vec![2, 3, 4],
+            ("restricted-filter" | "distinct-restrictions" | "mixed-pools", None) => vec![2, 3, 4],
             (_, None) => vec![4, 8, 16],
         };
         for size in sizes {

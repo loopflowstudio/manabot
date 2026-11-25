@@ -15,10 +15,99 @@ Curator of Destinies pile-partition UI (`cfa110e6d8`) are built and verified.
 
 Do **not** replace our grouped `[u8; 6]`-per-`ManaClass` `ManaPool` with per-unit `ManaUnit` storage, and do **not** replace our exact DFS witness solver with heuristic auto-tap. Adapt these three targeted improvements into `managym/state/src/mana.rs` and `managym/src/flow/mana.rs`, preserving all digests, learning tokens, checkpoint compatibility, and `bench_steps`/`bench_search` gains:
 
-1. **Feasibility-only `ProjectedClass` stripping:** In pure feasibility searches (`witness` / `can_pay` — never `ManaSpend` or live pool mutation), strip `expiry` and `effect` (`SpendEffect`) from `ProjectedClass` when they cannot affect payability, collapsing mixed Ventmaw / Firebending / ordinary / spend-effect pools into fewer search states. Verify with the debug search oracle and `bench_states` (`ventmaw-pools`, `entry-choices`, `changeling-anthems`).
-2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying:** Refactor `clear_mana_pools` (`managym/src/flow/mana.rs`) into a small per-class emptying disposition pass (`Drop | Keep | Recolor(Color)`) over `ManaPool` that subsumes the special-case `keeps_red_mana` / expiry branching cleanly while preserving identical Firebending, Savage Ventmaw, and Ozai semantics (and zero new `Player` fields).
-3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle:** Replace ad-hoc hybrid/single-pip branching in `ManaCost` / `flow/mana.rs` where a 6-bit `ManaTypeSet(u8)` pip mask and a small `Copy` payment-permission bundle simplify legality/payment code and eliminate parallel branches — keeping `ManaCost` serialization, learning tokens (`tests/model/test_pinned_pilot.py`), and `bench_steps`/`bench_search` retired instructions ≤ current `04a8f55e6d`.
+1. **Feasibility-only `ProjectedClass` stripping (profile-backed on `mixed-pools`):**
+   - **Profile:** `mixed-pools --sizes 16` (`/usr/bin/sample`, 1,740 samples) spends **53.62%** in `PaymentModel::witness` and **17.76%** in `PaymentSearch::insert` (`visited` `HashMap::insert` `13.91%`, `[(ManaClass, [u8; 6])]::hash_slice` `8.33%`, `CardPredicate::hash` inside `SpendEffect` `4.89%`), with `SearchEquivalence::insert_projected` at **`0.00%`** because `state_has_restriction` only projects classes where `restriction.is_some()`, plus `7.59%` in `Mana::spending_choices` iteration across 5 uncollapsed `{R}` classes.
+   - **Hypothesis:** In pure feasibility searches (`PaymentModel::witness` / `SearchEquivalence` — never `ManaSpend`, live pools, or `SourceClassCache` for player-visible `mana_ability_actions`/`useful_payment_taps`), strip `expiry` and `effect` (`SpendEffect`) from `ProjectedClass` so unrestricted non-ordinary classes merge straight into `ProjectedMana.mana`, activate feasibility projection whenever a search state/model carries any non-ordinary `ManaClass` (`!classes().is_empty()`), and deduplicate feasibility-only `spending_choices` inside `witness` when two classes differ only in `expiry`/`effect`. That eliminates `CardPredicate::hash` and `ManaClass` hashing from `PaymentSearch::visited` and collapses mixed Ventmaw / Firebending / ordinary / spend-effect pools into fewer search states without changing any first-in-source-order witness or player choice.
+   - **Deletes:** `expiry: ManaExpiry` and `effect: Option<SpendEffect>` fields on feasibility `ProjectedClass` (and `state_has_restriction` / `model_has_restriction` restriction-only guards in `PaymentSearch`, replaced by non-ordinary class checks while keeping `SourceClassCache` exact on `expiry`/`effect`).
+   - **Focused check:** debug `nextest` (`flow::mana::`), debug `bench_states mixed-pools --sizes 2,3`, `entry-choices --sizes 4,8`, `changeling-anthems --sizes 4,8` (debug search oracle), release `bench_states mixed-pools --sizes 2,3,4` and `--sizes 4,8,16` (fewer states & instructions, identical witness/action surface), plus `ventmaw-pools`, `entry-choices`, `changeling-anthems`, `float-origins`.
+2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying (architectural cleanup; `< 0.1%` in curated profiles):**
+   - Refactor `clear_mana_pools` (`managym/src/flow/mana.rs`) into a small per-class emptying disposition pass (`Drop | Keep | Recolor(Color)`) over `ManaPool` that deletes the dual `split_expiring` (`combat_expiring` + `regular_expiring`) / `unspent_mana_retained` branching cleanly while preserving identical Firebending, Savage Ventmaw, and Ozai semantics (and zero new `Player` fields).
+   - **Focused check:** debug `nextest` (`flow::mana::`, `tla::fire_lord_azula`, `ozai`, `ventmaw`), identical `bench_steps`/`bench_search` digests and retired instructions `≤ 45.71B` / `≤ 972.65B`.
+3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle (architectural cleanup; `Mana::can_pay` is `0.32%` in `bench_search`, `< 0.1%` in `bench_steps`):**
+   - Replace ad-hoc hybrid/single-pip branching in `ManaCost` / `flow/mana.rs` where a 6-bit `ManaTypeSet(u8)` pip mask and a small `Copy` payment-permission bundle simplify legality/payment code and delete parallel branches — keeping `ManaCost` serialization, learning tokens (`tests/model/test_pinned_pilot.py`), and `bench_steps`/`bench_search` retired instructions `≤ 45.71B` / `≤ 972.65B`.
+   - **Focused check:** debug `nextest` (`flow::mana::`, `managym_state`), rebuilt release extension + `tests/model/test_pinned_pilot.py`, uninstrumented release `bench_steps` and `bench_search`.
 4. **PR #605 CI fix before `pr-publish`:** Fix `tests/env/test_named_observation_layout.py::test_named_layout_describes_tagged_rows_and_history` (extra set items `{17, 18, 19}` in CI `Integration (model)`), and check why the 4 Playwright tests in `Academy UI` (`choice-navigation.spec.ts` ×2, `decision-surface.spec.ts` ×2) timed out on `getByTestId('game')`.
+
+## Engine measure pass 4 (pre-Slice-17 baseline at `ff0f872c3e`, Apple M4 Max, contended host)
+
+No Rust files changed between `04a8f55e6d` (Pass 3) and `ff0f872c3e`. Fresh
+uninstrumented release measurements (`/usr/bin/time -l`, host load `67–110`)
+and `/usr/bin/sample` CPU profiles confirm Pass 3's base comparison against
+`fcc96be003` and establish the pre-Slice-17 profile:
+
+- **Curated benchmarks (uninstrumented release, all digests & counts match `fcc96be003` and `managym/perf/baseline.json`):**
+  - `bench_steps`: `512` games, `0` capped, `118,559` steps, digest
+    `10601622128491155944`; **45.961B** instructions retired (vs base
+    `fcc96be003` `46.731B`, **-1.65%**; Pass 3 C/R/R/C mean `45.707B`,
+    **-2.19%**), `14.708B` cycles, wall `35.00s` (sample run `22.11s`, 15,700
+    involuntary ctx switches).
+  - `bench_search`: seeds 1–3 digests `13638875039089371439`
+    (`score_digest_blake3` `2f29dd10...`), `5466143068363283977`
+    (`09de41e9...`), `9998925852575961750` (`9692421a...`), `0` cap hits,
+    `7,680 / 8,064 / 7,424` simulations; **975.339B** instructions retired
+    (vs base `fcc96be003` `1,027.552B`, **-5.08%**; Pass 3 C/R/R/C mean
+    `972.648B`, **-5.34%**), `275.306B` cycles, wall `130.03s` (`worst_overall_s`
+    `4.975s`).
+  - **CPU profiles (`/usr/bin/sample`, 1ms):**
+    - `bench_steps` (6,493 samples): `Observation::new` `39.32%`
+      (`populate_permanents` `13.86%`, `populate_cards` `8.13%`, `player_data`
+      `7.67%`), `layer_board` `18.44%` (`layers::Context::evaluate` `15.22%`),
+      `drain_pending_events` `18.37%` (`indexed_sources` `17.83%`),
+      `priority_action_space` `13.09%`, `finish_mana_payment` `5.71%`,
+      `payment_model` `5.16%`. `PaymentModel::witness`, `Mana::can_pay`,
+      `Mana::spending_choices`, `clear_mana_pools`, and hybrid branching are
+      all `< 0.1%`.
+    - `bench_search` (12,158 samples): `layer_board` `35.24%`
+      (`layers::Context::evaluate` `28.97%`, `layers::Context::apply` `9.89%`),
+      `indexed_sources`/`drain_pending_events` `31.31%`
+      (`collect_waiting_triggers` `17.97%`), `priority_action_space` `25.70%`,
+      `advance_event_batch` `21.39%`, `payment_model` `8.75%`
+      (`Vec<ManaSource>` `5.80%`), `finish_mana_payment` `8.41%`
+      (`advance_mana_spend` `6.05%`), `PaymentModel::payable` `1.78%`
+      (`direct_payable` `1.20%`), `Mana::can_pay` `0.32%`.
+      `PaymentModel::witness`, `ProjectedClass`, `clear_mana_pools`, and hybrid
+      branching are all `< 0.15%`.
+- **Stress states (`bench_states --features benchmark`, release):**
+  - Existing MTG-431 / mana shapes reproduce Pass 3: `ventmaw-pools --sizes 4,8,16`
+    (**0.244B** inst, **0** payment search calls — fixed sources + single
+    `EndOfTurn` class), `entry-choices --sizes 4,8,16` (**10.099B** inst,
+    `cast-choice search` `38,123` states), `changeling-anthems --sizes 4,8,16`
+    (**9.363B** inst, `cast-choice search` `14,233` states), `storm-copies --sizes 2,4,8`
+    (**1.665B**), `genesis-wave --sizes 4,8,16` (**0.492B**), `diverse-mana --sizes 4,8,16`
+    (**3.724B**), `restricted-filter` + `distinct-restrictions` (**3.994B**),
+    `float-origins --sizes 4,8,16` (**8.439B** inst, `cast-choice search`
+    `81,566` states; 529-sample profile: `witness` `65.22%`,
+    `PaymentSearch::insert` `21.36%`, `insert_projected` `8.32%`).
+  - **Added `mixed-pools` stress state (`managym/examples/bench_states.rs`):**
+    Because `ventmaw-pools` makes 0 payment search calls and no existing state
+    combined multiple `ManaExpiry` (`Step`, `EndOfCombat`, `EndOfTurn`) and
+    `SpendEffect` (`CopySpell`, `SpellGainsKeyword`,
+    `CreatureEntersWithPlusOneCounter`) classes inside `PaymentSearch`, added
+    `mixed-pools` (`Savage Ventmaw`, `Firebending Student`, `Mountain`,
+    `Pyromancer's Goggles`, `Carnelian Orb of Dragonkind`, `Animal Attendant`,
+    `N` `Prophetic Prism`s, casting `Arcane Epiphany` / `Claws Out` /
+    `Abandon Attachments` / `Pillar Launch` at `priority` and `pooled`).
+    - Default `--sizes 2,3,4`: **1.328B** inst, `pooled search`
+      `calls 4,645 → 7,302 → 9,553`, `states 2,977 → 4,818 → 6,362`
+      (`maxc 24 → 28 → 32`), digest
+      `3ad67dc77c5de7823e0ed48a3c73e523fc6c5c677a388ff11996558dea4ecb79`.
+    - `--sizes 4,8,16`: **4.497B** inst, `pooled actions`
+      `states 42 → 66 → 114` (`maxc 32 → 48 → 80`), `pooled search`
+      `plans 680 → 710 → 879`, `calls 9,553 → 16,110 → 35,239`,
+      `states 6,362 → 11,192 → 25,196`.
+    - CPU profile (`mixed-pools --sizes 16`, 1,740 samples): `PaymentModel::witness`
+      `53.62%`, `PaymentSearch::insert` `17.76%` (`visited` `HashMap::insert`
+      `13.91%`, `Arc<SearchState>::hash` `11.03%`,
+      `[(ManaClass, [u8; 6])]::hash_slice` `8.33%`, `CardPredicate::hash`
+      inside `SpendEffect` `4.89%`), `SearchEquivalence::insert_projected`
+      `0.00%`, `Mana::spending_choices` + iteration `7.59%`.
+- **No additional slices planned beyond Slice 17:** curated-deck profiles show
+  no new MTG-431 bottleneck; Slice 17 item 1 directly targets the measured
+  `mixed-pools` feasibility-projection bottleneck, while items 2–3 are tracked
+  as non-bottleneck architectural cleanups guarded against regression.
+- **Deferred unavailable hardware (no x86_64 speed claim):** Ubuntu `x86_64`
+  Engine Budget runner — verify on CI via PR #605 or:
+  `gh workflow run ci.yml --ref jack/mtg-431-close-foundations-stack-copies-choices-costs -f measure=<commit>`.
 
 ## Performance outcome (Slices 13–16 + compress, Apple M4 Max, contended host)
 
