@@ -1,22 +1,47 @@
 """Framework backends; only composition roots select one through `resolve`."""
 
 import importlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 if TYPE_CHECKING:
-    from manabot.policy.protocol import Backend, Precision
+    from manabot.backends.mlx.checkpoint import MLXBackend
+    from manabot.backends.torch.checkpoint import TorchBackend
+    from manabot.policy.protocol import BackendName, Precision
 
 
-def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend":
+@overload
+def resolve(
+    name: Literal["torch"], *, precision: "Precision | None" = None
+) -> "TorchBackend": ...
+
+
+@overload
+def resolve(
+    name: Literal["mlx"], *, precision: "Precision | None" = None
+) -> "MLXBackend": ...
+
+
+@overload
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend": ...
+
+
+def resolve(
+    name: str, *, precision: "Precision | None" = None
+) -> "TorchBackend | MLXBackend":
     """Select a configured backend, loading its optional framework on first use.
 
-    MLX's omitted precision follows each policy's width. Torch's resolver
+    With precision omitted, MLX uses the self-play settings for training
+    and the policy's width for standalone inference. Torch's resolver
     supports float32; reduced-precision training is configured on its learner.
     """
     if name not in {"torch", "mlx"}:
         raise ValueError(f"unknown backend {name!r}; available backends: torch, mlx")
     if name == "torch" and precision not in (None, "float32"):
-        raise ValueError("half-precision parity is supported only for the MLX backend")
+        raise ValueError(
+            "resolver precision is configurable only for the MLX backend; pass Torch precision to load or the learner"
+        )
     try:
         importlib.import_module("torch" if name == "torch" else "mlx.core")
     except ImportError as error:
@@ -27,3 +52,10 @@ def resolve(name: str, *, precision: "Precision | None" = None) -> "Backend":
     if name == "mlx":
         return checkpoint.MLXBackend(precision=precision)
     return checkpoint.BACKEND
+
+
+def local_cpu_backend(name: "BackendName") -> "TorchBackend | MLXBackend":
+    """Configure a standalone evaluation child before it loads any policies."""
+    backend = resolve(name, precision="float32")
+    backend.configure_cpu_inference()
+    return backend

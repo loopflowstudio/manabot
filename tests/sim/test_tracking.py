@@ -67,7 +67,11 @@ def test_simulation_admits_exact_etude_checkpoint(
         monkeypatch.setattr(artifacts, "storage_from_uri", lambda _: storage)
         retained = tmp_path / "bucket/policy.pt"
     policy.unlink()  # The SDK retained its own bytes.
-    player = sim.load_player(str(record), backend=TORCH_BACKEND)
+
+    class Loader:
+        load_policy = staticmethod(TORCH_BACKEND.load_policy)
+
+    player = sim.load_player(str(record), backend=Loader())
     assert isinstance(player, ModelPlayer)
     assert not player.agent.training
     for name, value in original.state_dict().items():
@@ -208,8 +212,8 @@ def test_game_reaching_step_limit_records_timeout() -> None:
             return 0
 
     player = cast(sim.Player, Player())
-    outcome, steps, _, _ = sim._simulate_game(
+    record = sim._simulate_game(
         cast(sim.Env, LimitedEnv()), player, player, 1
     )
-    assert outcome == sim.GameOutcome.TIMEOUT
-    assert steps == 1
+    assert record.outcome == sim.GameOutcome.TIMEOUT
+    assert record.steps == 1

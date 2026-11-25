@@ -325,8 +325,8 @@
       && gameStore.work.chooser !== null && gameStore.work.chooser !== heroSeat)
     || (decisionFrame?.prompt != null && decisionFrame.prompt.actor !== heroSeat)));
   const thinking = $derived(!gameActive ? null
-    : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}…`
-      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working…' : null);
+    : opponentChoosing ? `${shortName(opponentName)} is ${gameStore.work?.kind === 'search' ? 'searching' : 'choosing'}`
+      : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working' : null);
 
   const ending = $derived(gameStore.gameOver && boardFrame
     ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);

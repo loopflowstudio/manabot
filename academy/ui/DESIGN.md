@@ -8,7 +8,7 @@ reads the permitted list below and fails on any literal outside it in
 `app.css` and in the board's Svelte styles (`src/lib/board/`).
 
 ```permitted
-families: Spectral, Work Sans
+families: Spectral, DM Sans
 fallbacks: Georgia, serif, system-ui, sans-serif, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
 sizes: 12/16, 14/20, 16/24, 20/28, 28/32, 40/44
 weights: 400, 500, 600
@@ -25,7 +25,7 @@ the SIL Open Font License):
   player names, life totals, the inspected card's name, page titles, and in
   the rail the moves and the legal choices (a choice's words, not its key or
   probability).
-- **Work Sans**, the interface's face (`--font-sans`, the body default):
+- **DM Sans**, the interface's face (`--font-sans`, the body default):
   prompts, buttons, labels, counts, the stop bar and key hints.
 
 Monospace (`--font-mono`, the system's) is for code a person copies, never
@@ -42,11 +42,11 @@ case ("Your decision", "Hand · 7"): no capitals by transform, no tracking. Numb
 | `type-brand` | Spectral 600 | 28/32 | The brand mark |
 | `type-display` | Spectral 600 | 20/28 | Page titles |
 | `type-title` | Spectral 600 | 16/24 | A player's or a thing's name |
-| `type-prompt` | Work Sans 400 | 16/24 | What the game asks |
-| `type-heading` | Work Sans 500 | 14/20 | A region's name: Stack, Moves |
-| `type-body` | Work Sans 400 | 14/20 | Running text (the body default) |
-| `type-label` | Work Sans 500 | 12/16 | Small labels |
-| `type-caption` | Work Sans 400 | 12/16 | Counts, hints, empties |
+| `type-prompt` | DM Sans 400 | 16/24 | What the game asks |
+| `type-heading` | DM Sans 500 | 14/20 | A region's name: Stack, Moves |
+| `type-body` | DM Sans 400 | 14/20 | Running text (the body default) |
+| `type-label` | DM Sans 500 | 12/16 | Small labels |
+| `type-caption` | DM Sans 400 | 12/16 | Counts, hints, empties |
 
 A mana symbol's letter scales with its pip (`calc(var(--pip) * k)`): it is a
 symbol, not text, and is the one size outside the scale.
@@ -92,6 +92,11 @@ bar and in a data bar's fill.
   on), `--lift-selected`, `--lift-attacking`, and `--shadow-raised` for
   popovers and menus (`--shadow-sheet`, `--shadow-surface` on pages). An
   edge or ring may be drawn with a zero-blur `box-shadow` in a token colour.
+- Floating panels are opaque: the result card, trays, the inspect popover,
+  menus and the keys sheet use a solid `--bg-surface`, never a translucent
+  mix. One layering order holds on the board, lowest first: cards, the
+  lines between cards and targets, floating panels, sheets. It is written once
+  in `Board.svelte`'s styles; do not add z-indexes outside it.
 
 ## Space and motion
 

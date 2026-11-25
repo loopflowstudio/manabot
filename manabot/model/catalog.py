@@ -2,39 +2,27 @@
 
 The catalog answers "which bots could play here?" without constructing them.
 ``inspect_checkpoint`` reads container metadata or a legacy ``.pt`` with
-Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes, world,
+Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes,
 model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
 
 Admission belongs to the injected backend's policy loader; the catalog
-reuses its world binding rules (``manabot.model.world``) so a listed
-"compatible" checkpoint and a loadable one cannot disagree about the world.
+uses its bound checkpoint reader so tensor and metadata refusals appear in the listing.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Literal
 
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import (
-    ModelConfig,
-    ObservationConfig,
-    UnsupportedPolicyInput,
-)
-from manabot.model.world import (
-    WORLD,
-    current_binding_form,
-    expected_world,
-    written_at,
-)
-from manabot.policy.protocol import Backend
+from manabot.infra.config import ModelConfig
+from manabot.infra.identity import file_sha256
+from manabot.policy.protocol import CheckpointReader
 import managym
 
 CheckpointSource = Literal["path", "runs", "tournament"]
@@ -52,8 +40,6 @@ class CheckpointSummary:
     label: str
     source: CheckpointSource
     producer: str
-    # ``None`` when the checkpoint predates world binding.
-    world: str | None
     model: str
     parameters: int
     # Trainer ``global_step`` (environment steps) when it records one.
@@ -90,7 +76,7 @@ class NotAPolicyCheckpoint(ValueError):
 def inspect_checkpoint(
     path: Path,
     *,
-    backend: Backend,
+    backend: CheckpointReader,
     label: str | None = None,
     source: CheckpointSource = "path",
     producer: str | None = None,
@@ -119,13 +105,12 @@ def inspect_checkpoint(
 
 @lru_cache(maxsize=512)
 def _inspect_cached(
-    path: str, size: int, mtime_ns: int, backend: Backend
+    path: str, size: int, mtime_ns: int, backend: CheckpointReader
 ) -> CheckpointSummary | NotAPolicyCheckpoint:
     # Refusals are returned, not raised, so they are cached too: run
     # directories hold large optimizer and dataset files that every listing
     # and every game admission would otherwise read again in full.
-    del size, mtime_ns  # cache key only: a rewritten file is re-read
-    data = Path(path).read_bytes()
+    del mtime_ns  # cache key only: a rewritten file is re-read
     try:
         checkpoint = backend.metadata(path)
     except Exception as error:  # legacy unpickling and malformed container headers
@@ -135,18 +120,15 @@ def _inspect_cached(
     ):
         return NotAPolicyCheckpoint(f"{path} holds no policy")
     config = checkpoint["hypers"]
-    binding = checkpoint.get("world_binding")
-    world = binding.get("world") if isinstance(binding, Mapping) else None
     step = checkpoint.get("global_step")
     search_reason = checkpoint_search_incompatibility(checkpoint)
     return CheckpointSummary(
         path=Path(path),
-        sha256=hashlib.sha256(data).hexdigest(),
-        bytes=len(data),
+        sha256=file_sha256(path),
+        bytes=size,
         label=_default_label(Path(path)),
         source="path",
         producer=_producer(checkpoint),
-        world=world if isinstance(world, str) else None,
         model=_model_shape(config.get("agent_hypers")),
         parameters=(checkpoint.get("architecture") or {})
         .get("parameters", {})
@@ -155,8 +137,8 @@ def _inspect_cached(
         run_id=_text(checkpoint.get("bc"), "run_id"),
         stage=_text(checkpoint.get("bc"), "stage_id"),
         weights=_text(checkpoint.get("bc"), "weights"),
-        setups=_setups(binding),
-        incompatibility=checkpoint_incompatibility(checkpoint),
+        setups=_setups(checkpoint.get("world_binding")),
+        incompatibility=refusal(lambda: backend.read_policy(path)),
         policy_input_version=config.get("observation_hypers", {}).get(
             "policy_input_version", 1
         ),
@@ -184,90 +166,25 @@ def checkpoint_search_incompatibility(checkpoint: Mapping[str, object]) -> str |
     return None
 
 
-def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
-    """Name the first way a checkpoint's world binding differs from this runtime.
-
-    Mirrors ``validate_checkpoint_world`` but explains the difference instead
-    of raising, field by field, in the order a researcher would fix it.
-    """
-
-    binding = checkpoint.get("world_binding")
-    if not isinstance(binding, Mapping):
-        return f"trained without a world binding; engine is {WORLD}"
-    trained = binding.get("world")
-    if trained != WORLD:
-        return f"trained in {trained}, engine is {WORLD}"
+def refusal(admit: Callable[[], object]) -> str | None:
+    """Run an admission and return its refusal as a sentence instead of raising."""
     try:
-        observation = ObservationConfig.from_checkpoint(
-            checkpoint["hypers"]["observation_hypers"]
-        )
-        expected = expected_world(binding, ObservationSpace(observation))
-        binding = current_binding_form(binding)
-    except UnsupportedPolicyInput as error:
+        admit()
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        IndexError,
+        RuntimeError,
+        managym.AgentError,
+    ) as error:
         return str(error)
-    except BaseException as error:  # PyO3 panics on invalid native setups
+    except BaseException as error:
+        # Invalid retained native setups may raise a PyO3 panic.
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise
         return "its deck setup or observation settings no longer build in this engine"
-    for key, explanation in _BINDING_FIELDS:
-        if binding.get(key) != expected.get(key):
-            difference = explanation(binding.get(key), expected.get(key))
-            return f"{difference}; {written_at(checkpoint)}"
     return None
-
-
-def _content_mismatch(trained: Any, engine: Any) -> str:
-    def digest(manifest: Any) -> str:
-        if isinstance(manifest, Mapping):
-            return str(manifest.get("content_digest", "unknown"))[:12]
-        return "unknown"
-
-    return (
-        f"card content differs: trained on content {digest(trained)}, "
-        f"engine has {digest(engine)}"
-    )
-
-
-_BINDING_FIELDS = (
-    (
-        "policy_input_version",
-        lambda trained, engine: (
-            f"policy input version {trained}, engine expects {engine}"
-        ),
-    ),
-    (
-        "rules",
-        lambda trained, engine: (
-            f"rules decision/world-space versions {trained}, engine has {engine}"
-        ),
-    ),
-    ("content_manifest", _content_mismatch),
-    (
-        "naming_vocabulary",
-        lambda trained, engine: "naming vocabulary differs from this engine",
-    ),
-    (
-        "world_digest",
-        lambda trained, engine: (
-            f"world cards differ: trained on {str(trained)[:12]}, "
-            f"engine has {str(engine)[:12]}"
-        ),
-    ),
-    (
-        "input_schema",
-        lambda trained, engine: "observation tensor shapes differ from this engine",
-    ),
-    (
-        "learning_schema_sha256",
-        lambda trained, engine: (
-            f"learning schema {str(trained)[:12]}, engine has {str(engine)[:12]}"
-        ),
-    ),
-    (
-        "setups",
-        lambda trained, engine: "its recorded deck setup no longer resolves the same",
-    ),
-)
 
 
 def _setups(binding: Any) -> tuple[managym.Deck, ...]:
@@ -326,7 +243,7 @@ class UnavailableEntry:
 
 
 def discover_checkpoints(
-    sources: Iterable[Path], *, backend: Backend, runs_dir: Path | None = None
+    sources: Iterable[Path], *, backend: CheckpointReader, runs_dir: Path | None = None
 ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
     """Summarize every policy checkpoint reachable from ``sources``.
 
@@ -369,7 +286,7 @@ def discover_checkpoints(
 
 
 def _scan(
-    directory: Path, source: CheckpointSource, backend: Backend
+    directory: Path, source: CheckpointSource, backend: CheckpointReader
 ) -> list[CheckpointSummary]:
     summaries = []
     for path in sorted([*directory.rglob("*.pt"), *directory.rglob("*.safetensors")]):
@@ -472,7 +389,7 @@ def _with_run_facts(summary: CheckpointSummary, root: Path) -> CheckpointSummary
 
 
 def _tournament(
-    path: Path, directories: list[Path], backend: Backend
+    path: Path, directories: list[Path], backend: CheckpointReader
 ) -> list[CheckpointSummary | UnavailableEntry]:
     """Read checkpoint entrants from a Tournament file.
 

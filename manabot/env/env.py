@@ -21,29 +21,29 @@ from managym.recording import DecisionAnnotation
 # Local directory imports
 from .failures import CapturedSearch, ScalarCapture
 from .match import Match, Reward
-from .observation import ObservationEncoder, ObservationSpace
+from .observation import ObservationSpace, encode_observation
 
 
 def add_truncation_flags(
     raw_obs: managym.Observation,
     info: dict[str, Any],
-    encoder: ObservationEncoder,
+    space: ObservationSpace,
 ) -> None:
     info["action_space_truncated"] = (
-        len(raw_obs.action_space.actions) > encoder.max_actions
-        and encoder.config.action_overflow == "error"
+        len(raw_obs.action_space.actions) > space.config.max_actions
+        and space.config.action_overflow == "error"
     )
-    if encoder.config.action_overflow == "first-legal":
+    if space.config.action_overflow == "first-legal":
         info["policy_action_cutoff"] = max(
-            0, len(raw_obs.action_space.actions) - encoder.max_actions
+            0, len(raw_obs.action_space.actions) - space.config.max_actions
         )
     info["card_space_truncated"] = (
-        len(raw_obs.agent_cards) > encoder.cards_per_player
-        or len(raw_obs.opponent_cards) > encoder.cards_per_player
+        len(raw_obs.agent_cards) > space.config.max_cards_per_player
+        or len(raw_obs.opponent_cards) > space.config.max_cards_per_player
     )
     info["permanent_space_truncated"] = (
-        len(raw_obs.agent_permanents) > encoder.perms_per_player
-        or len(raw_obs.opponent_permanents) > encoder.perms_per_player
+        len(raw_obs.agent_permanents) > space.config.max_permanents_per_player
+        or len(raw_obs.opponent_permanents) > space.config.max_permanents_per_player
     )
 
 
@@ -73,8 +73,8 @@ class Env(gym.Env):
             if capture is not None
             else ScalarCapture(
                 seed,
-                decision_memory=obs_space.encoder.config.max_decision_records > 0,
-                decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
+                decision_memory=obs_space.config.max_decision_records > 0,
+                decision_memory_include_own=obs_space.config.decision_memory_include_own,
             )
         )
         self.skip_trivial = True
@@ -86,8 +86,8 @@ class Env(gym.Env):
         )
         self._engine = managym.Env(
             seed=self.seed,
-            decision_memory=obs_space.encoder.config.max_decision_records > 0,
-            decision_memory_include_own=obs_space.encoder.config.decision_memory_include_own,
+            decision_memory=obs_space.config.max_decision_records > 0,
+            decision_memory_include_own=obs_space.config.decision_memory_include_own,
             skip_trivial=self.skip_trivial,
             enable_profiler=self.enable_profiler,
             enable_behavior_tracking=self.enable_behavior_tracking,
@@ -101,7 +101,7 @@ class Env(gym.Env):
         self.obs_space: ObservationSpace = obs_space
         # Type: gymnasium.Space
         self.observation_space = self.obs_space
-        self.action_space = spaces.Discrete(self.obs_space.encoder.max_actions)
+        self.action_space = spaces.Discrete(self.obs_space.config.max_actions)
 
         self.match = match
         self.reward = reward
@@ -141,7 +141,7 @@ class Env(gym.Env):
         self.match = match
         self._last_obs = raw_obs
         # Encode to our dictionary-of-numpy format
-        py_obs = self.obs_space.encode(raw_obs)
+        py_obs = encode_observation(self.obs_space, raw_obs)
 
         return py_obs, raw_info
 
@@ -171,7 +171,7 @@ class Env(gym.Env):
             self._engine, action, annotation=annotation
         )
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
-        add_truncation_flags(raw_obs, info, self.obs_space.encoder)
+        add_truncation_flags(raw_obs, info, self.obs_space)
 
         log.debug(
             f"Stepped env. Step output: reward={raw_reward}, terminated={terminated}, truncated={truncated}"
@@ -179,7 +179,7 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
 
-        py_obs = self.obs_space.encode(raw_obs)
+        py_obs = encode_observation(self.obs_space, raw_obs)
         self._last_obs = raw_obs
         return py_obs, reward, terminated, truncated, info
 
@@ -216,10 +216,10 @@ class Env(gym.Env):
         winner = self._engine.winner_index()
         if winner is not None:
             info["winner_index"] = int(winner)
-        add_truncation_flags(raw_obs, info, self.obs_space.encoder)
+        add_truncation_flags(raw_obs, info, self.obs_space)
         self._last_obs = raw_obs
         return (
-            self.obs_space.encode(raw_obs),
+            encode_observation(self.obs_space, raw_obs),
             reward,
             terminated,
             truncated,
@@ -257,7 +257,7 @@ class Env(gym.Env):
         """
         raw_obs = self._engine.scenario_refresh()
         self._last_obs = raw_obs
-        return self.obs_space.encode(raw_obs), raw_obs
+        return encode_observation(self.obs_space, raw_obs), raw_obs
 
     def hand_snapshot(self, player: int) -> managym.HandSnapshot:
         """Read a native seat's authoritative hand, separate from policy inputs."""
@@ -279,7 +279,7 @@ class Env(gym.Env):
         return self._engine.skip_trivial_count()
 
     def _record_policy_actions(self) -> None:
-        config = self.obs_space.encoder.config
+        config = self.obs_space.config
         if config.action_overflow == "first-legal":
             self._capture.inputs.actor = self._engine.current_agent_index()
             self._capture.inputs.frame = self._engine.semantic_decision_frame_json()

@@ -88,9 +88,17 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
         "any_mana",
         "waterbend",
         "foretold",
+        "flashback",
+        "follows_source_controller",
+        "on_adventure",
+        "prepared",
+        "face_down",
+        "play_lands",
     ):
         if getattr(permission, key):
             terms[key] = True
+    if permission.condition is not None:
+        terms["condition"] = str(permission.condition)
     for key in ("after_turn", "source_permanent_id"):
         if (value := getattr(permission, key)) is not None:
             terms[key] = int(value)
@@ -130,10 +138,16 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
         announced_x = card.x
         if card.face_down:
             details["face_down"] = True
-        if card.cast_permission is not None:
-            details["cast_permission"] = _serialize_cast_permission(
-                card.cast_permission
-            )
+        permissions = [
+            _serialize_cast_permission(grant) for grant in card.cast_permissions
+        ]
+        # Retained boards use the singular field for a single grant.
+        if len(permissions) == 1:
+            details["cast_permission"] = permissions[0]
+        elif permissions:
+            details["cast_permissions"] = permissions
+        if card.counters:
+            details["counters"] = {kind: int(n) for kind, n in card.counters.items()}
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -206,11 +220,18 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attached_to": permanent.attached_to,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
+        "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
+        "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
+        "combat_damage_to_players": list(permanent.combat_damage_to_players) or None,
+        "damaged_permanents": list(permanent.damaged_permanents) or None,
+        "ability_resolutions": list(permanent.ability_resolutions) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "attacked_this_turn": bool(permanent.attacked_this_turn) or None,
+        "entered_this_turn": bool(permanent.entered_this_turn) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
         "copy_of": _copy(permanent.copy),
@@ -231,6 +252,13 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "land_entered": history.land_entered,
         "cards_drawn": history.cards_drawn,
         "bent": history.bent,
+        "life_gains": history.life_gains,
+        "mana_spent_casting": history.mana_spent_casting,
+        "life_gained": history.life_gained,
+        "creatures_died": history.creatures_died,
+        "permanents_left": history.permanents_left,
+        "nonland_permanents_left": history.nonland_permanents_left,
+        "warped_this_turn": history.warped_this_turn,
         "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
@@ -373,12 +401,12 @@ def _serialize_player(
         "is_active": bool(player.is_active),
         "is_agent": bool(player.is_agent),
         "life": int(player.life),
+        **({"counters": dict(player.counters)} if player.counters else {}),
         **(
             {"hand_only_until": int(player.hand_only_until)}
             if player.hand_only_until is not None
             else {}
         ),
-        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         "zone_counts": zone_counts,
         "library_count": zone_counts.get("LIBRARY", 0),
         "known_hand": {
@@ -417,6 +445,11 @@ def _serialize_player(
             if (turn_history := _turn_history(player.turn_history))
             else {}
         ),
+        **(
+            {"spent_graveyard_types": spent}
+            if (spent := player.spent_graveyard_types)
+            else {}
+        ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
@@ -435,6 +468,7 @@ def serialize_observation(
         "won": bool(obs.won),
         "turn": {
             "turn_number": int(obs.turn.turn_number),
+            "creature_died_this_turn": obs.turn.creature_died_this_turn,
             "phase": enum_name(PhaseEnum, obs.turn.phase),
             "step": enum_name(StepEnum, obs.turn.step),
             "active_player_id": int(obs.turn.active_player_id),
@@ -463,7 +497,7 @@ def serialize_observation(
         _serialize_object(card)
         for card in obs.opponent_cards
         if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
-        or (card.cast_permission is not None and card.cast_permission.foretold)
+        or card.face_down
     ]
     if inspected:
         data["agent"].setdefault("inspected", []).extend(inspected)
@@ -515,17 +549,26 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     }
     data["stack_objects"] = [
         {
+            "combat_damage_to_players": list(entry.combat_damage_to_players),
+            "ability_resolutions": entry.ability_resolutions,
             "id": int(entry.stack_object_id),
             "kind": {0: "spell", 1: "activated_ability", 2: "triggered_ability"}[
                 int(entry.kind)
             ],
             "controller": int(entry.controller_id),
+            "mana_spent": entry.mana_spent,
             "label": entry.description
-            or data["definition_names"][str(entry.source_card_registry_key)],
+            or (
+                entry.characteristics.name
+                if entry.characteristics is not None
+                else data["definition_names"][str(entry.source_card_registry_key)]
+            ),
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
             "x": int(entry.x) or None,
+            "from_prepared": entry.from_prepared,
+            "flashback": entry.flashback,
         }
         for entry in observation.stack_objects
     ]
@@ -646,6 +689,8 @@ def format_action(
     if action_name == "CHOOSE_MODE":
         return f"Choose a mode ({first})" if first else "Choose a mode"
     if action_name == "TAP_FOR_COST" and first:
+        if space_kind == "PRIORITY":
+            return f"Tap {first} for mana"
         return f"Tap {first} to help pay"
 
     label = ACTION_LABELS.get(action_name, action_name)
@@ -699,7 +744,7 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
 
 
 def _redact_face_down_exile(player_state: dict[str, Any]) -> None:
-    """Remove foretold cards: only their owner may see a face-down card."""
+    """Remove face-down exiled cards: only the players allowed to look see them."""
     exile = player_state.get("exile")
     if isinstance(exile, list):
         player_state["exile"] = [
@@ -723,7 +768,7 @@ def redact_observation(observation: dict[str, Any]) -> None:
     agent = observation.get("agent", {})
     if isinstance(context, dict) and context.get("actor") != agent.get("player_index"):
         observation["decision_context"] = {
-            **context,
+            **{key: value for key, value in context.items() if key != "paid"},
             "source": None,
             "targets": [],
             "reserved_sacrifice": None,

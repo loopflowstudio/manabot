@@ -9,11 +9,12 @@
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
   import type { MoveTurn } from './moves';
-  import type { PrimaryLabel } from './prompt';
+  import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
+  import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
-  import { stackName, type PlacedOffer, type StackItem, type BoardView } from './view';
+  import { stackName, stackProvenance, type PlacedOffer, type StackItem, type BoardView } from './view';
 
   interface Props {
     view: BoardView;
@@ -21,12 +22,16 @@
     live: boolean;
     /** What to do now, in plain words. */
     line: string;
+    /** How to answer, apart from what is asked. */
+    hint: string | null;
     /** What the primary button does next. */
     primaryText: PrimaryLabel | null;
     status: string;
     whose: string;
-    /** "Search 64 is choosing…" while someone else decides. */
+    /** "Search 64 is choosing" while someone else decides; the rail adds the seconds. */
     thinking: string | null;
+    /** The opponent is the one deciding: an empty choice list waits for them by name. */
+    opponentChoosing: boolean;
     /** When the awaited work started, epoch seconds. */
     workStarted: number | null;
     interrupted: boolean;
@@ -47,7 +52,11 @@
     over?: boolean;
     /** The docked inspect pane, when inspecting docks to the rail. */
     dock?: Snippet;
-    /** The opponent's move being read out; it sits over the move list, never over a card or a choice. */
+    /**
+     * The opponent's move being read out. It heads the decision block, and
+     * while it is set the decision's controls wait: listed, focusable and
+     * announced unavailable, a press on one ends the read-out (the board owns that).
+     */
     reading?: Snippet;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
@@ -63,15 +72,19 @@
   }
 
   let {
-    view, frame, live, line, primaryText, status, whose, thinking, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
+    view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
+  const readingOut = $derived(reading !== undefined);
+  /** No choices because the opponent is deciding: the list waits for them by name instead of counting 0. */
+  const waitingFor = $derived(frame.offers.length === 0 && opponentChoosing);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
   const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
 
   const context = $derived(frame.projection.decision_context);
+  const paid = $derived(committed(frame));
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
@@ -137,17 +150,24 @@
     {:else}
       <ol>
         {#each view.stack as item, index (item.entry.id)}
+          {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
+          {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
+          {@const provenance = stackProvenance(item.entry)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}
-              aria-label={`${item.entry.label}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
+              aria-label={`${item.entry.label}${provenance.map(tag => `, ${tag}`).join('')}${damageHistory ? `. ${damageHistory}` : ''}, ${mine(item.entry.controller) ? 'yours' : opponentName + "'s"}${item.offers.length ? ` — ${item.offers.map(placed => placed.offer.label).join('; ')}` : ''}`}
               onclick={event => onstack(item, event.currentTarget)}
               {...hover(item.card?.name ?? item.entry.label)}>
               <Thumb name={item.card?.name ?? item.entry.label} />
               <span class="entry-text">
-                <span class="truncate entry-name">{stackName(item.entry)}</span>
+                <span class="entry-title">
+                  <span class="truncate entry-name">{stackName(item.entry)}</span>
+                  {#each provenance as tag (tag)}<span class="tag type-caption" data-testid="stack-provenance">{tag}</span>{/each}
+                </span>
+                {#if damageHistory}<span class="type-caption text-ink-3">{damageHistory}</span>{/if}
                 <span class="type-caption text-ink-3">{mine(item.entry.controller) ? 'You' : opponentName}{item.announcing ? ` · ${item.announcing === 'spell' ? 'casting' : 'activating'}` : index === 0 ? ' · resolves next' : ''}</span>
               </span>
             </button>
@@ -178,15 +198,23 @@
     {/if}
   </section>
 
-  <section use:region={{ across: !onjump }} class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+  <section use:region={{ across: !onjump }} class="block prompt" class:reading-out={readingOut} aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
+    {#if reading}{@render reading()}{/if}
     <p class="type-heading whose" class:yours={live}>
-      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed"> · {elapsed} s</span>{/if}</span>{:else}{whose}{/if}
+      {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
     </p>
     {#if !over}
       {#if interrupted}
         <p class="type-body text-ink-2" data-testid="decision-prompt">The live session is unavailable. These choices belong to the last recorded decision and cannot be submitted.</p>
       {:else if frame.prompt}
-        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}>{line}</p>
+        <p class="type-prompt text-ink" data-testid="decision-prompt" data-kind={frame.action_space}><ManaText text={line} size={16} /></p>
+        {#if paid.length}
+          <div class="committed" data-testid="decision-committed">
+            <h3 class="type-caption text-ink-3">Committed to this cost</h3>
+            <ol>{#each paid as phrase, at (at)}<li class="type-body text-ink">{phrase}</li>{/each}</ol>
+          </div>
+        {/if}
+        {#if hint}<p class="type-caption text-ink-3 hint" data-testid="decision-hint">{hint}</p>{/if}
       {/if}
       {#if evidence}
         <div class="evidence" data-testid="recorded-decision-evidence" aria-label="Recorded at this decision">
@@ -220,20 +248,20 @@
       {:else}
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
-          disabled={!live} onclick={() => onact(view.primary!)}>
-          <span>{#if isChosen(view.primary)}✓ {/if}{primaryText?.text ?? view.primary.offer.label}</span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
+          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
+          <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? view.primary.offer.label} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-          disabled={!live} onclick={() => onact(placed)}>
-          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}{placed.offer.label}{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
+          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
+          <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={placed.offer.label} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
       {#if canPassTurn}
-        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
+        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
           title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
@@ -244,26 +272,29 @@
         </details>
       {/if}
     {/if}
-    <!-- While you may act, the prompt above already says what the status would. -->
-    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
+    <!-- While you may act, or once the game is over, the heading above already says what the status would. -->
+    <p class="type-caption text-ink-3 status" class:sr-only={live || thinking !== null || frame.status === 'game_over'} data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true">{thinking ?? status}</p>
   </section>
 
+  <!-- A finished game has no choices to list; the result card says what happened. -->
+  {#if !over || frame.offers.length}
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
       <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
-      <span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>
+      {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
+    {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
     <ol class="list" aria-label="Legal choices">
       {#each view.list as placed (placed.offer.id)}
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
             aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
-            disabled={!live} onclick={() => onact(placed)}
+            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}{placed.offer.label}</span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}
@@ -273,9 +304,9 @@
       {/each}
     </ol>
   </section>
+  {/if}
 
   <section use:region={{ across: !onjump }} class="block log" aria-label="Moves">
-    {#if reading}<div class="reading">{@render reading()}</div>{/if}
     <h2><span class="type-heading text-ink-2">Moves</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each moves as turn, index (`${turn.turn}:${index}`)}
@@ -319,6 +350,10 @@
   .notices { padding: 8px 14px 0; display: grid; gap: 6px; }
   h2 { margin-bottom: 4px; line-height: 16px; }
   .stack { max-height: 34vh; overflow-y: auto; }
+  /* A crowded rail never cuts the top two stack entries (a spell and what it answers): the block keeps room for its
+     heading and one entry (88 px) or two (135 px); deeper entries and the recap below scroll. */
+  .stack:has(.stack-entry) { min-height: 88px; }
+  .stack:has(li + li .stack-entry) { min-height: 135px; }
   .stack ol { display: grid; gap: 3px; }
   .stack-entry {
     width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 6px; border-radius: var(--radius-sm);
@@ -330,6 +365,8 @@
   .stack-entry.legal { box-shadow: 0 0 0 2px var(--legal); }
   .entry-text { display: grid; min-width: 0; }
   .entry-name { font-family: var(--font-serif); font-weight: 600; }
+  .entry-title { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+  .tag { flex: none; padding: 0 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); }
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
@@ -347,6 +384,11 @@
   .primary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .primary kbd { flex: none; opacity: 1; }
   .payment-note { margin-top: -4px; }
+  /* Two caption lines are kept so a hint that rewords on hover moves nothing below it. */
+  .hint { min-height: 32px; }
+  .committed ol { list-style: none; margin: 2px 0 0; padding: 0; }
+  .committed li { padding-left: 10px; border-left: 2px solid var(--planned); line-height: 20px; }
+  .committed li + li { margin-top: 2px; }
   .primary:disabled { background: var(--bg-muted); color: var(--text-secondary); opacity: 1; }
   .secondary { width: 100%; height: auto; min-height: 32px; padding-block: 5px; justify-content: flex-start; text-align: left; white-space: normal; }
   .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
@@ -359,13 +401,15 @@
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
-  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
-  .row:disabled { color: var(--text-secondary); cursor: default; }
+  .row:hover:not(:disabled, [aria-disabled]) { border-color: var(--border-strong); background: var(--bg-field); }
+  .row:disabled, .row[aria-disabled] { color: var(--text-secondary); cursor: default; }
+  /* During the read-out: the decision stays in place beneath the beat, quieter. */
+  .reading-out [data-testid='decision-prompt'], .reading-out .whose { color: var(--text-tertiary); }
+  .prompt [aria-disabled] { opacity: 0.55; cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
-  .log { position: relative; flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
-  .reading { position: absolute; inset: 6px 8px; z-index: 5; display: grid; }
+  .log { flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
   .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, var(--text) 14px); display: grid; align-content: start; gap: 4px; }
   .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }

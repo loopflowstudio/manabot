@@ -1,8 +1,11 @@
 use managym::{
     agent::action::ActionSpaceKind,
-    flow::{trigger::PendingTrigger, turn::StepKind},
+    flow::{
+        trigger::{PendingTrigger, TriggerId},
+        turn::StepKind,
+    },
     state::{
-        game_object::{ObjectId, ObjectLookupError, PermanentId, PlayerId},
+        game_object::{AbilitySource, ObjectId, ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -117,46 +120,18 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
     let p0_source = owned_card(&s, 0, "Man-o'-War");
     let p1_source = owned_card(&s, 1, "Man-o'-War");
     s.game_mut().state.pending_triggers = vec![
-        PendingTrigger {
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: managym::state::game_object::AbilitySource::new(p1_source, None),
-            source_lki: None,
-            ability_index: 0,
-            controller: PlayerId(1),
-            id: managym::flow::trigger::TriggerId(0),
-            ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-            context: None,
-            player: None,
-            chosen_modes: Vec::new(),
-            attacker: None,
-            inline_effects: None,
-            x: 0,
-            spent: Default::default(),
-        },
-        PendingTrigger {
-            program: false,
-            remembered: Vec::new(),
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_identity: managym::state::game_object::AbilitySource::new(p0_source, None),
-            source_lki: None,
-            ability_index: 0,
-            controller: PlayerId(0),
-            id: managym::flow::trigger::TriggerId(1),
-            ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-            context: None,
-            player: None,
-            chosen_modes: Vec::new(),
-            attacker: None,
-            inline_effects: None,
-            x: 0,
-            spent: Default::default(),
-        },
+        PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(1),
+            AbilitySource::new(p1_source, None),
+            0,
+        ),
+        PendingTrigger::new(
+            TriggerId(1),
+            PlayerId(0),
+            AbilitySource::new(p0_source, None),
+            0,
+        ),
     ];
 
     s.pass_priority();
@@ -269,26 +244,15 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         .damage = 2;
 
     let source = owned_card(&s, 0, "Man-o'-War");
-    s.game_mut().state.pending_triggers.push(PendingTrigger {
-        program: false,
-        remembered: Vec::new(),
-        targets: Vec::new(),
-        target_req_indices: Vec::new(),
-        requirement_index: 0,
-        source_identity: managym::state::game_object::AbilitySource::new(source, None),
-        source_lki: None,
-        ability_index: 0,
-        controller: PlayerId(0),
-        id: managym::flow::trigger::TriggerId(0),
-        ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
-        context: None,
-        player: None,
-        chosen_modes: Vec::new(),
-        attacker: None,
-        inline_effects: None,
-        x: 0,
-        spent: Default::default(),
-    });
+    s.game_mut()
+        .state
+        .pending_triggers
+        .push(PendingTrigger::new(
+            TriggerId(0),
+            PlayerId(0),
+            AbilitySource::new(source, None),
+            0,
+        ));
 
     s.pass_priority();
 
@@ -298,5 +262,139 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
     assert_eq!(
         count_cards_named(&s, 0, ZoneType::Graveyard, "Man-o'-War"),
         1
+    );
+}
+
+/// CR 700.2a, 603.3c: a triggered ability's mode that needs two targets is
+/// not offered while only one legal target exists.
+#[test]
+fn trigger_mode_needs_as_many_legal_targets_as_its_clause_minimum() {
+    use crate::support::{inspect::card_of, play::cast};
+    use managym::{
+        agent::action::Action,
+        state::{
+            ability::{Ability, Actor, Effect, TargetRequirement, TargetSpec, TriggerCondition},
+            player::ManaPayment,
+            predicate::CardPredicate,
+        },
+    };
+    let modes = |s: &Scenario| {
+        let mut s = s.clone();
+        cast(&mut s, "Llanowar Elves");
+        let offered: Vec<usize> = s
+            .action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::ChooseMode { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .collect();
+        offered
+    };
+    let mut s = five_color_setup(&["Hill Giant", "Gray Ogre", "Llanowar Elves"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let object = card_of(&s, giant);
+    s.game_mut().state[object].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::casts(Actor::You, CardPredicate::creature()),
+        intervening_if: None,
+        effects: vec![Effect::TriggerModes {
+            modes: vec![
+                vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 2,
+                        max: 2,
+                        ..TargetRequirement::one(TargetSpec::CreatureOpponentControls)
+                    },
+                    effects: Vec::new(),
+                }],
+                vec![Effect::gain_life(1)],
+            ],
+            up_to: None,
+            unchosen: false,
+        }],
+    }];
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(modes(&s), [1], "one opposing creature, two targets");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(modes(&s), [0, 1]);
+}
+
+/// CR 700.2b, 603.4: a printed modal trigger resolves its chosen mode as that
+/// printed ability. It keeps its intervening "if", rechecked on resolution,
+/// and its stack row describes the printed ability, not a delayed one.
+#[test]
+fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
+    use crate::support::{
+        game::move_card,
+        inspect::card_of,
+        play::{cast, choose_mode, resolve_top},
+    };
+    use managym::{
+        agent::observation::Observation,
+        state::{
+            ability::{Ability, Actor, Condition, Effect, TriggerCondition},
+            player::ManaPayment,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Hill Giant", "Gray Ogre", "Llanowar Elves"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let giant = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let object = card_of(&s, giant);
+    s.game_mut().state[object].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::casts(Actor::You, CardPredicate::creature()),
+        intervening_if: Some(Condition::ControlsAtLeast {
+            distinct_names: false,
+            count: 2,
+            predicate: CardPredicate::creature(),
+        }),
+        effects: vec![Effect::TriggerModes {
+            modes: vec![vec![Effect::gain_life(1)], vec![Effect::gain_life(2)]],
+            up_to: None,
+            unchosen: false,
+        }],
+    }];
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Llanowar Elves");
+    choose_mode(&mut s, 1);
+    assert_eq!(
+        s.game().state.stack_objects.len(),
+        2,
+        "Elves and the trigger"
+    );
+    let descriptions: Vec<String> = Observation::for_player(s.game(), PlayerId(0))
+        .stack_objects
+        .iter()
+        .filter_map(|row| row.description.clone())
+        .collect();
+    let [description] = descriptions.as_slice() else {
+        panic!("one described ability: {descriptions:?}");
+    };
+    assert!(description.contains("Hill Giant"), "{description}");
+    assert!(!description.contains("delayed ability"), "{description}");
+    assert!(description.contains("gain 2 life"), "{description}");
+    assert!(!description.contains("gain 1 life"), "{description}");
+    let modes: Vec<Option<usize>> = Observation::for_player(s.game(), PlayerId(0))
+        .stack_objects
+        .iter()
+        .filter(|row| row.description.is_some())
+        .map(|row| row.chosen_mode)
+        .collect();
+    assert_eq!(modes, vec![Some(1)], "the stack row names the chosen mode");
+    let life = s.life(0);
+
+    let mut kept = s.clone();
+    resolve_top(&mut kept);
+    assert_eq!(kept.life(0), life + 2, "the chosen mode");
+
+    move_card(&mut s, ogre_card, ZoneType::Graveyard);
+    resolve_top(&mut s);
+    assert_eq!(
+        s.life(0),
+        life,
+        "one creature left: the intervening if fails"
     );
 }

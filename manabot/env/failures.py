@@ -219,7 +219,6 @@ def runtime_identities() -> dict[str, object]:
             sources.update(path.read_bytes())
     extension = Path(managym._managym.__file__)
     return {
-        "world": managym.WORLD_VERSION,
         "python": platform.python_version(),
         "numpy": np.__version__,
         "source_sha256": sources.hexdigest(),
@@ -292,7 +291,11 @@ class _TrainingCapture:
                     retained_count=retained,
                     dropped_count=count - retained,
                     decision_kind=kind,
-                    game=game.model_copy(deep=True),
+                    game=(
+                        self.game_inputs(game.stream - self.games[0].stream)
+                        if isinstance(self, recording.RecordedVectorEnv)
+                        else game
+                    ).model_copy(deep=True),
                 )
             )
         overflows = sum(counts.overflows for counts in self._policy_counts.values())
@@ -348,7 +351,7 @@ class ScalarCapture(_TrainingCapture, recording.ScalarCapture):
     """Engine recording with run scope and policy accounting."""
 
 
-class CapturedVector(_TrainingCapture, recording.CapturedVector):
+class RecordedVectorEnv(_TrainingCapture, recording.RecordedVectorEnv):
     """Engine recording with run scope and policy accounting."""
 
 
@@ -356,12 +359,20 @@ class CapturedSearch(_TrainingCapture, recording.CapturedSearch):
     """Engine search evidence with training policy accounting."""
 
 
-# Published evidence names retain a warning-only alias until 0.4.0.
+# Published evidence names retain a warning-only alias until 0.3.0.
 def __getattr__(name: str) -> Any:
+    if name == "CapturedVector":
+        warnings.warn(
+            "manabot.env.failures.CapturedVector is deprecated; "
+            "use RecordedVectorEnv; removal in 0.3.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return RecordedVectorEnv
     if name.startswith("_") or not hasattr(recording, name):
         raise AttributeError(name)
     warnings.warn(
-        f"manabot.env.failures.{name} moved to managym.recording; removal in 0.4.0",
+        f"manabot.env.failures.{name} moved to managym.recording; removal in 0.3.0",
         DeprecationWarning,
         stacklevel=2,
     )

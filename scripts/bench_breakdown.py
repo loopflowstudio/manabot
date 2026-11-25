@@ -24,7 +24,7 @@ from manabot.infra.config import (
 from manabot.infra.profiler import Profiler
 
 
-def build_env(num_envs: int, seed: int) -> VectorEnv:
+def build_env(num_envs: int, seed: int, *, opponent: str = "random") -> VectorEnv:
     return VectorEnv(
         num_envs=num_envs,
         match=Match(),
@@ -32,7 +32,7 @@ def build_env(num_envs: int, seed: int) -> VectorEnv:
         reward=Reward(RewardConfig()),
         device="cpu",
         seed=seed,
-        player_policies=("agent", "random"),
+        player_policies=("agent", opponent),
     )
 
 
@@ -76,11 +76,11 @@ def run_breakdown(
                             )
                         actions = action
 
-                with profiler.track("step_into_buffers"):
-                    env._rust_env.step_into_buffers(actions.cpu().tolist())
+                with profiler.track("step_and_refill"):
+                    env._step_and_refill(actions)
 
-                with profiler.track("sync_tensors"):
-                    env._sync_tensors_from_buffers()
+                with profiler.track("sync_observations"):
+                    env._sync_observations()
 
                 with profiler.track("apply_reward_policy"):
                     env._apply_reward_policy()
@@ -166,7 +166,7 @@ def main() -> None:
             )
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
-        env = build_env(args.num_envs, args.seed)
+        env = build_env(args.num_envs, args.seed, opponent="agent")
         try:
             env.reset()
             before = identity()

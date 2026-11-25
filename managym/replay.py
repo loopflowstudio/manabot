@@ -8,14 +8,16 @@ prefix loop remains separate because it measures failure agreement, not history.
 """
 
 import argparse
-from collections.abc import Callable, Iterator, Mapping
+from collections import defaultdict
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass
 import hashlib
+from itertools import chain
 import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Literal, Never
+from typing import Literal, Never, Protocol
 
 import numpy as np
 
@@ -23,9 +25,11 @@ import managym
 from managym.card_capture import CapturedCards, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
 from managym.recording import (
+    BufferSpec,
     DecisionAnnotation,
     GameInputs,
     GameRecord,
+    Intervention,
     read_record,
     read_records,
     runtime_identities,
@@ -73,9 +77,33 @@ class RecordedDecision:
 def _build_name(identities: Mapping[str, object]) -> str:
     return (
         f"managym {identities.get('managym_version', 'unknown')} "
-        f"world {identities.get('world')} cards {identities.get('card_digest', 'unknown')} "
+        f"cards {identities.get('card_digest', 'unknown')} "
         f"engine {identities.get('engine_recording_source_sha256', 'unknown')}"
     )
+
+
+class InterventionHistory(Protocol):
+    @property
+    def interventions(self) -> Sequence[Intervention]: ...
+
+
+def interventions_by_offset(game: InterventionHistory) -> dict[int, list[Intervention]]:
+    boundaries: dict[int, list[Intervention]] = defaultdict(list)
+    for op in game.interventions:
+        boundaries[op.at_action].append(op)
+    return boundaries
+
+
+def apply_boundary(
+    env: managym.Env, operations: Sequence[Intervention], remaining_frames: set[str]
+) -> None:
+    """Consume issued fingerprints on both sides of each live intervention."""
+    for op in operations:
+        if remaining_frames:
+            env._restore_frame_candidates(remaining_frames)
+        env._apply_intervention_json(op.model_dump_json(exclude={"at_action"}))
+    if remaining_frames:
+        env._restore_frame_candidates(remaining_frames)
 
 
 class RecordWalker:
@@ -97,17 +125,22 @@ class RecordWalker:
         self.builds = (
             f"recorded {_build_name(record.identities)}; running {_build_name(current)}"
         )
-        if record.identities.get("world") != current["world"] or (
+        if (
             record.identities.get("card_digest") is not None
             and record.identities["card_digest"] != current["card_digest"]
         ):
             raise ValueError(
-                f"record world or cards differ: {self.builds}. Open it with managym "
+                f"record cards differ: {self.builds}. Open it with managym "
                 f"{record.identities.get('managym_version', 'unknown')}."
             )
         self.build_differs = any(
             record.identities.get(key) != current[key]
-            for key in ("engine_recording_source_sha256", "engine_extension_sha256")
+            for key in (
+                "managym_version",
+                "engine_recording_source_sha256",
+                "engine_extension_sha256",
+            )
+            if key in record.identities
         )
         self.record = record
         self.game = record.games[0]
@@ -117,6 +150,8 @@ class RecordWalker:
             seed=self.game.seed,
             skip_trivial=record.skip_trivial,
             player_policies=record.resolved_player_policies,
+            decision_memory=self.game.decision_memory,
+            decision_memory_include_own=self.game.decision_memory_include_own,
         )
         self._capture_cards = capture_cards
         if capture_cards:
@@ -137,7 +172,8 @@ class RecordWalker:
         return self.run()
 
     def run(
-        self, apply: Callable[[RecordedDecision], None] | None = None
+        self,
+        apply: Callable[[RecordedDecision], None] | None = None,
     ) -> Iterator[RecordedDecision]:
         if self._used:
             raise ValueError("a record walker can only be consumed once")
@@ -156,9 +192,21 @@ class RecordWalker:
             and self.record.execution_outcome != "last_command_succeeded"
         ):
             count = max(0, count - 1)
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
+
         index = 0
         try:
-            for index, action in enumerate(game.actions[:count]):
+            # The final boundary can contain interventions after the last action.
+            for index, action in enumerate(chain(game.actions[:count], (None,))):
+                operations = boundaries.get(index, ())
+                apply_boundary(self.env, operations, remaining_frames)
+                if operations:
+                    self.observation = self.env.observation_for_player(
+                        self.env.current_agent_index() or 0
+                    )
+                if action is None:
+                    break
                 if (
                     index < len(game.digests)
                     and self.env.state_digest() != game.digests[index]
@@ -208,13 +256,21 @@ class RecordWalker:
                     if index + 1 == count and game.end is not None
                     else None
                 )
-                if after is not None and target.state_digest() != after:
-                    raise ValueError("transition digest differs")
+                # Compare the consumer immediately after its action. The retained
+                # next digest includes any interventions before the next decision.
+                expected = target.state_digest() if apply is not None else None
+                if after is not None:
+                    # Only rules interventions affect the digest. Bind issued
+                    # frames on the live timeline when it reaches that boundary.
+                    if operations := boundaries.get(index + 1):
+                        apply_boundary(target, operations, set())
+                    if target.state_digest() != after:
+                        raise ValueError("transition digest differs")
                 if apply is None:
                     self.observation = decision.apply(self.env)
                 else:
                     apply(decision)
-                    if self.env.state_digest() != target.state_digest():
+                    if self.env.state_digest() != expected:
                         raise RuntimeError(
                             "consumer transition differs from verified native commitment"
                         )
@@ -222,15 +278,20 @@ class RecordWalker:
                         self.env.current_agent_index() or 0
                     )
                 yield decision
-            index = count
+            if count == len(game.actions) and remaining_frames:
+                raise ValueError("snapshot object candidate frame missing")
             end = game.end
+            if (
+                end is not None
+                and end.digest is not None
+                and self.env.state_digest() != end.digest
+            ):
+                raise ValueError("final digest differs")
             if end is not None and end.status == "complete":
                 if not self.env.is_game_over() or (
                     end.winner_retained and self.env.winner_index() != end.winner
                 ):
                     raise ValueError("recorded result differs")
-                if end.digest is not None and self.env.state_digest() != end.digest:
-                    raise ValueError("final digest differs")
                 self.stop = ReplayStop(
                     "complete", count, winner=self.env.winner_index()
                 )
@@ -326,15 +387,13 @@ def require_replay_runtime(
 ) -> str:
     """Admit native bytes and require automatic capture's source digest on request.
 
-    Changed-runtime admission never permits another world. Historical arena and
-    tolerance receipts retain other source identities; their replay contract only
-    checks native bytes. Return the current native digest for diagnostic output.
+    Historical arena and tolerance receipts retain other source identities;
+    their replay contract only checks native bytes. Return the current native
+    digest for diagnostic output.
     """
-    if identities["world"] != managym.WORLD_VERSION:
-        raise ValueError("world differs from retained failure")
     native = hashlib.sha256(Path(managym._managym.__file__).read_bytes()).hexdigest()
     if not allow_changed_runtime:
-        if native != identities["engine_extension_sha256"]:
+        if native != identities.get("engine_extension_sha256"):
             raise ValueError(
                 "native bytes differ; explicit --allow-changed-runtime required"
             )
@@ -418,6 +477,35 @@ def replay_failure_inputs(
     return results
 
 
+_HISTORY_EVENT_WIDTH = managym.observation_layout(policy_history=True)["events"][
+    "shape"
+][1]
+
+
+def _search_layout(specs: Mapping[str, BufferSpec]) -> managym.ObservationLayout:
+    """Resolve the native layout recorded by a search receipt's buffer shapes."""
+
+    def rows(name: str, default: int = 0) -> int:
+        return specs[name].shape[1] if name in specs else default
+
+    version = 11 if "stack" in specs else (10 if "player_turn_state" in specs else 9)
+    return managym.ObservationLayout(
+        policy_input_version=version,
+        policy_history=specs["events"].shape[2] == _HISTORY_EVENT_WIDTH,
+        max_cards_per_player=specs["agent_cards"].shape[1],
+        max_permanents_per_player=specs["agent_permanents"].shape[1],
+        max_stack_objects=rows("stack", 32),
+        max_actions=specs["actions"].shape[1],
+        max_focus_objects=specs["action_focus"].shape[2],
+        max_events=specs["events"].shape[1],
+        max_facts=specs["facts"].shape[1],
+        max_decision_records=rows("decision_records"),
+        max_decision_references=rows("decision_references"),
+        max_decision_reference_details=rows("decision_reference_details"),
+        max_decision_members=rows("decision_members"),
+    )
+
+
 def _replay_game_inputs(
     evidence: GameRecord, game: GameInputs, *, statistics: bool = False
 ) -> dict[str, object]:
@@ -438,6 +526,13 @@ def _replay_game_inputs(
         retained_index = len(evidence.search.operations) - 1
     else:
         retained_phase, retained_index = "prefix", len(game.actions) - 1
+    # Branch operations and semantic Commands belong to the scalar executor.
+    # The retained batch still owns the (unknown) original vector outcome.
+    vector_steps = evidence.mode == "vector" and not (
+        game.interventions
+        or game.object_candidate_frames
+        or any(isinstance(a, str) for a in game.actions)
+    )
     env = (
         managym.VectorEnv(
             num_envs=1,
@@ -448,8 +543,9 @@ def _replay_game_inputs(
             skip_trivial=evidence.skip_trivial,
             player_policies=evidence.resolved_player_policies,
         )
-        if evidence.mode == "vector"
+        if vector_steps
         else managym.Env(
+            player_policies=evidence.resolved_player_policies,
             seed=game.seed,
             skip_trivial=evidence.skip_trivial,
             decision_memory=game.decision_memory,
@@ -469,12 +565,27 @@ def _replay_game_inputs(
         setup = (
             [] if evidence.operation == "reset" and not game.players else game.setup()
         )
-        if evidence.mode == "vector":
+        if vector_steps:
             reached = env.reset_all(setup)[0][0]
         else:
             reached = env.reset(setup)[0]
         phase = "prefix"
-        for index, action in enumerate(game.actions):
+        boundaries = interventions_by_offset(game)
+        remaining_frames = set(game.object_candidate_frames)
+        for offset, action in enumerate(chain(game.actions, (None,))):
+            operations = boundaries.get(offset, ())
+            if operations or remaining_frames:
+                index, phase = offset, "intervention"
+                agreement.at_retained_failure = False
+                assert isinstance(env, managym.Env)
+                apply_boundary(env, operations, remaining_frames)
+                if operations:
+                    reached = env.observation_for_player(env.current_agent_index() or 0)
+            if action is None:
+                if remaining_frames:
+                    raise ValueError("snapshot object candidate frame missing")
+                break
+            index, phase = offset, "prefix"
             if (
                 index == len(game.actions) - 1
                 and game.frame is not None
@@ -482,7 +593,7 @@ def _replay_game_inputs(
             ):
                 frame = (
                     env.semantic_decision_frames_json()[0]
-                    if evidence.mode == "vector"
+                    if vector_steps
                     else env.semantic_decision_frame_json()
                 )
                 agreement.matches_binding = frame == game.frame
@@ -507,7 +618,7 @@ def _replay_game_inputs(
             agreement.at_retained_failure = (
                 phase == retained_phase and index == retained_index
             )
-            if evidence.mode == "vector":
+            if vector_steps:
                 reached = env.step([action])[0][0]
             elif isinstance(action, str):
                 env.execute_semantic_command_json(action)
@@ -527,18 +638,29 @@ def _replay_game_inputs(
             agreement.at_retained_failure = retained_index == index
             pool = getattr(env, search.method)(*search.arguments)
             if search.method == "rollout_pool" and search.buffers:
-                buffers = {
-                    key: np.zeros(spec.shape, dtype=spec.dtype)
-                    for key, spec in search.buffers.items()
-                }
-                pool.set_buffers(buffers, search.capacity)
-                pool.encode_active()
-                for index, operation in enumerate(search.operations):
-                    agreement.at_retained_failure = retained_index == index
-                    if operation == "finish_random":
-                        pool.finish_random()
-                    else:
-                        pool.step_active(operation)
+                layout = _search_layout(search.buffers)
+                if layout.csr_fields:
+                    pool.set_observation_layout(layout)
+                    pool.encode_active_batch()
+                    for index, operation in enumerate(search.operations):
+                        agreement.at_retained_failure = retained_index == index
+                        if operation == "finish_random":
+                            pool.finish_random()
+                        else:
+                            pool.step_active_batch(operation)
+                else:
+                    buffers = {
+                        key: np.zeros(spec.shape, dtype=spec.dtype)
+                        for key, spec in search.buffers.items()
+                    }
+                    pool.set_buffers(buffers, search.capacity, layout=layout)
+                    pool.encode_active()
+                    for index, operation in enumerate(search.operations):
+                        agreement.at_retained_failure = retained_index == index
+                        if operation == "finish_random":
+                            pool.finish_random()
+                        else:
+                            pool.step_active(operation)
     except _FrameMismatch as error:
         result: dict[str, object] = {
             "status": "binding_mismatch",
@@ -589,12 +711,20 @@ def main() -> None:
     if not args.worker:
         run_bounded_replay("managym.replay", args.seconds)
     try:
-        evidence = next(read_records(args.path))
-    except (OSError, ValueError, StopIteration) as error:
+        records = read_records(args.path)
+        evidence = next(records)
+    except StopIteration:
+        if not args.path.is_dir():
+            parser.error(f"cannot read journal {args.path}: no game records")
+        parser.error(
+            f"no game records in {args.path}: a directory is read for its .jsonl"
+            " records; pass a snapshot replay .json file directly"
+        )
+    except (OSError, ValueError) as error:
         parser.error(f"cannot read journal {args.path}: {error}")
     if not evidence.needs_reproduction:
         results = []
-        for record in read_records(args.path):
+        for record in chain((evidence,), records):
             try:
                 replay = walk(record, capture_cards=args.statistics)
             except ValueError as error:

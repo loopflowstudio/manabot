@@ -18,38 +18,42 @@ Never add "Co-Authored by:" tags in commits
   Always ASCII (never "Étude").
 
 Jack Heart selected Manabot and `manabot.gg` on 2026-10-14, replacing the
-provisional Fantasia project name. Academy remains the name of the UI.
+provisional Fantasia project name.
 
-Boundary rule for anything those lines don't settle: if it is the browser UI,
-it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
-world, it is managym; if it launches or records experiments, it is Etude. So
+Boundary rule: browser UI is Academy; training and evaluation is manabot; the
+rules engine is managym; experiment launching and recording is Etude. So
 the play server, experience protocol, curated packs, and their env/error
 namespaces (`ACADEMY_PLAY_*`) take Academy names, while training
 infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
-correctly keeps manabot names. Frozen evidence — experiment IDs, contracts,
+keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `x-etude-*` wire headers,
-`etude.*` browser storage keys and schema identifiers. Hosted services are `academy-play` and `fantasia-website`, with
-deployment secrets in Doppler `manabot/prd` (Jack Heart, 2026-10-14).
-`etude.gg` and its legacy aliases redirect to `manabot.gg`, preserving paths
-and queries; hosted play is available at both `play.manabot.gg` and
-`academy.manabot.gg` (equivalent addresses selected by Jack Heart, 2026-10-14).
-Namecheap is the registrar and Cloudflare manages DNS. Existing service
-identifiers stay unchanged.
-The shared Etude experiment services retain their names. "Sepia Etude" remains
-the name of the visual language.
+`etude.*` browser storage keys and schema identifiers. Hosted services are
+`academy-play` and `fantasia-website`, with deployment secrets in Doppler
+`manabot/prd` (Jack Heart, 2026-10-14). `etude.gg` and its legacy aliases
+redirect to `manabot.gg`, preserving paths and queries; hosted play is
+available at both `play.manabot.gg` and `academy.manabot.gg` (equivalent
+addresses selected by Jack Heart, 2026-10-14). Namecheap is the registrar and
+Cloudflare manages DNS. "Sepia Etude" remains the name of the visual language.
 
-Name a thing for what it is where it is produced, not for how one consumer
-uses it. managym produces observations, encodings and card tokens for any
-consumer, so its API says `catalog_tokens` and `record_vocabulary`; manabot may
-name the same value by its use. Rename a published name with a deprecated alias
-that warns and states its removal release; serialized configuration keys,
+Name a thing for what it is where it is produced (`catalog_tokens`,
+`record_vocabulary` in `managym`; consumer-specific names in `manabot`), for
+the steady state where it is the only path (no transition qualifiers like
+`native_` contrasting with a deprecated path), keeping the wrapped interface's
+noun on wrappers (`RecordedVectorEnv`) and qualifying generic roles with their
+domain unit (`decision_weights`, `SnapshotScorer`). Do not reuse established
+terms (`recipe` for training recipes, `manifest` for content packs, `replay`
+for seed-and-action replays) for unrelated concepts, even internally, and avoid
+duplicating module filenames across packages. When renaming or replacing a
+published API, convert remaining callers, emit a `DeprecationWarning` targeting
+the next minor release (e.g. `0.3.0` on `0.2.x`), and tag the whole deletable
+compatibility graph with that version so rollover finds it; serialized keys,
 checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
 through the `managym.bots` provider entry points; optional historical replay/advice
-capabilities use `managym.academy.bots`. manabot never imports Academy.
+capabilities use `managym.academy.bots`.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -92,10 +96,8 @@ checkpoints or experiment evidence.
 - Etude evaluation source identity reads `git ls-files`. Mark a new source file
   with `git add -N <path>` before running an evaluation fixture that fingerprints
   it; untracked files fail admission with `identity_path_without_files`.
-- Package style guides live in each package README (`manabot/README.md`,
-  `managym/README.md`). Avoid transient comments that denote changes; pay
-  attention to file headers and README content; propose small, iterative
-  changes.
+- Package style guides live in `manabot/README.md` and `managym/README.md`.
+  Avoid transient comments that denote changes.
 - Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
   Compose builtin graphs; use narrowly named forks for domain review placement.
   Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
@@ -103,34 +105,36 @@ checkpoints or experiment evidence.
   `lf pr publish` stages tracked edits, including edits left after a path-scoped
   commit. Temporarily preserve unrelated edits outside the checkout and restore
   them after publication.
+- In a Loopflow Graph step, commit your own edits, scratch notes included,
+  before finishing. A clean tree skips the separate commit-message session
+  Loopflow otherwise starts for what a step leaves behind.
 
 ### Experiments
 
+- Base training, learnability and performance trials on
+  `experiments/tla_frontier.py` (including its model sizes) rather than
+  Elemental; TLA does not have larger or longer games.
 - Etude report curves average runs within a job. For a per-seed readout,
   select that seed's fixed checkpoint seatings in its own panel and declare
   `Seating(seeds="one")`; otherwise other seeds can make the curve a gap.
-
-- Most runs are exploratory: calibration, throughput, capacity, pilots and
-  anything run to make later work possible. They need no prediction, protocol
-  or review; the report ends them. A finding, a result that will be cited as a claim
-  about a method or about playing strength, opens its report with one
-  paragraph committed before any scored run: question, numeric prediction, the
-  result that would refute it and a cost cap. When unsure, it is exploratory.
-- The freeze is the commit and the Etude run ID. A change that keeps the
-  question (capacity, crash fix, device, retry) is a dated line in the report,
-  never a new protocol version. Cost is the launcher's number for the run,
-  recorded once; do not reconstruct bills, reserves or settlements.
-- An experiment whose whole cost is at or under USD25 launches under the
-  launcher's cap (`--max-usd`). Above that, a person approves the amount first.
-- Etude rental admission includes the on-demand startup allowance in addition
-  to `Job.max_hours`. Size both job and experiment dollar caps for that whole
-  window; a price offer does not guarantee provider capacity.
-- An experiment is `experiments/<name>.py` at a commit with one report,
-  `experiments/reports/<name>.md`. Do not add a protocol document, a serialized regime,
-  a digest check or a test suite for one experiment's schedule; reusable
-  machinery belongs in `manabot/` or Etude, tested once there.
-- Paired deals, replay verification, world-bound checkpoints and training
-  seeds as the unit of evidence are measurement quality and stay as they are.
+- Exploratory runs (calibration, throughput, capacity, pilots) need no
+  prediction, protocol or review; the report ends them. Findings (cited claims
+  about a method or playing strength) open their report with one committed
+  paragraph before scoring: question, numeric prediction, refuting result and
+  cost cap. When unsure, treat a run as exploratory.
+- The freeze is the commit and Etude run ID. Changes keeping the question
+  (capacity, crash fix, device, retry) are dated lines in the report, never new
+  protocol versions. Record the launcher's cost once; never reconstruct bills,
+  reserves or settlements.
+- Experiments costing at most USD25 launch under `--max-usd`; higher caps need
+  approval first. Rental admission includes the on-demand startup allowance
+  beyond `Job.max_hours`; size job and experiment caps for the whole window (a
+  price offer does not guarantee provider capacity).
+- Each experiment is `experiments/<name>.py` at a commit with
+  `experiments/reports/<name>.md`—no per-experiment protocol doc, serialized
+  regime, digest check or schedule test suite. Put reusable machinery in
+  `manabot/` or Etude. Keep paired deals, replay verification, checkpoint
+  compatibility and training seeds as the unit of evidence.
 
 ### Python structure and documentation
 
@@ -144,13 +148,13 @@ checkpoints or experiment evidence.
   beside the code that depends on them. Training code should explain what an
   estimator measures, where gradients flow, and which samples a loss uses.
   Cite a method when claiming to implement it; document meaningful departures.
-- Keep docstrings concise, but include non-obvious contracts, side effects,
-  and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
-  boilerplate or narrate obvious statements. Update comments with behavior.
-- Put imports at the top; use explicit imports. Do not prefix a function with
-  an underscore merely because it is used only within its module.
-  Keep one implementation and one owner for each fact; use git for
-  old versions rather than `_new`, `_old`, or `_backup` variants.
+- Keep docstrings concise: state non-obvious contracts, side effects and
+  failure behavior; omit `Args:`/`Returns:` boilerplate and obvious narration.
+  Update comments with behavior.
+- Put imports at the top; use explicit imports. Do not prefix a function or
+  module with an underscore merely because it is internal; keep peer packages
+  aligned in layout. Keep one implementation and one owner for each fact; use
+  git for old versions rather than `_new`, `_old`, or `_backup` variants.
 - Import names from their defining modules (`manabot.env.observation`, not
   `manabot.env`); package `__init__` files re-export nothing, so evaluation
   game and replay children stay Torch-free
@@ -164,6 +168,9 @@ checkpoints or experiment evidence.
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Standalone local checkpoint admission and scalar games can run with
+  `manabot.training` unavailable. Load the backend learner on first training
+  use so opening a policy in these children needs only inference.
 - Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
   types under `TYPE_CHECKING`; importing their annotations at runtime must not
   pull in checkpoint, player, observation or training-configuration modules.
@@ -171,6 +178,20 @@ checkpoints or experiment evidence.
   Integer lookups, masks and admission run once on the host in `prepare`; do
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
+
+For dense observation dicts, `historical_mean` includes masked object slots
+(preserve supplied numeric features when skipping zero padding) and relation
+features use the relation validity column. Read-only NumPy dicts get full
+admission because their origin and writable aliases are unknown. V11
+`ObservationBatch` offsets certify live rows and native joins; keep model
+layout and vocabulary admission on that path, read packed fields from
+`layout.csr_fields` and fact units from `layout.csr_fact_divisors`, and use
+full int32 words for lookups with saved logical columns for readings. The
+dense observation transport and dict admission graph (`VectorEnv.set_buffers`,
+`RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
+`ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
+`EncodedObservation`, dense `ObservationRows`, dense admission/bucketing)
+is scheduled for removal in 0.3.0 alongside v9/v10.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic
@@ -203,20 +224,20 @@ work (an executor, trainer, manager, runner or collector) is the shape to
 avoid; write the loop as a function whose body shows each step
 (`manabot/training/loops/self_play.py`:
 `row = step(settings, learner, ema, collector, counts, rng, out=run.out)`).
-That step updates the registered learner, EMA and counters in place because
-Etude saves those same objects through `run.resume`.
+That step updates the learner, EMA and counters in place. Etude restores the
+registered counts before calling the self-play restore callback. Register the
+live exporter with `run.save(export=...)` once the collector has opened.
 
 Where classes are valuable here, with the examples to copy:
 
 - **Configurations and records** (`ObservationConfig`, `ModelConfig`,
-  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
-  records). A config is the model object: it refuses a bad value when it is
-  built, compares and hashes by content, serializes with stable keys into
-  checkpoints and frozen evidence, and is copied rather than edited
-  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
-  and pure derivations of its own fields (a digest, a derived size). It does
-  not open files, build runtime objects or run anything; a function that
-  takes the config does.
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, `llm/schema.py`). A config
+  enforces real domain and structural invariants when built (never arbitrary
+  upper caps or tested-grid `Literal` sets on resource counts), compares and
+  hashes by content, serializes with stable keys, and is copied rather than
+  edited (`model_copy(update=...)`, `dataclasses.replace`). It may own
+  validators and pure derivations, never I/O, runtime construction, or
+  execution.
 - **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
   construction and `forward` there; training logic is functions over the
   module.
@@ -274,29 +295,49 @@ change already touches it; do not rewrite a module only for style. Rust in
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - A checkpoint records the revision and Etude run that wrote it
-  (`checkpoint_source`). The world binding compares every input buffer's shape,
-  so a layout change refuses older checkpoints, naming that revision and the
-  buffers that differ. Do not bump the input version for a layout change or add
-  a loading path for an older layout.
+  (`checkpoint_source`), its column names, definition keys and naming names.
+  `manabot.model.interface.model_interface` checks the recorded input contract.
+  The shared policy reader then binds the learned arrays by key. Academy uses
+  that reader when listing checkpoints. When the checkpoint records exact decks,
+  compare its non-schema binding fields exactly and admit its saved column prefixes.
+  Otherwise the card and naming digests record what the writer used. Append
+  input columns to named buffers. Shared host preparation projects each buffer
+  to the saved prefix. Preserve column order and meaning. Renaming a Rust type,
+  field or record name the token serializer hashes needs an entry in
+  `managym/src/cards/token_renames.rs`; a name is never reused with a new
+  meaning. When removing a registered execution label, retire its token and
+  its `execution/<kind>/<name>` record name there. Never learn a `CardDefId`.
+  Bind tables indexed by card or name by definition key or name. A change that
+  alters what a stored pilot computes fails `tests/model/test_pinned_pilot.py`
+  until it adds the rename or column or declares the break with
+  `scripts/pinned_pilot.py record --reason`. Do not bump the input version for
+  a layout change.
+- The engine has no world label. New checkpoints, recordings, decision captures
+  (v6) and evaluation records write none; a reader ignores one in an older file
+  (`manabot.model.world.current_binding_form`, optional `world` fields omitted
+  when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
+  warning alias until 0.3.0. Matchup ids keep `w17` as the plain string
+  `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
+  literal, so retained tournaments find their records. Add no new label.
 - Main carries policy input v11, the fresh default
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
   permanents own one effective `CharacteristicsData` projection plus object
   identity and token status; spells own a `SpellData` projection, and abilities
   carry only source references. Old Python `.card` and flat characteristic
-  getters derive from those records (removed in 0.4.0); the `stack`
+  getters derive from those records (removed in 0.3.0); the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
   one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
   turn-state-free encoder refuses an observation that needs them
   (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
   deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
-  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed in 0.4.0,
-  MTG-353 owns portability across worlds); never extend it. A checkpoint,
+  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
+  the best v9 one, not before 0.3.0); never extend it. A checkpoint,
   replay or saved configuration bound to any other version, or omitting it,
   raises `UnsupportedPolicyInput`, which names the revision to run it from
   (`ac601834d` is the last revision supporting v1-v8). Add no other version
-  branch; a new layout replaces these at a world freeze.
+  branch.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -306,19 +347,44 @@ change already touches it; do not rewrite a module only for style. Rust in
   halves; raw storage identities never enter these tokens. A stacked activation
   owns its chosen effects; catalog joins are observation provenance, never
   resolution lookup authority.
-- Derive every buffer and key from the supplied `ObservationSpace` on both the
-  scalar and vector paths, never from a native default or a global key list.
-  Companion shapes must agree before writes. Fact, relation and capacity
-  overflow is a typed Capacity error, never truncation. The one exception is
-  Jack Heart's 2026-11-04 TLA pilot choice of `action_overflow=first-legal`
-  with 64 policy slots and aggregate replay-linked diagnostics; native legality
-  and Academy retain all choices, and an omitted overflow policy means error.
-- Model timestamp normalization is rank / 128, independent of fact capacity.
-- New observation state reaches the policy input (native and Python encoders
-  in parity), the LLM text observation and the learning tokens in the change
-  that adds it; the policy input never silently falls behind.
-  `managym/cards/tests/cards/observability.rs` names each `Observation` field's
-  tensor columns or fact kind and fails to compile when a field is unlisted.
+- Fact, relation and capacity overflow raise typed capacity errors. Only
+  `action_overflow=first-legal` may truncate policy input. The TLA pilot
+  uses it with 64 policy slots and aggregate replay-linked diagnostics
+  (Jack Heart, 2026-11-04). Native legality and Academy retain all choices,
+  and an omitted overflow policy means error.
+- The model reads each numeric input column by a reading. A fresh model
+  derives it from the column's native kind (`ValueLayout` in
+  `agent/observation_layout.rs`): unscaled counts get the log squash, a
+  category of declared `size` n reads `one_hot:n` and a selector `one_hot:15`
+  (the last flag is always "above the size", never a real value), a count or
+  number stored in tenths reads `steps:8`. Scaled player mana pools keep one
+  scalar (`as_is`), and unscaled mana reads `log`. Every `rank` is rank / 128
+  independent of fact and effect capacity, references are gathered and ids
+  looked up. No category or index reaches a projection as a magnitude. A new
+  column declares its kind (`scale` when the encoder divides it, `size` for a
+  category); add no Python column table and no per-backend scaling. The one
+  table is `PLACED_READINGS` (`manabot/policy/readings.py`): validity flags,
+  embedded words, fact durations and join extents read by their place in a
+  structured row. A sized reading is recorded as `name:size`, so a stored
+  model keeps its width when a category grows. A checkpoint records its readings
+  (`input_readings`) and never consults the rule; one without the record gets
+  `legacy_readings`, which is never extended. The native kinds of buffers with
+  their own preparation (decision memory, history events) are not used. A
+  run's saved state records its model settings and readings. Resume checks both before
+  restoring weights. Older runs supply their model settings from the initial raw policy.
+- Model and name rules state and observation fields directly after the
+  Comprehensive Rules, not derived consequence flags; new state reaches policy
+  input, LLM text and learning tokens together. To extend an integer-serialized
+  enum, append its discriminant for wire JSON, tag out-of-order values for the
+  next minor release (`0.3.0`), and map them into append-only named policy
+  columns (keeping any legacy coarse column set) for stored checkpoints. Pass
+  `ObservationSpace.layout` to encoding and derive buffers from it, validate
+  keys and companion shapes before encoding, read columns by native name
+  (`column("facts", "value")`), test new columns on a constructed position, and
+  keep the sole encoder in `managym/src/agent/`. `ObservationSpace.encode`,
+  `space.encoder` and `ObservationEncoder` are 0.3.0 warning aliases (kept for
+  frozen experiments); `managym/cards/tests/cards/observability.rs` enforces
+  every `Observation` field's tensor or fact mapping.
 - Decklist disclosure (open by default, or closed) lives on native
   `GameSetup.decklists` and the resolved `GameState.disclosure`, written by
   `MatchConfig.decklists` and Academy `GameConfig.decklists`. Observations, search and possible worlds read it
@@ -411,6 +477,14 @@ Optional statistics and private recording share native setup, movement and
 committed-choice facts. Search clones omit those sinks and their copy provenance;
 transactional rollback snapshots must restore them. Training supplies recorder
 paths and phase markers; engine recording never discovers training scope.
+Install retained vector roots with `reset_each_into_buffers(setups, seeds=seeds)`.
+An ordinary reset followed by a seed reset creates a separate interrupted game
+in recording and statistics. Enable native statistics before the first reset.
+
+`protocol/*.schema.json` has no generator. Patch the files when a protocol
+type changes; the Rust schema tests compare them byte for byte with what
+`schemars` derives. A resolution payment's focus (ward, "unless pays") is the
+permanent's `object_id`, never its permanent id.
 
 ## Forced decisions
 
@@ -429,10 +503,15 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-**No test runs for five minutes.** `tests/conftest.py` ends the run when a
-single test reaches 300 seconds, with every thread's stack and exit status 1.
-Fix or split a test that hits the limit; never raise it. Run the tests for the
-files you changed, not whole directories; CI runs the suite.
+**No test runs for five minutes.** Keep learning tests bounded under CI's
+parallel workers. Use bucketed shapes for small boards when they preserve the
+comparison, and restore any Torch thread limit changed by the test.
+Run targeted tests of the change and its existing consumers. For Python edits
+under `managym/` with a wheel already installed, run `uv run python -m pytest`
+from the repository root so the tests import the checkout’s Python modules.
+When policy input width or scale changes, include model tests that call
+projections directly. Dense reference tests should apply the model's saved
+readings before projection and keep the control that proves the behavior.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
@@ -451,10 +530,13 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
-- Native `Env.encode_observation_into` reports capacity overflow as `ValueError`
-  with `observation capacity exceeded:`; the Python memory encoder raises
-  `managym.AgentError` with `Capacity:`. Collectors that count capacity failures
-  must recognize those specific messages and propagate other failures.
+- An observation that does not fit its buffers raises
+  `managym.ObservationCapacity` (a `ValueError`, message
+  `observation capacity exceeded: …`) from `encode_observation_into` and
+  `encode_observations_into`. Collectors that count capacity failures catch
+  that type, never a message prefix, and propagate other failures. Vector
+  steps keep raising `AgentError` for an unrecovered one (retained evidence
+  names `PyAgentError`) and record `ObservationCapacity` when they recover.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never
@@ -471,17 +553,16 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
   `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`.
-- Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
-  `bench_steps` in release for the change and for the reference commit of
-  `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
-  slower than the reference or with a changed search/decision digest. A moved
-  digest (a rules change reaching the curated decks, or a change to the
-  benchmarks or curated lists), an accepted cost or a kept speedup moves the
-  reference by adopting the PR's own run (`gh run download`, then
-  `scripts/engine_budget.py record --reason`); a reference that no longer
-  builds with the change's benchmarks is recorded the same way
-  ([engine performance budget](docs/development.md#engine-performance-budget));
-  wall time is never compared across runners.
+- Engine speed is budgeted in CI: `Engine Budget` compares release
+  `bench_search` and `bench_steps` against `managym/perf/baseline.json` on
+  one runner (never across runners) and fails a PR >10% slower or with a
+  changed digest. A moved digest, accepted cost, kept speedup or broken
+  reference build adopts the PR's run with `scripts/engine_budget.py record
+  --reason` ([engine performance budget](docs/development.md#engine-performance-budget)).
+  To stay under inline `size_of` ceilings in `managym/src/flow/game.rs`, box
+  cold or rarely populated fields (`Option<Box<...>>`), never an always-hot
+  lookup table (`ZoneManager.slots`), which adds pointer indirection on every
+  lookup and a heap allocation on every `GameState::clone`.
 - **CI runs the Rust suite in debug, so validate in debug before landing.**
   The dev profile is opt-level 1 with debug assertions on; CI runs it with
   `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
@@ -520,7 +601,10 @@ another `PrintedCharacteristics` on it. A static ability or additional cost is
 a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
-card-specific logic. Rebuild the extension after card changes.
+card-specific logic. Rebuild the extension after card changes. A new definition
+shifts the name-ordered definition ids: refresh Academy fixtures with
+`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
+the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
@@ -592,10 +676,18 @@ its dev-dependency). Both test targets mount the engine's `tests/support/` (`gam
 primitive defined once. `five_color_setup` decks hold four copies of each listed
 name; a fifth `force_permanent_on_battlefield` of that name returns an existing
 copy, so list another card when a test needs more. `inspect::keywords` reads
-printed and until-end-of-turn keywords only; assert static grants through the
-observation. `force_permanent_on_battlefield` places a permanent without an
-entry event (no triggers or turn history); `enter_and_settle` and
+the layered characteristics, including static grants. `force_permanent_on_battlefield` places
+a permanent without an entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
+
+A forced creature starts summoning-sick. For a constructed position that
+needs an immediately available attacker or tap source, use
+`clear_summoning_sickness` or native `scenario_force_battlefield(..., ready=true)`. With exactly enough untapped lands a
+manual payment finishes itself after its last object choice; calling `pay_rest`
+then overruns into the next priority. Read a new card's printing with `curl`
+from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
+apart on `cards/search`, and append its row to
+`managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
@@ -703,7 +795,7 @@ A `TriggerCondition` is "whenever X does Y": an event over its actor, never an
 `BeginningOf { step, whose }`, `Performs { who, any_of }` for keyword actions
 (search, scry, surveil, the four bends) and `PutIntoGraveyard { whose,
 predicate }`, `PutsCounters { who, kind, on }`. An object actor is a
-`TriggerSubject` (`This`, `EnchantedCreature`, or `Matching { controlled_by,
+`TriggerSubject` (`This`, `Attached`, or `Matching { controlled_by,
 predicate, another }`, whose controller is the same `Actor`; card code uses
 `you_control`, `another_you_control`, `any`, `another`), as in
 `Dies { subject }`, `Sacrificed { subject }`,
@@ -746,6 +838,9 @@ its own batch; `blank_decision_memory` on a seat's config is the ablation.
 Read-only native transport metadata must also be exposed through
 `managym.recording._VECTOR_READS` and flattened in `ShardedVectorEnv`;
 collectors use these wrappers rather than raw native vectors.
+Runtime-checkable vector extension protocols list their concrete capability
+methods. Python 3.12+ protocol checks use static lookup and miss the ordinary
+native reads delegated by `RecordedVectorEnv.__getattr__`.
 CLI subcommands import their execution runtime at the command boundary when
 needed to keep migration/help available without the training SDK.
 
@@ -755,6 +850,9 @@ A launched training job's experiment label must match the label supplied to
 Etude tracking by its recipe/stage, including training in a subprocess. Etude
 rejects a mismatch with `experiment_differs_from_launch` before the first update;
 changing the launch label does not rename the recipe's tracking label.
+
+For a training warm start, `run.input("start")` inside `with track(...) as run`
+returns the delivered `Path` directly (Etude 0.4.3).
 
 Etude preserves a checkpoint's source suffix. Worker tests wait for a registered
 checkpoint through the SDK, rather than assuming the file ends in `.pt`.
@@ -782,13 +880,21 @@ Tests that build pages and retain module-level references must restore saved
 `sys.modules` entries and remove neighbours first imported during the build,
 while keeping new dependency imports (including Torch lazy registrations).
 
+Etude lists a file in its experiment pages if it defines `training_jobs`,
+`eval_jobs` or `report`. Standalone benchmark CLIs use `render_report` for
+their offline report renderer.
+
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
 namespace or a `python -m` invocation's `__main__`; the same holds for agent
 loaders. Exercise discovery with `etude.controller.declarations.read_experiment` in runner tests,
 or `etude.controller.declarations.read_training_jobs` for a file's `training_jobs()`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
-only launched jobs receive that directory automatically.
+create the directory before starting local evaluation because Etude writes progress
+there before calling the experiment. Launched jobs receive it automatically.
+Local evaluation and reporting also read the default tracking directory alongside
+`--source`. Set `ETUDE_TRACK_DIR` to a study-specific directory for both commands
+when smoke and full tournaments share a name.
 Etude imports evaluation callbacks by module and qualified name, including local
 runs; callbacks take `play(match, agents)`. A closure or callable instance is
 not a portable entry point. Managed jobs share `manabot.eval.agents.AGENTS`;
@@ -829,10 +935,12 @@ Etude launched source is an extracted commit without `.git`. Read its revision
 through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
 loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
 continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.
+`etude continue` queues the child in the parent's pool with its rental settings.
+A backend or device config override must be runnable in that pool.
 
-The repository depends on the released Etude SDK from PyPI (0.4.1 or newer;
-0.4.0 lacks the experiment-file API). Etude's shared records, storage and
-errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
+The repository requires `etude-sdk>=0.4.7,<0.5` from PyPI for training
+continuation callbacks and versioned storage listing. Etude's shared records,
+storage and errors live in `etude.records`, `etude.storage` and `etude.errors`, and training
 uses `etude.train.tracking`. Experiment entry points are `training_jobs()` and
 `eval_jobs(state)`; discovery is in `etude.controller.declarations`, state in `etude.jobs`.
 A resumed tracker uses `resume=True`; its first logged row sets the supersession

@@ -1,0 +1,184 @@
+{
+  "schema_version": 2,
+  "contract_id": "manabot.semantic-kernel-conformance.v1",
+  "content_digest": "ff20d76456ef5c9a6233bd7bf2d594c295bb03557e08e2d8f26da73e33cc72d8",
+  "reference": "reference/explicit-step-v1",
+  "optimized": "optimized/skip-trivial-v1",
+  "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
+  "replays": [
+    {
+      "case_id": "ur-vs-gw-5eed",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 193,
+      "outcome": "terminal",
+      "final_state_hash": "v31:fe5509650786d601fecb9ad7156b6c2bd3146eed2690fded8ff58fd087f20464",
+      "trace_sha256": "c60ba90af92143c5ed43b6360f905932b18087c6638430b88ddcd3b2e319582c"
+    },
+    {
+      "case_id": "gw-vs-ur-5eee",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 337,
+      "outcome": "terminal",
+      "final_state_hash": "v31:b7046e271006b1511742c7406da07b3993d02863e2005db9fe0fc682908edcb5",
+      "trace_sha256": "7928903e47e2c3538a9a4ccb42d3c077597ee68ccf85437db433971688862231"
+    },
+    {
+      "case_id": "ur-vs-gw-5eef",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 221,
+      "outcome": "terminal",
+      "final_state_hash": "v31:24716dd6d760354d8ab28f798ddf687896a875924c3d6bdbca4ec8fefc84b148",
+      "trace_sha256": "ce949ce3422b44fbeacf991323f7252bb7342b78ea20c4c873b89d1a327107e6"
+    },
+    {
+      "case_id": "gw-vs-ur-5ef0",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 132,
+      "outcome": "terminal",
+      "final_state_hash": "v31:857b748575d4914356534c82f994be0180ddf32dc17b6061b1e7061ebc0bbb88",
+      "trace_sha256": "152572d1eb86cd7866a8dfcb97a6281a380b96fc967a0df008f6fe41f27e274f"
+    },
+    {
+      "case_id": "elemental-161",
+      "orientation": "elemental_left_vs_right",
+      "commands": 186,
+      "outcome": "terminal",
+      "final_state_hash": "v31:3c534e39ba781ac7174bc75c09ec38cf86d79f2c04fece7c21b1c76f51ac4d1e",
+      "trace_sha256": "0246f365622222b2754c6b9ed248fccac0b72351d60393dabb73c034183ac830"
+    },
+    {
+      "case_id": "elemental-162",
+      "orientation": "elemental_right_vs_left",
+      "commands": 140,
+      "outcome": "terminal",
+      "final_state_hash": "v31:ef94d2e5003b8deb01385000c97f8d09a125da6fd56e3cbab9b444835ef1bdec",
+      "trace_sha256": "413ba0fff43576d8598273cc30f8c4b930b3826a9df9c9e72c9f5175c69e4018"
+    },
+    {
+      "case_id": "elemental-163",
+      "orientation": "elemental_left_vs_right",
+      "commands": 124,
+      "outcome": "terminal",
+      "final_state_hash": "v31:fcc8418eb03ad8b033e96d56a7740ffddce7904f9cef8354964d9f255e8b676a",
+      "trace_sha256": "430ab5718718c6dddafd85ec07db96f8d5be503a424690c9882b67fd98e390d6"
+    },
+    {
+      "case_id": "elemental-164",
+      "orientation": "elemental_right_vs_left",
+      "commands": 198,
+      "outcome": "terminal",
+      "final_state_hash": "v31:fbddad922b0bfeac86bc6de7310399bf143c78f768b5f9b572f23fbbb9c24959",
+      "trace_sha256": "b14c298a4d970d8109bdfe5b0031111362f0bb455c1e9c52d2bd1372b659e09c"
+    },
+    {
+      "case_id": "sacrifice-162",
+      "orientation": "sacrifice_left_vs_right",
+      "commands": 312,
+      "outcome": "terminal",
+      "final_state_hash": "v31:133375fb524c22c81619e15606bb01969c6a3d8c3fc3479c5debcfe62a60ad52",
+      "trace_sha256": "0d78fbc5b08d62d587b82286516fec4fd52037491b3711ac2e5abb648bf98c64"
+    },
+    {
+      "case_id": "sacrifice-163",
+      "orientation": "sacrifice_right_vs_left",
+      "commands": 268,
+      "outcome": "terminal",
+      "final_state_hash": "v31:7809fe8e70def33b268891c89d362d2db8846006aced650e4689077a08867f21",
+      "trace_sha256": "bb6255dc74550273ec1a98f3ac1afeff18a323932b854bd61501b142e05b95af"
+    },
+    {
+      "case_id": "temur-163",
+      "orientation": "temur_left_vs_right",
+      "commands": 220,
+      "outcome": "terminal",
+      "final_state_hash": "v31:e0131edf13f1f0e11499b5428f2be7e05c36bab9d52b9b538247f670557fbd86",
+      "trace_sha256": "13b31dca352ffa3fb7a854305a843ecee388f4785ecaff6c3de6f2e448bc53a4"
+    },
+    {
+      "case_id": "temur-164",
+      "orientation": "temur_right_vs_left",
+      "commands": 324,
+      "outcome": "terminal",
+      "final_state_hash": "v31:1317da3f482818b7f5803ee47fb29fd7139424565d27ed1507f74ed563240f94",
+      "trace_sha256": "e496cdf99d39d8375be12d23f7b271ffd2e8a994458a34b30a64c2a33ca7560c"
+    },
+    {
+      "case_id": "elemental-world-gr_vs_ug",
+      "orientation": "elemental_world_gr_vs_ug",
+      "commands": 316,
+      "outcome": "terminal",
+      "final_state_hash": "v31:7b05bed52bb0157bbaf5725eed0c2c296c20370a33fcdb7c45500bbff4aa4bff",
+      "trace_sha256": "c747f443f1246f4330a4d80a4e82819f683def6b3442660d12b17bdef52d7ddf"
+    },
+    {
+      "case_id": "elemental-world-ug_vs_gr",
+      "orientation": "elemental_world_ug_vs_gr",
+      "commands": 179,
+      "outcome": "terminal",
+      "final_state_hash": "v31:10a26c8af7640a7c7ce1ca8c53616021139190ced9c42a86aacf96c8c1be356a",
+      "trace_sha256": "d20fc80794716b41e80d212d8f32dff676af22508058471d0ef59d79dc721224"
+    }
+  ],
+  "exercised_prompt_kinds": [
+    "ChooseTarget",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "Discard",
+    "Learn",
+    "LegendRule",
+    "LookAndSelect",
+    "Modal",
+    "OrderTriggers",
+    "PayOrNot",
+    "Priority",
+    "Scry",
+    "Waterbend"
+  ],
+  "exercised_action_types": [
+    "ChooseMode",
+    "ChooseTarget",
+    "ChooseTrigger",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "DeclineChoice",
+    "LearnDiscard",
+    "PayCost",
+    "PriorityActivateAbility",
+    "PriorityCastSpell",
+    "PriorityPassPriority",
+    "PriorityPlayLand",
+    "ScryBottom",
+    "ScryKeep",
+    "SelectCard",
+    "TapForCost"
+  ],
+  "property_checks": [
+    "fresh_same_seed_semantic_tapes_are_identical",
+    "semantic_action_lookup_is_independent_of_diagnostic_index",
+    "nonterminal_prompts_are_nonempty",
+    "cloned_sibling_does_not_mutate_root"
+  ],
+  "metamorphic_checks": [
+    "explicit_singletons_equal_trivial_step_collapse",
+    "compatibility_card_renames_preserve_trace",
+    "fresh_and_cloned_roots_preserve_trace"
+  ],
+  "fuzz": {
+    "seed": 24301,
+    "cases": 32,
+    "max_commands": 512
+  },
+  "phase_revision": "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d",
+  "phase_status_counts": {
+    "excluded": 7,
+    "match": 3,
+    "mismatch": 5
+  },
+  "phase_mismatches": [
+    "mana-suki-hybrid",
+    "continuous-suki-and-dragonfly",
+    "conditional-cadets-firebending",
+    "card-flow-learn-and-bottom-order",
+    "ward-trigger-scope"
+  ]
+}

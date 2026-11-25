@@ -6,11 +6,25 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
-        card::ObjectDefinition,
-        game_object::{ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId},
+        card::{CardDefId, ObjectDefinition},
+        game_object::{
+            BattlefieldFacts, ObjectId, ObjectLki, ObjectLookupError, PermanentId, PlayerId,
+            PublicId,
+        },
         zone::ZoneType,
     },
 };
+
+/// How a face-down permanent showing no name is called in human labels.
+pub(crate) const FACE_DOWN_NAME: &str = "a face-down permanent";
+/// How a face-up permanent with no name (a copy of a manifest) is called.
+pub(crate) const NAMELESS_PERMANENT_NAME: &str = "a nameless permanent";
+
+/// Exact public reference and the storage slot a decision or event may cite.
+pub(crate) struct ObservedIdentity {
+    pub reference: ObjectEventRef,
+    pub visible_slot: Option<u32>,
+}
 
 impl Game {
     /// The object a live battlefield permanent is.
@@ -40,6 +54,128 @@ impl Game {
             .ok_or(ObjectLookupError::WrongZone)
     }
 
+    /// The definition `viewer` may learn for a battlefield permanent: what
+    /// `observed_source_definition` publishes, plus the printing behind a
+    /// face-down permanent for a viewer who may look at it (CR 708.5) or
+    /// while turning it face up shows it.
+    pub(crate) fn observed_permanent_definition(
+        &self,
+        viewer: PlayerId,
+        permanent: &crate::state::permanent::Permanent,
+    ) -> Option<CardDefId> {
+        let object = &self.state[permanent.object];
+        if !object.is_face_down() {
+            return self.observed_source_definition(permanent.object);
+        }
+        // Announcing the special action shows the creature and its cost
+        // before the controller chooses which mana to spend.
+        use super::decision::{FrameCompletion, ResolutionRef};
+        let showing = self.state.suspended_decision.as_ref().is_some_and(|pending| {
+            pending.continuation().into_iter().any(|part| matches!(part, ResolutionRef::Frame(frame)
+                if matches!(frame.completion, FrameCompletion::TurnFaceUp(id) if id == permanent.object)))
+        });
+        (showing || self.shares_information(viewer, permanent.controller))
+            .then(|| object.retained_base().0)
+    }
+
+    /// A permanent's alias survives departure in last-known information. Each
+    /// manifest entry mints a fresh alias, so incarnation zero identifies it
+    /// without disclosing the physical card's previous zone changes (CR 708.2).
+    pub(crate) fn observed_identity(&self, object: ObjectId) -> Option<ObservedIdentity> {
+        let (entity, manifested) = if let Ok(id) = self.lookup_current_permanent(object) {
+            let permanent = self.state.permanents[id].as_ref()?;
+            (permanent.id, permanent.manifested)
+        } else if let Some(lki) = self.object_lki(object) {
+            (lki.presentation_id, lki.battlefield.manifested)
+        } else {
+            (self.state.objects.provenance(object)?.0, false)
+        };
+        let hides_card = manifested || self.observed_face_down(object);
+        Some(ObservedIdentity {
+            reference: ObjectEventRef {
+                entity,
+                incarnation: if hides_card { 0 } else { object.generation() },
+            },
+            visible_slot: (!hides_card).then_some(object.slot() as u32),
+        })
+    }
+
+    pub(crate) fn hidden_card_alias(&self, object: ObjectId) -> Option<ObjectEventRef> {
+        let identity = self.observed_identity(object)?;
+        identity
+            .visible_slot
+            .is_none()
+            .then_some(identity.reference)
+    }
+
+    pub(crate) fn observed_object_id(&self, object: ObjectId) -> PublicId {
+        if let Some(alias) = self.hidden_card_alias(object) {
+            return alias.entity;
+        }
+        self.state
+            .objects
+            .provenance(object)
+            .expect("object provenance")
+            .0
+    }
+
+    /// The catalog definition a viewer may learn for a source object, live or
+    /// departed: its last shown face, never the printing behind a face-down
+    /// permanent (`ANONYMOUS` gives `None`).
+    pub(crate) fn observed_source_definition(&self, object: ObjectId) -> Option<CardDefId> {
+        if self.state.live(object).is_some() {
+            return self.state[object].definition_id.catalog_id();
+        }
+        match self.object_lki(object) {
+            Some(lki) => lki.definition_id.catalog_id(),
+            None => self.state.source_base(object).0.catalog_id(),
+        }
+    }
+
+    /// Whether an object is face down now, or was when it left the
+    /// battlefield (CR 708.2).
+    pub(crate) fn observed_face_down(&self, object: ObjectId) -> bool {
+        if self.state.live(object).is_some() {
+            self.state[object].is_face_down()
+        } else {
+            self.object_lki(object)
+                .is_some_and(|lki| lki.battlefield.face_down)
+        }
+    }
+
+    /// How a label names an object that shows no name.
+    pub(crate) fn unnamed_label(&self, object: ObjectId) -> &'static str {
+        if self.observed_face_down(object) {
+            FACE_DOWN_NAME
+        } else {
+            NAMELESS_PERMANENT_NAME
+        }
+    }
+
+    /// The name a viewer may read for an object: its live effective name,
+    /// else its last effective battlefield name once departed, else the name
+    /// of the definition it shows. A face-down permanent has no name unless an
+    /// effect gives it one (Witness Protection); neither has a face-up copy of
+    /// one, which reads as a nameless permanent.
+    pub(crate) fn observed_object_name(&self, object: ObjectId) -> String {
+        let name = if let Ok(permanent) = self.lookup_current_permanent(object) {
+            Some(self.characteristics(permanent).name.clone())
+        } else if self.state.live(object).is_none() {
+            self.object_lki(object)
+                .map(|lki| lki.battlefield.name.clone())
+        } else {
+            None
+        };
+        name.filter(|name| !name.is_empty())
+            .or_else(|| {
+                let definition = self.observed_source_definition(object)?;
+                default_content_pack()
+                    .definition(definition)
+                    .map(|row| row.printed.name.clone())
+            })
+            .unwrap_or_else(|| self.unnamed_label(object).to_owned())
+    }
+
     /// Snapshot the current battlefield object for triggers and LKI.
     pub(crate) fn snapshot_current_permanent(&self, object: ObjectId) -> Option<ObjectLki> {
         let permanent_id = self.lookup_current_permanent(object).ok()?;
@@ -47,6 +183,7 @@ impl Game {
         let definition = &self.state[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
+            copiable: None,
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
             granted_abilities: characteristics
@@ -62,7 +199,23 @@ impl Game {
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
-            animated_creature: characteristics.is_animated,
+            battlefield: std::sync::Arc::new(BattlefieldFacts {
+                types: characteristics.types.clone(),
+                subtypes: characteristics.subtypes.clone(),
+                supertypes: definition.supertypes.clone(),
+                colors: characteristics.colors.clone(),
+                name: characteristics.name.clone(),
+                mana_value: self.object_mana_value(object),
+                is_legendary: characteristics.is_legendary,
+                token: !definition.is_card(),
+                attacking: permanent.attacking,
+                in_combat: self.permanent_in_combat(permanent_id),
+                tapped: permanent.tapped,
+                manifested: permanent.manifested,
+                face_down: definition.is_face_down(),
+            }),
+            attached_to: permanent.attached_to,
+            meld_partner: None,
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             power: characteristics.power,
@@ -87,19 +240,8 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// Capture the stable viewer identity for a current or departed object.
-    pub(crate) fn object_event_ref(&self, object_ref: ObjectId) -> Option<ObjectEventRef> {
-        let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
-            self.state.permanents[permanent_id].as_ref()?.id
-        } else if let Some(lki) = self.object_lki(object_ref) {
-            lki.presentation_id
-        } else {
-            self.state.objects.provenance(object_ref)?.0
-        };
-        Some(ObjectEventRef {
-            entity,
-            incarnation: object_ref.generation(),
-        })
+    pub(crate) fn object_event_ref(&self, object: ObjectId) -> Option<ObjectEventRef> {
+        Some(self.observed_identity(object)?.reference)
     }
 
     pub(crate) fn permanent_event_ref(&self, permanent_id: PermanentId) -> Option<ObjectEventRef> {
@@ -107,8 +249,7 @@ impl Game {
     }
 
     /// Resolve a departed object's immutable meaning through the match's
-    /// shared content pack. LKI stores only `CardDefId`, never a definition
-    /// clone.
+    /// shared content pack by the final shown definition id.
     pub fn object_lki_definition(&self, object_ref: ObjectId) -> Option<&ObjectDefinition> {
         let lki = self.object_lki(object_ref)?;
         default_content_pack().definition(lki.definition_id)
@@ -201,13 +342,17 @@ impl Game {
     }
 
     pub fn is_game_over(&self) -> bool {
-        self.state.players.iter().filter(|p| p.alive).count() < 2
+        self.state.is_game_over()
     }
 
     pub fn winner_index(&self) -> Option<usize> {
-        if !self.is_game_over() {
-            return None;
+        use super::game::{GameOutcome, GameProcedure};
+        match self.state.procedure {
+            GameProcedure::Finished(GameOutcome::Victory { winner }) => Some(winner.0),
+            GameProcedure::Finished(GameOutcome::Losses { losses }) => {
+                losses.iter().position(|loss| !loss.any())
+            }
+            _ => None,
         }
-        self.state.players.iter().position(|p| p.alive)
     }
 }

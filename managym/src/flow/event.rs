@@ -20,6 +20,15 @@ pub struct ObjectEventRef {
     pub incarnation: u32,
 }
 
+impl From<ObjectEventRef> for crate::experience::ObjectRenderId {
+    fn from(event: ObjectEventRef) -> Self {
+        Self {
+            entity: event.entity.0,
+            incarnation: event.incarnation,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventSubject {
     Object(ObjectEventRef),
@@ -28,9 +37,20 @@ pub enum EventSubject {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
+    Object(ObjectEventRef),
+    Definition(CardDefId),
     Card(ObjectId),
     Permanent(PermanentId),
     Player(PlayerId),
+}
+
+/// One committed hit within a simultaneous combat damage step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CombatPlayerHit {
+    #[serde(serialize_with = "crate::state::game_object::exact")]
+    pub source: ObjectId,
+    pub recipient: PlayerId,
+    pub amount: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -65,16 +85,26 @@ pub enum GameEvent {
         source: Option<ObjectId>,
         target: DamageTarget,
         amount: u32,
+        /// Combat damage (CR 510.2); everything else is noncombat damage.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        combat: bool,
     },
     LifeChanged {
         player: PlayerId,
         old: i32,
         new: i32,
+        /// One-based occurrence on a gain, zero on a loss. Set at commit.
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        gain_ordinal: u32,
     },
     SpellCast {
         #[serde(rename = "card")]
         object_id: ObjectId,
         targets: Vec<Target>,
+        caster: PlayerId,
+        /// Cumulative mana spent casting by the payer before and after payment.
+        spend_before: u32,
+        spend_after: u32,
     },
     SpellResolved {
         #[serde(rename = "card")]
@@ -115,6 +145,10 @@ pub enum GameEvent {
     PermanentTapped {
         permanent: PermanentId,
         for_mana: bool,
+    },
+    /// A permanent transitioned from tapped to untapped.
+    PermanentUntapped {
+        permanent: PermanentId,
     },
     /// A permanent became the target of a spell or ability (ward, CR
     /// 702.21): `by` is a `Target::StackSpell` or `Target::StackAbility`.
@@ -174,7 +208,25 @@ pub enum GameEvent {
     /// The creatures that dealt combat damage to a player in one combat
     /// damage step (CR 510.2).
     CombatDamageToPlayers {
-        creatures: Vec<PermanentId>,
+        hits: Vec<CombatPlayerHit>,
+    },
+    CardsLeftGraveyard {
+        owner: PlayerId,
+    },
+    /// Trigger occurrence for one source across all recipients in a damage batch.
+    SourceDealtDamage {
+        source: ObjectId,
+        amount: i32,
+        /// All of it was combat damage: one combat damage step's batch.
+        #[serde(skip)]
+        combat: bool,
+    },
+    /// Each permanent that dealt combat damage in one combat damage step,
+    /// to any recipients, with its total (CR 510.2): a trailing trample
+    /// split is one entry. Trigger-only (`Game::emit_trigger_event`); the
+    /// ledger records the same damage as `DamageDealt`.
+    CombatDamageTotals {
+        dealt: Vec<(ObjectId, u32)>,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {
@@ -215,10 +267,14 @@ pub enum EventKind {
     Scried,
     LibrarySearched,
     CombatDamageToPlayers,
+    CombatDamageTotals,
     PermanentsDied,
     TurnStarted,
     StepStarted,
     Surveilled,
+    CardsLeftGraveyard,
+    SourceDealtDamage,
+    PermanentUntapped,
 }
 
 impl GameEvent {
@@ -236,6 +292,8 @@ impl GameEvent {
             GameEvent::PermanentSacrificed { .. } => EventKind::PermanentSacrificed,
             GameEvent::CardRevealed { .. } => EventKind::CardRevealed,
             GameEvent::CardMoved { .. } => EventKind::CardMoved,
+            GameEvent::CardsLeftGraveyard { .. } => EventKind::CardsLeftGraveyard,
+            GameEvent::SourceDealtDamage { .. } => EventKind::SourceDealtDamage,
             GameEvent::DamageDealt { .. } => EventKind::DamageDealt,
             GameEvent::LifeChanged { .. } => EventKind::LifeChanged,
             GameEvent::SpellCast { .. } => EventKind::SpellCast,
@@ -245,6 +303,7 @@ impl GameEvent {
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
+            GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,
             GameEvent::PermanentTargeted { .. } => EventKind::PermanentTargeted,
             GameEvent::AttackersDeclared { .. } => EventKind::AttackersDeclared,
             GameEvent::CombatAttackersDeclared { .. } => EventKind::CombatAttackersDeclared,
@@ -256,6 +315,7 @@ impl GameEvent {
             GameEvent::Surveilled { .. } => EventKind::Surveilled,
             GameEvent::LibrarySearched { .. } => EventKind::LibrarySearched,
             GameEvent::CombatDamageToPlayers { .. } => EventKind::CombatDamageToPlayers,
+            GameEvent::CombatDamageTotals { .. } => EventKind::CombatDamageTotals,
             GameEvent::PermanentsDied { .. } => EventKind::PermanentsDied,
             GameEvent::TurnStarted { .. } => EventKind::TurnStarted,
             GameEvent::StepStarted { .. } => EventKind::StepStarted,
@@ -406,6 +466,7 @@ mod tests {
             player: PlayerId(0),
             old: new + 1,
             new,
+            gain_ordinal: 0,
         }
     }
 

@@ -84,8 +84,12 @@ export interface RecordedPosition extends Position {
   views_stopped?: string | null;
 }
 
-/** Seating changes the rendering only, never the information projection. */
-export function orientBoard(observation: Observation, nearSeat: number): Observation {
+/**
+ * Seating changes the rendering only, never the information projection.
+ * After the game the near seat won only if it is the recorded winner: in a
+ * draw (`winner` null) neither seat won.
+ */
+export function orientBoard(observation: Observation, nearSeat: number, winner: number | null): Observation {
   if (observation.agent.player_index === nearSeat) return observation;
-  return { ...observation, agent: observation.opponent, opponent: observation.agent, won: observation.game_over ? !observation.won : observation.won };
+  return { ...observation, agent: observation.opponent, opponent: observation.agent, won: observation.game_over ? winner === nearSeat : observation.won };
 }

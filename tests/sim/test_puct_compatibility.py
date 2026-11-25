@@ -14,7 +14,7 @@ from manabot.backends.torch.checkpoint import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.evaluation_records import audit_view, finalize_game, stored_game
@@ -28,7 +28,6 @@ from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     puct_source_sha256,
 )
-import managym
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
 
@@ -126,7 +125,7 @@ def test_nonfinite_values_and_incomplete_offers_fail_closed() -> None:
     agent, space = _flat_agent()
     agent.value_semantic = "signed_outcome"
     evaluator = AgentLeafEvaluator(agent, space)
-    encoded = space.encode(obs)
+    encoded = encode_observation(space, obs)
     with pytest.raises(ValueError, match="complete legal offers"):
         evaluator.root_priors(encoded, action_count=len(encoded["actions_valid"]) + 1)
     with torch.no_grad():
@@ -146,7 +145,7 @@ def test_live_player_deadline_yields_no_decision() -> None:
     player.start_game(wrapper, 0)
     player.deadline = 1.0
     with pytest.raises(TimeoutError):
-        player.act(wrapper, space.encode(obs))
+        player.act(wrapper, encode_observation(space, obs))
     assert player.stats.decisions == 0
 
 
@@ -171,7 +170,6 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         role="challenger",
         compute_class_id="bounded-fixture",
         information_boundary="acting-viewer-only-v1",
-        world=managym.WORLD_VERSION,
         content_suite="tiny-fixture",
         observation_abi_sha256=identity,
         action_abi_sha256=identity,

@@ -18,6 +18,7 @@ from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import MemoryStore, PrefixIdentity, PrefixObservation
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
+from manabot.policy.spans import ObservationSelection
 import managym
 from managym.recording import ScalarCapture
 
@@ -179,7 +180,6 @@ def collect_games(
         seen = [0, 0]
         status = "complete"
         failure: str | None = None
-        buffers = space.encoder.allocate()
         for decision in range(max_decisions):
             if time.monotonic() >= deadline:
                 raise TimeoutError(
@@ -191,16 +191,14 @@ def collect_games(
             try:
                 # Admission/capacity is checked for every decision, not just
                 # reservoir survivors, so long games cannot disappear silently.
-                env.encode_observation_into(obs, buffers)
-                dense = {k: v[None] for k, v in buffers.items()}
+                batch = managym.encode_observation_batch([obs], space.layout)
+                selection = ObservationSelection(space, ((batch, 0),))
                 prefix = store.capture(
-                    dense, 0, PrefixIdentity(str(seed), viewer, "root")
+                    selection,
+                    0,
+                    PrefixIdentity(str(seed), viewer, "root"),
                 )
-            except (managym.AgentError, ValueError) as error:
-                if "Capacity" not in str(error) and not str(error).startswith(
-                    "observation capacity exceeded:"
-                ):
-                    raise
+            except managym.ObservationCapacity as error:
                 corpus.overflows += 1
                 status = "capacity"
                 failure = str(error)
@@ -219,8 +217,8 @@ def collect_games(
                         disclosure,
                         PrefixObservation(
                             {
-                                k: v.copy()
-                                for k, v in dense.items()
+                                k: selection.project(k)
+                                for k in selection
                                 if k not in MEMORY_FIELDS
                             },
                             [prefix],

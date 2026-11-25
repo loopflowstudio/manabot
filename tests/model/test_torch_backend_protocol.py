@@ -10,7 +10,7 @@ from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
@@ -26,7 +26,7 @@ def _batch(space: ObservationSpace, count: int) -> dict[str, np.ndarray]:
     rows = []
     while len(rows) < count:
         obs = env.observation_for_player(env.current_agent_index())
-        rows.append(space.encode(obs))
+        rows.append(encode_observation(space, obs))
         _, _, terminated, truncated, _ = env.step(
             int(rng.integers(len(obs.action_space.actions)))
         )
@@ -64,9 +64,10 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     policy, learner = BACKEND.load(
         from_torch_state(
             model.config,
-            space.encoder.config,
+            space.config,
             state,
             parameter_names=dict(model.named_parameters()),
+            readings=model.readings,
         )
     )
     obs = _batch(space, 6)
@@ -183,7 +184,7 @@ def test_preparation_purpose_is_independent_of_grad_mode(
     assert model.semantic_cards is not None
     count = len(learner.programs.rows)
     total = model.semantic_cards.catalog_shape.definitions
-    if inference or bucketed:
+    if inference:
         assert count == total
     else:
         assert 0 < count < total
@@ -191,3 +192,28 @@ def test_preparation_purpose_is_independent_of_grad_mode(
         model.evaluate(learner), model.evaluate(frozen), strict=True
     ):
         np.testing.assert_array_equal(wanted, output)
+
+
+@pytest.mark.parametrize("device", ["cuda", "mps"])
+def test_bucketed_learner_catalog_coverage(
+    device: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(hidden_dim=8, world=managym.WORLD_SETUP),
+        bucketed_shapes=True,
+    )
+    obs = _batch(model.observation_space, 3)
+    needs = model.check_observation(obs)
+    # Catalog scheduling runs entirely on the host, including for a GPU learner.
+    monkeypatch.setattr(ActorCritic, "device_type", device)
+    learner = model.prepare_admitted(obs, needs=needs).programs
+    inference = model.prepare_admitted(obs, needs=needs, inference=True).programs
+    assert model.semantic_cards is not None
+    assert learner is not None and inference is not None
+    total = model.semantic_cards.catalog_shape.definitions
+    assert len(inference.rows) == total
+    if device == "cuda":
+        np.testing.assert_array_equal(learner.rows, inference.rows)
+    else:
+        assert 0 < len(learner.rows) < total

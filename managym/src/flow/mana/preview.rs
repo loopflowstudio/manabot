@@ -2,9 +2,10 @@
 //! output or mana unit is committed by this query.
 use super::*;
 use crate::agent::ability_description::cost_description;
-use crate::experience::{ObjectRenderId, PooledManaView, SubjectRef};
+use crate::experience::{PooledManaView, SubjectRef};
 use crate::flow::game::CastChoices;
-use crate::state::game_object::Object;
+use crate::flow::payment::CostComponent;
+use crate::flow::play::CastAuthority;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,19 +58,34 @@ impl From<&Mana> for PreviewPool {
                     mana: amounts.map(i32::from),
                     combat: class.combat,
                     restriction: class.restriction.as_ref().map(|r| r.describe()),
-                    effect: class.effect.as_ref().map(|e| e.describe()),
+                    effect: class
+                        .effect
+                        .as_ref()
+                        .map(crate::agent::ability_description::spend_effect_description),
                 })
                 .collect(),
         }
     }
 }
 
-/// A sacrifice, waterbend or exile alternative needs its own choice, which the
-/// preview does not make for the player.
-fn has_unannounced_cost(card: &Object, cast: CastChoices) -> bool {
-    card.sacrifice_cost().is_some()
-        || card.required_waterbend().is_some()
-        || (cast.kicked && card.exile_alternative().is_some())
+/// Whether `owed` still asks its payer for something other than mana: a
+/// component ahead of the mana (a sacrifice, discard, exile or forage). The
+/// preview does not make those choices for the player.
+fn owes_a_choice(owed: &[CostComponent]) -> bool {
+    !matches!(owed[0], CostComponent::Mana { .. })
+}
+
+/// Whether a cost not yet being paid would ask its payer for more than mana.
+/// Before the payment begins a waterbend cost's taps are such a choice too;
+/// once it is being paid, the preview shows its mana route.
+fn will_owe_a_choice(owed: &[CostComponent]) -> bool {
+    owes_a_choice(owed)
+        || matches!(&owed[0], CostComponent::Mana { help, .. } if help.waterbend > 0)
+}
+
+/// Whether convoke, improvise or delve may pay part of the mana `owed`.
+fn keyword_help(owed: &[CostComponent]) -> bool {
+    matches!(&owed[0], CostComponent::Mana { help, .. } if help.keyworded())
 }
 
 impl PaymentPreview {
@@ -93,6 +109,25 @@ impl PaymentPreview {
 }
 
 impl Game {
+    /// What casting `object` with `cast` would owe.
+    fn spell_owed(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        cast: CastChoices,
+    ) -> Vec<CostComponent> {
+        self.cost_components(
+            player,
+            &Operation::Spell {
+                object,
+                cast,
+                mode: None,
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+            },
+        )
+    }
+
     /// Query one legal action at its exact semantic authority address.
     pub fn payment_preview(
         &self,
@@ -124,26 +159,62 @@ impl Game {
         let mut position = std::borrow::Cow::Borrowed(self);
         let mut sources = Vec::new();
         let mut resolution = None;
+        // Whether convoke, improvise or delve may pay where mana cannot.
+        let mut helped = false;
+        // A deliberate tap in a payment previews its own production first.
+        let offered_tap = match action {
+            Action::TapForMana { permanent, .. } => Some(AutomaticTap::fixed(*permanent)),
+            _ => None,
+        };
+        // A resolving instruction's offer (CR 608.2g) or a priority play;
+        // front-face resolution offers are card selections.
+        let offered_cast = match (action, self.state.suspended_decision.as_ref()) {
+            (
+                Action::CastSpell { object, .. } | Action::SelectCard { object, .. },
+                Some(suspended),
+            ) if let Some(authority) = suspended.decision.cast_authority() => {
+                self.cast_choices(player, *object, action.spell_profile(), authority)
+            }
+            (
+                Action::CastSpell {
+                    object,
+                    route,
+                    profile,
+                    ..
+                },
+                _,
+            ) => self.cast_choices(
+                player,
+                *object,
+                *profile,
+                CastAuthority::Priority(
+                    self.selected_play_route(player, *object, *profile, *route)?,
+                ),
+            ),
+            _ => None,
+        };
         let cost = match action {
-            Action::CastSpell { object, .. } => {
-                let card = &self.state[*object];
-                if self.cast_needs_x_announcement(player, *object, CastChoices::default()) {
+            Action::CastSpell { object, .. } | Action::SelectCard { object, .. }
+                if let Some(cast) = offered_cast =>
+            {
+                let card = cast.spell(&self.state[*object]);
+                if self.cast_needs_x_announcement(*object, cast) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose X or replicate count before previewing payment.",
                     ));
                 }
-                let Some(cast) =
-                    self.fixed_cast_cost_choices(player, *object, CastChoices::default())
-                else {
+                let Some(cast) = self.fixed_cast_cost_choices(player, *object, cast) else {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the optional or alternative cost before previewing payment.",
                     ));
                 };
-                if has_unannounced_cost(card, cast) {
+                let owed = self.spell_owed(player, *object, cast);
+                if will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::needs_additional_cost());
                 }
+                helped = keyword_help(&owed);
                 if card.cost_reduction_if_targets().is_some() {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
@@ -162,10 +233,12 @@ impl Game {
                     chosen_req_indices,
                     ..
                 }) => {
-                    let card = &self.state[*object];
-                    if has_unannounced_cost(card, *cast) {
+                    let card = cast.spell(&self.state[*object]);
+                    let owed = self.spell_owed(player, *object, *cast);
+                    if will_owe_a_choice(&owed) {
                         return Ok(PaymentPreview::needs_additional_cost());
                     }
+                    helped = keyword_help(&owed);
                     let requirements = card.target_requirements_for_mode(*mode);
                     let completes = *requirement_index + 1 == requirements.len()
                         && chosen_req_indices
@@ -184,43 +257,43 @@ impl Game {
                 }
                 _ => None,
             },
-            Action::PayCost { .. } if self.state.suspended_decision.is_some() => {
+            Action::PayCost { .. } | Action::TapForMana { .. }
+                if self.state.suspended_decision.is_some() =>
+            {
                 let suspended = position
                     .to_mut()
                     .state
                     .suspended_decision_mut()
                     .take()
                     .unwrap();
-                if let Decision::Payment(payment) = suspended.decision {
-                    let cost = payment.remaining.mana_cost();
-                    resolution = Some((payment, suspended.frame));
-                    Some(cost)
-                } else {
-                    None
+                // A cost paid in life has no mana route: `None` answers
+                // `not_applicable` below, as for any other decision.
+                match suspended.decision {
+                    Decision::Payment(payment) => match payment.owed.clone() {
+                        CostComponent::Mana { cost, .. } => {
+                            sources.extend(
+                                offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)),
+                            );
+                            resolution = Some((payment, suspended.frame));
+                            Some(cost)
+                        }
+                        _ => None,
+                    },
+                    _ => None,
                 }
             }
             Action::PayCost { .. } | Action::TapForMana { .. } => match &self.pending_choice {
-                Some(PendingChoice::ManaPayment {
-                    payment,
-                    alternative,
-                    ..
-                }) => {
-                    if let Action::TapForMana { permanent, .. } = action {
-                        sources.push(position.to_mut().preview_tap(player, *permanent));
-                    }
-                    Some(position.payment_mana_cost(player, payment, alternative.as_ref()))
+                Some(PendingChoice::Pay { payment, .. }) if owes_a_choice(&payment.owed) => {
+                    return Ok(PaymentPreview::needs_additional_cost());
                 }
-                Some(PendingChoice::Waterbend {
-                    payment,
-                    remaining_generic,
-                    tapped,
-                    ..
-                }) => {
-                    position.to_mut().pending_choice = None;
-                    Some(
-                        self.waterbend_owed(player, payment, *remaining_generic, *tapped)
-                            .0,
-                    )
+                Some(PendingChoice::Pay { payment, .. }) => {
+                    helped = keyword_help(&payment.owed);
+                    sources
+                        .extend(offered_tap.map(|tap| position.to_mut().preview_tap(player, tap)));
+                    if payment.waterbends() {
+                        position.to_mut().pending_choice = None;
+                    }
+                    Some(payment.mana().0.clone())
                 }
                 Some(_) => {
                     return Ok(PaymentPreview::message(
@@ -244,29 +317,29 @@ impl Game {
                         "No automatic activation fee preview.",
                     ));
                 }
-                if ability.mana_cost.x > 0
-                    || ability.sacrifice.is_some()
-                    || ability.tap_cost.is_some()
-                    || ability.waterbend
-                    || ability.discard_card
-                {
+                let operation = Operation::Activation {
+                    source: ActivationSource::Permanent(*permanent),
+                    ability_index: *ability_index,
+                    targets: Vec::new(),
+                    x: 0,
+                };
+                let owed = self.cost_components(player, &operation);
+                if ability.mana_cost.x > 0 || will_owe_a_choice(&owed) {
                     return Ok(PaymentPreview::message(
                         PaymentPreviewState::NeedsChoice,
                         "Choose the activation's additional costs before previewing payment.",
                     ));
                 }
-                position.to_mut().pending_choice = Some(PendingChoice::ManaPayment {
+                let cost = ability.mana_cost.clone();
+                position.to_mut().pending_choice = Some(PendingChoice::Pay {
                     player,
-                    payment: Box::new(Payment::Activation {
-                        source: ActivationSource::Permanent(*permanent),
-                        ability_index: *ability_index,
-                        targets: Vec::new(),
-                        x: 0,
+                    payment: Box::new(Payment {
+                        owed,
+                        operation,
+                        receipt: Default::default(),
                     }),
-                    sacrifice: None,
-                    alternative: None,
                 });
-                Some(ability.mana_cost.clone())
+                Some(cost)
             }
             _ => None,
         };
@@ -277,15 +350,25 @@ impl Game {
             ));
         };
         let Ok(taps) = position.automatic_taps(player, &cost) else {
-            let mut preview = PaymentPreview::message(
-                PaymentPreviewState::Unavailable,
-                "No automatic route. Use a legal mana activation and choose its output first.",
-            );
+            let mut preview = if helped {
+                PaymentPreview::message(
+                    PaymentPreviewState::NeedsChoice,
+                    "Mana alone cannot pay this cost. Choose what to tap or exile.",
+                )
+            } else {
+                PaymentPreview::message(
+                    PaymentPreviewState::Unavailable,
+                    "No automatic route. Use a legal mana activation and choose its output first.",
+                )
+            };
             preview.cost = Some(cost_description(&cost));
             return Ok(preview);
         };
         let position = position.to_mut();
-        sources.extend(taps.map(|id| position.preview_tap(player, id)));
+        sources.extend(
+            taps.into_iter()
+                .map(|tap| position.preview_tap(player, tap)),
+        );
         let pool = position.pooled_mana(player);
         if let Some((payment, frame)) = resolution {
             *position.state.suspended_decision_mut() = Some(SuspendedResolution {
@@ -293,7 +376,7 @@ impl Game {
                 decision: Decision::ManaSpend {
                     player,
                     cost: cost.clone(),
-                    spent: ManaSpent::default(),
+                    spent: Default::default(),
                     completion: Box::new(SpendCompletion::Resolution(payment)),
                 },
             });
@@ -328,19 +411,18 @@ impl Game {
     }
     /// Run only the selected production on the isolated preview position. Its
     /// pool delta includes triggered production, spend riders and expiry.
-    fn preview_tap(&mut self, player: PlayerId, permanent: PermanentId) -> PaymentSourcePreview {
-        let card = self.state.permanents[permanent]
-            .as_ref()
-            .expect("planned source");
+    fn preview_tap(&mut self, player: PlayerId, tap: AutomaticTap) -> PaymentSourcePreview {
+        let permanent = tap.permanent;
+        let object = self.permanent_object(permanent).expect("planned source");
         let source = SubjectRef::Object {
-            id: ObjectRenderId {
-                entity: card.id.0,
-                incarnation: card.object.generation(),
-            },
+            id: self
+                .object_event_ref(object)
+                .expect("planned source")
+                .into(),
         };
-        let label = self.characteristics(permanent).name.clone();
+        let label = self.observed_object_name(object);
         let before = self.pooled_mana(player);
-        self.tap_fixed_mana_source(player, permanent);
+        self.perform_automatic_tap(player, tap);
         let after = self.pooled_mana(player);
         let mut output = Mana {
             mana: std::array::from_fn(|i| after.mana[i] - before.mana[i]),
@@ -385,6 +467,7 @@ mod tests {
             165,
             true,
         );
+        game.keep_opening_hands();
         game.scenario_force_card_in_hand(PlayerId(0), "Ancestral Recall")
             .unwrap();
         for _ in 0..2 {
@@ -448,12 +531,69 @@ mod tests {
         );
     }
 
+    /// A convoke spell previews its mana route like any other cost. Short of
+    /// mana the convoker is the player's pick, never the preview's.
+    #[test]
+    fn payment_preview_pays_a_convoke_cost_with_mana_or_asks_for_the_pick() {
+        for (plains, state) in [
+            (true, PaymentPreviewState::Exact),
+            (false, PaymentPreviewState::NeedsChoice),
+        ] {
+            let lands = ["Mountain", "Forest", "Plains"];
+            let mut deck: BTreeMap<String, usize> =
+                lands.iter().map(|land| (land.to_string(), 10)).collect();
+            deck.insert("Guardian of Vitu-Ghazi".into(), 10);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("payer", deck),
+                    PlayerConfig::new("other", BTreeMap::from([("Plains".into(), 40)])),
+                ],
+                165,
+                true,
+            );
+            game.keep_opening_hands();
+            let payer = PlayerId(0);
+            game.scenario_force_card_in_hand(payer, "Guardian of Vitu-Ghazi")
+                .unwrap();
+            game.scenario_force_battlefield(payer, "Guardian of Vitu-Ghazi", true)
+                .unwrap();
+            for land in lands.iter().take(if plains { 3 } else { 2 }) {
+                for _ in 0..if *land == "Mountain" { 6 } else { 1 } {
+                    game.scenario_force_battlefield(payer, land, true).unwrap();
+                }
+            }
+            game.scenario_refresh_priority().unwrap();
+            let cast = game
+                .action_space()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|action| matches!(action, Action::CastSpell { .. }))
+                .unwrap();
+            let before = witness(&game);
+            let result = preview(&game, cast);
+            assert_eq!(before, witness(&game));
+            assert_eq!(result.state, state);
+            assert_eq!(result.cost.as_deref(), Some("{6}{W}{G}"));
+            if plains {
+                assert_eq!(result.sources.len(), 8);
+                assert_eq!(result.pool_after_spending.unwrap().amounts, [0; 6]);
+            } else {
+                assert_eq!(
+                    result.explanation,
+                    "Mana alone cannot pay this cost. Choose what to tap or exile."
+                );
+                assert!(result.sources.is_empty());
+            }
+        }
+    }
+
     #[test]
     fn payment_preview_does_not_guess_a_spending_choice() {
         let mut game = preview_game();
         game.state
             .mana_pool_mut(PlayerId(0))
-            .add(&Mana::parse("UR"));
+            .add(&Mana::parse("UR"), None);
         let exact = preview(&game, cast_index(&game));
         assert!(exact.sources.is_empty());
         assert_eq!(
@@ -532,23 +672,27 @@ mod tests {
             165,
             true,
         );
+        game.keep_opening_hands();
         game.scenario_force_card_in_hand(payer, "Spectral Sailor")
             .unwrap();
         let blue = [0, 1, 0, 0, 0, 0];
-        game.state.mana_pool_mut(payer).add(&Mana::restricted_to(
-            ManaRestriction::spell(["Lesson"]),
-            blue,
-        ));
-        game.state.combat_mana_pool_mut(payer).add(&Mana::of_class(
-            ManaClass {
-                restriction: Some(ManaRestriction::spell(["Pirate"])),
-                effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
-                    without_subtype: "Human".into(),
-                }),
-                combat: false,
-            },
-            blue,
-        ));
+        game.state.mana_pool_mut(payer).add(
+            &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), blue),
+            None,
+        );
+        game.state.combat_mana_pool_mut(payer).add(
+            &Mana::of_class(
+                ManaClass {
+                    restriction: Some(ManaRestriction::spell(["Pirate"])),
+                    effect: Some(SpendEffect::CreatureEntersWithPlusOneCounter {
+                        without_subtype: "Human".into(),
+                    }),
+                    combat: false,
+                },
+                blue,
+            ),
+            None,
+        );
         game.scenario_refresh_priority().unwrap();
         let index = game
             .action_space()
@@ -577,8 +721,8 @@ mod tests {
         let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
             panic!("expected the paid spell on the stack");
         };
-        assert_eq!(spell.spent.amounts, blue);
-        assert_eq!(spell.spent.entry_counters, 1);
+        assert_eq!(spell.spent.amounts(), blue);
+        assert_eq!(spell.spent.entry_counters(), 1);
         let leftover = proposal.pool_after_spending.unwrap();
         assert_eq!(leftover.amounts, blue.map(u16::from));
         assert_eq!(
@@ -591,19 +735,19 @@ mod tests {
     fn payment_preview_keeps_restrictions_and_combat_expiry() {
         use crate::state::mana::ManaRestriction;
         let mut game = preview_game();
-        game.state.mana_pool_mut(PlayerId(0)).add(&Mana::parse("U"));
         game.state
             .mana_pool_mut(PlayerId(0))
-            .add(&Mana::restricted_to(
-                ManaRestriction::spell(["Lesson"]),
-                [0, 1, 0, 0, 0, 0],
-            ));
+            .add(&Mana::parse("U"), None);
+        game.state.mana_pool_mut(PlayerId(0)).add(
+            &Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 1, 0, 0, 0, 0]),
+            None,
+        );
         let rider = crate::state::mana::SpendEffect::CreatureEntersWithPlusOneCounter {
             without_subtype: "Human".into(),
         };
         game.state
             .combat_mana_pool_mut(PlayerId(0))
-            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]));
+            .add(&Mana::of_class(rider.into(), [0, 0, 0, 1, 0, 0]), None);
         let result = preview(&game, cast_index(&game));
         assert!(result.sources.is_empty());
         let final_pool = result.pool_after_spending.unwrap();

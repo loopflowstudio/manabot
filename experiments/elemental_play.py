@@ -28,14 +28,16 @@ from experiments.elemental_grid import (
 from experiments.elemental_long import H2HGame
 from manabot.eval.admission import register_anchor
 from manabot.eval.agents import game_players, registration
+from manabot.eval.behaviour import Play, checkpoint_counts
 from manabot.eval.card_evaluation import trace_card_tables
+from manabot.eval.evaluation import attempt_play_counts
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
+from manabot.eval.results import EvaluationRow
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
-import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 HEURISTIC = "heuristic"
@@ -50,7 +52,7 @@ def eval_environment() -> Environment:
             ROOT / "experiments/elemental_grid.py",
         ],
         config={
-            "world": managym.WORLD_VERSION,
+            "world": "w17",
             "pack": PACK,
             "game_seconds": GAME_SECONDS,
             "max_commands": MAX_COMMANDS,
@@ -178,7 +180,7 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
     else:
         opponent = register_anchor(candidate, "heuristic", player_id=names[1])
     key = EvaluationKey(
-        world=managym.WORLD_VERSION,
+        world="w17",
         content_suite=matchup.content_suite,
         viewer_boundary="acting-viewer",
         arena_version="elemental-etude-agents-v1",
@@ -206,6 +208,7 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
             matchup_mode="cross" if leg < 4 else "mirrors",
             legs=(leg,),
             card_evidence_dir=cards,
+            reducers=None if pair else {"play": Play()},
             agents=dict(zip(names, game_players(match.players, agents), strict=True)),
         )
         found = trace_card_tables(cards, trace, names)
@@ -230,7 +233,23 @@ def play(match: Match[Conditions], agents: Sequence[object]) -> Result:
             raise ValueError(
                 f"Elemental match has no valid replayed games; evidence retained: {output}"
             )
+        tables = {"games": game_rows(games, conditions.kind), **found.tables}
+        if not pair:
+            counts = attempt_play_counts(
+                output, [EvaluationRow.model_validate(r) for r in played]
+            )
+            if counts:
+                tables["behaviour"] = [
+                    {
+                        **checkpoint_counts(seats, group.model_seat),
+                        "unit": conditions.kind,
+                        "deal": deal,
+                        "deck": group.model_deck,
+                        "opponent_deck": group.heuristic_deck,
+                    }
+                    for (deal, _), seats in counts.items()
+                ]
         return Result(
-            tables={"games": game_rows(games, conditions.kind), **found.tables},
+            tables=tables,
             blobs=found.blobs,
         )

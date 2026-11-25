@@ -20,6 +20,7 @@ const MAX_STEPS: usize = 2000;
 fn main() {
     // Keep the original 512-game budget independently comparable. The added
     // board is an explicitly selected workload with its own count and digest.
+    let usable_taps = std::env::args().any(|arg| arg == "--usable-taps");
     let layers = std::env::args().any(|arg| arg == "--layers");
     let tail_samples = std::env::args().any(|arg| arg == "--tail-samples");
     let mut samples = Vec::new();
@@ -35,7 +36,7 @@ fn main() {
     let start = Instant::now();
     for seed in seeds {
         let mut env = Env::new(seed, true, false, false);
-        env.reset(curated::players()).unwrap();
+        env.reset(curated::setup(usable_taps)).unwrap();
         if layers {
             curated::add_layer_board(&mut env);
         }

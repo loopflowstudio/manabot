@@ -64,8 +64,9 @@ class TestPoolPerspective:
         # (world, action, rollout) lexicographic layout
         expect = [a for _ in range(3) for a in range(num_actions) for _ in range(2)]
         assert roots == expect
-        buffers = allocate_buffers(ObservationSpace(), pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots)
+        space = ObservationSpace()
+        buffers = allocate_buffers(space, pool.num_slots)
+        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         active = pool.encode_active()
         acting = pool.acting_players()
         for slot, player in enumerate(acting):

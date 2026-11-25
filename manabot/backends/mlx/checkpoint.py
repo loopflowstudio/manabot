@@ -15,108 +15,139 @@ and preserves norms. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
+from collections.abc import Collection, Iterator, Sequence
+from contextlib import contextmanager
 import importlib
 import json
+from pathlib import Path
 import re
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
-from manabot.backends.mlx.arrays import precision_dtype, to_mlx
-from manabot.backends.mlx.learner import Learner
+from manabot.backends.mlx import arrays, rl
+from manabot.backends.mlx.arrays import flat_numpy, precision_dtype, to_mlx
 from manabot.backends.mlx.policy import MLXActorCritic
+from manabot.belief.encoding import BeliefCheckpointBinding, BeliefEncodingSchema
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.model.architecture import architecture_receipt
+from manabot.model.world import validate_policy_input
 from manabot.policy.checkpoint import (
     GRUS,
     ParameterArrays,
     PolicyCheckpoint,
-    UnsupportedPolicy,
     read_container,
     read_metadata,
+    restore_value_semantic,
+    save_policy_checkpoint,
 )
 from manabot.policy.protocol import Precision
 
-
-def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
-    """Refuse configurations the host preparation and backends do not
-    implement, naming every one, rather than running them partially."""
-    reasons = []
-    if model.world is None or not model.catalog_records():
-        reasons.append("a catalog world with record_vocabulary='catalog' is required")
-    if observation.policy_input_version != 9:
-        reasons.append(f"policy_input_version={observation.policy_input_version}")
-    if model.belief_count_buckets:
-        reasons.append("belief inputs")
-    if model.decision_memory != "none":
-        reasons.append("decision memory")
-    if model.recent_events:
-        reasons.append("policy history input (recent_events)")
-    if model.value_aggregation != "masked_mean":
-        reasons.append(f"value_aggregation={model.value_aggregation!r}")
-    if model.value_kind != "scalar":
-        reasons.append(f"value_kind={model.value_kind!r}")
-    if model.policy_film:
-        reasons.append("policy_film")
-    if not model.attention_on:
-        reasons.append("attention_on=False")
-    if reasons:
-        raise UnsupportedPolicy(
-            "the framework backends do not support " + "; ".join(reasons)
-        )
+if TYPE_CHECKING:
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.mlx.runtime import Runtime
+    import managym
 
 
-_SEQUENTIAL = re.compile(r"(^|\.)(projection|policy_head|value_head|mlp)\.(\d+)\.")
+_SEQUENCES = r"(^|\.)(projection|policy_head|value_head|mlp|detail_map|reference_map|member_map|record_output)"
+_SEQUENTIAL = re.compile(_SEQUENCES + r"\.(\d+)\.")
+_MLX_SEQUENTIAL = re.compile(_SEQUENCES + r"\.layers\.(\d+)\.")
 _GRU = {
     "input_weight": "Wx",
     "hidden_weight": "Wh",
     "input_bias": "input_bias",
     "hidden_bias": "hidden_bias",
 }
+_GRU_INVERSE = {value: key for key, value in _GRU.items()}
+_QKV = ("query", "key", "value")
+
+
+def gru_name(name: str, leaves: dict[str, str]) -> str:
+    """Both frameworks keep the GRU prefix and rename its four leaves."""
+    for prefix in GRUS:
+        if name.startswith(prefix + "."):
+            leaf = name[len(prefix) + 1 :]
+            if leaf not in leaves:
+                raise KeyError(f"unmapped GRU tensor {name}")
+            return f"{prefix}.{leaves[leaf]}"
+    return name
+
+
+def put_parameter(out: dict[str, np.ndarray], name: str, value: np.ndarray) -> None:
+    if name in out:
+        raise KeyError(f"two tensors map to {name}")
+    # Preserve rank-zero memory gates when requiring contiguous storage.
+    out[name] = np.asarray(value, dtype=np.float32, order="C")
+
+
+def mlx_names(canonical: str) -> tuple[str, ...]:
+    """Native leaves of a canonical parameter, in packed tensor order."""
+    name = _SEQUENTIAL.sub(r"\1\2.layers.\3.", gru_name(canonical, _GRU))
+    if name.endswith(
+        (
+            ".mha.qkv_weight",
+            ".mha.qkv_bias",
+            ".self_attn.qkv_weight",
+            ".self_attn.qkv_bias",
+        )
+    ):
+        stem, leaf = name.rsplit(".", 1)
+        return tuple(f"{stem}.{part}_proj.{leaf.removeprefix('qkv_')}" for part in _QKV)
+    return (name,)
 
 
 def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Canonical arrays in MLX names; only renames and splits, preserving norms."""
     out: dict[str, np.ndarray] = {}
-
-    def put(key: str, value: np.ndarray) -> None:
-        if key in out:
-            raise KeyError(f"two canonical tensors map to {key}")
-        out[key] = np.ascontiguousarray(value, dtype=np.float32)
-
     for name, tensor in canonical.items():
-        tensor = np.asarray(tensor)
-        prefix = next((p for p in GRUS if name.startswith(p + ".")), None)
-        if prefix is not None:
-            leaf = name[len(prefix) + 1 :]
-            if leaf in _GRU:
-                put(f"{prefix}.{_GRU[leaf]}", tensor)
-            else:
-                raise KeyError(f"unmapped GRU tensor {name}")
-            continue
-        name = _SEQUENTIAL.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}.layers.{m.group(3)}.", name
+        names = mlx_names(name)
+        parts = (tensor,) if len(names) == 1 else np.split(tensor, len(names))
+        for leaf, value in zip(names, parts, strict=True):
+            put_parameter(out, leaf, value)
+    return out
+
+
+def canonical_groups(names: Collection[str]) -> dict[str, tuple[str, ...]]:
+    """Group a native policy tree by canonical parameter, including packed QKV."""
+    groups: dict[str, tuple[str, ...]] = {}
+    for name in names:
+        canonical = _MLX_SEQUENTIAL.sub(r"\1\2.\3.", gru_name(name, _GRU_INVERSE))
+        matched = re.fullmatch(
+            r"(.*\.(?:mha|self_attn))\.(query|key|value)_proj\.(weight|bias)", canonical
         )
-        if name.endswith((".mha.qkv_weight", ".mha.qkv_bias")):
-            stem, leaf = name.rsplit(".", 1)
-            leaf = leaf.removeprefix("qkv_")
-            for part, value in zip(("query", "key", "value"), np.split(tensor, 3)):
-                put(f"{stem}.{part}_proj.{leaf}", value)
-            continue
-        put(name, tensor)
+        if matched:
+            stem, _, leaf = matched.groups()
+            canonical = f"{stem}.qkv_{leaf}"
+        if canonical not in groups:
+            leaves = mlx_names(canonical)
+            if not all(leaf in names for leaf in leaves):
+                raise KeyError(f"incomplete MLX projections for {canonical}")
+            groups[canonical] = leaves
+    return groups
+
+
+def canonical_from_mlx(mlx_named: ParameterArrays) -> dict[str, np.ndarray]:
+    """Inverse of `mlx_parameters`: MLX names and split QKV back to canonical."""
+    out: dict[str, np.ndarray] = {}
+    for name, leaves in canonical_groups(mlx_named.keys()).items():
+        parts = [mlx_named[leaf] for leaf in leaves]
+        put_parameter(out, name, parts[0] if len(parts) == 1 else np.concatenate(parts))
     return out
 
 
 def assemble(
-    checkpoint: PolicyCheckpoint, *, precision: Precision | None = None
+    checkpoint: PolicyCheckpoint,
+    *,
+    precision: Precision | None = None,
+    bucketed_shapes: bool = False,
+    live_tokens: bool = False,
 ) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly. An omitted precision follows the model's
     width (`manabot.backends.mlx.arrays.default_precision`)."""
-    require_supported(checkpoint.model, checkpoint.space.encoder.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(),
@@ -124,6 +155,8 @@ def assemble(
         checkpoint.model,
         checkpoint.space,
         precision=precision,
+        bucketed_shapes=bucketed_shapes,
+        live_tokens=live_tokens,
     )
     expected = dict(tree_flatten(policy.parameters()))
     unmapped = sorted(set(parameters) ^ set(expected))
@@ -139,6 +172,46 @@ def assemble(
     return policy
 
 
+def policy_arrays(agent: MLXActorCritic) -> dict[str, np.ndarray]:
+    if agent.compute_dtype != mx.float32:
+        raise ValueError("close the forward precision scope before saving")
+    return canonical_from_mlx(flat_numpy(agent.parameters()))
+
+
+def policy_buffers(agent: MLXActorCritic) -> dict[str, np.ndarray]:
+    return agent.buffers()
+
+
+def save_checkpoint(
+    agent: MLXActorCritic,
+    obs_space: ObservationSpace,
+    path: str | Path,
+    *,
+    player_configs: "Sequence[managym.PlayerConfig] | None",
+    extra: dict[str, Any] | None = None,
+    belief_schema: BeliefEncodingSchema | None = None,
+) -> None:
+    """Save an MLX policy into the shared portable safetensors container."""
+    parameters = policy_arrays(agent)
+    receipt = architecture_receipt(
+        agent.config,
+        obs_space,
+        {name: (int(value.size), True) for name, value in parameters.items()},
+    )
+    save_policy_checkpoint(
+        agent,
+        obs_space,
+        path,
+        parameters=parameters,
+        buffers=policy_buffers(agent),
+        readings=agent.readings,
+        architecture=receipt,
+        player_configs=player_configs,
+        extra=extra,
+        belief_schema=belief_schema,
+    )
+
+
 class MLXBackend:
     """`manabot.policy.protocol.Backend` for MLX.
 
@@ -146,49 +219,51 @@ class MLXBackend:
     (`manabot.backends.mlx.arrays.default_precision`).
     """
 
-    name = "mlx"
+    name: Literal["mlx"] = "mlx"
+    arrays = arrays
+    rl = rl
 
-    @property
-    def verification(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support numerical verification probes")
-
-    @property
-    def runtime(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support full regime execution")
-
-    def save_policy(self, *args: object, **kwargs: object) -> None:
-        raise NotImplementedError("MLX does not support regime policy exports")
-
-    @property
-    def state(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support training state recovery")
+    @staticmethod
+    def configure_cpu_inference() -> None:
+        mx.set_default_device(mx.cpu)
 
     @property
     def belief_fit(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support belief fitting")
+        return importlib.import_module("manabot.backends.mlx.belief_fit")
 
     @property
     def belief(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support belief sampling or training")
-
-    @property
-    def collection(self) -> ModuleType:
-        raise NotImplementedError("MLX does not support regime collection")
-
-    def seeded_inference(self, seed: int, *, cpu_only: bool = False) -> object:
-        raise NotImplementedError("MLX does not support frozen belief collection")
-
-    @property
-    def rl(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.rl")
-
-    @property
-    def arrays(self) -> ModuleType:
-        return importlib.import_module("manabot.backends.mlx.arrays")
+        return importlib.import_module("manabot.backends.mlx.belief")
 
     @property
     def learner(self) -> ModuleType:
         return importlib.import_module("manabot.backends.mlx.learner")
+
+    @property
+    def runtime(self) -> "Runtime":
+        from manabot.backends.mlx.runtime import Runtime
+
+        return Runtime(self.precision)
+
+    @property
+    def state(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.state")
+
+    save_policy = staticmethod(save_checkpoint)
+
+    @property
+    def collection(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.collection")
+
+    @staticmethod
+    @contextmanager
+    def seeded_inference(seed: int, *, cpu_only: bool = False) -> Iterator[None]:
+        stream = mx.cpu if cpu_only else mx.default_device()
+        from manabot.backends.mlx.runtime import preserve_rng
+
+        with preserve_rng("cpu" if cpu_only else "mps"), mx.stream(stream):
+            mx.random.seed(seed)
+            yield
 
     @property
     def rollout(self) -> ModuleType:
@@ -200,43 +275,70 @@ class MLXBackend:
         self.precision = precision
 
     def load_policy(
-        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        self,
+        path: str | Path | PolicyCheckpoint,
+        *,
+        bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> tuple[MLXActorCritic, ObservationSpace]:
-        if bucketed_shapes or live_tokens:
-            raise ValueError("MLX does not support bucketed or live-token inference")
-        checkpoint = read_container(path)
-        policy = assemble(checkpoint, precision=self.precision)
+        checkpoint = (
+            path if isinstance(path, PolicyCheckpoint) else read_container(str(path))
+        )
+        policy = assemble(
+            checkpoint,
+            precision=self.precision,
+            bucketed_shapes=bucketed_shapes,
+            live_tokens=live_tokens,
+        )
         # read_container has already validated the world. Keep it on the loaded
         # policy so simulation's common deck admission cannot silently bypass it.
-        policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
-        record = json.loads(checkpoint.metadata.get("bc", "{}"))
-        semantic = record.get("value_semantic")
-        if semantic not in (None, "signed_outcome", "win_logit"):
-            raise ValueError("unsupported checkpoint value semantic")
-        policy.value_semantic = semantic
+        world_binding = json.loads(checkpoint.metadata["world_binding"])
+        validate_policy_input(policy, world_binding)
+        policy.world_binding = world_binding
+        if policy.belief_count_buckets:
+            policy.belief_binding = BeliefCheckpointBinding.from_checkpoint(
+                checkpoint.record()
+            )
+        training = json.loads(checkpoint.metadata.get("bc", "{}"))
+        restore_value_semantic(policy, training.get("value_semantic"))
         return policy, checkpoint.space
 
-    @staticmethod
-    def metadata(path: str) -> dict[str, Any]:
-        return read_metadata(path)
+    read_policy = staticmethod(read_container)
+
+    metadata = staticmethod(read_metadata)
 
     @staticmethod
-    def seed_training(seed: int, *, torch_deterministic: bool = True) -> None:
+    def seed(seed: int, *, deterministic: bool | None = None) -> None:
         mx.random.seed(seed)
 
-    @staticmethod
-    def seed(seed: int) -> None:
-        mx.random.seed(seed)
+    def load(
+        self,
+        checkpoint: PolicyCheckpoint,
+        *,
+        device: str | None = None,
+        precision: Precision | None = None,
+        bucketed_shapes: bool = False,
+        minibatch_rows: int = 1,
+        execution_rows: int | None = None,
+        bootstrap_rows: int | None = None,
+    ) -> tuple[MLXActorCritic, "Learner"]:
+        device = "mps" if device is None else device
+        with mx.stream(arrays.mlx_device(device)):
+            policy = assemble(
+                checkpoint,
+                precision=self.precision if precision is None else precision,
+                bucketed_shapes=bucketed_shapes,
+            ).to(device)
+        return policy, self.learner.Learner(
+            policy,
+            device,
+            minibatch_rows=minibatch_rows,
+            execution_rows=execution_rows,
+            bootstrap_rows=bootstrap_rows,
+        )
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
-        policy = assemble(checkpoint, precision=self.precision)
-        return policy, Learner(policy, minibatch_rows=1)
-
-    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
-        return mlx_parameters(canonical)
-
-    def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
-        return mlx_parameters(canonical)
+    parameter_layout = staticmethod(mlx_parameters)
+    gradient_layout = staticmethod(mlx_parameters)
 
 
 BACKEND = MLXBackend()

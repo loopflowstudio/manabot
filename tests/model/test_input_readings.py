@@ -1,0 +1,373 @@
+"""A checkpoint is read with the readings it recorded, never with today's rule."""
+
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+import torch
+
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.observation import (
+    FACT_COUNTER,
+    FACT_DIM,
+    FACT_DURATION_INDEX,
+    FACT_EFFECT_PROGRAM,
+    FACT_KIND_INDEX,
+    FACT_TRANSFORMS,
+    FACT_VALID_INDEX,
+    ObservationSpace,
+    encode_observation,
+)
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.policy.admission import binding
+from manabot.policy.readings import (
+    OWN_PREPARATION,
+    ColumnKind,
+    Reading,
+    Sized,
+    fresh_readings,
+    kind_reading,
+    legacy_readings,
+    published_columns,
+    read_numeric,
+    recorded_readings,
+    signed_log,
+)
+import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import fact_rows
+
+
+def _batch(space: ObservationSpace) -> dict[str, np.ndarray]:
+    env = managym.Env(seed=7, skip_trivial=True)
+    raw, _ = env.reset(
+        [
+            managym.PlayerConfig("A", {"Mountain": 20, "Gray Ogre": 20}),
+            managym.PlayerConfig("B", {"Forest": 20, "Gray Ogre": 20}),
+        ]
+    )
+    for _ in range(12):
+        raw, *_ = env.step(0)
+    return {key: value[None] for key, value in encode_observation(space, raw).items()}
+
+
+def _column(space: ObservationSpace, key: str, name: str) -> int:
+    return [c.name for c in published_columns(space)[key]].index(name)
+
+
+@pytest.fixture
+def saved(tmp_path: Path) -> tuple[ActorCritic, ObservationSpace, Path]:
+    space = ObservationSpace()
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, world="world")).eval()
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    return policy, space, path
+
+
+def test_saved_model_reloads_with_its_recorded_readings(
+    saved: tuple[ActorCritic, ObservationSpace, Path],
+) -> None:
+    policy, space, path = saved
+    record = read_checkpoint(path)
+    timestamp = _column(space, "agent_permanents", "timestamp")
+    assert record["input_readings"]["agent_permanents"][timestamp] == "rank"
+    assert record["input_readings"] == {
+        key: [str(value) for value in values]
+        for key, values in fresh_readings(space).items()
+    }
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings == policy.readings
+    batch = _batch(space)
+    for before, after in zip(
+        policy.evaluate(policy.prepare(batch)),
+        loaded.evaluate(loaded.prepare(batch)),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(before, after)
+
+
+def test_checkpoint_without_readings_reads_as_before(tmp_path: Path) -> None:
+    space = ObservationSpace()
+    policy = ActorCritic(
+        space, ModelConfig(hidden_dim=8, world="world"), readings=legacy_readings(space)
+    )
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    record = read_checkpoint(path)
+    del record["input_readings"]
+    write_checkpoint(record, path)
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings == legacy_readings(space)
+    assert (
+        loaded.readings["agent_permanents"][
+            _column(space, "agent_permanents", "timestamp")
+        ]
+        is Reading.AS_IS
+    )
+
+
+def test_legacy_readings_ignore_native_kind_corrections(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = ObservationSpace()
+    original = legacy_readings(space)
+    arrays = space.layout.arrays
+    arrays["relations"]["columns"]["parent"]["kind"] = "reference"
+    monkeypatch.setattr(space, "layout", SimpleNamespace(arrays=arrays))
+    parent = _column(space, "relations", "parent")
+    assert fresh_readings(space)["relations"][parent] is Reading.GATHER
+    assert legacy_readings(space) == original
+
+
+def test_unknown_recorded_reading_is_refused(
+    saved: tuple[ActorCritic, ObservationSpace, Path],
+) -> None:
+    _, space, path = saved
+    record = read_checkpoint(path)
+    record["input_readings"]["agent_permanents"][
+        _column(space, "agent_permanents", "timestamp")
+    ] = "squared"
+    write_checkpoint(record, path)
+    with pytest.raises(ValueError, match="agent_permanents.timestamp.*'squared'"):
+        load_checkpoint(str(path))
+
+
+def test_models_differing_in_one_reading_never_share_a_batch() -> None:
+    space = ObservationSpace()
+    model = ModelConfig()
+    readings = fresh_readings(space)
+    timestamp = _column(space, "agent_permanents", "timestamp")
+    permanents = list(readings["agent_permanents"])
+    permanents[timestamp] = Reading.AS_IS
+    other = {
+        **readings,
+        "agent_permanents": tuple(permanents),
+        "opponent_permanents": tuple(permanents),
+    }
+    assert binding(model, space, readings) != binding(model, space, other)
+
+
+def test_a_kind_without_a_rule_has_no_reading() -> None:
+    with pytest.raises(ValueError, match="no reading for column x of kind 'magnitude'"):
+        kind_reading(ColumnKind("x", "magnitude", None))
+    with pytest.raises(ValueError, match="size None"):
+        kind_reading(ColumnKind("x", "category", None))
+
+
+def test_saved_model_records_sized_readings(
+    saved: tuple[ActorCritic, ObservationSpace, Path],
+) -> None:
+    _, space, path = saved
+    recorded = read_checkpoint(path)["input_readings"]
+    frame_kind = managym.observation_layout()["relations"]["columns"]["frame_kind"]
+    assert recorded["relations"][frame_kind["index"]] == f"one_hot:{frame_kind['size']}"
+    assert recorded["relations"][_column(space, "relations", "frame")] == "gather"
+    assert recorded["actions"][_column(space, "actions", "mode")] == "one_hot:15"
+    assert (
+        recorded["agent_permanents"][_column(space, "agent_permanents", "power")]
+        == "steps:8"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["one_hot", "one_hot:0", "as_is:3", "as_is:", "steps:x", "steps:+8", "steps:٨", 8],
+)
+def test_a_malformed_sized_reading_is_refused(value: object) -> None:
+    with pytest.raises(ValueError, match="agent_permanents.timestamp"):
+        recorded_readings(
+            {"agent_permanents": [value]},
+            {"agent_permanents": ["timestamp"]},
+            "test checkpoint",
+        )
+
+
+def test_a_category_size_is_kept_when_the_category_grows(tmp_path: Path) -> None:
+    """A checkpoint keeps its recorded width; a code above it lights only the
+    last flag, and every code it trained on reads as before."""
+    space = ObservationSpace()
+    readings = fresh_readings(space)
+    frame_kind = _column(space, "relations", "frame_kind")
+    relations = list(readings["relations"])
+    relations[frame_kind] = Sized(Reading.ONE_HOT, 12)
+    readings = {**readings, "relations": tuple(relations)}
+    policy = ActorCritic(
+        space, ModelConfig(hidden_dim=8, world="world"), readings=readings
+    )
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings["relations"][frame_kind] == Sized(Reading.ONE_HOT, 12)
+    codes = np.array([[0], [3], [12], [14]], dtype=np.float32)
+    flags = read_numeric(codes, (Sized(Reading.ONE_HOT, 12),))
+    assert flags.shape == (4, 13)
+    np.testing.assert_array_equal(flags.sum(1), [0, 1, 1, 1])
+    assert flags[1, 2] == flags[2, 11] == flags[3, 12] == 1
+
+
+def test_subunit_codes_leave_the_whole_one_hot_empty() -> None:
+    rows = np.array([[0.25, 0.5], [0.25, -1]], dtype=np.float32)
+    actual = read_numeric(rows, (Reading.AS_IS, Sized(Reading.ONE_HOT, 2)))
+    np.testing.assert_array_equal(actual, [[0.25, 0, 0, 0]] * 2)
+
+
+def test_one_hot_and_steps_read_as_documented() -> None:
+    """`steps:8` is the stored tenths, then flags for at least 1..8; a 2/2 and
+    a 3/3 differ by a whole flag. `one_hot` gives 0 no flag."""
+    power = np.array([[0.2], [0.3], [1.2], [-0.1]], dtype=np.float32)
+    steps = read_numeric(power, (Sized(Reading.STEPS, 8),))
+    np.testing.assert_array_equal(
+        steps,
+        np.array(
+            [
+                [0.2, 1, 1, 0, 0, 0, 0, 0, 0],
+                [0.3, 1, 1, 1, 0, 0, 0, 0, 0],
+                [1.2, 1, 1, 1, 1, 1, 1, 1, 1],
+                [-0.1, 0, 0, 0, 0, 0, 0, 0, 0],
+            ],
+            dtype=np.float32,
+        ),
+    )
+    assert np.linalg.norm(steps[1] - steps[0]) >= 1
+
+
+def test_one_hot_overflow_slot_can_exceed_the_source_dtype() -> None:
+    rows = np.array([[0], [1], [255]], dtype=np.uint8)
+    encoded = read_numeric(rows, [Sized(Reading.ONE_HOT, 255)])
+    expected = np.zeros((3, 256), dtype=np.float32)
+    expected[1, 0] = expected[2, 254] = 1
+    np.testing.assert_array_equal(encoded, expected)
+
+
+def test_mixed_numeric_columns_preserve_bits_on_strided_rows() -> None:
+    # Float64 ties in tenths distinguish rounding before and after narrowing.
+    entries = np.array([np.nan, np.inf, -np.inf, -0.0, 0.05, 0.15, 0.25, 1.9, 12.0])
+    readings = (
+        Reading.AS_IS,
+        Reading.FACT_VALUE_RAW,
+        Reading.MASK,
+        Reading.RANK,
+        Sized(Reading.STEPS, 2),
+        Reading.LOG,
+        Sized(Reading.ONE_HOT, 2),
+        Reading.FACT_VALUE,
+        Sized(Reading.STEPS, 2),
+        Reading.RANK,
+    )
+    rows = np.stack([np.roll(entries, i) for i in range(len(readings))])[::-1].T
+    kinds = np.tile([FACT_TRANSFORMS, FACT_EFFECT_PROGRAM, FACT_COUNTER], 3)
+    narrow = rows.astype(np.float32)
+    payload = narrow[:, 7].copy()
+    payload[kinds == FACT_EFFECT_PROGRAM] = 0
+    counts = kinds == FACT_TRANSFORMS
+    payload[counts] = signed_log(payload[counts])
+
+    def steps(index: int) -> np.ndarray:
+        count = np.rint(rows[:, index] * 10)
+        return np.column_stack((narrow[:, index], count >= 1, count >= 2))
+
+    code = rows[:, 6]
+    expected = np.column_stack(
+        (
+            narrow[:, :2],
+            narrow[:, 3] / 128,
+            steps(4),
+            signed_log(narrow[:, 5]),
+            (code >= 1) & (code < 2),
+            (code >= 2) & (code < 3),
+            code >= 3,
+            payload,
+            steps(8),
+            narrow[:, 9] / 128,
+        )
+    ).astype(np.float32)
+    assert read_numeric(rows, readings, kinds).tobytes() == expected.tobytes()
+
+
+def test_a_checkpoint_that_recorded_log_for_categories_loads_unchanged(
+    tmp_path: Path,
+) -> None:
+    """Models written when categories and selectors read `log` keep it."""
+    space = ObservationSpace()
+    kinds = published_columns(space)
+    readings = {
+        key: tuple(
+            Reading.LOG
+            if column.kind in ("category", "selector") and isinstance(value, Sized)
+            else (Reading.AS_IS if isinstance(value, Sized) else value)
+            for column, value in zip(kinds[key], values, strict=True)
+        )
+        for key, values in fresh_readings(space).items()
+    }
+    policy = ActorCritic(
+        space, ModelConfig(hidden_dim=8, world="world"), readings=readings
+    ).eval()
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings == readings
+    batch = _batch(space)
+    for before, after in zip(
+        policy.evaluate(policy.prepare(batch)),
+        loaded.evaluate(loaded.prepare(batch)),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(before, after)
+
+
+def test_a_float_buffer_without_a_reading_stops_the_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(OWN_PREPARATION, "decklists")
+    with pytest.raises(ValueError, match="no reading or own preparation.*decklists"):
+        ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=8))
+
+
+def test_fact_payloads_read_by_their_fact_kind() -> None:
+    values = np.array([[0.3, 0.0], [7.0, 0.0], [4.0, 81.0]], dtype=np.float32)
+    kinds = np.array([FACT_COUNTER, FACT_TRANSFORMS, FACT_EFFECT_PROGRAM])
+    fresh = read_numeric(values, (Reading.FACT_VALUE,) * 2, kinds)
+    expected = np.array([[0.3, 0.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32)
+    expected[1, 0] = signed_log(np.array([7.0]))[0]
+    np.testing.assert_array_equal(fresh, expected)
+    raw = read_numeric(values, (Reading.FACT_VALUE_RAW,) * 2, kinds)
+    np.testing.assert_array_equal(raw, values)
+
+
+@pytest.mark.parametrize("duration", [3, 4])
+def test_durations_three_and_four_reach_a_fresh_model_only(duration: int) -> None:
+    space = ObservationSpace()
+    facts = torch.zeros(1, 2, FACT_DIM)
+    facts[0, :, FACT_KIND_INDEX] = FACT_COUNTER
+    facts[0, :, FACT_VALID_INDEX] = 1
+    facts[0, 1, FACT_DURATION_INDEX] = duration
+    objects = torch.zeros(1, 2, 8)
+    with torch.no_grad():
+        fresh = fact_rows(facts, objects, readings=fresh_readings(space)).columns
+        legacy = fact_rows(facts, objects).columns
+    assert not torch.equal(fresh[0, 0], fresh[0, 1])
+    torch.testing.assert_close(legacy[0, 0], legacy[0, 1], rtol=0, atol=0)
+
+
+def test_historical_memory_checkpoint_reads_all_memory_columns(tmp_path: Path) -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=8,
+            max_decision_references=16,
+            max_decision_reference_details=32,
+            max_decision_members=16,
+        )
+    )
+    policy = ActorCritic(space, ModelConfig(hidden_dim=8, world="world"))
+    path = tmp_path / "policy.safetensors"
+    save_checkpoint(policy, space, path, player_configs=None)
+    checkpoint = read_checkpoint(path)
+    for key in MEMORY_FIELDS:
+        assert checkpoint["input_columns"].pop(key)
+        assert checkpoint["input_readings"].pop(key) == ["own"] * space.shapes[key][-1]
+    write_checkpoint(checkpoint, path)
+    loaded, _ = load_checkpoint(str(path))
+    assert loaded.readings == policy.readings

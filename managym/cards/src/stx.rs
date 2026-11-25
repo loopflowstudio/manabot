@@ -2,8 +2,8 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Effect, EffectValue, LibraryEnd, ObjectSelector, PaymentCost, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
@@ -11,10 +11,13 @@ use managym_state::{
     },
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        campus_guide(),
+        burrog_befuddler(),
         divide_by_zero(),
         enthusiastic_study(),
         eyetwitch(),
@@ -257,6 +260,79 @@ fn waterfall_aerialist() -> CardDefinition {
             statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
                 "{2}",
             )))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn burrog_befuddler() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nWhen this creature enters, target creature an opponent controls gets -1/-0 until end of turn.";
+    CardDefinition {
+        key: "stx.burrog_befuddler",
+        scryfall_id: "6040c573-cd8c-4593-8ade-d9922482035c",
+        printed: PrintedCharacteristics {
+            name: "Burrog Befuddler".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Frog".into(), "Wizard".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    Modification::pump(-1, 0),
+                )],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn campus_guide() -> CardDefinition {
+    let text_box = "When this creature enters, you may search your library for a basic land card, reveal it, then shuffle and put that card on top.";
+    CardDefinition {
+        key: "stx.campus_guide",
+        scryfall_id: "87a9a8a2-de81-441b-b501-418311b677f7",
+        printed: PrintedCharacteristics {
+            name: "Campus Guide".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Golem".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                // "then shuffle and put that card on top": the shuffle
+                // precedes the placement, so the revealed card ends on top.
+                effects: vec![Effect::Modal {
+                    modes: vec![
+                        vec![Effect::SelectCards {
+                            from: ObjectSelector::Zone(ZoneType::Library),
+                            predicate: CardPredicate::basic_land(),
+                            min: 0,
+                            max: EffectValue::Fixed(1),
+                            effects: vec![
+                                Effect::Reveal {
+                                    what: ObjectSelector::Selected,
+                                },
+                                Effect::ShuffleLibrary,
+                                Effect::put_in_library(ObjectSelector::Selected, LibraryEnd::Top),
+                            ],
+                            if_declined: vec![Effect::ShuffleLibrary],
+                        }],
+                        vec![],
+                    ],
+                }],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

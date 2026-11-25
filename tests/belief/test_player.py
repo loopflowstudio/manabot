@@ -233,7 +233,7 @@ def test_player_tracks_opponent_pass_from_semantic_receipt() -> None:
 def test_tiny_matchup_records_calibration_replay_and_system_cost(
     tmp_path: Path,
 ) -> None:
-    from manabot.model.world import checkpoint_world
+    from manabot.model.interface import world_fields
     import managym
 
     tiny_deck = {"Mountain": 4, "Raging Goblin": 4}
@@ -244,12 +244,13 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
     agent = ActorCritic(obs_space, agent_config)
     torch.save(
         {
-            "world_binding": checkpoint_world(
+            **world_fields(
+                obs_space,
+                agent.readings,
                 [
                     managym.PlayerConfig("Hero", tiny_deck),
                     managym.PlayerConfig("Villain", tiny_deck),
                 ],
-                obs_space,
             ),
             "hypers": {
                 "observation_hypers": obs_config.model_dump(),

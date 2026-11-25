@@ -46,11 +46,12 @@ from managym.replay import ReplayStop, walk
 ANNOUNCING_STAGES = frozenset(
     {"payment", "additional_cost", "targets", "mode", "announcement"}
 )
-# Stages of a choice made while a spell or ability resolves (the suspended
-# decisions of `decision_context.rs`). Mana payment, Learn and casting during
-# resolution are named by their own lines.
+# Stages of a choice made while a spell or ability resolves, or while combat
+# damage is assigned (the suspended decisions of `decision_context.rs`). Mana
+# payment, Learn and casting during resolution are named by their own lines.
 RESOLVING_STAGES = frozenset(
     {
+        "assign_combat_damage",
         "resolution_choice",
         "private_inspection",
         "scry",
@@ -58,6 +59,8 @@ RESOLVING_STAGES = frozenset(
         "order_library_bottom",
         "order_library_top",
         "order_replacement",
+        "order_melded_cards",
+        "manifest_dread",
         "resolution_payment",
         "private_search",
         "name_card",
@@ -88,6 +91,16 @@ class OwnStep:
     # What the choice is for: the resolving spell or ability, by its label.
     source: str | None = None
 
+    def groups_with(self, stage: str | None, source: str | None) -> bool:
+        """Whether another consecutive choice by this actor belongs to the same move."""
+        if self.stage == "order_triggers":
+            return stage == self.stage
+        return (
+            self.stage in RESOLVING_STAGES
+            and stage in RESOLVING_STAGES
+            and source == self.source
+        )
+
 
 def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
     """The person's own steps of the move that `events[index]` (theirs) ends.
@@ -111,27 +124,25 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
             source=(context.get("source") or {}).get("label"),
         )
 
-    def same_move(earlier: OwnStep, last: OwnStep) -> bool:
-        if last.stage == "order_triggers":
-            return earlier.stage == last.stage
-        return (
-            last.stage in RESOLVING_STAGES
-            and earlier.stage in RESOLVING_STAGES
-            and earlier.source == last.source
-        )
-
     # A legacy trace event retains neither the offered actions nor the choice.
-    if "actions" not in events[index] or "action" not in events[index]:
+    current = events[index]
+    if "actions" not in current or "action" not in current:
         return []
-    last = step(events[index])
+    last = step(current)
     run = [last]
-    for event in reversed(events[:index]):
-        if "actions" not in event or "action" not in event:
+    for previous in reversed(range(len(events))[:index]):
+        event = events[previous]
+        if (
+            "actions" not in event
+            or "action" not in event
+            or event["actor"] != current["actor"]
+        ):
             break
         earlier = step(event)
-        if event["actor"] != events[index]["actor"] or not same_move(earlier, last):
+        if not last.groups_with(earlier.stage, earlier.source):
             break
-        run.insert(0, earlier)
+        run.append(earlier)
+    run.reverse()
     return run
 
 
@@ -402,7 +413,9 @@ class Recording:
         index = position.event_index + (position.kind == "consequences")
         if index not in self._boards:
             self._boards[index] = person_board(
-                self._raw_board(position), self.human_seat
+                self._raw_board(position),
+                self.human_seat,
+                winner=self.payload.get("winner"),
             )
         return self._boards[index]
 
@@ -726,11 +739,13 @@ read_cache = ReadCache()
 # ———————————————— Narrating a move
 
 
-def person_board(observation: dict[str, Any], human_seat: int) -> dict[str, Any]:
+def person_board(
+    observation: dict[str, Any], human_seat: int, *, winner: int | None
+) -> dict[str, Any]:
     """A retained board as the person saw it: hero-oriented and redacted (the
     established viewer boundary, `prepare_trace_payload`)."""
     board = deepcopy(observation)
-    normalize_observation_to_hero(board, human_seat)
+    normalize_observation_to_hero(board, human_seat, winner=winner)
     redact_observation(board)
     return board
 
@@ -830,12 +845,11 @@ def narrate_move(
     following = after.get("decision_context") or {}
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
-        or (own and following.get("stage") == own[-1].stage == "order_triggers")
         or (
             own
-            and own[-1].stage in RESOLVING_STAGES
-            and following.get("stage") in RESOLVING_STAGES
-            and (following.get("source") or {}).get("label") == own[-1].source
+            and own[-1].groups_with(
+                following.get("stage"), (following.get("source") or {}).get("label")
+            )
         )
     )
     if continues:
@@ -905,6 +919,9 @@ def _resolution(own: Sequence[OwnStep]) -> str:
             cards = [_ORDERED.sub(r"\1", offer) for offer in placed]
             end = "on the bottom" if step.stage == "order_library_bottom" else "on top"
             phrases.append(f"put {_in_order(cards)} {end}")
+        elif step.stage == "assign_combat_damage":
+            # "Serra Angel assigns 2 to Grizzly Bears, ...": a name leads it.
+            phrases.append(step.chosen)
         else:
             kept = _KEPT.fullmatch(step.chosen)
             phrases.append(

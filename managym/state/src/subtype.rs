@@ -27,6 +27,7 @@ use SubtypeCategory::{Artifact, Creature, Enchantment, Land, Spell};
 const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Adventure", Spell),
     ("Advisor", Creature),
+    ("Aetherborn", Creature),
     ("Ally", Creature),
     ("Angel", Creature),
     ("Ape", Creature),
@@ -50,6 +51,7 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Blood", Artifact),
     ("Boar", Creature),
     ("Bobblehead", Artifact),
+    ("Book", Artifact),
     ("Cartouche", Enchantment),
     ("Case", Enchantment),
     ("Cat", Creature),
@@ -65,6 +67,8 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Coward", Creature),
     ("Crocodile", Creature),
     ("Curse", Enchantment),
+    ("Cyclops", Creature),
+    ("Demon", Creature),
     ("Desert", Land),
     ("Detective", Creature),
     ("Devil", Creature),
@@ -74,7 +78,11 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Dragon", Creature),
     ("Drake", Creature),
     ("Druid", Creature),
+    ("Dryad", Creature),
+    ("Dwarf", Creature),
     ("Elder", Creature),
+    ("Eldrazi", Creature),
+    ("Elemental", Creature),
     ("Elephant", Creature),
     ("Elf", Creature),
     ("Elk", Creature),
@@ -86,25 +94,38 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Forest", Land),
     ("Fortification", Artifact),
     ("Fox", Creature),
+    ("Fractal", Creature),
     ("Frog", Creature),
+    ("Fungus", Creature),
     ("Gate", Land),
     ("Giant", Creature),
     ("Goat", Creature),
     ("Goblin", Creature),
     ("Gold", Artifact),
+    ("Golem", Creature),
+    ("Gorgon", Creature),
+    ("Gremlin", Creature),
+    ("Halfling", Creature),
+    ("Heartwood", Artifact),
     ("Hero", Creature),
     ("Hippo", Creature),
+    ("Homunculus", Creature),
+    ("Horror", Creature),
     ("Horse", Creature),
     ("Human", Creature),
+    ("Hyena", Creature),
     ("Incubator", Artifact),
     ("Infinity", Artifact),
+    ("Inkling", Creature),
     ("Insect", Creature),
     ("Island", Land),
     ("Jellyfish", Creature),
+    ("Juggernaut", Creature),
     ("Junk", Artifact),
     ("Kangaroo", Creature),
     ("Knight", Creature),
     ("Kor", Creature),
+    ("Kraken", Creature),
     ("Lair", Land),
     ("Lander", Artifact),
     ("Lemur", Creature),
@@ -113,7 +134,9 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Locus", Land),
     ("Map", Artifact),
     ("Mercenary", Creature),
+    ("Merfolk", Creature),
     ("Mine", Land),
+    ("Minotaur", Creature),
     ("Mole", Creature),
     ("Mongoose", Creature),
     ("Monk", Creature),
@@ -121,26 +144,35 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Mount", Creature),
     ("Mountain", Land),
     ("Mutagen", Artifact),
+    ("Mutant", Creature),
+    ("Ninja", Creature),
     ("Noble", Creature),
+    ("Octopus", Creature),
     ("Ogre", Creature),
     ("Omen", Spell),
+    ("Ooze", Creature),
+    ("Orc", Creature),
     ("Otter", Creature),
     ("Ox", Creature),
     ("Peasant", Creature),
     ("Performer", Creature),
+    ("Phyrexian", Creature),
     ("Pilot", Creature),
     ("Pirate", Creature),
     ("Plains", Land),
+    ("Plan", Enchantment),
     ("Plant", Creature),
     ("Platypus", Creature),
     ("Porcupine", Creature),
     ("Power-Plant", Land),
     ("Powerstone", Artifact),
     ("Rabbit", Creature),
+    ("Raccoon", Creature),
     ("Ranger", Creature),
     ("Rat", Creature),
     ("Rebel", Creature),
     ("Rhino", Creature),
+    ("Robot", Creature),
     ("Rogue", Creature),
     ("Role", Enchantment),
     ("Room", Enchantment),
@@ -150,15 +182,21 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Scout", Creature),
     ("Seal", Creature),
     ("Serpent", Creature),
+    ("Shade", Creature),
+    ("Shaman", Creature),
     ("Shapeshifter", Creature),
     ("Shard", Enchantment),
+    ("Shark", Creature),
     ("Sheep", Creature),
     ("Shrine", Enchantment),
+    ("Skeleton", Creature),
     ("Sloth", Creature),
     ("Snake", Creature),
     ("Soldier", Creature),
+    ("Sorcerer", Creature),
     ("Spacecraft", Artifact),
     ("Sphere", Land),
+    ("Sphinx", Creature),
     ("Spider", Creature),
     ("Spirit", Creature),
     ("Squirrel", Creature),
@@ -170,16 +208,23 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Trap", Spell),
     ("Treasure", Artifact),
     ("Treefolk", Creature),
+    ("Troll", Creature),
     ("Turtle", Creature),
+    ("Unicorn", Creature),
     ("Urza's", Land),
+    ("Vampire", Creature),
+    ("Vedalken", Creature),
     ("Vehicle", Artifact),
+    ("Villain", Creature),
     ("Wall", Creature),
     ("Warlock", Creature),
     ("Warrior", Creature),
+    ("Werewolf", Creature),
     ("Whale", Creature),
     ("Wizard", Creature),
     ("Wolf", Creature),
     ("Wurm", Creature),
+    ("Zombie", Creature),
 ];
 
 /// Every subtype in the table, in name order.
@@ -195,12 +240,113 @@ pub fn subtype_category(subtype: &str) -> Option<SubtypeCategory> {
         .map(|index| SUBTYPES[index].1)
 }
 
+/// Whether `subtype` is on the list of a card type the object has
+/// (CR 205.3d): kindred uses creature types (CR 205.3m), and instants and
+/// sorceries share spell types (CR 205.3k). Planeswalker and battle types are
+/// not in the table, so nothing corresponds to them.
+pub fn subtype_corresponds_to(subtype: &str, card_type: crate::card::CardType) -> bool {
+    use crate::card::CardType as T;
+    let wanted = match card_type {
+        T::Creature | T::Kindred => Creature,
+        T::Land => Land,
+        T::Artifact => Artifact,
+        T::Enchantment => Enchantment,
+        T::Instant | T::Sorcery => Spell,
+        T::Planeswalker | T::Battle => return false,
+    };
+    subtype_category(subtype) == Some(wanted)
+}
+
 /// CR 205.3m. An unlisted name is not a creature type; debug builds reject it,
 /// so a new subtype must be classified before any rule reads it.
 pub fn is_creature_type(subtype: &str) -> bool {
     let category = subtype_category(subtype);
     debug_assert!(category.is_some(), "unclassified subtype {subtype:?}");
     category == Some(Creature)
+}
+
+/// An object's creature types (CR 205.3m): the ones it lists, or every
+/// creature type at once ("all creature types", Soulstone Sanctuary). "All"
+/// is one value rather than an enumeration of the creature-type list, so it
+/// also covers types no card in the catalog names.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum CreatureTypes {
+    /// Sorted and distinct.
+    Listed(Vec<String>),
+    All,
+}
+
+impl Default for CreatureTypes {
+    fn default() -> Self {
+        Self::Listed(Vec::new())
+    }
+}
+
+impl CreatureTypes {
+    /// The distinct creature types among `subtypes`.
+    pub fn among<'a>(subtypes: impl IntoIterator<Item = &'a String>) -> Self {
+        let mut listed: Vec<String> = subtypes
+            .into_iter()
+            .filter(|subtype| is_creature_type(subtype))
+            .cloned()
+            .collect();
+        listed.sort();
+        listed.dedup();
+        Self::Listed(listed)
+    }
+
+    /// The listed creature types; none for all creature types.
+    pub fn listed(&self) -> &[String] {
+        match self {
+            Self::Listed(listed) => listed,
+            Self::All => &[],
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        matches!(self, Self::All)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Listed(listed) if listed.is_empty())
+    }
+
+    pub fn contains(&self, creature_type: &str) -> bool {
+        match self {
+            Self::Listed(listed) => listed.iter().any(|t| t == creature_type),
+            Self::All => is_creature_type(creature_type),
+        }
+    }
+
+    /// Whether the two have a creature type in common ("that share a
+    /// creature type"); all creature types shares with any nonempty list.
+    pub fn shares(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::All, other) | (other, Self::All) => !other.is_empty(),
+            (Self::Listed(a), Self::Listed(b)) => a.iter().any(|t| b.contains(t)),
+        }
+    }
+
+    /// The creature types both have.
+    pub fn intersection(&self, other: &Self) -> Self {
+        match (self, other) {
+            (Self::All, other) | (other, Self::All) => other.clone(),
+            (Self::Listed(a), Self::Listed(b)) => {
+                Self::Listed(a.iter().filter(|t| b.contains(t)).cloned().collect())
+            }
+        }
+    }
+}
+
+/// A listed set serializes as its names, so retained records keep their
+/// bytes; all creature types is the string `"all"`.
+impl serde::Serialize for CreatureTypes {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Listed(listed) => listed.serialize(serializer),
+            Self::All => serializer.serialize_str("all"),
+        }
+    }
 }
 
 #[cfg(test)]

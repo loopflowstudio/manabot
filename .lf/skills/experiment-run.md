@@ -1,29 +1,30 @@
 ---
-requires: the experiment module at a committed revision
-produces: completed runs, each recorded in the report by commit, run ID and cost
+requires: an experiment module at a committed revision
+produces: completed Etude runs recorded in `experiments/reports/<name>.md` by commit, run ID and cost
+action_style: procedural
 ---
-Run the experiment through Etude and the existing manabot owners.
+Run the experiment through Etude and record each run in `experiments/reports/<name>.md`.
 
-1. The freeze is the commit and the Etude run ID. Launch from a committed
-   revision and record both in the report. Nothing else is frozen, hashed or
-   admitted by hand.
-2. Spending. At or under USD25 for the whole experiment (training, evaluation
-   and retries), launch with the launcher's own cap (`--max-usd`). Above that,
-   a person's go-ahead naming the amount is required; when it is absent, stop
-   before renting and say what amount is needed. An approval already given is
-   not asked for again.
-3. Look at the experiment's existing runs before launching. Resume or finish
-   them; never duplicate a run because an earlier step stopped. Etude owns jobs
-   and recovery.
-4. A change that keeps the question (a capacity limit, a crash fix, a device,
-   a machine type, a retry) is fixed, relaunched and recorded as one dated line
-   in the report. It is not a new protocol or a new version. A change to a
-   finding's question or to what it measures is a new dated opening
-   paragraph, and the runs before it become exploratory.
-5. Cost is the launcher's number for the run, recorded once per run. Do not
-   reconstruct bills, reserves or settlements. Confirm the rentals ended.
-6. Keep what the runs retain: failed games with their seeds and Commands,
-   numerical health, and artifact bytes published through `manabot.data`
-   before any manifest is committed. File reproduced engine defects as bug
-   Tasks. No artificial load, no fallback policies, and no spending to obtain
-   a favorable result.
+1. Launch from a committed revision and record the commit and Etude run ID in
+   the report. Those two are the freeze; freeze, hash or admit nothing else
+   by hand.
+2. Keep spending within authority. At or under USD25 for the whole experiment
+   (training, evaluation and retries), launch with `--max-usd`. Above USD25,
+   stop before renting unless a person has already approved the amount; state
+   the amount needed and wait. Don't ask again for an amount already
+   approved.
+3. Inspect existing runs and resume unfinished work in Etude. For checkpoint
+   curves, run `etude eval` once checkpoints are ready—declaring `eval_jobs`
+   alone queues no evaluation. Confirm the intended checkpoint and deal
+   coverage before reporting.
+4. A fix that keeps the question (capacity limit, crash fix, device, machine
+   type, retry) is fixed, relaunched and noted as one dated line in the
+   report—never a new protocol or version. A change to a finding's question
+   or what it measures gets a new dated opening paragraph, and earlier runs
+   become exploratory.
+5. Record the launcher's cost once per run; never reconstruct bills, reserves
+   or settlements. Confirm rentals ended.
+6. Keep failed games (seeds and Commands), numerical health, and artifacts
+   published through `manabot.data` before committing any manifest. File
+   reproduced engine defects as bug Tasks. No artificial load, no fallback
+   policies, and no spending to chase a favorable result.

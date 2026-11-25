@@ -42,7 +42,7 @@ class CardMove(StrictModel):
     from_: Zone | None = Field(alias="from")
     controller: Seat
     cause: Literal["draw", "selection", "return", "outside", "generated", "move"]
-    turn: int = Field(ge=1)
+    turn: int = Field(ge=0)
 
 
 class ExposureOption(StrictModel):
@@ -76,7 +76,38 @@ class ExposureResolution(StrictModel):
     definition: int | None
 
 
+class ManaUse(StrictModel):
+    priority_produced: int = Field(ge=0)
+    regular_expired: int = Field(ge=0)
+    combat_expired: int = Field(ge=0)
+    priority_expired_min: int = Field(ge=0)
+    priority_expired_max: int = Field(ge=0)
+
+
+class TurnMana(StrictModel):
+    available: int = Field(ge=0)
+    paid: int = Field(ge=0)
+
+
 class ExposureCapture(StrictModel):
+    mana_turns: tuple[tuple[TurnMana, ...], tuple[TurnMana, ...]] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    attackers_committed: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    attackers_lost_for_nothing: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    blockers_committed: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    blockers_lost_for_nothing: tuple[int, int] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
+    mana: tuple[ManaUse, ManaUse] | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     choices: tuple[ExposureChoice, ...]
     resolutions: tuple[ExposureResolution, ...]
 
@@ -95,7 +126,7 @@ class NativeCapture(StrictModel):
 class CapturedCards(StrictModel):
     capture: NativeCapture
     final_cards: tuple[CardSnapshot, ...]
-    turn: int = Field(ge=1)
+    turn: int = Field(ge=0)
 
     @model_validator(mode="after")
     def complete(self) -> CapturedCards:
@@ -111,7 +142,7 @@ class CapturedCards(StrictModel):
             }
             if len(opening) != len(set(opening)) or set(opening) != expected:
                 raise ValueError("opening hand differs from setup")
-        turn = 1
+        turn = 0
         for sequence, move in enumerate(self.capture.moves):
             card = move.card
             old = cards.get(card.copy_id)

@@ -13,9 +13,14 @@ use managym::{
         player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
-    benchmark_allocations, benchmark_layers, benchmark_payments,
+    allocator, benchmark_layers, benchmark_payments,
     flow::event::GameEvent,
-    state::{game_object::PlayerId, permanent::CounterKind, player::PlayerConfig, zone::ZoneType},
+    state::{
+        game_object::PlayerId,
+        permanent::CounterKind,
+        player::{GameSetup, ManaFloats, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -28,17 +33,38 @@ const STATES: &[(&str, &str)] = &[
     ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap scans stop once a single use is funded. Residual rollout replanning spans changing tapped resources and saved callers; sharing answers across steps needs a separate cache/invalidation design"),
     ("waterbend-x", "Forest, Katara, Bender's Waterskin, Herbalist; one payment per X"),
     ("duplicate-creatures", "Gray Ogre on both sides; attack, block and damage checkpoints"),
+    ("herald-healthy", "Same battlefield as herald-statics, with both seats at starting life"),
+    ("herald-statics", "One Herald of Eternal Dawn per seat among a growing cycle of static abilities; protection checks during combat"),
     ("duplicate-tokens", "Ally tokens on both sides; observation and combat rows"),
     ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven. Avoids counted-tap scans on ordinary activations; residual nested-filter branches need an exact bound accounting for upfront spending purposes and saved outputs"),
     ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
+    ("face-down", "N manifests from the library beside N Gray Ogres on both sides; hidden-card aliases in observation, combat and search"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
+    ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
+    ("mixed-life-gain", "Same Food activation with N listeners cycling Cat Collector, Fiendish Panda, Vanguard Seraph and Exemplar of Light"),
+    ("fumigate-panda", "Fumigate destroys Panda and N Ogres, leaves N indestructible Oozes, then offers eligible graveyard targets within Panda's last power. Pre-batch listener checks grow quadratically across the departures"),
+    ("venom-team", "Venom Connoisseur with N Gray Ogres and two entering Allies; resolve the second ability and grant the whole team deathtouch"),
+    ("blast-discard", "Incinerating Blast damages an Ogre; N individually selectable cards remain in hand beside decline"),
+    ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
+    ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
     ("names", "The Rise of Sozin chapter II; catalog-wide bounded naming groups beside a large graveyard"),
+    ("convoke-duplicates", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N other Guardians and N Forests. Identical sources still yield one direct-tap offer per creature"),
+    ("convoke-diverse", "Guardian of Vitu-Ghazi + Appeal to Eirdu; N creatures cycling eight color mixes (two are mana sources) and N lands cycling four kinds. The payment step grows with N squared and a search reply with N cubed: a step asks a number of payment plans that grows with N, each over the whole board, and search tries one tap per source. One payment model answers every tap offer of a decision"),
+    ("delve-graveyard", "Teval, Sire of Seven Deaths, three lands and N graveyard cards cycling eight names; one exile offer per card, no payment search"),
+    ("improvise-artifacts", "Ironheart, one Island and N artifacts cycling Treasure, Prism, Waterskin, Scarecrow Guide and Battle Fan; the payment step and search grow as in convoke-diverse, beside one plan per mana ability"),
+    ("float-origins", "diverse-mana with mana_floats = all; the floated checkpoint has every mana ability used at priority, so the pool holds one origin per unit and a clone copies each unit's class"),
+    ("crew-saddle", "Cultivator's Caravan, Alacrian Jaguar and Lumen-Class Frigate with N creatures cycling eight names; crew, saddle and station tap choices, one offer per creature"),
+    ("bargain-forage", "Archon's Glory + Feed the Cycle; N artifacts and tokens cycling five kinds and N graveyard cards; bargain's sacrifice and forage's exile are single picks among N, never subsets"),
+    ("graveyard-routes", "Muldrotha and Zul Ashur over N graveyard cards cycling artifact, creature, Zombie and land kinds; the granted checkpoint overlaps Zul's exact-object grant with Muldrotha's type routes on one Zombie"),
+    ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
+    ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
+    ("unprepared-copies", "prepared-copies' board with the Phytomedics forced onto the battlefield unprepared; the zero-link control"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -47,6 +73,7 @@ const LAYERS: &[&str] = &[
     "step:attack",
     "step:block",
     "step:damage",
+    "step:resolve",
     "step:choice",
     "characteristics",
     "triggers",
@@ -64,6 +91,47 @@ const MANA: &[&str] = &[
     "Jasmine Dragon Tea Shop",
     "White Lotus Hideout",
 ];
+const CREATURES: &[&str] = &[
+    "White Lotus Reinforcements",
+    "Kyoshi Warriors",
+    "Badgermole Cub",
+    "Hermitic Herbalist",
+    "Gray Ogre",
+    "Earth King's Lieutenant",
+    "Supportive Parents",
+    "Tiger-Seal",
+];
+const ARTIFACTS: &[&str] = &[
+    "token.treasure",
+    "Prophetic Prism",
+    "Bender's Waterskin",
+    "Scarecrow Guide",
+    "Kyoshi Battle Fan",
+];
+const GRAVEYARD: &[&str] = &[
+    "Gray Ogre",
+    "Forest",
+    "Pillar Launch",
+    "Badgermole Cub",
+    "Island",
+    "Kyoshi Warriors",
+    "Prophetic Prism",
+    "Tiger-Seal",
+];
+const CASCADE: &[&str] = &[
+    "Helpful Hunter",
+    "Ajani's Pridemate",
+    "Hinterland Sanctifier",
+    "Felidar Savior",
+    "Fog Bank",
+];
+const CASCADE_ENGINES: &[&str] = &[
+    "Arahbo, the First Fang",
+    "Impact Tremors",
+    "Doubling Season",
+    "Gratuitous Violence",
+    "Goblin Oriflamme",
+];
 const STATICS: &[&str] = &[
     "White Lotus Reinforcements",
     "Earth King's Lieutenant",
@@ -77,11 +145,31 @@ struct Seat {
     hand: Vec<String>,
     graveyard: Vec<String>,
     tokens: Vec<String>,
+    /// Library cards manifested face down after the named permanents enter.
+    manifests: usize,
+    /// Moved from hand to the battlefield through the zone move, so entry
+    /// replacements ("enters prepared") apply.
+    entered: Vec<String>,
 }
 impl Seat {
     fn add(&mut self, name: &str, count: usize) {
         self.battlefield
             .extend(std::iter::repeat_n(name.to_string(), count));
+    }
+    /// `size` permanents cycling `names`; a `token.` name is a token key.
+    fn cycle(&mut self, names: &[&str], size: usize) {
+        for &name in names.iter().cycle().take(size) {
+            if name.starts_with("token.") {
+                self.tokens.push(name.into());
+            } else {
+                self.add(name, 1);
+            }
+        }
+    }
+    /// `size` graveyard cards cycling `GRAVEYARD`.
+    fn fill_graveyard(&mut self, size: usize) {
+        let cards = GRAVEYARD.iter().cycle().take(size);
+        self.graveyard.extend(cards.map(|name| name.to_string()));
     }
 }
 #[derive(Clone, Debug, Serialize)]
@@ -123,8 +211,184 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "diverse-mana" | "restricted-filter" | "distinct-restrictions" => {
-            let names = if name == "diverse-mana" {
+        "collector-food" | "mixed-life-gain" => {
+            let seat = &mut seats[0];
+            seat.add("Plains", 2);
+            if name == "collector-food" {
+                seat.add("Cat Collector", size);
+            } else {
+                seat.cycle(
+                    &[
+                        "Cat Collector",
+                        "Fiendish Panda",
+                        "Vanguard Seraph",
+                        "Exemplar of Light",
+                    ],
+                    size,
+                );
+            }
+            seat.cycle(&["token.food"], size);
+        }
+        "fumigate-panda" => {
+            seats[0].add("Fiendish Panda", 1);
+            seats[0].add("Plains", 5);
+            seats[0].hand.push("Fumigate".into());
+            let creatures = [
+                "Felidar Cub",
+                "Hill Giant",
+                "Fog Bank",
+                "Steel Hellkite",
+                "Helpful Hunter",
+                "Vanguard Seraph",
+                "Heartfire Immolator",
+                "High-Society Hunter",
+                "Hinterland Sanctifier",
+                "Felidar Savior",
+                "Spectral Sailor",
+                "Exemplar of Light",
+                "Ajani's Pridemate",
+                "Cat Collector",
+                "Venom Connoisseur",
+                "Cackling Prowler",
+            ];
+            seats[0]
+                .graveyard
+                .extend(creatures.iter().cycle().take(size).map(|s| s.to_string()));
+            seats[1].add("Gray Ogre", size);
+            seats[1].add("Predator Ooze", size);
+        }
+        "venom-team" => {
+            seats[0].add("Venom Connoisseur", 1);
+            seats[0].add("Gray Ogre", size);
+        }
+        "blast-discard" => {
+            seats[0].add("Mountain", 5);
+            seats[0].hand.push("Incinerating Blast".into());
+            seats[0]
+                .hand
+                .extend(GRAVEYARD.iter().cycle().take(size).map(|s| s.to_string()));
+            seats[1].add("Gray Ogre", 1);
+        }
+        "lathril-elves" => {
+            seats[0].add("Lathril, Blade of the Elves", 1);
+            seats[0].cycle(&["token.elf_warrior_1_1_g"], size);
+        }
+        "convoke-duplicates" | "convoke-diverse" => {
+            let seat = &mut seats[0];
+            if name == "convoke-duplicates" {
+                seat.add("Guardian of Vitu-Ghazi", size);
+                seat.add("Forest", size);
+            } else {
+                seat.cycle(CREATURES, size);
+                seat.cycle(&["Forest", "Plains", "Airship Engine Room", "Island"], size);
+            }
+            seat.hand
+                .extend(["Guardian of Vitu-Ghazi".into(), "Appeal to Eirdu".into()]);
+        }
+        "delve-graveyard" => {
+            let seat = &mut seats[0];
+            for card in ["Teval, Arbiter of Virtue", "Swamp", "Forest", "Island"] {
+                seat.add(card, 1);
+            }
+            seat.hand.push("Sire of Seven Deaths".into());
+            seat.fill_graveyard(size);
+        }
+        "improvise-artifacts" => {
+            let seat = &mut seats[0];
+            seat.add("Island", 1);
+            seat.cycle(ARTIFACTS, size);
+            seat.hand.push("Ironheart, Clever Champion".into());
+        }
+        "crew-saddle" => {
+            let seat = &mut seats[0];
+            for card in [
+                "Cultivator's Caravan",
+                "Alacrian Jaguar",
+                "Lumen-Class Frigate",
+            ] {
+                seat.add(card, 1);
+            }
+            seat.cycle(CREATURES, size);
+        }
+        "bargain-forage" => {
+            seats[1].add("Gray Ogre", 1);
+            let seat = &mut seats[0];
+            for card in ["Gray Ogre", "Plains", "Swamp", "Swamp", "Swamp"] {
+                seat.add(card, 1);
+            }
+            seat.cycle(
+                &[
+                    "token.food",
+                    "token.treasure",
+                    "Prophetic Prism",
+                    "Kyoshi Battle Fan",
+                    "token.ally",
+                ],
+                size,
+            );
+            seat.hand
+                .extend(["Archon's Glory".into(), "Feed the Cycle".into()]);
+            seat.fill_graveyard(size);
+        }
+        "graveyard-routes" => {
+            let seat = &mut seats[0];
+            for card in ["Muldrotha, the Gravetide", "Zul Ashur, Lich Lord"] {
+                seat.add(card, 1);
+            }
+            for land in ["Swamp", "Forest", "Island"] {
+                seat.add(land, 3);
+            }
+            let kinds = [
+                "Cityscape Leveler",
+                "Hungry Ghoul",
+                "Prophetic Prism",
+                "Forest",
+                "Suspicious Shambler",
+                "Gray Ogre",
+                "Kyoshi Battle Fan",
+            ];
+            seat.graveyard
+                .extend(kinds.iter().cycle().take(size).map(|name| name.to_string()));
+        }
+        "profile-hand" => {
+            let cards = [
+                "Twinmaw Stormbrood",
+                "Smaug, the Great Calamity",
+                "Sagu Wildling",
+                "Dirgur Island Dragon",
+                "Bofur, Reliable Guardian",
+                "Disruptive Stormbrood",
+            ];
+            seats[0]
+                .hand
+                .extend(cards.iter().cycle().take(size).map(|name| name.to_string()));
+            seats[0].cycle(
+                &[
+                    "Mountain",
+                    "Island",
+                    "Forest",
+                    "Plains",
+                    "Jasmine Dragon Tea Shop",
+                    "White Lotus Hideout",
+                ],
+                size + 6,
+            );
+            seats[1].add("Gray Ogre", size);
+        }
+        "prepared-copies" | "unprepared-copies" => {
+            for seat in &mut seats {
+                seat.add("Gray Ogre", size);
+                seat.add("Plains", size);
+            }
+            let medics = std::iter::repeat_n("Emergency Phytomedic".to_string(), size);
+            if name == "prepared-copies" {
+                seats[0].entered.extend(medics);
+            } else {
+                seats[0].battlefield.extend(medics);
+            }
+        }
+        "diverse-mana" | "restricted-filter" | "distinct-restrictions" | "float-origins" => {
+            let names = if matches!(name, "diverse-mana" | "float-origins") {
                 MANA
             } else {
                 &[
@@ -154,18 +418,31 @@ fn recipe(name: &str, size: usize) -> Recipe {
             ]);
         }
         "duplicate-creatures"
+        | "herald-statics"
+        | "herald-healthy"
         | "duplicate-tokens"
         | "diverse-statics"
         | "attachments"
+        | "face-down"
         | "triggers"
+        | "entry-cascade"
         | "zones"
         | "mixed" => {
             for seat in &mut seats {
                 match name {
                     "duplicate-tokens" => seat.tokens = vec!["token.ally".into(); size],
-                    "diverse-statics" => {
+                    "diverse-statics" | "herald-statics" | "herald-healthy" => {
                         for i in 0..size {
                             seat.add(STATICS[i % STATICS.len()], 1);
+                        }
+                        if name != "diverse-statics" {
+                            seat.add("Herald of Eternal Dawn", 1);
+                        }
+                    }
+                    "entry-cascade" => {
+                        seat.cycle(CASCADE, size);
+                        for engine in CASCADE_ENGINES {
+                            seat.add(engine, 1);
                         }
                     }
                     "triggers" => {
@@ -193,6 +470,10 @@ fn recipe(name: &str, size: usize) -> Recipe {
                         seat.graveyard
                             .extend(std::iter::repeat_n("Gray Ogre".into(), size));
                     }
+                    "face-down" => {
+                        seat.add("Gray Ogre", size);
+                        seat.manifests = size;
+                    }
                     _ => seat.add("Gray Ogre", size),
                 }
                 if name == "attachments" {
@@ -219,6 +500,14 @@ fn recipe(name: &str, size: usize) -> Recipe {
         }
         _ => panic!("unknown state {name}; use --list"),
     }
+    // A real response keeps the opponent's final priority pass visible.
+    if matches!(
+        name,
+        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team" | "blast-discard"
+    ) {
+        seats[1].add("Mountain", 1);
+        seats[1].hand.push("Lightning Bolt".into());
+    }
     Recipe {
         state: name.into(),
         size,
@@ -237,14 +526,26 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .chain(&seat.hand)
                 .chain(&seat.graveyard)
+                .chain(&seat.entered)
             {
                 *deck.entry(name.clone()).or_default() += 1;
             }
             PlayerConfig::new(format!("seat {i}"), deck)
         })
         .collect();
+    let mut setup = GameSetup::from(players);
+    if recipe.state == "float-origins" {
+        setup.mana_floats[0] = ManaFloats::All;
+    }
     let mut env = Env::new(7, true, false, false);
-    env.reset(players).unwrap();
+    env.reset(setup).unwrap();
+    for _ in 0..2 {
+        let keep = actions(&mut env)
+            .iter()
+            .position(|action| matches!(action, Action::ChooseMode { mode: 0, .. }))
+            .expect("opening hand offers keep");
+        env.step(keep as i64).unwrap();
+    }
     for (i, seat) in recipe.seats.iter().enumerate() {
         env.scenario_clear_hand(i).unwrap();
         for name in &seat.battlefield {
@@ -255,7 +556,7 @@ fn build(recipe: &Recipe) -> Env {
         }
         for name in &seat.graveyard {
             env.scenario_force_card_in_hand(i, name).unwrap();
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let card = *game
                 .state
                 .zones
@@ -267,14 +568,37 @@ fn build(recipe: &Recipe) -> Env {
                 .zones
                 .move_object(&state.objects, card, PlayerId(i), ZoneType::Graveyard);
         }
+        for name in &seat.entered {
+            env.scenario_force_card_in_hand(i, name).unwrap();
+            let game = env.fixture_game_mut();
+            let card = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, PlayerId(i))
+                .last()
+                .unwrap();
+            game.move_object(card, ZoneType::Battlefield);
+        }
         for token in &seat.tokens {
-            let game = env.benchmark_game_mut();
+            let game = env.fixture_game_mut();
             let id = game.create_token(token, PlayerId(i), false).unwrap();
+            game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
+        }
+        for _ in 0..seat.manifests {
+            let game = env.fixture_game_mut();
+            let top = *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Library, PlayerId(i))
+                .last()
+                .expect("library card to manifest");
+            let manifested = game.manifest(top, PlayerId(i));
+            let id = game.lookup_current_permanent(manifested).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
     if recipe.state == "attachments" {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         for i in 0..2 {
             let creatures: Vec<_> = game
                 .state
@@ -323,7 +647,7 @@ fn build(recipe: &Recipe) -> Env {
         }
     }
     if recipe.state == "names" {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let id = game
             .state
             .permanents
@@ -340,11 +664,14 @@ fn build(recipe: &Recipe) -> Env {
             .unwrap()
             .change_counters(CounterKind::Lore, 1);
     }
+    if recipe.state == "herald-statics" {
+        env.fixture_game_mut().state.players[0].life = 0;
+    }
     env.scenario_refresh().unwrap();
     env
 }
 fn actions(env: &mut Env) -> Vec<Action> {
-    env.benchmark_game_mut()
+    env.fixture_game_mut()
         .current_action_space
         .as_ref()
         .unwrap()
@@ -352,7 +679,11 @@ fn actions(env: &mut Env) -> Vec<Action> {
         .clone()
 }
 fn first_action(env: &mut Env, kind: &str) -> Option<usize> {
-    actions(env).iter().position(|a| match kind {
+    nth_action(env, kind, 0)
+}
+fn nth_action(env: &mut Env, kind: &str, nth: usize) -> Option<usize> {
+    let offered = actions(env);
+    let matching = offered.iter().enumerate().filter(|(_, a)| match kind {
         "cast" => matches!(a, Action::CastSpell { .. }),
         "activate" => matches!(
             a,
@@ -366,7 +697,7 @@ fn first_action(env: &mut Env, kind: &str) -> Option<usize> {
                 ..
             }
         ),
-        "damage" => matches!(a, Action::PassPriority { .. }),
+        "damage" | "resolve" => matches!(a, Action::PassPriority { .. }),
         "choice" => !matches!(
             a,
             Action::PassPriority { .. }
@@ -378,7 +709,72 @@ fn first_action(env: &mut Env, kind: &str) -> Option<usize> {
                 | Action::DeclareBlocker { .. }
         ),
         _ => false,
-    })
+    });
+    matching.map(|(index, _)| index).nth(nth)
+}
+/// The decision a cost choice is made at: each step of `path` takes the nth
+/// offered action of a kind. Fixture preparation only.
+fn follow(root: &Env, path: &[(&str, usize)]) -> Env {
+    let mut env = root.fork().unwrap();
+    for &(kind, nth) in path {
+        let index = nth_action(&mut env, kind, nth)
+            .unwrap_or_else(|| panic!("no {kind} action {nth} on the way to a cost choice"));
+        env.step(index as i64).unwrap();
+    }
+    env
+}
+/// Tap every mana source at priority, taking the first offer of each choice
+/// an ability asks, so the pool holds every unit the board can float.
+fn float_everything(root: &Env) -> Env {
+    let mut env = root.fork().unwrap();
+    for _ in 0..256 {
+        let index = if env.action_space_kind() == Some(ActionSpaceKind::Priority) {
+            let offered = actions(&mut env);
+            let game = env.fixture_game_mut();
+            let source = offered.iter().position(|a| match a {
+                Action::TapForMana { .. } => true,
+                Action::ActivateAbility {
+                    permanent,
+                    ability_index,
+                    ..
+                } => game.characteristics(*permanent).activated_abilities[*ability_index]
+                    .mana_choices()
+                    .is_some(),
+                _ => false,
+            });
+            match source {
+                Some(index) => index,
+                None => return env,
+            }
+        } else {
+            0
+        };
+        env.step(index as i64).unwrap();
+    }
+    panic!("mana sources were still offered after 256 decisions")
+}
+/// Activate the first permanent ability (Zul Ashur's) and take the first
+/// target, returning to priority with its grant in place.
+fn granted(root: &Env) -> Env {
+    let mut env = root.fork().unwrap();
+    let index = actions(&mut env)
+        .iter()
+        .position(|a| matches!(a, Action::ActivateAbility { .. }))
+        .expect("Zul Ashur's ability is offered");
+    env.step(index as i64).unwrap();
+    for _ in 0..16 {
+        if env.action_space_kind() == Some(ActionSpaceKind::Priority)
+            && env.fixture_game_mut().state.stack_objects.is_empty()
+        {
+            return env;
+        }
+        let pass = actions(&mut env)
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        env.step(pass as i64).unwrap();
+    }
+    panic!("Zul Ashur's grant never resolved")
 }
 /// Reach combat by passing priority and declaring every attacker. Bound the
 /// preparation trace, not the rules search; error if it never reaches combat.
@@ -409,7 +805,7 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
                 .position(|a| matches!(a, Action::PassPriority { .. }))
         };
         env.step(index? as i64).unwrap();
-        if env.benchmark_game_mut().state.turn.turn_number > 1 {
+        if env.is_game_over() || env.fixture_game_mut().state.turn.turn_number > 1 {
             return None;
         }
     }
@@ -420,11 +816,33 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
 fn damage(root: &Env) -> Option<Env> {
     use managym::flow::turn::StepKind;
     let mut env = combat(root, true)?;
+    // One blocker per attacker: a gang block would stop the measured step
+    // at the attacker's damage assignment instead of dealing damage.
+    let mut blocked = Vec::new();
     for _ in 0..256 {
         if env.action_space_kind() != Some(ActionSpaceKind::DeclareBlocker) {
             break;
         }
-        let index = first_action(&mut env, "block").unwrap_or(0);
+        let offered = actions(&mut env);
+        let index = offered
+            .iter()
+            .position(|action| {
+                matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                    if !blocked.contains(attacker))
+            })
+            .or_else(|| {
+                offered.iter().position(|action| {
+                    matches!(action, Action::DeclareBlocker { attacker: None, .. })
+                })
+            })
+            .unwrap_or(0);
+        if let Action::DeclareBlocker {
+            attacker: Some(attacker),
+            ..
+        } = offered[index]
+        {
+            blocked.push(attacker);
+        }
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
@@ -433,14 +851,14 @@ fn damage(root: &Env) -> Option<Env> {
     if env.action_space_kind() != Some(ActionSpaceKind::Priority) {
         return None;
     }
-    if env.benchmark_game_mut().state.priority.consecutive_passes == 0 {
+    if env.fixture_game_mut().state.priority.consecutive_passes == 0 {
         let index = first_action(&mut env, "damage").unwrap();
         env.step(index as i64).unwrap();
         if env.is_game_over() {
             return None;
         }
     }
-    (env.benchmark_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
+    (env.fixture_game_mut().state.turn.current_step_kind() == StepKind::DeclareBlockers)
         .then_some(env)
 }
 
@@ -450,7 +868,7 @@ fn reach(root: &Env, label: &str) -> Env {
     use managym::flow::decision::Decision;
     let mut env = root.fork().unwrap();
     for _ in 0..256 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let decision = game.state.suspended_decision.as_ref().map(|p| &p.decision);
         let reached = match label {
             "name" => matches!(decision, Some(Decision::NameCard { .. })),
@@ -477,18 +895,112 @@ fn reach(root: &Env, label: &str) -> Env {
     panic!("fixture never reached {label} in 256 decisions")
 }
 
+/// Stop at the real response to a single stack object. In the Connoisseur
+/// position its first resolution must already have recorded the ordinal.
+fn before_resolution(mut env: Env, after_first: bool) -> Env {
+    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    for _ in 0..32 {
+        let game = env.benchmark_game_mut();
+        assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
+        let ready = game.state.stack_objects.len() == 1
+            && game.state.priority.consecutive_passes == 1
+            && (!after_first
+                || game
+                    .state
+                    .turn
+                    .ability_resolutions_this_turn
+                    .values()
+                    .any(|&n| n == 1));
+        if ready && env.action_space_kind() == Some(ActionSpaceKind::Priority) {
+            return env;
+        }
+        let next = first_action(&mut env, "resolve").unwrap_or(0);
+        env.step(next as i64).unwrap();
+    }
+    panic!("never reached the final resolution pass");
+}
+
 fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
+    match recipe.state.as_str() {
+        "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
+        | "blast-discard" => {
+            let env = match recipe.state.as_str() {
+                "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
+                "venom-team" => {
+                    let mut env = root.fork().unwrap();
+                    for _ in 0..2 {
+                        env.benchmark_game_mut()
+                            .create_token("token.ally", PlayerId(0), false)
+                            .unwrap();
+                    }
+                    // Injection left a pass-only priority. Start measurement
+                    // where the two actual Connoisseur triggers need ordering.
+                    let order = reach(&env, "order");
+                    result = vec![("order".into(), order.fork().unwrap())];
+                    order
+                }
+                _ => follow(root, &[("cast", 0)]),
+            };
+            let resolution = before_resolution(env, recipe.state == "venom-team");
+            let resolved = follow(&resolution, &[("resolve", 0)]);
+            result.push(("resolution".into(), resolution));
+            result.push(("after-resolution".into(), resolved));
+            return result;
+        }
+        "lathril-elves" => {
+            if recipe.size >= 10 {
+                let mut payment = follow(root, &[("activate", 0)]);
+                for tapped in 0..10 {
+                    if !actions(&mut payment)
+                        .iter()
+                        .any(|a| matches!(a, Action::SelectCard { .. }))
+                    {
+                        break; // Native skipping can pay the last forced tap.
+                    }
+                    result.push((format!("tapped-{tapped}"), payment.fork().unwrap()));
+                    payment = follow(&payment, &[("choice", 0)]);
+                }
+            }
+            return result;
+        }
+        _ => {}
+    }
     if recipe.state == "names" {
         return vec![("name".into(), reach(root, "name"))];
     }
-    if recipe.state == "triggers" {
+    if let Some(token) = match recipe.state.as_str() {
+        "triggers" => Some("token.ally"),
+        "entry-cascade" => Some("token.cat_1_1_w"),
+        _ => None,
+    } {
         let mut entered = root.fork().unwrap();
         entered
-            .benchmark_game_mut()
-            .create_token("token.ally", PlayerId(0), false)
+            .fixture_game_mut()
+            .create_token(token, PlayerId(0), false)
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
+    }
+    let cost_choices: &[(&str, &[(&str, usize)])] = match recipe.state.as_str() {
+        "crew-saddle" => &[
+            ("crew", &[("activate", 0)]),
+            ("saddle", &[("activate", 1)]),
+            ("station", &[("activate", 2)]),
+        ],
+        "bargain-forage" => &[
+            ("bargain", &[("cast", 0), ("choice", 0), ("choice", 0)]),
+            ("forage", &[("cast", 1), ("choice", 0)]),
+        ],
+        _ => &[],
+    };
+    for (label, path) in cost_choices {
+        result.push(((*label).into(), follow(root, path)));
+    }
+    if recipe.state == "graveyard-routes" {
+        result.push(("granted".into(), granted(root)));
+    }
+    if recipe.state == "float-origins" {
+        result.push(("floated".into(), float_everything(root)));
     }
     if recipe.state == "choices" {
         let mut activated = root.fork().unwrap();
@@ -595,7 +1107,9 @@ fn run(
         if layer == "actions" && root.action_space_kind() != Some(ActionSpaceKind::Priority) {
             continue;
         }
-        if layer == "step:damage" && checkpoint != "damage" {
+        if (layer == "step:damage" && checkpoint != "damage")
+            || (layer == "step:resolve" && checkpoint != "resolution")
+        {
             continue;
         }
         let mut probe = root.fork().unwrap();
@@ -621,28 +1135,28 @@ fn run(
             // Cold characteristics attribution: a conservative state write
             // invalidates the cloned caches, without changing any value.
             if layer == "characteristics" {
-                let _ = &mut *env.benchmark_game_mut().state;
+                let _ = &mut *env.fixture_game_mut().state;
             }
             // Cold payment attribution: preparation already answered these
             // questions, and the fork carries their cached answers.
             if layer == "actions" {
-                benchmark_payments::clear_cache(env.benchmark_game_mut());
+                benchmark_payments::clear_cache(env.fixture_game_mut());
             }
             benchmark_layers::reset();
             benchmark_payments::reset();
             if allocations {
-                benchmark_allocations::start();
+                allocator::start();
             }
             let start = Instant::now();
             let output = match layer {
                 "actions" => Output::Actions {
-                    actions: benchmark_layers::actions(env.benchmark_game_mut(), PlayerId(actor)),
+                    actions: benchmark_layers::actions(env.fixture_game_mut(), PlayerId(actor)),
                 },
                 "characteristics" => Output::Views {
-                    views: benchmark_layers::characteristics(env.benchmark_game_mut()),
+                    views: benchmark_layers::characteristics(env.fixture_game_mut()),
                 },
                 "triggers" => {
-                    let game = env.benchmark_game_mut();
+                    let game = env.fixture_game_mut();
                     // Feed one controlled entry event to the ordinary indexed
                     // matcher. On the trigger recipe every Ascension sees it.
                     let source = game
@@ -650,7 +1164,12 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state[p.object].name == "Gray Ogre")
+                        .find(|p| {
+                            matches!(
+                                game.state[p.object].name.as_str(),
+                                "Gray Ogre" | "Helpful Hunter"
+                            )
+                        })
                         .or_else(|| game.state.permanents.iter().flatten().next())
                         .map(|p| p.object);
                     if let Some(card) = source {
@@ -711,7 +1230,7 @@ fn run(
                 }
             };
             if allocations {
-                traffic = Some(benchmark_allocations::stop());
+                traffic = Some(allocator::stop());
             } else {
                 times.push(start.elapsed().as_secs_f64() * 1000.0);
             }
@@ -747,9 +1266,9 @@ fn run(
                 }
                 // Clone bytes are allocation traffic, measured separately.
                 if layer == "clone" {
-                    benchmark_allocations::start();
+                    allocator::start();
                     black_box(root.fork().unwrap());
-                    let (_, bytes) = benchmark_allocations::stop();
+                    let (_, bytes) = allocator::stop();
                     clone_bytes = Some(bytes);
                 }
             }
@@ -839,6 +1358,7 @@ fn main() {
         }
         let sizes = match (name, &sizes) {
             (_, Some(given)) => given.clone(),
+            ("lathril-elves", None) => vec![10, 11, 12],
             ("restricted-filter" | "distinct-restrictions", None) => vec![2, 3, 4],
             (_, None) => vec![4, 8, 16],
         };
@@ -883,6 +1403,55 @@ fn main() {
 mod tests {
     use super::*;
     #[test]
+    fn history_positions_reach_the_measured_choices() {
+        for (name, kind, count) in [
+            ("collector-food", ActionSpaceKind::OrderTriggers, 4),
+            ("mixed-life-gain", ActionSpaceKind::OrderTriggers, 4),
+            ("fumigate-panda", ActionSpaceKind::ChooseTarget, 2),
+            ("blast-discard", ActionSpaceKind::LookAndSelect, 5),
+            ("venom-team", ActionSpaceKind::Priority, 2),
+        ] {
+            let recipe = recipe(name, 4);
+            let points = checkpoints(&build(&recipe), &recipe);
+            assert!(
+                points
+                    .iter()
+                    .all(|(_, env)| env.action_count().unwrap() > 1),
+                "{name}"
+            );
+            let (_, env) = points
+                .iter()
+                .find(|(label, _)| label == "after-resolution")
+                .unwrap();
+            assert_eq!(env.action_space_kind(), Some(kind), "{name}");
+            assert_eq!(env.action_count().unwrap(), count, "{name}");
+            if name == "venom-team" {
+                let view = env.observation_for_player(0).unwrap();
+                assert_eq!(view.agent_permanents.len(), 7);
+                assert!(view
+                    .agent_permanents
+                    .iter()
+                    .all(|p| p.characteristics.keywords.deathtouch));
+            }
+        }
+        for size in [10, 12] {
+            let recipe = recipe("lathril-elves", size);
+            let points = checkpoints(&build(&recipe), &recipe);
+            let counts: Vec<_> = points
+                .iter()
+                .skip(1)
+                .map(|(_, env)| env.action_count().unwrap())
+                .collect();
+            assert_eq!(
+                counts,
+                (0..10)
+                    .map(|n| size - n)
+                    .take_while(|&n| n > 1)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+    #[test]
     fn recipes_reach_large_boards_and_real_combat_choices() {
         for &(name, _) in STATES {
             let recipe = recipe(name, 4);
@@ -891,6 +1460,18 @@ mod tests {
             let mut first = root.fork().unwrap();
             assert_eq!(surface(&mut first), surface(&mut again), "{name}");
             let points = checkpoints(&root, &recipe);
+            if name == "convoke-duplicates" {
+                let (_, payment) = points
+                    .iter()
+                    .find(|(label, _)| label == "cast-choice")
+                    .expect("duplicate convoke reaches a payment choice");
+                let mut env = payment.fork().unwrap();
+                let taps = actions(&mut env)
+                    .into_iter()
+                    .filter(|action| matches!(action, Action::WaterbendTap { .. }))
+                    .count();
+                assert_eq!(taps, recipe.size);
+            }
             if name == "duplicate-creatures" {
                 assert!(points.iter().any(|(label, _)| label == "attack"));
                 assert!(points.iter().any(|(label, _)| label == "block"));

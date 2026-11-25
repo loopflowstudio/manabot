@@ -62,15 +62,15 @@ async function updateSeq(page: Page): Promise<number> {
 // mid-swap and the input count is exact. Keyboard play avoids repeated pointer
 // scrolling/layout waits; pointer submission is covered by the release suite.
 async function playUntilComparisonTurn(page: Page): Promise<number> {
-  const actionButtons = page.getByTestId('action-option');
+  const actionButtons = page.locator('[data-testid=action-option]:enabled:not([aria-disabled])');
   const gameOverOverlay = page.getByTestId('game-result');
   const game = page.getByTestId('game');
   let inputs = 0;
 
   for (let i = 0; i < MAX_ACTIONS; i += 1) {
+    // A choice held during the opponent's read-out is aria-disabled: an input
+    // then only ends the read-out and sends nothing, so wait for it to end.
     await expect(actionButtons.first().or(gameOverOverlay)).toBeVisible({ timeout: 30_000 });
-    await expect(gameOverOverlay).not.toBeVisible();
-    await expect(page.locator('[data-testid="action-option"]:enabled').first().or(gameOverOverlay)).toBeVisible();
     await expect(gameOverOverlay).not.toBeVisible();
     if (await game.getAttribute('data-turn') === String(COMPARISON_TURN)
       && await game.getAttribute('data-turn-owner') === 'you'
@@ -163,6 +163,7 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await page.getByRole('button', { name: 'Start game' }).first().click();
   const game = page.getByTestId('game');
   await expect(game).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
 
   // Default stops: the game opens at my main1 on turn 1.
   await expect(game).toHaveAttribute('data-turn', '1');
@@ -181,6 +182,7 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', { timeout: 15_000 });
   await page.getByTestId('opponent-select').selectOption('random');
   await page.getByRole('button', { name: 'Start game' }).first().click();
+  await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
 
   // Default stops: your main phases and the opponent's end step stop every time.
@@ -254,6 +256,7 @@ test('the stop bar sets the same stops as the Menu, for either turn, and a once 
   const game = page.getByTestId('game');
   for (let pass = 0; pass < 12; pass += 1) {
     if (await stop('my', 'main1').getAttribute('data-state') === 'off') break;
+    await expect(page.getByTestId('beat')).toHaveCount(0, { timeout: 15_000 });
     const seq = await updateSeq(page);
     await page.keyboard.press('F6');
     await expect.poll(() => updateSeq(page), { timeout: 30_000 }).toBeGreaterThan(seq);

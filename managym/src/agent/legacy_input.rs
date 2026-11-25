@@ -9,7 +9,7 @@
 //! else depends on it.
 //!
 //! Its whole surface is frozen; deleting it (and the `InputLayout::Legacy`
-//! branches that call it) removes inputs v9 and v10. Removal release: 0.4.0.
+//! branches that call it) removes inputs v9 and v10. Removal release: 0.3.0.
 //! MTG-353 owns the general mechanism for checkpoints across worlds.
 
 use std::collections::HashMap;
@@ -22,6 +22,7 @@ use super::{
 /// A v9/v10 permanent row ends at `dealt_damage_this_turn`, then validity.
 pub const PERMANENT_VALID: usize = 37;
 pub const PERMANENT_DIM: usize = PERMANENT_VALID + 1;
+pub const RELATION_DIM: usize = 49;
 
 /// `obs` with v9/v10 card lists: after each side's v11 cards, that side's
 /// stack spells (by owner, top first), then its battlefield objects (by
@@ -63,7 +64,7 @@ pub fn history(
     obs: &Observation,
     capacity: usize,
     cards_per_player: usize,
-) -> Vec<[f32; HISTORY_DIM]> {
+) -> Vec<[i64; HISTORY_DIM]> {
     let agent: HashMap<i32, usize> = obs
         .agent_cards
         .iter()

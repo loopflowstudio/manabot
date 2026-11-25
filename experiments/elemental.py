@@ -70,6 +70,7 @@ from manabot.eval.agents import AGENTS
 from manabot.experiment.setup import machine_setup
 from manabot.recipes.elemental import ElementalConfig, train
 from manabot.training.panels import ML, PERF
+from manabot.training.report import behaviour_curves
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -243,6 +244,7 @@ def report() -> Report:
         clock="updates",
         evals=(
             Curve(title="Score against the heuristic", matches=heuristic),
+            *behaviour_curves(matches=heuristic),
             Curve(
                 title="Against the rated checkpoint before",
                 matches=Matches(tag="consecutive"),

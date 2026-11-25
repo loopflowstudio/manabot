@@ -9,7 +9,7 @@ import torch
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import (
     NotAContainer,
@@ -29,7 +29,7 @@ def _observation(space: ObservationSpace) -> dict[str, torch.Tensor]:
             managym.PlayerConfig("Villain", {"Plains": 20, "Gray Ogre": 20}),
         ]
     )
-    encoded = space.encode(env.observation_for_player(0))
+    encoded = encode_observation(space, env.observation_for_player(0))
     return {key: torch.from_numpy(value)[None] for key, value in encoded.items()}
 
 
@@ -122,11 +122,16 @@ def test_container_preserves_general_policy_and_metadata(
     save_checkpoint(agent, space, path, player_configs=Match().to_rust(), extra=extra)
     loaded, loaded_space = load_checkpoint(str(path))
     metadata = read_metadata(path)
+    assert metadata["hypers"]["training_setup"] == {
+        "mana_payment": ["manual", "manual"],
+        "mana_floats": ["off", "off"],
+        "skip_trivial": True,
+    }
     assert metadata["bc"] == extra
     assert metadata["global_step"] == 0
     assert "converted_from" not in metadata
     assert metadata["parameter_names"] == list(dict(agent.named_parameters()))
-    assert loaded_space.encoder.config == observation
+    assert loaded_space.config == observation
     assert loaded.value_semantic == "signed_outcome"
     assert loaded.config == model
     for name, tensor in agent.state_dict().items():

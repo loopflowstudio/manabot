@@ -23,7 +23,11 @@ from typing import Any, Mapping, Protocol
 import numpy as np
 
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import (
+    ObservationBuffers,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy
@@ -35,6 +39,7 @@ from manabot.sim.search.branch import (
     structured_random_playout,
 )
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
+import managym
 
 _U64_MASK = (1 << 64) - 1
 
@@ -192,30 +197,48 @@ class AgentLeafEvaluator:
         if self.agent.value_semantic == "signed_outcome":
             return (value + 1.0) / 2.0
         if self.agent.value_semantic == "win_logit":
-            return self.agent.probability_from_logit(value)
+            if value >= 0.0:
+                return 1.0 / (1.0 + math.exp(-value))
+            scaled = math.exp(value)
+            return scaled / (1.0 + scaled)
         raise ValueError("PUCT critic has an unsupported value semantic")
 
     def _predict(
         self, observation: Any | ObservationBuffers, *, action_count: int
     ) -> tuple[np.ndarray, float]:
-        encoded = (
-            observation
-            if isinstance(observation, Mapping)
-            else self.observation_space.encode(observation)
-        )
-        valid = np.asarray(encoded["actions_valid"])
-        if (
-            action_count < 1
-            or valid.ndim != 1
-            or action_count > len(valid)
-            or not np.all(valid[:action_count] == 1)
-            or np.any(valid[action_count:] != 0)
-        ):
-            raise ValueError("PUCT policy cannot represent the complete legal offers")
-        batch = self.agent.prepare(
-            {key: np.asarray(value)[None] for key, value in encoded.items()},
-            inference=True,
-        )
+        if not isinstance(observation, Mapping) and self.observation_space.one_token:
+            encoded_batch = managym.encode_observation_batch(
+                [observation],
+                self.observation_space.layout,
+                self.observation_space.config.action_overflow,
+            )
+            if action_count < 1 or encoded_batch.action_counts[0] != action_count:
+                raise ValueError(
+                    "PUCT policy cannot represent the complete legal offers"
+                )
+            batch = self.agent.prepare(encoded_batch, inference=True)
+        else:
+            # Deprecated dense dict / v9/v10 path; removed in 0.3.0.
+            encoded = (
+                observation
+                if isinstance(observation, Mapping)
+                else encode_observation(self.observation_space, observation)
+            )
+            valid = np.asarray(encoded["actions_valid"])
+            if (
+                action_count < 1
+                or valid.ndim != 1
+                or action_count > len(valid)
+                or not np.all(valid[:action_count] == 1)
+                or np.any(valid[action_count:] != 0)
+            ):
+                raise ValueError(
+                    "PUCT policy cannot represent the complete legal offers"
+                )
+            batch = self.agent.prepare(
+                {key: np.asarray(value)[None] for key, value in encoded.items()},
+                inference=True,
+            )
         logits, value = self.agent.evaluate(batch)
         legal_logits = logits[0, :action_count]
         if not np.isfinite(legal_logits).all():

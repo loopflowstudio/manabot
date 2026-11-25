@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
-import { primaryLabel, promptLine } from './prompt';
+import { committed, primaryLabel, promptHint, promptLine } from './prompt';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -31,10 +31,32 @@ describe('promptLine', () => {
     expect(line).not.toMatch(/offer|commit|clause|nonparticipation/i);
   });
 
-  it('names the cost and how Space pays it', () => {
+  it('asks for the cost in the line and says how Space pays it in the hint', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost);
     expect(pay).toBeDefined();
-    expect(promptLine(pay!, boardView(pay!, PLAYERS))).toMatch(/^Pay \{.*Space pays automatically/);
+    const view = boardView(pay!, PLAYERS);
+    expect(promptLine(pay!, view)).toMatch(/^Pay \{[^.]*$/);
+    expect(promptHint(pay!, view)).toMatch(/^Space pays automatically/);
+  });
+
+  it('lists what is committed to the cost, in order, apart from the line', () => {
+    const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
+    const paying = { ...pay, projection: { ...pay.projection, decision_context: { ...pay.projection.decision_context!,
+      paid: [{ phrase: 'Gray Ogre, sacrificed when the payment completes' }, { phrase: 'tapped Hill Giant to crew' }] } } };
+    expect(committed(paying)).toEqual(['Gray Ogre, sacrificed when the payment completes', 'tapped Hill Giant to crew']);
+    expect(promptLine(paying, boardView(paying, PLAYERS))).toBe(promptLine(pay, boardView(pay, PLAYERS)));
+    expect(committed(pay)).toEqual([]);
+  });
+
+  it('names a tap-pays choice, combat damage and replacement order by what they ask, other modal choices as modes', () => {
+    const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost)!;
+    const modal = (stage: string): ExperienceFrame => ({ ...pay, action_space: 'MODAL', projection: { ...pay.projection,
+      decision_context: { ...pay.projection.decision_context!, stage, source: { ...pay.projection.decision_context!.source!, label: 'Appeal to Eirdu' } } } });
+    const line = (frame: ExperienceFrame): string => promptLine(frame, boardView(frame, PLAYERS));
+    expect(line(modal('payment'))).toBe('Choose what the tap pays for Appeal to Eirdu');
+    expect(line(modal('mode'))).toBe('Choose a mode for Appeal to Eirdu');
+    expect(line(modal('assign_combat_damage'))).toBe('Assign combat damage');
+    expect(line(modal('order_replacement'))).toBe('Choose which replacement applies next');
   });
 
   it('invites a land or a sorcery-speed spell only in your own main phase', () => {
@@ -80,6 +102,14 @@ describe('primaryLabel', () => {
     return frame;
   }
 
+  it('names the next damage step while the stack is empty', () => {
+    const frame = emptyStack();
+    frame.projection.turn.step = 'COMBAT_FIRST_STRIKE_DAMAGE';
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To regular damage');
+    frame.projection.turn.step = 'COMBAT_DAMAGE';
+    expect(primaryLabel(frame, boardView(frame, PLAYERS))?.text).toBe('To end of combat');
+  });
+
   it('names the stack top while something waits to resolve', () => {
     const frame = emptyStack();
     frame.projection.stack_objects = [{ id: 9001, kind: 'spell', controller: 0, label: 'Lightning Bolt' }];
@@ -122,7 +152,6 @@ describe('primaryLabel', () => {
     const label = primaryLabel(pay, boardView(pay, PLAYERS), preview);
     expect(label?.text).toBe(`Pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
-    expect(promptLine(pay, boardView(pay, PLAYERS), true)).toMatch(/Space taps the dashed lands/);
     // A preview that is not exact draws nothing; the button keeps the cost.
     expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
   });

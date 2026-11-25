@@ -3,10 +3,11 @@
 import csv
 import gzip
 from pathlib import Path
+import sys
 
 import pytest
 
-from experiments.tla_corpus import Corpus, Source, build_corpus
+from experiments.tla_corpus import Corpus, Source, build_corpus, main
 from manabot.infra.identity import file_sha256
 
 
@@ -126,3 +127,53 @@ def test_seven_wins_after_three_losses_is_not_a_trophy(tmp_path: Path) -> None:
     path, source = _source(tmp_path, losses + rows)
     with pytest.raises(ValueError, match="three recorded losses"):
         build_corpus(path, source)
+
+
+def test_cli_derives_from_retained_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path, source = _source(tmp_path, _event("a"))
+    path.with_name("source.json").write_text(source.model_dump_json())
+    output = tmp_path / "derived"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["tla_corpus", str(output), "--source-dir", str(tmp_path), "--target", "1"],
+    )
+    main()
+    [snapshot] = output.iterdir()
+    assert snapshot.name == "corpus.json"
+    corpus = Corpus.model_validate_json(snapshot.read_bytes())
+    assert corpus.source == source
+    assert [t.event_id for t in corpus.trophies] == ["a"]
+
+
+def test_full_source_checks_later_results_and_selects_final_winning_build(
+    tmp_path: Path,
+) -> None:
+    valid = _event("valid")
+    # The seventh match observed need not be the final match played.
+    valid[-1].update(match_number="9", build_index="12", deck_Plains="18")
+    last_loss = _event("last-loss")
+    extra_win = _event("extra-win", wins=8)
+    tenth = _event("tenth")
+    tenth[-1]["match_number"] = "10"
+    rows = (
+        extra_win[:7]
+        + valid[:5]
+        + [valid[-1]]
+        + last_loss
+        + tenth
+        + [valid[5], dict(last_loss[0], match_number="8", won="False"), extra_win[-1]]
+    )
+    path, source = _source(tmp_path, rows)
+    corpus = build_corpus(path, source, target=None)
+    assert corpus.selection == "complete-premier-trophies-v1"
+    assert corpus.exhausted and corpus.scanned_rows == len(rows)
+    [trophy] = corpus.trophies
+    assert trophy.source_id == "TLA:PremierDraft:valid:12"
+    assert trophy.deck is not None and trophy.deck.main["Plains"] == 18
+    assert [game.match_number for game in trophy.games] == [1, 2, 3, 4, 5, 6, 9]
+    first = build_corpus(path, source, target=1)
+    assert first.selection == "first-observed-trophies-v1"
+    assert [t.event_id for t in first.trophies] == ["extra-win"]

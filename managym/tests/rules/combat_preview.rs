@@ -236,3 +236,192 @@ fn a_lone_block_of_a_menace_creature_is_refused_with_the_reason() {
         "Llanowar Elves can block only one attacker."
     );
 }
+
+/// Juggernaut attacks each combat (CR 508.1d): the preview marks it, refuses
+/// a plan that leaves it home, and a plan with it declares as planned.
+#[test]
+fn a_creature_that_must_attack_is_marked_and_a_plan_omitting_it_is_refused() {
+    for skip_trivial in [false, true] {
+        for order in [["Juggernaut", "Gray Ogre"], ["Gray Ogre", "Juggernaut"]] {
+            let mut s = Scenario::new(
+                deck(&[("Mountain", 30), ("Juggernaut", 4), ("Gray Ogre", 6)]),
+                deck(&[("Forest", 30), ("Llanowar Elves", 10)]),
+                7,
+            );
+            s.advance_to_active_step(0, StepKind::Main);
+            let ids: Vec<_> = order
+                .iter()
+                .map(|name| {
+                    let id = s.force_permanent_on_battlefield(0, name);
+                    clear_summoning_sickness(&mut s, id);
+                    id
+                })
+                .collect();
+            s.game_mut().skip_trivial = skip_trivial;
+            s.advance_to_active_step(0, StepKind::DeclareAttackers);
+            let game = s.game();
+            let juggernaut = render(
+                game,
+                ids[order.iter().position(|n| *n == "Juggernaut").unwrap()],
+            );
+            let ogre = render(
+                game,
+                ids[order.iter().position(|n| *n == "Gray Ogre").unwrap()],
+            );
+            let context = format!("skip_trivial {skip_trivial}, order {order:?}");
+
+            let home = preview(
+                game,
+                0,
+                &CombatPlan {
+                    attackers: vec![ogre],
+                    blocks: Vec::new(),
+                },
+            );
+            match home
+                .declarable
+                .iter()
+                .find(|creature| creature.creature == juggernaut)
+            {
+                Some(creature) => {
+                    assert!(creature.must_attack, "{context}");
+                    let refused = home
+                        .refused
+                        .as_ref()
+                        .expect("omitting Juggernaut is refused");
+                    assert_eq!(refused.creature, juggernaut, "{context}");
+                    assert_eq!(refused.reason, "Juggernaut must attack.", "{context}");
+                }
+                // Already declared without asking: the plan covers the rest.
+                None => {
+                    assert!(home.refused.is_none(), "{context}: {:?}", home.refused);
+                    assert!(home.declared_attackers.contains(&juggernaut), "{context}");
+                }
+            }
+            assert!(home
+                .declarable
+                .iter()
+                .all(|creature| creature.creature == juggernaut || !creature.must_attack));
+
+            let both = CombatPlan {
+                attackers: vec![juggernaut, ogre],
+                blocks: Vec::new(),
+            };
+            let result = preview(game, 0, &both);
+            assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
+            let mut declared = result.declared_attackers.clone();
+            declared.sort_by_key(|id| id.entity);
+            let mut planned = both.attackers.clone();
+            planned.sort_by_key(|id| id.entity);
+            assert_eq!(declared, planned, "{context}");
+        }
+    }
+}
+
+/// Taunting Challenge makes Giant Spider block Wind Drake (CR 509.1c). When
+/// the engine has already declared that block without asking, the preview
+/// accepts plans that include or omit it, refuses moving it, and still asks
+/// for the Llanowar Elves' answer.
+#[test]
+fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
+    use crate::support::play::{cast, settle};
+    use managym::state::target::Target;
+    let mut reached_predeclared = false;
+    for order in [
+        ["Giant Spider", "Llanowar Elves"],
+        ["Llanowar Elves", "Giant Spider"],
+    ] {
+        let mut s = five_color_setup(&[
+            "Taunting Challenge",
+            "Wind Drake",
+            "Gray Ogre",
+            "Giant Spider",
+            "Llanowar Elves",
+        ]);
+        let drake = s.force_permanent_on_battlefield(0, "Wind Drake");
+        let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        for id in [drake, ogre] {
+            clear_summoning_sickness(&mut s, id);
+        }
+        let blockers: Vec<_> = order
+            .iter()
+            .map(|name| s.force_permanent_on_battlefield(1, name))
+            .collect();
+        let spider = blockers[order.iter().position(|n| *n == "Giant Spider").unwrap()];
+        let elves = blockers[order.iter().position(|n| *n == "Llanowar Elves").unwrap()];
+        cast(&mut s, "Taunting Challenge");
+        assert!(s.choose_target(Target::Permanent(drake)));
+        settle(&mut s);
+        s.game_mut().skip_trivial = true;
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            let index = s
+                .action_space()
+                .actions
+                .iter()
+                .position(|action| {
+                    matches!(
+                        action,
+                        managym::agent::action::Action::DeclareAttacker { attack: true, .. }
+                    )
+                })
+                .unwrap();
+            s.step_action(index);
+        }
+        s.advance_until(
+            |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+            "failed to reach blockers".into(),
+        );
+        let game = s.game();
+        let predeclared =
+            !game.state.combat.as_ref().unwrap().attacker_to_blockers[&drake].is_empty();
+        reached_predeclared |= predeclared;
+        let context = format!("order {order:?}, spider pre-declared {predeclared}");
+        let forced = PlannedBlock {
+            blocker: render(game, spider),
+            attacker: render(game, drake),
+        };
+        let elves_on_ogre = PlannedBlock {
+            blocker: render(game, elves),
+            attacker: render(game, ogre),
+        };
+
+        for blocks in [vec![forced, elves_on_ogre], vec![elves_on_ogre]] {
+            let plan = CombatPlan {
+                attackers: Vec::new(),
+                blocks: blocks.clone(),
+            };
+            let result = preview(game, 1, &plan);
+            if predeclared || blocks.contains(&forced) {
+                assert!(result.refused.is_none(), "{context}: {:?}", result.refused);
+                let mut declared = result.declared_blocks.clone();
+                declared.sort_by_key(|block| block.blocker.entity);
+                let mut wanted = vec![forced, elves_on_ogre];
+                wanted.sort_by_key(|block| block.blocker.entity);
+                assert_eq!(declared, wanted, "{context}");
+            } else {
+                assert_eq!(
+                    result.refused.expect("omitting the forced block").reason,
+                    "Giant Spider must block Wind Drake.",
+                    "{context}"
+                );
+            }
+        }
+
+        if predeclared {
+            let moved = CombatPlan {
+                attackers: Vec::new(),
+                blocks: vec![PlannedBlock {
+                    blocker: render(game, spider),
+                    attacker: render(game, ogre),
+                }],
+            };
+            assert_eq!(
+                preview(game, 1, &moved).refused.unwrap().reason,
+                "Giant Spider already blocks Wind Drake.",
+                "{context}"
+            );
+        }
+    }
+    assert!(reached_predeclared, "one order declares the Spider first");
+}

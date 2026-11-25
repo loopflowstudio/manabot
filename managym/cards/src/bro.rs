@@ -16,7 +16,14 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![cityscape_leveler(), giant_cindermaw()]
+    vec![
+        deadly_riposte(),
+        bushwhack(),
+        cityscape_leveler(),
+        giant_cindermaw(),
+        goblin_firebomb(),
+        obliterating_bolt(),
+    ]
 }
 
 /// Unearth `cost` (CR 702.84a): "Return this card from your graveyard to the
@@ -124,6 +131,127 @@ fn giant_cindermaw() -> CardDefinition {
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Trample]),
             statics: vec![StaticAbility::PlayersCantGainLife],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn goblin_firebomb() -> CardDefinition {
+    let text_box = "Flash\n{7}, {T}, Sacrifice this artifact: Destroy target permanent.";
+    CardDefinition {
+        key: "bro.goblin_firebomb",
+        scryfall_id: "0ba00d0f-0ea5-417c-a792-06b3b9d1c8f1",
+        printed: PrintedCharacteristics {
+            name: "Goblin Firebomb".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{7}"),
+                tap_source: true,
+                sacrifice_source: true,
+                effects: vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate::default(),
+                    },
+                ))],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bushwhack() -> CardDefinition {
+    let text_box = "Choose one —\n• Search your library for a basic land card, reveal it, put it into your hand, then shuffle.\n• Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)";
+    CardDefinition {
+        key: "bro.bushwhack",
+        scryfall_id: "712a0640-d9c8-46fc-b38b-bf20a40fa902",
+        printed: PrintedCharacteristics {
+            name: "Bushwhack".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        1.into(),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    )],
+                    vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::CreatureYouControl),
+                            effects: vec![],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(
+                                TargetSpec::CreatureOpponentControls,
+                            ),
+                            effects: vec![Effect::FightLastTarget],
+                        },
+                    ],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn deadly_riposte() -> CardDefinition {
+    let text_box = "Deadly Riposte deals 3 damage to target tapped creature and you gain 2 life.";
+    CardDefinition {
+        key: "bro.deadly_riposte",
+        scryfall_id: "38eca0ae-d400-4afb-9a45-7100f4cd7149",
+        printed: PrintedCharacteristics {
+            name: "Deadly Riposte".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(
+                    3,
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            tapped: true,
+                            ..CardPredicate::creature()
+                        },
+                    }),
+                ),
+                Effect::gain_life(2),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn obliterating_bolt() -> CardDefinition {
+    let text_box = "Obliterating Bolt deals 4 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.";
+    let target = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                ..Default::default()
+            },
+        })
+    };
+    CardDefinition {
+        key: "bro.obliterating_bolt",
+        scryfall_id: "7f886411-8216-4fb7-9172-a408c39043ee",
+        printed: PrintedCharacteristics {
+            name: "Obliterating Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::deal_damage(4, target()),
+                Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

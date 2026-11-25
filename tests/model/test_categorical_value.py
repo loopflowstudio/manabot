@@ -14,9 +14,9 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.world import checkpoint_world
+from manabot.model.interface import world_fields
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
@@ -65,11 +65,9 @@ def _save_checkpoint(
             "model_state_dict": weights,
             "hypers": {
                 "agent_hypers": saved_config,
-                "observation_hypers": agent.observation_space.encoder.config.model_dump(),
+                "observation_hypers": agent.observation_space.config.model_dump(),
             },
-            "world_binding": checkpoint_world(
-                Match().to_rust(), agent.observation_space
-            ),
+            **world_fields(agent.observation_space, agent.readings, Match().to_rust()),
         },
         path,
     )
@@ -154,8 +152,8 @@ def test_outcome_supervision_distinguishes_draw_from_balanced_win_loss() -> None
 @pytest.mark.parametrize(
     "fields,error",
     [
-        ({"value_aggregation": "masked_mean"}, 'Unexpected key.*"value_token"'),
-        ({"attention_layers": 1}, 'Unexpected key.*"extra_attention'),
+        ({"value_aggregation": "masked_mean"}, "no policy parameter.*'value_token'"),
+        ({"attention_layers": 1}, "no policy parameter.*'extra_attention"),
         ({"value_kind": "scalar"}, "size mismatch for value_head"),
         ({"attention_layers": 3}, "Missing key.*extra_attention"),
     ],
@@ -235,7 +233,9 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
     space = agent.observation_space
     original = {
         key: torch.from_numpy(value).unsqueeze(0)
-        for key, value in space.encode(engine.observation_for_player(actor)).items()
+        for key, value in encode_observation(
+            space, engine.observation_for_player(actor)
+        ).items()
     }
     expected = agent.forward_distribution(device_input(agent, original))
     for seed in (17, 91):
@@ -243,7 +243,9 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         hidden.determinize(seed, perspective=actor)
         observation = {
             key: torch.from_numpy(value).unsqueeze(0)
-            for key, value in space.encode(hidden.observation_for_player(actor)).items()
+            for key, value in encode_observation(
+                space, hidden.observation_for_player(actor)
+            ).items()
         }
         for key in original:
             torch.testing.assert_close(original[key], observation[key], rtol=0, atol=0)

@@ -113,13 +113,14 @@ def supervise_game(
     evidence_path: Path | None = None,
     *,
     worker: str,
+    worker_args: tuple[object, ...] = (),
     keep_completed: bool = False,
 ) -> dict[str, Any]:
     """Retain attempted Commands before native code can hang or kill its worker.
 
     `worker` is the child's `module:function` target, called with the
-    connection, game, registrations, checkpoint paths, Command cap and the
-    game's wall-clock deadline in Unix seconds.
+    connection, game, registrations, checkpoint paths, Command cap, absolute
+    Unix deadline and any additional worker arguments.
     Successful games discard their journal unless `keep_completed`; their
     canonical record holds every decision. Failed ordinary games retain a
     settled canonical snapshot of the journal, including an unknown pending call.
@@ -156,7 +157,15 @@ def supervise_game(
     responsible = None
     try:
         process = ChildProcess(
-            worker, (game, registrations, checkpoint_paths, max_commands, deadline_unix)
+            worker,
+            (
+                game,
+                registrations,
+                checkpoint_paths,
+                max_commands,
+                deadline_unix,
+                *worker_args,
+            ),
         )
         receiver = process.connection
         while True:

@@ -59,7 +59,7 @@ def save_incident(
         evidence_bytes=EVIDENCE_BYTES,
         max_rows=MAX_ROWS,
     )
-    evidence_path = directory / "tensors.pt"
+    evidence_path = directory / f"tensors{captured.suffix}"
     with evidence_path.open("wb") as output:
         backend.save(captured.evidence, output)
     size = captured.state_tensor_bytes
@@ -87,7 +87,7 @@ def save_incident(
         "recovery": "diagnostic only; no engine journal or collection-time RNG",
     }
     if size <= STATE_BYTES:
-        state_path = directory / "state.pt"
+        state_path = directory / f"state{captured.suffix}"
         with state_path.open("wb") as output:
             backend.save(captured.state, output)
         paths.append(state_path)

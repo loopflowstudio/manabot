@@ -8,7 +8,7 @@ use search::{best_action, digest_decision};
 
 use managym::{
     agent::action::Action,
-    benchmark_allocations, benchmark_layers,
+    allocator, benchmark_layers,
     state::{
         ability::Condition,
         card::{
@@ -27,7 +27,7 @@ use std::{sync::Arc, time::Instant};
 
 fn root() -> (Env, PermanentId) {
     let mut env = Env::new(244, true, false, false);
-    env.reset(curated::players()).unwrap();
+    env.reset(curated::setup(false)).unwrap();
     curated::add_layer_board(&mut env);
     // Urborg precedes Moon: timestamp order would incorrectly grant Swamp.
     // The fixture changes two existing physical cards, never the catalog.
@@ -69,7 +69,7 @@ fn root() -> (Env, PermanentId) {
             },
         ),
     ] {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         let object_id = game.state.permanents[id].as_ref().unwrap().object;
         let old = &game.state[object_id];
         let object = Object::from_definition(
@@ -82,7 +82,7 @@ fn root() -> (Env, PermanentId) {
         game.state[object_id] = object;
     }
     env.scenario_refresh().unwrap();
-    let view = env.benchmark_game_mut().characteristics(urborg);
+    let view = env.fixture_game_mut().characteristics(urborg);
     assert!(view.has_subtype("Mountain") && !view.has_subtype("Swamp"));
     (env, urborg)
 }
@@ -99,13 +99,13 @@ fn main() {
         return;
     }
     let (mut env, id) = root();
-    benchmark_layers::probe(env.benchmark_game_mut(), id);
+    benchmark_layers::probe(env.fixture_game_mut(), id);
     if std::env::args().any(|arg| arg == "--probe-only") {
         return;
     }
     benchmark_layers::reset();
     if allocations {
-        benchmark_allocations::start();
+        allocator::start();
     }
     let start = Instant::now();
     let mut digest = blake3::Hasher::new();
@@ -135,7 +135,7 @@ fn main() {
     }
     let elapsed = start.elapsed().as_secs_f64();
     let traffic = if allocations {
-        benchmark_allocations::stop()
+        allocator::stop()
     } else {
         (0, 0)
     };
@@ -152,7 +152,7 @@ fn main() {
     for decision in 0..8 {
         benchmark_layers::reset();
         if allocations {
-            benchmark_allocations::start();
+            allocator::start();
         }
         let start = Instant::now();
         let result = env
@@ -160,7 +160,7 @@ fn main() {
             .unwrap();
         let elapsed = start.elapsed().as_secs_f64();
         let traffic = if allocations {
-            benchmark_allocations::stop()
+            allocator::stop()
         } else {
             (0, 0)
         };
@@ -191,11 +191,11 @@ fn payment_root(pool: bool) -> (Env, PermanentId) {
         env.scenario_force_battlefield(0, "Mountain", true).unwrap();
     }
     let source = {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         game.state.players[0].mana_pool = if pool {
-            Mana::parse("RR")
+            Mana::parse("RR").into()
         } else {
-            Mana::default()
+            Default::default()
         };
         game.state
             .permanents
@@ -214,7 +214,7 @@ fn payment_root(pool: bool) -> (Env, PermanentId) {
 
 fn payment_surface(env: &mut Env) -> serde_json::Value {
     let digest = env.state_digest().unwrap();
-    let game = env.benchmark_game_mut();
+    let game = env.fixture_game_mut();
     serde_json::json!({
         "digest": digest,
         "legal_actions": game.current_action_space,
@@ -243,7 +243,7 @@ fn payment(
     benchmark_layers::reset();
     for decision in 0..8 {
         let actions = env
-            .benchmark_game_mut()
+            .fixture_game_mut()
             .current_action_space
             .as_ref()
             .unwrap()
@@ -257,23 +257,23 @@ fn payment(
             }
         }).unwrap_or_else(|| panic!("payment decision {decision}, pool={pool}: {actions:?}"));
         if allocations {
-            benchmark_allocations::start();
+            allocator::start();
         }
         let start = Instant::now();
         env.step(index as i64).unwrap();
         elapsed += start.elapsed().as_secs_f64();
         if allocations {
-            let counts = benchmark_allocations::stop();
+            let counts = allocator::stop();
             traffic.0 += counts.0;
             traffic.1 += counts.1;
         }
         trace.push(serde_json::json!({"index":index, "action":actions[index], "after":payment_surface(&mut env)}));
-        if !env.benchmark_game_mut().state.stack_objects.is_empty() {
+        if !env.fixture_game_mut().state.stack_objects.is_empty() {
             break;
         }
     }
     let metrics = benchmark_layers::snapshot();
-    let game = env.benchmark_game_mut();
+    let game = env.fixture_game_mut();
     assert_eq!(
         game.state.stack_objects.len(),
         1,

@@ -12,6 +12,7 @@ from manabot.sim.action.structured import (
     StructuredPolicyError,
     flatten_projection,
 )
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 
@@ -123,7 +124,7 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
             managym.PlayerConfig("legacy", {"Gray Ogre": 36, "Mountain": 4}),
         ]
     )
-    return env, observation
+    return env, keep_opening_hands(env, observation)
 
 
 def _decode_verb(
@@ -194,6 +195,7 @@ def test_bound_bridge_applies_one_of_64_attacker_declarations() -> None:
             managym.PlayerConfig("legacy", {"Gray Ogre": 36, "Mountain": 4}),
         ]
     )
+    keep_opening_hands(structured, observation)
     structured.scenario_clear_hand(0)
     for _ in range(6):
         structured.scenario_force_battlefield(0, "Gray Ogre", ready=True)

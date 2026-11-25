@@ -716,6 +716,13 @@
         "mana_cost": {
           "$ref": "#/$defs/RequiredNullable3"
         },
+        "paid": {
+          "description": "What objects have already paid toward the cost being paid, in the\norder paid. Omitted when nothing has and on older frames.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PaidView"
+          }
+        },
         "pending": {
           "description": "Native pending execution, omitted on older recorded projections.",
           "type": "array",
@@ -1031,7 +1038,7 @@
       "type": "object",
       "properties": {
         "cast_permission": {
-          "description": "The permission to play this card from exile, when it has one.",
+          "description": "The permission to play this card from its current zone, when it has one.",
           "anyOf": [
             {
               "$ref": "#/$defs/LegacyCastPermissionView"
@@ -1040,6 +1047,20 @@
               "type": "null"
             }
           ]
+        },
+        "cast_permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCastPermissionView"
+          }
+        },
+        "counters": {
+          "description": "Counters on the card off the battlefield (\"with a stash counter on it\").",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "face_down": {
           "description": "Foretold and face down in exile; only its owner's views list it.",
@@ -1107,7 +1128,7 @@
       ]
     },
     "LegacyCastPermissionView": {
-      "description": "A public permission to play an exiled card. Only set terms are present.",
+      "description": "A public permission to play a card in its current zone. Only set terms are present.",
       "type": "object",
       "properties": {
         "after_turn": {
@@ -1122,6 +1143,13 @@
         "any_mana": {
           "type": "boolean"
         },
+        "condition": {
+          "description": "What must hold for the player to use it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cost": {
           "description": "Mana symbols paid to cast it, such as `{2}`; absent for a land play.",
           "type": [
@@ -1129,13 +1157,30 @@
             "null"
           ]
         },
+        "face_down": {
+          "description": "Face down in exile without Foretell.",
+          "type": "boolean"
+        },
         "flash": {
+          "type": "boolean"
+        },
+        "flashback": {
+          "type": "boolean"
+        },
+        "follows_source_controller": {
           "type": "boolean"
         },
         "foretold": {
           "type": "boolean"
         },
+        "on_adventure": {
+          "type": "boolean"
+        },
         "own_turn_only": {
+          "type": "boolean"
+        },
+        "play_lands": {
+          "description": "A land face may be played with it (\"you may play\"); otherwise it casts spells only.",
           "type": "boolean"
         },
         "player_id": {
@@ -1143,8 +1188,11 @@
           "format": "uint32",
           "minimum": 0
         },
+        "prepared": {
+          "type": "boolean"
+        },
         "source_permanent_id": {
-          "description": "Lasts while the permitted player controls this permanent.",
+          "description": "The public permanent sustaining this grant.",
           "type": [
             "integer",
             "null"
@@ -1248,6 +1296,26 @@
           "description": "It has lost all abilities.",
           "type": "boolean"
         },
+        "ability_resolutions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            ]
+          }
+        },
         "attached_to": {
           "description": "The permanent this Aura or Equipment is attached to.",
           "type": [
@@ -1256,6 +1324,9 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "attacked_this_turn": {
+          "type": "boolean"
         },
         "attacking": {
           "description": "Attacking in the current combat.",
@@ -1275,6 +1346,15 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
         },
         "controller_id": {
           "type": "integer",
@@ -1315,6 +1395,14 @@
           "type": "integer",
           "format": "int32"
         },
+        "damaged_permanents": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "dealt_damage_this_turn": {
           "description": "It was dealt damage this turn.",
           "type": "boolean"
@@ -1326,6 +1414,10 @@
             "$ref": "#/$defs/ContinuousEffectView"
           }
         },
+        "entered_this_turn": {
+          "description": "It entered the battlefield during this turn.",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
           "type": "integer",
@@ -1333,6 +1425,13 @@
           "minimum": 0
         },
         "exile_if_dies_this_turn": {
+          "type": "boolean"
+        },
+        "face_down": {
+          "description": "Face down (CR 708.2).",
+          "type": "boolean"
+        },
+        "first_strike_participant": {
           "type": "boolean"
         },
         "granted_firebending": {
@@ -1459,6 +1558,13 @@
             "null"
           ],
           "format": "int32"
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "int32"
+          }
         },
         "effects": {
           "description": "Continuous effects on this player, in timestamp order.",
@@ -1646,6 +1752,24 @@
           "format": "uint32",
           "minimum": 0
         },
+        "spent_graveyard_types": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
         "stack": {
           "type": "array",
           "items": {
@@ -1739,6 +1863,9 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creature_died_this_turn": {
+          "type": "boolean"
+        },
         "phase": {
           "type": "string"
         },
@@ -1810,6 +1937,29 @@
         "special"
       ]
     },
+    "PaidView": {
+      "description": "One object's payment toward the pending cost: \"sacrificed Gray Ogre to\nbargain\". `object` is that object as it is now (a permanent still on the\nbattlefield, the card in a graveyard or exile), absent when nothing the\nviewer can see remains of it.",
+      "type": "object",
+      "properties": {
+        "object": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionObjectView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phrase": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "phrase"
+      ]
+    },
     "PlayerControlView": {
       "description": "Public player-control effects in creation order. Effective distinguishes\nthe last-created active effect from another whose interval also runs now.",
       "type": "object",
@@ -1866,12 +2016,44 @@
           "format": "uint32",
           "minimum": 0
         },
+        "creatures_died": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "land_entered": {
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
         },
+        "life_gained": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "life_gains": {
+          "description": "Separate occurrences, independent of the amount gained.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "life_lost": {
           "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mana_spent_casting": {
+          "description": "Mana spent by this player to cast spells this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "nonland_permanents_left": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "permanents_left": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
@@ -1881,6 +2063,9 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "warped_this_turn": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -2526,6 +2711,11 @@
           "format": "uint32",
           "minimum": 0
         },
+        "ability_resolutions": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "chosen_mode": {
           "type": [
             "integer",
@@ -2534,11 +2724,28 @@
           "format": "uint32",
           "minimum": 0
         },
+        "combat_damage_to_players": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
         "controller": {
           "type": "integer",
           "format": "uint8",
           "maximum": 255,
           "minimum": 0
+        },
+        "flashback": {
+          "description": "A spell cast with flashback, exiled as it leaves the stack.",
+          "type": "boolean"
+        },
+        "from_prepared": {
+          "description": "A spell cast from a prepared copy; its stack copies are not.",
+          "type": "boolean"
         },
         "id": {
           "type": "integer",
@@ -2550,6 +2757,11 @@
         },
         "label": {
           "type": "string"
+        },
+        "mana_spent": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "source_permanent": {
           "type": [

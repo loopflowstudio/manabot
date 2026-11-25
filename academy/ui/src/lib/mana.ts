@@ -3,12 +3,24 @@ import type { PlayerState, RestrictedMana } from './types';
 
 type PooledManaView = NonNullable<PlayerState['pooled_mana_classes']>[number];
 
+/** A line split into plain words and runs of braced mana symbols: "Pay {2}{R} now" → "Pay ", "{2}{R}", " now". */
+export function manaRuns(text: string): { text: string; mana: boolean }[] {
+  return text.split(/((?:\{[^{}]+\})+)/).filter(Boolean).map(part => ({ text: part, mana: part.startsWith('{') }));
+}
+
 export function manaText(amounts: number[]): string {
   return amounts.map((amount, index) => amount ? `${amount} {${['W', 'U', 'B', 'R', 'G', 'C'][index]}}` : '').filter(Boolean).join(' · ') || 'Empty';
 }
 
-export function pooledManaText(pool: PooledManaView): string {
-  return `${manaText(pool.mana)}${pool.restriction ? ` only for ${pool.restriction}` : ''}${pool.effect ? ` that puts ${pool.effect}` : ''}, normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
+/** What sets a class of pooled mana apart, after its amount: "only for Lesson spells, normally expires at step end". */
+export function pooledManaTerms(pool: PooledManaView): string {
+  const sets = [pool.restriction && spendPhrase(pool.restriction), pool.effect && `that puts ${pool.effect}`].filter(Boolean).join(' ');
+  return `${sets ? `${sets}, ` : ''}normally expires ${pool.combat ? 'at end of combat' : 'at step end'}`;
+}
+
+/** "only for Lesson spells", but "for anything but spells from hand": an exclusion needs no "only". */
+export function spendPhrase(spending: string): string {
+  return spending.startsWith('anything but ') ? `for ${spending}` : `only for ${spending}`;
 }
 
 /** What restricted mana may be spent on: "Lesson spells", "abilities of Shrine sources". */

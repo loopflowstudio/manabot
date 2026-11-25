@@ -178,6 +178,15 @@ class DecisionTargetView(ProtocolModel):
     object: DecisionObjectView
 
 
+class PaidView(ProtocolModel):
+    """One object's payment toward the pending cost, and what remains of it."""
+
+    phrase: str
+    object: DecisionObjectView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
 class DecisionContextView(ProtocolModel):
     pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
     recent_facts: list[str]
@@ -193,6 +202,10 @@ class DecisionContextView(ProtocolModel):
     # is on the stack by the rules (CR 601.2a, 602.2a) while its costs are paid.
     announcing: Literal["spell", "activated_ability"] | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    # What objects have already paid toward the cost being paid, in paid order.
+    paid: list[PaidView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
 
 
@@ -308,6 +321,15 @@ class LegacyCastPermissionView(ProtocolModel):
     any_mana: bool = Field(default=False, exclude_if=lambda value: not value)
     waterbend: bool = Field(default=False, exclude_if=lambda value: not value)
     foretold: bool = Field(default=False, exclude_if=lambda value: not value)
+    flashback: bool = Field(default=False, exclude_if=lambda value: not value)
+    follows_source_controller: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    on_adventure: bool = Field(default=False, exclude_if=lambda value: not value)
+    prepared: bool = Field(default=False, exclude_if=lambda value: not value)
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    play_lands: bool = Field(default=False, exclude_if=lambda value: not value)
+    condition: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class LegacyRestrictedManaView(ProtocolModel):
@@ -327,6 +349,13 @@ class PlayerTurnHistoryView(ProtocolModel):
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gains: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    mana_spent_casting: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
@@ -342,10 +371,16 @@ class LegacyCardView(ProtocolModel):
     mana_value: Int32
     types: LegacyCardTypesView
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    cast_permissions: list[LegacyCastPermissionView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     cast_permission: LegacyCastPermissionView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
 
 class ContinuousEffectView(ProtocolModel):
@@ -415,17 +450,32 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    first_strike_participant: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
     keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    damaged_permanents: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    ability_resolutions: list[tuple[UInt32, UInt32]] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    attacked_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    entered_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
@@ -468,6 +518,9 @@ class LegacyPlayerView(ProtocolModel):
     restricted_mana: list[LegacyRestrictedManaView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    spent_graveyard_types: list[tuple[UInt32, str]] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     hand_only_until: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -484,6 +537,9 @@ class LegacyPlayerView(ProtocolModel):
     id: UInt32
     is_active: bool
     is_agent: bool
+    counters: dict[str, Int32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     life: Int32
     zone_counts: dict[str, UInt32]
     library_count: UInt32
@@ -536,6 +592,7 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
+    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     turn_number: UInt32
     phase: str
     step: str
@@ -544,6 +601,11 @@ class LegacyTurnView(ProtocolModel):
 
 
 class StackEntryView(ProtocolModel):
+    mana_spent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    combat_damage_to_players: list[UInt8] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    ability_resolutions: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     id: UInt64
     kind: str
     controller: UInt8
@@ -558,6 +620,10 @@ class StackEntryView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    # A spell cast from a prepared copy; its stack copies are not.
+    from_prepared: bool = Field(default=False, exclude_if=lambda value: not value)
+    # A spell cast with flashback, exiled as it leaves the stack.
+    flashback: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class PlayerControlView(ProtocolModel):
@@ -621,6 +687,7 @@ class LegacyHeroObservation(ProtocolModel):
                 or self.decision_context.mana_cost is not None
                 or self.decision_context.chosen_mode is not None
                 or self.decision_context.announcing is not None
+                or self.decision_context.paid
             )
         ):
             raise ValueError("decision context is not oriented to its acting viewer")

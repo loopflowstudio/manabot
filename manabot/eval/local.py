@@ -8,14 +8,13 @@ an Etude checkpoint record that could fetch remote bytes.
 
 import argparse
 import math
-import multiprocessing as mp
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 
-import torch
+from pydantic import TypeAdapter
 
-from manabot.backends import resolve
+from manabot.backends import local_cpu_backend
 from manabot.eval.admission import (
     OPPONENT_NAMES,
     AnchorKind,
@@ -30,10 +29,22 @@ from manabot.eval.evaluation import (
     evaluation_status,
 )
 from manabot.eval.models import EvaluationKey
+from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.policy.protocol import Backend
-from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
+from manabot.policy.protocol import Backend, BackendName
+from manabot.sim.child import ChildProcess
+from manabot.sim.matchup import (
+    SELECTED_SUITE,
+    AuthoredMatchup,
+    DeckMatchup,
+    selected_match,
+)
+
+# --matchup reads either named form; their fields do not overlap.
+MATCHUP_FILE: TypeAdapter[AuthoredMatchup | DeckMatchup] = TypeAdapter(
+    AuthoredMatchup | DeckMatchup
+)
 
 
 def checkpoint_request(
@@ -42,8 +53,9 @@ def checkpoint_request(
     backend: Backend,
     opponent: Path | AnchorKind = "heuristic",
     deal_seeds: tuple[int, ...] = (101,),
-    authored_matchup: AuthoredMatchup | None = None,
+    authored_matchup: AuthoredMatchup | DeckMatchup | None = None,
     include_mirrors: bool = False,
+    heuristic_actions: int | None = None,
     game_seconds: float = 120,
     max_commands: int = 10_000,
 ) -> EvaluationRequest:
@@ -55,7 +67,7 @@ def checkpoint_request(
     """
     match = authored_matchup.match() if authored_matchup else selected_match()
     suite = authored_matchup.content_suite if authored_matchup else SELECTED_SUITE
-    candidate = register_checkpoint(
+    admitted = register_checkpoint(
         checkpoint,
         backend=backend,
         match=match,
@@ -63,7 +75,8 @@ def checkpoint_request(
         player_id="local-candidate",
         display_name="Local candidate",
         allow_deck_repetition=include_mirrors,
-    ).registration
+    )
+    candidate = admitted.registration
     paths = {candidate.player_id: str(checkpoint.resolve())}
     if isinstance(opponent, Path):
         other = register_checkpoint(
@@ -78,10 +91,12 @@ def checkpoint_request(
         paths[other.player_id] = str(opponent.resolve())
     else:
         other = register_anchor(
-            candidate, opponent, player_id="local-" + opponent.replace("_", "-")
+            candidate,
+            opponent,
+            player_id="local-" + opponent.replace("_", "-"),
+            heuristic_actions=heuristic_actions,
         )
     key = EvaluationKey(
-        world=candidate.world,
         content_suite=suite,
         viewer_boundary="acting-viewer",
         arena_version="local-evaluation-v1",
@@ -105,23 +120,27 @@ def checkpoint_request(
 
 def _prepare(
     sender: Connection,
-    checkpoint: Path,
+    checkpoint: Path | StoredArtifact,
     opponent: Path | AnchorKind,
     seeds: tuple[int, ...],
-    matchup: AuthoredMatchup | None,
+    matchup: AuthoredMatchup | DeckMatchup | None,
     mirrors: bool,
     game_seconds: float,
     max_commands: int,
+    heuristic_actions: int | None,
+    backend_name: BackendName = "torch",
 ) -> None:
     try:
-        torch.set_num_threads(1)
+        if isinstance(checkpoint, StoredArtifact):
+            checkpoint = materialize_artifact(checkpoint)
         request = checkpoint_request(
             checkpoint,
-            backend=resolve("torch"),
+            backend=local_cpu_backend(backend_name),
             opponent=opponent,
             deal_seeds=seeds,
             authored_matchup=matchup,
             include_mirrors=mirrors,
+            heuristic_actions=heuristic_actions,
             game_seconds=game_seconds,
             max_commands=max_commands,
         )
@@ -132,10 +151,51 @@ def _prepare(
         sender.close()
 
 
+def prepare_local_request(
+    checkpoint: Path | StoredArtifact,
+    opponent: Path | AnchorKind,
+    seeds: tuple[int, ...],
+    matchup: AuthoredMatchup | DeckMatchup | None,
+    *,
+    deadline: float,
+    backend_name: BackendName = "torch",
+    mirrors: bool = False,
+    game_seconds: float = 120,
+    max_commands: int = 10_000,
+    heuristic_actions: int | None = None,
+) -> EvaluationRequest:
+    """Resolve and admit checkpoint bytes within the remaining allocation."""
+    process = ChildProcess(
+        "manabot.eval.local:_prepare",
+        (
+            checkpoint,
+            opponent,
+            seeds,
+            matchup,
+            mirrors,
+            game_seconds,
+            max_commands,
+            heuristic_actions,
+            backend_name,
+        ),
+    )
+    try:
+        if not process.connection.poll(max(0, deadline - time.time())):
+            raise TimeoutError(
+                "allocation deadline exhausted during checkpoint admission"
+            )
+        payload, error = process.connection.recv()
+        if error:
+            raise ValueError(error)
+        return EvaluationRequest.model_validate_json(payload)
+    finally:
+        process.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--checkpoint", type=Path, help="Local policy .pt file")
+    source.add_argument("--checkpoint", type=Path, help="Local policy checkpoint")
     source.add_argument(
         "--request", type=Path, help="Previously admitted EvaluationRequest JSON"
     )
@@ -149,9 +209,15 @@ def main(argv: list[str] | None = None) -> int:
         "--status", type=Path, help="Inspect retained evaluation progress"
     )
     parser.add_argument(
+        "--backend",
+        choices=("torch", "mlx"),
+        default="torch",
+        help="CPU float32 backend for checkpoint admission and play (default %(default)s)",
+    )
+    parser.add_argument(
         "--opponent",
         default="heuristic",
-        help="heuristic, scripted_greedy, random, or a local policy .pt",
+        help="heuristic, scripted_greedy, random, or a local policy checkpoint",
     )
     parser.add_argument(
         "--deal-seed",
@@ -162,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--matchup",
         type=Path,
-        help="AuthoredMatchup JSON; default selected Allies/Lessons setup",
+        help="AuthoredMatchup or DeckMatchup JSON; default selected Allies/Lessons setup",
     )
     parser.add_argument("--include-mirrors", action="store_true")
     parser.add_argument(
@@ -198,7 +264,9 @@ def main(argv: list[str] | None = None) -> int:
                 if not math.isfinite(args.seconds) or args.seconds <= 0:
                     parser.error("--seconds must be positive")
                 result = continue_evaluation(
-                    directory, deadline=time.time() + args.seconds
+                    directory,
+                    deadline=time.time() + args.seconds,
+                    backend_name=args.backend,
                 )
             return _describe(result, directory)
         except Exception as exc:
@@ -216,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             request = EvaluationRequest.model_validate_json(args.request.read_bytes())
         else:
             matchup = (
-                AuthoredMatchup.model_validate_json(args.matchup.read_bytes())
+                MATCHUP_FILE.validate_json(args.matchup.read_bytes())
                 if args.matchup
                 else None
             )
@@ -226,41 +294,24 @@ def main(argv: list[str] | None = None) -> int:
                 if args.opponent in OPPONENT_NAMES
                 else Path(args.opponent)
             )
-            context = mp.get_context("spawn")
-            receiver, sender = context.Pipe(duplex=False)
-            process = context.Process(
-                target=_prepare,
-                args=(
-                    sender,
-                    args.checkpoint,
-                    opponent,
-                    tuple(args.deal_seed or [101]),
-                    matchup,
-                    args.include_mirrors,
-                    args.game_seconds,
-                    args.max_commands,
-                ),
+            request = prepare_local_request(
+                args.checkpoint,
+                opponent,
+                tuple(args.deal_seed or [101]),
+                matchup,
+                deadline=deadline,
+                backend_name=args.backend,
+                mirrors=args.include_mirrors,
+                game_seconds=args.game_seconds,
+                max_commands=args.max_commands,
             )
-            try:
-                process.start()
-                sender.close()
-                if not receiver.poll(max(0, deadline - time.time())):
-                    raise TimeoutError(
-                        "allocation deadline exhausted during checkpoint admission"
-                    )
-                payload, error = receiver.recv()
-                if error:
-                    raise ValueError(error)
-                request = EvaluationRequest.model_validate_json(payload)
-            finally:
-                if process.is_alive():
-                    process.kill()
-                if process.pid is not None:
-                    process.join()
-                sender.close()
-                receiver.close()
         atomic_json(args.out / "request.json", request.model_dump(mode="json"))
-        result = evaluate_local(request, deadline=deadline, out_dir=args.out / "panel")
+        result = evaluate_local(
+            request,
+            deadline=deadline,
+            out_dir=args.out / "panel",
+            backend_name=args.backend,
+        )
     except Exception as exc:
         atomic_json(
             args.out / "admission-failure.json",

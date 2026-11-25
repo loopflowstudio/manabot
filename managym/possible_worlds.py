@@ -116,9 +116,11 @@ class PossibleWorldSpace:
     worlds: tuple[PossibleWorld, ...]
     known_hand: tuple[tuple[str, int], ...] = ()
     known_library: tuple[tuple[str, int], ...] = ()
-    # Public count of the opponent's face-down foretold cards; the pool holds
+    # Public counts of the opponent's face-down foretold cards and of their
+    # other face-down exiled cards the viewer cannot look at; the pool holds
     # their names, so they are neither in hand nor in the library.
     foretold: int = 0
+    face_down_exile: int = 0
     world_schema_identity: str = WORLD_SCHEMA_IDENTITY
     content_manifest_identity: str = ""
     _engine: Any | None = field(default=None, repr=False, compare=False, hash=False)
@@ -171,6 +173,9 @@ class PossibleWorldSpace:
         foretold = payload["foretold"]
         if type(foretold) is not int or foretold < 0:
             raise PossibleWorldError("foretold must be a non-negative count")
+        face_down_exile = payload.get("face_down_exile", 0)
+        if type(face_down_exile) is not int or face_down_exile < 0:
+            raise PossibleWorldError("face_down_exile must be a non-negative count")
         canonical_pool = tuple(
             (str(name), int(count)) for name, count in sorted(payload["pool"].items())
         )
@@ -212,6 +217,7 @@ class PossibleWorldSpace:
             known_hand=tuple(sorted(known_hand.items())),
             known_library=tuple(sorted(known_library.items())),
             foretold=foretold,
+            face_down_exile=face_down_exile,
             content_manifest_identity=content_manifest_identity,
             _engine=engine,
         )
@@ -392,7 +398,12 @@ class PossibleWorldSpace:
 
     @property
     def library_size(self) -> int:
-        return sum(count for _, count in self.pool) - self.hand_size - self.foretold
+        return (
+            sum(count for _, count in self.pool)
+            - self.hand_size
+            - self.foretold
+            - self.face_down_exile
+        )
 
     def world(self, index: int) -> PossibleWorld:
         if index < 0 or index >= len(self.worlds):

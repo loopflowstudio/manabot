@@ -23,16 +23,19 @@ from etude.eval.records import (
     Match,
     Seating,
 )
-from etude.eval.result import Row, Tables
+from etude.eval.result import Row, Tables, Value
 from etude.eval.tournament import evaluating
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
 from manabot.eval.agents import AGENTS, etude_registration
+from manabot.eval.behaviour import checkpoint_counts
 from manabot.eval.evaluation import (
     EvaluationRequest,
+    GamePlayCounts,
     continue_evaluation,
     evaluate as evaluate_panel,
+    evaluation_play_counts,
 )
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorResult
@@ -41,7 +44,7 @@ from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.agent import GamePlayer
-from manabot.sim.matchup import AuthoredMatchup, selected_decks
+from manabot.sim.matchup import AuthoredMatchup, DeckMatchup, selected_decks
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS, PlayerRegistration
 
 BENCHMARK = "two-seat-ladder-heuristic-deck-seats-agents-v1"
@@ -182,13 +185,19 @@ def play_deal(
         if out.exists()
         else evaluate_panel(request, out_dir=out, agents=seated)
     )
-    return evaluation_tables(result.rows)
+    return evaluation_tables(
+        result.rows,
+        play_counts=evaluation_play_counts(out)
+        if opponent.runner_kind == "code"
+        else None,
+    )
 
 
 def evaluation_tables(
     rows: Sequence[EvaluationRow],
     *,
-    matchup: AuthoredMatchup | None = None,
+    matchup: AuthoredMatchup | DeckMatchup | None = None,
+    play_counts: GamePlayCounts | None = None,
     legs: int = 8,
 ) -> Tables:
     """Project one replay-checked deal using each player's actual authored deck.
@@ -209,6 +218,7 @@ def evaluation_tables(
         ("gw_allies", "gw_allies"): "AvA",
     }
     plays: list[Row] = []
+    behaviour: list[Row] = []
     for row in rows:
         decks = selected_decks(row.leg) if matchup is None else matchup.decks(row.leg)
         extra = row.model_extra or {}
@@ -224,23 +234,37 @@ def evaluation_tables(
         for seat in (0, 1):
             game_seat = (row.leg + seat) % 2
             deck, opponent_deck = decks[game_seat], decks[1 - game_seat]
+            participant: dict[str, Value] = {
+                "seat": seat,
+                "game": row.leg,
+                "deck": deck,
+                "opponent_deck": opponent_deck,
+                "matchup": labels[deck, opponent_deck]
+                if matchup is None
+                else f"{deck} v {opponent_deck}",
+                "game_seat": game_seat,
+                "on_play": game_seat == 0,
+            }
+            if matchup is not None:
+                participant["decklists"] = matchup.decklists
             plays.append(
                 {
-                    "seat": seat,
-                    "game": row.leg,
+                    **participant,
                     "score": score if seat == 0 or score is None else 1.0 - score,
-                    "deck": deck,
-                    "opponent_deck": opponent_deck,
-                    "matchup": labels[(deck, opponent_deck)]
-                    if matchup is None
-                    else f"{deck} v {opponent_deck}",
-                    "game_seat": game_seat,
-                    "on_play": game_seat == 0,
                     "valid": row.valid,
                     "failure": row.failure,
                 }
             )
-    return {"plays": plays}
+            if seat == 0 and row.valid and play_counts:
+                pair = play_counts.get((row.deal_seed, row.leg))
+                if pair is not None:
+                    behaviour.append(
+                        {**checkpoint_counts(pair, game_seat), **participant}
+                    )
+    tables = {"plays": plays}
+    if behaviour:
+        tables["behaviour"] = behaviour
+    return tables
 
 
 def evaluate(manifest: MonitorResult, directory: Path) -> None:

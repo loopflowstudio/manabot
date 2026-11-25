@@ -10,6 +10,12 @@ def basic_deck_configs():
 
 
 class TestManagym:
+    def test_native_allocator_identity(self) -> None:
+        assert managym.NATIVE_ALLOCATOR in {"system", "mimalloc"}
+        assert managym.ALLOCATION_COUNTING is hasattr(
+            managym.VectorEnv, "_benchmark_allocations_start"
+        )
+
     def test_init(self):
         env = managym.Env()
         assert env is not None

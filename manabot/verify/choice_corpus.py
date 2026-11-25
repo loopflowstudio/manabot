@@ -1,12 +1,12 @@
 """Replayable native choices for capacity tests and frozen-policy inspection.
 
 Collect model-independent authored-game prefixes, retain seed/action traces and
-both encoders, and select public action classes without arbitrary instance IDs.
+encoded observations, and select public action classes without arbitrary instance IDs.
 This corpus contains no strategic labels and never trains a model.
 """
 
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, fields
 from itertools import combinations, zip_longest
 import json
 from pathlib import Path
@@ -14,14 +14,16 @@ import random
 import time
 from typing import Literal
 
-import torch
+import numpy as np
 
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
+    ACTION_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     STACK_DEFINITION_INDEX,
+    ObservationSpace,
 )
-from manabot.verify.action_cases import encode, reorder_offers
+from manabot.verify.choice_inputs import encode, reorder_offers
 import managym
 
 PACK = "ur-lessons-vs-gw-allies"
@@ -53,11 +55,15 @@ class Case:
     groups: tuple[list[int], list[int]]
     signatures: list[str]
     raw_json: str
-    obs: dict[str, torch.Tensor]
+    obs: dict[str, np.ndarray]
     successors: tuple[str, str]
 
     def receipt(self) -> dict[str, object]:
-        return {key: value for key, value in asdict(self).items() if key != "obs"}
+        return {
+            field.name: getattr(self, field.name)
+            for field in fields(self)
+            if field.name != "obs"
+        }
 
 
 def _keywords(value: managym.Keywords) -> list[bool]:
@@ -164,8 +170,10 @@ def _pair(groups: dict[str, list[int]], closest: bool) -> tuple[list[int], list[
     if not closest:
         return groups[keys[0]], groups[keys[-1]]
 
+    fields = {key: _flatten(json.loads(key)) for key in keys}
+
     def distance(pair: tuple[str, str]) -> tuple[bool, int]:
-        left, right = (_flatten(json.loads(key)) for key in pair)
+        left, right = fields[pair[0]], fields[pair[1]]
         # Prefer the same verb, then the fewest differing public fields.
         # Registry keys are categorical identities, never a numeric distance.
         return left[0] != right[0], sum(a != b for a, b in zip_longest(left, right))
@@ -181,6 +189,7 @@ def collect_choices(
     buckets: dict[int, list[Case]] = defaultdict(list)
     counts: Counter[str] = Counter()
     findings: list[dict[str, object]] = []
+    observation_space = ObservationSpace()
     # Eight whole-game prefixes per round; both seats are visited naturally.
     for game in range(8):
         seed = 50_000 + round_index * 8 + game
@@ -210,7 +219,7 @@ def collect_choices(
                     for index, signature in enumerate(signatures):
                         groups[signature].append(index)
                     if len(groups) > 1:
-                        obs = encode(env, raw)
+                        obs = encode(raw, observation_space)
                         assert int(obs["actions_valid"].sum()) == len(actions), (
                             "legal mask count"
                         )
@@ -218,28 +227,30 @@ def collect_choices(
                             assert (
                                 obs["action_focus"][0, index, : len(action.focus)] >= 0
                             ).all(), "unresolved focus"
-                        # Reverse native offers before running both encoders.
-                        space, original = raw.action_space, actions
-                        space.actions = original[::-1]
+                        # Check native encoding against a permutation of its output.
+                        space = raw.action_space
+                        space.actions = actions[::-1]
                         raw.action_space = space
                         try:
-                            reversed_obs = encode(env, raw)
+                            reversed_obs = encode(raw, observation_space)
                         finally:
-                            space.actions = original
+                            space.actions = actions
                             raw.action_space = space
                         expected = reorder_offers(
-                            obs, torch.arange(len(actions) - 1, -1, -1)
+                            obs,
+                            np.arange(len(actions) - 1, -1, -1),
+                            observation_space.layout,
                         )
                         for key in obs:
-                            torch.testing.assert_close(
-                                reversed_obs[key], expected[key], rtol=0, atol=0
+                            np.testing.assert_array_equal(
+                                reversed_obs[key], expected[key], strict=True
                             )
                         counts[f"audited_family_{family}"] += 1
-                        selected = _pair(groups, closest)
                         # Reservoir sampling within each family avoids priority dominance.
                         seen = counts[f"audited_family_{family}"]
                         slot = rng.randrange(seen)
                         if len(buckets[family]) < 6 or slot < 6:
+                            selected = _pair(groups, closest)
                             root = env.state_digest()
                             left, right = env.clone_env(), env.clone_env()
                             left.step(selected[0][0])
@@ -309,7 +320,14 @@ def collect_choices(
     out.mkdir(parents=True, exist_ok=True)
     _write_json(out / "cases.json", [case.receipt() for case in cases])
     _write_json(out / "native-findings.json", findings)
-    torch.save({case.name: case.obs for case in cases}, out / "observations.pt")
+    np.savez(
+        out / "observations.npz",
+        **{
+            f"{case.name}/{key}": value
+            for case in cases
+            for key, value in case.obs.items()
+        },
+    )
     return cases, counts, findings
 
 
@@ -330,7 +348,7 @@ class ActionInput:
 
 
 def action_inputs(
-    obs: dict[str, torch.Tensor], count: int, mutation: Mutation
+    obs: dict[str, np.ndarray], count: int, mutation: Mutation
 ) -> list[ActionInput]:
     rows: list[ObjectInput] = []
     for key in (
@@ -359,7 +377,10 @@ def action_inputs(
         rows.append(ObjectInput("stack", "shared", tuple(stack_row)))
     result: list[ActionInput] = []
     for index in range(count):
-        action: list[float] = obs["actions"][0, index, :-1].tolist()
+        # Every action column except validity, which is 1 for every offer.
+        action: list[float] = np.delete(
+            obs["actions"][0, index], ACTION_VALID_INDEX
+        ).tolist()
         if mutation == "without_declaration":
             action[ACTION_DECLARED_INDEX] = 0.0
         focus = tuple(

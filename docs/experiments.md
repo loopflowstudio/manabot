@@ -143,8 +143,8 @@ matter most on day one:
 - **Games are paired.** Candidates play the same deals, with both decks and
   both seats, which removes a large source of variance
   ([evaluation](evaluation.md#one-deal)).
-- **Results belong to a world.** Numbers don't carry across
-  [world versions](../WORLDS.md).
+- **Results line up only when the measurement matches.** See
+  [comparing measurements across revisions](evaluation.md#comparing-measurements-across-revisions).
 - **Refutations stay on the record,** dated and never silently edited.
 
 ## From a result to a decision
@@ -249,7 +249,9 @@ transitions, exposures or dollars.
 
 An experiment's `report()` returns an Etude `Report`. Build it from
 `manabot.training.report`, which knows how manabot jobs are named and which
-comparisons a training study asks, and add only what is specific to the
+comparisons a training study asks, beside `PERF` and `ML` from
+`manabot.training.panels` (or `self_play_report()` for a recipe or training-only
+file with no evaluations of its own), and add only what is specific to the
 experiment. The frontier study's report is four questions:
 
 ```python
@@ -323,6 +325,7 @@ ML details open with each run's logged learning rate and policy damping.
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
 | `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
 | `head_to_head(title, seatings)` | Two jobs against each other, as one line: the first-seated job's score, drawn where its checkpoint stood. `seatings` are the names `eval_jobs(state)` gave the pairs, one per point, each played once. An empty sequence raises `ValueError`. |
+| `behaviour_curves(*, matches=None)` | Eleven checkpoint play-rate curves against the heuristic (`behaviour` table, pooled by each measure's opportunities via per-curve `Score`), optionally filtered to `matches` (for example `Matches(tag="heuristic")`). |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
 own `Curve`, `Matrix` or `Series` panels, and an experiment that needs a

@@ -565,7 +565,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--demo",
-        choices=["learn", "precision", "precision-mana"],
+        choices=["learn", "precision", "precision-mana", "convoke"],
         help="start at a checked legal decision prefix",
     )
     parser.add_argument("--port", type=int, default=8000, help="backend port")

@@ -27,7 +27,7 @@ from manabot.infra.config import (
     ObservationConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
+from manabot.model.catalog import inspect_checkpoint
 from manabot.sim.replay import replay_environment
 from manabot.sim.table_bots import CheckpointVillain
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
@@ -74,7 +74,7 @@ def test_v11_is_the_fresh_default_and_every_input_is_serialized() -> None:
     assert ObservationConfig.from_checkpoint(dumped) == config
     for version in (9, 10):
         # The deprecated v9/v10 rows still load, and warn.
-        with pytest.warns(DeprecationWarning, match="removed in 0.4.0") as caught:
+        with pytest.warns(DeprecationWarning, match="no earlier than 0.3.0") as caught:
             legacy = ObservationConfig(policy_input_version=version)
         assert caught[0].filename == __file__  # The caller, not pydantic.
         assert legacy.model_dump()["policy_input_version"] == version
@@ -109,18 +109,16 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
     tmp_path: Path, version: int | None
 ) -> None:
     path = tmp_path / "policy.pt"
-    payload = _saved(path, version)
+    _saved(path, version)
     recorded = 1 if version is None else version
     with pytest.raises(UnsupportedPolicyInput) as raised:
         load_checkpoint(str(path))
     _assert_names_the_recording_revision(str(raised.value), recorded)
 
     # Academy lists the checkpoint with the same reason and refuses to seat it.
-    reason = checkpoint_incompatibility(payload)
-    assert reason is not None
-    _assert_names_the_recording_revision(reason, recorded)
     summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
-    assert not summary.compatible and summary.incompatibility == reason
+    assert not summary.compatible and summary.incompatibility is not None
+    _assert_names_the_recording_revision(summary.incompatibility, recorded)
     with pytest.raises(UnsupportedPolicyInput):
         CheckpointVillain(str(path), player_configs=_match().to_rust())
 

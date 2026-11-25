@@ -5,6 +5,7 @@
 //! `ContentPack` definitions are named once by digest; every mutable match fact
 //! a fork must preserve is serialized.
 
+use crate::state::player::{ManaFloats, ManaPayment};
 use rand::RngCore;
 use serde::Serialize;
 
@@ -75,6 +76,10 @@ struct CanonicalAuthorityState<'a> {
     current_action_space: &'a Option<ActionSpace>,
     decision_epoch: u64,
     pending_choice: &'a Option<PendingChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mana_floats: Option<[ManaFloats; 2]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mana_payment: Option<[ManaPayment; 2]>,
     skip_trivial: bool,
     skip_trivial_count: usize,
     rng_probe: [u64; 8],
@@ -107,6 +112,8 @@ fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
         current_action_space: &game.current_action_space,
         decision_epoch: game.decision_epoch,
         pending_choice: &game.pending_choice,
+        mana_payment: (game.mana_payment != [ManaPayment::Manual; 2]).then_some(game.mana_payment),
+        mana_floats: (game.mana_floats != [ManaFloats::Off; 2]).then_some(game.mana_floats),
         skip_trivial: game.skip_trivial,
         skip_trivial_count: game.skip_trivial_count,
         rng_probe,
@@ -197,7 +204,7 @@ mod tests {
 
     #[test]
     fn authority_fingerprint_covers_identity_rng_events_allocation_zones_and_decisions() {
-        let game = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1")
+        let game = crate::match_fixtures::build_fixture("interactive-midgame-48-opening-v1")
             .expect("contract fixture");
         let baseline = witness(&game);
 
@@ -227,6 +234,21 @@ mod tests {
         let mut object_lki = game.clone();
         object_lki.state.object_lki.insert(lki);
         assert_authority_change(&baseline, &object_lki, "object LKI");
+
+        let mut spell_lki = game.clone();
+        spell_lki.state.spell_lki.insert(
+            object,
+            crate::state::stack_object::SpellLki {
+                object,
+                definition_id: game.state[object].definition_id,
+                controller: PlayerId(0),
+                profile: Default::default(),
+                mana_value: 3,
+                spent: 3,
+                colors: Default::default(),
+            },
+        );
+        assert_authority_change(&baseline, &spell_lki, "spell LKI");
 
         let mut rng = game.clone();
         rng.reseed(0x197_5eed);

@@ -30,6 +30,7 @@ import type {
   PresentationLabels,
   SubjectRef,
 } from '$lib/types';
+import { inspectableCards } from './view';
 
 /** Something on screen a line can start or end at. */
 export type Endpoint =
@@ -112,6 +113,22 @@ export interface NameBook {
   casts: Record<Side, string[]>;
 }
 
+/**
+ * The phrases of one narrated move. `narrate_move`
+ * (managym/academy/recording.py) joins a compound move's phrases with "; ":
+ * "Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Earth Kingdom Jailer".
+ */
+export function movePhrases(text: string): string[] {
+  return text.split('; ');
+}
+
+/** The spells a narrated move cast, by name, without their ", targeting …" clauses. */
+function narratedSpells(text: string): string[] {
+  return movePhrases(text)
+    .filter(phrase => phrase.startsWith('Cast '))
+    .map(phrase => phrase.slice('Cast '.length).split(', targeting ')[0]);
+}
+
 export function nameBook(frames: readonly ExperienceFrame[], moves: readonly GameLogEntry[]): NameBook {
   const ids = new Map<number, string>();
   for (const frame of frames) {
@@ -120,9 +137,10 @@ export function nameBook(frames: readonly ExperienceFrame[], moves: readonly Gam
       for (const permanent of player.battlefield) if (permanent.name) ids.set(permanent.id, permanent.name);
     }
   }
+  // The targets are presentation events of their own.
   const cast = (actor: GameLogEntry['actor']): string[] => moves
-    .filter(move => move.actor === actor && move.text.startsWith('Cast '))
-    .map(move => move.text.slice('Cast '.length));
+    .filter(move => move.actor === actor)
+    .flatMap(move => narratedSpells(move.text));
   return { ids, casts: { you: cast('hero'), opponent: cast('villain') } };
 }
 
@@ -336,8 +354,7 @@ export function turnOwners(frame: ExperienceFrame, events: readonly Presentation
 /** Every card name this viewer can see now, for inspecting names in the log. */
 export function visibleNames(frame: ExperienceFrame, labels: PresentationLabels): string[] {
   const players: PlayerState[] = [frame.projection.agent, frame.projection.opponent];
-  const names = players.flatMap(player => [
-    ...player.hand, ...player.graveyard, ...player.exile, ...player.stack, ...(player.inspected ?? []),
-  ].map(card => card.name).concat(player.battlefield.map(p => p.name ?? '')));
+  const names = inspectableCards(players).map(card => card.name)
+    .concat(players.flatMap(player => player.battlefield.map(p => p.name ?? '')));
   return [...new Set([...names, ...Object.values(labels.objects), ...Object.values(labels.stacks)].filter(Boolean))];
 }

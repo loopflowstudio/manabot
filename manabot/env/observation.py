@@ -1,40 +1,35 @@
+"""The policy input: named arrays, their shapes and the columns the model reads.
+
+Native code owns the policy input. `managym.encode_observation_into` (one
+observation), `managym.encode_observations_into` (many) and the vector env
+write it against a resolved `managym.ObservationLayout`, and
+`managym.observation_layout()` publishes its schema: array names, axes, fixed
+extents, dtypes, named columns and row-kind maps. Nothing here is a second copy
+of that layout:
+
+- `ObservationSpace` is one `ObservationConfig` plus `space.layout`
+  (`managym.ObservationLayout` at the config's input version, history, memory
+  and capacities), from which `shapes`, `dtypes` and `allocate` come;
+- `encode_observation(space, obs)` returns fresh buffers for one observation;
+- the column constants below (`PERMANENT_DEFINITION_INDEX`, `FACT_VALUE_INDEX`,
+  ...) and fact kinds are looked up by name in the native layout at import, so
+  a renamed native column fails the import instead of being read from the
+  wrong place.
+
+Native checks every buffer key, shape and dtype against the supplied layout
+before writing, so every buffer is derived from the space the caller supplies,
+never a native default.
 """
-observation.py
-Defines a Gymnasium-compatible observation space from managym observations.
 
-This module is responsible for:
-1. Converting managym observations into fixed-size tensors,
-2. Structuring tensors in a natural way for the agent to build a policy, and
-3. Defining the observation space as a Gymnasium space.
-
-Additional updates in this version:
-- Focus object indices are naturally gathered when encoding actions.
-- Validity masks (if provided) are passed to the GameObject Encoder, Action Encoder,
-  Policy head, and multi-head attention.
-- The last element of each card and permanent feature vector is reserved as an
-  is_valid flag.
-"""
-
-from collections import Counter
-from collections.abc import Mapping, Sequence
-from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
+from collections.abc import Mapping
+from typing import Any, ItemsView, KeysView, ValuesView
+import warnings
 
 import gymnasium as gym
 import numpy as np
 
-from manabot.env.decision_memory import MEMORY_WIDTHS, encode_records
-from manabot.env.legacy_input import LEGACY_PERMANENT_DIM, legacy_card_lists
-
-# Local imports
-from manabot.env.shared_effects import (
-    DURATION_CODES,
-    SHARED_EFFECT_SHAPES,
-    encode_shared_effects,
-)
-from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
-from manabot.infra.log import getLogger
+from manabot.infra.config import ObservationConfig
 import managym
-from managym.decision_memory import read_records
 
 # Many modules import the enum mirrors from here; managym.enums owns them.
 from managym.enums import (  # noqa: F401
@@ -49,1372 +44,233 @@ from managym.enums import (  # noqa: F401
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
+type PolicyObservation = ObservationBuffers | managym.ObservationBatch
 
-# Native action tensor: family, declaration, mode/ability selectors, validity.
-ACTION_TYPE_DIM = len(ActionEnum)
-ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
-ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
-ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
-ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
+# Release that removes `ObservationSpace.encode`, `space.encoder` and
+# `ObservationEncoder`.
+REMOVAL_RELEASE = "0.3.0"
+
+# Input v11 with public history and decision memory: every array a v11
+# reader can meet. Legacy v9/v10 rows are `observation_layout(legacy=True)`.
+V11_LAYOUT = managym.observation_layout(policy_history=True, decision_memory=True)
+
+
+def column(array: str, name: str) -> int:
+    """Index of the named native column of `array` in input v11."""
+    return V11_LAYOUT[array]["columns"][name]["index"]
+
+
+def columns(array: str, *names: str) -> list[int]:
+    """Indexes of the named native columns of `array`, in the order given."""
+    return [column(array, name) for name in names]
+
+
+def column_names(array: str) -> list[str]:
+    """The native column names of `array` in input v11, in column order."""
+    return list(V11_LAYOUT[array]["columns"])
+
+
+def width(array: str) -> int:
+    """Feature width of `array` in input v11."""
+    return len(V11_LAYOUT[array]["columns"])
+
+
+# Column constants manabot reads, by native column name. Add one only for a
+# column the model, preparation or a test reads.
+
+# Action rows: one-hot family, declaration, mode/ability selectors,
+# continuation join, validity, then appended columns.
+ACTION_TYPE_DIM = column("actions", "declared")
+ACTION_DECLARED_INDEX = column("actions", "declared")
+ACTION_MODE_INDEX = column("actions", "mode")
+ACTION_ABILITY_INDEX = column("actions", "ability")
+ACTION_CONTINUATION_INDEX = column("actions", "continuation")
+ACTION_VALID_INDEX = column("actions", "valid")
+# In v11 this flag marks taps that directly pay a cost (convoke, improvise,
+# waterbend). Its position preserves the saved 22-column prefix.
+ACTION_PAYS_DIRECTLY_INDEX = column("actions", "pays_directly")
 MAX_ACTION_SELECTOR = (1 << 24) - 1
 # Name candidate columns: name row + 1, definition + 1, then the first and
 # last name rows (+ 1) of a naming group choice.
-NAME_DIM = 4
-PERMANENT_DEFINITION_INDEX = 24
-# The policy input encodes every Observation fact; managym's
-# observation_encoder.rs owns the layout and these mirror it exactly.
-RELATION_ROWS = 64
-RELATION_DIM = 49
-# Row validity sits before target eligibility and the spell terms.
-RELATION_VALID_INDEX = 31
-RELATION_ELIGIBILITY_INDEX = 32
-RELATION_X_INDEX = 33
-RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
-RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
-# Restricted-mana column subtypes, in column order (the native
-# `RESTRICTED_SUBTYPE_COLUMNS`); other restrictions are refused, never dropped.
-RESTRICTED_SUBTYPE_COLUMNS = ("Lesson", "Shrine", "Ally")
-PLAYER_RESTRICTED_INDEX = 40
-PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(RESTRICTED_SUBTYPE_COLUMNS) * 6
-PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
-PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
-PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
-PLAYER_KEEPS_RED_MANA_INDEX = PLAYER_SEAT_INDEX + 1
-# Turn history: attacked, permanents sacrificed, a land entered, cards drawn.
-PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
-PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
-PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
-PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
-# Bending done this turn: water, earth, fire, air.
-PLAYER_BENT_INDEX = PLAYER_CARDS_DRAWN_INDEX + 1
-# Extra turns this player will take after this one.
-PLAYER_EXTRA_TURNS_INDEX = PLAYER_BENT_INDEX + 4
-# Additional combat phases still to come this turn (active player's row).
-PLAYER_ADDITIONAL_COMBATS_INDEX = PLAYER_EXTRA_TURNS_INDEX + 1
-PLAYER_DECKLISTS_OPEN_INDEX = PLAYER_ADDITIONAL_COMBATS_INDEX + 1
-PLAYER_DIM = PLAYER_DECKLISTS_OPEN_INDEX + 1
+NAME_DIM = width("name_candidates")
+
+# Mana restricted to spending on Lesson, Shrine and Ally spells: three blocks
+# of W/U/B/R/G/C.
+PLAYER_RESTRICTED_INDEX = column("agent_player", "restricted_lesson_white")
+PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = column("agent_player", "no_maximum_hand_size")
+PLAYER_DIM = width("agent_player")
 # Cast-permission terms follow the printed characteristics; validity is last.
-CARD_PERMISSION_INDEX = 40
-CARD_X_INDEX = CARD_PERMISSION_INDEX + 13
-CARD_DIM = CARD_X_INDEX + 2 + 1
-# Open-ended vocabularies are fact rows (below), not columns; validity is last.
-PERMANENT_EXHAUSTED_INDEX = 28
-PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
-PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
-# Object index + 1 of the attachment's host: a join, never a numeric feature.
-PERMANENT_ATTACHED_INDEX = PERMANENT_FIREBENDING_INDEX + 1
-PERMANENT_GRANTED_LAND_INDEX = PERMANENT_ATTACHED_INDEX + 1
-# Object index + 1 of the attacker this creature blocks: a join.
-PERMANENT_BLOCKING_INDEX = PERMANENT_GRANTED_LAND_INDEX + 1
-PERMANENT_ABILITIES_LOST_INDEX = PERMANENT_BLOCKING_INDEX + 1
+CARD_PERMISSION_INDEX = column("agent_cards", "permission")
+CARD_DIM = width("agent_cards")
+
+PERMANENT_DEFINITION_INDEX = column("agent_permanents", "definition")
+PERMANENT_ONCE_EACH_TURN_INDEX = column("agent_permanents", "once_each_turn_used")
+# Object index + 1 of the attachment's host and of the attacker this creature
+# blocks: joins, never numeric features.
+PERMANENT_ATTACHED_INDEX = column("agent_permanents", "attached_to")
+PERMANENT_BLOCKING_INDEX = column("agent_permanents", "blocking")
 # Rank of its timestamp among the observation's timestamps.
-PERMANENT_TIMESTAMP_INDEX = PERMANENT_ABILITIES_LOST_INDEX + 1
-PERMANENT_DEALT_DAMAGE_INDEX = PERMANENT_TIMESTAMP_INDEX + 1
-# Input v11: the characteristics only a card row held before: mana value, six
-# card types, legendary, token, Ally, Lesson, ward flag and cost.
-PERMANENT_MANA_VALUE_INDEX = PERMANENT_DEALT_DAMAGE_INDEX + 1
-PERMANENT_TYPES_INDEX = PERMANENT_MANA_VALUE_INDEX + 1  # land..battle
-PERMANENT_LEGENDARY_INDEX = PERMANENT_TYPES_INDEX + 6
-PERMANENT_TOKEN_INDEX = PERMANENT_LEGENDARY_INDEX + 1
-PERMANENT_ALLY_INDEX = PERMANENT_TOKEN_INDEX + 1
-PERMANENT_LESSON_INDEX = PERMANENT_ALLY_INDEX + 1
-PERMANENT_WARD_INDEX = PERMANENT_LESSON_INDEX + 1  # flag, cost
-PERMANENT_DIM = PERMANENT_WARD_INDEX + 2 + 1
+PERMANENT_TIMESTAMP_INDEX = column("agent_permanents", "timestamp")
+PERMANENT_MANA_VALUE_INDEX = column("agent_permanents", "mana_value")
+PERMANENT_DIM = width("agent_permanents")
+# Permanent columns that hold object links (joins), in model parameter order.
+PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+
 # Input v11 stack rows, top first: one per spell or ability.
-STACK_IS_MINE_INDEX = 0
-STACK_KIND_INDEX = 1  # spell, activated ability, triggered ability
-STACK_DEFINITION_INDEX = 4
-STACK_SOURCE_INDEX = 5  # object index + 1 of an ability's source: a join
-STACK_ABILITY_INDEX = 6
-STACK_MODE_INDEX = 7
-STACK_X_INDEX = 8  # flag, value
-STACK_KICKED_INDEX = 10
-STACK_COPY_INDEX = 11
-STACK_MANA_VALUE_INDEX = 12
-STACK_POWER_INDEX = 13  # power, toughness
-STACK_TYPES_INDEX = 15  # land..battle
-STACK_LEGENDARY_INDEX = 21
-STACK_KEYWORDS_INDEX = 22  # 14 keywords, KeywordData order
-STACK_DIM = STACK_KEYWORDS_INDEX + 14 + 1
+STACK_IS_MINE_INDEX = column("stack", "is_mine")
+STACK_DEFINITION_INDEX = column("stack", "definition")
+STACK_SOURCE_INDEX = column("stack", "source")  # object index + 1: a join
+STACK_DIM = width("stack")
+
+RELATION_ROWS = V11_LAYOUT["relations"]["shape"][0]
+RELATION_DIM = width("relations")
+RELATION_VALID_INDEX = column("relations", "valid")
+RELATION_ELIGIBILITY_INDEX = column("relations", "legal_at_resolution_start")
+RELATION_X_INDEX = column("relations", "x")
+# A waiting delayed trigger ends this turn.
+RELATION_THIS_TURN_INDEX = column("relations", "this_turn")
+
 # Fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
-# Model numeric scale for timestamp ranks, independent of row allocation.
-FACT_TIMESTAMP_SCALE = 128
-FACT_OBJECT_INDEX = 0
-FACT_KIND_INDEX = 1
-FACT_ID_INDEX = 2  # high, low
-FACT_DETAIL_INDEX = 4  # high, low: a keyword, subtype or color an effect names
-FACT_VALUE_INDEX = 6  # amounts / 10: count, power or N; then toughness
-FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite, 3 while controlling source
-FACT_ORDER_INDEX = 9  # timestamp rank (1-based)
-FACT_SOURCE_INDEX = 10  # source definition + 1
-FACT_VALID_INDEX = 11
-FACT_DIM = 12
-# FactKind values (observation_encoder.rs).
-FACT_COUNTER = 1
-FACT_ADDED_SUBTYPE = 2
-FACT_SET_NAME = 3
-FACT_SET_CREATURE_TYPE = 4
-FACT_USED_ABILITY = 5
-# Reserved: continuous-effect records are shared-effect rows, never fact rows.
+FACT_OBJECT_INDEX = column("facts", "object")
+FACT_KIND_INDEX = column("facts", "kind")
+FACT_ID_INDEX = column("facts", "id_high")  # high, low
+# High, low: a keyword, subtype or color an effect names.
+FACT_DETAIL_INDEX = column("facts", "detail_high")
+# Amounts / 10: count, power or N; then toughness.
+FACT_VALUE_INDEX = column("facts", "value")
+# 1 until end of turn, 2 indefinite, 3 while controlling source, 4 until your
+# next turn.
+FACT_DURATION_INDEX = column("facts", "duration")
+FACT_ORDER_INDEX = column("facts", "timestamp")  # timestamp rank (1-based)
+FACT_SOURCE_INDEX = column("facts", "source_definition")  # definition + 1
+FACT_VALID_INDEX = column("facts", "valid")
+FACT_DIM = width("facts")
+# Fact kinds by native name (`observation_encoder::FactKind`).
+_FACT_KINDS: dict[str, int] = V11_LAYOUT["facts"]["row_kind_names"]
+FACT_COUNTER = _FACT_KINDS["counter"]
+FACT_SET_NAME = _FACT_KINDS["set_name"]
+FACT_ABILITY_RESOLUTION = _FACT_KINDS["ability_resolution"]
+FACT_TRIGGERING_AMOUNT = _FACT_KINDS["triggering_amount"]
+FACT_USED_ABILITY = _FACT_KINDS["used_ability"]
+FACT_COPY = _FACT_KINDS["copy"]
+FACT_COPY_EXCEPTION = _FACT_KINDS["copy_exception"]
+FACT_TRANSFORMS = _FACT_KINDS["transforms"]
+FACT_COMBAT_RESTRICTION = _FACT_KINDS["combat_restriction"]
+FACT_EFFECT_PROGRAM = _FACT_KINDS["effect_program"]
+FACT_CONTINUATION_PROGRAM = _FACT_KINDS["continuation_program"]
+# Largest kind; sizes the model's fact-kind embedding.
+FACT_KINDS = max(_FACT_KINDS.values())
+# Reserved and never written: continuous-effect records are shared-effect
+# rows. Preparation still names it among the kinds whose detail is a name.
 FACT_EFFECT = 6
-FACT_COPY = 7
-FACT_COPY_EXCEPTION = 8
-FACT_TRANSFORMS = 9
-FACT_COMBAT_RESTRICTION = 10
-FACT_EFFECT_PROGRAM = 11
 # The id of an effect program that states a player's pooled mana with a
 # spend effect or combat expiry (native `observation_encoder::POOLED_MANA`).
 POOLED_MANA = "PooledMana"
-FACT_EFFECTIVE_COLOR = 12
-FACT_KEYWORD_COUNTER_TIMESTAMP = 13
-FACT_CONTINUATION_PROGRAM = 14
-FACT_KINDS = 14
-# Permanent columns that hold object links (joins), in model parameter order.
-PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
+# The id of an effect program that states a permanent's ward price when the
+# ward-cost column cannot, as "Ward—Pay 7 life." (native `observation_encoder::WARD`).
+WARD = "Ward"
+
 # Decklist rows: definition id + 1, then main, unseen, sideboard and
 # remaining-sideboard counts. A closed opponent's rows are all zero.
-DECKLIST_DIM = 5
-# Input v10 turn state (observation_encoder.rs). `player_turn_state` has one
-# row per seat, agent first: life lost this turn / 20, spells cast this turn
-# / 10, then mana that can't be spent to cast nonartifact spells by
-# W/U/B/R/G/C / 10. `card_turn_state` aligns with the seats' card rows: 1 for
-# a graveyard card put there from the battlefield this turn.
-TURN_STATE_LIFE_LOST_INDEX = 0
-TURN_STATE_SPELLS_CAST_INDEX = 1
-TURN_STATE_NONARTIFACT_MANA_INDEX = 2
-TURN_STATE_DIM = TURN_STATE_NONARTIFACT_MANA_INDEX + 6
-_DECKLIST_COUNTS = (
-    "main_counts",
-    "unseen_counts",
-    "sideboard_counts",
-    "remaining_sideboard_counts",
+DECKLIST_DIM = width("decklists")
+# Input v10/v11 turn state. `player_turn_state` has one row per seat, agent
+# first: life lost this turn / 20, spells cast this turn / 10, then mana that
+# can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10.
+# `card_turn_state` aligns with the seats' card rows: 1 for a graveyard card
+# put there from the battlefield this turn.
+TURN_STATE_LIFE_LOST_INDEX = column("player_turn_state", "life_lost")
+TURN_STATE_SPELLS_CAST_INDEX = column("player_turn_state", "spells_cast")
+TURN_STATE_NONARTIFACT_MANA_INDEX = column(
+    "player_turn_state", "nonartifact_mana_white"
 )
-
-
-# -----------------------------------------------------------------------------
-# Observation Encoding
-# -----------------------------------------------------------------------------
-def _decklist_rows(player: managym.Player) -> list[tuple[int, ...]]:
-    """Reference implementation of native decklist rows: one per
-    definition in a known player's main deck and sideboard, sorted."""
-    rows: dict[int, list[int]] = {}
-    for column, name in enumerate(_DECKLIST_COUNTS, start=1):
-        for definition, count in (getattr(player, name) or {}).items():
-            row = rows.setdefault(int(definition), [int(definition) + 1, 0, 0, 0, 0])
-            row[column] = int(count)
-    return [tuple(rows[definition]) for definition in sorted(rows)]
-
-
-# `KeywordData` field order, the order of every keyword column block.
-KEYWORD_FIELDS = (
-    "flying",
-    "reach",
-    "haste",
-    "flash",
-    "vigilance",
-    "trample",
-    "first_strike",
-    "double_strike",
-    "deathtouch",
-    "lifelink",
-    "defender",
-    "menace",
-    "hexproof",
-    "indestructible",
-)
-
-
-def _types(types: managym.CardTypes) -> tuple[float, ...]:
-    """Land, creature, artifact, enchantment, planeswalker and battle flags."""
-    return (
-        float(types.is_land),
-        float(types.is_creature),
-        float(types.is_artifact),
-        float(types.is_enchantment),
-        float(types.is_planeswalker),
-        float(types.is_battle),
-    )
-
-
-def _split_id(ident: int) -> Tuple[float, float]:
-    """A vocabulary id as 16-bit halves, exact in float32."""
-    ident &= 0xFFFFFFFF
-    return float(ident >> 16), float(ident & 0xFFFF)
-
-
-def _timestamp(perm: managym.Permanent) -> int:
-    """A permanent's timestamp: renewed by an attachment, otherwise its id."""
-    return perm.id if perm.timestamp is None else perm.timestamp
-
-
-def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
-    """Rank (1-based) of every permanent and shared-effect timestamp in `obs`."""
-    permanents = [*obs.agent_permanents, *obs.opponent_permanents]
-    stamps = {_timestamp(perm) for perm in permanents}
-    if obs.shared_effects is None:
-        raise ValueError("policy input requires native shared-effect provenance")
-    stamps.update(record.effect.timestamp for record in obs.shared_effects)
-    stamps.update(
-        timestamp
-        for perm in permanents
-        for timestamp in perm.keyword_counter_timestamps.values()
-    )
-    return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
-
-
-def _card_rows(cards: Sequence[Any], sideboard: int) -> str:
-    """Where a seat's card rows sit, for a capacity failure's retained text."""
-    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in cards)
-    tokens = Counter(card.name for card in cards if card.is_token)
-    parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
-    parts.append(f"sideboard {sideboard}")
-    parts.append(f"tokens {sum(tokens.values())}")
-    parts.extend(f"{name} {count}" for name, count in tokens.most_common(3))
-    return ", ".join(parts)
-
-
-class ObservationEncoder:
-    """
-    Encodes each typed chunk (player, cards, permanents, etc.) into fixed-size arrays,
-    along with corresponding ID and validity masks. These validity masks can be used
-    later by the agent to mask out invalid slots in attention, action encoding, etc.
-    """
-
-    def __init__(self, config: ObservationConfig) -> None:
-        self.config = config
-        self.library_shape = tuple(
-            managym.observation_layout()["known_library"]["shape"]
-        )
-        self.relation_dim = RELATION_DIM
-        self.cards_per_player = config.max_cards_per_player
-        self.perms_per_player = config.max_permanents_per_player
-        # Naming is bounded group prompts, so action capacity is independent
-        # of vocabulary size.
-        self.max_actions = config.max_actions
-        self.name_dim = NAME_DIM
-        self.max_focus_objects = config.max_focus_objects
-        self.max_events = config.max_events
-
-        self.num_phases = len(PhaseEnum.__members__)
-        self.num_steps = len(StepEnum.__members__)
-        self.num_zones = len(ZoneEnum.__members__)
-        self.num_actions = len(ActionEnum.__members__)
-        self.num_event_types = len(EventTypeEnum.__members__)
-        self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
-
-        # Define dimensions for players, cards, permanents.
-        # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana + pooled and spend-restricted colors,
-        # restricted mana by spending subtype, the hand-only lock, no maximum
-        # hand size, turn number, seat, kept red mana and turn history.
-        # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
-        # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + outside + indestructible + legendary,
-        # cast-permission terms and announced X; validity is last.
-        self.player_dim = PLAYER_DIM
-        self.card_dim = CARD_DIM
-        # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
-        # can't-be-blocked-this-turn, effective power/toughness, animated
-        # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-        # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, attacking, used exhaust and
-        # once-each-turn ability counts, granted firebending, attachment join,
-        # granted land, blocking join, lost abilities, timestamp rank and
-        # dealt damage this turn; validity is last. Counter kinds, effect-set
-        # subtypes and characteristics and used abilities are fact rows;
-        # continuous-effect records are shared-effect rows.
-        # Input v11 lists each game thing once; deprecated v9/v10 rows also
-        # list battlefield objects and spells as cards (`legacy_input`).
-        self.one_token = config.policy_input_version == 11
-        self.permanent_dim = PERMANENT_DIM if self.one_token else LEGACY_PERMANENT_DIM
-        self.max_stack_objects = config.max_stack_objects if self.one_token else 0
-        self.event_dim = 12 if config.policy_history_version == 1 else 7
-        self.turn_state = config.policy_input_version in (10, 11)
-        capacities = (
-            config.max_decision_records,
-            config.max_decision_reference_details,
-            config.max_decision_references,
-            config.max_decision_members,
-        )
-        if any(capacities) and not all(capacities):
-            raise ValueError("decision memory requires all companion capacities")
-        if config.max_decision_records and not self.one_token:
-            raise ValueError("decision memory requires policy input v11")
-
-        # Preserve attack/decline independently of action family and focus.
-        self.action_dim = (
-            self.num_actions + 5
-        )  # declaration, mode, ability, continuation join, validity
-
-        # This maps object IDS to their ultimate Game Object index.
-        # This is used to map the focus object indices in the action space
-        # to the actual object indices in the game object tensor.
-        self.object_to_index: Dict[int, int] = {}
-        self.current_object_index = 0
-
-    @property
-    def shapes(self) -> Dict[str, Tuple[int, ...]]:
-        return {
-            **(
-                {
-                    key: (capacity, MEMORY_WIDTHS[key])
-                    for key, capacity in (
-                        ("decision_records", self.config.max_decision_records),
-                        ("decision_references", self.config.max_decision_references),
-                        (
-                            "decision_reference_details",
-                            self.config.max_decision_reference_details,
-                        ),
-                        ("decision_members", self.config.max_decision_members),
-                    )
-                }
-                if self.config.max_decision_records
-                else {}
-            ),
-            "relations": (RELATION_ROWS, self.relation_dim),
-            "facts": (self.config.max_facts, FACT_DIM),
-            **SHARED_EFFECT_SHAPES,
-            "semantic_cards": (2, self.cards_per_player),
-            "known_hand": (2, self.cards_per_player, 2),
-            **({"known_library": self.library_shape} if self.one_token else {}),
-            "decklists": (2, self.cards_per_player, DECKLIST_DIM),
-            **(
-                {
-                    "player_turn_state": (2, TURN_STATE_DIM),
-                    "card_turn_state": (2, self.cards_per_player),
-                }
-                if self.turn_state
-                else {}
-            ),
-            # Game objects
-            "agent_player": (1, self.player_dim),
-            "opponent_player": (1, self.player_dim),
-            "agent_cards": (self.cards_per_player, self.card_dim),
-            "opponent_cards": (self.cards_per_player, self.card_dim),
-            "agent_permanents": (self.perms_per_player, self.permanent_dim),
-            "opponent_permanents": (self.perms_per_player, self.permanent_dim),
-            **(
-                {
-                    "stack": (self.max_stack_objects, STACK_DIM),
-                    "stack_valid": (self.max_stack_objects,),
-                }
-                if self.one_token
-                else {}
-            ),
-            "name_candidates": (self.max_actions, self.name_dim),
-            "actions": (self.max_actions, self.action_dim),
-            "events": (self.max_events, self.event_dim),
-            "action_focus": (self.max_actions, self.max_focus_objects),
-            "agent_player_valid": (1,),
-            "opponent_player_valid": (1,),
-            "agent_cards_valid": (self.cards_per_player,),
-            "opponent_cards_valid": (self.cards_per_player,),
-            "agent_permanents_valid": (self.perms_per_player,),
-            "opponent_permanents_valid": (self.perms_per_player,),
-            "actions_valid": (self.max_actions,),
-            "events_valid": (self.max_events,),
-        }
-
-    @property
-    def dtypes(self) -> Dict[str, np.dtype]:
-        return {
-            key: np.int32 if key == "action_focus" else np.float32
-            for key in self.shapes
-        }
-
-    def allocate(self, *leading_dims: int) -> Dict[str, np.ndarray]:
-        dtypes = self.dtypes
-        return {
-            key: np.zeros((*leading_dims, *shape), dtype=dtypes[key])
-            for key, shape in self.shapes.items()
-        }
-
-    def encode(self, obs: managym.Observation) -> ObservationBuffers:
-        # Native selection owns the optional policy prefix; authority stays complete.
-        retained = managym.policy_action_count(
-            len(obs.action_space.actions), self.max_actions, self.config.action_overflow
-        )
-        actions = obs.action_space.actions[:retained]
-        if self.one_token:
-            if any(
-                perm.object_id is None
-                for perm in (*obs.agent_permanents, *obs.opponent_permanents)
-            ) or any(
-                (item.kind == managym.StackObjectKindEnum.SPELL)
-                != (item.characteristics is not None)
-                for item in obs.stack_objects
-            ):
-                raise ValueError(
-                    "policy input v11 requires permanent and spell identities; "
-                    "this historical observation encodes only as input v9/v10"
-                )
-            agent_cards, opponent_cards = obs.agent_cards, obs.opponent_cards
-        else:
-            agent_cards, opponent_cards = legacy_card_lists(obs)
-        for label, size, capacity in (
-            ("agent cards", len(agent_cards), self.cards_per_player),
-            ("opponent cards", len(opponent_cards), self.cards_per_player),
-            ("agent permanents", len(obs.agent_permanents), self.perms_per_player),
-            (
-                "opponent permanents",
-                len(obs.opponent_permanents),
-                self.perms_per_player,
-            ),
-            (
-                "stack",
-                len(obs.stack_objects) if self.one_token else 0,
-                self.max_stack_objects,
-            ),
-        ):
-            if size > capacity:
-                raise ValueError(
-                    f"Observation capacity exceeded: {label} {size} > {capacity}"
-                )
-        if any(len(action.focus) > self.max_focus_objects for action in actions):
-            raise ValueError("Observation capacity exceeded: action focus")
-        for action in actions:
-            if action.continuation_index is not None and not (
-                0 <= action.continuation_index < len(obs.continuation)
-            ):
-                raise ValueError("invalid action continuation reference")
-        if not self.turn_state and (state := managym.input_v10_state(obs)):
-            raise UnsupportedPolicyInput(10, state)
-        if state := managym.unrepresentable_state(obs):
-            raise ValueError(f"the policy input cannot represent {state}")
-        out = {
-            "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
-            "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
-        }
-
-        if self.one_token:
-            out["known_library"] = np.zeros(
-                self.shapes["known_library"], dtype=np.float32
-            )
-
-        ## NOTE: It is very important that we encode in this exact
-        ## order.
-        # 1. ActorCritic player
-        # 2. Opponent player
-        # 3. ActorCritic cards
-        # 4. Opponent cards
-        # 5. ActorCritic permanents
-        # 6. Opponent permanents
-        # This ensures that the object_to_index mapping is always
-        # consistent and matches the actual array order, because
-        # this is also the concatenation order.
-
-        log = getLogger(__name__).getChild("encode")
-
-        self.object_to_index = {}
-        self.current_object_index = 0
-
-        for key, player in (
-            ("agent_player", obs.agent),
-            ("opponent_player", obs.opponent),
-        ):
-            out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
-            out[key][0, PLAYER_DECKLISTS_OPEN_INDEX] = float(not obs.decklists_closed)
-        for key, cards, is_mine in (
-            ("agent_cards", agent_cards, 1.0),
-            ("opponent_cards", opponent_cards, 0.0),
-        ):
-            out[key] = self._encode_cards(
-                cards, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
-            )
-        # Outside copies occupy explicit rows after visible owner cards. They
-        # have no zone bits; the outside marker identifies their location.
-        for seat, (cards, player) in enumerate(
-            ((agent_cards, obs.agent), (opponent_cards, obs.opponent))
-        ):
-            if self.one_token:
-                capacity = self.shapes["known_library"][1]
-                if len(player.known_library) > capacity:
-                    raise ValueError("known library exceeds observation capacity")
-                for slot, (position, definition) in enumerate(
-                    sorted(player.known_library.items())
-                ):
-                    out["known_library"][seat, slot] = (
-                        int(definition) + 1,
-                        int(position) + 1,
-                    )
-            if len(player.known_hand) > self.cards_per_player:
-                raise ValueError("known hand exceeds observation capacity")
-            for slot, card in enumerate(cards):
-                out["semantic_cards"][seat, slot] = card.registry_key + 1
-            for slot, (definition, count) in enumerate(
-                sorted(player.known_hand.items())
-            ):
-                out["known_hand"][seat, slot] = (int(definition) + 1, count)
-        out["decklists"] = np.zeros(
-            (2, self.cards_per_player, DECKLIST_DIM), dtype=np.float32
-        )
-        for seat, player in enumerate((obs.agent, obs.opponent)):
-            rows = _decklist_rows(player)
-            if len(rows) > self.cards_per_player:
-                raise ValueError(
-                    "observation capacity exceeded: decklist definitions "
-                    f"{len(rows)} > {self.cards_per_player}"
-                )
-            for slot, row in enumerate(rows):
-                out["decklists"][seat, slot] = row
-        if self.turn_state:
-            out["player_turn_state"] = np.zeros((2, TURN_STATE_DIM), dtype=np.float32)
-            out["card_turn_state"] = np.zeros(
-                (2, self.cards_per_player), dtype=np.float32
-            )
-            for seat, (cards, player) in enumerate(
-                ((agent_cards, obs.agent), (opponent_cards, obs.opponent))
-            ):
-                row = out["player_turn_state"][seat]
-                row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost / 20.0
-                row[TURN_STATE_SPELLS_CAST_INDEX] = player.spells_cast / 10.0
-                for restricted in player.restricted_mana:
-                    if restricted.except_nonartifact_spells:
-                        row[TURN_STATE_NONARTIFACT_MANA_INDEX:] += (
-                            np.asarray(restricted.mana, dtype=np.float32) / 10.0
-                        )
-                for slot, card in enumerate(cards):
-                    out["card_turn_state"][seat, slot] = float(
-                        card.from_battlefield_this_turn
-                    )
-        outside = obs.agent_sideboard
-        start = len(agent_cards)
-        if start + len(outside) > self.cards_per_player:
-            raise ValueError(
-                "observation capacity exceeded: agent_cards plus sideboard "
-                f"{start + len(outside)} > {self.cards_per_player} "
-                f"({_card_rows(agent_cards, len(outside))})"
-            )
-        for offset, card in enumerate(outside):
-            out["semantic_cards"][0, start + offset] = card.registry_key + 1
-            row = start + offset
-            out["agent_cards"][row, 7] = 1.0
-            out["agent_cards"][row, 37] = 1.0
-            out["agent_cards"][row, -1] = 1.0
-            self.object_to_index[card.candidate_id] = 2 + row
-        for key, perms, is_mine in (
-            ("agent_permanents", obs.agent_permanents, 1.0),
-            ("opponent_permanents", obs.opponent_permanents, 0.0),
-        ):
-            out[key] = self._encode_perms(perms, is_mine=is_mine)
-        if self.one_token:
-            # A battlefield object or a spell is one token: its card id names
-            # its permanent or stack row.
-            start = 2 + 2 * self.cards_per_player
-            for side, perms in enumerate(
-                (obs.agent_permanents, obs.opponent_permanents)
-            ):
-                for slot, perm in enumerate(perms):
-                    self.object_to_index[perm.object_id] = (
-                        start + side * self.perms_per_player + slot
-                    )
-            out["stack"] = np.zeros(
-                (self.max_stack_objects, STACK_DIM), dtype=np.float32
-            )
-            for slot, item in enumerate(obs.stack_objects):
-                out["stack"][slot] = self._encode_stack_features(item, obs.agent.id)
-                self.object_to_index[item.stack_object_id] = (
-                    self.current_object_index + slot
-                )
-                if item.object_id is not None:
-                    self.object_to_index[item.object_id] = (
-                        self.current_object_index + slot
-                    )
-            self.current_object_index += self.max_stack_objects
-        # Hosts may be listed after their attachments, so links follow indexing.
-        ranks = _timestamp_ranks(obs)
-        for key, perms in (
-            ("agent_permanents", obs.agent_permanents),
-            ("opponent_permanents", obs.opponent_permanents),
-        ):
-            for row, perm in enumerate(perms):
-                for column, linked in (
-                    (PERMANENT_ATTACHED_INDEX, perm.attached_to),
-                    (PERMANENT_BLOCKING_INDEX, perm.blocking),
-                ):
-                    if linked is not None:
-                        out[key][row, column] = self.object_to_index.get(linked, -1) + 1
-                out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
-        if self.one_token:
-            for slot, item in enumerate(obs.stack_objects):
-                if item.source_permanent_id is not None:
-                    out["stack"][slot, STACK_SOURCE_INDEX] = (
-                        self.object_to_index.get(item.source_permanent_id, -1) + 1
-                    )
-            out["stack_valid"] = out["stack"][..., -1].astype(np.float32)
-        out["facts"] = self._encode_facts(obs, ranks)
-        out.update(encode_shared_effects(obs, self.object_to_index, ranks))
-
-        # Validity masks
-        out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
-        out["opponent_player_valid"] = np.ones((1,), dtype=np.float32)
-        for key in (
-            "agent_cards",
-            "opponent_cards",
-            "agent_permanents",
-            "opponent_permanents",
-        ):
-            out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
-
-        # Actionspace
-        out.update(self._encode_actions(actions))
-        if self.config.policy_history_version == 1:
-            rows = (
-                obs.encode_policy_history(self.max_events, self.object_to_index)
-                if self.one_token
-                else obs.encode_legacy_policy_history(
-                    self.max_events, self.cards_per_player
-                )
-            )
-            out["events"] = np.zeros(
-                (self.max_events, self.event_dim), dtype=np.float32
-            )
-            out["events_valid"] = np.zeros(self.max_events, dtype=np.float32)
-            if rows:
-                out["events"][: len(rows)] = rows
-                out["events_valid"][: len(rows)] = 1
-        else:
-            out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
-
-        out["relations"] = self._encode_relations(
-            obs.continuation, obs.agent.player_index
-        )
-
-        if self.config.max_decision_records:
-            out.update(
-                encode_records(
-                    read_records(obs.decision_memory_json()),
-                    self.config.max_decision_records,
-                    self.config.max_decision_reference_details,
-                    self.config.max_decision_references,
-                    self.config.max_decision_members,
-                )
-            )
-        for key, value in out.items():
-            log.debug(f"[SHAPES] {key}: {value.shape}")
-        return out
-
-    def _encode_facts(
-        self, obs: managym.Observation, ranks: Dict[int, float]
-    ) -> np.ndarray:
-        """Reference implementation of native fact rows."""
-        rows: list[np.ndarray] = []
-
-        def push(
-            obj: int,
-            kind: int,
-            ident: int,
-            values: Tuple[float, float],
-            detail: int = 0,
-            provenance: tuple[float, int, int | None] | None = None,
-        ) -> None:
-            """One row; `provenance` is an effect's (duration, timestamp,
-            source registry key), as native `Fact.effect`."""
-            row = np.zeros(FACT_DIM, dtype=np.float32)
-            row[FACT_OBJECT_INDEX] = self.object_to_index.get(obj, -1) + 1
-            row[FACT_KIND_INDEX] = kind
-            row[FACT_ID_INDEX : FACT_ID_INDEX + 2] = _split_id(ident)
-            row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = _split_id(detail)
-            row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = values
-            if provenance is not None:
-                duration, timestamp, source = provenance
-                row[FACT_DURATION_INDEX] = duration
-                row[FACT_ORDER_INDEX] = ranks[timestamp]
-                if source is not None:
-                    row[FACT_SOURCE_INDEX] = source + 1
-            row[FACT_VALID_INDEX] = 1.0
-            rows.append(row)
-
-        token = managym.catalog_token_value
-        permanents = [*obs.agent_permanents, *obs.opponent_permanents]
-        for perm in permanents:
-            if perm.plus1_counters > 0:
-                push(
-                    perm.id,
-                    FACT_COUNTER,
-                    token("CounterKind::plus_one_plus_one"),
-                    (perm.plus1_counters / 10.0, 0.0),
-                )
-            for kind, count in sorted(perm.counters.items()):
-                push(
-                    perm.id,
-                    FACT_COUNTER,
-                    token(f"CounterKind::{kind}"),
-                    (count / 10.0, 0.0),
-                )
-            if perm.colors is not None:
-                for color in perm.colors or ["Colorless"]:
-                    push(
-                        perm.id,
-                        FACT_EFFECTIVE_COLOR,
-                        token(f"Color::{color}"),
-                        (1.0, 0.0),
-                    )
-            for subtype in perm.temp_subtypes:
-                push(perm.id, FACT_ADDED_SUBTYPE, token(subtype), (1.0, 0.0))
-            if perm.name is not None:
-                push(perm.id, FACT_SET_NAME, token(perm.name), (1.0, 0.0))
-            for creature_type in perm.creature_types or ():
-                push(perm.id, FACT_SET_CREATURE_TYPE, token(creature_type), (1.0, 0.0))
-            if perm.transforms:
-                push(perm.id, FACT_TRANSFORMS, 0, (float(perm.transforms), 0.0))
-            for index in perm.used_abilities:
-                push(perm.id, FACT_USED_ABILITY, index, (1.0, 0.0))
-
-        for index, frame in enumerate(obs.continuation):
-            if frame.source_transforms:
-                push(
-                    frame.source.object
-                    if frame.source.object is not None
-                    else (
-                        obs.agent.id
-                        if frame.controller == obs.agent.player_index
-                        else obs.opponent.id
-                    ),
-                    FACT_TRANSFORMS,
-                    index + 1,
-                    (float(frame.source_transforms), 0.0),
-                )
-
-        for index, frame in enumerate(obs.continuation):
-            for program in (frame.program, frame.effect_execution):
-                for ordinal, (kind, value) in enumerate(program):
-                    push(
-                        obs.agent.id
-                        if frame.controller == obs.agent.player_index
-                        else obs.opponent.id,
-                        FACT_CONTINUATION_PROGRAM,
-                        index + 1,
-                        (float(kind), float(ordinal)),
-                        detail=value,
-                    )
-            if frame.attackers is not None:
-                push(
-                    obs.agent.id
-                    if frame.controller == obs.agent.player_index
-                    else obs.opponent.id,
-                    FACT_COMBAT_RESTRICTION,
-                    index + 1,
-                    (0.0, 0.0),
-                    detail=token(frame.attackers),
-                )
-
-        def push_modification(
-            obj: int, kind: int, effect: managym.ContinuousEffect
-        ) -> None:
-            ident = token(f"Modification::{effect.modification}")
-            amount = effect.power if effect.power is not None else effect.amount
-            values = (
-                (amount or 0) / 10.0,
-                (effect.toughness or 0) / 10.0,
-            )
-            details = [
-                *(token(name) for name in (*effect.keywords, *effect.subtypes)),
-                *(
-                    [token(f"Color::{effect.color}")]
-                    if effect.color is not None
-                    else []
-                ),
-            ] or [0]
-            duration = float(DURATION_CODES.get(effect.duration, 2))
-            provenance = (duration, effect.timestamp, effect.source_registry_key)
-            for ordinal, (token_kind, token_value) in enumerate(effect.program):
-                push(
-                    obj,
-                    FACT_EFFECT_PROGRAM,
-                    ident,
-                    (float(token_kind), float(ordinal)),
-                    token_value,
-                    provenance,
-                )
-            for detail in details:
-                push(obj, kind, ident, values, detail, provenance)
-
-        for perm in permanents:
-            if perm.copy is None:
-                continue
-            push(
-                perm.id,
-                FACT_COPY,
-                token("CopyEffect"),
-                (0.0, 0.0),
-                provenance=(2.0, _timestamp(perm), perm.copy.registry_key),
-            )
-            for exception in perm.copy.exceptions:
-                push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
-        for perm in permanents:
-            for kind, timestamp in sorted(perm.keyword_counter_timestamps.items()):
-                push(
-                    perm.id,
-                    FACT_KEYWORD_COUNTER_TIMESTAMP,
-                    token(f"CounterKind::{kind}"),
-                    (0.0, 0.0),
-                    provenance=(0.0, timestamp, None),
-                )
-        # Spend effects and combat expiry: one program per pooled class on its player.
-        for player in (obs.agent, obs.opponent):
-            for pooled in player.pooled_mana_classes:
-                for ordinal, (token_kind, token_value) in enumerate(pooled.program):
-                    push(
-                        player.id,
-                        FACT_EFFECT_PROGRAM,
-                        token(POOLED_MANA),
-                        (float(token_kind), float(ordinal)),
-                        token_value,
-                    )
-        if len(rows) > self.config.max_facts:
-            raise ValueError(
-                f"observation capacity exceeded: facts {len(rows)} > {self.config.max_facts}"
-            )
-        out = np.zeros((self.config.max_facts, FACT_DIM), dtype=np.float32)
-        if rows:
-            out[: len(rows)] = rows
-        return out
-
-    def _encode_relations(
-        self, frames: list[managym.ContinuationFrame], viewer: int
-    ) -> np.ndarray:
-        """Reference implementation of native current-continuation relation rows."""
-        rows: list[np.ndarray] = []
-
-        def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
-            row[23] = 0 if value.definition is None else value.definition + 1
-            row[24] = self.object_to_index.get(value.object, -1) + 1
-            if value.player is not None:
-                row[25] = row[24] = 1 if value.player == viewer else 2
-
-        for index, frame in enumerate(frames):
-            row = np.zeros(self.relation_dim, dtype=np.float32)
-            row[:5] = (
-                1,
-                index + 1,
-                0 if frame.parent is None else frame.parent + 1,
-                frame.kind,
-                1 if frame.controller == viewer else 2,
-            )
-            row[5] = (
-                0 if frame.source.definition is None else frame.source.definition + 1
-            )
-            row[6] = self.object_to_index.get(frame.source.object, -1) + 1
-            row[7:12] = (
-                0 if frame.mode is None else frame.mode + 1,
-                0 if frame.ability is None else frame.ability + 1,
-                frame.kicked,
-                0 if frame.active_clause is None else frame.active_clause + 1,
-                frame.cost is not None,
-            )
-            if frame.cost is not None:
-                row[12:19] = frame.cost
-            row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
-            row[30] = frame.resolutions_this_turn
-            row[28] = frame.decision
-            row[RELATION_VALID_INDEX] = 1
-            row[RELATION_X_INDEX] = frame.x
-            row[RELATION_KEYWORDS_INDEX:RELATION_THIS_TURN_INDEX] = (
-                frame.granted_keywords
-            )
-            row[RELATION_THIS_TURN_INDEX] = frame.this_turn
-            rows.append(row)
-            for ordinal, target in enumerate(frame.targets, 1):
-                target_row = row.copy()
-                target_row[0], target_row[22], target_row[29] = (
-                    2,
-                    target.clause + 1,
-                    ordinal,
-                )
-                legal = target.legal_at_resolution_start
-                target_row[RELATION_ELIGIBILITY_INDEX] = (
-                    0 if legal is None else (1 if legal else 2)
-                )
-                _reference(target_row, target.reference)
-                rows.append(target_row)
-            for kind, reference in ((3, frame.context), (4, frame.sacrifice)):
-                if reference is not None:
-                    context_row = row.copy()
-                    context_row[0], context_row[22], context_row[29] = kind, 1, 1
-                    _reference(context_row, reference)
-                    rows.append(context_row)
-            for ordinal, reference in enumerate(frame.effect_execution_references, 1):
-                retained = row.copy()
-                retained[0], retained[22], retained[29] = 10, 1, ordinal
-                _reference(retained, reference)
-                rows.append(retained)
-            if frame.inherited_from is not None:
-                inherited = row.copy()
-                inherited[0], inherited[22], inherited[29] = 7, 1, 1
-                _reference(inherited, frame.inherited_from)
-                rows.append(inherited)
-            for ordinal, reference in enumerate(frame.remembered, 1):
-                remembered = row.copy()
-                remembered[0], remembered[22], remembered[29] = 8, 1, ordinal
-                _reference(remembered, reference)
-                rows.append(remembered)
-            if frame.delayed_frequency is not None:
-                frequency = row.copy()
-                frequency[0], frequency[28] = 9, frame.delayed_frequency
-                rows.append(frequency)
-            for pair in frame.hybrid:
-                hybrid = row.copy()
-                hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1
-                rows.append(hybrid)
-            for output in frame.mana_outputs:
-                for restricted, amounts in (
-                    (False, output.mana),
-                    (True, output.lesson),
-                ):
-                    produced = row.copy()
-                    produced[0], produced[7] = 6, output.mode + 1
-                    produced[12:18] = amounts
-                    produced[19] = restricted
-                    rows.append(produced)
-        if len(rows) > RELATION_ROWS:
-            raise ValueError("observation capacity exceeded: continuation relations")
-        result = np.zeros((RELATION_ROWS, self.relation_dim), dtype=np.float32)
-        if rows:
-            result[: len(rows)] = rows
-        return result
-
-    # -------------------------------------------------------------------------
-    # Players (with validity mask support)
-    # -------------------------------------------------------------------------
-    def _encode_player_features(
-        self, player: managym.Player, turn: managym.Turn
-    ) -> np.ndarray:
-        arr = np.zeros(self.player_dim, dtype=np.float32)
-        arr[0] = float(player.life) / 20.0
-        arr[1] = float(player.is_active)
-        zone_start = 2
-        zone_counts = np.asarray(player.zone_counts[: self.num_zones], dtype=np.float32)
-        arr[zone_start : zone_start + len(zone_counts)] = zone_counts / 60.0
-        zone_end = zone_start + self.num_zones
-
-        phase_start = zone_end
-        phase = int(turn.phase)
-        if 0 <= phase < self.num_phases:
-            arr[phase_start + phase] = 1.0
-
-        step_start = phase_start + self.num_phases
-        step = int(turn.step)
-        if 0 <= step < self.num_steps:
-            arr[step_start + step] = 1.0
-
-        arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
-        arr[step_start + self.num_steps + 1] = float(player.combat_mana) / 10.0
-
-        arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
-        arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
-        # A class admitting several subtypes counts under each.
-        for index, subtype in enumerate(RESTRICTED_SUBTYPE_COLUMNS):
-            start = PLAYER_RESTRICTED_INDEX + 6 * index
-            for restricted in player.restricted_mana:
-                if subtype in (*restricted.spells, *restricted.abilities):
-                    arr[start : start + 6] += (
-                        np.asarray(restricted.mana, dtype=np.float32) / 10.0
-                    )
-        arr[PLAYER_HAND_ONLY_INDEX] = float(player.hand_only_until is not None)
-        arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
-        arr[PLAYER_TURN_INDEX] = float(turn.turn_number) / 20.0
-        # Seat 0 is on the play.
-        arr[PLAYER_SEAT_INDEX] = float(player.player_index)
-        arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
-        history = player.turn_history
-        arr[PLAYER_ATTACKED_INDEX] = float(history.attacked)
-        arr[PLAYER_SACRIFICED_INDEX] = float(history.permanents_sacrificed) / 10.0
-        arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
-        arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
-        for index in range(4):
-            arr[PLAYER_BENT_INDEX + index] = float(bool(history.bent & (1 << index)))
-        arr[PLAYER_EXTRA_TURNS_INDEX] = float(player.extra_turns)
-        arr[PLAYER_ADDITIONAL_COMBATS_INDEX] = float(player.additional_combats)
-
-        self.object_to_index[player.id] = self.current_object_index
-        self.current_object_index += 1
-        return arr
-
-    # -------------------------------------------------------------------------
-    # Cards (with validity mask support)
-    # -------------------------------------------------------------------------
-    def _encode_cards(
-        self, cards: List[managym.Card], is_mine: float, viewer: int, turn: int
-    ) -> np.ndarray:
-        return self._encode_objects(
-            items=cards,
-            max_items=self.cards_per_player,
-            dim=self.card_dim,
-            label="Card list",
-            encode_item=lambda card: self._encode_card_features(
-                card, is_mine, viewer, turn
-            ),
-        )
-
-    def _encode_card_features(
-        self, card: managym.Card, is_mine: float, viewer: int, turn: int
-    ) -> np.ndarray:
-        characteristics = card.characteristics
-        arr = np.zeros(self.card_dim, dtype=np.float32)
-        i = 0
-        zone_val = int(card.zone) & 0xFF
-        if 0 <= zone_val < self.num_zones:
-            arr[i + zone_val] = 1.0
-        i += self.num_zones
-        arr[i] = is_mine
-        i += 1
-        arr[i] = float(characteristics.power) / 10.0
-        i += 1
-        arr[i] = float(characteristics.toughness) / 10.0
-        i += 1
-        arr[i] = float(characteristics.mana_cost.mana_value) / 10.0
-        i += 1
-        arr[i] = float(characteristics.card_types.is_land)
-        i += 1
-        arr[i] = float(characteristics.card_types.is_creature)
-        i += 1
-        arr[i] = float(characteristics.card_types.is_artifact)
-        i += 1
-        arr[i] = float(characteristics.card_types.is_enchantment)
-        i += 1
-        arr[i] = float(characteristics.card_types.is_planeswalker)
-        i += 1
-        arr[i] = float(characteristics.card_types.is_battle)
-        i += 1
-        arr[i] = float(characteristics.keywords.flying)
-        i += 1
-        arr[i] = float(characteristics.keywords.reach)
-        i += 1
-        arr[i] = float(characteristics.keywords.haste)
-        i += 1
-        arr[i] = float(characteristics.keywords.vigilance)
-        i += 1
-        arr[i] = float(characteristics.keywords.trample)
-        i += 1
-        arr[i] = float(characteristics.keywords.first_strike)
-        i += 1
-        arr[i] = float(characteristics.keywords.double_strike)
-        i += 1
-        arr[i] = float(characteristics.keywords.deathtouch)
-        i += 1
-        arr[i] = float(characteristics.keywords.lifelink)
-        i += 1
-        arr[i] = float(characteristics.keywords.defender)
-        i += 1
-        arr[i] = float(characteristics.keywords.menace)
-        i += 1
-        arr[i] = float(characteristics.keywords.flash)
-        i += 1
-        arr[i] = float(card.is_token)
-        i += 1
-        arr[i] = float(characteristics.is_ally)
-        i += 1
-        arr[i] = float(characteristics.is_lesson)
-        i += 1
-        arr[i] = float(characteristics.ward_cost > 0)
-        i += 1
-        arr[i] = float(characteristics.ward_cost) / 10.0
-        i += 1
-        arr[i] = float(characteristics.kicker_cost > 0)
-        i += 1
-        arr[i] = float(characteristics.kicker_cost) / 10.0
-        i += 1
-        arr[i] = float(characteristics.keywords.hexproof)
-        arr[38] = float(characteristics.keywords.indestructible)
-        arr[39] = float(characteristics.is_legendary)
-        permission = card.cast_permission
-        if permission is not None:
-            base = CARD_PERMISSION_INDEX
-            arr[base] = 1.0
-            arr[base + 1] = float(permission.player_id == viewer)
-            if permission.cost is not None:
-                arr[base + 2] = 1.0
-                arr[base + 3] = float(permission.cost.mana_value) / 10.0
-            arr[base + 4] = float(permission.this_turn)
-            arr[base + 5] = float(permission.own_turn_only)
-            # Not usable until a later turn than this one.
-            arr[base + 6] = float(
-                permission.after_turn is not None and turn <= permission.after_turn
-            )
-            arr[base + 7] = float(permission.source_permanent_id is not None)
-            arr[base + 8] = float(permission.flash)
-            arr[base + 9] = float(permission.any_mana)
-            arr[base + 10] = float(permission.waterbend)
-            arr[base + 11] = float(permission.foretold)
-            arr[base + 12] = float(permission.through_next_turn)
-        if card.x is not None:
-            arr[CARD_X_INDEX] = 1.0
-            arr[CARD_X_INDEX + 1] = float(card.x) / 10.0
-        # Set validity flag (card exists)
-        arr[-1] = 1.0
-        return arr
-
-    # -------------------------------------------------------------------------
-    # Permanents (with validity mask support)
-    # -------------------------------------------------------------------------
-    def _encode_perms(
-        self, perms: List[managym.Permanent], is_mine: float
-    ) -> np.ndarray:
-        return self._encode_objects(
-            items=perms,
-            max_items=self.perms_per_player,
-            dim=self.permanent_dim,
-            label="Permanent list",
-            encode_item=lambda perm: self._encode_permanent_features(perm, is_mine),
-        )
-
-    def _encode_permanent_features(
-        self, perm: managym.Permanent, is_mine: float
-    ) -> np.ndarray:
-        characteristics = perm.characteristics
-        arr = np.zeros(self.permanent_dim, dtype=np.float32)
-        arr[0] = is_mine
-        arr[1] = float(perm.tapped)
-        arr[2] = float(perm.damage) / 10.0
-        arr[3] = float(perm.is_summoning_sick)
-        arr[4] = float(perm.plus1_counters) / 10.0
-        arr[5] = float(perm.cant_be_blocked_this_turn)
-        arr[6] = float(characteristics.power) / 10.0
-        arr[7] = float(characteristics.toughness) / 10.0
-        arr[8] = float(perm.is_animated)
-        arr[9] = float(perm.has_exile_link)
-        # Effective keywords (printed + until-EOT grants) — mirrors the Rust
-        # encoder's permanent keyword block exactly.
-        arr[10] = float(characteristics.keywords.flying)
-        arr[11] = float(characteristics.keywords.reach)
-        arr[12] = float(characteristics.keywords.haste)
-        arr[13] = float(characteristics.keywords.flash)
-        arr[14] = float(characteristics.keywords.vigilance)
-        arr[15] = float(characteristics.keywords.trample)
-        arr[16] = float(characteristics.keywords.first_strike)
-        arr[17] = float(characteristics.keywords.double_strike)
-        arr[18] = float(characteristics.keywords.deathtouch)
-        arr[19] = float(characteristics.keywords.lifelink)
-        arr[20] = float(characteristics.keywords.defender)
-        arr[21] = float(characteristics.keywords.menace)
-        arr[22] = float(characteristics.keywords.hexproof)
-        arr[23] = float(perm.exile_if_dies_this_turn)
-        arr[25] = float(characteristics.keywords.indestructible)
-        arr[26] = float("Avatar" in perm.temp_subtypes)
-        arr[27] = float(perm.attacking)
-        arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
-        arr[PERMANENT_EXHAUSTED_INDEX] = float(perm.exhausted_abilities)
-        arr[PERMANENT_ONCE_EACH_TURN_INDEX] = float(perm.once_each_turn_used)
-        arr[PERMANENT_FIREBENDING_INDEX] = float(perm.granted_firebending) / 10.0
-        # PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX and
-        # PERMANENT_TIMESTAMP_INDEX are written once every object is indexed.
-        arr[PERMANENT_GRANTED_LAND_INDEX] = float(perm.is_granted_land)
-        arr[PERMANENT_ABILITIES_LOST_INDEX] = float(perm.abilities_lost)
-        arr[PERMANENT_DEALT_DAMAGE_INDEX] = float(perm.dealt_damage_this_turn)
-        if self.one_token:
-            card = characteristics
-            types = card.card_types
-            arr[PERMANENT_MANA_VALUE_INDEX] = card.mana_cost.mana_value / 10.0
-            arr[PERMANENT_TYPES_INDEX : PERMANENT_TYPES_INDEX + 6] = _types(types)
-            arr[PERMANENT_LEGENDARY_INDEX] = float(card.is_legendary)
-            arr[PERMANENT_TOKEN_INDEX] = float(perm.is_token)
-            arr[PERMANENT_ALLY_INDEX] = float(card.is_ally)
-            arr[PERMANENT_LESSON_INDEX] = float(card.is_lesson)
-            arr[PERMANENT_WARD_INDEX] = float(card.ward_cost > 0)
-            arr[PERMANENT_WARD_INDEX + 1] = card.ward_cost / 10.0
-        # Set validity flag (permanent exists)
-        arr[-1] = 1.0
-        return arr
-
-    def _encode_stack_features(
-        self, item: managym.StackObject, viewer: int
-    ) -> np.ndarray:
-        """One input v11 stack row (native `encode_stack_features`)."""
-        arr = np.zeros(STACK_DIM, dtype=np.float32)
-        arr[STACK_IS_MINE_INDEX] = float(item.controller_id == viewer)
-        arr[STACK_KIND_INDEX + int(item.kind)] = 1.0
-        card = item.characteristics
-        # A spell's definition is its card's; an ability's is its source's.
-        definition = item.source_card_registry_key
-        arr[STACK_DEFINITION_INDEX] = definition + 1
-        if item.ability_index is not None:
-            arr[STACK_ABILITY_INDEX] = item.ability_index + 1
-        if item.chosen_mode is not None:
-            arr[STACK_MODE_INDEX] = item.chosen_mode + 1
-        x = item.announced_x if card is not None else (item.x if item.x != 0 else None)
-        if x is not None:
-            arr[STACK_X_INDEX] = 1.0
-            arr[STACK_X_INDEX + 1] = x / 10.0
-        arr[STACK_KICKED_INDEX] = float(item.kicked)
-        if card is not None:
-            arr[STACK_COPY_INDEX] = float(item.is_copy)
-            arr[STACK_MANA_VALUE_INDEX] = card.mana_cost.mana_value / 10.0
-            arr[STACK_POWER_INDEX] = card.power / 10.0
-            arr[STACK_POWER_INDEX + 1] = card.toughness / 10.0
-            arr[STACK_TYPES_INDEX : STACK_TYPES_INDEX + 6] = _types(card.card_types)
-            arr[STACK_LEGENDARY_INDEX] = float(card.is_legendary)
-            granted = item.granted_keywords
-            for offset, name in enumerate(KEYWORD_FIELDS):
-                arr[STACK_KEYWORDS_INDEX + offset] = float(
-                    getattr(card.keywords, name)
-                    or (granted is not None and getattr(granted, name))
-                )
-        arr[-1] = 1.0
-        return arr
-
-    # -------------------------------------------------------------------------
-    # Actions (with focus object indices and validity masking)
-    # -------------------------------------------------------------------------
-    def _encode_actions(self, actions: list[managym.Action]) -> dict[str, np.ndarray]:
-        log = getLogger(__name__).getChild("encode_actions")
-        arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
-        action_focus = np.full(
-            (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
-        )
-        candidates = np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
-        for idx, action in enumerate(actions):
-            arr[idx, -1] = 1.0
-            action_type = int(action.action_type)
-            if 0 <= action_type < self.num_actions:
-                arr[idx, action_type] = 1.0
-
-            arr[idx, ACTION_DECLARED_INDEX] = float(action.declared is True)
-            for column, selector in (
-                (ACTION_MODE_INDEX, action.mode_index),
-                (ACTION_ABILITY_INDEX, action.ability_index),
-                (ACTION_CONTINUATION_INDEX, action.continuation_index),
-            ):
-                if selector is not None:
-                    if not 0 <= selector <= MAX_ACTION_SELECTOR:
-                        raise ValueError(
-                            "observation capacity exceeded: action selector"
-                        )
-                    arr[idx, column] = selector + 1
-
-            if action.name_definition is not None and (
-                action.name_index is None
-                or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
-            ):
-                raise ValueError("invalid name candidate definition")
-            if action.name_index is not None:
-                if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
-                    raise ValueError("observation capacity exceeded: name selector")
-                candidates[idx, :2] = (
-                    action.name_index + 1,
-                    (action.name_definition + 1)
-                    if action.name_definition is not None
-                    else 0,
-                )
-                # Names use categorical identity rather than a numeric mode.
-                arr[idx, ACTION_MODE_INDEX] = 0
-            if action.name_group is not None:
-                first, last = action.name_group
-                if not 0 <= first <= last <= MAX_ACTION_SELECTOR:
-                    raise ValueError("observation capacity exceeded: name group")
-                # A group is its public span of sorted names, not a mode.
-                candidates[idx, 2:] = (first + 1, last + 1)
-                arr[idx, ACTION_MODE_INDEX] = 0
-
-            if len(action.focus) > self.max_focus_objects:
-                raise ValueError("observation capacity exceeded: action focus")
-            for focus_index, fid in enumerate(action.focus):
-                index = self.object_to_index.get(fid, -1)
-                if index == -1:
-                    log.warning(
-                        f"Invalid focus object ID {fid} for action {action_type}."
-                    )
-                action_focus[idx, focus_index] = index
-
-        return {
-            "actions": arr,
-            "action_focus": action_focus,
-            "actions_valid": arr[..., -1].astype(np.float32),
-            "name_candidates": candidates,
-        }
-
-    def _encode_events(
-        self, events: List[managym.EventData]
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        log = getLogger(__name__).getChild("encode_events")
-        arr = np.zeros((self.max_events, self.event_dim), dtype=np.float32)
-        valid = np.zeros((self.max_events,), dtype=np.float32)
-        # Values after ABILITY_TRIGGERED are viewer presentation facts. They
-        # share the committed event window but never alter the policy tensor.
-        learning_events = [
-            event
-            for event in events
-            if int(event.event_type) <= int(EventTypeEnum.ABILITY_TRIGGERED)
-        ]
-        if len(learning_events) > self.max_events:
-            log.warning(
-                f"Event list truncated: {len(learning_events)} -> {self.max_events}"
-            )
-        ordered_events = learning_events[-self.max_events :]
-        for i, event in enumerate(ordered_events):
-            arr[i] = np.array(
-                [
-                    float(int(event.event_type)),
-                    float(int(event.source_kind)),
-                    float(event.source_id),
-                    float(int(event.target_kind)),
-                    float(event.target_id),
-                    float(event.amount),
-                    float(event.controller_id),
-                ],
-                dtype=np.float32,
-            )
-            valid[i] = 1.0
-        return arr, valid
-
-    def _encode_objects(
-        self,
-        items: List,
-        max_items: int,
-        dim: int,
-        label: str,
-        encode_item,
-    ) -> np.ndarray:
-        feat = np.zeros((max_items, dim), dtype=np.float32)
-        if len(items) > max_items:
-            raise ValueError(
-                f"observation capacity exceeded: {label} {len(items)} > {max_items}"
-            )
-
-        for i, item in enumerate(items):
-            feat[i] = encode_item(item)
-            self.object_to_index[item.id] = self.current_object_index
-            self.current_object_index += 1
-
-        self.current_object_index += max_items - len(items)
-        return feat
+TURN_STATE_DIM = width("player_turn_state")
 
 
 class ObservationSpace(gym.spaces.Space):
-    """
-    Gymnasium-compatible observation space optimized for attention processing.
+    """One `ObservationConfig` and the native layout of its policy input.
+
+    `shapes` and `dtypes` come from the configured native `layout`.
+    Construction refuses a configuration whose decision-memory
+    capacities are incomplete or that asks for memory under a deprecated
+    input. The space writes nothing; `encode_observation` does.
     """
 
-    def __init__(self, config: ObservationConfig | None = None):
+    def __init__(self, config: ObservationConfig | None = None) -> None:
         super().__init__(shape=None, dtype=None)
-        self.encoder = ObservationEncoder(config or ObservationConfig())
+        config = config or ObservationConfig()
+        self.config = config
+        self.layout = managym.ObservationLayout(
+            policy_input_version=config.policy_input_version,
+            policy_history=config.policy_history_version == 1,
+            max_cards_per_player=config.max_cards_per_player,
+            max_permanents_per_player=config.max_permanents_per_player,
+            max_stack_objects=config.max_stack_objects,
+            max_actions=config.max_actions,
+            max_focus_objects=config.max_focus_objects,
+            max_events=config.max_events,
+            max_facts=config.max_facts,
+            max_decision_records=config.max_decision_records,
+            max_decision_references=config.max_decision_references,
+            max_decision_reference_details=config.max_decision_reference_details,
+            max_decision_members=config.max_decision_members,
+        )
+        self.shapes = self.layout.shapes
+        self.axis_buffers = self.layout.axis_buffers
+        self.one_token = "stack" in self.shapes
+        self.turn_state = "player_turn_state" in self.shapes
+        # Checkpoints record str() of each NumPy scalar type.
+        self.dtypes = {
+            key: np.dtype(dtype).type for key, dtype in self.layout.dtypes.items()
+        }
         self.spaces = gym.spaces.Dict(
             {
                 name: gym.spaces.Box(
                     low=-np.inf, high=np.inf, shape=shape, dtype=np.float32
                 )
-                for name, shape in self.encoder.shapes.items()
+                for name, shape in self.shapes.items()
             }
         )
-        self.shapes = self.encoder.shapes
 
-    def sample(self, mask=None) -> Dict[str, np.ndarray]:
-        return {name: space.sample() for name, space in self.spaces.items()}
+    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
+        """Zeroed dense buffers for this space, with `leading_dims` before each shape.
+
+        Dense transport helper; removed in 0.3.0 with dense `set_buffers` / `encode_observation_into`.
+        """
+        return self.layout.allocate(*leading_dims)
+
+    @property
+    def encoder(self) -> "ObservationSpace":
+        """Deprecated: the space is its own layout."""
+        warnings.warn(
+            "ObservationSpace.encoder is deprecated and removed in "
+            f"{REMOVAL_RELEASE}; read config, shapes, dtypes and allocate from "
+            "the space",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self
+
+    def encode(self, obs: managym.Observation) -> ObservationBuffers:
+        """Deprecated: call `encode_observation(space, obs)`."""
+        warnings.warn(
+            "ObservationSpace.encode is deprecated and removed in "
+            f"{REMOVAL_RELEASE}; call "
+            "manabot.env.observation.encode_observation(space, obs)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return encode_observation(self, obs)
+
+    def sample(self, mask: Any = None) -> dict[str, np.ndarray]:
+        return self.spaces.sample()
 
     def contains(self, x: ObservationBuffers) -> bool:
         return all(
             name in x and x[name].shape == self.shapes[name]
             for name in self.spaces.keys()
         )
-
-    def encode(self, obs: managym.Observation) -> ObservationBuffers:
-        return self.encoder.encode(obs)
-
-    @property
-    def shape(self) -> tuple | None:
-        return None
 
     def __getitem__(self, key: str) -> gym.spaces.Space:
         return self.spaces[key]
@@ -1429,11 +285,61 @@ class ObservationSpace(gym.spaces.Space):
         return self.spaces.items()
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ObservationSpace):
-            return False
-        if set(self.spaces.keys()) != set(other.spaces.keys()):
-            return False
-        for key in self.spaces:
-            if self.spaces[key] != other.spaces[key]:
-                return False
-        return True
+        return (
+            isinstance(other, ObservationSpace)
+            and self.keys() == other.keys()
+            and all(space == other[name] for name, space in self.items())
+        )
+
+
+def allocate_vector_buffers(
+    obs_space: ObservationSpace, n: int
+) -> dict[str, np.ndarray]:
+    """Allocate dense observation and step-result arrays for n native vector streams.
+
+    Dense transport helper; removed in 0.3.0 (use `step_buffers` with `set_observation_layout`).
+    """
+    return {
+        **obs_space.allocate(n),
+        **step_buffers(n),
+    }
+
+
+def step_buffers(n: int) -> dict[str, np.ndarray]:
+    """Per-stream outcomes written by both native observation transports."""
+    return {
+        "rewards": np.zeros(n, dtype=np.float64),
+        "terminated": np.zeros(n, dtype=np.uint8),
+        "truncated": np.zeros(n, dtype=np.uint8),
+    }
+
+
+def encode_observation(
+    space: ObservationSpace, obs: managym.Observation
+) -> dict[str, np.ndarray]:
+    """Fresh dense buffers for `obs` in `space`, written by the native encoder.
+
+    Dense dict transport helper; removed in 0.3.0 (use `managym.encode_observation_batch`).
+
+    Any observation encodes: live, restored with ``Observation.from_json`` or
+    a viewer projection. Raises ``managym.ObservationCapacity`` when it does
+    not fit the space and ``ValueError`` for state the configured input cannot
+    represent.
+    """
+    out = space.allocate()
+    managym.encode_observation_into(
+        obs, space.layout, out, space.config.action_overflow
+    )
+    return out
+
+
+def __getattr__(name: str) -> Any:
+    if name == "ObservationEncoder":
+        warnings.warn(
+            f"ObservationEncoder is deprecated and removed in {REMOVAL_RELEASE}; "
+            "ObservationSpace(config) holds the layout",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return ObservationSpace
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -48,10 +48,9 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == PERMANENT_DIM
+    assert space.shapes["agent_permanents"][-1] == PERMANENT_DIM
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == managym.WORLD_VERSION
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -132,11 +131,3 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
         assert not done and not truncated
     else:
         pytest.fail("required choice was not reached")
-
-
-def test_runtime_fingerprints_refuse_earlier_world_labels() -> None:
-    from manabot.infra.provenance import runtime_fingerprints
-
-    for old_world in ("w2", "w3", "w4", "w5", "w6"):
-        with pytest.raises(ValueError, match="cannot register"):
-            runtime_fingerprints(world=old_world)

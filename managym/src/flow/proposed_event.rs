@@ -6,14 +6,20 @@
 //! source snapshot and returns its results with the consequences its caller
 //! runs next.
 
-use crate::state::card::Keyword;
+use std::sync::Arc;
+
+use super::decision::Decision;
+use crate::state::{
+    ability::Actor,
+    card::{DamageTransform, SpellProfile},
+};
 use crate::{
     flow::{event::GameEvent, game::Game},
-    state::card::StaticAbility,
     state::{
-        card::ReplacementEffect,
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId},
-        permanent::{CounterKind, Counters},
+        card::{CardDefId, Keyword, ReplacementEffect, StaticAbility},
+        effect::{ContinuousEffect, Modification},
+        game_object::{CardId, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId},
+        permanent::{CounterKind, Counters, SpellEntry},
         zone::ZoneType,
     },
 };
@@ -21,47 +27,174 @@ use crate::{
 /// How a card enters its new zone.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct ZoneEntry {
+    /// The resolving Adventure proposes a graveyard move. Only its own
+    /// replacement transfers the right to cast to the exile successor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolving_adventure: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adventure_player: Option<PlayerId>,
+    #[serde(
+        rename = "cast_adventure",
+        skip_serializing_if = "SpellProfile::is_front"
+    )]
+    pub profile: SpellProfile,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub prepared: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
-    /// Battlefield: enters with these counters.
+    /// Battlefield or exile: enters with these counters ("exile it with a
+    /// stash counter on it").
     pub counters: Counters,
-    /// Battlefield: the announced X of the resolving spell becoming this
-    /// permanent.
-    pub x: u8,
+    /// A resolving permanent spell supplies its choices and payment. The
+    /// stack and suspended frame already serialize these, except the entry's
+    /// historical X projection.
+    #[serde(rename = "x", serialize_with = "entry_x")]
+    pub spell: Option<Arc<SpellEntry>>,
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
-    /// Battlefield: enters with its back face up (CR 712.14).
-    pub transformed: bool,
+    /// Battlefield: what the entering permanent shows.
+    #[serde(flatten)]
+    pub face: EntryFace,
     /// CR 614.1c, 614.12: this entry owns the prospective copy already on
     /// the row. It is an instruction for the new object, not old copy state
     /// carried across a zone change. The row already records its values in
     /// v16, and `PendingEvent::copy_chosen` records the answered choice.
     #[serde(skip)]
     pub entry_copy: bool,
+    /// Battlefield: an Aura spell enters attached to this object (CR 303.4f),
+    /// so triggers on its entry see it attached (CR 603.6a).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attached_to: Option<ObjectId>,
     /// The instruction removes the publicly identified top position.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub library_top_departure: bool,
+    /// The owner selected this departure from a privately inspected prefix.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub inspected_library_departure: bool,
+}
+
+/// What a card shows as it enters the battlefield. The forms exclude one
+/// another: a manifest shows no face, and a meld result is the combined
+/// card's single face.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum EntryFace {
+    #[default]
+    Front,
+    /// A transforming double-faced card enters transformed (CR 712.14).
+    Transformed,
+    /// A modal double-faced card played or cast as its back face enters
+    /// with that face up (CR 712.11). It never transforms.
+    ModalBack,
+    /// Manifested: a face-down nameless 2/2 creature (CR 701.40a, 708.2).
+    Manifested,
+    /// This card and `partner` enter melded as the `result` card
+    /// (CR 701.42a, 712.4c).
+    Melded { partner: CardId, result: CardDefId },
+}
+
+impl EntryFace {
+    /// The face a permanent spell or land shows when it resolves or is played
+    /// as `profile`: only a modal back face differs from the front.
+    pub(crate) fn played_as(profile: SpellProfile) -> Self {
+        if profile == SpellProfile::BackFace {
+            Self::ModalBack
+        } else {
+            Self::Front
+        }
+    }
+}
+
+/// Recorded bytes keep the historical entry keys in their order: `manifested`
+/// only when true, `transformed` always, `modal_back` only when true and
+/// `meld` as a `[partner, result]` pair only when present.
+impl serde::Serialize for EntryFace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct Keys {
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            manifested: bool,
+            transformed: bool,
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            modal_back: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            meld: Option<(CardId, CardDefId)>,
+        }
+        Keys {
+            manifested: *self == EntryFace::Manifested,
+            transformed: *self == EntryFace::Transformed,
+            modal_back: *self == EntryFace::ModalBack,
+            meld: match *self {
+                EntryFace::Melded { partner, result } => Some((partner, result)),
+                _ => None,
+            },
+        }
+        .serialize(serializer)
+    }
+}
+
+fn entry_x<S: serde::Serializer>(
+    spell: &Option<Arc<SpellEntry>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u8(spell.as_ref().map_or(0, |entry| entry.x))
 }
 
 impl ZoneEntry {
-    /// The terms `zone` takes: battlefield terms only for the battlefield,
-    /// face down only for exile.
+    /// The entering object shows no printing: a foretold exile or a manifest
+    /// (CR 406.3, 708.2).
+    pub(crate) fn is_face_down(&self) -> bool {
+        self.face_down || self.face == EntryFace::Manifested
+    }
+
+    /// Apply entry counters granted by the mana spent to cast this spell.
+    pub(crate) fn from_spell(controller: PlayerId, spell: SpellEntry) -> Self {
+        let mut counters = Counters::default();
+        if let Some(receipt) = &spell.payment {
+            counters.change(
+                CounterKind::PlusOnePlusOne,
+                i32::from(receipt.entry_counters()),
+            );
+        }
+        Self {
+            controller: Some(controller),
+            spell: Some(Arc::new(spell)),
+            counters,
+            ..Self::default()
+        }
+    }
+
+    /// The terms `zone` takes: battlefield terms only for the battlefield;
+    /// face down and counters for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {
         let mut entry = match zone {
             ZoneType::Battlefield => Self {
                 face_down: false,
                 ..self.clone()
             },
+            ZoneType::Stack => Self {
+                profile: self.profile,
+                ..Default::default()
+            },
+            ZoneType::Graveyard => Self {
+                resolving_adventure: self.resolving_adventure,
+                ..Default::default()
+            },
             ZoneType::Exile => Self {
+                adventure_player: self.adventure_player,
                 face_down: self.face_down,
+                counters: self.counters.clone(),
                 ..Self::default()
             },
             _ => Self::default(),
         };
+        entry.inspected_library_departure = self.inspected_library_departure;
         entry.library_top_departure = self.library_top_departure;
         entry
     }
@@ -78,9 +211,6 @@ pub(crate) enum ProposedDamageTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum EventCause {
     Effect,
-    // The causal domain includes costs even before a registered ability pays
-    // positive counters. Directed CR 614.16 witnesses exercise this boundary.
-    #[allow(dead_code)]
     Cost,
     TurnAction,
 }
@@ -111,15 +241,9 @@ pub(crate) enum TokenSource {
     /// The token definition with this `token.*` key.
     Registered(String),
     Copy {
-        definition_id: crate::state::card::CardDefId,
-        /// The copied object as it stood; the token takes its `printed`.
-        definition: crate::state::card::ObjectDefinition,
-        front: Option<(
-            crate::state::card::CardDefId,
-            std::sync::Arc<crate::state::card::PrintedCharacteristics>,
-        )>,
-        copy: Option<crate::state::effect::CopyEffect>,
-        exceptions: Vec<crate::state::effect::Modification>,
+        #[serde(flatten)]
+        values: crate::state::game_object::CopiableValues,
+        exceptions: Vec<crate::state::effect::CopyException>,
     },
 }
 
@@ -265,25 +389,92 @@ pub(crate) struct ReplacementId {
     pub(crate) source: ObjectId,
     pub(crate) definition_index: usize,
     pub(crate) static_ability: bool,
+    /// The timestamp of the resolved continuous effect that offers it
+    /// (`Fleeting Flight`'s shield); absent for a printed replacement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) effect: Option<PublicId>,
 }
 
+/// One replacement the affected player may apply. A printed replacement's
+/// identity is its source object and definition index; a resolved
+/// continuous effect's (`Fleeting Flight`'s shield) is the object it
+/// protects and the effect's timestamp, so two shields, or a shield and the
+/// creature's own printed replacement, stay distinct.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ReplacementCandidate {
     identity: ReplacementId,
     pub(crate) effect: ReplacementEffect,
+    /// The spell or ability that created a resolved effect, kept after it
+    /// left (last-known information); absent for a printed replacement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) source_definition: Option<CardDefId>,
 }
 
 impl ReplacementCandidate {
+    /// A replacement printed at `definition_index` of the source's
+    /// `replacement_effects`.
+    fn printed(source: ObjectId, definition_index: usize, effect: ReplacementEffect) -> Self {
+        Self {
+            identity: ReplacementId {
+                source,
+                definition_index,
+                static_ability: false,
+                effect: None,
+            },
+            effect,
+            source_definition: None,
+        }
+    }
+
+    /// A replacement derived from the source's static ability at
+    /// `definition_index`.
+    fn printed_static(
+        source: ObjectId,
+        definition_index: usize,
+        effect: ReplacementEffect,
+    ) -> Self {
+        let mut candidate = Self::printed(source, definition_index, effect);
+        candidate.identity.static_ability = true;
+        candidate
+    }
+
+    /// The prevention `record` places on `object`, named for its source.
+    fn shield(object: ObjectId, record: &ContinuousEffect) -> Self {
+        Self {
+            identity: ReplacementId {
+                source: object,
+                definition_index: 0,
+                static_ability: false,
+                effect: Some(record.timestamp),
+            },
+            effect: ReplacementEffect::PreventCombatDamage,
+            source_definition: record.source,
+        }
+    }
+
     pub(crate) fn source(&self) -> ObjectId {
         self.identity.source
     }
 
     pub(crate) fn description(&self) -> String {
         match &self.effect {
-            ReplacementEffect::PreventDamageToController { amount } => {
+            ReplacementEffect::ExileInsteadOfGraveyard => {
+                "Exile without Adventure permission".into()
+            }
+            ReplacementEffect::AdventureExile => "Exile on Adventure".into(),
+            ReplacementEffect::EntersPrepared => "Enter prepared".into(),
+            ReplacementEffect::PreventCombatDamageToOrFromSelf
+            | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
+            ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::Prevent(amount),
+                ..
+            } => {
                 format!("Prevent {amount} damage")
             }
-            ReplacementEffect::DoubleDamageToController => "Double the damage".into(),
+            ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::Double,
+                ..
+            } => "Double the damage".into(),
             ReplacementEffect::EntersTapped
             | ReplacementEffect::EntersTappedUnlessControls { .. } => "Enter tapped".into(),
             ReplacementEffect::EntersWithPlusOneCounters { count, .. } => {
@@ -292,7 +483,7 @@ impl ReplacementCandidate {
             ReplacementEffect::EntersWithXCounters { kind } => {
                 format!("Enter with X {kind:?} counters")
             }
-            ReplacementEffect::EntersWithCounters { kind, count } => {
+            ReplacementEffect::EntersWithCounters { kind, count, .. } => {
                 format!("Enter with {count} {kind:?} counters")
             }
             ReplacementEffect::OpponentDamagePlusCounters { kind } => {
@@ -322,6 +513,8 @@ pub(crate) struct PendingEvent {
     /// Its "enter as a copy" choice has been made (or had no candidate).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) copy_chosen: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) second_card_first: Option<bool>,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -338,28 +531,36 @@ pub(crate) struct EventBatch {
 }
 
 impl EventBatch {
-    /// Choosing replacements for an entry exposes the entering objects. Their
-    /// current hidden-zone membership remains fixed until the batch commits.
-    pub(crate) fn public_entries(&self, out: &mut Vec<ObjectId>) {
-        for pending in &self.events {
-            if let ProposedEvent::ZoneMove {
-                object_id: object,
-                from: Some(_),
-                to: ZoneType::Battlefield,
-                ..
-            } = pending.event
-            {
-                out.push(object);
-            }
-        }
+    /// Every object a pending move takes out of a zone, with its destination
+    /// and entry. Its current zone membership stays fixed until the batch
+    /// commits.
+    pub(crate) fn pending_movers(&self) -> impl Iterator<Item = (ObjectId, ZoneType, &ZoneEntry)> {
+        self.events
+            .iter()
+            .filter_map(|pending| match &pending.event {
+                ProposedEvent::ZoneMove {
+                    object_id,
+                    from: Some(_),
+                    to,
+                    entry,
+                } => Some((*object_id, *to, entry)),
+                _ => None,
+            })
+    }
+
+    /// Choosing replacements for a face-up battlefield entry exposes the
+    /// entering object; a face-down entry stays hidden (CR 708.2).
+    pub(crate) fn public_entries(&self) -> impl Iterator<Item = ObjectId> + '_ {
+        self.pending_movers()
+            .filter(|(_, to, entry)| *to == ZoneType::Battlefield && !entry.is_face_down())
+            .map(|(object, ..)| object)
     }
 }
 
 /// Which result of the interrupted instruction its frame consumes. Consequent
 /// child batches never replace these results with their own moves.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) enum EventBinding {
-    #[default]
     None,
     Moved {
         #[serde(serialize_with = "crate::state::game_object::exact")]
@@ -369,6 +570,9 @@ pub(crate) enum EventBinding {
         reveal: bool,
     },
     ThisWay,
+    /// A Destroy instruction, including when its zone moves end in exile.
+    Destroyed,
+    LifeLost,
     Damage {
         result: Option<usize>,
     },
@@ -387,29 +591,52 @@ pub(crate) enum EventBinding {
     Created {
         attacking: bool,
     },
+    /// A linked exile (Hama, Azula): `actor` exiles, so orders a melded pair
+    /// (CR 713.8); `grantee` may cast each exiled arrival as `grant` allows
+    /// while controlling `source`. Without a source the cards are only exiled.
+    ExileLinked {
+        actor: PlayerId,
+        grantee: PlayerId,
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        source: Option<ObjectId>,
+        grant: crate::state::ability::LinkedGrant,
+    },
+}
+
+impl EventBinding {
+    /// The player performing the batch's instruction, when it is not the
+    /// effect's controller.
+    pub(crate) fn actor(&self) -> Option<PlayerId> {
+        match self {
+            EventBinding::ExileLinked { actor, .. } => Some(*actor),
+            _ => None,
+        }
+    }
 }
 
 /// One member's outcome, in the order of the batch's events.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct EventResult {
     pub committed: bool,
-    pub moved: Option<ObjectId>,
+    /// Signed difference of the committed life totals for a LifeChange member.
+    pub life_delta: i32,
+    /// Destination appearances of this event, in draw order for library placement.
+    pub moved: [Option<ObjectId>; 2],
     pub excess_damage: Option<i32>,
+    pub combat_damage: Option<(ObjectId, u32)>,
+    pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
+    /// Life this damage member gains through lifelink; its batch commits it.
+    pub lifelink: Option<crate::flow::damage::LifelinkGain>,
+}
+
+impl EventResult {
+    pub fn arrivals(&self) -> impl DoubleEndedIterator<Item = ObjectId> {
+        self.moved.into_iter().flatten()
+    }
 }
 
 pub(crate) enum BatchProgress {
-    Choice {
-        player: PlayerId,
-        candidates: Vec<ReplacementCandidate>,
-    },
-    /// The member at the cursor may enter as a copy of one of `candidates`
-    /// (CR 707.5); its entering controller chooses before any other entry
-    /// replacement applies (CR 616.1c).
-    EntryCopy {
-        player: PlayerId,
-        object: ObjectId,
-        candidates: Vec<PermanentId>,
-    },
+    Decision(Box<Decision>),
     /// Every member committed. Cards returning as a linked exile ends are
     /// consequences of the committed event: a new simultaneous event the
     /// caller runs next, which never replaces these results.
@@ -420,7 +647,11 @@ pub(crate) enum BatchProgress {
 }
 
 impl Game {
-    pub(crate) fn event_batch(&self, events: Vec<ProposedEvent>) -> EventBatch {
+    pub(crate) fn event_batch(
+        &self,
+        binding: EventBinding,
+        events: impl IntoIterator<Item = ProposedEvent>,
+    ) -> EventBatch {
         EventBatch {
             events: events
                 .into_iter()
@@ -428,7 +659,7 @@ impl Game {
                 .filter_map(|(ordinal, event)| self.pending_event(ordinal, event))
                 .collect(),
             cursor: 0,
-            binding: EventBinding::None,
+            binding,
         }
     }
 
@@ -468,6 +699,7 @@ impl Game {
             sacrifice,
             applied: Vec::new(),
             copy_chosen: false,
+            second_card_first: None,
         })
     }
 
@@ -509,7 +741,11 @@ impl Game {
         }
     }
 
-    pub(crate) fn advance_event_batch(&mut self, batch: &mut EventBatch) -> BatchProgress {
+    pub(crate) fn advance_event_batch(
+        &mut self,
+        batch: &mut EventBatch,
+        effect_controller: Option<PlayerId>,
+    ) -> BatchProgress {
         // Earlier instructions and paid tap/life costs happened before this
         // proposal. Match them while their sources still exist; committing a
         // sacrifice must not erase the source's already-earned tap trigger.
@@ -553,13 +789,18 @@ impl Game {
                             .filter_map(|event| self.pending_event(ordinal, event)),
                     );
                 }
-                [] => batch.cursor += 1,
+                [] => {
+                    if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
+                        return BatchProgress::Decision(Box::new(decision));
+                    }
+                    batch.cursor += 1;
+                }
                 [candidate] => self.apply_replacement(&mut batch.events[batch.cursor], candidate),
                 _ => {
-                    return BatchProgress::Choice {
+                    return BatchProgress::Decision(Box::new(Decision::OrderReplacement {
                         player: self.affected_player(&pending.event),
                         candidates,
-                    }
+                    }))
                 }
             }
         }
@@ -584,10 +825,26 @@ impl Game {
         } else {
             Vec::new()
         };
+        // CR 603.10a: graveyard-departure triggers look back, including when
+        // the source enters the battlefield from the graveyard in this batch.
+        let graveyard_sources = if batch.events.iter().any(|pending| {
+            matches!(
+                pending.event,
+                ProposedEvent::ZoneMove {
+                    from: Some(ZoneType::Graveyard),
+                    ..
+                }
+            )
+        }) {
+            self.graveyard_departure_sources()
+        } else {
+            Vec::new()
+        };
         let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
         let mut hits = Vec::new();
+        let mut totals: Vec<(ObjectId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
         // choices. Match its subjects while every pre-batch permanent still
         // exists: moving a Food first would erase the predicate it satisfied.
@@ -618,96 +875,59 @@ impl Game {
                 }
             }
             if sacrifices {
-                self.process_event_batch(&sources);
+                self.process_event_batch(&sources, &[]);
             }
         }
         for (pending, departing_lki) in batch.events.iter().zip(departing) {
-            if !self.proposal_is_current(&pending.event) {
+            let event = &pending.event;
+            if !self.proposal_is_current(event) {
                 results.push(EventResult::default());
                 continue;
             }
-            let mut event = pending.event.clone();
-            if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
-                *entry = entry.for_zone(*to);
-            }
-            let moved_object = match &event {
-                ProposedEvent::ZoneMove { object_id, .. } => Some(*object_id),
-                _ => None,
-            };
-            let excess_damage = match &event {
-                ProposedEvent::Damage {
-                    source,
-                    target: ProposedDamageTarget::Object(target),
-                    amount,
-                    ..
-                } => Some(
-                    self.lookup_current_permanent(*target)
-                        .ok()
-                        .map_or(0, |id| self.excess_for_damage(*source, id, *amount)),
-                ),
-                _ => None,
-            };
-            let death = if matches!(batch.binding, EventBinding::Deaths) {
-                match &event {
-                    ProposedEvent::ZoneMove {
-                        object_id: object,
-                        to: ZoneType::Graveyard,
-                        ..
-                    } => self.object_event_ref(*object),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let hit = if matches!(batch.binding, EventBinding::Combat) {
-                match &event {
-                    ProposedEvent::Damage {
-                        source: Some(source),
-                        target: ProposedDamageTarget::Player(_),
-                        amount,
-                        ..
-                    } if *amount > 0 => self.lookup_current_permanent(*source).ok(),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let reveal = if matches!(batch.binding, EventBinding::Moved { reveal: true, .. }) {
-                match &event {
+            let death = match (&batch.binding, event) {
+                (
+                    EventBinding::Deaths,
                     ProposedEvent::ZoneMove {
                         object_id,
-                        from: Some(ZoneType::Graveyard | ZoneType::Library),
+                        to: ZoneType::Graveyard,
+                        ..
+                    },
+                ) => self.object_event_ref(*object_id),
+                _ => None,
+            };
+            let known_hand_entry = match (&batch.binding, event) {
+                (
+                    EventBinding::Moved { reveal: true, .. },
+                    ProposedEvent::ZoneMove {
+                        object_id,
+                        from: Some(from @ (ZoneType::Library | ZoneType::Graveyard)),
                         to: ZoneType::Hand,
                         ..
-                    } => Some((
-                        self.state.entry_object(*object_id).owner,
-                        self.state.entry_object(*object_id).definition_id,
-                    )),
-                    _ => None,
+                    },
+                ) => {
+                    let card = self.state.entry_object(*object_id);
+                    let (owner, definition) = (card.owner, card.definition_id);
+                    // The graveyard card is already public. A library card
+                    // must be revealed before its move into the hand.
+                    if *from == ZoneType::Library {
+                        self.emit(GameEvent::CardRevealed { owner, definition });
+                    }
+                    // A known library top can also update this count during the move.
+                    let count = self.state.players[owner.0]
+                        .known_hand
+                        .get(&definition)
+                        .copied()
+                        .unwrap_or(0)
+                        + 1;
+                    Some((owner, definition, count))
                 }
-            } else {
-                None
+                _ => None,
             };
-            let known_before = reveal.map(|(owner, definition)| {
-                self.state.players[owner.0]
-                    .known_hand
-                    .get(&definition)
-                    .copied()
-                    .unwrap_or(0)
-            });
-            if let Some((owner, definition)) = reveal {
-                self.emit(GameEvent::CardRevealed { owner, definition });
+            let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            if let Some(second_first) = pending.second_card_first {
+                self.order_meld_arrivals(&mut result, second_first, &batch.binding);
             }
-            let committed = self.commit_proposed_event(event, departing_lki, &mut followups);
-            // CR 400.7: the object this move made, or the same object when
-            // it entered its first zone (CR 400.11).
-            let moved_object = moved_object.filter(|_| committed).and_then(|object_id| {
-                self.state
-                    .zones
-                    .successor(object_id)
-                    .or_else(|| self.state.live(object_id))
-            });
-            if committed {
+            if result.committed {
                 if matches!(
                     batch.binding,
                     EventBinding::Moved {
@@ -715,34 +935,31 @@ impl Game {
                         ..
                     }
                 ) {
-                    if let Some(object_id) = moved_object.filter(|object_id| {
-                        self.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
-                    }) {
-                        self.put_on_bottom_of_library(object_id);
-                    }
+                    self.place_library_arrivals(&result, false);
                 }
-                if let Some((owner, definition)) = reveal {
-                    self.set_known_hand_count(
-                        owner,
-                        definition,
-                        known_before.expect("revealed entrant") + 1,
-                    );
+                if let Some((owner, definition, count)) = known_hand_entry {
+                    self.set_known_hand_count(owner, definition, count);
                 }
                 died.extend(death);
-                hits.extend(hit);
+                if matches!(batch.binding, EventBinding::Combat) {
+                    hits.extend(result.combat_hit);
+                    if let Some((source, amount)) = result.combat_damage {
+                        match totals.iter_mut().find(|(dealer, _)| *dealer == source) {
+                            Some((_, total)) => *total += amount,
+                            None => totals.push((source, amount)),
+                        }
+                    }
+                }
             }
-            results.push(EventResult {
-                committed,
-                excess_damage,
-                moved: moved_object,
-            });
+            results.push(result);
         }
+        self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
         if let EventBinding::Moved {
             linked: Some((source, returns)),
             ..
         } = batch.binding
         {
-            for object in results.iter().filter_map(|result| result.moved) {
+            for object in results.iter().flat_map(|result| result.arrivals()) {
                 if self.state.zones.zone_of(object) != Some(ZoneType::Exile) {
                     continue;
                 }
@@ -767,9 +984,12 @@ impl Game {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
         if !hits.is_empty() {
-            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
+            self.emit(GameEvent::CombatDamageToPlayers { hits });
         }
-        self.process_event_batch(&sources);
+        if !totals.is_empty() {
+            self.emit_trigger_event(GameEvent::CombatDamageTotals { dealt: totals });
+        }
+        self.process_event_batch(&sources, &graveyard_sources);
         BatchProgress::Complete { results, followups }
     }
 
@@ -786,23 +1006,8 @@ impl Game {
         for _ in 0..count {
             let object = match &definition {
                 TokenSource::Registered(key) => self.prepare_token(key, controller),
-                TokenSource::Copy {
-                    definition_id,
-                    definition,
-                    front,
-                    copy,
-                    exceptions,
-                } => {
-                    let mut template = crate::state::game_object::Object::from_definition(
-                        crate::state::game_object::PublicId(0),
-                        controller,
-                        *definition_id,
-                        std::sync::Arc::clone(&definition.printed),
-                        true,
-                    );
-                    template.set_front_face(front.clone());
-                    template.copy = copy.clone();
-                    Some(self.prepare_token_copy(template, controller, exceptions.clone()))
+                TokenSource::Copy { values, exceptions } => {
+                    Some(self.prepare_token_copy(values, controller, exceptions))
                 }
             };
             if let Some(object) = object {
@@ -827,18 +1032,15 @@ impl Game {
         if pending.copy_chosen {
             return None;
         }
-        let (scope, predicate, _) = self.entry_copy_terms(*object)?;
+        let (scope, predicate, _) =
+            Self::entry_copy_terms(self.battlefield_entry_face(*object, entry)?)?;
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
-        let controllers = match scope {
-            crate::state::ability::Scope::YouControl => vec![player],
-            crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
-            _ => vec![PlayerId(0), PlayerId(1)],
-        };
+        let controllers = self.scope_players(&scope, player, Some(*object), None);
         let candidates: Vec<PermanentId> = controllers
             .into_iter()
-            .flat_map(|controller| self.battlefield_permanents(controller))
+            .flat_map(|controller| self.iter_battlefield_permanents(controller))
             .filter(|id| self.permanent_matches_predicate(*id, predicate))
             .collect();
         let object = *object;
@@ -846,11 +1048,11 @@ impl Game {
             pending.copy_chosen = true;
             return None;
         }
-        Some(BatchProgress::EntryCopy {
+        Some(BatchProgress::Decision(Box::new(Decision::EnterAsCopy {
             player,
-            object,
+            object_id: object,
             candidates,
-        })
+        })))
     }
 
     /// Answer the cursor member's entry-copy question: it becomes a copy of
@@ -859,7 +1061,9 @@ impl Game {
         let pending = &mut batch.events[batch.cursor];
         pending.copy_chosen = true;
         let ProposedEvent::ZoneMove {
-            object_id: object, ..
+            object_id: object,
+            ref entry,
+            ..
         } = pending.event
         else {
             return;
@@ -868,7 +1072,10 @@ impl Game {
             return;
         };
         let source = self.state[source.object].clone();
-        let Some((_, _, exceptions)) = self.entry_copy_terms(object) else {
+        let Some((_, _, exceptions)) = self
+            .battlefield_entry_face(object, entry)
+            .and_then(Self::entry_copy_terms)
+        else {
             return;
         };
         let exceptions = exceptions.to_vec();
@@ -883,16 +1090,13 @@ impl Game {
     /// The scope, predicate and copy exceptions of the card's "enter as a
     /// copy" replacement, if it has one.
     fn entry_copy_terms(
-        &self,
-        object: ObjectId,
+        face: &crate::state::card::PrintedCharacteristics,
     ) -> Option<(
         crate::state::ability::Scope,
         &crate::state::predicate::CardPredicate,
-        &[crate::state::effect::Modification],
+        &[crate::state::effect::CopyException],
     )> {
-        self.state
-            .entry_object(object)
-            .replacement_effects
+        face.replacement_effects
             .iter()
             .find_map(|effect| match effect {
                 ReplacementEffect::EntersAsCopy {
@@ -944,7 +1148,7 @@ impl Game {
     /// operations that can ask a replacement question retain an EventBatch on
     /// their EffectFrame; this entry point must never turn Pending into success.
     pub(crate) fn apply_immediate_event(&mut self, event: ProposedEvent) -> bool {
-        let batch = self.event_batch(vec![event]);
+        let batch = self.event_batch(EventBinding::None, [event]);
         self.complete_immediate_batch(batch)
             .first()
             .is_some_and(|result| result.committed)
@@ -956,7 +1160,7 @@ impl Game {
     pub(crate) fn complete_immediate_batch(&mut self, mut batch: EventBatch) -> Vec<EventResult> {
         let (results, mut followups) = self.advance_immediate_batch(&mut batch);
         while !followups.is_empty() {
-            let mut next = self.event_batch(followups);
+            let mut next = self.event_batch(EventBinding::None, followups);
             followups = self.advance_immediate_batch(&mut next).1;
         }
         results
@@ -967,10 +1171,14 @@ impl Game {
         batch: &mut EventBatch,
     ) -> (Vec<EventResult>, Vec<ProposedEvent>) {
         loop {
-            match self.advance_event_batch(batch) {
+            match self.advance_event_batch(batch, None) {
                 BatchProgress::Complete { results, followups } => return (results, followups),
-                BatchProgress::EntryCopy { .. } => self.choose_entry_copy(batch, None),
-                BatchProgress::Choice { .. } => {
+                BatchProgress::Decision(decision)
+                    if matches!(*decision, Decision::EnterAsCopy { .. }) =>
+                {
+                    self.choose_entry_copy(batch, None)
+                }
+                BatchProgress::Decision(_) => {
                     panic!("event requiring a choice needs a retained caller")
                 }
             }
@@ -1021,6 +1229,8 @@ impl Game {
                     return false;
                 }
                 self.state.zones.is_latest(*object_id)
+                    && (*to != ZoneType::Battlefield
+                        || self.battlefield_entry_face(*object_id, entry).is_some())
             }
         }
     }
@@ -1041,6 +1251,30 @@ impl Game {
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
+            ProposedEvent::ZoneMove {
+                object_id,
+                from: Some(ZoneType::Stack),
+                to: ZoneType::Graveyard,
+                entry,
+            } => {
+                let mut choices = Vec::new();
+                for (index, replacement) in [
+                    entry
+                        .resolving_adventure
+                        .map(|_| ReplacementEffect::AdventureExile),
+                    self.spell_on_stack(*object_id)
+                        .is_some_and(|spell| spell.exile_instead_of_graveyard)
+                        .then_some(ReplacementEffect::ExileInsteadOfGraveyard),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if let Some(effect) = replacement {
+                        choices.push(ReplacementCandidate::printed(*object_id, index, effect));
+                    }
+                }
+                choices
+            }
             ProposedEvent::CreateTokens {
                 controller, count, ..
             } if *count > 0 => {
@@ -1056,14 +1290,11 @@ impl Game {
                         .enumerate()
                     {
                         if matches!(effect, ReplacementEffect::MultiplyTokens { .. }) {
-                            out.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source: self.permanent_object(id).expect("battlefield"),
-                                    definition_index,
-                                    static_ability: false,
-                                },
-                                effect: effect.clone(),
-                            });
+                            out.push(ReplacementCandidate::printed(
+                                self.permanent_object(id).expect("battlefield"),
+                                definition_index,
+                                effect.clone(),
+                            ));
                         }
                     }
                 }
@@ -1071,16 +1302,16 @@ impl Game {
             }
 
             ProposedEvent::Damage {
-                source,
+                source: damage_source,
                 target,
                 amount,
-                ..
+                combat,
             } if *amount > 0 => {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
-                let source_controller =
-                    source.and_then(|source| self.damage_source_controller(source));
+                let source_facts = damage_source.and_then(|id| self.damage_source_facts(id));
+                let source_controller = source_facts.map(|(controller, _)| controller);
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
                 // board read across the replacement scan.
@@ -1100,7 +1331,7 @@ impl Game {
                         continue;
                     };
                     let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    let affected_side = permanent.controller == affected_controller;
+
                     let source_side = source_controller == Some(permanent.controller)
                         && permanent.controller != affected_controller;
                     for (definition_index, effect) in self.state[permanent.object]
@@ -1109,21 +1340,51 @@ impl Game {
                         .enumerate()
                     {
                         let applies = match effect {
-                            ReplacementEffect::PreventDamageToController { .. }
-                            | ReplacementEffect::DoubleDamageToController => affected_side,
+                            ReplacementEffect::PreventCombatDamageToOrFromSelf => {
+                                *combat
+                                    && (*damage_source == Some(source)
+                                        || *target == ProposedDamageTarget::Object(source))
+                            }
+                            ReplacementEffect::ModifyDamage {
+                                creature_source,
+                                source_by,
+                                recipient_by,
+                                ..
+                            } => {
+                                (!*creature_source
+                                    || source_facts.is_some_and(|(_, creature)| creature))
+                                    && recipient_by
+                                        .includes(permanent.controller, affected_controller)
+                                    && (*source_by == Actor::AnyPlayer
+                                        || source_controller.is_some_and(|p| {
+                                            source_by.includes(permanent.controller, p)
+                                        }))
+                            }
                             ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
                             _ => false,
                         };
                         if applies {
-                            out.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source,
-                                    definition_index,
-                                    static_ability: false,
-                                },
-                                effect: effect.clone(),
-                            });
+                            out.push(ReplacementCandidate::printed(
+                                source,
+                                definition_index,
+                                effect.clone(),
+                            ));
                         }
+                    }
+                }
+                // A resolved shield on the damaged permanent ("prevent all
+                // combat damage that would be dealt to it this turn") is an
+                // effect record, not one of its abilities, so losing all
+                // abilities leaves it in place (CR 615.1).
+                if let (true, ProposedDamageTarget::Object(object)) = (*combat, *target) {
+                    if let Ok(id) = self.lookup_current_permanent(object) {
+                        out.extend(
+                            self.effects_on(id)
+                                .filter(|effect| {
+                                    effect.modification == Modification::PreventCombatDamage
+                                })
+                                .map(|effect| ReplacementCandidate::shield(object, effect)),
+                        );
                     }
                 }
                 out
@@ -1140,17 +1401,27 @@ impl Game {
                 let entering_controller = entry
                     .controller
                     .unwrap_or(self.state.entry_object(*object_id).owner);
-                let mut entries: Vec<_> = self
-                    .state
-                    .entry_object(*object_id)
+                let Some(face) = self.battlefield_entry_face(*object_id, entry) else {
+                    return Vec::new();
+                };
+                let mut entries: Vec<_> = face
                     .replacement_effects
                     .iter()
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
-                            ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. }
-                            | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersPrepared
+                            | ReplacementEffect::EntersTapped
+                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersWithCounters { if_cast, .. }
+                                if !if_cast
+                                    || entry
+                                        .spell
+                                        .as_ref()
+                                        .is_some_and(|spell| spell.payment.is_some()) =>
+                            {
+                                effect.clone()
+                            }
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
                                     self.check_static_condition(condition, entering_controller)
@@ -1168,14 +1439,11 @@ impl Game {
                             }
                             _ => return None,
                         };
-                        Some(ReplacementCandidate {
-                            identity: ReplacementId {
-                                source,
-                                definition_index,
-                                static_ability: false,
-                            },
+                        Some(ReplacementCandidate::printed(
+                            source,
+                            definition_index,
                             effect,
-                        })
+                        ))
                     })
                     .collect();
                 // Keep own replacements before battlefield grants. Borrow the
@@ -1189,17 +1457,22 @@ impl Game {
                         continue;
                     };
                     for (definition_index, ability) in view.static_abilities.iter().enumerate() {
-                        if matches!(ability, StaticAbility::EntersTapped(predicate)
-                            if self.entry_matches_predicate(*object_id, predicate))
-                        {
-                            entries.push(ReplacementCandidate {
-                                identity: ReplacementId {
-                                    source,
-                                    definition_index,
-                                    static_ability: true,
-                                },
-                                effect: ReplacementEffect::EntersTapped,
-                            });
+                        let predicate = match ability {
+                            StaticAbility::EntersTapped(predicate) => predicate,
+                            StaticAbility::OpponentsEnterTapped(predicate)
+                                if self.state.permanents[id].as_ref().unwrap().controller
+                                    != entering_controller =>
+                            {
+                                predicate
+                            }
+                            _ => continue,
+                        };
+                        if self.entry_matches_predicate(*object_id, entry, predicate) {
+                            entries.push(ReplacementCandidate::printed_static(
+                                source,
+                                definition_index,
+                                ReplacementEffect::EntersTapped,
+                            ));
                         }
                     }
                 }
@@ -1254,7 +1527,10 @@ impl Game {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
-                        _ => self.entry_matches_predicate(object_id, predicate),
+                        ProposedEvent::ZoneMove { entry, .. } => {
+                            self.entry_matches_predicate(object_id, entry, predicate)
+                        }
+                        _ => unreachable!("counter placement"),
                     };
                     let matches_kind = match event {
                         ProposedEvent::CounterChange { kind: placed, .. } => {
@@ -1278,33 +1554,16 @@ impl Game {
                             _ => false,
                         };
                     if matches_object && matches_kind && matches_cause {
-                        candidates.push(ReplacementCandidate {
-                            identity: ReplacementId {
-                                source: self.permanent_object(id).expect("battlefield"),
-                                definition_index,
-                                static_ability: false,
-                            },
-                            effect: effect.clone(),
-                        });
+                        candidates.push(ReplacementCandidate::printed(
+                            self.permanent_object(id).expect("battlefield"),
+                            definition_index,
+                            effect.clone(),
+                        ));
                     }
                 }
             }
         }
         candidates
-    }
-
-    /// The controller of a damage source: a permanent, a spell on the
-    /// stack, or the last known information of an object that left.
-    fn damage_source_controller(&self, source: ObjectId) -> Option<PlayerId> {
-        if let Ok(id) = self.lookup_current_permanent(source) {
-            return self.state.permanents[id].as_ref().map(|p| p.controller);
-        }
-        if self.state.live(source).is_some() {
-            if let Some(controller) = self.stack_spell_controller(source) {
-                return Some(controller);
-            }
-        }
-        self.object_lki(source).map(|lki| lki.controller)
     }
 
     fn damage_target_controller(&self, target: ProposedDamageTarget) -> Option<PlayerId> {
@@ -1324,6 +1583,22 @@ impl Game {
     fn apply_replacement(&self, pending: &mut PendingEvent, candidate: &ReplacementCandidate) {
         pending.applied.push(candidate.identity);
         match (&mut pending.event, &candidate.effect) {
+            (
+                ProposedEvent::ZoneMove { to, entry, .. },
+                ReplacementEffect::ExileInsteadOfGraveyard,
+            ) => {
+                *to = ZoneType::Exile;
+                *entry = ZoneEntry::default();
+            }
+            (ProposedEvent::ZoneMove { to, entry, .. }, ReplacementEffect::AdventureExile) => {
+                *to = ZoneType::Exile;
+                entry.adventure_player = entry.resolving_adventure.take();
+            }
+            (
+                ProposedEvent::Damage { amount, .. },
+                ReplacementEffect::PreventCombatDamageToOrFromSelf
+                | ReplacementEffect::PreventCombatDamage,
+            ) => *amount = 0,
             (
                 ProposedEvent::CreateTokens { count, .. },
                 ReplacementEffect::MultiplyTokens { multiplier },
@@ -1371,13 +1646,24 @@ impl Game {
 
             (
                 ProposedEvent::Damage { amount, .. },
-                ReplacementEffect::PreventDamageToController { amount: prevented },
+                ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::Prevent(prevented),
+                    ..
+                },
             ) => {
-                debug_assert!(*prevented >= 0, "prevention amount must be nonnegative");
-                *amount = amount.saturating_sub((*prevented).max(0)).max(0);
+                *amount = amount.saturating_sub_unsigned(*prevented).max(0);
             }
-            (ProposedEvent::Damage { amount, .. }, ReplacementEffect::DoubleDamageToController) => {
+            (
+                ProposedEvent::Damage { amount, .. },
+                ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::Double,
+                    ..
+                },
+            ) => {
                 *amount = amount.saturating_mul(2);
+            }
+            (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersPrepared) => {
+                entry.prepared = true;
             }
             (ProposedEvent::ZoneMove { entry, .. }, ReplacementEffect::EntersTapped) => {
                 entry.tapped = true;
@@ -1395,11 +1681,14 @@ impl Game {
                 ProposedEvent::ZoneMove { entry, .. },
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
-                entry.counters.change(*kind, i32::from(entry.x));
+                entry.counters.change(
+                    *kind,
+                    entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),
+                );
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithCounters { kind, count },
+                ReplacementEffect::EntersWithCounters { kind, count, .. },
             ) => {
                 entry.counters.change(*kind, (*count).max(0));
             }
@@ -1421,18 +1710,24 @@ impl Game {
 
     fn commit_proposed_event(
         &mut self,
-        event: ProposedEvent,
+        event: &ProposedEvent,
         lki: Option<ObjectLki>,
         followups: &mut Vec<ProposedEvent>,
-    ) -> bool {
-        match event {
+    ) -> EventResult {
+        let mut result = EventResult::default();
+        result.committed = match *event {
             ProposedEvent::Damage {
                 source,
                 target,
                 amount,
                 combat,
-            } => self.commit_damage(source, target, amount, combat),
-            ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
+            } => {
+                return self.commit_damage(source, target, amount, combat);
+            }
+            ProposedEvent::LifeChange { player, delta } => {
+                result.life_delta = self.commit_life_change(player, delta);
+                result.life_delta != 0
+            }
             ProposedEvent::CreateTokens { .. } => unreachable!("creation owns an entry batch"),
             ProposedEvent::Destroy { .. } | ProposedEvent::Sacrifice { .. } => {
                 unreachable!("normalized before replacement")
@@ -1448,9 +1743,19 @@ impl Game {
                 object_id,
                 from,
                 to,
-                entry,
-            } => self.commit_zone_move(object_id, from, to, entry, lki, followups),
-        }
+                ref entry,
+            } => {
+                return self.commit_zone_move(
+                    object_id,
+                    from,
+                    to,
+                    entry.for_zone(to),
+                    lki,
+                    followups,
+                )
+            }
+        };
+        result
     }
 
     /// Counter results of a committed event (including damage) stay inside
@@ -1465,15 +1770,6 @@ impl Game {
         let Ok(permanent_id) = self.lookup_current_permanent(target) else {
             return false;
         };
-        // A land-type overwrite's counters change other players' mana.
-        if self.state[target]
-            .statics
-            .iter()
-            .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
-        {
-            self.invalidate_mana_cache(PlayerId(0));
-            self.invalidate_mana_cache(PlayerId(1));
-        }
         let timestamp =
             (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
@@ -1529,7 +1825,9 @@ mod tests {
         state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     };
 
-    use super::{CounterKind, CounterProvenance, EventCause, ProposedEvent, ZoneEntry};
+    use super::{
+        CounterKind, CounterProvenance, EventBinding, EventCause, ProposedEvent, ZoneEntry,
+    };
 
     fn game_with_ogre() -> (Game, crate::state::game_object::PermanentId) {
         let deck = BTreeMap::from([("Gray Ogre".to_string(), 16), ("Mountain".to_string(), 24)]);
@@ -1594,16 +1892,22 @@ mod tests {
                             additional,
                         }];
                 }
-                let mut batch = game.event_batch(vec![ProposedEvent::CounterChange {
-                    target: game.permanent_object(target).unwrap(),
-                    kind: CounterKind::Loyalty,
-                    delta: 1,
-                    by: Some(PlayerId(0)),
-                    provenance: CounterProvenance::new(cause),
-                }]);
-                while let super::BatchProgress::Choice { candidates, .. } =
-                    game.advance_event_batch(&mut batch)
+                let mut batch = game.event_batch(
+                    EventBinding::None,
+                    [ProposedEvent::CounterChange {
+                        target: game.permanent_object(target).unwrap(),
+                        kind: CounterKind::Loyalty,
+                        delta: 1,
+                        by: Some(PlayerId(0)),
+                        provenance: CounterProvenance::new(cause),
+                    }],
+                );
+                while let super::BatchProgress::Decision(decision) =
+                    game.advance_event_batch(&mut batch, None)
                 {
+                    let super::Decision::OrderReplacement { candidates, .. } = *decision else {
+                        panic!("expected a replacement choice")
+                    };
                     // Apply the unconditional +1 first when both are initially
                     // eligible. For costs/turn actions it is initially the only
                     // replacement; its result then admits the effect-only one.
@@ -1710,6 +2014,206 @@ mod tests {
     }
 
     #[test]
+    fn life_change_result_uses_the_applied_difference_at_the_storage_limit() {
+        let (mut game, _) = game_with_ogre();
+        let player = PlayerId(0);
+        *game.state.life_mut(player).unwrap() = i32::MAX - 1;
+        let batch = game.event_batch(
+            EventBinding::None,
+            [ProposedEvent::LifeChange { player, delta: 3 }],
+        );
+        let results = game.complete_immediate_batch(batch);
+        assert_eq!(game.state.players[0].life, i32::MAX);
+        assert_eq!(results[0].life_delta, 1);
+    }
+
+    #[test]
+    fn fog_bank_prevents_only_combat_damage_at_its_own_endpoints() {
+        use super::{BatchProgress, ProposedDamageTarget};
+        let deck = BTreeMap::from([("Fog Bank".into(), 20), ("Twinflame Tyrant".into(), 20)]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            614901,
+            false,
+        );
+        let fog = game
+            .scenario_force_battlefield(PlayerId(1), "Fog Bank", true)
+            .unwrap();
+        game.state.permanents[fog]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::PlusOnePlusOne, 1);
+        let power = game.characteristics(fog).pt().0;
+        assert_eq!(power, 1);
+        let cat = game
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(0), false)
+            .unwrap();
+        let other = game
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(1), false)
+            .unwrap();
+        let damage = |source, target, combat, amount| ProposedEvent::Damage {
+            source: Some(source),
+            target: ProposedDamageTarget::Object(target),
+            combat,
+            amount,
+        };
+        for (source, target, combat, amount, expected) in [
+            (fog, cat, true, power, 0),
+            (cat, fog, true, 1, 0),
+            (fog, cat, false, power, 1),
+            (cat, fog, false, 1, 1),
+            (cat, other, true, 1, 1),
+        ] {
+            let mut branch = game.clone();
+            branch.apply_immediate_event(damage(
+                game.permanent_object(source).unwrap(),
+                game.permanent_object(target).unwrap(),
+                combat,
+                amount,
+            ));
+            assert_eq!(
+                branch.state.permanents[target].as_ref().unwrap().damage,
+                expected
+            );
+            assert_eq!(
+                branch.state.players[0].life,
+                20 + if source == cat { expected } else { 0 }
+            );
+        }
+
+        let tyrant = game
+            .scenario_force_battlefield(PlayerId(0), "Twinflame Tyrant", true)
+            .unwrap();
+        let fog_object = game.permanent_object(fog).unwrap();
+        let tyrant_object = game.permanent_object(tyrant).unwrap();
+        let proposal = damage(game.permanent_object(cat).unwrap(), fog_object, true, 1);
+        let mut batch = game.event_batch(EventBinding::None, [proposal.clone()]);
+        let BatchProgress::Decision(decision) = game.advance_event_batch(&mut batch, None) else {
+            panic!("competing prevention and doubling")
+        };
+        let super::Decision::OrderReplacement { player, candidates } = *decision else {
+            panic!("replacement order expected")
+        };
+        assert_eq!(player, PlayerId(1));
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(batch.events[0].event, proposal);
+        assert!(batch.events[0].applied.is_empty());
+        let fog_effect = candidates
+            .iter()
+            .find(|c| c.source() == fog_object)
+            .unwrap();
+        let double = candidates
+            .iter()
+            .find(|c| c.source() == tyrant_object)
+            .unwrap();
+        for (choice, intermediate, identities) in [
+            (fog_effect, 0, vec![fog_effect.identity]),
+            (double, 2, vec![double.identity, fog_effect.identity]),
+        ] {
+            let mut branch = game.clone();
+            let mut pending = batch.clone();
+            branch.choose_replacement(&mut pending, choice);
+            assert!(
+                matches!(pending.events[0].event, ProposedEvent::Damage { amount, .. } if amount == intermediate)
+            );
+            assert_eq!(pending.events[0].applied, [choice.identity]);
+            let BatchProgress::Complete { followups, .. } =
+                branch.advance_event_batch(&mut pending, None)
+            else {
+                panic!("replacement order must complete")
+            };
+            assert!(followups.is_empty());
+            assert_eq!(pending.events[0].applied, identities);
+            assert!(matches!(
+                pending.events[0].event,
+                ProposedEvent::Damage { amount: 0, .. }
+            ));
+            assert_eq!(branch.state.permanents[fog].as_ref().unwrap().damage, 0);
+            assert_eq!(branch.state.players[0].life, 20);
+        }
+    }
+
+    #[test]
+    fn pridemate_triggers_once_per_lifelink_source_in_a_damage_batch() {
+        use super::ProposedDamageTarget;
+        let player = PlayerId(0);
+        let deck = BTreeMap::from([("Ajani's Pridemate".into(), 20), ("Plains".into(), 20)]);
+        for distinct in [false, true] {
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck.clone()),
+                ],
+                614900,
+                false,
+            );
+            let mate = game
+                .scenario_force_battlefield(player, "Ajani's Pridemate", true)
+                .unwrap();
+            let mate_object = game.permanent_object(mate).unwrap();
+            let mut cat = |owner| {
+                let id = game
+                    .create_token("token.cat_1_1_w_lifelink", owner, false)
+                    .unwrap();
+                game.permanent_object(id).unwrap()
+            };
+            let first = cat(player);
+            let second = if distinct { cat(player) } else { first };
+            let blocker = cat(PlayerId(1));
+            game.state.events.clear();
+            let damage = |source, target, amount| ProposedEvent::Damage {
+                source: Some(source),
+                target,
+                amount,
+                combat: true,
+            };
+            let batch = game.event_batch(
+                EventBinding::None,
+                [
+                    damage(first, ProposedDamageTarget::Object(blocker), 2),
+                    damage(second, ProposedDamageTarget::Player(PlayerId(1)), 3),
+                ],
+            );
+            game.complete_immediate_batch(batch);
+            let gains: Vec<_> = game
+                .state
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    GameEvent::LifeChanged {
+                        player: PlayerId(0),
+                        old,
+                        new,
+                        ..
+                    } if new > old => Some(new - old),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(gains, if distinct { vec![2, 3] } else { vec![5] });
+            assert_eq!(game.state.players[0].life, 25);
+            let triggers = &game.state.pending_triggers;
+            assert_eq!(triggers.len(), gains.len());
+            assert!(triggers
+                .iter()
+                .all(|trigger| trigger.source_object() == mate_object));
+            if distinct {
+                let first = triggers[0].id;
+                assert!(game.flush_triggers().is_some());
+                game.choose_trigger(player, first).unwrap();
+            }
+            assert!(game.flush_triggers().is_none());
+            for _ in &gains {
+                game.resolve_top_of_stack();
+            }
+            let size = 2 + gains.len() as i32;
+            assert_eq!(game.characteristics(mate).pt(), (size, size));
+        }
+    }
+
+    #[test]
     fn direct_life_change_commits_once_and_emits_the_legacy_fact() {
         let (mut game, _) = game_with_ogre();
         game.state.events.clear();
@@ -1726,6 +2230,7 @@ mod tests {
                 player: PlayerId(0),
                 old: 20,
                 new: 17,
+                gain_ordinal: 0,
             }]
         );
     }

@@ -33,7 +33,7 @@ from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
 )
-from manabot.policy.protocol import Backend, BackendPolicy
+from manabot.policy.protocol import BackendPolicy, PolicyLoader
 from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
@@ -178,7 +178,7 @@ class AgentMatchupPlayer:
 
 
 def make_player(
-    spec: dict[str, Any], seed: int, *, backend: Backend | None = None
+    spec: dict[str, Any], seed: int, *, backend: PolicyLoader | None = None
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     """Build a player from a picklable spec.
 
@@ -209,6 +209,9 @@ def make_player(
         kind
         in {
             "checkpoint",
+            "local_update",
+            "exact_range",
+            "uniform_range",
             "policy_prior_puct",
             "agent_puct",
             "policy_search",
@@ -381,6 +384,7 @@ def make_player(
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
+        from manabot.belief.protocol import BeliefPolicy
         from manabot.belief.runtime import ManabotPlayer
 
         agent, obs_space = backend.load_policy(spec["path"])
@@ -394,6 +398,10 @@ def make_player(
                 )
             if binding is None:
                 raise ValueError("belief-enabled checkpoint has no schema binding")
+            if not isinstance(agent, BeliefPolicy):
+                raise ValueError(
+                    "belief checkpoint requires a policy with belief admission"
+                )
             return ManabotPlayer(agent, checkpoint_binding=binding), obs_space
         return (
             AgentMatchupPlayer(
@@ -474,7 +482,7 @@ def play_games(
     game_offset: int = 0,
     hero_deck: dict[str, int] | None = None,
     villain_deck: dict[str, int] | None = None,
-    backend: Backend | None = None,
+    backend: PolicyLoader | None = None,
 ) -> MatchupResult:
     """Play seat-balanced games between two player specs.
 
