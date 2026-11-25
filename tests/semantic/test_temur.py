@@ -8,10 +8,12 @@ from manabot.env.observation import (
     CARD_DIM,
     PLAYER_DIM,
     ObservationSpace,
+    column,
     encode_observation,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
+from manabot.verify.text_observation import priority_root
 import managym
 
 
@@ -50,16 +52,10 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
 
 
 def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
-    env = managym.Env(seed=163, skip_trivial=False)
-    env.reset(
-        [
-            managym.authored_deck_setup("elemental-temur-v1", key)
-            for key in ("temur_left", "temur_right")
-        ]
+    env = priority_root(
+        (), ("Hermitic Herbalist", "Iroh, Grand Lotus"), mana_floats="all"
     )
-    env.scenario_force_battlefield(0, "Hermitic Herbalist")
-    env.scenario_force_battlefield(0, "Iroh, Grand Lotus")
-    observation = env.scenario_refresh()
+    observation = env.observation_for_player(env.current_agent_index())
     activation = next(
         i
         for i, action in enumerate(observation.action_space.actions)
@@ -73,6 +69,18 @@ def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
     )
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
-    assert any(card.is_legendary for card in observation.agent_cards)
-    encoded = encode_observation(ObservationSpace(ObservationConfig()), observation)
-    assert encoded["agent_player"][0, 37] == np.float32(0.2)
+    iroh = next(
+        i
+        for i, permanent in enumerate(observation.agent_permanents)
+        if permanent.characteristics.name == "Iroh, Grand Lotus"
+    )
+    assert observation.agent_permanents[iroh].characteristics.is_legendary
+    space = ObservationSpace(ObservationConfig())
+    encoded = encode_observation(space, observation)
+    assert encoded["agent_player"][
+        0, column("agent_player", "lesson_mana_red")
+    ] == np.float32(0.2)
+    assert (
+        encoded["agent_permanents"][iroh, column("agent_permanents", "is_legendary")]
+        == 1
+    )

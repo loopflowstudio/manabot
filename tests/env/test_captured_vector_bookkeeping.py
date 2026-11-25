@@ -27,14 +27,11 @@ def _players() -> list[managym.PlayerConfig]:
 def _captured(
     seed: int,
     player_policies: tuple[str, str] | None = None,
-    *,
-    opponent_policy: str | None = None,
 ) -> tuple[RecordedVectorEnv, dict[str, np.ndarray]]:
     vector = RecordedVectorEnv(
         num_envs=1,
         seed=seed,
         player_policies=player_policies,
-        opponent_policy=opponent_policy,
     )
     space = ObservationSpace()
     buffers = step_buffers(1)
@@ -100,12 +97,9 @@ def test_seeded_reset_rejects_bad_seeds_before_replacing_any_stream() -> None:
         vector.close()
 
 
-@pytest.mark.parametrize("policy", ["none", "random", "heuristic"])
-def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
-    policy: str,
-) -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        vector, _ = _captured(42, opponent_policy=policy)
+@pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
+def test_recorded_player_policies_round_trip(policy: str) -> None:
+    vector, _ = _captured(42, player_policies=("agent", policy))
     try:
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
@@ -113,10 +107,7 @@ def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
         restored = GameRecord.model_validate_json(
             evidence.model_dump_json(by_alias=True)
         )
-        assert restored.player_policies == (
-            "agent",
-            "agent" if policy == "none" else policy,
-        )
+        assert restored.player_policies == ("agent", policy)
         assert restored.opponent_policy is None
         assert "opponent_policy" not in evidence.model_dump(mode="json", by_alias=True)
         assert replay_failure_inputs(restored)[0]["matches_binding"] is True

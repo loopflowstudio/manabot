@@ -307,7 +307,6 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             Reward(RewardConfig()),
             seed=24,
             enable_profiler=False,
-            enable_behavior_tracking=False,
         )
         env.failure_context.update(game_index=11)
         env.reset(seed=24)

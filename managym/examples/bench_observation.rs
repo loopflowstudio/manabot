@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 use std::{hint::black_box, time::Instant};
 
 fn root(large: bool) -> (Env, Observation) {
-    let mut env = Env::new(23, false, false, false);
+    let mut env = Env::new(23, false, false);
     let deck = [
         ("Swamp".into(), 20),
         ("Deadly Precision".into(), 40),

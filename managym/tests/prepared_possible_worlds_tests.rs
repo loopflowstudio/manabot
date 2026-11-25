@@ -19,7 +19,7 @@ fn authored_configs() -> Vec<PlayerConfig> {
 }
 
 fn authored_env() -> Env {
-    let mut env = Env::new(0, true, false, false);
+    let mut env = Env::new(0, true, false);
     env.reset(authored_configs())
         .expect("authored match resets");
     env
@@ -133,7 +133,7 @@ fn prepared_batches_enumerate_once_preserve_order_and_fail_closed() {
 
 #[test]
 fn prepared_rejects_invalid_construction_and_changed_hidden_pool() {
-    let empty = Env::new(0, true, false, false);
+    let empty = Env::new(0, true, false);
     assert!(empty
         .prepare_possible_world_materializer(0, "identity", 1)
         .unwrap_err()

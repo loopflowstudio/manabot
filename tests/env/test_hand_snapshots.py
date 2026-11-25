@@ -38,7 +38,7 @@ def _players(
 def _hand(env: managym.Env, player: int) -> dict[str, int]:
     return dict(
         Counter(
-            card.name
+            card.characteristics.name
             for card in env.observation_for_player(player).agent_cards
             if int(card.zone) == int(managym.ZoneEnum.HAND)
         )

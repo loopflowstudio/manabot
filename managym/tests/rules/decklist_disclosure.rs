@@ -168,7 +168,7 @@ fn decklist_rows_encode_known_lists_and_zero_for_a_closed_opponent() {
 
 #[test]
 fn closed_opponent_refuses_hidden_information_sampling() {
-    let mut env = Env::new(7, true, false, false);
+    let mut env = Env::new(7, true, false);
     env.reset(configs(DecklistDisclosure::Closed)).unwrap();
     for viewer in [0, 1] {
         for error in [
@@ -189,7 +189,7 @@ fn closed_opponent_refuses_hidden_information_sampling() {
         .0
         .starts_with("decklist closed"));
 
-    let mut open = Env::new(7, true, false, false);
+    let mut open = Env::new(7, true, false);
     open.reset(configs(DecklistDisclosure::Open)).unwrap();
     open.possible_world_space(0).unwrap();
     open.determinize(0, 3).unwrap();

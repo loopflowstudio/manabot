@@ -561,7 +561,6 @@ def build_scenario_env(
         Reward(RewardConfig()),
         seed=seed,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
     _, _ = env.reset(seed=seed)
     raw = env.last_raw_obs

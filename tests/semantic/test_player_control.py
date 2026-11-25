@@ -68,7 +68,7 @@ def _controlled_root(
     source = next(
         c.id
         for c in raw.agent_cards
-        if c.name == "Secret of Bloodbending" and int(c.zone) == 1
+        if c.characteristics.name == "Secret of Bloodbending" and int(c.zone) == 1
     )
     index = next(
         i

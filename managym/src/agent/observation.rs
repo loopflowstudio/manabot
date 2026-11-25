@@ -2601,26 +2601,6 @@ impl Observation {
             }))
     }
 
-    /// Deprecated compatibility records; non-card objects are synthesized only here.
-    #[deprecated(note = "use object_records; removed in 0.3.0")]
-    pub fn card_records(&self) -> impl Iterator<Item = CardData> + Clone + '_ {
-        self.agent_cards
-            .iter()
-            .chain(&self.opponent_cards)
-            .cloned()
-            .chain(
-                self.agent_permanents
-                    .iter()
-                    .chain(&self.opponent_permanents)
-                    .filter_map(PermanentData::legacy_card),
-            )
-            .chain(
-                self.stack_objects
-                    .iter()
-                    .filter_map(|s| s.spell.as_ref().map(|spell| spell.legacy_card(s.x))),
-            )
-    }
-
     pub fn historical(&self) -> bool {
         self.agent_permanents
             .iter()

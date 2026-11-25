@@ -32,7 +32,7 @@ impl GameSnapshot {
         let provenance = replay.provenance;
         let mut remaining_frames = replay.object_candidate_frames;
 
-        let mut env = Env::new(replay.seed, provenance.skip_trivial, false, false)
+        let mut env = Env::new(replay.seed, provenance.skip_trivial, false)
             .with_player_policies(provenance.player_policies)
             .with_decision_memory(provenance.decision_memory)
             .with_decision_memory_include_own(provenance.decision_memory_include_own);
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn checked_replay_reports_the_first_divergent_boundary() {
-        let mut source = Env::new(42, true, false, false);
+        let mut source = Env::new(42, true, false);
         source
             .reset(
                 ["a", "b"]

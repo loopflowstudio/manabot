@@ -285,7 +285,6 @@ class Env:
         seed: int = 0,
         skip_trivial: bool = True,
         enable_profiler: bool = False,
-        enable_behavior_tracking: bool = False,
         *,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
@@ -576,7 +575,6 @@ class VectorEnv:
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
         *,
         decision_memory_include_own: bool = False,
@@ -702,14 +700,11 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
-        disclosure: DecklistDisclosure | None = None,
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Deprecated per-seat hint, removed in 0.3.0; use GameSetup.decklists.
-    disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
     @property
@@ -1078,10 +1073,7 @@ class ObservationCharacteristics:
     mana_cost: ManaCost
 
 class Card:
-    """A visible card outside the battlefield and stack.
-
-    Flat characteristic accessors are deprecated aliases, removed in 0.3.0.
-    """
+    """A visible card outside the battlefield and stack."""
 
     characteristics: ObservationCharacteristics
 
@@ -1089,22 +1081,9 @@ class Card:
     owner_id: int
     id: int
     registry_key: int
-    name: str
-    text_box: str
-    power: int
-    toughness: int
     is_token: bool
-    is_legendary: bool
-    is_ally: bool
-    is_lesson: bool
-    ward_cost: int
-    kicker_cost: int
-    card_types: CardTypes
-    keywords: Keywords
-    mana_cost: ManaCost
     face_down: bool
     cast_permissions: list[CastPermission]
-    cast_permission: Optional[CastPermission]
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
@@ -1183,9 +1162,6 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
-    # Derived characteristic aliases warn; removed in 0.3.0.
-    power: int
-    toughness: int
     is_animated: bool
     has_exile_link: bool
     exile_if_dies_this_turn: bool
@@ -1195,8 +1171,6 @@ class Permanent:
     once_each_turn_used: int
     granted_firebending: int
     temp_subtypes: List[str]
-    # Effective keywords (printed + until-EOT grants).
-    keywords: Keywords
     # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, age, ice, ...).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
@@ -1223,9 +1197,6 @@ class Permanent:
     timestamp: int | None
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
-    @property
-    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.3.0")
-    def card(self) -> Card | None: ...
 
 class Turn:
     creature_died_this_turn: bool
@@ -1308,9 +1279,6 @@ class StackObject:
     # A spell cast with flashback (exiled as it leaves the stack).
     @property
     def flashback(self) -> bool: ...
-    @property
-    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.3.0")
-    def card(self) -> Card | None: ...
 
 class EventData:
     event_type: EventTypeEnum

@@ -1218,27 +1218,9 @@ def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
     )
 
 
-def resolve_player_policies(
-    opponent_policy: str | None, player_policies: tuple[str, str] | None
-) -> tuple[str, str]:
-    """Per-seat chooser policies from either spelling of the argument.
-
-    The legacy ``opponent_policy`` warns (removal in 0.3.0): ``none`` surfaces
-    both seats and any other name plays seat 1 natively. Native construction
-    rejects unknown per-seat names.
-    """
-    if opponent_policy is None:
-        return player_policies or ("agent", "agent")
-    if opponent_policy not in ("none", "random", "heuristic"):
-        raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
-    if player_policies is not None:
-        raise ValueError("use player_policies or opponent_policy, not both")
-    warnings.warn(
-        "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return _retained_player_policies(opponent_policy)
+def resolve_player_policies(player_policies: tuple[str, str] | None) -> tuple[str, str]:
+    """Both seats use external agents when no policies are supplied."""
+    return ("agent", "agent") if player_policies is None else player_policies
 
 
 class _ExposureSummary(BaseModel):
@@ -1267,7 +1249,6 @@ class RecordedVectorEnv(_Capture):
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str | None = None,
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
@@ -1289,7 +1270,7 @@ class RecordedVectorEnv(_Capture):
         self.decision_memory = decision_memory or decision_memory_include_own
         self._branch_roots: list[BranchRoot | None] = [None] * num_envs
         self.skip_trivial = skip_trivial
-        self.player_policies = resolve_player_policies(opponent_policy, player_policies)
+        self.player_policies = resolve_player_policies(player_policies)
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             decision_memory=self.decision_memory,

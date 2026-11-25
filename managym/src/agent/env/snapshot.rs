@@ -232,7 +232,7 @@ impl GameSnapshot {
             decision_memory_enabled: self.memory_enabled,
             decision_memory_include_own: self.include_own,
             capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
-            ..Env::new(self.reset_seed, self.skip_trivial, false, false)
+            ..Env::new(self.reset_seed, self.skip_trivial, false)
         }
     }
 
@@ -351,7 +351,7 @@ mod tests {
     fn every_materialized_branch_starts_a_new_incremental_memory_write() {
         use crate::agent::decision_memory::{encode_suffix, MemoryEncoding};
 
-        let mut source = Env::new(42, true, false, false).with_decision_memory_include_own(true);
+        let mut source = Env::new(42, true, false).with_decision_memory_include_own(true);
         source
             .reset(
                 ["a", "b"]
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn concurrent_exact_snapshots_preserve_the_witness_and_live_decision_memory() {
-        let mut source = Env::new(42, true, false, false).with_decision_memory_include_own(true);
+        let mut source = Env::new(42, true, false).with_decision_memory_include_own(true);
         let players = ["a", "b"].map(|name| {
             PlayerConfig::new(
                 name,
@@ -453,7 +453,7 @@ mod card_history_tests {
     #[test]
     fn drake_hatcher_snapshot_binds_the_amount_dealt_by_the_same_source() {
         use crate::{flow::combat::CombatState, state::permanent::CounterKind};
-        let mut env = Env::new(418, true, false, false);
+        let mut env = Env::new(418, true, false);
         let deck = [
             ("Drake Hatcher".to_string(), 12),
             ("Island".to_string(), 28),
@@ -517,7 +517,7 @@ mod card_history_tests {
             observation_layout::stack,
         };
         use crate::flow::proposed_event::ProposedDamageTarget;
-        let mut env = Env::new(418, true, false, false);
+        let mut env = Env::new(418, true, false);
         let deck = [("Steel Hellkite".to_owned(), 12), ("Forest".to_owned(), 28)]
             .into_iter()
             .collect::<std::collections::BTreeMap<_, _>>();
@@ -639,7 +639,7 @@ mod card_history_tests {
         };
         use crate::flow::game::Game;
         use crate::flow::proposed_event::ProposedDamageTarget;
-        let mut env = Env::new(418, true, false, false);
+        let mut env = Env::new(418, true, false);
         let deck = [("Predator Ooze".to_owned(), 12), ("Forest".to_owned(), 28)].into();
         env.reset(vec![
             PlayerConfig::new("p0", deck),
@@ -745,7 +745,7 @@ mod card_history_tests {
 
     #[test]
     fn panda_snapshot_replays_source_and_target_reentry() {
-        let mut env = Env::new(418, false, false, false);
+        let mut env = Env::new(418, false, false);
         let deck = [
             "Fiendish Panda",
             "Gray Ogre",

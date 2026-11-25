@@ -988,9 +988,6 @@ pub struct PyPlayerConfig {
     #[pyo3(get)]
     pub deck: Deck,
     pub submitted: bool,
-    /// `"open"` (default) or `"closed"`: whether the opponent knows this
-    /// player's main deck and sideboard.
-    pub legacy_disclosure: Option<DecklistDisclosure>,
 }
 
 /// `PlayerConfig.world` names only the world; authored content packs are retired.
@@ -1022,23 +1019,17 @@ fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, world=None, disclosure=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, world=None))]
     fn new(
-        py: Python<'_>,
         name: String,
         decklist: BTreeMap<String, usize>,
         sideboard: Option<BTreeMap<String, usize>>,
         world: Option<&str>,
-        disclosure: Option<&str>,
     ) -> PyResult<Self> {
-        if disclosure.is_some() {
-            warn_disclosure(py)?;
-        }
         Ok(Self {
             name,
             deck: Deck::new(decklist, sideboard.unwrap_or_default()),
             submitted: submission(world)?,
-            legacy_disclosure: disclosure.map(parse_disclosure).transpose()?,
         })
     }
 
@@ -1062,19 +1053,6 @@ impl PyPlayerConfig {
     fn sideboard(&self) -> BTreeMap<String, usize> {
         self.deck.sideboard.clone()
     }
-
-    #[getter]
-    fn disclosure(&self, py: Python<'_>) -> PyResult<&'static str> {
-        warn_disclosure(py)?;
-        Ok(disclosure_name(self.legacy_disclosure.unwrap_or_default()))
-    }
-
-    #[setter]
-    fn set_disclosure(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
-        warn_disclosure(py)?;
-        self.legacy_disclosure = Some(parse_disclosure(value)?);
-        Ok(())
-    }
 }
 
 #[cfg(feature = "python")]
@@ -1095,7 +1073,6 @@ impl From<PlayerConfig> for PyPlayerConfig {
             name: value.name,
             deck: value.deck,
             submitted: value.submitted,
-            legacy_disclosure: None,
         }
     }
 }
@@ -1584,26 +1561,6 @@ impl From<CardTypeData> for PyCardTypes {
 }
 
 #[cfg(feature = "python")]
-impl From<PyCardTypes> for CardTypeData {
-    fn from(value: PyCardTypes) -> Self {
-        Self {
-            is_castable: value.is_castable,
-            is_permanent: value.is_permanent,
-            is_non_land_permanent: value.is_non_land_permanent,
-            is_non_creature_permanent: value.is_non_creature_permanent,
-            is_spell: value.is_spell,
-            is_creature: value.is_creature,
-            is_land: value.is_land,
-            is_planeswalker: value.is_planeswalker,
-            is_enchantment: value.is_enchantment,
-            is_artifact: value.is_artifact,
-            is_kindred: value.is_kindred,
-            is_battle: value.is_battle,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
 #[pyclass(name = "Keywords")]
 #[derive(Clone)]
 pub struct PyKeywords {
@@ -1691,40 +1648,6 @@ impl From<ManaCost> for PyManaCost {
 }
 
 #[cfg(feature = "python")]
-impl From<PyManaCost> for ManaCost {
-    fn from(value: PyManaCost) -> Self {
-        let mut cost = [0_u8; 7];
-        for (index, amount) in value.cost.iter().take(6).enumerate() {
-            let clamped = (*amount).clamp(0, u8::MAX as i32) as u8;
-            cost[index] = clamped;
-        }
-        cost[6] = 0;
-        let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
-
-        Self {
-            purpose: Default::default(),
-            cost,
-            mana_value,
-            x: value.x,
-            hybrid: value
-                .hybrid
-                .into_iter()
-                .map(|(left, right)| {
-                    let colors = [
-                        crate::state::mana::Color::White,
-                        crate::state::mana::Color::Blue,
-                        crate::state::mana::Color::Black,
-                        crate::state::mana::Color::Red,
-                        crate::state::mana::Color::Green,
-                    ];
-                    [colors[left as usize], colors[right as usize]]
-                })
-                .collect(),
-        }
-    }
-}
-
-#[cfg(feature = "python")]
 #[pyclass(name = "ObservationCharacteristics", frozen)]
 #[derive(Clone)]
 pub struct PyObservationCharacteristics {
@@ -1792,20 +1715,6 @@ impl PyObservationCharacteristics {
 }
 
 #[cfg(feature = "python")]
-fn warn_observation_alias(py: Python<'_>, old: &str, new: &str) -> PyResult<()> {
-    py.import_bound("warnings")?.call_method1(
-        "warn",
-        (
-            format!("{old} is deprecated; use {new}; removal in 0.3.0"),
-            py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-            // A native getter has no Python frame, so level 1 is the caller.
-            1,
-        ),
-    )?;
-    Ok(())
-}
-
-#[cfg(feature = "python")]
 #[pyclass(name = "Card")]
 #[derive(Clone)]
 pub struct PyCard {
@@ -1847,50 +1756,6 @@ impl PyCard {
         self.data.registry_key = value;
     }
     #[getter]
-    fn name(&self, py: Python<'_>) -> PyResult<String> {
-        warn_observation_alias(py, "name", "characteristics.name")?;
-        Ok(self.data.name.clone())
-    }
-    #[setter]
-    fn set_name(&mut self, py: Python<'_>, value: String) -> PyResult<()> {
-        warn_observation_alias(py, "name", "characteristics.name")?;
-        self.data.name = value;
-        Ok(())
-    }
-    #[getter]
-    fn text_box(&self, py: Python<'_>) -> PyResult<String> {
-        warn_observation_alias(py, "text_box", "characteristics.text_box")?;
-        Ok(self.data.text_box.clone())
-    }
-    #[setter]
-    fn set_text_box(&mut self, py: Python<'_>, value: String) -> PyResult<()> {
-        warn_observation_alias(py, "text_box", "characteristics.text_box")?;
-        self.data.text_box = value;
-        Ok(())
-    }
-    #[getter]
-    fn power(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "power", "characteristics.power")?;
-        Ok(self.data.power)
-    }
-    #[setter]
-    fn set_power(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "power", "characteristics.power")?;
-        self.data.power = value;
-        Ok(())
-    }
-    #[getter]
-    fn toughness(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
-        Ok(self.data.toughness)
-    }
-    #[setter]
-    fn set_toughness(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
-        self.data.toughness = value;
-        Ok(())
-    }
-    #[getter]
     fn is_token(&self) -> bool {
         self.data.is_token
     }
@@ -1899,109 +1764,12 @@ impl PyCard {
         self.data.is_token = value;
     }
     #[getter]
-    fn is_legendary(&self, py: Python<'_>) -> PyResult<bool> {
-        warn_observation_alias(py, "is_legendary", "characteristics.is_legendary")?;
-        Ok(self.data.is_legendary)
-    }
-    #[setter]
-    fn set_is_legendary(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
-        warn_observation_alias(py, "is_legendary", "characteristics.is_legendary")?;
-        self.data.is_legendary = value;
-        Ok(())
-    }
-    #[getter]
-    fn is_ally(&self, py: Python<'_>) -> PyResult<bool> {
-        warn_observation_alias(py, "is_ally", "characteristics.is_ally")?;
-        Ok(self.data.is_ally)
-    }
-    #[setter]
-    fn set_is_ally(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
-        warn_observation_alias(py, "is_ally", "characteristics.is_ally")?;
-        self.data.is_ally = value;
-        Ok(())
-    }
-    #[getter]
-    fn is_lesson(&self, py: Python<'_>) -> PyResult<bool> {
-        warn_observation_alias(py, "is_lesson", "characteristics.is_lesson")?;
-        Ok(self.data.is_lesson)
-    }
-    #[setter]
-    fn set_is_lesson(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
-        warn_observation_alias(py, "is_lesson", "characteristics.is_lesson")?;
-        self.data.is_lesson = value;
-        Ok(())
-    }
-    #[getter]
-    fn ward_cost(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "ward_cost", "characteristics.ward_cost")?;
-        Ok(self.data.ward_cost)
-    }
-    #[setter]
-    fn set_ward_cost(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "ward_cost", "characteristics.ward_cost")?;
-        self.data.ward_cost = value;
-        Ok(())
-    }
-    #[getter]
-    fn kicker_cost(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "kicker_cost", "characteristics.kicker_cost")?;
-        Ok(self.data.kicker_cost)
-    }
-    #[setter]
-    fn set_kicker_cost(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "kicker_cost", "characteristics.kicker_cost")?;
-        self.data.kicker_cost = value;
-        Ok(())
-    }
-    #[getter]
-    fn card_types(&self, py: Python<'_>) -> PyResult<PyCardTypes> {
-        warn_observation_alias(py, "card_types", "characteristics.card_types")?;
-        Ok(self.data.card_types.clone().into())
-    }
-    #[setter]
-    fn set_card_types(&mut self, py: Python<'_>, value: PyCardTypes) -> PyResult<()> {
-        warn_observation_alias(py, "card_types", "characteristics.card_types")?;
-        self.data.card_types = value.into();
-        Ok(())
-    }
-    #[getter]
-    fn keywords(&self, py: Python<'_>) -> PyResult<PyKeywords> {
-        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
-        Ok(self.data.keywords.clone().into())
-    }
-    #[setter]
-    fn set_keywords(&mut self, py: Python<'_>, value: PyKeywords) -> PyResult<()> {
-        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
-        self.data.keywords = value.into();
-        Ok(())
-    }
-    #[getter]
-    fn mana_cost(&self, py: Python<'_>) -> PyResult<PyManaCost> {
-        warn_observation_alias(py, "mana_cost", "characteristics.mana_cost")?;
-        Ok(self.data.mana_cost.clone().into())
-    }
-    #[setter]
-    fn set_mana_cost(&mut self, py: Python<'_>, value: PyManaCost) -> PyResult<()> {
-        warn_observation_alias(py, "mana_cost", "characteristics.mana_cost")?;
-        self.data.mana_cost = value.into();
-        Ok(())
-    }
-    #[getter]
     fn face_down(&self) -> bool {
         self.data.face_down
     }
     #[setter]
     fn set_face_down(&mut self, value: bool) {
         self.data.face_down = value;
-    }
-    /// First listed grant. Use cast_permissions for inspection (singular removed in 0.4.0).
-    #[getter]
-    fn cast_permission(&self) -> Option<PyCastPermission> {
-        self.data.cast_permissions.first().cloned().map(Into::into)
-    }
-    #[setter]
-    fn set_cast_permission(&mut self, value: Option<PyCastPermission>) {
-        self.data.cast_permissions = value.into_iter().map(Into::into).collect();
     }
     #[getter]
     fn cast_permissions(&self) -> Vec<PyCastPermission> {
@@ -2092,32 +1860,6 @@ pub struct PyCastPermission {
 #[cfg(feature = "python")]
 impl From<CastPermissionData> for PyCastPermission {
     fn from(value: CastPermissionData) -> Self {
-        Self {
-            player_id: value.player_id,
-            cost: value.cost.map(Into::into),
-            this_turn: value.this_turn,
-            through_next_turn: value.through_next_turn,
-            own_turn_only: value.own_turn_only,
-            after_turn: value.after_turn,
-            source_permanent_id: value.source_permanent_id,
-            flash: value.flash,
-            any_mana: value.any_mana,
-            waterbend: value.waterbend,
-            foretold: value.foretold,
-            follows_source_controller: value.follows_source_controller,
-            flashback: value.flashback,
-            on_adventure: value.on_adventure,
-            prepared: value.prepared,
-            face_down: value.face_down,
-            play_lands: value.play_lands,
-            condition: value.condition,
-        }
-    }
-}
-
-#[cfg(feature = "python")]
-impl From<PyCastPermission> for CastPermissionData {
-    fn from(value: PyCastPermission) -> Self {
         Self {
             player_id: value.player_id,
             cost: value.cost.map(Into::into),
@@ -2279,28 +2021,6 @@ impl PyPermanent {
         self.data.cant_be_blocked_this_turn = value;
     }
     #[getter]
-    fn power(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "power", "characteristics.power")?;
-        Ok(self.data.power)
-    }
-    #[setter]
-    fn set_power(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "power", "characteristics.power")?;
-        self.data.power = value;
-        Ok(())
-    }
-    #[getter]
-    fn toughness(&self, py: Python<'_>) -> PyResult<i32> {
-        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
-        Ok(self.data.toughness)
-    }
-    #[setter]
-    fn set_toughness(&mut self, py: Python<'_>, value: i32) -> PyResult<()> {
-        warn_observation_alias(py, "toughness", "characteristics.toughness")?;
-        self.data.toughness = value;
-        Ok(())
-    }
-    #[getter]
     fn is_animated(&self) -> bool {
         self.data.is_animated
     }
@@ -2367,17 +2087,6 @@ impl PyPermanent {
     #[setter]
     fn set_temp_subtypes(&mut self, value: Vec<String>) {
         self.data.temp_subtypes = value;
-    }
-    #[getter]
-    fn keywords(&self, py: Python<'_>) -> PyResult<PyKeywords> {
-        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
-        Ok(self.data.keywords.clone().into())
-    }
-    #[setter]
-    fn set_keywords(&mut self, py: Python<'_>, value: PyKeywords) -> PyResult<()> {
-        warn_observation_alias(py, "keywords", "characteristics.keywords")?;
-        self.data.keywords = value.into();
-        Ok(())
     }
     #[getter]
     fn counters(&self) -> BTreeMap<String, i32> {
@@ -2521,34 +2230,6 @@ impl PyPermanent {
     #[getter]
     fn is_token(&self) -> bool {
         self.data.is_token
-    }
-    #[getter]
-    fn card(&self, py: Python<'_>) -> PyResult<Option<PyCard>> {
-        warn_observation_alias(
-            py,
-            "Permanent.card",
-            "Permanent.characteristics and object_id/owner_id/is_token",
-        )?;
-        Ok(self.data.legacy_card().map(Into::into))
-    }
-    #[setter]
-    fn set_card(&mut self, py: Python<'_>, value: Option<PyCard>) -> PyResult<()> {
-        warn_observation_alias(
-            py,
-            "Permanent.card",
-            "Permanent.characteristics and object identity",
-        )?;
-        if let Some(value) = value {
-            let card = value.data;
-            self.data.object_id = Some(card.id);
-            self.data.owner_id = card.owner_id;
-            self.data.registry_key = card.registry_key;
-            self.data.is_token = card.is_token;
-            self.data.characteristics = card.characteristics;
-        } else {
-            self.data.object_id = None;
-        }
-        Ok(())
     }
 }
 
@@ -3006,34 +2687,6 @@ impl PyStackObject {
             .spell
             .as_ref()
             .and_then(|s| s.has_announced_x.then_some(self.data.x))
-    }
-    #[getter]
-    fn card(&self, py: Python<'_>) -> PyResult<Option<PyCard>> {
-        warn_observation_alias(
-            py,
-            "StackObject.card",
-            "StackObject.characteristics and object_id/owner_id/is_copy",
-        )?;
-        Ok(self
-            .data
-            .spell
-            .as_ref()
-            .map(|s| s.legacy_card(self.data.x).into()))
-    }
-    #[setter]
-    fn set_card(&mut self, py: Python<'_>, value: Option<PyCard>) -> PyResult<()> {
-        warn_observation_alias(
-            py,
-            "StackObject.card",
-            "StackObject.characteristics and object identity",
-        )?;
-        if let Some(card) = &value {
-            self.data.source_card_registry_key = card.data.registry_key;
-            self.data.x = card.data.x.unwrap_or(0);
-        }
-        self.data.spell =
-            value.map(|value| crate::agent::observation::SpellData::from_legacy_card(value.data));
-        Ok(())
     }
 }
 
@@ -3996,35 +3649,21 @@ impl PySelectedBranchRuntime {
 #[pymethods]
 impl PyEnv {
     #[new]
-    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
+    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
-        py: Python<'_>,
         seed: u64,
         skip_trivial: bool,
         enable_profiler: bool,
-        enable_behavior_tracking: bool,
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
         decision_memory: bool,
     ) -> PyResult<Self> {
-        if enable_behavior_tracking {
-            py.import_bound("warnings")?.call_method1("warn", (
-                "enable_behavior_tracking is a deprecated no-op; use managym.statistics.Behaviour; removal in 0.3.0",
-                py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-            ))?;
-        }
-        let policies =
-            crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
+        let policies = crate::python::vector_env_bindings::parse_player_policies(player_policies)?;
         Ok(Self::from_live(
-            Env::new(
-                seed,
-                skip_trivial,
-                enable_profiler,
-                enable_behavior_tracking,
-            )
-            .with_player_policies(policies)
-            .with_decision_memory(decision_memory)
-            .with_decision_memory_include_own(decision_memory_include_own),
+            Env::new(seed, skip_trivial, enable_profiler)
+                .with_player_policies(policies)
+                .with_decision_memory(decision_memory)
+                .with_decision_memory_include_own(decision_memory_include_own),
         ))
     }
 
@@ -5651,55 +5290,26 @@ pub(crate) fn disclosure_name(value: DecklistDisclosure) -> &'static str {
 }
 
 #[cfg(feature = "python")]
-fn warn_disclosure(py: Python<'_>) -> PyResult<()> {
-    pyo3::PyErr::warn_bound(
-        py,
-        &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
-        "PlayerConfig.disclosure is deprecated; use GameSetup(decklists=...). Removed in 0.3.0.",
-        2,
-    )
-}
-
-/// Read the game value directly; the deprecated seat hints are checked only at
-/// this boundary, never installed on a native player or roster.
-#[cfg(feature = "python")]
 pub(crate) fn game_setup(value: &Bound<'_, PyAny>) -> PyResult<crate::state::player::GameSetup> {
     use crate::state::player::{DecklistMode, GameSetup};
     let players: Vec<PyPlayerConfig> = value.extract()?;
-    let mut hints = players
-        .iter()
-        .filter_map(|player| player.legacy_disclosure)
-        .map(DecklistMode::from);
+    let players = players
+        .into_iter()
+        .map(PlayerConfig::from)
+        .collect::<Vec<_>>();
     let setup_type = value.py().import_bound("managym")?.getattr("GameSetup")?;
-    let (decklists, mana_floats, mana_payment, conflict) = if value.is_instance(&setup_type)? {
-        let name: String = value.getattr("decklists")?.extract()?;
-        let decklists = match name.as_str() {
+    if !value.is_instance(&setup_type)? {
+        return Ok(GameSetup::from(players));
+    }
+    let name: String = value.getattr("decklists")?.extract()?;
+    Ok(GameSetup {
+        players,
+        decklists: match name.as_str() {
             "mixed" => DecklistMode::Mixed,
             fixed => parse_disclosure(fixed)?.into(),
-        };
-        (
-            decklists,
-            seat_modes(value, "mana_floats", ManaFloats::from_name)?,
-            seat_modes(value, "mana_payment", ManaPayment::from_name)?,
-            "deprecated per-seat disclosure conflicts with GameSetup.decklists",
-        )
-    } else {
-        // A bare seat list takes its game value from the first hint, if any.
-        (
-            hints.clone().next().unwrap_or_default(),
-            [ManaFloats::Off; 2],
-            [ManaPayment::Manual; 2],
-            "deprecated per-seat disclosure values disagree",
-        )
-    };
-    if hints.any(|hint| hint != decklists) {
-        return Err(PyValueError::new_err(conflict));
-    }
-    Ok(GameSetup {
-        players: players.into_iter().map(PlayerConfig::from).collect(),
-        decklists,
-        mana_floats,
-        mana_payment,
+        },
+        mana_floats: seat_modes(value, "mana_floats", ManaFloats::from_name)?,
+        mana_payment: seat_modes(value, "mana_payment", ManaPayment::from_name)?,
     })
 }
 

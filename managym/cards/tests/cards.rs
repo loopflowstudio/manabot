@@ -16,7 +16,7 @@ impl Scenario {
     /// Capture this constructed decision for exact native forks.
     pub fn snapshot(&self) -> GameSnapshot {
         use managym::{state::player::PlayerConfig, Env};
-        let mut env = Env::new(1, false, false, false);
+        let mut env = Env::new(1, false, false);
         env.reset(
             ["a", "b"]
                 .map(|name| PlayerConfig::new(name, deck(&[("Island", 40)])))

@@ -362,23 +362,25 @@ class TestObservationSpace:
             assert step_slice[int(observation.turn.step)] == pytest.approx(1.0)
 
     def test_card_and_permanent_features_are_partitioned_and_normalized(
-        self, observation_space, observation, config
-    ):
+        self, observation_space: ObservationSpace, observation: managym.Observation
+    ) -> None:
         encoded = encode_observation(observation_space, observation)
 
         for i, card in enumerate(observation.agent_cards):
+            characteristics = card.characteristics
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
-            assert vec[8] == pytest.approx(card.power / 10.0)
-            assert vec[9] == pytest.approx(card.toughness / 10.0)
-            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+            assert vec[8] == pytest.approx(characteristics.power / 10.0)
+            assert vec[9] == pytest.approx(characteristics.toughness / 10.0)
+            assert vec[10] == pytest.approx(characteristics.mana_cost.mana_value / 10.0)
 
         for i, card in enumerate(observation.opponent_cards):
+            characteristics = card.characteristics
             vec = encoded["opponent_cards"][i]
             assert vec[7] == pytest.approx(0.0)
-            assert vec[8] == pytest.approx(card.power / 10.0)
-            assert vec[9] == pytest.approx(card.toughness / 10.0)
-            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+            assert vec[8] == pytest.approx(characteristics.power / 10.0)
+            assert vec[9] == pytest.approx(characteristics.toughness / 10.0)
+            assert vec[10] == pytest.approx(characteristics.mana_cost.mana_value / 10.0)
 
         for i, perm in enumerate(observation.agent_permanents):
             vec = encoded["agent_permanents"][i]

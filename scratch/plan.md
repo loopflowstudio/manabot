@@ -17,78 +17,20 @@ rules order; `Observation.toJSON()` writes step and phase names.
 - The managym wheel and staged sdist have no top-level `academy/` package or
   files.
 
-## Built (pass 1, 0605ac68f7; docs daffa5c394)
+## Built
 
-- `StepKind` in rules order (`FirstStrikeCombatDamage = 7` … `Cleanup = 12`,
-  `PartialOrd, Ord`); `PhaseKind/StepKind::name/from_name` own the public enum
-  spellings; `from_legacy_code` decodes 0.2.x integers (`12` = first strike)
-  only in `observation_json.rs` and the baseline fixture test.
-- `parse_observation` normalizes integer `turn.phase/step` before its canonical
-  comparison; the 11 frozen captures keep their bytes and digests and differ
-  from the writer only in those two fields.
-- Decision memory shares the encoder's frozen 12-step index (`0..=11`, both
-  damage steps 7, Cleanup 11). A live double-strike game and both committed
-  pilots confirmed it; `viewer_state_hash` values change (live-to-live only).
-- Docs for the whole Task (list below) were committed in daffa5c394, ahead of
-  passes 2–3: they already describe removals the code has not made yet, so
-  re-read each named doc against the code at the end of pass 3.
+- Pass 1 (0605ac68f7) put turn steps in rules order, wrote public enum names to Observation JSON, and kept the 0.2.x capture reader and the frozen 12-step policy and decision-memory index. All 11 captures and both committed pilots passed.
+- Pass 2 removed the native observation, policy, behavior-tracking and disclosure aliases across Rust, PyO3, stubs and Python wrappers. The CPython 3.13 extension built and 34 focused tests passed, including retained policy replay, keyword round trips and Temur mana encoding.
+- The docs commit daffa5c394 describes all three passes. Re-read each named doc against the code at the end of pass 3.
 
-## Findings that shape the remaining removals
+## Findings for the remaining work
 
-1. **The singular `cast_permission` is two things.** The Python getter/setter
-   on `Card` (`bindings.rs:1998-2006`, marked 0.4.0, explicitly approved for
-   0.3.0) is the deprecated API. The JSON key `cast_permission` for a single
-   grant is the frozen schema-8 card wire (`observation_json.rs:194`), mirrored
-   by the experience projection (`experience_projection.py:145`), the protocol
-   schemas and the UI type. The key stays; only the Python accessor goes.
-2. **`ObservationCharacteristics` is intentionally read-only.** One test
-   (`tests/verify/test_native_observation_contract.py:345-359`) mutates
-   `card.keywords = ...` and `permanent.keywords = ...` through the deprecated
-   flat setters. Removing those setters requires rewriting that test via JSON
-   round-trip (`json.loads(obs.toJSON())` → mutate → `Observation.from_json`),
-   not adding setters to `ObservationCharacteristics`.
-3. **`RecordedGame` has four 0.3.0 properties, not three.** `deal_seed`
-   (`managym/academy/launch.py:51`) calls `_warn_listing_field` alongside `leg`,
-   `game_trace_sha256`, and `decks` (and is documented in `docs/academy.md:351`
-   and tested in `tests/academy/test_game_records.py:239`). All four go
-   together; `_record` stays because `launch.py:447` passes it to `import_game`.
-4. **Release staging also references `academy/`.** `scripts/release/prepare.py`
-   still includes `"academy"` in the engine staging tree (copying
-   `academy/README.md` into the staged engine sdist) and `managym/pyproject.toml`
-   keeps `academy/ui/**` and `academy/README.md` excludes for that shim. Both
-   must be cleaned alongside deleting `academy/__init__.py` and tightening
-   `scripts/release/validate.py`.
-5. **No pytest warning filter exists**, so deprecated use is silent today.
-    After removal each use is a hard error, which is the detector: running the
-    consumers' tests finds every straggler. Grep found flat-accessor use only
-    in tests (9 files) — library code already reads `.characteristics`.
-6. `git grep -E '\b…'` matches nothing on this machine; use `-w` or explicit
-    character classes when sweeping for callers.
-
+- `RecordedGame.deal_seed` uses the same deprecation helper as `leg`, `game_trace_sha256` and `decks`. Remove all four and keep `_record`, which launch passes to `import_game`.
+- The release preparer also stages the top-level `academy` directory. Remove it from the staging tree alongside the package and obsolete source exclusions.
 
 ## Design
 
-### Removals
-
-Native (Rust, PyO3, stub) — each with its `.pyi` lines:
-
-| Goes | Where | Callers to convert |
-|---|---|---|
-| Flat characteristic getters/setters on `Card` and `Permanent` (`name`, `text_box`, `power`, `toughness`, `is_legendary`, `is_ally`, `is_lesson`, `ward_cost`, `kicker_cost`, `card_types`, `keywords`, `mana_cost`), `Permanent.card`, `StackObject.card`, `warn_observation_alias` | `python/bindings.rs` | 9 test files; `tests/env/test_observation_characteristics.py` keeps its non-alias cases; `tests/verify/test_native_observation_contract.py:345-359` mutates via JSON round-trip (`Observation.from_json`) |
-| `Observation::card_records` | `agent/observation.rs:2584` | none |
-| `ExileCastGrant` | `flow/cast_permission.rs:147` | none (one `.lf/wave` research note mentions it) |
-| `Card.cast_permission` getter/setter | `bindings.rs:1998` | `tests/semantic/test_player_control.py:279` |
-| `opponent_policy` on `VectorEnv`, `RecordedVectorEnv`, `resolve_player_policies`, and the pass-through on `manabot.env.vector_env.VectorEnv` | `vector_env_bindings.rs:241,1415-1432`, `recording.py:1221`, `manabot/env/vector_env.py:30` | `tests/env/test_native_player_policies.py`, `test_captured_vector_bookkeeping.py` |
-| `enable_behavior_tracking` on `managym.Env`, Rust `Env::new`, and `manabot.env.Env` | `bindings.rs:3985`, `agent/env.rs:241`, `manabot/env/env.py:60` | six callers pass `False` |
-| `PlayerConfig.disclosure` argument, getter, setter, `legacy_disclosure`, the hint/conflict branch of `game_setup` | `bindings.rs:994-1076,5640-5680`, `deck_bindings.rs:166` | `tests/env/test_decklist_disclosure.py`, `managym/tests/fixtures/payment_search/manabot_slow_step.py` |
-
-`Card`'s flat accessors are the same alias family as `Permanent`'s (one warn
-helper, one `.pyi` note) and go together. *Choice made for review*; the brief
-names only permanents and spells. `Permanent.name` stays: it is the
-effect-set name override (not a deprecated alias; renaming it to `name_override`
-would break schema-8 wire JSON and is a separate outcome).
-
-Python & packaging:
+### Remaining removals
 
 | Goes | Where | Callers to convert |
 |---|---|---|
@@ -98,11 +40,9 @@ Python & packaging:
 | `villain_type == "checkpoint"` | `managym/academy/server.py:680` | Academy test files send `"policy"` |
 | `academy/__init__.py`; `"academy"` in `managym/pyproject.toml` `python-packages` and its vestigial `academy/` excludes; `"academy"` staging in `scripts/release/prepare.py`; the `academy/__init__.py` allowance in `scripts/release/validate.py:116` | — | shim case in `tests/test_package_boundaries.py:687` |
 
-With the last flat alias gone, `tests/env/test_observation_characteristics.py`
-loses its alias cases and keeps the projection ones.
-
 ### What must survive
 
+- The reported game in `managym/tests/fixtures/payment_search/manabot_slow_step.py` keeps its historical per-seat disclosure argument. Its SHA-256 matches the original report documented in `docs/development.md`.
 - **Retained evidence reads as before.** `GameRecord.opponent_policy` and
   `resolved_player_policies` (`recording.py:287,337`) still decode old
   receipts; the JSON key `cast_permission`; `Observation.from_json` and
@@ -165,10 +105,8 @@ Updated in place for `write-docs`:
 1. **Done (0605ac68f7)** — turn order, JSON names, decision memory. Demo
    printed `PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP` and `7 8`; optional u1952
    checkpoint was absent, both committed pilots replayed.
-2. **Next — native removals.** The first table, stub lines with it, one extension
-   rebuild, then every converted caller's tests (including
-   `test_native_observation_contract.py` rewritten via JSON round-trip).
-3. **Python removals, shim, packaging, docs.** The second table (including
+2. **Done — native removals.** The rebuilt extension exposes characteristics and object identity directly. The player-control test still checks single-grant wire data; that field belongs to the projection.
+3. **Next — Python removals, shim, packaging, docs.** The remaining table (including
    `RecordedGame.deal_seed`, `prepare.py`, `pyproject.toml`, `validate.py`),
    docs. Ends with the acceptance check.
 

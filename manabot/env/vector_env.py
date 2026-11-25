@@ -15,7 +15,6 @@ from manabot.env.observation import (
     allocate_vector_buffers,
 )
 import managym
-from managym.recording import resolve_player_policies
 
 
 class VectorEnv:
@@ -27,14 +26,11 @@ class VectorEnv:
         reward: Reward,
         device: str,
         seed: int = 0,
-        opponent_policy: str | None = None,
         *,
         player_policies: tuple[str, str] | None = None,
     ) -> None:
         self._skip_trivial = True
-        self._player_policies = resolve_player_policies(
-            opponent_policy, player_policies
-        )
+        self._player_policies = player_policies
         self._player_configs = match.to_rust()
         self.observation_space = observation_space
         self.reward = reward

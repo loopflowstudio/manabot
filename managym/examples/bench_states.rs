@@ -537,7 +537,7 @@ fn build(recipe: &Recipe) -> Env {
     if recipe.state == "float-origins" {
         setup.mana_floats[0] = ManaFloats::All;
     }
-    let mut env = Env::new(7, true, false, false);
+    let mut env = Env::new(7, true, false);
     env.reset(setup).unwrap();
     for _ in 0..2 {
         let keep = actions(&mut env)

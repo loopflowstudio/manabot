@@ -238,18 +238,17 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, seed_stride=None, *, player_policies=None, decision_memory_include_own=false, decision_memory=false))]
     fn new(
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
-        opponent_policy: Option<&str>,
         seed_stride: Option<u64>,
         player_policies: Option<Vec<String>>,
         decision_memory_include_own: bool,
         decision_memory: bool,
     ) -> PyResult<Self> {
-        let policies = parse_player_policies(player_policies, opponent_policy)?;
+        let policies = parse_player_policies(player_policies)?;
         let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies)
             .with_decision_memory(decision_memory)
             .with_decision_memory_include_own(decision_memory_include_own);
@@ -1412,30 +1411,10 @@ fn encode_observations_into(
 #[cfg(feature = "python")]
 pub(crate) fn parse_player_policies(
     values: Option<Vec<String>>,
-    legacy: Option<&str>,
 ) -> PyResult<[crate::agent::player_policy::PlayerPolicy; 2]> {
     use crate::agent::player_policy::PlayerPolicy;
-    if values.is_some() && legacy.is_some() {
-        return Err(PyValueError::new_err(
-            "use player_policies or opponent_policy, not both",
-        ));
-    }
-    let values = if let Some(legacy) = legacy {
-        if !["none", "random", "heuristic"].contains(&legacy) {
-            return Err(PyValueError::new_err(format!(
-                "unsupported opponent_policy: {legacy}"
-            )));
-        }
-        Python::with_gil(|py| -> PyResult<()> {
-            py.import_bound("warnings")?.call_method1("warn", ("opponent_policy is deprecated; use player_policies=('agent', '<policy>'); removal in 0.3.0", py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(), 2))?;
-            Ok(())
-        })?;
-        vec![
-            "agent".into(),
-            if legacy == "none" { "agent" } else { legacy }.into(),
-        ]
-    } else {
-        values.unwrap_or_else(|| vec!["agent".into(); 2])
+    let Some(values) = values else {
+        return Ok([PlayerPolicy::Agent; 2]);
     };
     if values.len() != 2 {
         return Err(PyValueError::new_err(

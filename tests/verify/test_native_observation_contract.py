@@ -342,20 +342,12 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     env.step(0)
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()
-    cards = obs.agent_cards
-    card = cards[0]
-    keywords = card.keywords
-    keywords.indestructible = True
-    card.keywords = keywords
-    cards[0] = card
-    obs.agent_cards = cards
-    permanents = obs.agent_permanents
-    permanent = permanents[0]
-    keywords = permanent.keywords
-    keywords.indestructible = True
-    permanent.keywords = keywords
-    permanents[0] = permanent
-    obs.agent_permanents = permanents
+    wire = json.loads(obs.toJSON())
+    wire["agent_cards"][0]["keywords"]["indestructible"] = True
+    permanent = wire["agent_permanents"][0]
+    permanent["keywords"]["indestructible"] = True
+    permanent["card"]["keywords"]["indestructible"] = True
+    obs = managym.Observation.from_json(json.dumps(wire))
 
     actual = encode_observation(ObservationSpace(), obs)
     assert actual["agent_cards"].shape[-1] == CARD_DIM
@@ -363,7 +355,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     assert actual["agent_cards"][0, 38] == 1
     assert actual["agent_cards"][0, 37] == 0
     assert actual["agent_permanents"][0, 25] == 1
-    assert actual["agent_permanents"][0, 24] == permanent.registry_key + 1
+    assert actual["agent_permanents"][0, 24] == obs.agent_permanents[0].registry_key + 1
 
 
 def _token_low(name: str) -> int:

@@ -26,6 +26,12 @@ Assumptions taken in the plan (all reversible before merge):
   the writer bytes before the existing object upgrade, then compare the public
   parse results of the integer and named captures after the upgrade.
 
+Pass 2 corrections:
+
+- The `cast_permission` assertion in `tests/semantic/test_player_control.py` reads a serialized projection. It continues to test the single-grant wire field. Only the native card-name lookup in the same test file needed migration.
+- `docs/development.md` identifies `manabot_slow_step.py` as the exact reported game. Its verified SHA-256 is `42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`. Its historical constructor call stays in the fixture.
+- The Temur fixture hit the opening Modal decision before it could inspect the legendary flag. The test now uses the established first-main fixture with a ready Hermitic Herbalist and reads Iroh on his permanent row.
+
 Ideas outside this Task:
 
 - Rename `Permanent.name` (effect-set name override) to `name_override` with a

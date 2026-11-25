@@ -8,10 +8,7 @@ use serde_json::json;
 fn initial_observation() -> Observation {
     let players =
         ["a", "b"].map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])));
-    Env::new(42, true, false, false)
-        .reset(players.to_vec())
-        .unwrap()
-        .0
+    Env::new(42, true, false).reset(players.to_vec()).unwrap().0
 }
 fn board(kind: Space) -> Observation {
     let mut obs = initial_observation();
@@ -420,7 +417,7 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
     let players = ["a", "b"]
         .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
         .to_vec();
-    let mut env = Env::new(42, true, false, false);
+    let mut env = Env::new(42, true, false);
     env.reset(players.clone()).unwrap();
     // Select through the batch policy boundary. Kicker history must survive
     // a fork even after the lands used to estimate its cost become tapped.
@@ -460,7 +457,7 @@ fn heuristic_per_seat_memory_is_independent_and_forked() {
     let players = ["a", "b"]
         .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
         .to_vec();
-    let mut env = Env::new(42, true, false, false);
+    let mut env = Env::new(42, true, false);
     env.reset(players.clone()).unwrap();
     let mut obs = board(Space::PayOrNot);
     let mut spell = card(1, "Firebending Lesson", 1);
@@ -505,7 +502,7 @@ fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
         [PlayerPolicy::Random, PlayerPolicy::Heuristic],
         [PlayerPolicy::Heuristic, PlayerPolicy::Heuristic],
     ] {
-        let mut scalar = Env::new(213, true, false, false).with_player_policies(policies);
+        let mut scalar = Env::new(213, true, false).with_player_policies(policies);
         let mut vector = VectorEnv::new(1, 213, true, policies);
         let (mut obs, _) = scalar.reset(players.clone()).unwrap();
         let batch = vector.reset_all(players.clone()).unwrap();
@@ -554,8 +551,8 @@ fn heuristic_builtin_steps_retain_live_event_parity() {
         .map(|key| setup.player_config(key, key).unwrap())
         .to_vec();
     let mut builtins =
-        Env::new(213, true, false, false).with_player_policies([PlayerPolicy::Heuristic; 2]);
-    let mut manual = Env::new(213, true, false, false);
+        Env::new(213, true, false).with_player_policies([PlayerPolicy::Heuristic; 2]);
+    let mut manual = Env::new(213, true, false);
     builtins.reset(players.clone()).unwrap();
     let (mut obs, _) = manual.reset(players).unwrap();
     let mut selectors = [Heuristic::default(), Heuristic::default()];

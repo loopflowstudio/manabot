@@ -309,7 +309,9 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     )
     assert "foretold" not in opponent.text
     observation = _viewer_observation(opponent)
-    assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
+    assert all(
+        card.characteristics.name != "Sozin's Comet" for card in observation.opponent_cards
+    )
     assert observation.opponent.zone_counts[5] == 1
     encoded = encode_observation(space, observation)
     for key in ("agent_cards", "opponent_cards"):

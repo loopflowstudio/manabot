@@ -60,7 +60,6 @@ def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
         Reward(RewardConfig()),
         seed=19,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
     observation, _ = env.reset(seed=19)
     return env, observation
