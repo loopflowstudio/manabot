@@ -81,103 +81,17 @@ Quoted from the Task's steers, newest governing:
 - QA (`44ebea8e8e`): fixed Academy's `MODAL` prompt for `stage === 'mana_color'`
   to read `"Choose the mana to add"` instead of `"Choose a mode for <Spell>"`
   (`academy/ui/src/lib/board/prompt.ts`).
-- Pass 4: fixed both post-build concept-review mismatches — (1) relaxed
-  `summoning_sick` comparison in `interchangeable.rs` for plain non-creature,
-  non-animating lands (keeping creatures, non-lands, and self-animating lands
-  such as `Soulstone Sanctuary` / `Treetop Village` / `Crawling Barrens`
-  distinct via `Effect::may_become_creature` / `Modification::grants_creature_type`)
-  and gated `entered_this_turn` on `ability.power_up`; (2) deleted
-  `resolution_mana_abilities` from `managym/src/flow/mana.rs` so
-  `Decision::Payment` (`TurnFaceUp`, `Ward`) calls
-  `mana_ability_actions(player, include_simple)` identically to fixed sources.
-  Added real `Action::PlayLand` and `Soulstone Sanctuary` tests in
-  `managym/tests/source_taps.rs` and `tests/academy/test_dual_land_payment.py`,
-  updated `managym/README.md`, rebuilt the extension, and refreshed the three
-  Academy fixtures (`precision-demo-opening-v1.json`,
-  `precision-mana-demo-opening-v1.json`, `choice-navigation-opening-v1.json`)
-  plus `tests/academy/test_choice_navigation.py` where real-play land-drop
-  casts now skip redundant `Pay the cost` stops. Verified debug `source_taps`
-  (32/32), acceptance pytest suite (23/23), and `test_pinned_pilot.py` (v9/v11).
-
-## Post-build concept review findings → Pass 4 (built)
-
-Post-build review + live Academy QA (`scratch/concept-review.html`,
-`scratch/qa.html`) caught two model mismatches in Passes 1–3 that must be fixed
-before advancing:
-
-### 1. Real-game land-for-turn equivalence (`managym/src/flow/mana/interchangeable.rs`)
-
-- **What failed:** `same_mana_permanent` unconditionally compares raw
-  `left.summoning_sick == right.summoning_sick` and
-  `left.entered_this_turn(turn) == right.entered_this_turn(turn)`. Because every
-  played land enters with `summoning_sick = true` (`Permanent::new`) and
-  `entry_turn = turn` (`zones.rs:1049`), playing a land for turn and casting a
-  spell splits the new land into its own class — defeating Pass 2 on nearly
-  every main-phase cast (`Mountain ×4` for `{2}{R}`, `Plains ×2 + Kyoshi
-  Village` for `{1}{G}`, and the `Kyoshi Village + 3 Plains` color modal all
-  still stop in real play, while Academy stacks all 3 Plains into one visually
-  identical pile). Every earlier test missed this because
-  `scenario_force_battlefield(..., ready=true)` bypasses playing a land.
-- **Model to build:** Compute `let view = self.characteristics(a.permanent);`
-  once and check `view == self.characteristics(b.permanent)`.
-  - Compare `left.summoning_sick == right.summoning_sick` **only when sickness
-    can matter** for that permanent: `view.is_creature() || !view.is_land() ||
-    can_become_creature(&view)` — where `can_become_creature` detects any
-    ability on `view` whose effects/modifications contain
-    `Modification::BecomeCreature` (preserving manlands like `Soulstone
-    Sanctuary` and `Treetop Village`, Vehicles, artifacts, and creatures).
-    Document right in `interchangeable.rs` that Earthbend grants haste
-    (CR 702.182a) and no catalog card animates another land without haste, so
-    plain lands played this turn are interchangeable with earlier copies.
-  - Compare `left.entered_this_turn(turn) == right.entered_this_turn(turn)`
-    **only when the permanent can read it**:
-    `view.activated_abilities.iter().any(|a| a.power_up)` (the sole rules reader,
-    `statics.rs:486`).
-- **Tests to add:**
-  - In `managym/tests/source_taps.rs`: real-play tests that actually play a land
-    via `Action::PlayLand` on the current turn before casting — covering
-    `Mountain ×4` for `{2}{R}`, `Plains ×2 + Kyoshi Village` for `{1}{G}`, and
-    `Kyoshi Village + 3 Plains` skipping the color modal and second stop; PLUS
-    a guard test with two `Soulstone Sanctuary`s (one old, one played this turn)
-    for `{1}` asserting the prompt stays open.
-  - In `tests/academy/test_dual_land_payment.py`: exercise a real `Play Plains`
-    turn before casting `Youthful Knight` with `Kyoshi Village + 3 Plains` and
-    assert tapping `Kyoshi Village` skips the color modal and finishes directly.
-  - Re-check Academy fixture tests (`tests/academy/`) and refresh any fixture
-    prefixes whose real-play land-drop casts now skip redundant basic stops.
-
-### 2. Unified resolution payments (`managym/src/flow/decision.rs`, `managym/src/flow/mana.rs`)
-
-- **What failed:** `resolution_mana_abilities` runs `useful_payment_taps` and
-  filters `.filter(|a| matches!(a, Action::ActivateAbility { .. }))`. Because
-  `Decision::Payment` (`TurnFaceUp`, `Ward`, `Mana Leak`) never offers
-  individual `TapForMana` offers for basics, this re-introduced an asymmetry:
-  `TurnFaceUp {1}{W}` with `Plains ×2 + Forest` skips (`[PayCost]`), while
-  `Kyoshi Village + Plains + Forest` stops with `[Tap Kyoshi Village for
-  {G}/{W}, PayCost]` (and clicking Village pops up an unskipped color modal
-  because `equivalent_mana_choices` checks `resume: None`). Likewise `Ward {2}`
-  with `Plains + Sol Ring` offers `[PayCost, Decline]`, while `Kyoshi Village +
-  Sol Ring` offered `[Tap Kyoshi Village for {G}/{W}, PayCost, Decline]`.
-- **Model to build:** Delete `resolution_mana_abilities` from
-  `managym/src/flow/mana.rs`. In `managym/src/flow/decision.rs`, `Decision::Payment`
-  calls:
-  ```rust
-  let include_simple = !can_pay || help.waterbend != 0 || self.offers_extra_payment_taps(player);
-  let mut actions = self.mana_ability_actions(player, include_simple);
-  ```
-  So simple choice taps match fixed taps on `Decision::Payment` (both paid by
-  `PayCost`; non-simple activations like Treasure/pain lands always stay offered;
-  `!can_pay`, waterbend, or floats keep all activations).
-- **Tests & docs to update:**
-  - Update `ward_keeps_pay_or_decline_and_keeps_source_choices_when_they_matter`
-    in `managym/tests/source_taps.rs` to assert `Ward {2}` with `Kyoshi Village
-    + Sol Ring` matches `Plains + Sol Ring` (`[PayCost, Decline]`, tapping Sol
-    Ring and leaving Village untapped), and `TurnFaceUp {1}{W}` with `Kyoshi
-    Village + Plains + Forest` skips immediately like `Plains ×2 + Forest`,
-    while `Ward {2}` with `Treasure + Plains` keeps Treasure offered.
-  - Update `managym/README.md` (`### Manual mana sources`) to match both fixes
-    (played-this-turn plain lands vs manlands/creatures/`power_up`, and
-    resolution payments matching fixed sources).
+- Pass 4 (`38aeeb6716`): post-build review fixes — played-this-turn plain
+  lands are interchangeable (sickness still compared for creatures, non-lands
+  and self-animating lands via `Effect::may_become_creature` /
+  `Modification::grants_creature_type`; `entered_this_turn` only with
+  `power_up`), and `resolution_mana_abilities` is deleted so `Decision::Payment`
+  uses `mana_ability_actions(player, include_simple)`. Real `PlayLand` and
+  Soulstone Sanctuary tests in `managym/tests/source_taps.rs` and
+  `tests/academy/test_dual_land_payment.py`; three Academy fixtures refreshed.
+  Recorded: debug `source_taps` 32/32, acceptance pytest 23/23,
+  `test_pinned_pilot.py` v9/v11 green. Review notes: `scratch/concept-review.html`,
+  `scratch/qa.html`.
 
 ## Determinism rule
 
@@ -240,10 +154,7 @@ cache parity assertions run.
 
 `managym/README.md` (`### Automatic source preference`, `### Manual mana
 sources`, `### Inspecting automatic payment`) and `docs/academy.md`
-(`### Previewing payments`). Update `managym/README.md` in Pass 4 to remove the
-old `Ward {2}` Sol-Ring exception and document plain-land vs manland/creature
-turn-of-entry equivalence.
-
+(`### Previewing payments`). 
 ## Remaining
 
 1. **Gate/CI only:** After the PR's CI run, download its `engine-budget`
