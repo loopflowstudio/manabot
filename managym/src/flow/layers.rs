@@ -838,10 +838,52 @@ impl<'a> Context<'a> {
         {
             return Vec::new();
         }
+        let source = self.game.state.permanent_of(node.source);
+        match &node.scope {
+            StaticScope::This => {
+                return source
+                    .filter(|id| self.objects.contains_key(id))
+                    .into_iter()
+                    .collect();
+            }
+            StaticScope::Attached => {
+                return source
+                    .and_then(|id| self.game.attached_permanent(id))
+                    .filter(|id| self.objects.contains_key(id))
+                    .into_iter()
+                    .collect();
+            }
+            StaticScope::SpellsYouControl(_) => return Vec::new(),
+            _ => {}
+        }
+        let source_controller = source.map_or_else(
+            || {
+                self.game
+                    .state
+                    .zones
+                    .holder_in(node.source, ZoneType::Command)
+                    .expect("live command-zone source")
+            },
+            |id| self.controller(id),
+        );
+        let source_name = Some(source.map_or_else(
+            || self.game.state[node.source].name.as_str(),
+            |id| self.objects[&id].view.name.as_str(),
+        ));
         self.objects
-            .keys()
-            .copied()
-            .filter(|&id| self.scope(&node.scope, node.source, id))
+            .iter()
+            .filter_map(|(&id, object)| {
+                matches_static_scope(
+                    &node.scope,
+                    source,
+                    source_controller,
+                    None,
+                    id,
+                    self.controller(id),
+                    |predicate| matches_view(self.game, id, predicate, &object.view, source_name),
+                )
+                .then_some(id)
+            })
             .collect()
     }
     fn instructions(&self, node: &Node, layer: Layer) -> Vec<Instruction> {
@@ -1183,20 +1225,6 @@ impl<'a> Context<'a> {
                 .game
                 .layer_state_condition(condition, self.source_controller(source), source),
         }
-    }
-    fn scope(&self, scope: &StaticScope, source: ObjectId, target: PermanentId) -> bool {
-        matches_static_scope(
-            scope,
-            self.game.state.permanent_of(source),
-            self.source_controller(source),
-            self.game
-                .state
-                .permanent_of(source)
-                .and_then(|id| self.game.attached_permanent(id)),
-            target,
-            self.controller(target),
-            |predicate| self.matches(target, predicate, Some(source)),
-        )
     }
     fn matches(
         &self,
