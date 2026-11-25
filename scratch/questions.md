@@ -50,6 +50,9 @@ reversible before merge.
     using the registered layout) for now; adding optional
     `*, layout: ObservationLayout | None = None, action_overflow: str | None = None`
     is a small reversible addition in Pass 4 if desired.
+    **Pass 4:** kept `observations_for_players(players)` on the registered
+    layout; no override added. `RecordedVectorEnv` now defines it as a method
+    and the `SnapshotVector` protocol names it.
 12. **Belief demo root.** Use the first decision after keeping opening hands.
     At the opening modes the actor has no object focus. On the same seeded
     position both input paths gave the same action logits with and without
@@ -112,3 +115,23 @@ reversible before merge.
     deprecated encoder aliases). Per patch-clean main this PR is a held
     0.3.0 removal; recording it (`record --allow-break --reason`) or adding
     0.3.0-deprecated aliases for the non-deprecated breaks is undecided.
+    **Pass 4:** recorded with `record --allow-break --reason "MTG-433: 0.3.0
+    removal …; hold for the 0.3.0 cut"`. Aliases for `PackedActions.fields`,
+    `write_observations_for_players` or `encode_active` would need the dense
+    paths this PR deletes. The PR must merge with the other 0.3.0 removals
+    immediately before the 0.3.0 cut. Reverse by restoring the snapshot.
+
+20. **Rust row reader lives in the library (Pass 4).** The plan named an
+    `inspect.rs` reader, but crate unit tests (`src/agent/*`, `src/flow/*`)
+    cannot mount `tests/support`, and the `fixtures` feature is not enabled for
+    `cargo test -p managym` alone. `managym::agent::observation_rows::InputRows`
+    is the one reader (live rows in their dense column reading, no padding), the
+    Rust analogue of `ObservationSelection.project`.
+
+21. **Incremental decision-memory cursor removed (Pass 4).** `MemoryEncoding`,
+    `encode_suffix` and `RowWriter::reset_memory` served only the dense
+    transport's per-slot suffix writes; packed rows always wrote the whole log.
+    `decision_memory::write` writes the whole log; `EncodedMemory` (test reader
+    of a log) keeps its four tables. `observation_extents::Join` keeps only the
+    object joins the batch archive validates (`Extent`/`Span` served the dense
+    extent scanner).

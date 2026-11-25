@@ -354,22 +354,30 @@ Done:
   1517 passed, 50 failed, all failing at `95fa222b07`. Native-transport
   tests stay on `space.layout.allocate` + `step_buffers` for Pass 4.
 
-Remaining:
+- **4. Native dense transport deleted** (`88e30b1318`..`aabdac571a`):
+  `EncodedObservation(Mut)`, `encode`/`allocate`/`encode_into*`, the
+  incremental memory cursor (questions 21), dense `VectorEnv`/`RolloutPool`
+  buffers and writers, `encode_observation(s)_into`, `Env.encode_observation*`,
+  `ObservationLayout.allocate/axis_extents/object_references`,
+  `python/layout_extents.rs` and the `Extent`/`Span` joins are deleted
+  (vector bindings 2,263 → ~1,050 lines). Slot loads admit into scratch
+  `PackedRows`. Rust tests read rows through `InputRows` (library, not
+  `inspect.rs`: questions 20); `bench_observation`/`bench_states` time
+  `PackedRows`. `RecordedVectorEnv.observations_for_players` is a method and
+  the `SnapshotVector` protocol names it (questions 11). Replay of search
+  receipts uses the packed pool only. AGENTS.md, `.lf/qa`, API audit, 0.3.0
+  notes and `tests/env/test_observation_transport_surface.py` updated; public
+  API recorded with `--allow-break` and the PR held for the 0.3.0 cut
+  (questions 19). Runs: Rust lib 401 passed; rules 11; cards observability 89
+  and ten set modules 770; workspace `--no-run` and benchmark examples clean;
+  fmt clean; clippy on the lib reports only pre-existing lint kinds. Python:
+  25 ported test files 445 passed, 3 failed — two `test_replay_runtime_admission`
+  cases expect the removed `world` key (fail at base);
+  `test_merchant_payment_reconnect_vector_and_fork` fails on Academy mana
+  (`sum(game.obs.agent.mana) == 1`, got 0) after the vector comparisons pass,
+  not traced. Batch values are int32: a history definition id of `2**32 - 1`
+  that dense float buffers accepted is refused.
 
-**4. Native dense transport deleted + docs/guards.** The Rust list in "What
-goes"; slot admission via scratch `PackedRows`; Rust tests read rows through
-one `inspect.rs` reader over `encode_rows`; `recording.py`, `replay.py`, stubs;
-remaining dense tests (native-transport tests kept running on
-`space.layout.allocate` in 3b); the `write_observations_for_players` protocol
-methods in `SnapshotVector`/`BufferedStreams`; decide questions 11. Debug
-`cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
-and clippy. Then `AGENTS.md`, `.lf/qa/*.md`, 0.3.0 release-notes entry, and a
-boundary test asserting removed names are absent.
-Also re-run `uv run python scripts/public_api.py check` and
-`tests/test_public_api_contract.py` after the native deletions. Open choice
-(questions 19), needed before gate: this branch removes non-deprecated 0.2.x
-surface (`PackedActions.native/fields/unpack`, `RecordedObservations.memory*`,
-`RolloutBatch.policy_rows/ordered_obs`, `managym.input_v10_state`,
-`observation_layout(legacy=, turn_state=)`), so either record the snapshot
-with `record --allow-break --reason "MTG-433 0.3.0 removal"` and hold the PR
-for the 0.3.0 cut, or restore 0.3.0-deprecated aliases for those names.
+Remaining (gate/CI): debug `cargo nextest run --profile ci`
+(`CARGO_BUILD_JOBS=2`, `--test-threads 2`), clippy at CI settings, the six
+full Python suites, and tracing the merchant-payment failure against base.
