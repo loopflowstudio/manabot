@@ -1,5 +1,6 @@
 import { selectDeck } from './deck-selection';
 import { expect, test, type Page } from '@playwright/test';
+import { showEachCreaturesChoice } from './fixtures/combat';
 
 test('unauthorized session history explains access and offers to leave the session filter', async ({ page }) => {
   await page.route('**/api/play-sessions/private-session', route => route.fulfill({ status: 403, json: { detail: 'Session not owned' } }));
@@ -124,8 +125,9 @@ test('shared history identifies both players and preserves private prefixes and 
     const over = alice.getByTestId('result-card');
     const actions = alice.getByTestId('action-option');
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
-      await expect(actions.first().or(over)).toBeVisible();
+      await expect(actions.first().or(over).or(alice.getByTestId('per-creature-choices')).first()).toBeVisible();
       if (await over.isVisible()) break;
+      await showEachCreaturesChoice(alice);
       await expect(actions.first()).toBeEnabled();
       const before = Number(await alice.locator('main').getAttribute('data-update-seq'));
       const labels = await actions.allTextContents();
@@ -164,7 +166,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByTestId('game').getByRole('link', { name: 'Games', exact: true }).focus();
+    await visitor.getByTestId('game').getByRole('link', { name: 'History', exact: true }).focus();
     await visitor.keyboard.press('Enter');
     expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);

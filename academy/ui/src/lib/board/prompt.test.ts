@@ -31,6 +31,17 @@ describe('promptLine', () => {
     expect(line).not.toMatch(/offer|commit|clause|nonparticipation/i);
   });
 
+  it('leaves the live keyboard out of a recording', () => {
+    const frame = structuredClone(frames[0]);
+    frame.action_space = 'PRIORITY';
+    for (const stack of [[], [{ id: 9, kind: 'spell', controller: 1, label: 'Lightning Bolt' }]]) {
+      frame.projection.stack_objects = stack as typeof frame.projection.stack_objects;
+      const view = boardView(frame, PLAYERS);
+      expect(promptLine(frame, view)).toMatch(/Space/);
+      expect(promptLine(frame, view, false)).not.toMatch(/Space/);
+    }
+  });
+
   it('asks for the cost in the line and says how Space pays it in the hint', () => {
     const pay = frames.find(frame => frame.action_space === 'PAY_OR_NOT' && frame.projection.decision_context?.mana_cost);
     expect(pay).toBeDefined();

@@ -10,6 +10,7 @@ import {
 } from './decks';
 import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 import { deriveObservationNotes } from './log';
+import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 import { stepBoards, type StepBoard } from './board/boards';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
@@ -142,6 +143,8 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
+  /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
+  liveAnalysis = $state.raw<LiveAnalysis>(LIVE_ANALYSIS_OFF);
   /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
   stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
@@ -614,6 +617,7 @@ export class GameStore {
 
   private resetMatchState(): void {
     this.interruptedIdentity = null;
+    this.liveAnalysis = LIVE_ANALYSIS_OFF;
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;

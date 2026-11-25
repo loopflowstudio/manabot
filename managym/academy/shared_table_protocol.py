@@ -213,6 +213,17 @@ class SetStopsMessage(ProtocolModel):
     auto_pass: bool | None = None
 
 
+class ShowAnalysisMessage(ProtocolModel):
+    """Show or hide a policy's reading of the pilot's decisions in this game.
+    `policy` names a registered policy; omitted, the opponent's own or the
+    first that can read the game."""
+
+    type: Literal["show_analysis"]
+    grant_revision: UInt64 | None = None
+    shown: bool
+    policy: str | None = None
+
+
 class TransferPilotMessage(ProtocolModel):
     type: Literal["transfer_pilot"]
     grant_revision: UInt64
@@ -278,6 +289,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | PassTurnMessage
     | RetryMirrorMessage
     | SetStopsMessage
+    | ShowAnalysisMessage
     | TransferPilotMessage
     | AuthorBeliefMessage
     | ShareBeliefMessage
@@ -301,6 +313,7 @@ REQUEST_TYPES = (
     "pass_turn",
     "retry_mirror",
     "set_stops",
+    "show_analysis",
     "transfer_pilot",
     "author_belief",
     "share_belief",

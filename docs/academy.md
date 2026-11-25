@@ -239,8 +239,12 @@ digests wherever the source retained them, and saves what it verified to this tr
 directory as a finished recording. A snapshot replay carries its final digest.
 It opens as a **Recorded game**. The acting view hides the opponent’s hand.
 **Show both hands** includes both hands in the spectator response. The board
-draws the bottom seat’s cards and shows the top seat’s hand count. Branch
-seeds stay private in either view.
+draws the bottom seat’s cards; the top seat’s **Hand** count opens a list of
+its cards, by pointer or keyboard, as the graveyard does. Where the record
+re-dealt the position before a decision, the move list shows a neutral note
+in its place, such as **Branch · libraries reshuffled** or **Branch · hidden
+cards re-dealt**, which jumps to that decision. Branch seeds stay private in
+either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the
@@ -596,6 +600,32 @@ with several actions opens them beside the card; choose one, or press Escape to
 close the list without acting. A card with no action sends nothing when
 clicked.
 
+You can also play or cast from hand by dragging (mouse, pen or touch). Press a
+playable land or castable spell and drag it onto the battlefield: the full card
+follows the pointer — even when lifted from a covered fan — while its slot stays
+stepped back in your hand. Any lands the automatic payer would tap stay outlined
+on the board, and a dashed frame over the battlefield names what releasing does
+(**Play Island**, **Cast Lightning Bolt**, or **Choose how to play …** when the
+card has several legal offers). Over your hand, the rail or the bars, the frame
+softens and reads **Release to cancel**. Release over the battlefield to commit
+a single offer — the card travels from where you dropped it onto the stack or
+battlefield — or to open the card's choices at the drop point when it has
+several; choosing an offer commits it, while **Cancel** or Escape returns the
+card to your hand and restores focus to it. Release outside the battlefield, or
+press Escape while dragging, to return the card with nothing sent. If the server
+rejects a dropped play, the card returns to your hand and the notice explains
+why. Discard and "choose a card" prompts in hand, and choices in an out-of-board
+tray, stay click-only, and casting a spell stays separate from choosing its
+target.
+
+When a spell or ability asks for a target, click a legal target or pull a line
+from the source — the casting spell or ability on the stack, or the asked
+permanent on the battlefield — onto any legal permanent, player plate or stack
+entry (including non-spell abilities). A dashed outline marks each legal
+permanent while you drag. The outline turns solid when the line snaps to it.
+When the line snaps to a target, the board previews any lands it would tap.
+Release to choose that target, or release elsewhere or press Escape to cancel.
+
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
@@ -603,11 +633,11 @@ symbols, with any restriction or expiry written under them and wrapped within
 the plate ("Floating {R}{R} normally expires at step end" shows its pips, not
 braces, and is never cut off); open a graveyard or
 exile count to list its cards. A player who can be targeted has an
-outlined plate. Identical permanents with the same choices share a pile, its
-count after the top copy's name ("Forest ×4"; the copies beneath show no name of
-their own), and each copy remains its own control. Crowded rows shrink their cards
-and wrap onto a further line before anything scrolls, and each half gives the
-crowded row more of its height.
+outlined plate. Identical permanents with the same effective abilities, status
+and choices share a pile, its count after the top copy's name ("Forest ×4"; the
+copies beneath show no name of their own), and each copy remains its own
+control. Crowded rows shrink their cards and wrap onto a further line before
+anything scrolls, and each half gives the crowded row more of its height.
 
 Every card has a printed card's proportions (63:88). A permanent's name is on
 a bar above its art, wrapping to a second line rather than being cut; its mana
@@ -616,22 +646,46 @@ colours: a pale tint in light mode and a solid bar in dark mode, white a
 neutral ivory-grey and colourless a cool grey, a land the colour of its basic
 land types, and a card of several colours blended left to right as printed
 hybrid frames are. Power and toughness sit on a plate at the lower right, and
-on a row above it the permanent's state: attacking, blocking, damage marked on
-it, summoning sickness, counters and the keywords it has now (one it was
-granted is edged in green). Mana symbols carry their letter, and ◇ for
-colourless. A tapped permanent turns a quarter onto its side, in room its row
-keeps for it so it never covers a neighbour; its name bar stays across the
-top. An attacker steps toward the player it attacks and tilts a few degrees:
-one that tapped lies just past the quarter, a vigilant one stays upright.
-Something a spell on the stack targets has a dashed red edge. Cards in hand
-have the type line under the name and the cost on the art; a hand card's name
-stays on one line, shortened with an ellipsis when long, and its full name is
-in the inspection.
+above it sit the permanent's active state chips, in priority order: damage
+marked (`2 damage` in red), a small spiral mark when a creature is summoning
+sick, active restrictions and statuses (`Can't be blocked`, `Can't block`,
+`Can't attack or block`, `Doesn't untap`, `Must attack`, `Struck first`, or
+`No abilities` / `Lost base abilities`), counters (`+1/+1`, `Charge ×2`), and
+the effective battlefield keywords and keyword abilities it has now (evergreen
+keywords plus `Prowess`, `Ward`, and active `Firebending N`; anything granted
+by an effect or another permanent is edged in green). Mana symbols carry their
+letter, and ◇ for colourless. A tapped permanent turns a quarter onto its side,
+in room its row keeps for it so it never covers a neighbour; its name bar stays
+across the top.
+
+Battlefield chips show what applies right now rather than static printed text.
+For example, **Platypus-Bear** displays plain `Defender` when you have no
+Lesson in your graveyard and strikes `Defender` through in muted ink once a
+Lesson is in your graveyard to show it can attack; **Fire Nation Cadets**
+displays `Firebending 2` only while a Lesson is in your graveyard; **Mai,
+Jaded Edge** shows `Prowess`, and an Ally beside **Sokka, Tenacious Tactician**
+shows green-edged `Prowess` alongside granted `Menace`; printed and granted
+Ward show their cost (`Ward {2}`, `Ward—Pay 7 life`, `Ward—Discard a card`);
+and **Ty Lee, Chi Blocker** shows `Prowess` on the board while leaving `Flash`
+to the inspection. Permanents with different effective abilities or status
+never share a pile, so a vanilla 1/1 Soldier token stays separate from a
+Firebending 1 Soldier token. Attacking and blocking do not take chip space: an
+attacker steps toward the player it attacks and tilts a few degrees (one that
+tapped lies just past the quarter, a vigilant one stays upright), and a blocker
+is joined to its attacker by a line. Chips are placed whole and never clipped
+mid-word. A narrow card can show `Firebend 2` or `Ward`. Hover the chip or
+inspect the card for the full ability and Ward cost. Chips use the space beside
+power/toughness when available. Hover a trailing `+N` for the hidden badges.
+The inspection and the card’s accessible name include every badge. On a short
+tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
+Cards in hand have the type line under the name and the cost on the art; a hand
+card's name stays on one line, shortened with an ellipsis when long, and its
+full name is in the inspection.
 
 While you may act, what you can act on is raised and what you cannot steps
 back: a card in hand you cannot play now is dimmed most, a permanent of yours
 nothing acts on is slightly muted, and lands and the opponent's side are never
-dimmed. Summoning sickness is told by its label, not by more dimming. The
+dimmed. Summoning sickness is told by its spiral mark, not by more dimming. The
 selected card, such as the spell whose targets you are choosing, rises higher
 with a thin ink edge. In light mode the grounds are white and grey and what you
 act with is charcoal; in dark mode they are near-black and it is near-white.
@@ -639,17 +693,26 @@ Academy follows the system setting. Card and player names, life, and the
 rail's moves and legal choices are set in Spectral; everything else is in Work
 Sans. The top bar shows the connection only when it has a problem.
 
-Rest the pointer on a card for a moment, or focus it with the keyboard, to inspect it: its rules text, type line and cost,
-keywords with why it has each (printed, the effect that granted it, or
-"another ability" for a grant from another permanent's static ability), where its power and toughness come
-from (printed or set, counters, each effect by its source and duration, and
-whatever those do not explain as "other effects"), and its state. The
+Rest the pointer on a card for a moment, or focus it with the keyboard, to
+inspect it: its rules text, type line and cost, effective keywords and keyword
+abilities (including `Flash`, and `Defender · can attack anyway` when Defender
+is overridden) with why it has each (printed, the effect that granted it with
+source and duration, the counter for a keyword counter such as a double strike
+counter, or the permanent granting the ability, such as Sokka), where its power and toughness come from (printed or set,
+counters, each effect by its source and duration, and whatever those do not
+explain as "other effects"), and its full battlefield state (summoning sickness
+in words, attacking or blocking, active restrictions from static abilities or
+effects with their provenance, and ability loss). For example, a creature
+enchanted by Watery Grasp reads “Doesn’t untap · Watery Grasp”. Older recordings without
+extended permanent details still render plain `Defender`, effective keywords,
+recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
-instead, showing the last card you inspected. The top bar shows the turn. Along
-the bottom of the screen runs the step bar: one cell per step, a line between
-phases, the current step shaded, and in each cell the stop for your turn above
+until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane in the left sidebar
+instead, showing the last card you inspected. Along
+the bottom of the screen runs the step bar: the turn number and whose turn it is,
+then one cell per step, a line between
+phases, the current step shaded in that side's colour, and in each cell the stop for your turn above
 the step's name and the stop for the opponent's turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
@@ -692,7 +755,8 @@ The rail holds:
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
-  nine.
+  nine. During a live combat draft the per-creature answers fold under a closed
+  disclosure (see combat below).
 - **Moves**: the game's moves grouped by turn, each turn headed by whose turn
   it was. Each move names the player who made it; priority-stop automation is
   marked **auto** and never counts as your move. A run of the opponent's and
@@ -716,11 +780,24 @@ opaque and sit above the lines between targets, so a line never crosses them.
 
 Combat is drafted whole. At an attack, every creature that can attack is
 outlined; click one (or focus it and press Enter) to add it to the attack or
-leave it out. Drafted attackers are ringed with a dashed line and lean in, and
-a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
-rail. At a block, click a blocker, then the attacker it blocks; a blocker
-that can block only one attacker takes it at once, and the block's line is
-drawn. The prompt reads the whole plan ("Attack with 3 · not with
+leave it out, or press inside the battlefield rows and drag a box across the
+creatures you want. Every declarable creature touching the box highlights as you
+sweep and joins the drafted attack on release; dragging a box only adds (click a
+creature or **Clear the draft** to remove one), and box selection starts only
+inside the battlefield rows during an attack draft — never on player plates,
+your hand, the rail or the bars, and never for lands or cards that commit one
+action at a time. Drafted attackers are ringed with a dashed line and lean in,
+and a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, drag a declarable blocker onto an attacker it can block, or
+click the blocker and then the attacker. Dragging draws a live blocking line,
+lights up legal attackers and hides an already-assigned blocker's old line while
+you move it; release on a legal attacker to assign or move the block, or release
+elsewhere or press Escape to put it back without disturbing a blocker you
+clicked. On click, a blocker that can block only one attacker still takes it at
+once, and clicking still takes a block back. When combat preview is unavailable
+and blocks are asked one creature at a time, dragging from the blocker onto an
+attacker still draws a blocking line and submits that block. The prompt reads
+the whole plan ("Attack with 3 · not with
 Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
 nothing is declared while drafting. The engine still asks about one creature
 at a time: Academy's read-only combat preview replays the draft on a copy of
@@ -728,15 +805,30 @@ the game and returns the exact answers that declare it, or the first one it
 refuses and why (a lone blocker of a creature with menace, a creature that
 cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
-where the game stands. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. Each creature's own
-answers stay in the full list of legal choices. **Pass turn** (F6) passes
+where the game stands. While a priority stop updates, your draft and selected
+blocker stay in place. If the first declaration is refused at the same
+decision, you can edit the draft and confirm again. If a later declaration
+is refused, the board keeps the accepted declarations and lets you draft
+from that decision. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. While a draft is
+open in live play it is the only way to declare: each creature's own answers
+stay in the list of legal choices under a closed **Each creature's choice**
+disclosure and are not numbered keys. Replay and Study keep them listed, since
+recorded policy probabilities attach to them. **Pass turn** (F6) passes
 priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button
-(unless a control with its own action has focus), F6 passes the turn and Escape
-closes an open list. **Menu** holds the session controls, priority stops, the
-sharing and Study tools and feedback.
+(unless a control with its own action has focus), F6 passes the turn, `?` opens
+the shortcuts sheet (which also lists drag gestures) and Escape cancels an
+active drag or closes an open list — cancelling a drag does not also close a
+menu or clear a click-selected blocker. Dragging adds no actions a click or key
+cannot take: short clicks still act as clicks, floating card inspection stays
+closed mid-drag, a new frame, disconnect or opponent read-out cancels a drag
+with nothing sent, and read-only recordings and Watch never start a drag. With
+reduced motion, dragged cards, lines and selection boxes still follow the
+pointer directly, without the return-to-hand or post-drop travel transitions.
+**Menu** holds the session controls, priority stops, the sharing and Study
+tools and feedback.
 
 While disconnected or waiting for a submitted choice, the board remains
 readable and actions are unavailable. Reconnect or reload in the same tab to
@@ -756,14 +848,16 @@ outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
-(`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
+(`{1}{G}`). Point at the Cub in your hand, focus it, or drag it toward the
+battlefield. The lands the
 automatic payer would tap get a dashed outline and a mark with their order and
 what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. A planned land
 in a pile of identical lands leaves the pile while the plan is shown, so each
 planned land has its own outline and its mark sits at the same corner of its
 art. Nothing has
-happened yet; pointing and focusing send no action. Pointing at a row of **All
-legal choices** previews that choice the same way.
+happened yet; pointing, focusing and dragging before release send no action.
+Pointing at a row of **All legal choices**, or snapping a targeting line onto a
+target that previews a payment, previews that choice the same way.
 
 Cast the Cub. At the payment prompt the same lands stay dashed and the primary
 button reads **Pay {1}{G}**; its accessible name reads the plan, "Pay {1}{G} ·
@@ -938,7 +1032,8 @@ then turns itself off; the moves list says so ("Stopped once at Upkeep on the
 opponent's turn; that stop is now off"), marked as automation like the passes
 Academy makes for you. The Menu shows a once stop as checked. The stops are one
 Tab stop: arrow keys move between them, up and down between the two turns, and
-Space or Enter presses one. A recording's bar shows its stops read-only.
+Space or Enter presses one. Stops are a setting of live play: a recording's
+bar shows only the steps of the turn, with the current one marked.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless
@@ -1056,8 +1151,17 @@ game you played, **Review this game** on the result card opens it from the
 first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
-newest first, with filters for player, deck, status, result and date. **My games**
-narrows the list to this browser. A trained bot appears under its
+newest first, with filters for player, deck, status, result and date. Player 1
+is always on the play. A finished game you played shows its turns and how long
+it took, and how many of your choices were made with
+[analysis shown](#analysis-while-you-play). **My games** narrows the list to
+this browser, under **My record**: your completed games across sessions,
+grouped by opponent and by the two decks, with wins, losses and draws, the win
+rate with its 95% Wilson interval, and **With analysis**, the games among them
+with a choice made while analysis was shown. A game
+[played on](#analysis) from another is listed but not counted there.
+Draws count as games, not wins. Rows that differ only in seat or disclosure are
+combined. These are counts of recorded games, not a rating. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
 [launch a replay directly](#open-a-replay-directly). `/replay` alone lists
@@ -1068,7 +1172,7 @@ recent recordings.
 | Position | What the board shows |
 |---|---|
 | Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
-| Consequences | The recorded board after the action, with what it did in the rail's recap. |
+| Consequences | The board after the action, with what it did in the rail's recap. In a game you played this is your own view, your hand included, whoever acts next. |
 | Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
 The transport bar sits where live play has your hand's input:
@@ -1086,7 +1190,10 @@ tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It is
 open in Replay and folded in live play, where it counts decisions but past
 positions open only in Review after the game. Moves in the rail jump to their
-positions too. Keys never act while you type in a field.
+positions too; there each move is one line, numbered by turn, with the whole
+move in its tooltip, and the moves take the rail's remaining height. The rail
+draws the stack only while something is on it, and the answers only in the
+choices list. Keys never act while you type in a field.
 
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
@@ -1103,10 +1210,12 @@ choice's consequences), or a fixed seat (the default for a game you played).
 Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** appears only where spectator reveal is authorized; it does
-not enrich the bot's recorded evidence or acting-view history. Consequences and
-result boards use the recorded view of the seat named in the menu's
-perspective line when a private post-action view was not captured.
+**Show both hands** appears where spectator reveal is authorized: at Watch
+choices that captured a spectator view, and at every position of a game you
+played once it has finished. It does not enrich the bot's recorded evidence or
+acting-view history. In Watch and imported games, consequences and result
+boards use the recorded view of the seat named in the menu's perspective line
+when a private post-action view was not captured.
 
 **Menu** holds the recording's kind and status, each seat's identity (policy
 ID, runner, provenance), **Refresh saved head**, a note for the position,
@@ -1116,6 +1225,144 @@ A live decision already being produced may finish saving while you read; your
 selected board stays put. A pending Search timeout is retained across reload
 and shown with its message. At the live edge, **Retry search** explicitly
 retries that decision; browsing saved positions never retries it.
+
+#### Analysis
+
+An analysis reads a game you played against a policy: at each of your
+decisions with more than one legal action, what that policy would have done
+in your seat. Academy replays the game with the policy in your seat; it sees
+only what your seat saw, and the game follows the moves you made. Opening
+Review of your own game starts an analysis when the game has none yet: by your
+opponent's policy when it is a registered trained policy, otherwise by
+Academy's recommended policy, the one Setup offers first. Review is usable at
+once; **Analysing 34 of 81** counts up while the marks fill in.
+
+At one of your choices the heading reads **Analysis by** the policy, and every
+legal option carries its probability and the policy's estimate after it, 0 to
+100 from your seat. Your choice is labelled **you** and the policy's first
+choice **its choice**. An estimate after an option reads the policy at the
+next decision: your own when you choose next, otherwise the opponent's in a
+world re-dealt from what you knew, never the real hidden cards. With closed
+decklists nothing can be re-dealt, so options after which the opponent
+chooses have no estimate.
+
+Each of your moves in the rail reads **same** when you chose as the policy
+would and **differs** otherwise, with a small track of the two estimates on
+one 0–100 scale: the filled dot after your choice, the ring after its own.
+These are the policy's readings, not grades; a policy weaker than you will
+often differ for good reason.
+
+With an analysis, the **Decisions** strip draws the policy's estimate at each
+of your decisions on a fixed 0–100 axis with a rule at 50. Its caption names
+the measure: **Expected score** for a policy whose values are signed outcomes
+(a draw counts half), **Win chance** for one whose values are win logits.
+Dots mark where you and the policy chose differently.
+
+**Next key moment**, beside the replay's step buttons, jumps to the next of up
+to eight decisions worth a look,
+in game order: the five where the policy's first choice had the most
+probability over yours, and the three where its estimate moved most by your
+next decision. At one of them a line names why, such as **Key moment ·
+Differs · 62% on its first choice, 8% on yours** or **Its expected score moved
+48 → 71 by your next decision**. A reading that barely moves, as an untrained
+policy's does, has none.
+
+**See its line**, at any analysed decision of your own game, plays the
+policy's first choice there and carries on: the policy's first choice at each
+of your decisions and your opponent's own choice at theirs, to the end of the
+next turn or the end of the game. The board shows each move from your seat;
+**Previous** and **Next**, or the arrow keys, step through it, and **Return to
+the game**, or Escape, goes back to the decision. The line is one play-out of
+the real game's cards, not a forecast, and nothing about it is saved. Your
+opponent's moves are named once the game is over; in a game that stopped
+early they read **Opponent's move**. Priority passes fold into the move
+before them.
+
+**Play on from here**, at any of your decisions of a finished game you played,
+opens Play with that game's decks, cards and opponent and replays its moves up
+to the decision; **Play on** starts it, and from there you choose and the
+opponent plays as in any game. It is a new game in your history: Review names
+the game it came from, its row in Games reads **played on from another game**,
+and **My record** leaves it out, since its opening moves were not played in it.
+The moves before the decision are not listed in the new game's live move list;
+its Review lists them all. If this build no longer plays the old game the same
+way, Play says which step differs and nothing starts.
+
+**Analyse with…** in **Settings** runs any other registered trained policy; each
+run is saved beside the game, and **Shown** switches between them. Analyses
+are never part of the game's recording or its exports. Readers of a shared
+finished game see its saved analyses; only you can start one.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No analysis yet · Analyse with… in Settings** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
+| **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
+| A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
+
+A policy with Search is not offered: Search plays out from the real hidden
+cards. One analysis runs per game at a time; a stopped or interrupted game is
+analysed up to its last recorded position.
+
+#### Analysis while you play
+
+**Show analysis**, in the top bar's Settings during your game (the bar then
+shows an **Analysis on** chip that turns it off), reads your
+decisions as you play. It is off at the start of every game. Turned on, it
+reads with your opponent's policy when that is a registered trained policy,
+otherwise with Academy's recommended policy; with more than one, a menu
+beside the switch changes it. The reading is the same as Review's: the
+heading reads **Analysis by** the policy, and each option on its card and row
+carries the policy's probability and its estimate after it. Nothing is
+chosen, raised or reordered for you, and no key plays the policy's choice.
+
+Turning it on also opens the strip under the board, which draws the policy's
+estimate from your seat at each of your decisions this game, those made
+before you turned it on included (read after the fact, so they mark nothing), on Review's
+fixed 0–100 axis; hovering it names the nearest point by the move before it
+and its score. The line keeps its points when you turn analysis off and on
+again, and starts over if you switch to another policy.
+
+Academy first replays the game so far with the policy in your seat, which takes
+a few seconds, then reads each new decision once its board is on the table.
+The board never waits for a reading: it arrives in its own message after the
+decision, and a choice you make before it arrives reads as made without it.
+
+Each choice you commit after its reading reached you is saved as made with
+analysis shown. Review marks that move **analysis shown**, **This game**
+counts them, and Games shows them on the game's row and in **My record**.
+Turning **Show analysis** off stops the marking from your next decision; it
+never unmarks a choice. A game you play without it saves exactly as before.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No registered policy can read this game** under the switch | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| A reason under the switch, and no probabilities | The policy failed, or the game could not be replayed here. Your game goes on. | Turn the switch off and on to start again. |
+
+#### The game in numbers
+
+The result card of a game you played ends with one line of its numbers, such as
+**9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
+2 times**. In Review, **This game** in **Settings** gives turns, whether you were on
+the play or the draw and how long the game took, and a table of both seats:
+
+| Count | What it counts |
+|---|---|
+| Lands played | Your decisions that played a land. |
+| Spells cast | Cards you cast. Copies of a spell are never cast and do not count. |
+| Attacks | Your decisions that declared an attacker. |
+| Cards drawn | Cards drawn from your library after the opening hand. |
+| Damage dealt | Damage your sources dealt to your opponent. |
+| Damage taken | Damage dealt to you by any source, your own included. |
+
+With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
+chose as Reader would: 8 of 20**, where the policy's first choice was yours,
+and the policy's estimate from your seat at the start, at its highest and at
+the end. A game with choices made while [analysis was
+shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
+decisions**. A game that stopped early is counted to where it stopped. Academy
+counts each game once, by replaying it when it ends. An older game is counted
+the first time you open it. A game recorded by another build has no counts.
 
 #### Continue a live Watch
 
@@ -1144,14 +1391,24 @@ At an eligible choice, **Try another line** pauses playback and live production
 and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
-A fresh branch requires the server's retained Study state. If that state has
-expired, recorded playback remains available.
+A fresh branch requires the server's retained Study state, so the button
+appears only while that state exists; once it has expired, recorded playback
+remains available, and in your own games **Play on from here** starts a new
+game from the decision instead.
 
 Older recordings use the same viewer with the frames they retained. Missing
 legal offers, Study support, consequences or policy outputs are explicitly
-unavailable; they are never inferred from a later frame or a rerun. Reading
-an existing recording needs no original checkpoint or policy provider. Import
-verification and live continuation have their own prerequisites below.
+unavailable; they are never inferred from a later frame. Reading an existing
+recording needs no original checkpoint or policy provider. Import verification
+and live continuation have their own prerequisites below.
+
+A game you played is also played again from its seed, decks and actions as you
+step through it, which gives your own view at every position and both hands
+after the game. Each step is checked against the stored track: the acting
+board and the action must match, and the final board and result. Where they
+stop matching, or for a game recorded in another world or card set, the board
+is the recorded one, with a line saying how far your own view was replayed and
+which world recorded the game.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same

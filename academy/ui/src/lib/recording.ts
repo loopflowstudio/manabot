@@ -30,11 +30,14 @@ export interface BotDecision {
 export interface Position {
   key: string;
   kind: 'choice' | 'consequences' | 'state';
+  /** The trace event a choice decides or a consequence follows; the final state's is the event count. */
+  event?: number;
   turn: number | null;
   phase: string | null;
   step: string | null;
   actor: number | null;
   automatic: boolean;
+  /** Both hands may show here: a Watch spectator view, or any position of a complete game you played. */
   can_reveal: boolean;
   /** The revision the position's decision or transition starts at; null at the latest state. */
   revision?: number | null;
@@ -42,13 +45,22 @@ export interface Position {
   label?: string | null;
   /** The chooser's recorded value at a choice, when one was retained. */
   value?: number | null;
+  /** How an imported record re-dealt the position before this choice, in order. */
+  branched?: BranchKind[] | null;
+  /** The person chose here with a live analysis shown. */
+  analysis_shown?: boolean;
 }
+/** A record intervention that branches the position from the game it came from. */
+export type BranchKind = 'determinize' | 'shuffle_libraries' | 'reseed';
 export interface RecordingIndex {
   id: string;
   positions: Position[];
   total: number;
   next_offset: number | null;
   revision: number | null;
+  /** When the game started and, once over, ended (ISO 8601; absent from legacy records). */
+  started_at?: string | null;
+  ended_at?: string | null;
   status: 'finished' | 'waiting' | 'interrupted';
   can_produce: boolean;
   mirror?: (SearchConfig | null)[];
@@ -58,6 +70,8 @@ export interface RecordingIndex {
   players: RecordedPlayer[];
   source_kind: string | null;
   record_stop?: {status: 'complete' | 'interrupted' | 'diverged'; index: number; reason: string | null} | null;
+  /** A game played on from another: moves before `event` (on `turn`) are that game's. */
+  played_from?: {trace_id: string; event: number; turn: number | null} | null;
   /** Seat 2's configured checkpoint, for records that predate recorded players. */
   opponent?: TraceConfig['opponent'];
   opponent_checkpoint?: TraceConfig['opponent_checkpoint'];
@@ -79,6 +93,8 @@ export interface RecordedPosition extends Position {
   cursor: number;
   transition_start: number;
   consequences_recorded: boolean;
+  /** Why this board is the stored track's rather than your replayed view; null where it was replayed or never could be. */
+  views_stopped?: string | null;
 }
 
 /**
