@@ -211,7 +211,7 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
             template.owner,
             template.definition_id,
             template.copiable_definition(),
-            true,
+            managym::state::game_object::ObjectKind::Token,
         ),
         managym::state::game_object::Object::spell_copy(
             template.clone(),
@@ -347,7 +347,7 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
             template.owner,
             template.definition_id,
             template.copiable_definition(),
-            true,
+            managym::state::game_object::ObjectKind::Token,
         ),
         template.clone(),
         managym::state::game_object::Object::spell_copy(

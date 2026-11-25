@@ -69,6 +69,11 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         red_white_spirit(),
         rat(),
         jace(),
+        token("token.ninja_2_1_u", "aeec04b1-475c-4e55-b72f-327ea5258146", creature(face("Ninja", [CardType::Creature], &["Ninja"], ""), 2, 1, [Color::Blue])),
+        token("token.ajanis_pridemate", "b0819e8e-fb7e-43c7-a7cf-d768f43193ac", PrintedCharacteristics {
+            abilities: vec![Ability::when_you_gain_life(Effect::put_counters(ObjectSelector::This, managym_state::permanent::CounterKind::PlusOnePlusOne, 1))],
+            ..creature(face("Ajani's Pridemate", [CardType::Creature], &["Cat", "Soldier"], "Whenever you gain life, put a +1/+1 counter on this token."), 2, 2, [Color::White])
+        }),
         token(
             "token.illusion_1_1_u",
             "7bda0b63-fd0f-495d-9eb0-20057571c0ee",

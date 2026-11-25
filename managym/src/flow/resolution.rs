@@ -1995,6 +1995,14 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
+            Effect::MayCastExiled { what, if_declined } => {
+                let decision = self.select(what, frame).into_iter().find(|object| self.state.zones.zone_of(*object) == Some(ZoneType::Exile))
+                    .map(|object| Decision::CastDuringResolution {
+                        player: frame.controller, paid: true, spends: None, offer: ResolutionCastOffer::ExactExiled { object, if_declined: if_declined.clone() }
+                    }).filter(|decision| !self.resolution_cast_candidates(decision).is_empty());
+                if decision.is_none() { frame.prepend_effects(if_declined.iter().cloned()); }
+                decision
+            }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
                 // A spell's reflexive trigger has its card as its source.
@@ -2052,6 +2060,10 @@ impl Game {
                 // loses via state-based actions (CR 704.5c), same as the draw step.
                 let count = self.effect_value(count, frame).max(0) as usize;
                 self.draw_cards(frame.controller, count);
+                None
+            }
+            Effect::CreateEmblem { key } => {
+                self.create_emblem(key, frame.controller);
                 None
             }
             Effect::CreateToken {
@@ -2631,6 +2643,7 @@ impl Game {
                 }
                 _ => Vec::new(),
             },
+            ObjectSelector::LibraryTop => self.state.zones.top(ZoneType::Library, frame.controller).into_iter().collect(),
             ObjectSelector::ExiledWithSource => frame
                 .source_ref()
                 .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),

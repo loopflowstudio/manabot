@@ -302,7 +302,7 @@ impl Game {
         for (object_id, object) in self.state.latest_objects() {
             let zone = self.state.zones.zone_of(object_id);
             let ceases = match object.kind() {
-                ObjectKind::Card => false,
+                ObjectKind::Card | ObjectKind::Emblem => false,
                 ObjectKind::Token => !matches!(zone, Some(ZoneType::Battlefield) | None),
                 ObjectKind::SpellCopy if zone == Some(ZoneType::Exile) => {
                     self.preparation_source(object_id).is_none()

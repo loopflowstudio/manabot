@@ -419,7 +419,7 @@ fn layer_fixture(
         old.owner,
         old.definition_id,
         Arc::new(definition),
-        old.kind() == ObjectKind::Token,
+        old.kind(),
     );
     s.game_mut().state[object_id] = object;
     id

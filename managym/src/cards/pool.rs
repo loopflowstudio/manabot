@@ -42,7 +42,7 @@ fn describe() -> ContentPool {
     let mut definitions = content
         .definition_entries()
         .map(|(card_def_id, definition)| {
-            let reason = if definition.is_token {
+            let reason = if definition.kind == crate::state::game_object::ObjectKind::Emblem { Some("An emblem in the command zone".to_owned()) } else if definition.kind == crate::state::game_object::ObjectKind::Token {
                 Some("A token, created by its card; not a deck entry".to_owned())
             } else if content.front_face(card_def_id).is_some() {
                 Some("The back face of a double-faced card; not a deck entry".to_owned())

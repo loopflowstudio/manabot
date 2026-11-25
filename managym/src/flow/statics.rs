@@ -522,7 +522,7 @@ impl Game {
         &self,
         condition: &Condition,
         controller: PlayerId,
-        source: PermanentId,
+        source: ObjectId,
     ) -> bool {
         debug_assert!(!matches!(
             condition,
@@ -537,7 +537,7 @@ impl Game {
             condition,
             controller,
             None,
-            self.permanent_object(source),
+            Some(source),
             None,
         )
     }
@@ -866,7 +866,7 @@ impl Game {
         };
         super::layers::matches_static_scope(
             scope,
-            source,
+            Some(source),
             controller,
             self.attached_permanent(source),
             target,

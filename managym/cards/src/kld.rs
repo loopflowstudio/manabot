@@ -13,6 +13,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        chandra_torch_of_defiance(),
         cultivators_caravan(),
         dramatic_reversal(),
         fumigate(),
@@ -208,5 +209,24 @@ fn cloudblazer() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+fn chandra_torch_of_defiance() -> CardDefinition {
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "kld.chandra_torch_of_defiance", scryfall_id: "ff8086cd-b868-4f4e-823e-2635ad7ebc07",
+        printed: PrintedCharacteristics {
+            name: "Chandra, Torch of Defiance".into(), types: CardTypes::new([CardType::Planeswalker]), supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Chandra".into()], mana_cost: Some(ManaCost::parse("{2}{R}{R}")), loyalty: Some(4),
+            text_box: "+1: Exile the top card of your library. You may cast that card. If you don't, Chandra deals 2 damage to each opponent.\n+1: Add {R}{R}.\n−3: Chandra deals 4 damage to target creature.\n−7: You get an emblem with \"Whenever you cast a spell, this emblem deals 5 damage to any target.\"".into(), 
+            activated_abilities: vec![
+                loyalty(1, vec![Effect::exile(ObjectSelector::LibraryTop), Effect::MayCastExiled { what: ObjectSelector::Moved,
+                    if_declined: vec![Effect::DealDamageToPlayer {player: managym_state::ability::PlayerSelector::EachOpponent, amount: 2.into()}]}]),
+                loyalty(1, vec![Effect::add_mana(Mana::parse("RR"))]),
+                loyalty(-3, vec![Effect::deal_damage(4, ObjectSelector::Target(TargetSpec::Creature))]),
+                loyalty(-7, vec![Effect::CreateEmblem { key: "emblem.chandra_torch_of_defiance".into() }]),
+            ], ..Default::default()
+        }, ..Default::default()
     }
 }

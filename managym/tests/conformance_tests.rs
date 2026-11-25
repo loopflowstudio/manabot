@@ -201,7 +201,7 @@ fn every_registered_real_card_matches_scryfall() {
 
     for def in registry.definitions() {
         let name = def.name.as_str();
-        if def.is_token {
+        if def.kind != managym::state::game_object::ObjectKind::Card {
             continue;
         }
         if NOT_REAL_CARDS.contains(&name) {

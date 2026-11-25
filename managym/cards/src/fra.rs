@@ -20,6 +20,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        ajani_resolute(),
         infinite_coursework(),
         paradox_shaper(),
         woodwork_prodigy(),
@@ -148,7 +149,6 @@ fn tomik_orzhov_lawmage() -> CardDefinition {
 }
 
 fn the_theorist() -> CardDefinition {
-    use managym_state::card::LoyaltyCost;
     let text_box = "At the beginning of each opponent's draw step, you draw a card.\n+1: Create a 1/1 blue Illusion creature token.\n−2: For each opponent, return up to one target artifact or creature that player controls to its owner's hand.\n−6: Draw three cards. Then put X +1/+1 counters on each creature you control, where X is the number of cards in your hand.";
     let bounce = TargetSpec::PermanentOpponentControls {
         predicate: CardPredicate {
@@ -156,11 +156,7 @@ fn the_theorist() -> CardDefinition {
             ..Default::default()
         },
     };
-    let loyalty = |cost, effects| ActivatedAbilityDefinition {
-        loyalty: Some(LoyaltyCost::Fixed(cost)),
-        effects,
-        ..Default::default()
-    };
+    let loyalty = ActivatedAbilityDefinition::loyalty;
     CardDefinition {
         key: "fra.the_theorist_jace_beleren",
         scryfall_id: "20bb8c55-4b0b-425f-8201-b54fa2fdde86",
@@ -1576,5 +1572,22 @@ fn way_of_the_necromancer() -> CardDefinition {
             ..Default::default()
         },
         ..Default::default()
+    }
+}
+
+fn ajani_resolute() -> CardDefinition {
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "fra.ajani_resolute", scryfall_id: "a5e1a7dd-8c49-4435-935c-bcc78704082b",
+        printed: PrintedCharacteristics {
+            name: "Ajani Resolute".into(), types: CardTypes::new([CardType::Planeswalker]), supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Ajani".into()], mana_cost: Some(ManaCost::parse("{1}{W}")), loyalty: Some(2),
+            text_box: "Whenever you gain life, put a loyalty counter on Ajani.\n0: You gain 1 life.\n−4: Create a 2/2 white Cat Soldier creature token named Ajani's Pridemate with \"Whenever you gain life, put a +1/+1 counter on this token.\"\n−10: You get an emblem with \"Creatures you control get +2/+2.\"".into(), abilities: vec![Ability::when_you_gain_life(Effect::put_counters(ObjectSelector::This, CounterKind::Loyalty, 1))],
+            activated_abilities: vec![
+                loyalty(0, vec![Effect::gain_life(1)]),
+                loyalty(-4, vec![Effect::create_tokens("token.ajanis_pridemate", 1)]),
+                loyalty(-10, vec![Effect::CreateEmblem { key: "emblem.ajani_resolute".into() }]),
+            ], ..Default::default()
+        }, ..Default::default()
     }
 }

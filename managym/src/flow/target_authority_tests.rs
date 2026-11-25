@@ -99,9 +99,7 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     let object = game.move_object(object, ZoneType::Graveyard);
     let object = game.move_object(object, ZoneType::Battlefield);
     assert!(object.generation() > 0);
-    let source = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let source = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     let expected = format!(
         "{{\"card\":{},\"controller\":0,\"lki\":{}}}",
         object.slot(),
@@ -110,8 +108,8 @@ fn trigger_source_snapshot_keeps_v16_bytes_after_departure() {
     assert_eq!(serde_json::to_string(&source).unwrap(), expected);
 
     game.move_object(object, ZoneType::Graveyard);
-    assert!(game.state.object(source.lki.object).is_err());
-    assert_eq!(source.lki.object, object);
+    assert!(game.state.object(source.object).is_err());
+    assert_eq!(source.object, object);
     assert_eq!(serde_json::to_string(&source).unwrap(), expected);
 }
 
@@ -159,8 +157,8 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
         Some(first)
     );
     let sources = game.trigger_ability_sources(&event);
-    assert!(sources.iter().any(|source| source.lki.object == original));
-    assert!(!sources.iter().any(|source| source.lki.permanent == second));
+    assert!(sources.iter().any(|source| source.object == original));
+    assert!(!sources.iter().any(|source| source.lki.as_ref().is_some_and(|lki| lki.permanent == second)));
     assert!(game.state.object(*became).is_err());
     let fork = game.clone();
     assert_eq!(
@@ -173,7 +171,7 @@ fn cr_400_zone_event_keeps_its_departure_after_a_later_death() {
     assert!(!game
         .trigger_ability_sources(hand_event)
         .iter()
-        .any(|source| source.lki.object == object));
+        .any(|source| source.object == object));
 }
 
 #[test]
@@ -983,16 +981,12 @@ fn retained_departure_predicate_uses_departing_copy_after_reentry() {
             card_type: Some(CardType::Land),
             ..Default::default()
         }));
-    let printed = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let printed = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     assert_eq!(game.additional_trigger_times(&printed), 0);
 
     let template = game.state[grantor].clone();
     game.state[object].become_copy_of(&template, &[]);
-    let source = TriggerSourceSnapshot {
-        lki: game.snapshot_current_permanent(object).unwrap(),
-    };
+    let source = TriggerSourceSnapshot::from(game.snapshot_current_permanent(object).unwrap());
     let graveyard = game.move_object(object, ZoneType::Graveyard);
     assert_eq!(game.additional_trigger_times(&source), 1);
     let reentered = game.move_object(graveyard, ZoneType::Battlefield);

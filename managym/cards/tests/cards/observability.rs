@@ -3319,7 +3319,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
     for definition in tokens {
         let row = pack.token_id(definition.key).unwrap();
         let token = pack.definition(row).unwrap();
-        assert!(token.is_token, "{}", token.key);
+        assert!(token.kind == managym_state::game_object::ObjectKind::Token, "{}", token.key);
         let row = row.0 as i32;
         let referencing = catalog
             .definition_ref_source_tokens

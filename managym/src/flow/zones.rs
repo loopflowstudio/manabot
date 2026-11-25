@@ -412,6 +412,23 @@ impl Game {
             .find_map(|object| self.lookup_current_permanent(object).ok())
     }
 
+    pub(crate) fn create_emblem(&mut self, key: &str, controller: PlayerId) {
+        let id = self.state.id_gen_mut().next_id();
+        let emblem = default_content_pack().instantiate_emblem(key, controller, id).expect("registered emblem");
+        let object = self.add_object(emblem);
+        self.state.place_object(object, controller, ZoneType::Command);
+        self.capture_object_move(object, None, Some(ZoneType::Command), controller);
+    }
+
+    /// CR 114.4. Only emblems in the command zone contribute these abilities.
+    pub(crate) fn emblems(&self) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
+        [PlayerId(0), PlayerId(1)].into_iter().flat_map(|controller| {
+            self.state.zones.zone_objects(ZoneType::Command, controller).iter().copied()
+                .filter(|&object| self.state[object].kind() == crate::state::game_object::ObjectKind::Emblem)
+                .map(move |object| (controller, object))
+        })
+    }
+
     pub(crate) fn prepare_token(&mut self, key: &str, controller: PlayerId) -> Option<ObjectId> {
         let public_id = self.state.id_gen_mut().next_id();
         let Some(object) = default_content_pack().instantiate_token(key, controller, public_id)
@@ -445,6 +462,23 @@ impl Game {
     /// appearance through its storage slot. `exceptions` become part of the
     /// token's copiable values after the source's own (CR 707.9b); the
     /// token's `CopyEffect` records both and the definition at the root.
+    pub(crate) fn create_emblem(&mut self, key: &str, controller: PlayerId) {
+        let id = self.state.id_gen_mut().next_id();
+        let emblem = default_content_pack().instantiate_emblem(key, controller, id).expect("registered emblem");
+        let object = self.add_object(emblem);
+        self.state.place_object(object, controller, ZoneType::Command);
+        self.capture_object_move(object, None, Some(ZoneType::Command), controller);
+    }
+
+    /// CR 114.4. Only emblems in the command zone contribute these abilities.
+    pub(crate) fn emblems(&self) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
+        [PlayerId(0), PlayerId(1)].into_iter().flat_map(|controller| {
+            self.state.zones.zone_objects(ZoneType::Command, controller).iter().copied()
+                .filter(|&object| self.state[object].kind() == crate::state::game_object::ObjectKind::Emblem)
+                .map(move |object| (controller, object))
+        })
+    }
+
     pub(crate) fn prepare_token_copy(
         &mut self,
         values: &crate::state::game_object::CopiableValues,
@@ -534,7 +568,7 @@ impl Game {
             controller,
             self.state[source].definition_id,
             program,
-            false,
+            crate::state::game_object::ObjectKind::Card,
         );
         let copy = Object::spell_copy(copy, id, controller);
         let object = self.add_object(copy);

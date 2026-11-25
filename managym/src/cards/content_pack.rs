@@ -20,10 +20,10 @@ use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
     card::{
-        CardDefId, CardDefinition, CastOption, ObjectDefinition, PrintedCharacteristics,
+        CardDefId, CardDefinition, CastOption, EmblemDefinition, ObjectDefinition, PrintedCharacteristics,
         SpellProfile, TokenDefinition,
     },
-    game_object::{CopiableValues, Object, ObjectLki, PlayerId, PublicId, TransformingFaces},
+    game_object::{CopiableValues, Object, ObjectKind, ObjectLki, PlayerId, PublicId, TransformingFaces},
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -48,6 +48,7 @@ pub struct ContentPackManifest {
 pub struct ContentPack {
     pub schema_version: u32,
     cards_by_name: BTreeMap<String, CardDefId>,
+    emblems_by_key: BTreeMap<&'static str, CardDefId>,
     tokens_by_key: BTreeMap<&'static str, CardDefId>,
     definitions: Vec<ObjectDefinition>,
     names: OnceLock<Arc<NameVocabulary>>,
@@ -69,7 +70,7 @@ impl ContentPack {
         Arc::clone(self.names.get_or_init(|| {
             let mut names = BTreeMap::new();
             for (id, card) in self.definition_entries() {
-                if card.is_token
+                if card.kind != ObjectKind::Card
                     || (card.scryfall_id.is_none()
                         && card.key.is_empty()
                         && self.front_face(id).is_none())
@@ -147,12 +148,14 @@ impl Default for ContentPack {
             .chain(&fixtures)
             .map(Row::Card)
             .chain(managym_cards::token_catalog().iter().map(Row::Token))
+            .chain(managym_cards::emblem_catalog().iter().map(Row::Emblem))
             .collect::<Vec<_>>();
         rows.sort_by(|left, right| (left.name(), left.key()).cmp(&(right.name(), right.key())));
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             cards_by_name: BTreeMap::new(),
             tokens_by_key: BTreeMap::new(),
+            emblems_by_key: BTreeMap::new(),
             names: OnceLock::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
@@ -162,6 +165,10 @@ impl Default for ContentPack {
             match row {
                 Row::Card(card) => out.register_card(card.clone()),
                 Row::Token(token) => out.register_token(token),
+                Row::Emblem(emblem) => out.register(ObjectDefinition {
+                    key: emblem.key, scryfall_id: None, printed: Arc::new(emblem.printed.clone()),
+                    kind: ObjectKind::Emblem, back_face: None,
+                }),
             }
         }
         out.register(managym_cards::ragnarok());
@@ -173,6 +180,7 @@ impl Default for ContentPack {
 enum Row<'a> {
     Card(&'a CardDefinition),
     Token(&'a TokenDefinition),
+    Emblem(&'a EmblemDefinition),
 }
 
 impl Row<'_> {
@@ -180,6 +188,7 @@ impl Row<'_> {
         match self {
             Self::Card(card) => &card.name,
             Self::Token(token) => &token.name,
+            Self::Emblem(emblem) => &emblem.printed.name,
         }
     }
 
@@ -187,6 +196,7 @@ impl Row<'_> {
         match self {
             Self::Card(card) => card.key,
             Self::Token(token) => token.key,
+            Self::Emblem(emblem) => emblem.key,
         }
     }
 }
@@ -230,12 +240,12 @@ impl ContentPack {
                 .try_into()
                 .expect("content pack exceeds CardDefId capacity"),
         );
-        if definition.is_token {
+        if definition.kind != ObjectKind::Card {
+            let keys = if definition.kind == ObjectKind::Emblem { &mut self.emblems_by_key } else { &mut self.tokens_by_key };
             assert!(
-                self.tokens_by_key
-                    .insert(definition.key, definition_id)
+                keys.insert(definition.key, definition_id)
                     .is_none(),
-                "duplicate token definition {}",
+                "duplicate object definition {}",
                 definition.key
             );
         } else {
@@ -354,7 +364,7 @@ impl ContentPack {
                             "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
                             "ward": card.ward().and_then(PaymentCost::mana),
-                            "is_token": card.is_token,
+                            "is_token": card.kind == ObjectKind::Token,
                         });
                         if let Some(loyalty) = card.loyalty {
                             public["printed_loyalty"] = loyalty.into();
@@ -427,7 +437,7 @@ impl ContentPack {
             key: "",
             scryfall_id: None,
             printed: card.copiable_definition(),
-            is_token: !card.is_card(),
+            kind: card.kind(),
             back_face: self
                 .transforming_faces(card)
                 .filter(|faces| !faces.back_up)
@@ -450,7 +460,7 @@ impl ContentPack {
         if object.copy().is_none()
             && object.form_faces().is_none()
             && self.definition(object.definition_id).is_some_and(|row| {
-                row.is_token != object.is_card() && &row.printed == object.copiable_face()
+                row.kind == object.kind() && &row.printed == object.copiable_face()
             })
         {
             return None;
@@ -492,6 +502,10 @@ impl ContentPack {
         self.instantiate_row(self.token_id(key)?, owner, object_id)
     }
 
+    pub fn instantiate_emblem(&self, key: &str, owner: PlayerId, id: PublicId) -> Option<Object> {
+        self.instantiate_row(*self.emblems_by_key.get(key)?, owner, id)
+    }
+
     fn instantiate_row(
         &self,
         definition_id: CardDefId,
@@ -504,7 +518,7 @@ impl ContentPack {
             owner,
             definition_id,
             Arc::clone(&row.printed),
-            row.is_token,
+            row.kind,
         ))
     }
 }

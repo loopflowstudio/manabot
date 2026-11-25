@@ -1196,6 +1196,8 @@ pub enum ObjectSelector {
     Remembered,
     /// Cards in exile linked to the exact ability source (CR 607.2a).
     ExiledWithSource,
+    /// The top object of the resolving player's library.
+    LibraryTop,
     /// The object the source Aura or Equipment is attached to.
     Attached,
     /// The token this resolution created last ("that token").
@@ -1730,6 +1732,8 @@ pub enum Effect {
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
     CastLibraryTopFree,
+    /// Offer the exact exiled card for its normal costs during resolution.
+    MayCastExiled { what: ObjectSelector, if_declined: Vec<Effect> },
     /// You may cast a matching spell from your hand without paying its mana cost.
     CastFromHandFree {
         predicate: CardPredicate,
@@ -1849,6 +1853,8 @@ pub enum Effect {
         player: PlayerSelector,
         amount: EffectValue,
     },
+    /// Create the emblem with these catalog abilities in your command zone.
+    CreateEmblem { key: String },
     /// Create `count` tokens from the token definition keyed `token`
     /// (`token.<name>`), under the resolving player's control, `count` read
     /// as the instruction resolves. Serialized as `token_name`, the learning
@@ -2442,6 +2448,7 @@ impl Effect {
                 ..
             } => then.iter().chain(otherwise).any(test),
             Self::OptionalManaPaymentX { if_paid: effects }
+            | Self::MayCastExiled { if_declined: effects, .. }
             | Self::ForEachTarget { effects }
             | Self::TargetClause { effects, .. }
             | Self::ForPlayer { effects, .. }
@@ -2471,6 +2478,7 @@ impl Effect {
             }
             | Effect::Sacrifice { what: selector, .. }
             | Effect::Move { what: selector, .. }
+            | Effect::MayCastExiled { what: selector, .. }
             | Effect::Prepare { what: selector }
             | Effect::Unprepare { what: selector }
             | Effect::Tap { what: selector }
@@ -2649,12 +2657,14 @@ impl Effect {
             | Effect::CastFromHandFree { .. }
             | Effect::CastFromGraveyard { .. }
             | Effect::CastLibraryTopFree
+            | Effect::MayCastExiled { .. }
             | Effect::WhenYouDo { .. }
             | Effect::TriggerModes { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchDistinctNames { .. }
             | Effect::DrawCards { .. }
+            | Effect::CreateEmblem { .. }
             | Effect::CreateToken { .. }
             | Effect::ExileMeldPair { .. }
             | Effect::MeldExiled { .. }
@@ -3254,7 +3264,7 @@ pub struct EffectiveTrigger {
 /// permanents can receive the same static grant at one timestamp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct GrantClock {
-    pub grantor: crate::game_object::PermanentId,
+    pub grantor: Option<crate::game_object::PermanentId>,
     pub timestamp: crate::game_object::PublicId,
     pub static_slot: Option<usize>,
     pub ability_index: usize,

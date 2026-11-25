@@ -129,6 +129,8 @@ mod tle;
 mod tmp;
 mod tmt;
 mod tokens;
+mod emblems;
+pub use emblems::emblem_catalog;
 mod tsp;
 mod ulg;
 mod usg;

@@ -91,7 +91,7 @@ pub(super) struct Context<'a> {
 /// first application to objects (CR 613.6). Resolved records already own targets.
 #[derive(Clone)]
 struct Node {
-    source: PermanentId,
+    source: ObjectId,
     key: Vec<usize>,
     timestamp: PublicId,
     targets: Option<Vec<PermanentId>>,
@@ -310,7 +310,8 @@ impl Node {
     /// Counters and resolved records already bind one affected object; their
     /// existence and membership no longer depend on a generating static ability.
     fn resolved(
-        source: PermanentId,
+        source: ObjectId,
+        target: PermanentId,
         key: Vec<usize>,
         timestamp: PublicId,
         part: (Layer, Operation),
@@ -319,7 +320,7 @@ impl Node {
             source,
             key,
             timestamp,
-            targets: Some(vec![source]),
+            targets: Some(vec![target]),
             plan: Arc::new(SourcePlan::on_source(vec![part]).summarize()),
         }
     }
@@ -473,7 +474,7 @@ impl<'a> Context<'a> {
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
                     nodes.push(Node::resolved(
-                        id,
+                        p.object, id,
                         vec![slot, usize::MAX - 1, kind as usize],
                         p.keyword_counter_timestamps
                             .get(&kind)
@@ -496,11 +497,25 @@ impl<'a> Context<'a> {
                     Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
                 };
                 nodes.push(Node::resolved(
-                    id,
+                    p.object, id,
                     vec![slot, usize::MAX, i],
                     record.timestamp,
                     (layer, operation),
                 ));
+            }
+        }
+        for (_, source) in game.emblems() {
+            let emblem = &game.state[source];
+            for (index, ability) in emblem.statics.iter().enumerate() {
+                let entry = StaticEntry {
+                    key: vec![usize::MAX, index, source.slot()], timestamp: emblem.id, ability: ability.clone()
+                };
+                if let Some(node) = context.node(source, &entry) {
+                    context.reads_mana |= node.reads.mana;
+                    context.reads_tapped |= node.reads.tapped;
+                    context.reads_life |= node.reads.life;
+                    nodes.push(node);
+                }
             }
         }
         if !retain_sources {
@@ -620,7 +635,7 @@ impl<'a> Context<'a> {
         let nodes = object
             .statics
             .iter()
-            .filter_map(|entry| self.node(id, entry))
+            .filter_map(|entry| self.node(permanent.object, entry))
             .collect();
         SourceSeed {
             source: source.clone(),
@@ -686,7 +701,7 @@ impl<'a> Context<'a> {
             }
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
-                    if let Some(node) = self.node(id, entry) {
+                    if let Some(node) = self.node(self.game.live_permanent(id).object, entry) {
                         self.reads_mana |= node.reads.mana;
                         self.reads_tapped |= node.reads.tapped;
                         self.reads_life |= node.reads.life;
@@ -802,10 +817,9 @@ impl<'a> Context<'a> {
 
     fn exists(&self, node: &Node) -> bool {
         node.targets.is_some()
-            || self
-                .objects
-                .get(&node.source)
-                .is_some_and(|o| o.statics.iter().any(|s| s.key == node.key))
+            || self.game.state.permanent_of(node.source).map_or_else(
+                || self.game.state.zones.zone_of(node.source) == Some(ZoneType::Command),
+                |id| self.objects[&id].statics.iter().any(|s| s.key == node.key))
     }
     fn targets(&self, node: &Node) -> Vec<PermanentId> {
         if let Some(targets) = &node.targets {
@@ -844,7 +858,7 @@ impl<'a> Context<'a> {
                                 sets_toughness,
                             } => {
                                 let value =
-                                    LayerValue::Fixed(self.cda(cda, self.controller(node.source)));
+                                    LayerValue::Fixed(self.cda(cda, self.source_controller(node.source)));
                                 Operation::Modify(Modification::SetBasePt {
                                     power: Some(value.clone()),
                                     toughness: sets_toughness.then_some(value),
@@ -861,7 +875,7 @@ impl<'a> Context<'a> {
             })
             .collect()
     }
-    fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
+    fn buff(&self, buff: &StaticPtBuff, source: ObjectId, id: PermanentId) -> Operation {
         let per_type = buff.per_creature_type_max.map_or(1, |max| {
             let view = &self.objects[&id].view;
             if view.has_all_creature_types() {
@@ -870,7 +884,7 @@ impl<'a> Context<'a> {
                 (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(max)
             }
         });
-        let controller = self.controller(source);
+        let controller = self.source_controller(source);
         let per_color = buff.per_color_among.as_ref().map_or(1, |p| {
             self.objects
                 .iter()
@@ -890,6 +904,12 @@ impl<'a> Context<'a> {
             power: LayerValue::Fixed(buff.power * times),
             toughness: LayerValue::Fixed(buff.toughness * times),
         })
+    }
+    fn source_controller(&self, source: ObjectId) -> PlayerId {
+        self.game.state.permanent_of(source).map_or_else(
+            || self.game.state[source].owner, // CR 114.2: an emblem's owner controls it.
+            |id| self.controller(id)
+        )
     }
     fn controller(&self, id: PermanentId) -> PlayerId {
         self.game.live_permanent(id).controller
@@ -976,11 +996,11 @@ impl<'a> Context<'a> {
     fn select_permanents(
         &self,
         selector: &ObjectSelector,
-        source: PermanentId,
+        source: ObjectId,
     ) -> Vec<PermanentId> {
-        let controller = self.controller(source);
+        let controller = self.source_controller(source);
         match selector {
-            ObjectSelector::This => vec![source],
+            ObjectSelector::This => self.game.state.permanent_of(source).into_iter().collect(),
             ObjectSelector::Each {
                 of,
                 predicate,
@@ -1005,7 +1025,7 @@ impl<'a> Context<'a> {
                                 Scope::Battlefield => true,
                                 _ => false,
                             }
-                            && !(id == source && *except == Some(Except::This))
+                            && !(self.game.live_permanent(id).object == source && *except == Some(Except::This))
                             && self.matches(id, predicate, Some(source))
                             && exact.is_none_or(|n| self.game.permanent_mana_value(id) == n)
                             && max.is_none_or(|n| self.game.permanent_mana_value(id) <= n)
@@ -1017,15 +1037,15 @@ impl<'a> Context<'a> {
     }
 
     /// Static comparisons see the characteristics at this point in the layer system.
-    fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
-        let controller = self.controller(source);
+    fn comparison_value(&self, value: &EffectValue, source: ObjectId) -> i32 {
+        let controller = self.source_controller(source);
         let controlled = || self.game.iter_battlefield_permanents(controller);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
                 factor.saturating_mul(self.comparison_value(value, source))
             }
-            EffectValue::SourcePower => self.objects[&source].view.power,
+            EffectValue::SourcePower => self.game.state.permanent_of(source).map_or(0, |id| self.objects[&id].view.power),
             EffectValue::Property {
                 of,
                 property,
@@ -1097,14 +1117,14 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn condition(&self, condition: &Condition, source: PermanentId) -> bool {
+    fn condition(&self, condition: &Condition, source: ObjectId) -> bool {
         match condition {
             Condition::Compare { left, op, right } => op.test(
                 self.comparison_value(left, source),
                 self.comparison_value(right, source),
             ),
             Condition::OpponentControlsMoreCreatures => {
-                let controller = self.controller(source);
+                let controller = self.source_controller(source);
                 self.creature_count(PlayerId(1 - controller.0)) > self.creature_count(controller)
             }
             Condition::BattlefieldAtLeast { count, predicate } => {
@@ -1120,29 +1140,29 @@ impl<'a> Context<'a> {
                 distinct_names,
             } => {
                 let matching = self.objects.keys().filter(|&&id| {
-                    self.controller(id) == self.controller(source)
+                    self.controller(id) == self.source_controller(source)
                         && self.matches(id, predicate, Some(source))
                 });
                 super::statics::controlled_threshold(matching, *count, *distinct_names, |id| {
                     self.objects[id].view.name.as_str()
                 })
             }
-            Condition::SourceMatches(predicate) => self.matches(source, predicate, Some(source)),
+            Condition::SourceMatches(predicate) => self.game.state.permanent_of(source).map_or_else(|| self.game.off_battlefield_matches(source, predicate, || 0), |id| self.matches(id, predicate, Some(source))),
             Condition::AllOf(conditions) => conditions.iter().all(|c| self.condition(c, source)),
             Condition::AnyOf(conditions) => conditions.iter().any(|c| self.condition(c, source)),
             Condition::Not(condition) => !self.condition(condition, source),
             // All other static conditions read state, not characteristics.
             _ => self
                 .game
-                .layer_state_condition(condition, self.controller(source), source),
+                .layer_state_condition(condition, self.source_controller(source), source),
         }
     }
-    fn scope(&self, scope: &StaticScope, source: PermanentId, target: PermanentId) -> bool {
+    fn scope(&self, scope: &StaticScope, source: ObjectId, target: PermanentId) -> bool {
         matches_static_scope(
             scope,
-            source,
-            self.controller(source),
-            self.game.attached_permanent(source),
+            self.game.state.permanent_of(source),
+            self.source_controller(source),
+            self.game.state.permanent_of(source).and_then(|id| self.game.attached_permanent(id)),
             target,
             self.controller(target),
             |predicate| self.matches(target, predicate, Some(source)),
@@ -1152,17 +1172,17 @@ impl<'a> Context<'a> {
         &self,
         id: PermanentId,
         predicate: &CardPredicate,
-        source: Option<PermanentId>,
+        source: Option<ObjectId>,
     ) -> bool {
         matches_view(
             self.game,
             id,
             predicate,
             &self.objects[&id].view,
-            source.map(|s| self.objects[&s].view.name.as_str()),
+            source.map(|s| self.game.state.permanent_of(s).map_or_else(|| self.game.state[s].name.as_str(), |id| self.objects[&id].view.name.as_str())),
         )
     }
-    fn node(&self, source: PermanentId, entry: &StaticEntry) -> Option<Node> {
+    fn node(&self, source: ObjectId, entry: &StaticEntry) -> Option<Node> {
         let mut plan = SourcePlan::on_source(Vec::new());
         let mut add = |l, m| plan.parts.push((l, Operation::Modify(m)));
         match &entry.ability {
@@ -1249,16 +1269,13 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let object = &self.game.state[self.game.live_permanent(source).object];
+                let object = &self.game.state[source];
                 let index = object
                     .attached_grants()
                     .position(|a| a == ability)
                     .unwrap_or(0);
                 let mut granted = ability.clone();
-                granted.granted_by = self
-                    .game
-                    .permanent_object(source)
-                    .map(|grantor| AbilityGrant { grantor, index });
+                granted.granted_by = Some(AbilityGrant { grantor: source, index });
                 add(
                     Layer::Ability,
                     Modification::GrantActivated(Box::new(granted)),
@@ -1289,11 +1306,12 @@ impl<'a> Context<'a> {
         })
     }
     fn apply(&mut self, node: &Node, instructions: &[Instruction]) {
+        let grantor = self.game.state.permanent_of(node.source);
         let clock = |ability: &Ability, index| {
             let Ability::Triggered { condition, .. } = ability;
             condition.once_each_turn().then(|| GrantClock {
                 timestamp: node.timestamp,
-                grantor: node.source,
+                grantor,
                 static_slot: (node.key[1] != usize::MAX).then_some(node.key[1]),
                 ability_index: index,
             })
@@ -1527,7 +1545,7 @@ fn intrinsic_mana_ability(gained: impl Fn(&str) -> bool) -> Option<ActivatedAbil
 
 pub(super) fn matches_static_scope(
     scope: &StaticScope,
-    source: PermanentId,
+    source: Option<PermanentId>,
     source_controller: PlayerId,
     attached: Option<PermanentId>,
     target: PermanentId,
@@ -1535,16 +1553,16 @@ pub(super) fn matches_static_scope(
     matches: impl FnOnce(&CardPredicate) -> bool,
 ) -> bool {
     let predicate = match scope {
-        StaticScope::This => return source == target,
+        StaticScope::This => return source == Some(target),
         StaticScope::Attached => return attached == Some(target),
         StaticScope::SpellsYouControl(_) => return false,
         StaticScope::OtherYouControl(p)
-            if source != target && source_controller == target_controller =>
+            if source != Some(target) && source_controller == target_controller =>
         {
             p
         }
         StaticScope::YouControl(p) if source_controller == target_controller => p,
-        StaticScope::Other(p) if source != target => p,
+        StaticScope::Other(p) if source != Some(target) => p,
         StaticScope::All(p) => p,
         _ => return false,
     };

@@ -1739,6 +1739,7 @@ pub(crate) fn project_decision(
                     out.field("spell mana value limit", below);
                     out.object_id("cast from exile", *object_id)
                 }
+                ResolutionCastOffer::ExactExiled { object, if_declined } => {out.object_id("cast from exile", *object); out.effects("if declined", if_declined);}
                 ResolutionCastOffer::AmongExiled { objects } => {
                     for object in objects {
                         out.object_id("cast from exile", *object);
