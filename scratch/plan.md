@@ -19,19 +19,10 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   damage assignment). Open defect: no replacement diverts a
   battlefield-to-exile move, so Overwrite's diverted case is untested.
 
-- Pass 1 (separation of target division from `X` and `−X` target authority):
-  removed `PendingChoice::DivideAmount` from `Game::announces_x()`, added
-  `ContinuationFrame.division_remaining` (encoded on header `relation::DIVISION`)
-  while preserving `frame.x`, added `ActionOption.division_amount` /
-  `action::DIVISION` (v11 column 31), added `EffectValue::TargetDivision` and
-  switched Chandra, Flameshaper's `−4` to it so `DealDamage` only divides when
-  authored with `TargetDivision`, factored `SpellTargeting` (mirroring
-  `ActivatedTargeting`) to eliminate the 7-field copy and `TargetSelection`,
-  and filtered `legal_activation_x_values` by `activation_targets_available`
-  (using `min_for_x`/`max_for_x`) with priority checking non-empty legal X
-  values. Verified with directed witness tests (including `ObservationEncodeError::Capacity`
-  when X offers exceed `max_actions`), Chandra `−4`, encoder, continuation, and
-  observability field-coverage tests.
+- Pass 1 (`1a2ba2c1a3`): target division separated from `X`
+  (`division_remaining`, `EffectValue::TargetDivision`, v11 `action::DIVISION`
+  column 31), `SpellTargeting` factored, `−X` offers filtered by target
+  availability; directed witnesses in `flow/target_authority_tests.rs`.
 
 ## Target model (updated by concept review)
 
@@ -41,8 +32,7 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; repair them before gate in three focused passes. Pass 1 is done; build
-Pass 2 next.
+code; Passes 2–3 repair the rest before the Pass 4 gate. Build Pass 2 next.
 
 ### Pass 2 — Remove derived `FactKind::EmblemAbility` and move zero-loyalty SBA exemption into `layers.rs`
 
