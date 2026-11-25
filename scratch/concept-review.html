@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MTG-389 Study — concept review (built, 2026-11-25)</title>
+<style>
+  :root { --bg:#fbfaf7; --ink:#1d1b18; --ink2:#5c574f; --rule:#d9d4ca; --yes:#2f6b3a; --no:#9a3b25; --prop:#2c5d8a; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --ink:#e9e6df; --ink2:#a6a196; --rule:#3a3d42; --yes:#7fc48d; --no:#e8907a; --prop:#8cbcea; --card:#1f2226; } }
+  body { background:var(--bg); color:var(--ink); font:15px/1.55 system-ui, sans-serif; max-width:1040px; margin:2em auto; padding:0 1.2em; }
+  h1 { font:600 26px/1.2 Georgia, serif; } h2 { font:600 19px/1.3 Georgia, serif; margin-top:2.2em; border-bottom:1px solid var(--rule); padding-bottom:.2em; }
+  table { border-collapse:collapse; width:100%; margin:.6em 0; } th, td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--rule); }
+  th { font-weight:600; color:var(--ink2); font-size:13px; }
+  .yes { color:var(--yes); font-weight:600; } .no { color:var(--no); font-weight:600; }
+  code { font-size:13px; background:color-mix(in srgb, var(--ink) 8%, transparent); padding:0 3px; border-radius:3px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media (max-width:760px){ .cols{ grid-template-columns:1fr; } }
+  .box { background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:10px 14px; }
+  .prop { border-left:4px solid var(--prop); } .prop h3::after { content:" · proposed"; color:var(--prop); font-size:12px; font-weight:600; }
+  .exist h3::after { content:" · as built"; color:var(--ink2); font-size:12px; }
+  h3 { font-size:15px; margin:.2em 0 .5em; }
+  .rail { font:13px/1.4 system-ui; border:1px solid var(--rule); border-radius:4px; }
+  .rail div { padding:5px 8px; border-bottom:1px solid var(--rule); } .rail .dim { color:var(--ink2); } .rail .big { padding:18px 8px; }
+  .btn { display:inline-block; border:1px solid var(--rule); border-radius:4px; padding:1px 7px; margin:1px 2px; } .btn.off { opacity:.45; }
+  ol.q li { margin:.5em 0; } ol.q ol { list-style:lower-alpha; }
+  img { max-width:100%; border:1px solid var(--rule); border-radius:4px; }
+  .callout { border:2px solid var(--no); border-radius:6px; padding:10px 14px; }
+</style>
+</head>
+<body>
+<h1>Study mode, as built: do the product's concepts and the code's line up?</h1>
+<p><b>Area taken:</b> the whole Study surface this Task built on top of a played game — Review of a played game (views, analysis, marks, value chart, key moments, its line, play on, both hands), Games and My record, and Show analysis while playing — reviewed against base <code>3be5a0cfb2</code> at <code>39259d0e41</code>, with the QA pass (<code>scratch/qa.html</code>) as the walk. Watch's branch boundary (MTG-423) is included only where it shares Review's board.</p>
+
+<h2>The interaction walked</h2>
+<p>You lose a game to the trained bot, press <b>Review this game</b>. Analysis starts by itself; the moves fill with "same / differs" marks; the Menu says "chose as the bot would: 2 of 27". At turn 21 you wonder what would have happened had you attacked. The rail offers <span class="btn">See its line</span> <span class="btn">Play on from here</span> <span class="btn">Next key moment</span> <span class="btn off">Try another line</span> and a sentence: "Trying another line needs the retained rules state and this game's participant credential." Below that: an empty Stack heading, Your choice, an Analysis list showing one row, a Moves list showing two rows, and the play-time stop settings <i>Off / Every time / Once</i>.</p>
+<p><b>Failure:</b> fifteen minutes after the game ended, the one button whose name says what you want (try another line) is disabled for a reason you cannot act on. <b>Recovery:</b> exists — <i>Play on from here</i> does exactly that, forever — but nothing tells you so.</p>
+<img src="shots/qa-marks-mixed.png" alt="Review at turn 21 with four branching buttons and a crowded rail">
+
+<h2>Product concepts against code concepts</h2>
+<table>
+<tr><th>What a person knows / does</th><th>In the code</th><th></th><th>What is wrong</th></tr>
+<tr><td>A played game, which can be read again</td><td><code>record_of(attempt) → GameRecord</code>, <code>ReplayedViews</code>, <code>step_matches</code></td><td class="yes">yes</td><td>One record, the engine's own. Nothing new stored.</td></tr>
+<tr><td>My hand stays mine in Review; every move named</td><td>Replayed views for boards; stored track for narration</td><td class="yes">yes</td><td></td></tr>
+<tr><td>An <b>Analysis</b> by a policy of my decisions</td><td><code>analyses</code> + <code>analysed_decisions</code>, <code>analyse_game</code>, <code>PolicyAdmissions</code></td><td class="yes">yes</td><td>Same name, one owner, saved beside the game, never in a frame.</td></tr>
+<tr><td>Same / differs per move</td><td><code>moveMarks</code> (counts every decision of a move since 39259d0e41)</td><td class="yes">yes</td><td>Fixed in the last pass: marks now add up to the summary.</td></tr>
+<tr><td>"This game" numbers</td><td><code>GameNumbers</code>, <code>numbers_json</code>, <code>Totals</code> reducer</td><td class="yes">yes</td><td>Code says <i>numbers</i>, UI says <i>This game</i>; documented, harmless.</td></tr>
+<tr><td>Analysis shown while playing</td><td><code>LiveAnalysis</code>, <code>TraceEvent.analysis_shown</code></td><td class="yes">yes</td><td>"Shown" means sent to the pilot's socket; recorded in questions.md.</td></tr>
+<tr><td><b>Another line from this decision</b></td><td>Three mechanisms: <code>agent_line</code> (read-only play-out), <code>played_from</code> (a new recorded Play game), Study branch (<code>StudyForkProvider</code>, retained roots, 15-minute TTL, Reveal)</td><td class="no">no</td><td>One idea, three owners and four buttons at one decision. One of them is usually disabled with a reason in engine vocabulary ("retained rules state").</td></tr>
+<tr><td>Reviewing (read-only)</td><td>The shared <code>Board</code> draws Play's priority-stop track and Off / Every time / Once in Review</td><td class="no">no</td><td>A play setting with no meaning in a finished game, taking rail and board height that Moves and Analysis need. Predates this Task, but Study is what now needs the room.</td></tr>
+<tr><td>Read the moves against the analysis</td><td>Rail: Stack, Your choice, Analysis list, Moves, each a fixed box</td><td class="no">no</td><td>At 1280×800 Moves shows two rows and Analysis one; the reading the Task exists for needs two small scrolling panes.</td></tr>
+<tr><td>Show both hands</td><td>Menu checkbox; opponent cards behind the Hand plate's dialog</td><td class="yes">partly</td><td>Readable and keyboard-reachable as MTG-423 asked, but the seat still reads "Hand 6". Left as a question.</td></tr>
+</table>
+
+<h2>The biggest mismatch: "another line" has three owners</h2>
+<div class="callout">
+<p>The person has one question at a decision — <i>what if this went differently?</i> — and two ways to ask it: <b>watch the policy continue</b>, or <b>continue it myself</b>. The code answers the second one twice. <i>Play on from here</i> (built this Task) works on every finished game of yours, for ever, and is recorded. <i>Try another line</i> (the pre-existing Study branch) works only while the live session still holds the root, and is ephemeral with a Reveal step. On a finished played game the two overlap completely, and the older one is the one most often disabled.</p>
+</div>
+<div class="cols">
+<div class="box exist"><h3>Review at your decision</h3>
+<div class="rail">
+<div><span class="btn">See its line</span><span class="btn">Play on from here</span><br><span class="btn">Next key moment</span><br><span class="btn off">Try another line</span><br><span class="dim">Trying another line needs the retained rules state and this game's participant credential.</span></div>
+<div class="dim">Stack (empty)</div><div>Your choice …</div><div>Analysis by … (1 row visible)</div><div>Moves (2 rows visible)</div><div class="dim">Off · Every time · Once — Decisions · 27</div>
+</div></div>
+<div class="box prop"><h3>Review at your decision</h3>
+<div class="rail">
+<div><span class="btn">See its line</span><span class="btn">Play on from here</span> <span class="btn">Next key moment</span><br><span class="dim">Try another line appears only while it is available (live Study, Watch, imports); never disabled with an engine reason.</span></div>
+<div>Your choice …</div><div class="big">Analysis by … (its options, scrolls)</div><div class="big">Moves (most of the remaining height)</div>
+<div class="dim">No Stack heading when empty; no stop settings in Review</div>
+</div></div>
+</div>
+<p><b>Before:</b> four affordances, one disabled; a play setting in a read-only view; the two lists the Task is about squeezed. <b>After:</b> two verbs ("see its line", "play on") always present on your analysed decisions; Study's branch shown only where it works; Review's rail gives its height to the analysis and the moves. Nothing is deleted from Study's branch itself, its sealed evidence or its specs: <code>study.spec.ts</code> opens a just-finished game, where it is available, so it still appears.</p>
+<p><b>Counterexample tested:</b> a game watched (bot v bot) has no Play on (not a participant) — Try another line stays its only branch, unchanged. A just-finished played game within 15 minutes shows both; that is honest (an ephemeral branch with Reveal versus a recorded game), named differently, and no longer joined by a disabled button.</p>
+<p><b>Passed over:</b> removing the Study branch from played games (it carries Reveal and Compare plans, which Play on lacks, and has its own specs); merging Play on into Study (Study's roots expire; Play on's record does not).</p>
+
+<h2>Larger than this work</h2>
+<ul>
+<li>A Study branch rooted in a re-executed position (no TTL) would let <i>Try another line</i> work on every game and retire the disabled state everywhere; it needs a <code>StudyForkProvider</code> over a walk and Reveal evidence from an analysis. Its own Task.</li>
+<li>Readability with a strong current-world checkpoint is untested: every proof used near-uniform policies, so the chart has always been flat.</li>
+</ul>
+
+<h2>Questions</h2>
+<ol class="q">
+<li>At a decision of your finished game, should <i>Try another line</i>
+  <ol><li>appear only while available (chosen, built next);</li><li>stay visible but disabled, as now;</li><li>be removed from played games, leaving Play on.</li></ol></li>
+<li>Review's play-time stop settings and the empty Stack heading
+  <ol><li>are not drawn in Review (chosen);</li><li>stay, as Board draws them everywhere.</li></ol></li>
+<li>The Review rail's height
+  <ol><li>goes mostly to Moves and the Analysis list (chosen);</li><li>stays split as now, with the Analysis list folded behind a disclosure;</li><li>moves the analysis list into the board's offers only (probabilities are already on cards and rows).</li></ol></li>
+<li>Show both hands
+  <ol><li>keeps the opponent's cards behind the Hand plate's dialog (as built);</li><li>turns them face up in the top seat.</li></ol></li>
+<li>"This game" and the analysis selector live in the Review Menu beside recording tools and feedback
+  <ol><li>keep (an expandable place, per "probably needs to be expandable");</li><li>give Study its own disclosure in the rail.</li></ol></li>
+</ol>
+</body>
+</html>

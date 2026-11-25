@@ -210,3 +210,13 @@ Playing on and the acceptance spec (2026-11-25, headless):
 - The acceptance spec plays Bolt decks (Mountain/Lightning Bolt) against the
   Reader, not Lessons v Allies, so each game is a few turns. Its pick loop
   sometimes bolts its own face; the assertions do not depend on who wins.
+
+Concept review of the built Study (2026-11-25, headless; `scratch/concept-review.html`):
+
+- Try another line is drawn only while Study is available; the disabled
+  button and its "retained rules state" caption go (page 1a). Passed over:
+  removing Study's branch from played games (it has Reveal and Compare plans).
+- Review draws no priority-stop toggles and no empty Stack block (2a).
+- Review's rail height goes to Moves and the Analysis list (3a).
+- Unchanged, open: Show both hands behind the Hand dialog (4a); "This game"
+  in Review's Menu (5a).

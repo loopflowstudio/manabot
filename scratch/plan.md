@@ -684,7 +684,7 @@ left is not building:
   the process (a key per registered-policy set and deck pair). Acceptable for
   a local server; revisit if hosted play registers policies often.
 
-Next: gate. Deferred to gate/CI: a clean run of the policy e2e spec
+Next: the Review pass below, then gate. Deferred to gate/CI: a clean run of the policy e2e spec
 (`study-review.spec.ts`), the configured-launch e2e, `test:e2e:release`,
 timing with a current-world checkpoint, and the control-fixture schema test
 that already fails on the base commit.
@@ -752,6 +752,49 @@ What it taught: the cache is shared across games, not just per game, since
 admission reads no game state; a failed admission (OSError included) is
 remembered until a policy registers or the process restarts.
 
+
+## Concept review of the built Study (2026-11-25)
+
+Page: `scratch/concept-review.html` (walked from the QA pass,
+`scratch/qa.html`). Records, analysis, marks, numbers and analysis-shown line
+up one to one with what a person sees. Three things do not, all in Review's
+rail, and the next pass fixes them (choices made headless, for review; page
+questions 1a, 2a, 3a):
+
+1. **"Another line" has three owners and four buttons.** At your decision
+   Review shows See its line, Play on from here, Next key moment and Try
+   another line, the last usually disabled with "needs the retained rules
+   state and this game's participant credential". Play on covers the same
+   need on every finished game. Change: draw **Try another line** only when
+   `index.can_study` is true; drop the disabled button and its caption. Watch
+   and imported recordings (no Play on) keep it exactly as now; a game within
+   Study's retention window shows both, as two different verbs. Study's
+   branch, its Reveal and `study.spec.ts` / `study-unavailable.spec.ts` are
+   untouched in behaviour; check that `study-unavailable.spec.ts` asserts
+   the disabled state, and if so move its assertion to "absent, with Play on
+   offered" for played games (keep its other contexts).
+2. **Play settings drawn in a read-only Review.** The shared `Board` draws
+   the priority-stop toggles (the step track's checkboxes and Off / Every
+   time / Once) in Review. Keep the step track's position (where in the turn
+   this is); do not draw stop toggles or the Off / Every time / Once control
+   when the board is a recording (`onjump` set / no live frame). Do not draw
+   an empty Stack block in Review. Verify the toggles are not used by Watch
+   production first; if Watch's live stepping uses them, scope the change to
+   finished recordings.
+3. **The rail starves the two lists Study is about.** At 1280×800 Moves shows
+   two rows and the Analysis list one. Give Review's rail height to the
+   Analysis list and Moves (Moves takes the remaining height, the Analysis
+   list a bounded share), with the freed height from items 1 and 2. Proof:
+   screenshots light and dark at 1280×800 of a Review decision with an
+   analysis, showing at least eight move rows and three option rows; the
+   policy e2e spec and `npm test` (design lint) still pass.
+
+Larger than this Task (on the page, not planned): a Study branch rooted in a
+re-executed position, which would make Try another line work on every game;
+readability of the chart with a strong current-world checkpoint.
+
+Left as questions (page 4, 5): Show both hands stays behind the Hand plate's
+dialog; "This game" and the analysis selector stay in Review's Menu.
 
 ## Slices
 
