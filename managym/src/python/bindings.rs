@@ -5548,7 +5548,6 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("NATIVE_ALLOCATOR", crate::allocator::NAME)?;
     m.add("ALLOCATION_COUNTING", crate::allocator::COUNTING)?;
     m.add(

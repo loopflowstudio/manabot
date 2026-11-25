@@ -63,17 +63,11 @@ def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
             "hero_deck_name": CURATED_PACK.villain_deck_id,
             "villain_deck_name": CURATED_PACK.hero_deck_id,
             "villain_type": "random",
-            "seed": 1,
+            "seed": 0,
             "auto_pass": False,
         }
     )
-    play_passing(
-        game,
-        120,
-        stop_when=lambda: any(
-            e["kind"]["kind"] == "revealed" for e in game.presentation_events
-        ),
-    )
+    play_passing(game, 120)
     logged.extend(game._pending_action_log)
     human = game.current_message()["frame"]["projection"]["agent"]["player_index"]
 
@@ -84,7 +78,7 @@ def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
     ]
     assert reveals and all(kind["player"] == 1 - human for kind in reveals)
     named = {card for kind in reveals for card in kind["cards"]}
-    assert named
+    assert "Kyoshi Warriors" in named
     told = {
         entry["text"].removeprefix("Reveal ")
         for entry in logged

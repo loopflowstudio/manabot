@@ -71,22 +71,6 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   Stall checks: `"stall_seconds": 0.3` in the local recipe config and
   `touch <out>/diagnostics.request` exercise the watchdog without load; read
   `escalations.jsonl` for one line per real stall.
-- Source launch (no installed `managym` distribution, as `scripts/play` runs):
-  `UV_PROJECT_ENVIRONMENT=<ignored .runs dir>/play-venv uv run --python 3.13
-  --locked --only-group play-runtime python -c 'import importlib.metadata as m;
-  m.version("managym")'` raises `PackageNotFoundError` there, so that venv
-  reproduces it. Start the API from it with `ACADEMY_CARD_ART_DIR=<empty .runs
-  dir>` and curl `/api/card-art/art/<slug>.jpg`: a cold card must return 200
-  JPEG and write `<scryfall id>-art.jpg` plus its credit JSON. On the table,
-  art is CSS backgrounds, not `<img>`: count `/api/card-art` responses and
-  `requestfailed` events instead of `document.images`. The same venv runs the
-  release Playwright config as `VIRTUAL_ENV` (the dev `.venv` lacks uvicorn);
-  scope it with `ACADEMY_RELEASE_API_PORT`, `ACADEMY_RELEASE_FRONTEND_PORT`
-  and `ACADEMY_RELEASE_PROOF_DIR`. `opponent-beats.spec.ts` took 2.3–3.1 min
-  per run at load ~200.
-- The landing card of a fresh dev-server visit reads "Ready to play" with one
-  **Play** button (no "Start game" there); "Set up a different game" opens the
-  New game page.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press Start game, play a land and Pass Turn.
@@ -275,3 +259,26 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Study (Review analysis, Show analysis, Games record) as a returning user:
+  games only count as "mine" (and only the participant may start an
+  analysis) in the same browser profile and origin, so drive every game with
+  Playwright `launchPersistentContext(<.runs dir>)` and keep one port for
+  the old and new builds. For games written by an older build, `git worktree
+  add --detach /private/tmp/<x> <base>`, build its SPA there, and run it with
+  this checkout's `.venv/bin/python` from `/tmp` (cwd on `sys.path` otherwise
+  loads this checkout) with `PYTHONPATH=/private/tmp/<x>` and
+  `ACADEMY_FRONTEND_BUILD` pointing at its build; when the Rust diff is only
+  additive, this checkout's `.so` serves (the main checkout's may be stale).
+  Start the CLI as `python -c 'from managym.cli import main; main()' academy
+  ...` (`-m managym.cli` exits silently); stop a `nohup … &` server with
+  SIGTERM. A clicked control during the opponent's read-out only ends the
+  read-out (the click is swallowed by design); click again, as a person
+  would. A real checkpoint from `etude train manabot/recipes/local.py`
+  analysed a 130-event game in about 5–60 s depending on load.
+  The Bolt-deck acceptance spec never meets long option names or a stack
+  item; check Review's rail at a Lessons v Allies decision (Learn has nine
+  options) and with **See its line** open, which passes no `onjump`.
+  `playwright.study.config.ts` (`study.spec.ts`) fails at setup on this
+  branch's base protocol ("Study source omitted its participant
+  credential") and runs in no CI job; do not read its failure as a
+  regression without reverting the change first.

@@ -19,11 +19,11 @@ test('Watch uses the same browser to assign both bot seats', async ({ page }) =>
 test('browse every exact deck and Lesson pool, choose both seats, and keep a running game intact', async ({ page }, testInfo) => {
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await page.getByText('Browse bundled decks and cards',{exact:true}).click();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   const browser = page.getByTestId('deck-browser');
   const detail = page.getByTestId('deck-detail');
   await expect(page.getByTestId('deck-browser')).toHaveCount(1);
-  await expect(page.getByRole('button',{name:'Play vs Bot',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(page.getByRole('combobox',{name:'Seat 1 controller',exact:true})).toHaveValue('human');
   for (const deck of manifest.roster) {
     await browser.getByTestId(`browse-${deck.deck_id}`).click();
     await expect(detail.getByRole('heading', { level: 3 })).toContainText(deck.display_name.replace('Elemental ', ''));
@@ -50,7 +50,7 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   // On the board, the session controls are in the top bar's Menu.
   await page.getByTestId('game-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
-  await page.getByText('Browse bundled decks and cards',{exact:true}).click();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   await browser.getByTestId('browse-elemental_bg').click();
   await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);
@@ -61,7 +61,7 @@ test('browse every exact deck and Lesson pool, choose both seats, and keep a run
   // On the board, the session controls are in the top bar's Menu.
   await page.getByTestId('game-menu').click();
   await page.getByRole('button', { name: 'Edit next game', exact: true }).click();
-  await page.getByText('Browse bundled decks and cards',{exact:true}).click();
+  await page.getByText('Browse decks and cards',{exact:true}).click();
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id','elemental_ug');
   await browser.getByTestId('browse-elemental_bg').click();
   await detail.getByRole('button', { name: 'Use for seat 2 deck', exact: true }).click();

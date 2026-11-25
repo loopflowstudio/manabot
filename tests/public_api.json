@@ -4130,9 +4130,6 @@
           }
         }
       },
-      "__version__": {
-        "kind": "value"
-      },
       "admit_decklists": {
         "kind": "function",
         "signature": "(decklists)"

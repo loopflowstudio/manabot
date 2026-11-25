@@ -66,8 +66,6 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
 def test_play_offers_and_registered_rules_text_cover_all_three_cards():
     env = managym.Env(seed=0, skip_trivial=False)
     obs, _ = env.reset(candidate_match().to_rust())
-    while obs.turn.turn_number == 0:
-        obs, *_ = env.step(0)
     while int(obs.turn.step) != 3:
         actions = describe_actions(obs)
         action = next(a for a in actions if a["type"] == "PRIORITY_PASS_PRIORITY")
@@ -92,14 +90,12 @@ def test_play_offers_and_registered_rules_text_cover_all_three_cards():
 @pytest.mark.parametrize("legend", [False, True])
 def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
     env = managym.Env(seed=0, skip_trivial=False)
-    match = candidate_match()
+    env.reset(candidate_match().to_rust())
     if legend:
         # A custom setup supplies the second copy, without changing authored decks.
+        match = candidate_match()
         match.hero_deck["Gran-Gran"] = 2
-    obs, _ = env.reset(match.to_rust())
-    while obs.turn.turn_number == 0:
-        obs, *_ = env.step(0)
-    if legend:
+        env.reset(match.to_rust())
         env.scenario_force_battlefield(0, "Gran-Gran", True)
         env.scenario_force_battlefield(0, "Gran-Gran", True)
     else:

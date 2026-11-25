@@ -17,7 +17,8 @@ const LAUNCH_STARTED_MS = Number(process.env.ACADEMY_CLEAN_START_MS ?? '0');
 const PLAYABLE_BUDGET_MS = 90_000;
 // Hang guard shared with scripts/verify-clean-machine.
 const READY_LIMIT_MS = 600_000;
-// A move advances the board only after the opponent replies.
+// A move advances the board only after the Search 64 opponent replies; its
+// flat Monte Carlo rollouts take tens of seconds on a hosted runner.
 const OPPONENT_REPLY_LIMIT_MS = 120_000;
 
 interface AssetPackReference {
@@ -262,15 +263,13 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  // The default opponent is the hosted policy when it can be fetched; this proof
-  // plays the built-in Random so it never depends on that download.
-  await page.getByTestId('opponent-select').selectOption('random');
+  await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
   await expect(page.getByTestId('selected-deck-hero')).toHaveAttribute('data-deck-id', 'ur_lessons');
   await expect(page.getByTestId('selected-deck-villain')).toHaveAttribute('data-deck-id', 'gw_allies');
   await page.getByRole('button', { name: 'Start game' }).first().click();
 
   const board = page.getByTestId('game-board');
-  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies', {
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies', {
     timeout: 15_000,
   });
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
@@ -290,7 +289,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Random · GW Allies');
+  await expect(page.getByTestId('deck-names')).toHaveText('You · UR Lessons vs Search 64 · GW Allies');
   await expect(page.getByTestId('action-option').first()).toBeEnabled({ timeout: 30_000 });
   const credentialsAfter = await resumeIdentity(page);
   const signatureAfter = await visibleSignature(page);
@@ -337,7 +336,7 @@ test('clean command reaches pinned play and reloads without public network', asy
       within_budget: elapsedToPlayableMs < PLAYABLE_BUDGET_MS,
     },
     experience: {
-      opponent: 'random',
+      opponent: 'search-64',
       hero_deck: 'ur_lessons',
       villain_deck: 'gw_allies',
       asset_pack: expected,

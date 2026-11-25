@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
 import hashlib
+from importlib.metadata import version
 from itertools import chain
 import json
 import os
@@ -564,7 +565,7 @@ def runtime_identities() -> dict[str, object]:
         sources.update(data)
     extension = Path(managym._managym.__file__)
     return {
-        "managym_version": managym.__version__,
+        "managym_version": version("managym"),
         "card_digest": managym.world_identity()["card_digest"],
         "python": platform.python_version(),
         "numpy": np.__version__,

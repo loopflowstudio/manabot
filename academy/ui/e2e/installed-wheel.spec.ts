@@ -39,8 +39,7 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   }));
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  // A bare install registers no policy, so the default opponent is the built-in Random.
-  await expect(page.getByTestId('opponent-select')).toHaveValue('random');
+  await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   const action = page.getByTestId('action-option').first();
   await expect(action).toBeEnabled();

@@ -261,12 +261,8 @@ def _run_engine(
     *,
     prove_stale: bool = False,
     config: trace_store.GameConfig | None = None,
-    decision_memory: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    env = managym.Env(
-        seed=0 if config is None else config.seed,
-        decision_memory=decision_memory,
-    )
+    env = managym.Env(seed=0 if config is None else config.seed)
     observation, _ = env.reset(
         config.to_rust()
         if config is not None

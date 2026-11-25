@@ -239,8 +239,12 @@ digests wherever the source retained them, and saves what it verified to this tr
 directory as a finished recording. A snapshot replay carries its final digest.
 It opens as a **Recorded game**. The acting view hides the opponent’s hand.
 **Show both hands** includes both hands in the spectator response. The board
-draws the bottom seat’s cards and shows the top seat’s hand count. Branch
-seeds stay private in either view.
+draws the bottom seat’s cards; the top seat’s **Hand** count opens a list of
+its cards, by pointer or keyboard, as the graveyard does. Where the record
+re-dealt the position before a decision, the move list shows a neutral note
+in its place, such as **Branch · libraries reshuffled** or **Branch · hidden
+cards re-dealt**, which jumps to that decision. Branch seeds stay private in
+either view.
 Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the
@@ -646,7 +650,7 @@ from (printed or set, counters, each effect by its source and duration, and
 whatever those do not explain as "other effects"), and its state. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
+until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn. Along
 the bottom of the screen runs the step bar: one cell per step, a line between
 phases, the current step shaded, and in each cell the stop for your turn above
@@ -924,7 +928,8 @@ then turns itself off; the moves list says so ("Stopped once at Upkeep on the
 opponent's turn; that stop is now off"), marked as automation like the passes
 Academy makes for you. The Menu shows a once stop as checked. The stops are one
 Tab stop: arrow keys move between them, up and down between the two turns, and
-Space or Enter presses one. A recording's bar shows its stops read-only.
+Space or Enter presses one. Stops are a setting of live play: a recording's
+bar shows only the steps of the turn, with the current one marked.
 
 **Your turn** and **Opponent turn** say whose turn contains the window. A checked
 step stops automatic priority passing there; an unchecked step allows it unless
@@ -1042,8 +1047,17 @@ game you played, **Review this game** on the result card opens it from the
 first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
-newest first, with filters for player, deck, status, result and date. **My games**
-narrows the list to this browser. A trained bot appears under its
+newest first, with filters for player, deck, status, result and date. Player 1
+is always on the play. A finished game you played shows its turns and how long
+it took, and how many of your choices were made with
+[analysis shown](#analysis-while-you-play). **My games** narrows the list to
+this browser, under **My record**: your completed games across sessions,
+grouped by opponent and by the two decks, with wins, losses and draws, the win
+rate with its 95% Wilson interval, and **With analysis**, the games among them
+with a choice made while analysis was shown. A game
+[played on](#analysis) from another is listed but not counted there.
+Draws count as games, not wins. Rows that differ only in seat or disclosure are
+combined. These are counts of recorded games, not a rating. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
 [launch a replay directly](#open-a-replay-directly). `/replay` alone lists
@@ -1054,7 +1068,7 @@ recent recordings.
 | Position | What the board shows |
 |---|---|
 | Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
-| Consequences | The recorded board after the action, with what it did in the rail's recap. |
+| Consequences | The board after the action, with what it did in the rail's recap. In a game you played this is your own view, your hand included, whoever acts next. |
 | Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
 The transport bar sits where live play has your hand's input:
@@ -1072,7 +1086,10 @@ tick, coloured by whose it was, or a point on that chooser's value line where
 a value was recorded; turns are ruled and numbered. Click it to jump. It is
 open in Replay and folded in live play, where it counts decisions but past
 positions open only in Review after the game. Moves in the rail jump to their
-positions too. Keys never act while you type in a field.
+positions too; there each move is one line, numbered by turn, with the whole
+move in its tooltip, and the moves take the rail's remaining height. The rail
+draws the stack only while something is on it, and the answers only in the
+choices list. Keys never act while you type in a field.
 
 The replay address keeps the position, the perspective and the information
 view. Reloading restores them, with a saved position in this tab as a
@@ -1089,10 +1106,12 @@ choice's consequences), or a fixed seat (the default for a game you played).
 Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-**Show both hands** appears only where spectator reveal is authorized; it does
-not enrich the bot's recorded evidence or acting-view history. Consequences and
-result boards use the recorded view of the seat named in the menu's
-perspective line when a private post-action view was not captured.
+**Show both hands** appears where spectator reveal is authorized: at Watch
+choices that captured a spectator view, and at every position of a game you
+played once it has finished. It does not enrich the bot's recorded evidence or
+acting-view history. In Watch and imported games, consequences and result
+boards use the recorded view of the seat named in the menu's perspective line
+when a private post-action view was not captured.
 
 **Menu** holds the recording's kind and status, each seat's identity (policy
 ID, runner, provenance), **Refresh saved head**, a note for the position,
@@ -1102,6 +1121,144 @@ A live decision already being produced may finish saving while you read; your
 selected board stays put. A pending Search timeout is retained across reload
 and shown with its message. At the live edge, **Retry search** explicitly
 retries that decision; browsing saved positions never retries it.
+
+#### Analysis
+
+An analysis reads a game you played against a policy: at each of your
+decisions with more than one legal action, what that policy would have done
+in your seat. Academy replays the game with the policy in your seat; it sees
+only what your seat saw, and the game follows the moves you made. Opening
+Review of your own game starts an analysis when the game has none yet: by your
+opponent's policy when it is a registered trained policy, otherwise by
+Academy's recommended policy, the one Setup offers first. Review is usable at
+once; **Analysing 34 of 81** counts up while the marks fill in.
+
+At one of your choices the heading reads **Analysis by** the policy, and every
+legal option carries its probability and the policy's estimate after it, 0 to
+100 from your seat. Your choice is labelled **you** and the policy's first
+choice **its choice**. An estimate after an option reads the policy at the
+next decision: your own when you choose next, otherwise the opponent's in a
+world re-dealt from what you knew, never the real hidden cards. With closed
+decklists nothing can be re-dealt, so options after which the opponent
+chooses have no estimate.
+
+Each of your moves in the rail reads **same** when you chose as the policy
+would and **differs** otherwise, with a small track of the two estimates on
+one 0–100 scale: the filled dot after your choice, the ring after its own.
+These are the policy's readings, not grades; a policy weaker than you will
+often differ for good reason.
+
+With an analysis, the **Decisions** strip draws the policy's estimate at each
+of your decisions on a fixed 0–100 axis with a rule at 50. Its caption names
+the measure: **Expected score** for a policy whose values are signed outcomes
+(a draw counts half), **Win chance** for one whose values are win logits.
+Dots mark where you and the policy chose differently.
+
+**Next key moment**, beside the replay's step buttons, jumps to the next of up
+to eight decisions worth a look,
+in game order: the five where the policy's first choice had the most
+probability over yours, and the three where its estimate moved most by your
+next decision. At one of them a line names why, such as **Key moment ·
+Differs · 62% on its first choice, 8% on yours** or **Its expected score moved
+48 → 71 by your next decision**. A reading that barely moves, as an untrained
+policy's does, has none.
+
+**See its line**, at any analysed decision of your own game, plays the
+policy's first choice there and carries on: the policy's first choice at each
+of your decisions and your opponent's own choice at theirs, to the end of the
+next turn or the end of the game. The board shows each move from your seat;
+**Previous** and **Next**, or the arrow keys, step through it, and **Return to
+the game**, or Escape, goes back to the decision. The line is one play-out of
+the real game's cards, not a forecast, and nothing about it is saved. Your
+opponent's moves are named once the game is over; in a game that stopped
+early they read **Opponent's move**. Priority passes fold into the move
+before them.
+
+**Play on from here**, at any of your decisions of a finished game you played,
+opens Play with that game's decks, cards and opponent and replays its moves up
+to the decision; **Play on** starts it, and from there you choose and the
+opponent plays as in any game. It is a new game in your history: Review names
+the game it came from, its row in Games reads **played on from another game**,
+and **My record** leaves it out, since its opening moves were not played in it.
+The moves before the decision are not listed in the new game's live move list;
+its Review lists them all. If this build no longer plays the old game the same
+way, Play says which step differs and nothing starts.
+
+**Analyse with…** in **Menu** runs any other registered trained policy; each
+run is saved beside the game, and **Shown** switches between them. Analyses
+are never part of the game's recording or its exports. Readers of a shared
+finished game see its saved analyses; only you can start one.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search, and the recommended policy cannot read these decks. | Choose a policy under **Analyse with…**. |
+| **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
+| A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
+
+A policy with Search is not offered: Search plays out from the real hidden
+cards. One analysis runs per game at a time; a stopped or interrupted game is
+analysed up to its last recorded position.
+
+#### Analysis while you play
+
+**Show analysis**, in the top bar's Settings during your game (the bar then
+shows an **Analysis on** chip that turns it off), reads your
+decisions as you play. It is off at the start of every game. Turned on, it
+reads with your opponent's policy when that is a registered trained policy,
+otherwise with Academy's recommended policy; with more than one, a menu
+beside the switch changes it. The reading is the same as Review's: the
+heading reads **Analysis by** the policy, and each option on its card and row
+carries the policy's probability and its estimate after it. Nothing is
+chosen, raised or reordered for you, and no key plays the policy's choice.
+
+Turning it on also opens the strip under the board, which draws the policy's
+estimate from your seat at each of your decisions this game, those made
+before you turned it on included (read after the fact, so they mark nothing), on Review's
+fixed 0–100 axis; hovering it names the nearest point by the move before it
+and its score. The line keeps its points when you turn analysis off and on
+again, and starts over if you switch to another policy.
+
+Academy first replays the game so far with the policy in your seat, which takes
+a few seconds, then reads each new decision once its board is on the table.
+The board never waits for a reading: it arrives in its own message after the
+decision, and a choice you make before it arrives reads as made without it.
+
+Each choice you commit after its reading reached you is saved as made with
+analysis shown. Review marks that move **analysis shown**, **This game**
+counts them, and Games shows them on the game's row and in **My record**.
+Turning **Show analysis** off stops the marking from your next decision; it
+never unmarks a choice. A game you play without it saves exactly as before.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No registered policy can read this game** under the switch | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| A reason under the switch, and no probabilities | The policy failed, or the game could not be replayed here. Your game goes on. | Turn the switch off and on to start again. |
+
+#### The game in numbers
+
+The result card of a game you played ends with one line of its numbers, such as
+**9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
+2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
+the play or the draw and how long the game took, and a table of both seats:
+
+| Count | What it counts |
+|---|---|
+| Lands played | Your decisions that played a land. |
+| Spells cast | Cards you cast. Copies of a spell are never cast and do not count. |
+| Attacks | Your decisions that declared an attacker. |
+| Cards drawn | Cards drawn from your library after the opening hand. |
+| Damage dealt | Damage your sources dealt to your opponent. |
+| Damage taken | Damage dealt to you by any source, your own included. |
+
+With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
+chose as Reader would: 8 of 20**, where the policy's first choice was yours,
+and the policy's estimate from your seat at the start, at its highest and at
+the end. A game with choices made while [analysis was
+shown](#analysis-while-you-play) reads **Chosen with analysis shown: 3
+decisions**. A game that stopped early is counted to where it stopped. Academy
+counts each game once, by replaying it when it ends. An older game is counted
+the first time you open it. A game recorded by another build has no counts.
 
 #### Continue a live Watch
 
@@ -1130,14 +1287,24 @@ At an eligible choice, **Try another line** pauses playback and live production
 and opens an isolated branch on the same board: the historical offers become
 live, and choosing one plays it against the branch. **Return to recorded decision** restores that
 exact choice and its history; the original recording and result stay unchanged.
-A fresh branch requires the server's retained Study state. If that state has
-expired, recorded playback remains available.
+A fresh branch requires the server's retained Study state, so the button
+appears only while that state exists; once it has expired, recorded playback
+remains available, and in your own games **Play on from here** starts a new
+game from the decision instead.
 
 Older recordings use the same viewer with the frames they retained. Missing
 legal offers, Study support, consequences or policy outputs are explicitly
-unavailable; they are never inferred from a later frame or a rerun. Reading
-an existing recording needs no original checkpoint or policy provider. Import
-verification and live continuation have their own prerequisites below.
+unavailable; they are never inferred from a later frame. Reading an existing
+recording needs no original checkpoint or policy provider. Import verification
+and live continuation have their own prerequisites below.
+
+A game you played is also played again from its seed, decks and actions as you
+step through it, which gives your own view at every position and both hands
+after the game. Each step is checked against the stored track: the acting
+board and the action must match, and the final board and result. Where they
+stop matching, or for a game recorded in another world or card set, the board
+is the recorded one, with a line saying how far your own view was replayed and
+which world recorded the game.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same

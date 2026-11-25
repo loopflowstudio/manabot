@@ -75,6 +75,8 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   page.on('websocket', socket => socket.on('framesent', frame => {
     if (String(frame.payload).includes('"type":"command"')) sent.push(String(frame.payload));
   }));
+  // Beats are tested on their own; here every Space is a move.
+  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'off'));
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
@@ -122,8 +124,6 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   for (let decision = 0; decision < 40 && (byEnter < 3 || bySpace < 6); decision += 1) {
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     if (await page.getByTestId('result-card').isVisible()) break;
-    // Beats are tested on their own; here every key is a move, so wait out the opponent's read-out.
-    await expect(page.locator('[data-testid=action-panel].reading-out')).toHaveCount(0, { timeout: 30_000 });
     const before = await revision(page);
     const commands = sent.length;
     const space = await page.getByTestId('action-panel').getAttribute('data-action-space-kind');
@@ -164,7 +164,7 @@ test('? opens the sheet of the board\'s keys, and Esc returns to the hint', asyn
   await page.keyboard.press('?');
   const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
   await expect(sheet).toBeVisible();
-  for (const key of ['Space', '1–9', 'Enter', 'Tab', 'Shift', 'Esc']) await expect(sheet.locator('kbd', { hasText: key }).first()).toBeVisible();
+  for (const key of ['Space', '1–9', 'Enter', 'Tab', 'F6', 'Esc']) await expect(sheet.locator('kbd', { hasText: key }).first()).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(page.getByTestId('keys-hint')).toBeFocused();

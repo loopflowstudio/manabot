@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Iterable
+import concurrent.futures
 from contextlib import ExitStack, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
@@ -18,6 +19,7 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+import threading
 from typing import Any, Callable, Literal, TypedDict
 import warnings
 
@@ -62,7 +64,6 @@ from managym.experience import (
 from managym.experience_projection import (
     decision_surface_view,
     definition_names,
-    describe_actions,
     enum_name,
     object_records,
     observation_definition_id,
@@ -87,11 +88,24 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
+from .analysis import (
+    AnalysedDecision,
+    AnalysisChoices,
+    AnalysisStop,
+    LiveAnalysis,
+    agent_line,
+    analysed_events,
+    analysing_policies,
+    analysis_choices,
+    policy_admissions,
+    run_analysis,
+)
 from .append_json import encode_list, splice
 from .attempts import (
     CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
+    RetainedAttempt,
     decode_cursor,
     page_cursor,
     participant_id,
@@ -114,6 +128,7 @@ from .deck_pools import (
     resolve_deck_pool,
     set_deck_pools,
 )
+from .numbers import game_numbers, wilson_interval
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -171,6 +186,7 @@ from .shared_table_protocol import (
     ReturnToLiveMessage,
     SetStopsMessage,
     ShareBeliefMessage,
+    ShowAnalysisMessage,
     TableCapability,
     TableSnapshot,
     TransferPilotMessage,
@@ -192,7 +208,7 @@ from .study_runtime import (
     join_historical_study_evidence,
     select_study_plan,
 )
-from .trace import GameConfig, Trace, TraceEvent
+from .trace import GameConfig, PlayedFrom, Trace, TraceEvent
 from .villain import build_villain_policy
 from .work import Work, WorkStatus
 
@@ -978,21 +994,6 @@ def _parse_game_config(config: Any) -> GameConfig:
     return parsed
 
 
-def _academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
-    """Relabel player targets by role without changing card names or native offers."""
-    actions = describe_actions(obs)
-    labels = {
-        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
-        for player in (obs.agent, obs.opponent)
-    }
-    for row in actions:
-        focus = row["focus"]
-        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
-            if row["description"] in {"Target Hero", "Target Villain"}:
-                row["description"] = f"Target {labels[focus[0]]}"
-    return actions
-
-
 def observe_policies(
     policies: Iterable[BotPolicy | None], env: managym.Env, obs: managym.Observation
 ) -> None:
@@ -1049,6 +1050,9 @@ class GameSession:
         self.interrupted_config: dict[str, Any] | None = None
         self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
+        # A policy reading the person's decisions, while they show it; off at
+        # the start of every game (`show_analysis`).
+        self._live_analysis: LiveAnalysis | None = None
         self.mirror_retry: PendingBotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -1187,6 +1191,23 @@ class GameSession:
         if demo_name is not None:
             demo = load_play_demo(demo_name)
             raw_config = {**raw_config, **demo.config}
+        played_from: PlayedFrom | None = None
+        source_events: list[dict[str, Any]] = []
+        if isinstance(raw_config, dict) and raw_config.get("played_from") is not None:
+            played_from, source = self._played_from_source(
+                raw_config["played_from"], raw_config.get("player_token")
+            )
+            source_events = source["events"]
+            # The source's own setup and seed; only identity travels with the request.
+            raw_config = {
+                **setup_draft(GameConfig(**source["config"])),
+                "seed": str(source["config"]["seed"]),
+                **{
+                    key: raw_config[key]
+                    for key in ("player_token", "player_name", "request_id")
+                    if key in raw_config
+                },
+            }
 
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
@@ -1319,6 +1340,7 @@ class GameSession:
             winner=None,
             end_reason="active",
             timestamp=self._clock(),
+            played_from=played_from,
         )
         self._trace_saved = False
         self.trace_id = None
@@ -1382,20 +1404,122 @@ class GameSession:
         # decisions. Retain every Command and Study root in memory, then persist
         # its complete final snapshot once instead of rewriting the growing
         # replay at each internal setup step.
-        self._preparing_demo = demo is not None
+        self._preparing_demo = demo is not None or played_from is not None
         try:
-            self._advance()
+            if played_from is not None:
+                self._play_recorded_prefix(source_events, played_from.event)
+            else:
+                self._advance()
             self._last_presentation_cursor = self.presentation.next_seq
             update = self._wire_message(reason="initial_connect")
             if demo is not None:
                 replay_checked_prefix(self, update, demo, demo_name)
         finally:
             self._preparing_demo = False
-        if demo is not None:
+        if demo is not None or played_from is not None:
             update = self._wire_message(reason="initial_connect")
         if launch_id is not None:
             update["launch"] = launch_id
         return update
+
+    def _played_from_source(
+        self, raw: Any, player_token: Any
+    ) -> tuple[PlayedFrom, dict[str, Any]]:
+        """The game to play on from and its stored trace: one of yours, no longer
+        being played, at one of your deliberate decisions."""
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("trace_id"), str)
+            or type(raw.get("event")) is not int
+        ):
+            raise ValueError("played_from needs a game and a decision.")
+        trace_id, event = raw["trace_id"], raw["event"]
+        access = self.attempt_store.access(
+            trace_id,
+            {self.attempt_owner},
+            player_token if isinstance(player_token, str) else None,
+        )
+        if access is None or not access["mine"]:
+            raise ValueError("played_from_unavailable: Only your own games can be played on.")
+        source = self.attempt_store.load(trace_id)
+        assert source is not None
+        if source["end_reason"] == "active":
+            raise ValueError("played_from_active: That game is still being played.")
+        events = source["events"]
+        if (
+            not 0 <= event < len(events)
+            or events[event]["actor"] != "hero"
+            or events[event].get("auto")
+        ):
+            raise ValueError("played_from_decision: That step is not one of your decisions.")
+        return PlayedFrom(trace_id, event), source
+
+    def _play_recorded_prefix(self, events: list[dict[str, Any]], upto: int) -> None:
+        """Play a recorded game's first `upto` steps through the Command path.
+
+        The opponent's recorded choices go through the offer-policy hook (a
+        recurrent opponent is still asked at each, so it has the history it
+        would have had) and the person's through `hero_command`. Every window
+        surfaces meanwhile, so the steps automation took replay as recorded,
+        now as Commands. The game is left at decision `upto`, the person's.
+        Raises ValueError where the game no longer plays as recorded.
+        """
+        assert self.trace is not None
+
+        def recorded(actor: str, context: DecisionContext) -> int:
+            index = len(self.trace.events)
+            event = events[index] if index < upto else None
+            action = None if event is None else int(event["action"])
+            offers = [
+                offer
+                for offer, engine in context.action_by_offer.items()
+                if engine == action
+            ]
+            if (
+                event is None
+                or event["actor"] != actor
+                or len(offers) != 1
+                or context.actions[action]["description"]
+                != event["action_description"]
+            ):
+                raise ValueError(
+                    f"played_from_diverged: Step {index + 1} no longer plays as recorded."
+                )
+            return offers[0]
+
+        def opponent(context: DecisionContext) -> int:
+            policy = self.villain_policy
+            if isinstance(policy, PolicyRunner) and policy.base_descriptor.recurrent:
+                choose_bot(policy, self.env, self.obs)
+            return recorded("villain", context)
+
+        saved = self._villain_offer_policy, self.auto_pass
+        self._villain_offer_policy, self.auto_pass = opponent, False
+        try:
+            self._advance()
+            while len(self.trace.events) < upto:
+                context = self._publish_current_prompt()
+                if context is None:
+                    raise ValueError("played_from_diverged: The game ended early.")
+                result = self.hero_command(
+                    {
+                        "command_id": f"played-from.{len(self.trace.events)}",
+                        "match_id": self.match_id,
+                        "expected_revision": context.revision,
+                        "prompt_id": context.prompt_id,
+                        "offer_id": recorded("hero", context),
+                        "answers": [],
+                    }
+                )
+                if result["status"] != "accepted":
+                    raise ValueError("played_from_diverged: A recorded move was refused.")
+        finally:
+            self._villain_offer_policy, self.auto_pass = saved
+        # The prompt published during the prefix carries its stops; publish it
+        # again under the game's own. Nobody has seen it, so nothing goes stale.
+        self.published_prompt = None
+        if len(self.trace.events) != upto or self._publish_current_prompt() is None:
+            raise ValueError("played_from_diverged: The decision was not reached.")
 
     def continue_game(self, request: RematchMessage, owner: str) -> dict[str, Any]:
         """Resolve one revision-bound next game from the owner-private draft."""
@@ -1918,8 +2042,17 @@ class GameSession:
                 auto=auto,
                 bot_decision=self._bot_decision,
                 analysis_observation=analysis_observation,
+                committed_at=trace_store.utc_now_iso(),
+                analysis_shown=(
+                    actor == "hero"
+                    and not auto
+                    and self._live_analysis is not None
+                    and self._live_analysis.shown(len(self.trace.events))
+                ),
             )
         )
+        if self._live_analysis is not None:
+            self._live_analysis.advance(action_index)
         self.obs = next_obs
         self._bot_decision = None
         self._advance_protocol_revision()
@@ -2125,7 +2258,7 @@ class GameSession:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            actions = _academy_actions(self.obs, self.human_seat)
+            actions = trace_store.academy_actions(self.obs, self.human_seat)
             action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
@@ -2304,6 +2437,8 @@ class GameSession:
                 ]["revision"]
             ),
         )
+        if self._live_analysis is not None and self.trace is not None:
+            self._live_analysis.decide(len(self.trace.events), self.revision)
         return self.published_prompt
 
     def _build_decision_context(
@@ -2313,7 +2448,7 @@ class GameSession:
         viewer: int,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
-        actions = _academy_actions(obs, self.human_seat)
+        actions = trace_store.academy_actions(obs, self.human_seat)
         action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
@@ -2559,6 +2694,8 @@ class GameSession:
             payload["deck_names"] = frame["deck_names"]
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
+        if self._live_analysis is not None:
+            payload["analysis"] = {"policy": self._live_analysis.policy}
         payload.update(transient)
         payload["mirror_retry"] = self.mirror_retry
         return payload
@@ -2619,15 +2756,16 @@ class GameSession:
         )
         if finished:
             self.trace = retained
+        world = {
+            **self.env.content_pack_manifest(),
+            "rules_binary_sha256": RULES_BINARY_SHA256,
+            "experience_source_sha256": PLAY_SOURCE_SHA256,
+        }
         self.attempt_store.save(
             self.match_id,
             self.attempt_owner,
             self.revision,
-            {
-                **self.env.content_pack_manifest(),
-                "rules_binary_sha256": RULES_BINARY_SHA256,
-                "experience_source_sha256": PLAY_SOURCE_SHA256,
-            },
+            world,
             retained.to_record(),
             trace_json=retained.to_json(
                 self._encoded_events, self._canonical_replay_json(canonical)
@@ -2648,6 +2786,12 @@ class GameSession:
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
+            if not self.watch_mode:
+                save_game_numbers(
+                    self.attempt_store,
+                    self.match_id,
+                    RetainedAttempt(retained.to_record(), json.dumps(world)),
+                )
 
     def canonical_replay(self) -> CanonicalReplayV1:
         """Project the canonical decisions committed so far.
@@ -2986,7 +3130,82 @@ class GameSession:
             )
 
     def _close_policies(self) -> None:
+        self._end_live_analysis()
         close_policies((self.villain_policy, *(self.watch_policies or ())))
+
+    def _end_live_analysis(self) -> None:
+        if self._live_analysis is not None:
+            self._live_analysis.close()
+            self._live_analysis = None
+
+    def show_analysis(
+        self,
+        shown: bool,
+        policy: str | None,
+        publish: Callable[[dict[str, Any]], concurrent.futures.Future[bool]],
+    ) -> dict[str, Any]:
+        """Show or hide a policy's reading of the person's decisions in this game.
+
+        Showing starts a `LiveAnalysis` from the game so far; its readings go
+        to `publish`, never into a frame. Hiding stops it: decisions from the
+        next one on are not marked `analysis_shown`.
+        """
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+        if self.watch_mode:
+            raise TableDispatchError("conflict", "A watched game has no seat of yours.")
+        self._end_live_analysis()
+        # Admission takes seconds the first time; the connection admits off the
+        # game lock before dispatching here (`policy_admissions`).
+        choices = analysing_policies(self.trace.config, policy_admissions())
+        state: dict[str, Any] = {
+            "type": "analysis_state",
+            "shown": False,
+            "policy": None,
+            "policies": choices.policies,
+            "unavailable": None
+            if choices.policies
+            else "No registered policy can read this game.",
+        }
+        if not shown or not choices.policies:
+            return state
+        key = policy or choices.default or choices.policies[0]["sha256"]
+        chosen = next((p for p in choices.policies if p["sha256"] == key), None)
+        if chosen is None:
+            raise TableDispatchError("not_found", "That policy cannot read this game.")
+        config = self.trace.config
+        setup = config.to_rust()
+        seat = self.human_seat
+        events = [
+            {
+                "actor": event.actor,
+                "auto": event.auto,
+                "action": event.action,
+                "action_description": event.action_description,
+            }
+            for event in self.trace.events
+        ]
+        snapshot = RetainedAttempt(
+            {
+                "config": config.to_record(),
+                "events": events,
+                "end_reason": "active",
+                "winner": None,
+            },
+            json.dumps(self.env.content_pack_manifest()),
+        )
+        self._live_analysis = LiveAnalysis(
+            snapshot,
+            seat,
+            chosen,
+            lambda: policy_registry().load(
+                key, setup, seat=seat, seed=int(config.seed or 0)
+            ),
+            publish,
+        )
+        if self.published_prompt is not None:
+            self._live_analysis.decide(len(self.trace.events), self.revision)
+        return {**state, "shown": True, "policy": chosen}
 
     def close(self, end_reason: str) -> None:
         try:
@@ -3378,6 +3597,7 @@ DISPATCH_CAPABILITIES: dict[str, TableCapability] = {
     "pass_turn": TableCapability.SUBMIT_LIVE_COMMAND,
     "retry_mirror": TableCapability.SUBMIT_LIVE_COMMAND,
     "set_stops": TableCapability.CONFIGURE_MATCH,
+    "show_analysis": TableCapability.SUBMIT_LIVE_COMMAND,
     "transfer_pilot": TableCapability.TRANSFER_PILOT,
     "author_belief": TableCapability.AUTHOR_BELIEF,
     "share_belief": TableCapability.SHARE_BELIEF,
@@ -3488,8 +3708,13 @@ def _dispatch_table_request(
     participant: ParticipantLease,
     request: Any,
     committed: Callable[[dict[str, Any]], None] | None = None,
+    publish_analysis: Callable[[dict[str, Any]], concurrent.futures.Future[bool]]
+    | None = None,
 ) -> tuple[dict[str, Any], bool]:
-    """Authorize and execute one closed operation under the table lock."""
+    """Authorize and execute one closed operation under the table lock.
+
+    `publish_analysis` delivers a live analysis's readings to the pilot
+    without waiting (`_send_live_analysis`)."""
     if isinstance(request, CommandMessage):
         command_id = request.command.command_id
         if command_id in record.game.accepted_commands:
@@ -3555,6 +3780,12 @@ def _dispatch_table_request(
             ),
             True,
         )
+    if isinstance(request, ShowAnalysisMessage):
+        if publish_analysis is None:
+            raise TableDispatchError("conflict", "Analysis needs a live connection.")
+        return record.game.show_analysis(
+            request.shown, request.policy, publish_analysis
+        ), False
     if isinstance(request, TransferPilotMessage):
         target = record.participants.get(request.target_viewer_id)
         if target is None or target is participant:
@@ -3710,6 +3941,22 @@ async def _publish_work(record: SessionRecord, status: WorkStatus) -> None:
                 )
 
 
+async def _send_live_analysis(record: SessionRecord, message: dict[str, Any]) -> bool:
+    """Send a live analysis reading to the pilot; true once it was sent."""
+    sent = False
+    for participant in list(record.participants.values()):
+        socket = participant.websocket
+        if participant.role != ViewerRole.PILOT or socket is None:
+            continue
+        try:
+            await socket.send_json(message)
+            sent = True
+        except Exception:
+            if participant.websocket is socket:
+                participant.websocket = None
+    return sent
+
+
 async def _send_table_response(
     record: SessionRecord,
     initiator: ParticipantLease,
@@ -3836,6 +4083,19 @@ async def play_socket(websocket: WebSocket) -> None:
                         attached_viewer_id = None
                         raise ValueError("Session expired. Start a new game.")
 
+                game = record.game
+                if (
+                    isinstance(parsed, ShowAnalysisMessage)
+                    and game.trace is not None
+                    and not game.watch_mode
+                ):
+                    # The first admission of a game's setups takes seconds;
+                    # make it here, off the game lock, so play goes on while it
+                    # runs and `show_analysis` then reads the cached answer.
+                    with suppress(ImportError, OSError, ValueError):
+                        await asyncio.to_thread(
+                            policy_admissions().admitted, game.trace.config.to_rust()
+                        )
                 async with record.lock:
                     loop = asyncio.get_running_loop()
 
@@ -3848,6 +4108,15 @@ async def play_socket(websocket: WebSocket) -> None:
                             ),
                             loop,
                         ).result()
+
+                    def publish_analysis(
+                        message: dict[str, Any],
+                        record: SessionRecord = record,
+                    ) -> concurrent.futures.Future[bool]:
+                        # From the analysis worker: never waits for delivery.
+                        return asyncio.run_coroutine_threadsafe(
+                            _send_live_analysis(record, message), loop
+                        )
 
                     def publish_work(status: WorkStatus) -> None:
                         # Called while the worker is paused at a safe boundary.
@@ -3874,6 +4143,7 @@ async def play_socket(websocket: WebSocket) -> None:
                             participant,
                             parsed,
                             committed,
+                            publish_analysis,
                         )
                         failed = record.game.mirror_retry is not None
                         dispatched = True
@@ -4033,7 +4303,9 @@ async def authorize_record(
         # Each reader applies the recording's permitted information projection.
         # Feedback and every mutation remain participant-only.
         public_read = request.method == "GET" and (
-            len(parts) == 4 or parts[4] in {"decisions", "recording", "positions"}
+            len(parts) == 4
+            or parts[4]
+            in {"decisions", "recording", "positions", "analyses", "numbers"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -4247,6 +4519,64 @@ async def list_traces(
     return page
 
 
+@app.get("/api/traces/record")
+def get_record(
+    response: Response,
+    x_etude_participant_tokens: str | None = Header(default=None),
+    x_etude_player_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """My games' record: wins, losses and draws over completed games against
+    each opponent identity with each pair of decks, with a 95% Wilson interval
+    on the win rate (draws count as games)."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    rows = store.record(
+        _record_owners(x_etude_participant_tokens), x_etude_player_token
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return {
+        "rows": [
+            {**row, "interval": wilson_interval(row["wins"], row["games"])}
+            for row in rows
+        ]
+    }
+
+
+def save_game_numbers(
+    store: AttemptStore, trace_id: str, attempt: RetainedAttempt
+) -> dict[str, Any] | None:
+    """Compute and save a finished game's numbers; None where it does not
+    re-execute here. A failure never reaches the game that just ended."""
+    try:
+        numbers = game_numbers(attempt)
+    except Exception:  # noqa: BLE001 - numbers are derived; the game is saved
+        logging.getLogger(__name__).exception("Summary of %s failed", trace_id)
+        return None
+    if numbers is None:
+        return None
+    store.save_numbers(trace_id, numbers.model_dump_json())
+    return numbers.model_dump(mode="json")
+
+
+@app.get("/api/traces/{trace_id}/numbers")
+def get_game_numbers(trace_id: str) -> dict[str, Any]:
+    """A played game's numbers, computed on first read for a game saved
+    before summaries were (null where it does not re-execute here)."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    saved = store.numbers(trace_id)
+    if saved is None:
+        raise HTTPException(404, "recording_not_found")
+    status, numbers_json = saved
+    if numbers_json is not None:
+        return {"numbers": json.loads(numbers_json)}
+    if status == "active":
+        return {"numbers": None}
+    attempt = store.load_attempt(trace_id)
+    assert attempt is not None
+    if attempt.trace["config"].get("watch_players") is not None:
+        return {"numbers": None}
+    return {"numbers": save_game_numbers(store, trace_id, attempt)}
+
+
 def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
     try:
         return load_canonical_replay(trace_store.load_trace(trace_id))
@@ -4417,6 +4747,8 @@ def get_recording_index(
         if offset + limit < len(recording.positions)
         else None,
         "revision": metadata.get("revision"),
+        "started_at": metadata.get("started_at"),
+        "ended_at": metadata.get("ended_at"),
         "status": "finished"
         if finished
         else "waiting"
@@ -4429,6 +4761,15 @@ def get_recording_index(
         "winner": payload.get("winner") if finished else None,
         "players": players,
         "record_stop": (payload.get("recording_import") or {}).get("stop"),
+        # A game played on from another: its source and the turn it starts at.
+        "played_from": {
+            **payload["played_from"],
+            "turn": payload["events"][payload["played_from"]["event"]]["observation"][
+                "turn"
+            ].get("turn_number"),
+        }
+        if payload.get("played_from")
+        else None,
         "source_kind": "play"
         if recording.completed_mirror
         else opponent.get("source_kind"),
@@ -4470,6 +4811,151 @@ def get_recording_position(
         return position
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+# ———————————————— Analyses: a policy's reading of your decisions
+
+# Games with an analysis running in this process; one per game at a time.
+_ANALYSING: set[str] = set()
+_ANALYSING_LOCK = threading.Lock()
+
+
+def _analysed_attempt(trace_id: str) -> tuple[AttemptStore, RetainedAttempt]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    attempt = store.load_attempt(trace_id)
+    if attempt is None:
+        raise HTTPException(404, "recording_not_found")
+    return store, attempt
+
+
+@app.get("/api/traces/{trace_id}/analyses")
+def get_analyses(trace_id: str) -> dict[str, Any]:
+    """The game's saved analyses: a read of their rows only, cheap enough to
+    follow a running analysis."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    if not store.has_attempt(trace_id):
+        raise HTTPException(404, "recording_not_found")
+    return {"analyses": store.analyses(trace_id)}
+
+
+@app.get("/api/traces/{trace_id}/analyses/policies")
+def get_analysis_policies(trace_id: str) -> dict[str, Any]:
+    """Who may analyse this game, read once when Review opens: it re-executes
+    the game and admits every registered policy."""
+    _, attempt = _analysed_attempt(trace_id)
+    try:
+        choices = analysis_choices(attempt, policy_admissions())
+    except (ImportError, OSError, ValueError) as exc:
+        choices = AnalysisChoices([], None, f"Policies could not be listed: {exc}")
+    return {
+        "policies": choices.policies,
+        "default": choices.default,
+        "unavailable": choices.unavailable,
+        "events": analysed_events(
+            attempt.trace, attempt.trace["config"].get("human_seat", 0)
+        ),
+    }
+
+
+class AnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    policy: str
+
+
+@app.post("/api/traces/{trace_id}/analyses")
+def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
+    """Analyse your seat of a game that is no longer being played."""
+    store, attempt = _analysed_attempt(trace_id)
+    if attempt.trace["end_reason"] == "active":
+        raise HTTPException(409, "analysis_game_active")
+    registry = policy_registry()
+    try:
+        descriptor = registry.descriptor(request.policy)
+    except ValueError as exc:
+        raise HTTPException(404, "analysis_policy_unavailable") from exc
+    if descriptor.base_policy is not None:
+        raise HTTPException(409, "analysis_by_search_refused")
+    choices = analysis_choices(attempt, policy_admissions())
+    if choices.unavailable or all(
+        policy["sha256"] != descriptor.id for policy in choices.policies
+    ):
+        raise HTTPException(409, choices.unavailable or "analysis_policy_unavailable")
+    config = GameConfig(**attempt.trace["config"])
+    seat = config.human_seat
+    with _ANALYSING_LOCK:
+        if trace_id in _ANALYSING:
+            raise HTTPException(409, "analysis_running")
+        try:
+            runner = registry.load(
+                descriptor.id, config.to_rust(), seat=seat, seed=int(config.seed or 0)
+            )
+        except (ImportError, OSError, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        _ANALYSING.add(trace_id)
+    analysis = store.start_analysis(
+        trace_id, seat, descriptor.record(), len(analysed_events(attempt.trace, seat))
+    )
+
+    def run() -> None:
+        try:
+            run_analysis(store, analysis, attempt, seat, runner)
+        finally:
+            with _ANALYSING_LOCK:
+                _ANALYSING.discard(trace_id)
+
+    threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+    return {"id": analysis}
+
+
+class LineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    event: int
+
+
+@app.post("/api/traces/{trace_id}/analyses/{analysis_id}/line")
+def see_line(trace_id: str, analysis_id: str, request: LineRequest) -> dict[str, Any]:
+    """The analysing policy's line from one of its decisions (`agent_line`):
+    its first choice played, then the policy and the game's opponent on to the
+    end of the next turn. Computed on each request; nothing is saved."""
+    store, attempt = _analysed_attempt(trace_id)
+    if attempt.trace["end_reason"] == "active":
+        raise HTTPException(409, "analysis_game_active")
+    saved = next((a for a in store.analyses(trace_id) if a["id"] == analysis_id), None)
+    if saved is None:
+        raise HTTPException(404, "analysis_not_found")
+    evidence = next(
+        (d for d in saved["decisions"] if d.get("event") == request.event), None
+    )
+    if evidence is None:
+        raise HTTPException(404, "line_decision_not_analysed")
+    config = GameConfig(**attempt.trace["config"])
+    registry = policy_registry()
+    seat = int(saved["seat"])
+    runner: PolicyRunner | None = None
+    opponent: BotPolicy | None = None
+    try:
+        runner = registry.load(
+            saved["policy"]["id"],
+            config.to_rust(),
+            seat=seat,
+            seed=int(config.seed or 0) + request.event,
+        )
+        opponent = build_villain_policy(config, seat=1 - seat)
+    except (ImportError, OSError, ValueError, KeyError) as exc:
+        close_policies((runner, opponent))
+        raise HTTPException(409, "line_policy_unavailable") from exc
+    try:
+        line = agent_line(
+            attempt, AnalysedDecision.model_validate(evidence), seat, runner, opponent
+        )
+    except AnalysisStop as stop:
+        raise HTTPException(409, str(stop)) from None
+    except (ValueError, managym.AgentError) as exc:
+        # Native errors may name private cards: keep only the kind.
+        raise HTTPException(409, f"The line failed: {type(exc).__name__}") from exc
+    finally:
+        close_policies((runner, opponent))
+    return line.model_dump(mode="json")
 
 
 @app.get("/api/traces/{trace_id}/decisions")

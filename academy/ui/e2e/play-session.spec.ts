@@ -153,7 +153,7 @@ for (const [theme, width, height] of [['light', 1280, 800], ['dark', 1440, 900]]
 test('one seat-oriented setup starts both registered bots and retains their exact setup', async ({page}, testInfo) => {
   await page.setViewportSize({width:1280,height:800});
   await page.goto('/?setup=1');
-  await page.getByRole('button', {name:'Watch Bot vs Bot',exact:true}).click();
+  await page.getByRole('combobox', {name:'Seat 1 controller',exact:true}).selectOption('bot');
   const catalog = await (await page.request.get('/api/opponents')).json();
   const smoke = catalog.opponents.filter((p: {name:string}) => p.name.startsWith('Session smoke'));
   for (const seat of [0,1]) {
@@ -177,10 +177,9 @@ test('one seat-oriented setup starts both registered bots and retains their exac
   await expect(page.getByTestId('checkpoint-select').nth(1)).toHaveValue(`policy:${smoke[1].sha256}`);
   await expect(page.getByLabel('Seat 1 deck source',{exact:true})).toHaveValue('8 Island');
   await page.screenshot({path:testInfo.outputPath('shared-watch-setup.png')});
-  // Seat 1 is always yours in Play: the same sources read as your deck and the opponent's.
-  await page.getByRole('button',{name:'Play vs Bot',exact:true}).click();
-  await expect(page.getByLabel('Your deck source',{exact:true})).toHaveValue('8 Island');
-  await expect(page.getByLabel('Opponent deck source',{exact:true})).toHaveValue('8 Mountain');
+  await page.getByRole('combobox',{name:'Seat 2 controller',exact:true}).selectOption('human');
+  await expect(page.getByLabel('Your deck source',{exact:true})).toHaveValue('8 Mountain');
+  await expect(page.getByLabel('Opponent deck source',{exact:true})).toHaveValue('8 Island');
 });
 
 test('session storage failure leaves current Play usable with an honest warning', async ({page}) => {
@@ -270,7 +269,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
     await expectSession(page, 'Game 1');
     await expect((await session(page)).getByRole('link',{name:'Session history'})).not.toHaveAttribute('href',history!);
     await (await session(page)).getByRole('button',{name:'Edit next game',exact:true}).click();
-    await next.getByRole('button',{name:'Watch Bot vs Bot',exact:true}).click();
+    await next.getByRole('combobox',{name:'Seat 1 controller',exact:true}).selectOption('bot');
     await expect(next.getByRole('button',{name:'Save next setup',exact:true})).toHaveCount(0);
     await expect(next.getByRole('button',{name:'Start next game',exact:true})).toHaveCount(0);
     await expect(next).toContainText('Your Play session and its current game stay available');
@@ -300,7 +299,7 @@ for (const [theme, width, height] of [['light',1280,800], ['dark',1440,900]] as 
 
 for (const [mode, deck] of [
   ['All', '16 Island'],
-  ['Only when usable', '4 Island\n4 Consider'],
+  ['Only when the mana could be used', '4 Island\n4 Consider'],
 ]) {
   test(`a human can float mana from the chosen land at priority with ${mode}`, async ({page}) => {
     await page.goto('/?setup=1');

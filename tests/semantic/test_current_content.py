@@ -11,7 +11,6 @@ import pytest
 
 from manabot.semantic.learning import FROZEN_VOCABULARY_LABELS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
-from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
@@ -121,7 +120,6 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
             for key in ("tla_red", "tla_white")
         ]
     )
-    obs = keep_opening_hands(env, obs)
     for _ in range(20):
         if int(obs.turn.step) == 3:
             break

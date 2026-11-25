@@ -51,11 +51,11 @@ class _TransportFacts:
     the foretold slot.
     """
 
-    hand_exits: list[str] = field(default_factory=list)
-    foretold_exits: list[str] = field(default_factory=list)
-    known_returns: list[str] = field(default_factory=list)
-    hidden_draws: int = 0
-    hidden_foretells: int = 0
+    hand_exits: list[str]
+    foretold_exits: list[str]
+    known_returns: list[str]
+    hidden_draws: int
+    hidden_foretells: int
 
     @property
     def known_exits(self) -> list[str]:
@@ -218,19 +218,8 @@ class BeliefTracker:
         transport_commitment = (
             opponent_commitment or pending_commitment if acting != self.viewer else None
         )
-        mulligan = (
-            self.observation.viewer_state.get("turn", {}).get("turn_number") == 0
-            and before_space.pool == next_space.pool
-            and before_space.foretold == next_space.foretold == 0
-            and next_space.hand_size < before_space.hand_size
-            and transport_commitment is None
-        )
-        facts = (
-            _TransportFacts()
-            if mulligan
-            else self._public_transport_facts(
-                before_space, next_space, transport_commitment
-            )
+        facts = self._public_transport_facts(
+            before_space, next_space, transport_commitment
         )
         known_exits = facts.known_exits
         if known_exits:
@@ -256,19 +245,15 @@ class BeliefTracker:
             action_updates = 1
             likelihood_seconds = likelihood.seconds
 
-        prior = BeliefState.compatible_prior(next_space)
-        posterior = (
-            BeliefState.compatible_prior(next_space, model_id=posterior.model_id)
-            if mulligan
-            else posterior.transport(
-                next_space,
-                known_exits=facts.hand_exits,
-                known_returns=facts.known_returns,
-                hidden_draws=facts.hidden_draws,
-                foretold_exits=facts.foretold_exits,
-                hidden_foretells=facts.hidden_foretells,
-            )
+        posterior = posterior.transport(
+            next_space,
+            known_exits=facts.hand_exits,
+            known_returns=facts.known_returns,
+            hidden_draws=facts.hidden_draws,
+            foretold_exits=facts.foretold_exits,
+            hidden_foretells=facts.hidden_foretells,
         )
+        prior = BeliefState.compatible_prior(next_space)
         elapsed = time.perf_counter() - started
         stats = replace(
             self.stats,

@@ -28,7 +28,7 @@
 
   const NAV = $derived([
     { href: '/?setup=1', label: 'New game' },
-    { href: '/games', label: 'Games' },
+    { href: '/games', label: 'History' },
     ...(currentGame.href ? [{href:currentGame.href, label:'Current game'}] : []),
   ]);
   function isActive(href: string): boolean {
@@ -44,42 +44,29 @@
 </svelte:head>
 
 <div class="flex min-h-screen flex-col text-ink">
-  <!-- The banner carries the color pie as a W→U→R→B→G weave: each color
-       radiates from its own point, alternating edges, in the manner of the
-       loopflow logo's multi-direction gradient. Like the card name plates,
-       the banner is a fixed rich world in both modes — Lotus Cobra
-       saturation under a title scrim, literal ivory text. -->
-  <header
-    class="border-b border-black/30"
-    style="background:
-        linear-gradient(180deg, rgb(15 11 6 / 0.34), rgb(15 11 6 / 0.2)),
-        radial-gradient(ellipse 42% 170% at 2% 0%, color-mix(in srgb, var(--vivid-w) 85%, transparent), transparent 78%),
-        radial-gradient(ellipse 42% 170% at 26% 100%, color-mix(in srgb, var(--vivid-u) 85%, transparent), transparent 78%),
-        radial-gradient(ellipse 42% 170% at 50% 0%, color-mix(in srgb, var(--vivid-r) 85%, transparent), transparent 78%),
-        radial-gradient(ellipse 42% 170% at 74% 100%, color-mix(in srgb, var(--vivid-b) 85%, transparent), transparent 78%),
-        radial-gradient(ellipse 42% 170% at 98% 0%, color-mix(in srgb, var(--vivid-g) 85%, transparent), transparent 78%),
-      #221a10"
-  >
-    <div class="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-y-2 px-4 py-3">
+  <!-- One header on every page, the table's bar included: paper, with the
+       color pie as a thin W-U-B-R-G rule beneath it. -->
+  <header class="chrome-bar">
+    <div class="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-y-2 px-4 py-2">
       <div class="flex items-baseline gap-3">
-        <div data-testid="brand-name" class="type-brand text-[#f8f1e0]">Academy</div>
-        <div class="type-label hidden text-[#f8f1e0]/65 sm:block">Games and recorded decisions</div>
+        <div data-testid="brand-name" class="type-brand text-display">Academy</div>
+        <div class="type-label hidden text-ink-3 sm:block">Games and recorded decisions</div>
       </div>
       <nav class="flex items-center gap-2">
         {#each NAV as item}
           <a
             href={item.href}
             aria-current={isActive(item.href) ? 'page' : undefined}
-            class={`rounded border px-3 py-2 transition ${
+            class={`rounded border px-3 py-1 transition ${
               isActive(item.href)
-                ? 'border-[#f8f1e0]/30 bg-[#f8f1e0]/15 font-semibold text-[#f8f1e0]'
-                : 'border-transparent text-[#f8f1e0]/80 hover:border-[#f8f1e0]/25 hover:bg-[#f8f1e0]/10 hover:text-[#f8f1e0]'
+                ? 'border-line bg-field font-semibold text-ink'
+                : 'border-transparent text-ink-2 hover:bg-field hover:text-ink'
             }`}
           >
             {item.label}
           </a>
         {/each}
-        <span class="text-[#f8f1e0]/80 hover:text-[#f8f1e0]"><ThemeSwitch /></span>
+        <span class="text-ink-2 hover:text-ink"><ThemeSwitch /></span>
       </nav>
     </div>
   </header>

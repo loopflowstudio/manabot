@@ -12,7 +12,6 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
-from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 
@@ -52,16 +51,12 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
 
 def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
     env = managym.Env(seed=163, skip_trivial=False)
-    obs, _ = env.reset(
-        managym.GameSetup(
-            [
-                managym.authored_deck_setup("elemental-temur-v1", key)
-                for key in ("temur_left", "temur_right")
-            ],
-            mana_floats=("all", "all"),
-        )
+    env.reset(
+        [
+            managym.authored_deck_setup("elemental-temur-v1", key)
+            for key in ("temur_left", "temur_right")
+        ]
     )
-    keep_opening_hands(env, obs)
     env.scenario_force_battlefield(0, "Hermitic Herbalist")
     env.scenario_force_battlefield(0, "Iroh, Grand Lotus")
     observation = env.scenario_refresh()

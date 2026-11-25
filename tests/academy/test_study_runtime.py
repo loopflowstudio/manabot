@@ -14,10 +14,7 @@ from managym.academy import server, trace as trace_store
 from managym.academy.replay_index import CanonicalReplayV1
 from managym.academy.server import GameSession, SessionRecord, app
 from managym.academy.study_protocol import StudyArtifact
-from managym.academy.study_runtime import (
-    HistoricalStudyEvidenceRequest,
-    UnavailableHistoricalStudyEvidenceProvider,
-)
+from managym.academy.study_runtime import HistoricalStudyEvidenceRequest
 from managym.experience import ExperienceFrame, InteractionOffer
 
 
@@ -160,11 +157,16 @@ def _source_offer(frame: ExperienceFrame) -> InteractionOffer:
 
 def _completed_session(
     trace_dir: Path,
+    *,
+    evidence_provider: ExactFixtureEvidenceProvider | None = None,
+    allow_fixture: bool = False,
 ) -> tuple[GameSession, CanonicalReplayV1]:
     session = GameSession(
         trace_dir,
         id_factory=lambda kind: f"study-runtime-{kind}",
         clock=lambda: "2026-07-17T00:00:00+00:00",
+        historical_evidence_provider=evidence_provider,
+        allow_fixture_study_evidence=allow_fixture,
     )
     session.attempt_owner = server.participant_id("study-resume")
     # Seeded early creatures and configured priority automation keep complete
@@ -204,31 +206,12 @@ def _completed_session(
     return session, CanonicalReplayV1.model_validate(session.trace.canonical_replay)
 
 
-@pytest.fixture(scope="module")
-def completed_session(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> tuple[Path, GameSession, CanonicalReplayV1]:
-    trace_dir = tmp_path_factory.mktemp("study-runtime")
-    session, replay = _completed_session(trace_dir)
-    return trace_dir, session, replay
-
-
 def _install_live_session(
     monkeypatch: pytest.MonkeyPatch,
     trace_dir: Path,
     session: GameSession,
-    *,
-    evidence_provider: ExactFixtureEvidenceProvider | None = None,
-    allow_fixture: bool = False,
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", trace_dir)
-    monkeypatch.setattr(
-        session,
-        "_historical_evidence_provider",
-        evidence_provider or UnavailableHistoricalStudyEvidenceProvider(),
-    )
-    monkeypatch.setattr(session, "_allow_fixture_study_evidence", allow_fixture)
-    session._study_attempts.clear()
     server.SESSION_REGISTRY.clear()
     server.SESSION_REGISTRY["study-session"] = SessionRecord(
         session_id="study-session",
@@ -274,11 +257,11 @@ def _first_pass_retry(
 
 def test_normal_runtime_seals_evidence_and_returns_exactly(
     monkeypatch: pytest.MonkeyPatch,
-    completed_session: tuple[Path, GameSession, CanonicalReplayV1],
+    tmp_path: Path,
 ) -> None:
-    trace_dir, session, _ = completed_session
-    _install_live_session(monkeypatch, trace_dir, session)
-    before = trace_store.load_trace(session.trace_id, trace_dir)
+    session, _ = _completed_session(tmp_path)
+    _install_live_session(monkeypatch, tmp_path, session)
+    before = trace_store.load_trace(session.trace_id, tmp_path)
 
     with TestClient(
         app,
@@ -311,22 +294,20 @@ def test_normal_runtime_seals_evidence_and_returns_exactly(
             == 404
         )
 
-    assert trace_store.load_trace(session.trace_id, trace_dir) == before
+    assert trace_store.load_trace(session.trace_id, tmp_path) == before
 
 
 def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
     monkeypatch: pytest.MonkeyPatch,
-    completed_session: tuple[Path, GameSession, CanonicalReplayV1],
+    tmp_path: Path,
 ) -> None:
-    trace_dir, session, _ = completed_session
-    _install_live_session(
-        monkeypatch,
-        trace_dir,
-        session,
+    session, _ = _completed_session(
+        tmp_path,
         evidence_provider=ExactFixtureEvidenceProvider(),
         allow_fixture=True,
     )
-    before = trace_store.load_trace(session.trace_id, trace_dir)
+    _install_live_session(monkeypatch, tmp_path, session)
+    before = trace_store.load_trace(session.trace_id, tmp_path)
 
     with TestClient(
         app,
@@ -373,21 +354,19 @@ def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
         returned = client.post(f"/api/study-attempts/{retry['attempt_id']}/return")
         assert returned.json() == restored
 
-    assert trace_store.load_trace(session.trace_id, trace_dir) == before
+    assert trace_store.load_trace(session.trace_id, tmp_path) == before
 
 
 def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
     monkeypatch: pytest.MonkeyPatch,
-    completed_session: tuple[Path, GameSession, CanonicalReplayV1],
+    tmp_path: Path,
 ) -> None:
-    trace_dir, session, _ = completed_session
-    _install_live_session(
-        monkeypatch,
-        trace_dir,
-        session,
+    session, _ = _completed_session(
+        tmp_path,
         evidence_provider=ExactFixtureEvidenceProvider(drift_digest=True),
         allow_fixture=True,
     )
+    _install_live_session(monkeypatch, tmp_path, session)
 
     with TestClient(
         app,
@@ -403,13 +382,14 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
         returned = client.post(f"/api/study-attempts/{retry['attempt_id']}/return")
         assert returned.json() == restored
 
-    _install_live_session(
-        monkeypatch,
-        trace_dir,
-        session,
+    forbidden_dir = tmp_path / "forbidden"
+    forbidden_dir.mkdir()
+    forbidden, _ = _completed_session(
+        forbidden_dir,
         evidence_provider=ExactFixtureEvidenceProvider(),
         allow_fixture=False,
     )
+    _install_live_session(monkeypatch, forbidden_dir, forbidden)
     with TestClient(
         app,
         headers={
@@ -417,7 +397,7 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
             "x-etude-participant-token": "study-resume",
         },
     ) as client:
-        _, restored, retry = _first_pass_retry(client, session.trace_id)
+        _, restored, retry = _first_pass_retry(client, forbidden.trace_id)
         reveal = client.post(f"/api/study-attempts/{retry['attempt_id']}/reveal")
         assert reveal.status_code == 409
         assert reveal.json()["detail"] == "fixture_evidence_forbidden"
@@ -429,10 +409,10 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
 
 def test_semantic_retry_supports_land_and_rejects_drift(
     monkeypatch: pytest.MonkeyPatch,
-    completed_session: tuple[Path, GameSession, CanonicalReplayV1],
+    tmp_path: Path,
 ) -> None:
-    trace_dir, session, _ = completed_session
-    _install_live_session(monkeypatch, trace_dir, session)
+    session, _ = _completed_session(tmp_path)
+    _install_live_session(monkeypatch, tmp_path, session)
 
     with TestClient(
         app,

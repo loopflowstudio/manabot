@@ -123,7 +123,7 @@ def verify_attempt(result):
         for row, saved in zip(tape, replay.decisions, strict=True)
     ]
     for surface, commands in (("headless", tape), ("replay", replay_tape)):
-        actual, _ = _run_engine(surface, commands, config=config, decision_memory=True)
+        actual, _ = _run_engine(surface, commands, config=config)
         _equal(
             surface, 0, "all_checkpoints", result["checkpoints"], actual["checkpoints"]
         )

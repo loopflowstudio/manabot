@@ -1,15 +1,19 @@
-"""Isolated browser proof for direct objects and provider-backed Watch seats."""
+"""Isolated browser proof for direct objects, provider-backed Watch seats and
+Study's analysis by a fixture policy (`study-review.spec.ts`)."""
 
 import json
 import os
 from pathlib import Path
 from threading import Event
+from urllib.parse import parse_qs, urlsplit
 
 from managym.academy import server
 from managym.academy.launch import serve
 from managym.academy.opponent import policy_registry
 from managym.policy import PolicyDecision, PolicySpec, PolicyView
 from tests.academy.test_play_modes import _write_tiny_checkpoint
+from tests.academy.test_played_analysis import ReadingFactory
+from tests.academy.test_played_replay import BOLT
 from tests.academy.test_policy_runtime import IndependentFactory, IndependentSession
 
 _LOAD_RELEASE = [Event(), Event()]
@@ -62,6 +66,16 @@ def control_watch_choose(seat: int, operation: str) -> dict[str, bool]:
     return {"ok": True}
 
 
+def short_game(url: str) -> str:
+    """The launch at `url` with Mountain and Lightning Bolt decks, whose games
+    end in a few turns."""
+    (launch,) = parse_qs(urlsplit(url).query)["launch"]
+    config = server.LAUNCH_CONFIGS[launch]
+    config.update(hero_deck=dict(BOLT), villain_deck=dict(BOLT))
+    server._parse_game_config(config)
+    return url
+
+
 def main() -> None:
     output = Path(os.environ["ACADEMY_POLICY_PROOF"])
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -78,6 +92,8 @@ def main() -> None:
             "refused-config": refused,
             "controlled": ControlledFactory("Controlled loading"),
             "baseline": PolicySpec("manabot", str(checkpoint)),
+            # Gives probabilities and a signed-outcome value: Study's analysis.
+            "reader": ReadingFactory(),
         },
     ) as academy:
         refused_url = academy.new_game(opponent="refused-config", seed=7).url
@@ -87,6 +103,7 @@ def main() -> None:
                 {
                     "refused": refused_url,
                     "play": academy.new_game(opponent="independent", seed=7).url,
+                    "study": short_game(academy.new_game(opponent="reader", seed=5).url),
                     "watch": academy.watch(players=("independent", "baseline")).url,
                     "ids": {
                         name: policy_registry().descriptor(name).id

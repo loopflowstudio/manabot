@@ -64,7 +64,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(selections.nth(0)).toHaveValue(`policy:${addresses.ids.independent}`);
     await expect(selections.nth(1)).toHaveValue(`policy:${addresses.ids.baseline}`);
     await expect(selections.nth(0)).toContainText('Independent');
-    await page.getByText('Browse bundled decks and cards', {exact:true}).click();
+    await page.getByText('Browse decks and cards', {exact:true}).click();
     await page.getByText('Other decks', { exact: true }).click();
     await page.getByTestId('browse-interactive').click();
     await page.getByTestId('assign-deck-villain').click();

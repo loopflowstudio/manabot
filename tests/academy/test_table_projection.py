@@ -32,9 +32,7 @@ def test_battlefield_permanents_carry_their_effective_keywords(
             )
             initial = settled_message(websocket)
             game = server.SESSION_REGISTRY[initial["session_id"]].game
-            assert game.env is not None and game.obs is not None
-            while game.obs.turn.turn_number == 0:
-                game.obs, *_ = game.env.step(0)
+            assert game.env is not None
             game.env.scenario_force_battlefield(0, "First-Time Flyer", ready=True)
             game.env.scenario_force_battlefield(0, "Island", ready=True)
             game.obs = game.env.scenario_refresh()
