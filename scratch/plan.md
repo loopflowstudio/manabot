@@ -301,11 +301,16 @@ except `EntersAsCopy`.
 
 ## Passes
 
-Passes 1 and 2 built slices 1–3. Pass 3 added slice 4 and exposed two changes needed in the graveyard design.
+Passes 1–3 built slices 1–4. Pass 3 also set out to build slice 5 but stopped at
+the counterexample above; no slice 5 code exists.
 
-- **Next · graveyard routes:** review slice 5’s revised payment continuation and library shuffle before implementing the three replacement cards.
-- **Pass 4 · proposed-event replacements:** slices 6, 7 and 8.
-- **Pass 5 · integration:** the cross-slice synergies below, ledger rows, Engine
+- **Pass 4 · graveyard routes (slice 5):** first the two-Militant discard-payment
+  and fizzled-spell reproductions, then the continuation across the ordering
+  choice and the in-library reveal/shuffle, then the three cards. Teaches whether
+  immediate batches can suspend on a replacement-order decision.
+- **Pass 5 · proposed-event replacements:** slices 6, 7 and 8 (6 reuses slice 5's
+  graveyard arm).
+- **Pass 6 · integration:** the cross-slice synergies below, ledger rows, Engine
   Budget reference.
 
 ## Cross-slice validation (integrated)
