@@ -47,6 +47,7 @@ def selected(
         ("scripts/audit_rules.py", {"python_unit"}),
         ("tests/semantic/fixtures/elemental/decks.json", {"academy_integration"}),
         ("academy/README.md", set()),
+        ("manabot/README.md", {"integration"}),
         ("scratch/notes.md", set()),
         ("website/app.py", {"python_unit"}),
         ("tests/infra/test_ci_selection.py", {"python_unit"}),

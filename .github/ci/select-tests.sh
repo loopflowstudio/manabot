@@ -32,6 +32,7 @@ else
       scripts/engine_budget.py) select_jobs python_unit engine_budget ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
       scripts/audit_rules.py) select_jobs python_unit ;;
+      manabot/README.md) select_jobs integration ;;
       content/DECKS.md|AGENTS.md|README.md|WORLDS.md|*/README.md|academy/ui/DESIGN.md) ;;
       managym/academy/packs/*) select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
       managym/academy/fixtures/*|managym/academy/server.py|managym/academy/presentation.py|managym/academy/play_demo.py|managym/academy/curated_pack.py|managym/academy/villain.py|managym/academy/presets.py)

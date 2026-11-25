@@ -373,7 +373,7 @@ neither skipped nor succeeded.
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
 | Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
-| Other `manabot/`, training/eval/sim tests, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
+| `manabot/README.md` (published API table), other `manabot/`, training/eval/sim tests, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
 | `manabot/infra/`, `tests/infra/test_external_consumer.py` | Python unit, integration |
 | `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
