@@ -26,7 +26,7 @@ from manabot.env.observation import (
     encode_observation,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy.admission import Spec, admit_native, check
+from manabot.policy.admission import Spec, admit, check
 from manabot.policy.buckets import MIN_BUCKET, bucket, bucket_observation
 from manabot.policy.prepare import (
     OBJECT_VALIDITY_KEYS,
@@ -317,7 +317,7 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     agent = ActorCritic(space, config)
     tables = _tables(agent)
     spec = Spec(config, space, tables, agent.card_definitions.num_embeddings)
-    spans = admit_native(obs, spec, bucketed=False, belief=belief)
+    spans = admit(obs, spec, bucketed=False, belief=belief)
     batch = prepare(
         spans, tables, belief=belief, attention="live_tokens", value_token=True
     )
@@ -354,7 +354,7 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     with pytest.raises(ValueError, match="binary"):
         agent.prepare(obs, belief=replace(belief, validity=belief.validity + 0.5))
     with pytest.raises(ValueError, match="belief-free"):
-        admit_native(
+        admit(
             obs, replace(spec, model=ModelConfig()), bucketed=False, belief=belief
         )
 
@@ -623,7 +623,7 @@ def test_native_batch_preserves_prepared_rows_and_full_external_admission(
     used = dense["agent_permanents"][..., PERMANENT_DEFINITION_INDEX]
     lookup[int(used[used > 0][0])] = -1
     with pytest.raises(ValueError, match="unadmitted semantic definition"):
-        admit_native(
+        admit(
             batch,
             replace(spec, tables=replace(spec.tables, definition_rows=lookup)),
             bucketed=bucketed,

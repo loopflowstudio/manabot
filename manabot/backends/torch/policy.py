@@ -33,20 +33,17 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.name_candidates import NameCandidateEncoder
 from manabot.backends.torch.numerics import buffer_on
 from manabot.backends.torch.recent_events import RecentEventEncoder
-from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.belief.encoding import BeliefRows
-from manabot.env.observation import FACT_KINDS, ObservationBuffers, ObservationSpace
+from manabot.env.observation import FACT_KINDS, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.policy import admission
 from manabot.policy.buckets import (
-    BucketedObservation,
-    bucket_observation,
     object_trimming,
 )
 from manabot.policy.catalog import fresh_policy_tables
@@ -481,40 +478,21 @@ class ActorCritic(nn.Module):
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
         bucketed, tables = self._admit_observation(obs, belief)
-        return self._prepare_rows(
-            bucketed or obs, tables, inference, belief, memory_roots
-        )
+        return self._prepare_rows(bucketed, tables, inference, belief, memory_roots)
 
     def check_observation(
         self, obs: PolicyObservation, *, belief: BeliefRows[np.ndarray] | None = None
     ) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
         bucketed, _ = self._admit_observation(obs, belief)
-        return None if bucketed is None else bucketed.needs
+        return bucketed.needs
 
     def _admit_observation(
         self, obs: PolicyObservation, belief: BeliefRows[np.ndarray] | None
-    ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
+    ) -> tuple[ObservationSpans, Tables]:
         spec = self._admission_spec()
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            return admission.admit_native(
-                obs, spec, bucketed=self.bucketed_shapes, belief=belief
-            ), spec.tables
-        mask = np.asarray(obs["actions_valid"])
-        try:
-            legal = admission.legal_mask(mask)
-        except ValueError as error:
-            # Allocate framework evidence only for a rejected host input.
-            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
-            raise NumericalError(
-                "invalid_action_mask",
-                {
-                    "mask": torch.from_numpy(mask.copy()),
-                    "failed": torch.from_numpy(failed),
-                },
-            ) from error
         return admission.admit(
-            obs, spec, legal, bucketed=self.bucketed_shapes, belief=belief
+            obs, spec, bucketed=self.bucketed_shapes, belief=belief
         ), spec.tables
 
     def prepare_admitted(
@@ -533,35 +511,20 @@ class ActorCritic(nn.Module):
         MPS uses bucketed object columns for inference and bucketed live fact
         routes for both inference and learning.
         """
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = observation_spans(
-                obs,
-                self.observation_space,
-                bucketed=self.bucketed_shapes,
-                objects=self.object_trimming(),
-                minimum_needs=needs,
-            )
-            return self._prepare_rows(
-                rows, self._admission_spec().tables, inference, belief, memory_roots
-            )
-        bucketed = (
-            bucket_observation(
-                obs, self.observation_space, needs, objects=self.object_trimming()
-            )
-            if self.bucketed_shapes
-            else None
+        rows = observation_spans(
+            obs,
+            self.observation_space,
+            bucketed=self.bucketed_shapes,
+            objects=self.object_trimming(),
+            minimum_needs=needs,
         )
         return self._prepare_rows(
-            bucketed or obs,
-            self._admission_spec().tables,
-            inference,
-            belief,
-            memory_roots,
+            rows, self._admission_spec().tables, inference, belief, memory_roots
         )
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        obs: ObservationSpans,
         tables: Tables,
         inference: bool,
         belief: BeliefRows[np.ndarray] | None,

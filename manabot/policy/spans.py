@@ -17,7 +17,6 @@ from manabot.env.memory_store import (
 from manabot.env.observation import (
     FACT_KIND_INDEX,
     FACT_VALUE_INDEX,
-    ObservationBuffers,
     ObservationSpace,
 )
 from manabot.policy.buckets import AXES, BucketSizes, sizes_of
@@ -285,9 +284,7 @@ class ObservationSelection:
         return tuple(result)
 
 
-type PolicyObservation = (
-    managym.ObservationBatch | ObservationSelection | ObservationBuffers
-)
+type PolicyObservation = managym.ObservationBatch | ObservationSelection
 
 
 @dataclass(frozen=True)

@@ -22,7 +22,7 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import validate_setup_binding
-from manabot.policy.admission import Spec, admit_native
+from manabot.policy.admission import Spec, admit
 from manabot.policy.checkpoint import read_container
 from manabot.policy.prepare import Layout, Tables, prepare
 from manabot.sim.agent import GamePlayer
@@ -61,7 +61,7 @@ class Sampler:
         encoded = encode_policy_batch(
             self.space, [obs], blank_decision_memory=self.blank_decision_memory
         )
-        batch = admit_native(encoded, self.spec, bucketed=False)
+        batch = admit(encoded, self.spec, bucketed=False)
         model = self.spec.model
         row = replace(
             prepare(

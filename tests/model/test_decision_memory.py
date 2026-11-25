@@ -21,7 +21,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.memory_store import gather_memory
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.policy.admission import admit_native
+from manabot.policy.admission import admit
 from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
@@ -865,4 +865,4 @@ def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
     keys = spec.tables.record_name_keys
     incomplete = replace(spec.tables, record_name_keys=keys[keys != key])
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        admit_native(batch, replace(spec, tables=incomplete), bucketed=False)
+        admit(batch, replace(spec, tables=incomplete), bucketed=False)

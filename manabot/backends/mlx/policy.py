@@ -42,7 +42,6 @@ from manabot.backends.mlx.decision_memory import DecisionMemory
 from manabot.backends.mlx.gru import PackedGRU
 from manabot.backends.mlx.live_tokens import attend_live
 from manabot.backends.mlx.rl import (
-    NumericalError,
     expected_outcome,
     outcome_probabilities,
 )
@@ -51,12 +50,10 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     BeliefRows,
 )
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.buckets import (
-    BucketedObservation,
-    bucket_observation,
     object_trimming,
 )
 from manabot.policy.checkpoint import Dimensions
@@ -75,7 +72,6 @@ from manabot.policy.prepare import (
 from manabot.policy.protocol import InferenceResult, Precision
 from manabot.policy.readings import Readings
 from manabot.policy.spans import (
-    ObservationSelection,
     ObservationSpans,
     PolicyObservation,
     observation_spans,
@@ -676,7 +672,7 @@ class MLXActorCritic(nn.Module):
     ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
         measured = self._admit_observation(obs, belief)
-        return self._prepare_rows(measured or obs, inference, belief, memory_roots)
+        return self._prepare_rows(measured, inference, belief, memory_roots)
 
     def prepare_admitted(
         self,
@@ -689,25 +685,18 @@ class MLXActorCritic(nn.Module):
     ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
         space = self._static.space
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            rows = observation_spans(
-                obs,
-                space,
-                bucketed=self.bucketed_shapes,
-                objects=self.object_trimming(),
-                minimum_needs=needs,
-            )
-            return self._prepare_rows(rows, inference, belief, memory_roots)
-        bucketed = (
-            bucket_observation(obs, space, needs, objects=self.object_trimming())
-            if self.bucketed_shapes
-            else None
+        rows = observation_spans(
+            obs,
+            space,
+            bucketed=self.bucketed_shapes,
+            objects=self.object_trimming(),
+            minimum_needs=needs,
         )
-        return self._prepare_rows(bucketed or obs, inference, belief, memory_roots)
+        return self._prepare_rows(rows, inference, belief, memory_roots)
 
     def _prepare_rows(
         self,
-        obs: ObservationBuffers | BucketedObservation | ObservationSpans,
+        obs: ObservationSpans,
         inference: bool,
         belief: BeliefRows[np.ndarray] | None,
         memory_roots: Mapping[str, int] | None,
@@ -749,34 +738,18 @@ class MLXActorCritic(nn.Module):
     ) -> np.ndarray | None:
         """The shared admission checks on raw rows, before booleans or lookups."""
         measured = self._admit_observation(obs, belief)
-        return None if measured is None else measured.needs
+        return measured.needs
 
     def _admit_observation(
         self, obs: PolicyObservation, belief: BeliefRows[np.ndarray] | None
-    ) -> BucketedObservation | ObservationSpans | None:
+    ) -> ObservationSpans:
         definition_count = (
             0 if self.has_programs else self.card_definitions.weight.shape[0]
         )
         spec = admission.Spec(
             self.config, self._static.space, self._static.tables, definition_count
         )
-        if type(obs) in (managym.ObservationBatch, ObservationSelection):
-            return admission.admit_native(
-                obs, spec, bucketed=self.bucketed_shapes, belief=belief
-            )
-        mask = np.asarray(obs["actions_valid"])
-        try:
-            legal = admission.legal_mask(mask)
-        except ValueError as error:
-            # Allocate framework evidence only for a rejected host input.
-            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
-            raise NumericalError(
-                "invalid_action_mask",
-                {"mask": mx.array(mask), "failed": mx.array(failed)},
-            ) from error
-        return admission.admit(
-            obs, spec, legal, bucketed=self.bucketed_shapes, belief=belief
-        )
+        return admission.admit(obs, spec, bucketed=self.bucketed_shapes, belief=belief)
 
     # Programs ----------------------------------------------------------------------
 

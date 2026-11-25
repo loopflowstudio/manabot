@@ -134,11 +134,11 @@ def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
     admit = admission.admit
-    admit_native = admission.admit_native
+    admit = admission.admit
 
     def admitted_rows(epochs: int) -> list[int]:
         monkeypatch.setattr(admission, "admit", admit)
-        monkeypatch.setattr(admission, "admit_native", admit_native)
+        monkeypatch.setattr(admission, "admit", admit)
         agent, batch = _policy(history=False)
         rows: list[int] = []
 
@@ -160,12 +160,12 @@ def test_learning_admits_each_trained_row_once(
             bucketed: bool,
             belief: BeliefRows[np.ndarray] | None = None,
         ) -> object:
-            result = admit_native(obs, spec, bucketed=bucketed, belief=belief)  # type: ignore[arg-type]
+            result = admit(obs, spec, bucketed=bucketed, belief=belief)  # type: ignore[arg-type]
             rows.append(len(result.tables["actions"].counts))
             return result
 
         monkeypatch.setattr(admission, "admit", counting_checks)
-        monkeypatch.setattr(admission, "admit_native", counting_native)
+        monkeypatch.setattr(admission, "admit", counting_native)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(

@@ -467,20 +467,6 @@ def admit_chunk(rows: tuple[np.ndarray, ...], cursor: MemoryCursor) -> MemoryCur
     )
 
 
-def validate_memory_vocabulary(obs: "ObservationBuffers", tables: "Tables") -> None:
-    """Validate only owned values, including for a control without learned heads."""
-    if _RECORDS not in obs:
-        return
-    for batch in range(obs[_RECORDS].shape[0]):
-        count, detail_count, reference_count, _ = memory_lengths(obs, batch)
-        memory_vocabulary(
-            obs[_RECORDS][batch, :count],
-            obs[_DETAILS][batch, :detail_count],
-            obs[_REFERENCES][batch, :reference_count],
-            tables,
-        )
-
-
 def memory_vocabulary(
     headers: np.ndarray, details: np.ndarray, references: np.ndarray, tables: "Tables"
 ) -> None:
@@ -656,16 +642,7 @@ def validate_retained_memory(
         size,
         lookup,
     )
-    validate_memory_vocabulary(
-        dict(
-            zip(
-                MEMORY_FIELDS[:3],
-                (a[None] for a in (headers, details, references)),
-                strict=True,
-            )
-        ),
-        tables,
-    )
+    memory_vocabulary(headers, details, references, tables)
     for node in pending.values():
         node.features.admission = binding
 
@@ -1018,31 +995,27 @@ def _prepare_fold(
 
 
 def prepare_memory(
-    obs: "ObservationBuffers",
+    obs: "ObservationSpans",
     tables: "Tables",
     *,
     fold: bool = False,
     roots: Mapping[str, int] | None = None,
-    native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
-    retained = native.memory if native is not None else retained_memory(obs)
-    return (
-        (
-            _prepare_fold(retained, tables, roots)
-            if fold
-            else _prepare_retained(retained, tables)
-        )
-        if retained is not None
-        else _prepare_memory_rows(obs, tables, native=native)
-    )
+    """Featurize interned prefixes when retained, else the batch's own memory tables."""
+    if obs.memory is None:
+        return _prepare_memory_rows(None, tables, native=obs)
+    if fold:
+        return _prepare_fold(obs.memory, tables, roots)
+    return _prepare_retained(obs.memory, tables)
 
 
 def _prepare_memory_rows(
-    obs: "ObservationBuffers",
+    obs: Mapping[str, np.ndarray] | None,
     tables: "Tables",
     *,
     native: "ObservationSpans | None" = None,
 ) -> MemoryRows[np.ndarray] | None:
+    """Featurize native memory tables, or retained chunk rows in padded form."""
     from manabot.policy.prepare import pack, record_word
     from manabot.policy.spans import full_word
 
