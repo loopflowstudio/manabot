@@ -1098,8 +1098,8 @@ mod tests {
     use super::*;
     use crate::{
         agent::{
-            observation::Observation,
-            observation_encoder::{self, ObservationEncoderConfig},
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_rows::InputRows,
         },
         state::player::PlayerConfig,
     };
@@ -1304,7 +1304,7 @@ mod tests {
             max_decision_members: memory.members.len(),
             ..Default::default()
         };
-        assert!(observation_encoder::encode(&obs, &config).is_ok());
+        assert!(InputRows::read(&obs, &config).is_ok());
         for field in [
             "decision_records",
             "decision_references",
@@ -1319,11 +1319,10 @@ mod tests {
                 "decision_members" => small.max_decision_members -= 1,
                 _ => unreachable!(),
             }
-            match observation_encoder::encode(&obs, &small) {
-                Err(observation_encoder::ObservationEncodeError::Capacity {
-                    field: actual,
-                    ..
-                }) => assert_eq!(actual, field),
+            match InputRows::read(&obs, &small) {
+                Err(ObservationEncodeError::Capacity { field: actual, .. }) => {
+                    assert_eq!(actual, field)
+                }
                 _ => panic!("missing complete-prefix capacity error for {field}"),
             }
         }

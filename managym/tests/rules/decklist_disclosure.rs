@@ -8,7 +8,8 @@ use std::collections::BTreeMap;
 use managym::{
     agent::{
         observation::{Observation, PlayerData},
-        observation_encoder::{encode, ObservationEncoderConfig, DECKLIST_DIM},
+        observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     },
     cards::setups::authored_setup,
     possible_worlds::HiddenHandConstraints,
@@ -144,24 +145,18 @@ fn closed_decklists_hide_the_opponents_lists_but_never_ones_own() {
 #[test]
 fn decklist_rows_encode_known_lists_and_zero_for_a_closed_opponent() {
     let config = ObservationEncoderConfig::default();
-    let width = config.max_cards_per_player * DECKLIST_DIM;
     for disclosure in [DecklistDisclosure::Open, DecklistDisclosure::Closed] {
         let game = Game::new(configs(disclosure), 7, true);
         let obs = Observation::for_player(&game, PlayerId(0));
-        let encoded = encode(&obs, &config).unwrap();
-        let (agent, opponent) = encoded.decklists.split_at(width);
-        let main_total =
-            |rows: &[f32]| -> f32 { rows.chunks(DECKLIST_DIM).map(|row| row[1]).sum() };
+        let encoded = InputRows::read(&obs, &config).unwrap();
+        let (agent, opponent) = (encoded.seat("decklists", 0), encoded.seat("decklists", 1));
+        let main_total = |rows: &[Vec<f32>]| -> f32 { rows.iter().map(|row| row[1]).sum() };
         assert_eq!(main_total(agent), 41.0);
-        assert!(agent
-            .chunks(DECKLIST_DIM)
-            .take_while(|row| row[0] > 0.0)
-            .collect::<Vec<_>>()
-            .windows(2)
-            .all(|pair| pair[0][0] < pair[1][0]));
+        assert!(agent.iter().all(|row| row[0] > 0.0));
+        assert!(agent.windows(2).all(|pair| pair[0][0] < pair[1][0]));
         match disclosure {
             DecklistDisclosure::Open => assert_eq!(main_total(opponent), 40.0),
-            DecklistDisclosure::Closed => assert!(opponent.iter().all(|value| *value == 0.0)),
+            DecklistDisclosure::Closed => assert!(opponent.is_empty()),
         }
     }
 }

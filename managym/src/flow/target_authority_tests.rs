@@ -757,13 +757,15 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
     game.current_action_space = Some(space);
     let observation = crate::agent::observation::Observation::new(&game, std::iter::empty());
     assert_eq!(observation.action_space.actions.len(), 65);
-    assert!(crate::agent::observation_encoder::encode(&observation, &Default::default()).is_err());
+    assert!(
+        crate::agent::observation_rows::InputRows::read(&observation, &Default::default()).is_err()
+    );
     let larger = crate::agent::observation_encoder::ObservationEncoderConfig {
         max_actions: 65,
         ..Default::default()
     };
     assert!(matches!(
-        crate::agent::observation_encoder::encode(&observation, &larger),
+        crate::agent::observation_rows::InputRows::read(&observation, &larger),
         Err(
             crate::agent::observation_encoder::ObservationEncodeError::Capacity {
                 field: "continuation relations",
@@ -781,7 +783,7 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
 
 #[test]
 fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
-    use crate::agent::{observation::Observation, observation_encoder};
+    use crate::agent::{observation::Observation, observation_rows::InputRows};
     let (mut game, source, other, ..) = fixture();
     let mut first = trigger(source, vec![Effect::gain_life(1)], 900);
     first.source_identity = AbilitySource::new(
@@ -809,7 +811,7 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     assert_ne!(frames[0].ability, frames[1].ability);
     assert_eq!(frames[0].ability, frames[2].ability);
     assert_ne!(frames[0].context, frames[2].context);
-    let encoded = observation_encoder::encode(&observation, &Default::default()).unwrap();
+    let encoded = InputRows::read(&observation, &Default::default()).unwrap();
     // Occurrence counters bind Commands but are not policy features.
     for trigger in &mut game.state.trigger_placement.as_mut().unwrap().remaining {
         trigger.id.0 += 10_000;
@@ -818,7 +820,7 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     let renumbered = Observation::for_player(&game, PlayerId(0));
     assert_eq!(
         encoded,
-        observation_encoder::encode(&renumbered, &Default::default()).unwrap()
+        InputRows::read(&renumbered, &Default::default()).unwrap()
     );
     let other_view = Observation::for_player(&game, PlayerId(1));
     assert!(other_view.continuation.iter().all(|frame| frame.kind <= 3));

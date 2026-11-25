@@ -32,11 +32,9 @@ fn heartwood_mana_pays_its_prepared_spell_but_no_hand_spell() {
     };
     use managym::agent::{
         observation::Observation,
-        observation_encoder::{
-            encode, unrepresentable_state, ObservationEncoderConfig, FACT_DIM, POOLED_MANA,
-            STACK_DIM,
-        },
+        observation_encoder::{unrepresentable_state, ObservationEncoderConfig, POOLED_MANA},
         observation_layout::{fact, stack},
+        observation_rows::InputRows,
     };
     use managym::state::{game_object::PlayerId, zone::ZoneType};
     let mut s =
@@ -68,10 +66,10 @@ fn heartwood_mana_pays_its_prepared_spell_but_no_hand_spell() {
     assert_eq!(pooled.mana, [0, 0, 0, 0, 0, 1]);
     assert_eq!(obs.agent.lesson_mana, [0, 0, 0, 0, 0, 1]);
     assert_eq!(unrepresentable_state(&obs), None);
-    let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     let pooled_rows = input
-        .facts
-        .chunks_exact(FACT_DIM)
+        .rows("facts")
+        .into_iter()
         .filter(|row| {
             let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
             id == managym::cards::tokens::name_value(POOLED_MANA) as u32
@@ -97,11 +95,10 @@ fn heartwood_mana_pays_its_prepared_spell_but_no_hand_spell() {
             .collect();
         // Top first: Codie's copy above the prepared original.
         assert_eq!(prepared, [(false, false), (true, false)]);
-        let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
         let rows: Vec<_> = input
-            .stack
-            .chunks_exact(STACK_DIM)
-            .take(2)
+            .rows("stack")
+            .into_iter()
             .map(|row| row[stack::FROM_PREPARED])
             .collect();
         assert_eq!(rows, [0.0, 1.0]);

@@ -172,9 +172,8 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
 fn cr_602_policy_preserves_ability_index_and_resolution() {
     use managym::{
         agent::{
-            action::Action,
-            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
-            observation_layout::action,
+            action::Action, observation_encoder::ObservationEncoderConfig,
+            observation_layout::action, observation_rows::InputRows,
         },
         state::{
             ability::{Effect, ObjectSelector},
@@ -205,11 +204,11 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
             .collect();
         assert_eq!(indices.len(), 2);
         let obs = Observation::new(s.game(), &[]);
-        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
         for (ability, &index) in indices.iter().enumerate() {
             assert_eq!(obs.action_space.actions[index].ability_index, Some(ability));
             assert_eq!(
-                encoded.actions[index * ACTION_DIM + action::ABILITY],
+                encoded.row("actions", index)[action::ABILITY],
                 (ability + 1) as f32
             );
         }

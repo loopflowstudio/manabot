@@ -347,9 +347,11 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
         }
         s.game_mut().scenario_refresh_priority().unwrap();
         let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
-        use managym::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        use managym::agent::{
+            observation_encoder::ObservationEncoderConfig, observation_rows::InputRows,
+        };
         let config = ObservationEncoderConfig::default();
-        let encoded = encode(&obs, &config).unwrap();
+        let encoded = InputRows::read(&obs, &config).unwrap();
         let frame = s.game().semantic_decision_frame().unwrap();
         for bracelet in bracelets {
             let grantor = s.game().state.permanent_of(bracelet).unwrap();
@@ -371,7 +373,6 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
             let label = &frame.offers[action_index].label;
             assert!(label.starts_with("Activate ability of Gray Ogre:"));
             assert!(label.contains(&expected));
-            let offset = action_index * config.max_focus_objects;
             for (slot, id) in offer.focus.iter().enumerate() {
                 let row = obs
                     .agent_permanents
@@ -379,7 +380,7 @@ fn dominion_bracelet_exiles_the_chosen_grantor_at_the_equipped_price() {
                     .position(|p| p.id == *id)
                     .unwrap();
                 assert_eq!(
-                    encoded.action_focus[offset + slot] as usize,
+                    encoded.row("action_focus", action_index)[slot] as usize,
                     2 + 2 * config.max_cards_per_player + row
                 );
             }

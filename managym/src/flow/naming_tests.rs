@@ -5,8 +5,8 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     },
     cards::{
         content_pack::default_content_pack,
@@ -143,15 +143,15 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };
-    let encoded = encode(&obs, &v9).unwrap();
-    assert_eq!(encoded.name_candidates.len(), 4 * NAME_BRANCHING);
+    let encoded = InputRows::read(&obs, &v9).unwrap();
+    assert_eq!(encoded.count("name_candidates"), groups.len());
     for (row, [first, last]) in groups.iter().enumerate() {
         assert_eq!(
-            encoded.name_candidates[4 * row..4 * row + 4],
+            encoded.row("name_candidates", row),
             [0.0, 0.0, (first + 1) as f32, (last + 1) as f32]
         );
     }
-    assert!(encode(&obs, &ObservationEncoderConfig::default()).is_ok());
+    assert!(InputRows::read(&obs, &ObservationEncoderConfig::default()).is_ok());
 
     let printed_names = ["Fire Lord Sozin", "Gray Ogre", "Seed Suture"].map(|name| {
         names
@@ -176,8 +176,11 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
                     leaf_obs.action_space.actions[offer].description.as_deref(),
                     Some(format!("Name {}", names.get(index).unwrap().name).as_str())
                 );
-                let leaf_encoded = encode(&leaf_obs, &v9).unwrap();
-                assert_eq!(leaf_encoded.name_candidates[4 * offer], (index + 1) as f32);
+                let leaf_encoded = InputRows::read(&leaf_obs, &v9).unwrap();
+                assert_eq!(
+                    leaf_encoded.row("name_candidates", offer)[0],
+                    (index + 1) as f32
+                );
                 branch.execute_semantic_command(&choose).unwrap();
                 break;
             }
@@ -311,7 +314,6 @@ fn installed_naming_vocabulary_preserves_the_exact_real_catalog() {
 #[cfg(feature = "benchmark")]
 #[test]
 fn catalog_naming_cost_attribution() {
-    use crate::agent::observation_encoder::encode_into;
     use std::time::Instant;
     fn measure<T>(label: &str, mut operation: impl FnMut() -> T) {
         let started = Instant::now();
@@ -355,9 +357,8 @@ fn catalog_naming_cost_attribution() {
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };
-    let mut buffers = encode(&obs, &config).unwrap();
-    measure("naming_encode_into", || {
-        encode_into(&obs, &config, buffers.buffers_mut()).unwrap()
+    measure("naming_input_rows", || {
+        InputRows::read(&obs, &config).unwrap()
     });
     measure("naming_search_fork", || game.clone());
     let deck = BTreeMap::from([("Mountain".into(), 40)]);

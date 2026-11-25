@@ -592,8 +592,8 @@ fn resolution_positional_power_damage_never_substitutes_an_illegal_victim() {
 #[test]
 fn resolution_eligibility_distinguishes_identical_present_observations() {
     use crate::agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     };
     let mut evidence = Vec::new();
     for controller in [PlayerId(0), PlayerId(1)] {
@@ -656,20 +656,17 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             let capture = game.capture_decision(controller, 0).unwrap();
             let other = game.continuation_frames(PlayerId(1 - controller.0));
             assert!(other.iter().all(|f| f.kind <= 3));
-            let native = encode(&obs, &ObservationEncoderConfig::default())
-                .unwrap()
-                .relations;
+            let native = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
             let target_rows = native
-                .as_chunks::<{ crate::agent::continuation::RELATION_DIM }>()
-                .0
-                .iter()
+                .rows("relations")
+                .into_iter()
                 .filter(|r| r[0] == 2.0 && r[3] == 5.0)
                 .collect::<Vec<_>>();
             assert_eq!(target_rows.len(), 2);
             assert_eq!(target_rows[0][32], if legal { 1.0 } else { 2.0 });
             assert_eq!(target_rows[1][32], 1.0);
             evidence
-                .push(serde_json::json!({"legal": legal, "capture": capture, "relations": native}));
+                .push(serde_json::json!({"legal": legal, "capture": capture, "relations": native.cells("relations")}));
             observations.push(obs.to_json());
         }
         assert_eq!(observations[0], observations[1]);
@@ -3816,27 +3813,17 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
     );
     let measure = |game: &Game| {
         use crate::agent::observation::Observation;
-        use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        use crate::agent::{
+            observation_encoder::ObservationEncoderConfig, observation_rows::InputRows,
+        };
         let obs = Observation::for_player(game, player);
         let config = ObservationEncoderConfig {
             max_facts: 4096,
             ..Default::default()
         };
-        let encoded = encode(&obs, &config).unwrap();
-        let facts = encoded
-            .facts
-            .as_chunks::<12>()
-            .0
-            .iter()
-            .filter(|row| row[11] == 1.0)
-            .count();
-        let relations = encoded
-            .relations
-            .as_chunks::<49>()
-            .0
-            .iter()
-            .filter(|row| row[31] == 1.0)
-            .count();
+        let encoded = InputRows::read(&obs, &config).unwrap();
+        let facts = encoded.count("facts");
+        let relations = encoded.count("relations");
         serde_json::json!({"facts":facts,"relations":relations,"default_overflow":facts > 512})
     };
     let mut occupancy = vec![measure(&game)];
@@ -4003,10 +3990,9 @@ fn determinize_keeps_a_pending_library_top_cast_for_its_chooser() {
 #[test]
 fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation::Observation;
-    use crate::agent::observation_encoder::{
-        encode, ObservationEncodeError, ObservationEncoderConfig,
-    };
+    use crate::agent::observation_encoder::{ObservationEncodeError, ObservationEncoderConfig};
     use crate::agent::observation_layout::relation;
+    use crate::agent::observation_rows::InputRows;
     use crate::flow::decision::{
         Decision, EffectFrame, FrameCompletion, ResolutionTarget, SuspendedResolution,
         TargetIteration,
@@ -4121,24 +4107,14 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             game.publish_action_space(game.suspended_decision_action_space().unwrap());
             let obs = Observation::for_player(&game, player);
             let config = ObservationEncoderConfig::default();
-            let input = encode(&obs, &config).unwrap();
-            let used = input
-                .facts
-                .as_chunks::<12>()
-                .0
-                .iter()
-                .filter(|row| row[11] == 1.0)
-                .count();
+            let input = InputRows::read(&obs, &config).unwrap();
             let relations: Vec<_> = input
-                .relations
-                .as_chunks::<{ relation::WIDTH }>()
-                .0
-                .iter()
-                .take_while(|row| row[relation::VALID] == 1.0)
+                .rows("relations")
+                .into_iter()
                 .flat_map(|row| row[..relation::SPELL_PROFILE].iter().copied())
                 .collect();
             assert!(matches!(
-                encode(
+                InputRows::read(
                     &obs,
                     &ObservationEncoderConfig {
                         max_facts: 1,
@@ -4150,7 +4126,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             let capture = game.capture_decision(player, 0).unwrap();
             evidence.push(
                 serde_json::json!({"case":case,"choice":choice,"capture":capture,
-                "facts": &input.facts[..used * 12], "relations": relations}),
+                "facts": input.cells("facts"), "relations": relations}),
             );
             assert_eq!(
                 game.clone().capture_decision(player, 0).unwrap().digest,
@@ -4169,7 +4145,8 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             "opponent cannot inspect private execution: {case}"
         );
         assert!(
-            inputs[0].facts != inputs[1].facts || inputs[0].relations != inputs[1].relations,
+            inputs[0].rows("facts") != inputs[1].rows("facts")
+                || inputs[0].rows("relations") != inputs[1].rows("relations"),
             "retained distinction: {case}"
         );
     }
@@ -5455,10 +5432,12 @@ fn a_departed_manifests_token_copy_captures_through_replacement_pauses() {
     game.run_frame(frame);
     let check = |game: &Game| {
         use crate::agent::observation::Observation;
-        use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
+        use crate::agent::{
+            observation_encoder::ObservationEncoderConfig, observation_rows::InputRows,
+        };
         game.capture_decision(player, 8).expect("captures");
         for viewer in [player, PlayerId(1)] {
-            encode(
+            InputRows::read(
                 &Observation::for_player(game, viewer),
                 &ObservationEncoderConfig::default(),
             )
@@ -5699,7 +5678,7 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
     let player = game.active_player();
     let observation = crate::agent::observation::Observation::for_player(&game, player);
     let config = crate::agent::observation_encoder::ObservationEncoderConfig::default();
-    let encoded = crate::agent::observation_encoder::encode(&observation, &config).unwrap();
+    let encoded = crate::agent::observation_rows::InputRows::read(&observation, &config).unwrap();
     let joins = [0, 1].map(|i| {
         let copy = copies[i];
         let source = sources[i];
@@ -5722,10 +5701,10 @@ fn prepared_seed_sutures_survive_priority_and_counter_independently() {
             .as_ref()
             .unwrap()
             .contains(&game.state[source].name));
-        let start = index * config.max_focus_objects;
-        [encoded.action_focus[start], encoded.action_focus[start + 1]]
+        let focus = encoded.row("action_focus", index);
+        [focus[0], focus[1]]
     });
-    assert!(joins.iter().flatten().all(|row| *row >= 0));
+    assert!(joins.iter().flatten().all(|row| *row >= 0.0));
     assert_ne!(joins[0][0], joins[1][0]);
     assert_ne!(joins[0][1], joins[1][1]);
     for (chosen, other) in [(copies[0], copies[1]), (copies[1], copies[0])] {

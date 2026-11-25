@@ -2,8 +2,8 @@
 use crate::support::game::{five_color_setup, pin_top};
 use managym::{
     agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     },
     state::{game_object::PlayerId, player::DecklistDisclosure, zone::ZoneType},
 };
@@ -56,7 +56,7 @@ fn manifest_projections_match(disclosure: DecklistDisclosure) {
             );
         }
         let opponent = Observation::for_player(s.game(), PlayerId(1));
-        let encoded = encode(&opponent, &ObservationEncoderConfig::default()).unwrap();
+        let encoded = InputRows::read(&opponent, &ObservationEncoderConfig::default()).unwrap();
         assert_anonymous_manifest(&opponent);
         assert_eq!(
             opponent.opponent.unseen_counts.is_none(),
@@ -65,9 +65,9 @@ fn manifest_projections_match(disclosure: DecklistDisclosure) {
         (
             opponent.to_json().to_string(),
             opponent.opponent_permanents,
-            encoded.opponent_permanents,
+            encoded.cells("opponent_permanents"),
             opponent.opponent.unseen_counts,
-            encoded.decklists,
+            [0, 1].map(|seat| encoded.seat("decklists", seat).to_vec()),
         )
     });
     assert_eq!(projections[0], projections[1]);
@@ -215,7 +215,7 @@ fn two_generations_copy_only_the_manifested_face() {
             .is_none());
         for viewer in [PlayerId(0), PlayerId(1)] {
             let view = Observation::for_player(s.game(), viewer);
-            encode(&view, &ObservationEncoderConfig::default()).unwrap();
+            InputRows::read(&view, &ObservationEncoderConfig::default()).unwrap();
             let rows = view
                 .agent_permanents
                 .iter()
@@ -439,7 +439,7 @@ fn manifested_cecil_reveals_in_place_between_two_ember_island_copies() {
         assert_eq!(row.object_id, Some(public));
         assert_eq!(row.plus1_counters, 1);
         assert_eq!(row.characteristics.name, "Cecil, Dark Knight");
-        encode(&view, &ObservationEncoderConfig::default()).unwrap();
+        InputRows::read(&view, &ObservationEncoderConfig::default()).unwrap();
     }
     resolve_top(&mut s);
     assert_eq!(
@@ -686,7 +686,7 @@ fn granted_triggers_of_a_dead_manifest_stack_and_counter_without_its_printing() 
         s.game()
             .capture_decision(PlayerId(0), 8)
             .expect("ordering captures");
-        encode(
+        InputRows::read(
             &Observation::for_player(s.game(), PlayerId(0)),
             &ObservationEncoderConfig::default(),
         )
@@ -722,7 +722,7 @@ fn granted_triggers_of_a_dead_manifest_stack_and_counter_without_its_printing() 
         }
         let viewer = s.action_space().player.unwrap();
         let opponent = Observation::for_player(s.game(), PlayerId(1));
-        encode(&opponent, &ObservationEncoderConfig::default()).expect("opponent encodes");
+        InputRows::read(&opponent, &ObservationEncoderConfig::default()).expect("opponent encodes");
         let context = s.game().decision_context(viewer).unwrap();
         assert!(
             context
@@ -815,18 +815,18 @@ fn a_clone_of_a_manifest_is_nameless_but_not_face_down() {
         [manifest, copy].map(|id| s.game().state.permanents[id].as_ref().unwrap().id.0 as i32);
     for viewer in [PlayerId(0), PlayerId(1)] {
         let view = Observation::for_player(s.game(), viewer);
-        let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
-        let (rows, buffer) = if viewer == PlayerId(0) {
-            (&view.agent_permanents, &encoded.agent_permanents)
+        let encoded = InputRows::read(&view, &ObservationEncoderConfig::default()).unwrap();
+        let (rows, table) = if viewer == PlayerId(0) {
+            (&view.agent_permanents, "agent_permanents")
         } else {
-            (&view.opponent_permanents, &encoded.opponent_permanents)
+            (&view.opponent_permanents, "opponent_permanents")
         };
         for (id, face_down) in ids.into_iter().zip([true, false]) {
             let slot = rows.iter().position(|row| row.id == id).unwrap();
             assert!(rows[slot].characteristics.name.is_empty());
             assert_eq!(rows[slot].face_down, face_down);
             assert_eq!(
-                buffer[slot * permanent::WIDTH + permanent::FACE_DOWN],
+                encoded.row(table, slot)[permanent::FACE_DOWN],
                 f32::from(u8::from(face_down))
             );
         }
@@ -878,9 +878,9 @@ fn a_named_manifest_is_still_face_down() {
     let row = &view.opponent_permanents[slot];
     assert_eq!(row.characteristics.name, "Legitimate Businessperson");
     assert!(row.face_down);
-    let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&view, &ObservationEncoderConfig::default()).unwrap();
     assert_eq!(
-        encoded.opponent_permanents[slot * permanent::WIDTH + permanent::FACE_DOWN],
+        encoded.row("opponent_permanents", slot)[permanent::FACE_DOWN],
         1.0
     );
 }

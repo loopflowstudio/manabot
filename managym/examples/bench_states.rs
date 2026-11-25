@@ -9,7 +9,9 @@ use managym::{
         action::{Action, ActionSpaceKind},
         env::Env,
         observation::Observation,
-        observation_encoder::{encode, encode_into, ObservationEncoderConfig},
+        observation_encoder::ObservationEncoderConfig,
+        observation_layout::configured_arrays,
+        observation_rows::PackedRows,
         player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
@@ -898,9 +900,9 @@ fn reach(root: &Env, label: &str) -> Env {
 /// Stop at the real response to a single stack object. In the Connoisseur
 /// position its first resolution must already have recorded the ordinal.
 fn before_resolution(mut env: Env, after_first: bool) -> Env {
-    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    let turn = env.fixture_game_mut().state.turn.turn_number;
     for _ in 0..32 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
         let ready = game.state.stack_objects.len() == 1
             && game.state.priority.consecutive_passes == 1
@@ -930,7 +932,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
-                        env.benchmark_game_mut()
+                        env.fixture_game_mut()
                             .create_token("token.ally", PlayerId(0), false)
                             .unwrap();
                     }
@@ -1095,6 +1097,7 @@ fn run(
     let actor = root.current_agent_index().unwrap();
     let obs = root.observation_for_player(actor).unwrap();
     let config = config(&obs);
+    let arrays = configured_arrays(&config).unwrap();
     for &layer in LAYERS {
         if !layers.is_empty()
             && !layers
@@ -1126,7 +1129,7 @@ fn run(
         for sample in 0..samples {
             let mut env = root.fork().unwrap();
             let mut vector = VectorEnv::new(1, 7, true, [PlayerPolicy::Agent; 2]);
-            let buffer = std::cell::RefCell::new(encode(&obs, &config).unwrap());
+            let buffer = std::cell::RefCell::new(PackedRows::new(&arrays));
             if layer == "vector" {
                 vector.reset_all(root.player_configs().to_vec()).unwrap();
                 vector.benchmark_load_root(root).unwrap();
@@ -1190,7 +1193,7 @@ fn run(
                 }
                 "observe" => {
                     let observation = env.observation_for_player(actor).unwrap();
-                    encode_into(&observation, &config, buffer.borrow_mut().buffers_mut()).unwrap();
+                    buffer.borrow_mut().append(&observation, &config).unwrap();
                     black_box(&buffer);
                     Output::Observation {
                         cards: observation.agent_cards.len() + observation.opponent_cards.len(),
@@ -1206,7 +1209,7 @@ fn run(
                 "vector" => {
                     let result = vector
                         .step_isolated_into(&[0], &[true], false, |_, obs, _, _, _| {
-                            encode_into(obs, &config, buffer.borrow_mut().buffers_mut())?;
+                            buffer.borrow_mut().append(obs, &config)?;
                             Ok(())
                         })
                         .unwrap();

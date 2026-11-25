@@ -19,7 +19,7 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
         observation::Observation,
-        observation_encoder::encode,
+        observation_rows::InputRows,
     },
     flow::turn::StepKind,
     state::{
@@ -455,7 +455,7 @@ fn merchant_tap_count_reaches_the_acting_viewer_and_policy() {
                 assert!(observation.continuation.is_empty());
                 assert!(observation.action_space.actions.is_empty());
             }
-            encode(&observation, &Default::default()).unwrap();
+            InputRows::read(&observation, &Default::default()).unwrap();
         }
         let object = card_of(&s, *food);
         select_card(&mut s, object);

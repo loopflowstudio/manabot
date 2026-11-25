@@ -921,8 +921,9 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
         for viewer in [PlayerId(0), PlayerId(1)] {
             use managym::agent::{
                 observation::Observation,
-                observation_encoder::{encode, FactKind, ObservationEncoderConfig},
+                observation_encoder::{FactKind, ObservationEncoderConfig},
                 observation_layout::fact,
+                observation_rows::InputRows,
             };
             let observation = Observation::for_player(s.game(), viewer);
             check_labels(
@@ -932,7 +933,8 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
                     .filter_map(|item| item.description.as_deref())
                     .collect(),
             );
-            let encoding = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+            let encoding =
+                InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
             let mut hits = Vec::new();
             for (index, frame) in observation
                 .continuation
@@ -942,8 +944,8 @@ fn drake_hatcher_binds_each_hit_and_spends_incubation_before_resolution() {
             {
                 let source = frame.source.object.unwrap();
                 let row = encoding
-                    .facts
-                    .chunks_exact(fact::WIDTH)
+                    .rows("facts")
+                    .into_iter()
                     .find(|row| {
                         row[fact::KIND] == FactKind::TriggeringAmount as u8 as f32
                             && row[fact::ID_LOW] == (index + 1) as f32
@@ -1376,19 +1378,18 @@ fn second_draw_listeners_share_the_ordinal_and_resolve_independently() {
 
 pub(crate) fn assert_raid(s: &crate::support::game::Scenario, attacker: Option<usize>) {
     use managym::agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
-        observation_layout::player::ATTACKED,
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_layout::player::ATTACKED, observation_rows::InputRows,
     };
     for viewer in 0..2 {
         let obs = Observation::for_player(s.game(), PlayerId(viewer));
-        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
         assert_eq!(
-            encoded.agent_player[ATTACKED],
+            encoded.row("agent_player", 0)[ATTACKED],
             f32::from(attacker == Some(viewer))
         );
         assert_eq!(
-            encoded.opponent_player[ATTACKED],
+            encoded.row("opponent_player", 0)[ATTACKED],
             f32::from(attacker == Some(1 - viewer))
         );
         assert_eq!(obs.agent.turn_history.attacked, attacker == Some(viewer));
@@ -1655,9 +1656,8 @@ fn attack_batch_thresholds_counts_and_raid_listeners() {
 fn attack_batch_midnight_snack_reads_total_after_sacrifice() {
     use crate::support::play::target_opponent;
     use managym::agent::{
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig, TURN_STATE_DIM},
-        observation_layout::turn_state,
+        observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_layout::turn_state, observation_rows::InputRows,
     };
     let mut s = five_color_setup(&["Midnight Snack", "Ancestor Dragon", "Gray Ogre"]);
     let snack = s.force_permanent_on_battlefield(0, "Midnight Snack");
@@ -1679,8 +1679,8 @@ fn attack_batch_midnight_snack_reads_total_after_sacrifice() {
     settle(&mut s);
     for viewer in 0..2 {
         let obs = Observation::for_player(s.game(), PlayerId(viewer));
-        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
-        let row = &encoded.player_turn_state[viewer * TURN_STATE_DIM..];
+        let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let row = encoded.row("player_turn_state", viewer);
         assert_eq!(
             (row[turn_state::LIFE_GAINS], row[turn_state::LIFE_GAINED]),
             (2., 5.)
@@ -1707,10 +1707,9 @@ fn attack_batch_alesha_reanimates_with_departed_power() {
     };
     use managym::{
         agent::{
-            action::ActionSpaceKind,
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
-            observation_layout::stack,
+            action::ActionSpaceKind, observation::Observation,
+            observation_encoder::ObservationEncoderConfig, observation_layout::stack,
+            observation_rows::InputRows,
         },
         state::target::Target,
     };
@@ -1738,8 +1737,8 @@ fn attack_batch_alesha_reanimates_with_departed_power() {
             .as_ref()
             .unwrap()
             .contains("source power 3"));
-        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
-        assert_eq!(encoded.stack[stack::SOURCE_POWER], 0.3);
+        let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
+        assert_eq!(encoded.row("stack", 0)[stack::SOURCE_POWER], 0.3);
     }
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
@@ -1868,9 +1867,8 @@ fn attack_batch_spell_payment_comparison_survives_countering() {
     };
     use managym::{
         agent::{
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
-            observation_layout::stack,
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_layout::stack, observation_rows::InputRows,
         },
         state::{
             ability::{CompareOp, Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
@@ -1902,9 +1900,9 @@ fn attack_batch_spell_payment_comparison_survives_countering() {
             let spent = 7 - u16::from(discount);
             assert_eq!(obs.stack_objects[0].mana_spent, spent);
             assert_eq!(
-                encode(&obs, &ObservationEncoderConfig::default())
+                InputRows::read(&obs, &ObservationEncoderConfig::default())
                     .unwrap()
-                    .stack[stack::MANA_SPENT],
+                    .row("stack", 0)[stack::MANA_SPENT],
                 f32::from(spent)
             );
         }
@@ -5486,13 +5484,14 @@ fn overlapping_grants_price_each_cast_in_both_orders() {
             let caster = s.game().state.players[0].id.0 as i32;
             assert_eq!(costs, [(caster, 0), (caster, 2)]);
             use managym::agent::{
-                observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM, PLAY_GRANT},
+                observation_encoder::{ObservationEncoderConfig, PLAY_GRANT},
                 observation_layout::fact,
+                observation_rows::InputRows,
             };
-            let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+            let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
             let programs: Vec<_> = input
-                .facts
-                .chunks_exact(FACT_DIM)
+                .rows("facts")
+                .into_iter()
                 .filter(|row| {
                     let id = ((row[fact::ID_HIGH] as u32) << 16) | row[fact::ID_LOW] as u32;
                     id == managym::cards::tokens::name_value(PLAY_GRANT) as u32
@@ -5573,10 +5572,10 @@ fn muldrotha_and_zul_offer_independent_casts() {
     s.game_mut().scenario_refresh_priority().unwrap();
     let obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
     use managym::agent::{
-        observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
-        observation_layout::action,
+        observation_encoder::ObservationEncoderConfig, observation_layout::action,
+        observation_rows::InputRows,
     };
-    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
     let mut labels = Vec::new();
     for (index, offer) in obs
         .action_space
@@ -5589,7 +5588,7 @@ fn muldrotha_and_zul_offer_independent_casts() {
         })
     {
         let label = offer.description.as_deref().unwrap();
-        let row = &encoded.actions[index * ACTION_DIM..][..ACTION_DIM];
+        let row = encoded.row("actions", index);
         assert_eq!(row[action::ROUTE_MANA_VALUE], 0.2);
         assert_eq!(row[action::QUOTA_TYPE] > 0., label.contains("Muldrotha"));
         labels.push(label);
@@ -6285,10 +6284,9 @@ fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
     };
     use managym::{
         agent::{
-            action::Action,
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig, FACT_DIM},
-            observation_layout::fact,
+            action::Action, observation::Observation,
+            observation_encoder::ObservationEncoderConfig, observation_layout::fact,
+            observation_rows::InputRows,
         },
         cards::tokens::name_value,
         state::{card::SpellProfile, game_object::ObjectId, permanent::CounterKind},
@@ -6344,10 +6342,10 @@ fn tinybones_stashes_discards_and_plays_them_on_its_turn() {
             ["Smaug, the Great Calamity", "Forest"],
             "{viewer:?}"
         );
-        let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        let input = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
         let rows = input
-            .facts
-            .chunks_exact(FACT_DIM)
+            .rows("facts")
+            .into_iter()
             .filter(|row| ((row[fact::ID_HIGH] as u32) << 16 | row[fact::ID_LOW] as u32) == stash)
             .count();
         assert_eq!(rows, 2, "a stash fact row per card for {viewer:?}");
@@ -6454,8 +6452,9 @@ fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
         agent::{
             action::Action,
             observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+            observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
             observation_layout::action as action_columns,
+            observation_rows::InputRows,
         },
         flow::cast_permission::{play_route_code, PlayGrant, PlayRoute},
         state::permanent::CounterKind,
@@ -6556,10 +6555,10 @@ fn a_later_tinybones_plays_an_earlier_stash_beside_an_exact_grant() {
         ]
     );
     assert_ne!(codes[0], codes[1]);
-    let input = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    let input = InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
     let rows: Vec<&[f32]> = indices
         .iter()
-        .map(|&index| &input.actions[index * ACTION_DIM..(index + 1) * ACTION_DIM])
+        .map(|&index| input.row("actions", index))
         .collect();
     assert_ne!(rows[0], rows[1]);
     let differing: Vec<usize> = (0..ACTION_DIM)

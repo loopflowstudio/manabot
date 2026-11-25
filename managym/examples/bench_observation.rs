@@ -1,16 +1,20 @@
-//! Seeded encode-only attribution. Run in release; JSON lines retain corpus
-//! identity, buffer size, allocation traffic, bytes written and repeated timing.
+//! Seeded encode-only attribution of the policy transport: each timed encode
+//! appends one observation to a `PackedRows` collection batch. Run in release;
+//! JSON lines retain corpus identity, transported bytes, allocation traffic of
+//! one append and repeated timing.
 use managym::{
     agent::{
         action::ActionType,
         env::Env,
         observation::Observation,
-        observation_encoder::{encode, encode_into, EncodedObservation, ObservationEncoderConfig},
+        observation_encoder::ObservationEncoderConfig,
+        observation_layout::{configured_arrays, ArrayLayout},
+        observation_rows::PackedRows,
     },
     state::player::PlayerConfig,
 };
 use sha2::{Digest, Sha256};
-use std::{hint::black_box, time::Instant};
+use std::{collections::BTreeMap, hint::black_box, time::Instant};
 
 fn root(large: bool) -> (Env, Observation) {
     let mut env = Env::new(23, false, false, false);
@@ -75,27 +79,12 @@ fn corpus() -> Vec<(&'static str, Observation)> {
     result
 }
 
-fn bytes(encoded: &EncodedObservation) -> usize {
-    4 * (encoded.relations.len()
-        + encoded.semantic_cards.len()
-        + encoded.known_hand.len()
-        + encoded.agent_player.len()
-        + encoded.opponent_player.len()
-        + encoded.agent_cards.len()
-        + encoded.opponent_cards.len()
-        + encoded.agent_permanents.len()
-        + encoded.opponent_permanents.len()
-        + encoded.actions.len()
-        + encoded.events.len()
-        + encoded.action_focus.len()
-        + encoded.agent_player_valid.len()
-        + encoded.opponent_player_valid.len()
-        + encoded.agent_cards_valid.len()
-        + encoded.opponent_cards_valid.len()
-        + encoded.agent_permanents_valid.len()
-        + encoded.opponent_permanents_valid.len()
-        + encoded.actions_valid.len()
-        + encoded.events_valid.len())
+/// Bytes one batch transports: every table's row offsets and packed values.
+fn bytes(rows: &PackedRows) -> usize {
+    rows.tables
+        .values()
+        .map(|table| 4 * table.offsets.len() + table.values.len())
+        .sum()
 }
 fn input_digest(observation: &Observation) -> String {
     let mut hash = Sha256::new();
@@ -104,73 +93,36 @@ fn input_digest(observation: &Observation) -> String {
     format!("{hash:x}", hash = hash.finalize())
 }
 
-fn encoded_digest(encoded: &EncodedObservation) -> String {
+fn encoded_digest(rows: &PackedRows) -> String {
     let mut hash = Sha256::new();
-    for value in &encoded.semantic_cards {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.known_hand {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_player {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_player {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_cards {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_cards {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_permanents {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_permanents {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.actions {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.events {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.action_focus {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_player_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_player_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_cards_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_cards_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.agent_permanents_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.opponent_permanents_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.actions_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.events_valid {
-        hash.update(value.to_le_bytes());
-    }
-    for value in &encoded.relations {
-        hash.update(value.to_le_bytes());
+    for (name, table) in &rows.tables {
+        hash.update(name.as_bytes());
+        for offset in &table.offsets {
+            hash.update(offset.to_le_bytes());
+        }
+        hash.update(&table.values);
     }
     format!("{hash:x}", hash = hash.finalize())
 }
 
+/// One collection batch of `batch` copies of `observation`, as rollout
+/// collection packs it for a policy.
+fn pack(
+    observation: &Observation,
+    config: &ObservationEncoderConfig,
+    arrays: &BTreeMap<String, ArrayLayout>,
+    batch: usize,
+) -> PackedRows {
+    let mut rows = PackedRows::new(arrays);
+    for _ in 0..batch {
+        rows.append(observation, config).unwrap();
+    }
+    rows
+}
+
 fn main() {
     let config = ObservationEncoderConfig::default();
+    let arrays = configured_arrays(&config).unwrap();
     let corpus = corpus();
     let digest = format!(
         "{:x}",
@@ -184,31 +136,26 @@ fn main() {
     );
     for batch in [1, 64] {
         for (name, observation) in &corpus {
-            let mut buffers: Vec<_> = (0..batch)
-                .map(|_| encode(observation, &config).unwrap())
-                .collect();
             for _ in 0..100 {
-                for buffer in &mut buffers {
-                    encode_into(observation, &config, buffer.buffers_mut()).unwrap();
-                }
+                black_box(pack(observation, &config, &arrays, batch));
             }
+            let single = pack(observation, &config, &arrays, 1);
             let repeats = if batch == 1 { 10000 } else { 200 };
             for repetition in 0..5 {
                 let start = Instant::now();
                 for _ in 0..repeats {
-                    for buffer in &mut buffers {
-                        encode_into(black_box(observation), &config, buffer.buffers_mut()).unwrap();
-                        black_box(&*buffer);
-                    }
+                    black_box(pack(black_box(observation), &config, &arrays, batch));
                 }
                 let seconds = start.elapsed().as_secs_f64();
+                let mut rows = PackedRows::new(&arrays);
                 managym::allocator::start();
-                encode_into(observation, &config, buffers[0].buffers_mut()).unwrap();
+                rows.append(observation, &config).unwrap();
                 let (allocations, allocated_bytes) = managym::allocator::stop();
+                black_box(rows);
                 let count = repeats * batch;
                 println!(
                     "{}",
-                    serde_json::json!({"corpus": digest, "case": name, "actions": observation.action_space.actions.len(), "profile": "release", "batch": batch, "repetition": repetition, "encodes": count, "seconds": seconds, "encodes_per_second": count as f64 / seconds, "ns_per_encode": seconds * 1e9 / count as f64, "allocations_per_encode": allocations, "allocated_bytes_per_encode": allocated_bytes, "output_bytes_per_encode": bytes(&buffers[0]), "input_digest": input_digest(observation), "encoded_digest": encoded_digest(&buffers[0]), "counting_during_timing": false})
+                    serde_json::json!({"corpus": digest, "case": name, "actions": observation.action_space.actions.len(), "profile": "release", "batch": batch, "repetition": repetition, "encodes": count, "seconds": seconds, "encodes_per_second": count as f64 / seconds, "ns_per_encode": seconds * 1e9 / count as f64, "allocations_per_encode": allocations, "allocated_bytes_per_encode": allocated_bytes, "output_bytes_per_encode": bytes(&single), "input_digest": input_digest(observation), "encoded_digest": encoded_digest(&single), "counting_during_timing": false})
                 );
             }
         }

@@ -6,8 +6,9 @@ use crate::support::inspect::{card_of, hand};
 use crate::support::play::{attack_with, cast, command, pass_until, resolve_top, settle};
 use managym::agent::action::{Action, ActionSpaceKind};
 use managym::agent::observation::Observation;
-use managym::agent::observation_encoder::{encode, ObservationEncoderConfig};
+use managym::agent::observation_encoder::ObservationEncoderConfig;
 use managym::agent::observation_layout::{permanent, player};
+use managym::agent::observation_rows::InputRows;
 use managym::cards::tokens::{name_value, TokenKind};
 use managym::flow::turn::StepKind;
 use managym::state::card::{Keyword, Keywords};
@@ -62,21 +63,22 @@ fn drogskol_reaver_draws_once_in_each_damage_step() {
                 .opponent_cards
                 .iter()
                 .all(|card| card.zone != ZoneType::Hand));
-            let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
-            assert_eq!(encoded.agent_player[player::STEP_COMBAT_DAMAGE], 1.0);
+            let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
+            let player_row = encoded.row("agent_player", 0);
+            assert_eq!(player_row[player::STEP_COMBAT_DAMAGE], 1.0);
             assert_eq!(
-                encoded.agent_player[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
+                player_row[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
                 f32::from(hit == 1)
             );
-            let (permanents, rows) = if seat == 0 {
-                (&obs.agent_permanents, &encoded.agent_permanents)
+            let (permanents, table) = if seat == 0 {
+                (&obs.agent_permanents, "agent_permanents")
             } else {
-                (&obs.opponent_permanents, &encoded.opponent_permanents)
+                (&obs.opponent_permanents, "opponent_permanents")
             };
             let row = permanents.iter().position(|p| p.id == id).unwrap();
             assert!(permanents[row].first_strike_participant);
             assert_eq!(
-                rows[row * permanent::WIDTH + permanent::FIRST_STRIKE_PARTICIPANT],
+                encoded.row(table, row)[permanent::FIRST_STRIKE_PARTICIPANT],
                 1.0
             );
         }

@@ -15807,7 +15807,7 @@ fn fire_lord_sozin_declining_and_zero_payment_are_distinct() {
 fn sozin_name(s: &mut Scenario, name: &str) {
     loop {
         let observation = Observation::for_player(s.game(), PlayerId(0));
-        managym::agent::observation_encoder::encode(&observation, &Default::default())
+        managym::agent::observation_rows::InputRows::read(&observation, &Default::default())
             .expect("every naming prompt fits the fresh policy input");
         let descriptions = observation
             .action_space

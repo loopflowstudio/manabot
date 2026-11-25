@@ -1734,10 +1734,17 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, permanent, EncodedObservationMut,
-        ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
-        FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
+        action, fact, permanent, ObservationEncodeError, ObservationEncoderConfig, CARD_DIM,
+        ZONE_DIM,
     };
+    use crate::agent::observation_rows::InputRows;
+
+    fn encode(
+        obs: &Observation,
+        config: &ObservationEncoderConfig,
+    ) -> Result<InputRows, ObservationEncodeError> {
+        InputRows::read(obs, config)
+    }
 
     #[test]
     fn selector_encoding_is_exact_and_rejects_overflow() {
@@ -1747,9 +1754,9 @@ mod tests {
         obs.action_space.actions[1].ability_index = Some(MAX_ACTION_SELECTOR);
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&obs, &config).unwrap();
-        assert_eq!(encoded.actions[action::MODE], 1.0);
-        assert_eq!(encoded.actions[action::ABILITY], 0.0);
-        assert_eq!(encoded.actions[ACTION_DIM + action::ABILITY], 16777216.0);
+        assert_eq!(encoded.row("actions", 0)[action::MODE], 1.0);
+        assert_eq!(encoded.row("actions", 0)[action::ABILITY], 0.0);
+        assert_eq!(encoded.row("actions", 1)[action::ABILITY], 16777216.0);
         for mode in [false, true] {
             let mut obs = sample_observation();
             let action = &mut obs.action_space.actions[0];
@@ -1824,17 +1831,13 @@ mod tests {
             })
         ));
         let encoded = encode(&obs, &config).unwrap();
-        assert_eq!(encoded.facts.len(), 512 * FACT_DIM);
-        for (index, row) in encoded.facts.as_chunks::<FACT_DIM>().0.iter().enumerate() {
-            if index < 140 {
-                assert_eq!(row[fact::VALID], 1.0);
-                assert_eq!(row[fact::KIND], 5.0);
-                assert_eq!(row[fact::ID_HIGH + 1], index as f32);
-                assert_eq!(row[fact::TIMESTAMP], 0.0);
-                assert_eq!(row[fact::SOURCE_DEFINITION], 0.0);
-            } else {
-                assert!(row.iter().all(|value| *value == 0.0));
-            }
+        assert_eq!(encoded.count("facts"), 140);
+        for (index, row) in encoded.rows("facts").into_iter().enumerate() {
+            assert_eq!(row[fact::VALID], 1.0);
+            assert_eq!(row[fact::KIND], 5.0);
+            assert_eq!(row[fact::ID_HIGH + 1], index as f32);
+            assert_eq!(row[fact::TIMESTAMP], 0.0);
+            assert_eq!(row[fact::SOURCE_DEFINITION], 0.0);
         }
         let exact = encode(
             &obs,
@@ -1844,7 +1847,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(exact.facts, encoded.facts[..140 * FACT_DIM]);
+        assert_eq!(exact.rows("facts"), encoded.rows("facts"));
     }
 
     fn sample_observation() -> Observation {
@@ -2073,13 +2076,13 @@ mod tests {
             .collect();
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&observation, &config).expect("attack decision encodes");
-        assert_eq!(encoded.actions[action::DECLARED], 1.0);
-        assert_eq!(encoded.actions[config.action_dim() + action::DECLARED], 0.0);
+        assert_eq!(encoded.row("actions", 0)[action::DECLARED], 1.0);
+        assert_eq!(encoded.row("actions", 1)[action::DECLARED], 0.0);
         assert_eq!(
-            &encoded.action_focus[..config.max_focus_objects],
-            &encoded.action_focus[config.max_focus_objects..2 * config.max_focus_objects]
+            encoded.row("action_focus", 0),
+            encoded.row("action_focus", 1)
         );
-        assert_eq!(&encoded.actions_valid[..2], &[1.0, 1.0]);
+        assert_eq!(encoded.count("actions"), 2);
     }
 
     fn make_card(
@@ -2183,51 +2186,38 @@ mod tests {
         let encoded = encode(&obs, &config).unwrap();
 
         // Agent and opponent player vectors are populated with turn one-hot slices.
-        assert_eq!(encoded.agent_player[9 + 2], 1.0);
-        assert_eq!(encoded.agent_player[14 + 5], 1.0);
-        assert_eq!(encoded.opponent_player[9 + 2], 1.0);
+        assert_eq!(encoded.row("agent_player", 0)[9 + 2], 1.0);
+        assert_eq!(encoded.row("agent_player", 0)[14 + 5], 1.0);
+        assert_eq!(encoded.row("opponent_player", 0)[9 + 2], 1.0);
 
         // Validity flags for populated card/permanent slots: the battlefield
         // object is its permanent row only.
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
-        assert_eq!(
-            encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
-            0.0
-        );
+        assert_eq!(encoded.row("agent_cards", 0)[CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.row("agent_permanents", 0)[permanent::VALID], 1.0);
 
         // Expected object indices with padding-aware ordering:
         // players: 0,1; agent cards: [2,3,4]; opponent cards: [5,6,7];
         // agent permanents: [8,9]; opponent permanents: [10,11]
-        assert_eq!(encoded.action_focus[0], 2);
-        assert_eq!(encoded.action_focus[1], 8);
-        assert_eq!(encoded.action_focus[2], 10);
-        assert_eq!(encoded.action_focus[3], -1);
-        assert_eq!(encoded.action_focus[4], -1);
-        assert_eq!(encoded.action_focus[5], -1);
-
         // Unknown focus IDs map to -1.
-        assert_eq!(encoded.action_focus[4], -1);
+        assert_eq!(encoded.row("action_focus", 0), [2.0, 8.0]);
+        assert_eq!(encoded.row("action_focus", 1), [10.0, -1.0]);
+        assert_eq!(encoded.row("action_focus", 2), [-1.0, -1.0]);
 
-        // Validity vectors match populated slots.
-        assert_eq!(encoded.agent_player_valid, vec![1.0]);
-        assert_eq!(encoded.opponent_player_valid, vec![1.0]);
-        assert_eq!(encoded.agent_cards_valid, vec![1.0, 0.0, 0.0]);
-        assert_eq!(encoded.opponent_cards_valid, vec![1.0, 0.0, 0.0]);
-        assert_eq!(encoded.agent_permanents_valid, vec![1.0, 0.0]);
-        assert_eq!(encoded.opponent_permanents_valid, vec![1.0, 0.0]);
-        assert_eq!(encoded.actions_valid, vec![1.0, 1.0, 1.0]);
-        assert_eq!(encoded.events_valid, vec![1.0, 1.0]);
-        assert_eq!(encoded.events[0], 3.0);
-        assert_eq!(encoded.events[EVENT_DIM], 2.0);
+        // Only populated slots have rows.
+        assert_eq!(encoded.count("agent_player"), 1);
+        assert_eq!(encoded.count("opponent_player"), 1);
+        assert_eq!(encoded.count("agent_cards"), 1);
+        assert_eq!(encoded.count("opponent_cards"), 1);
+        assert_eq!(encoded.count("agent_permanents"), 1);
+        assert_eq!(encoded.count("opponent_permanents"), 1);
+        assert_eq!(encoded.count("actions"), 3);
+        assert_eq!(encoded.count("events"), 2);
+        assert_eq!(encoded.row("events", 0)[0], 3.0);
+        assert_eq!(encoded.row("events", 1)[0], 2.0);
         // The battlefield card's characteristics are its permanent row's.
-        assert_eq!(
-            encoded.agent_permanents[permanent::MANA_VALUE],
-            0.2,
-            "mana value / 10"
-        );
-        assert_eq!(encoded.agent_permanents[permanent::IS_CREATURE], 1.0);
+        let permanent = encoded.row("agent_permanents", 0);
+        assert_eq!(permanent[permanent::MANA_VALUE], 0.2, "mana value / 10");
+        assert_eq!(permanent[permanent::IS_CREATURE], 1.0);
     }
 
     #[test]
@@ -2295,16 +2285,22 @@ mod tests {
         }
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&obs, &config).unwrap();
-        let permanents = 2 + 2 * config.max_cards_per_player as i32;
-        let stack_start = permanents + 2 * config.max_permanents_per_player as i32;
-        assert_eq!(&encoded.action_focus[0..2], &[permanents, stack_start]);
-        assert_eq!(&encoded.action_focus[2..4], &[stack_start, stack_start + 1]);
+        let permanents = 2.0 + 2.0 * config.max_cards_per_player as f32;
+        let stack_start = permanents + 2.0 * config.max_permanents_per_player as f32;
         assert_eq!(
-            encoded.action_focus[4],
-            permanents + config.max_permanents_per_player as i32
+            &encoded.row("action_focus", 0)[0..2],
+            &[permanents, stack_start]
         );
-        assert_eq!(encoded.stack_valid[..3], [1.0, 1.0, 0.0]);
-        let spell_row = &encoded.stack[..super::STACK_DIM];
+        assert_eq!(
+            &encoded.row("action_focus", 1)[0..2],
+            &[stack_start, stack_start + 1.0]
+        );
+        assert_eq!(
+            encoded.row("action_focus", 2)[0],
+            permanents + config.max_permanents_per_player as f32
+        );
+        assert_eq!(encoded.count("stack"), 2);
+        let spell_row = encoded.row("stack", 0);
         assert_eq!(spell_row[stack::IS_MINE], 0.0);
         assert_eq!(spell_row[stack::SPELL], 1.0);
         assert_eq!(spell_row[stack::DEFINITION], 556.0);
@@ -2313,15 +2309,15 @@ mod tests {
         assert_eq!(spell_row[stack::FROM_PREPARED], 1.0);
         assert_eq!(spell_row[stack::FLASHBACK], 0.0);
         assert_eq!(spell_row[stack::IS_CREATURE], 1.0);
-        let ability_row = &encoded.stack[super::STACK_DIM..2 * super::STACK_DIM];
+        let ability_row = encoded.row("stack", 1);
         assert_eq!(ability_row[stack::IS_MINE], 1.0);
         assert_eq!(ability_row[stack::ACTIVATED_ABILITY], 1.0);
         assert_eq!(ability_row[stack::DEFINITION], 113.0);
         assert_eq!(ability_row[stack::ABILITY], 1.0);
-        assert_eq!(ability_row[stack::SOURCE], (permanents + 1) as f32);
+        assert_eq!(ability_row[stack::SOURCE], permanents + 1.0);
         // No card row holds either object.
-        assert_eq!(encoded.agent_cards_valid.iter().sum::<f32>(), 1.0);
-        assert_eq!(encoded.opponent_cards_valid.iter().sum::<f32>(), 1.0);
+        assert_eq!(encoded.count("agent_cards"), 1);
+        assert_eq!(encoded.count("opponent_cards"), 1);
     }
 
     #[test]
@@ -2362,15 +2358,15 @@ mod tests {
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&obs, &config).unwrap();
         let last = 39;
-        assert_eq!(encoded.actions[last * ACTION_DIM + 14], 1.0);
+        assert_eq!(encoded.row("actions", last)[14], 1.0);
         assert_eq!(
-            encoded.action_focus[last * config.max_focus_objects],
-            2 + obs.agent_cards.len() as i32 + last as i32
+            encoded.row("action_focus", last)[0],
+            (2 + obs.agent_cards.len() + last) as f32
         );
-        let row = (obs.agent_cards.len() + last) * CARD_DIM;
-        assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
-        assert_eq!(encoded.agent_cards[row + 37], 1.0);
-        assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);
+        let row = encoded.row("agent_cards", obs.agent_cards.len() + last);
+        assert_eq!(row[..ZONE_DIM], [0.0; ZONE_DIM]);
+        assert_eq!(row[37], 1.0);
+        assert_eq!(row[CARD_DIM - 1], 1.0);
         for undersized in [
             ObservationEncoderConfig {
                 max_actions: 32,
@@ -2390,98 +2386,5 @@ mod tests {
                 Err(ObservationEncodeError::Capacity { .. })
             ));
         }
-    }
-
-    #[test]
-    fn encode_into_validates_output_lengths() {
-        let obs = sample_observation();
-        let config = ObservationEncoderConfig {
-            max_cards_per_player: 2,
-            max_permanents_per_player: 1,
-            max_actions: 2,
-            max_focus_objects: 2,
-            max_events: 1,
-            max_decision_records: 0,
-            max_decision_reference_details: 0,
-            max_decision_references: 0,
-            max_decision_members: 0,
-            policy_history: false,
-            ..ObservationEncoderConfig::default()
-        };
-
-        let mut agent_player = vec![0.0; 1];
-        let mut semantic_cards = vec![0.0; 4];
-        let mut known_hand = vec![0.0; 8];
-        let mut opponent_player = vec![0.0; PLAYER_DIM];
-        let mut agent_cards = vec![0.0; 2 * CARD_DIM];
-        let mut opponent_cards = vec![0.0; 2 * CARD_DIM];
-        let mut agent_permanents = vec![0.0; PERMANENT_DIM];
-        let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
-        let mut player_turn_state = vec![0.0; config.player_turn_state_len()];
-        let mut card_turn_state = vec![0.0; config.card_turn_state_len()];
-        let mut stack = vec![0.0; config.stack_len()];
-        let mut stack_valid = vec![0.0; config.stack_rows()];
-        let mut actions = vec![0.0; 2 * ACTION_DIM];
-        let mut events = vec![0.0; EVENT_DIM];
-        let mut action_focus = vec![-1; 2 * 2];
-        let mut agent_player_valid = vec![0.0; 1];
-        let mut opponent_player_valid = vec![0.0; 1];
-        let mut agent_cards_valid = vec![0.0; 2];
-        let mut opponent_cards_valid = vec![0.0; 2];
-        let mut agent_permanents_valid = vec![0.0; 1];
-        let mut opponent_permanents_valid = vec![0.0; 1];
-        let mut actions_valid = vec![0.0; 2];
-        let mut events_valid = vec![0.0; 1];
-        let mut name_candidates = vec![0.0; config.name_candidates_len()];
-        let mut relations = vec![0.0; config.relations_len()];
-        let mut decklists = vec![0.0; config.decklists_len()];
-        let mut effects = vec![0.0; config.effects_len()];
-        let mut effect_details = vec![0.0; config.effect_details_len()];
-        let mut effect_members = vec![0.0; config.effect_members_len()];
-        let mut facts = vec![0.0; config.facts_len()];
-
-        let out = EncodedObservationMut {
-            name_candidates: &mut name_candidates,
-            relations: &mut relations,
-            semantic_cards: &mut semantic_cards,
-            known_hand: &mut known_hand,
-            known_library: &mut [0.0; 80],
-            decklists: &mut decklists,
-            player_turn_state: &mut player_turn_state,
-            card_turn_state: &mut card_turn_state,
-            agent_player: &mut agent_player,
-            opponent_player: &mut opponent_player,
-            agent_cards: &mut agent_cards,
-            opponent_cards: &mut opponent_cards,
-            agent_permanents: &mut agent_permanents,
-            opponent_permanents: &mut opponent_permanents,
-            stack: &mut stack,
-            stack_valid: &mut stack_valid,
-            actions: &mut actions,
-            events: &mut events,
-            decision_records: &mut [],
-            decision_reference_details: &mut [],
-            decision_references: &mut [],
-            decision_members: &mut [],
-            effects: &mut effects,
-            effect_details: &mut effect_details,
-            effect_members: &mut effect_members,
-            facts: &mut facts,
-            action_focus: &mut action_focus,
-            agent_player_valid: &mut agent_player_valid,
-            opponent_player_valid: &mut opponent_player_valid,
-            agent_cards_valid: &mut agent_cards_valid,
-            opponent_cards_valid: &mut opponent_cards_valid,
-            agent_permanents_valid: &mut agent_permanents_valid,
-            opponent_permanents_valid: &mut opponent_permanents_valid,
-            actions_valid: &mut actions_valid,
-            events_valid: &mut events_valid,
-        };
-
-        let err = encode_into(&obs, &config, out).expect_err("invalid length must fail");
-        assert_eq!(
-            err.to_string(),
-            format!("invalid length for agent_player: expected {PLAYER_DIM}, got 1")
-        );
     }
 }

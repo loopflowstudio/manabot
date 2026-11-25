@@ -348,38 +348,6 @@ mod tests {
     use std::thread;
 
     #[test]
-    fn every_materialized_branch_starts_a_new_incremental_memory_write() {
-        use crate::agent::decision_memory::{encode_suffix, MemoryEncoding};
-
-        let mut source = Env::new(42, true, false, false).with_decision_memory_include_own(true);
-        source
-            .reset(
-                ["a", "b"]
-                    .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 12)])))
-                    .to_vec(),
-            )
-            .unwrap();
-        source.step(0).unwrap();
-        let snapshot = source.snapshot().unwrap();
-        for viewer in 0..2 {
-            let mut cursor = MemoryEncoding::default();
-            for env in [
-                &source,
-                &snapshot.restore(Default::default()).unwrap(),
-                &snapshot.restore(Default::default()).unwrap(),
-                &source.fork().unwrap(),
-            ] {
-                let log = &env.game.as_ref().unwrap().decision_memory[viewer];
-                let (starts, rows) = encode_suffix(log, &mut cursor);
-                assert_eq!(starts, [0; 4]);
-                assert!(rows.reset && !rows.records.is_empty());
-                let (_, repeated) = encode_suffix(&log.clone(), &mut cursor);
-                assert!(!repeated.reset && repeated.records.is_empty());
-            }
-        }
-    }
-
-    #[test]
     fn concurrent_exact_snapshots_preserve_the_witness_and_live_decision_memory() {
         let mut source = Env::new(42, true, false, false).with_decision_memory_include_own(true);
         let players = ["a", "b"].map(|name| {
@@ -512,9 +480,8 @@ mod card_history_tests {
     #[test]
     fn steel_hellkite_pending_snapshot_retains_combat_seat_after_source_departure() {
         use crate::agent::{
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
-            observation_layout::stack,
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_layout::stack, observation_rows::InputRows,
         };
         use crate::flow::proposed_event::ProposedDamageTarget;
         let mut env = Env::new(418, true, false, false);
@@ -603,13 +570,14 @@ mod card_history_tests {
                         &[]
                     }
                 );
-                let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+                let encoded = InputRows::read(&obs, &ObservationEncoderConfig::default()).unwrap();
+                let spell = encoded.row("stack", 0);
                 assert_eq!(
-                    encoded.stack[stack::COMBAT_DAMAGE_TO_ME],
+                    spell[stack::COMBAT_DAMAGE_TO_ME],
                     f32::from(permanent == hit && viewer == victim)
                 );
                 assert_eq!(
-                    encoded.stack[stack::COMBAT_DAMAGE_TO_OPPONENT],
+                    spell[stack::COMBAT_DAMAGE_TO_OPPONENT],
                     f32::from(permanent == hit && viewer == actor)
                 );
             }
@@ -633,9 +601,8 @@ mod card_history_tests {
     #[test]
     fn predator_ooze_remembers_only_the_exact_damage_pair_this_turn() {
         use crate::agent::{
-            observation::Observation,
-            observation_encoder::{encode, ObservationEncoderConfig},
-            observation_layout::relation,
+            observation::Observation, observation_encoder::ObservationEncoderConfig,
+            observation_layout::relation, observation_rows::InputRows,
         };
         use crate::flow::game::Game;
         use crate::flow::proposed_event::ProposedDamageTarget;
@@ -681,10 +648,10 @@ mod card_history_tests {
         for viewer in [PlayerId(0), PlayerId(1)] {
             let encoded_pair = |g: &Game| {
                 let obs = Observation::for_player(g, viewer);
-                let encoded = encode(&obs, &config).unwrap();
+                let encoded = InputRows::read(&obs, &config).unwrap();
                 let rows: Vec<_> = encoded
-                    .relations
-                    .chunks(relation::WIDTH)
+                    .rows("relations")
+                    .into_iter()
                     .filter(|r| r[relation::KIND] == 11.)
                     .collect();
                 assert_eq!(rows.len(), 1);

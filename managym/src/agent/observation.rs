@@ -2795,7 +2795,7 @@ impl std::ops::Deref for ObjectData<'_> {
 mod characteristics_tests {
     use super::*;
     use crate::{
-        agent::observation_encoder::{encode, ObservationEncoderConfig},
+        agent::{observation_encoder::ObservationEncoderConfig, observation_rows::InputRows},
         state::player::PlayerConfig,
     };
 
@@ -2873,10 +2873,10 @@ mod characteristics_tests {
         };
         observation.action_space.actions = vec![action];
         let config = ObservationEncoderConfig::default();
-        let encoded = encode(&observation, &config).unwrap();
+        let encoded = InputRows::read(&observation, &config).unwrap();
         assert_eq!(
-            encoded.action_focus[0],
-            (2 + 2 * config.max_cards_per_player) as i32
+            encoded.row("action_focus", 0)[0],
+            (2 + 2 * config.max_cards_per_player) as f32
         );
         assert!(!observation.agent_cards.iter().any(|c| c.id == identity));
         let parsed = crate::agent::observation_json::parse(&observation.to_json()).unwrap();

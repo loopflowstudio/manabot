@@ -15,15 +15,9 @@ pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
     match key {
         "action_focus" => &[Objects],
         "facts" => &[Object(fact::OBJECT, 1)],
-        "effects" => &[
-            Object(effect::CONTROLLER, 1),
-            Object(effect::SOURCE, 1),
-        ],
+        "effects" => &[Object(effect::CONTROLLER, 1), Object(effect::SOURCE, 1)],
         "effect_members" => &[Object(member::OBJECT, 1)],
-        "relations" => &[
-            Object(relation::SOURCE, 1),
-            Object(relation::REFERENCE, 1),
-        ],
+        "relations" => &[Object(relation::SOURCE, 1), Object(relation::REFERENCE, 1)],
         "agent_permanents" | "opponent_permanents" => &[
             Object(permanent::ATTACHED_TO, 1),
             Object(permanent::BLOCKING, 1),

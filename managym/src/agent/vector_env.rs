@@ -1151,7 +1151,7 @@ mod tests {
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         let mut writes = 0;
         assert!(vector
-            .write_observations_for_players(&[Some(0), Some(1)], |_, _| {
+            .read_observations_for_players::<AgentError>(&[Some(0), Some(1)], |_, _| {
                 writes += 1;
                 Ok(())
             })
@@ -1167,7 +1167,7 @@ mod tests {
         }
         for players in [vec![], vec![Some(0)], vec![Some(0), Some(2)]] {
             assert!(vector
-                .write_observations_for_players(&players, |_, _| {
+                .read_observations_for_players::<AgentError>(&players, |_, _| {
                     writes += 1;
                     Ok(())
                 })
@@ -1182,7 +1182,7 @@ mod tests {
         let frames = vector.semantic_decision_frames_json(None).unwrap();
         for players in [[0, 1], [1, 0]] {
             let reads = vector
-                .write_observations_for_players(&players.map(Some), |slot, obs| {
+                .read_observations_for_players::<AgentError>(&players.map(Some), |slot, obs| {
                     assert_eq!(
                         obs.to_json(),
                         vector.envs[slot]
@@ -1330,7 +1330,10 @@ mod tests {
 
     #[test]
     fn first_legal_policy_prefix_keeps_vector_execution_identity() {
-        use crate::agent::observation_encoder::{encode, ActionOverflow, ObservationEncoderConfig};
+        use crate::agent::{
+            observation_encoder::{ActionOverflow, ObservationEncoderConfig},
+            observation_rows::InputRows,
+        };
         let players: Vec<_> = ["a", "b"]
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
@@ -1354,8 +1357,8 @@ mod tests {
             action_overflow: ActionOverflow::FirstLegal,
             ..ObservationEncoderConfig::default()
         };
-        let encoded = encode(&observation, &config).unwrap();
-        assert_eq!(encoded.actions_valid, vec![1.0; 64]);
+        let encoded = InputRows::read(&observation, &config).unwrap();
+        assert_eq!(encoded.count("actions"), 64);
         assert_eq!(
             vector.current_action_summaries(),
             vec![(71, "Priority".into())]
@@ -1366,8 +1369,8 @@ mod tests {
             .step_into(&[63], None, |_, obs, _, _, _| {
                 assert_eq!(obs.to_json(), expected.to_json());
                 assert_eq!(
-                    encode(obs, &config).unwrap().actions,
-                    encode(&expected, &config).unwrap().actions
+                    InputRows::read(obs, &config).unwrap().rows("actions"),
+                    InputRows::read(&expected, &config).unwrap().rows("actions")
                 );
                 Ok(())
             })

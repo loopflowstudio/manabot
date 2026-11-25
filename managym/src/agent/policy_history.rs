@@ -331,14 +331,10 @@ mod tests {
             max_events: capacity,
             ..Default::default()
         };
-        let encoded = crate::agent::observation_encoder::encode(obs, &config).unwrap();
-        encoded
-            .events
-            .chunks(HISTORY_DIM)
-            .zip(&encoded.events_valid)
-            .filter(|(_, valid)| **valid > 0.0)
-            .map(|(row, _)| row.to_vec())
-            .collect()
+        crate::agent::observation_rows::InputRows::read(obs, &config)
+            .unwrap()
+            .seat("events", 0)
+            .to_vec()
     }
 
     fn game() -> Game {

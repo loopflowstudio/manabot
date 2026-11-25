@@ -7,9 +7,8 @@ use crate::support::{
 };
 use managym::{
     agent::{
-        action::Action,
-        observation::Observation,
-        observation_encoder::{encode, ObservationEncoderConfig},
+        action::Action, observation::Observation, observation_encoder::ObservationEncoderConfig,
+        observation_rows::InputRows,
     },
     state::{game_object::PlayerId, mana::Mana, zone::ZoneType},
 };
@@ -47,7 +46,7 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
                 observation.continuation.last().unwrap().mode,
                 Some(2 - index)
             );
-            encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+            InputRows::read(&observation, &ObservationEncoderConfig::default()).unwrap();
             let object = s.game().state.permanents[permanent]
                 .as_ref()
                 .unwrap()
