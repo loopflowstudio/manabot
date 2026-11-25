@@ -1,11 +1,11 @@
-at: f47bb9b4575269d6e10db67c121df1bedb873ce7
+at: 7b5536b37c
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
   - path: managym/state/src/card.rs
-    why: Printed loyalty, LoyaltyCost, EmblemDefinition and zero-loyalty SBA exemption
+    why: Printed loyalty, LoyaltyCost, EmblemDefinition and unified StateBasedActionDoesntApply
   - path: managym/state/src/ability.rs
-    why: Unified Fight, RevealUntil, TargetDivision and TargetRequirement bounds
+    why: DelayedEvent::Whenever, two-axis Attacks, LibraryTop(n), Fight, RevealUntil and TargetDivision
   - path: managym/state/src/permanent.rs
     why: Per-turn loyalty activation quota and available loyalty accounting
   - path: managym/src/flow/game.rs
@@ -19,13 +19,13 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics, Way grants and zero-loyalty exemption
+    why: Command-zone emblem statics, Way grants and per-permanent SBA exemptions
   - path: managym/src/flow/sba.rs
-    why: Layer-projected zero-loyalty SBA exemption and streaming checks
+    why: Layer-projected zero-loyalty and legend-rule SBA exemptions and streaming checks
   - path: managym/src/flow/triggers.rs
-    why: Command-zone emblem triggers, loyalty activations and multi-mode placement
+    why: Shared TriggerCondition matching for delayed Whenever watchers, batch attackers and emblems
   - path: managym/src/flow/resolution.rs
-    why: Unified Fight, RevealUntil, ExileTopCardsToPlay and TargetDivision damage
+    why: LibraryTop(n) departure moves, GrantPlay composition, Fight, RevealUntil and TargetDivision
   - path: managym/src/agent/structured_offer.rs
     why: Single authority for planeswalker attack-defender candidate bindings
   - path: managym/src/agent/observation_layout.rs

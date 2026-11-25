@@ -8953,9 +8953,11 @@ fn chandra_flameshaper_loyalty_abilities() {
         .unwrap();
     for obj in lib {
         if obj != keep {
-            s.game_mut()
-                .state
-                .place_object(obj, PlayerId(0), managym::state::zone::ZoneType::Exile);
+            s.game_mut().state.place_object(
+                obj,
+                PlayerId(0),
+                managym::state::zone::ZoneType::Exile,
+            );
         }
     }
     activate(&mut s, chandra, 0);
