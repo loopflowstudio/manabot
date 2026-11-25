@@ -22,6 +22,7 @@ from etude.records import ArtifactRef
 import pytest
 import torch
 
+from experiments import tla_frontier
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
@@ -80,6 +81,26 @@ def fixture_checkpoint(
             uri=path.as_uri(), sha256=file_sha256(path), size_bytes=path.stat().st_size
         ),
     )
+
+
+@pytest.mark.parametrize("version", [9, 11])
+def test_frontier_registers_recorded_and_fresh_checkpoint_inputs(
+    tmp_path: Path, cpu_threads: None, version: Literal[9, 11]
+) -> None:
+    fresh = tla_frontier.settings(tla_frontier.FrontierConfig(size="w64")).observation
+    assert fresh.policy_input_version == 11
+    space = ObservationSpace(fresh.model_copy(update={"policy_input_version": version}))
+    protocol = tla_frontier.PROTOCOL
+    matchup = tla_frontier.deck_matchup(
+        tla_frontier.corpus(), protocol, protocol.pairs[0]
+    )
+    player = checkpoint_player(fixture_checkpoint(tmp_path, 19, space))
+    _, path = tla_frontier._registration(player, "candidate", matchup, fresh)
+    assert path == player.checkpoint.path
+    with pytest.raises(ValueError, match="observation differs"):
+        tla_frontier._registration(
+            player, "candidate", matchup, fresh.model_copy(update={"max_actions": 32})
+        )
 
 
 @pytest.mark.parametrize(

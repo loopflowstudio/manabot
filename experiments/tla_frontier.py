@@ -1,13 +1,13 @@
 """Task c5fba4: frontier self-play on the 17Lands TLA trophy corpus at two model sizes.
 
 One seed per size trains under the same damped self-play rule, population,
-input v9, four producers and wall budget; the large size is w64 with only its
+input capacities, four producers and wall budget. The large size is w64 with only its
 width, depth, heads and damping horizon replaced. The
 design and results are `experiments/reports/tla-frontier-c5fba4-results.md`.
 
 This file is the experiment `tla_frontier` for Etude: `train(config)` runs one
-size on the current self-play loop with the settings its executed run recorded,
-stated here (`settings`), `training_jobs()` declares one wall-bounded job per size,
+size on the current self-play loop with policy input v11.
+`training_jobs()` declares one wall-bounded job per size,
 `eval_jobs(state)` plays the comparisons below and `report()` draws them.
 
     uv run etude launch experiments/tla_frontier.py --revision COMMIT --rent l4
@@ -17,9 +17,9 @@ stated here (`settings`), `training_jobs()` declares one wall-bounded job per si
 stored, it launches the comparisons that have not been played (on `--rent
 cpu32`, which the evaluation limits below are sized for).
 
-The executed runs (revision ab2b757d9) trained under the retired executor; a
-launch here is a new run of the same settings on the current loop, not a
-reproduction of them. `eval_jobs` admits one run per size, and the executed
+The executed runs (revision ab2b757d9) trained with input v9 under the retired
+executor. Their checkpoints retain their recorded input. `eval_jobs` admits
+one run per size, and the executed
 runs hold this experiment's two, so a new frontier starts from a copy of this
 file under its own name. Primary progress is
 each learner against its latest trained checkpoint at or before half its elapsed
@@ -251,7 +251,6 @@ def _regime_id(label: SizeLabel) -> str:
 
 # The executed runs' input capacities, shared by both sizes.
 OBSERVATION = ObservationConfig(
-    policy_input_version=9,
     max_facts=512,
     max_cards_per_player=128,
     max_permanents_per_player=96,
@@ -1046,7 +1045,11 @@ def _registration(
         ), None
     path = player.checkpoint.path
     checkpoint = read_container(path)
-    if checkpoint.space.encoder.config != observation:
+    # The executed frontier used v9 with these same capacities.
+    if checkpoint.space.config not in (
+        observation,
+        observation.model_copy(update={"policy_input_version": 9}),
+    ):
         raise ValueError("checkpoint observation differs from frontier protocol")
     return registration(
         player, name=name, match=setup, content_suite=matchup.content_suite, role=role
