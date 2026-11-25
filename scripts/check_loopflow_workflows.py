@@ -61,15 +61,23 @@ def _one(steps: list[Step], label: str) -> Step:
     return matches[0]
 
 
-def _delivery(steps: list[Step], target: int, verification: str = "verify") -> None:
+def _delivery(
+    steps: list[Step],
+    target: int,
+    verification: str = "verify",
+    *,
+    review: str = "demo",
+) -> None:
     boundary = [
         _one(steps, label)
-        for label in ("pr-publish", "demo", "gate", "land --wait-and-fix", verification)
+        for label in ("pr-publish", review, "land --wait-and-fix", verification)
     ]
     positions = [steps.index(step) for step in boundary]
     assert positions == sorted(positions), "Delivery boundaries changed order"
-    for review in (boundary[1], boundary[-1]):
-        assert review.interactive and review.returns_to == target, review.label
+    for gate_review in (boundary[1], boundary[-1]):
+        assert gate_review.interactive and gate_review.returns_to == target, (
+            gate_review.label
+        )
 
 
 def _compile_graphs(root: Path) -> dict[str, list[Step]]:
@@ -120,13 +128,26 @@ def _phase(steps: list[Step], start: int, plan: str, review: str) -> int:
 
 
 def _coverage(coverage: list[Step]) -> None:
-    position = _phase(coverage, 0, "card-batch", "coverage-behavior-review")
-    position = _phase(
-        coverage, position, "coverage-decomposition", "coverage-decomposition-review"
-    )
-    position = _phase(coverage, position, "engine-measure", "engine-performance-review")
-    assert coverage[position].label == "pr-publish"
-    _delivery(coverage, coverage[0].key)
+    """Check the two-pass coverage graph: sliced build/review, then card-perf xor."""
+    head = [step.label for step in coverage[:5]]
+    assert head == ["card-batch", "sync", "implement", "card-review", "card-perf"], head
+    sync, implement, review, perf = coverage[1:5]
+    assert implement.returns_to == sync.key, "implement decides the slice loop"
+    assert review.returns_to == sync.key, "card-review decides the build/review loop"
+    assert perf.kind == "xor", f"Expected xor router card-perf, got {perf.kind}"
+    routes = {path.name: path.steps for path in perf.paths}
+    assert set(routes) == {"clean", "optimize"}, routes.keys()
+    assert routes["clean"] == [], "clean path exits directly to pr-publish"
+    opt = routes["optimize"]
+    assert [step.label for step in opt] == ["sync", "implement", "card-perf-review"], opt
+    assert opt[-1].returns_to == opt[0].key, "card-perf-review decides the optimize loop"
+    assert not any(
+        step.interactive for step in [*coverage[:5], *opt]
+    ), "build, review and perf phases are headless"
+    assert coverage[5].label == "compress"
+    assert coverage[6].label == "pr-publish"
+    assert coverage[7].label == "ship-review"
+    _delivery(coverage, coverage[0].key, review="ship-review")
 
 
 def _experiment(experiment: list[Step]) -> None:
