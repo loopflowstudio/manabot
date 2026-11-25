@@ -76,6 +76,18 @@ impl Game {
         LibraryKnowledge::bound(&mut knowledge.own);
     }
 
+    /// Cards put into one library position together: their owner arranges
+    /// them and need not reveal the order (CR 401.4), so neither position
+    /// stays public while the owner remembers both.
+    pub(crate) fn arrange_library_objects(&mut self, owner: PlayerId, objects: &[ObjectId]) {
+        let positions = self.library_positions_of(owner, objects);
+        let knowledge = self.state.known_library_mut(owner);
+        for (position, _) in positions {
+            knowledge.public.remove(&position);
+        }
+        self.remember_library_objects(owner, objects);
+    }
+
     /// Both seats learn the top position even if the revealed card stays there.
     pub(crate) fn reveal_library_top(&mut self, owner: PlayerId) -> Option<ObjectId> {
         let object = self.state.zones.top(ZoneType::Library, owner)?;

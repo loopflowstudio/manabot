@@ -1101,7 +1101,7 @@ impl Game {
             }
             Effect::Untap { what } => {
                 for id in self.selected_permanents(what, frame) {
-                    self.state.untap(id);
+                    self.untap_permanent(id);
                 }
                 None
             }

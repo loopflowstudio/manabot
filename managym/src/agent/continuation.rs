@@ -252,8 +252,8 @@ impl ContinuationFrame {
     }
 }
 
-/// The receipt a stack object carries, when its frame shows any of it
-/// (`effect_execution::receipt_matters`).
+/// The damage that fired a "whenever this deals damage" trigger, or zero for
+/// any other trigger.
 fn trigger_damage(
     face: Option<&crate::state::card::PrintedCharacteristics>,
     index: usize,
@@ -271,6 +271,8 @@ fn trigger_damage(
     }
 }
 
+/// The receipt a stack object carries, when its frame shows any of it
+/// (`effect_execution::receipt_matters`).
 pub(super) fn stack_receipt(object: &StackObject) -> Option<&PaymentReceipt> {
     let spent = match object {
         StackObject::Spell(spell) => &spell.spent,
@@ -751,6 +753,9 @@ impl Game {
                     ability.ability_index,
                     ability.triggering_amount,
                 );
+                if frame.trigger_damage > 0 {
+                    super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
+                }
                 frame.inherited_from = ability
                     .source_lki
                     .as_ref()

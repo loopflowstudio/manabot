@@ -1161,12 +1161,6 @@ impl Game {
                 }
                 _ => {}
             }
-            if matches!(
-                event,
-                GameEvent::CombatDamageToPlayers { .. } | GameEvent::CombatDamageTotals { .. }
-            ) {
-                trigger.x = u8::try_from(amount).unwrap_or(u8::MAX);
-            }
             self.state.pending_triggers_mut().push(trigger);
         }
     }

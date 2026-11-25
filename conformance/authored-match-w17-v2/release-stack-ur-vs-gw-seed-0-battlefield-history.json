@@ -3728,7 +3728,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.14",
         "resulting_revision": 34,
-        "resulting_state_digest": "9c1e07f26ee0ad693b90729706ca7bccd8feef894eec696549f2c22faf1928bf"
+        "resulting_state_digest": "5599f73f3991692cb2cb5795210961f0621d46d63c7f7d765f3e73a06e047e50"
       },
       "encountered_definition_ids": [
         227,
@@ -3912,7 +3912,7 @@
       ],
       "source": "client",
       "state": {
-        "after": "9c1e07f26ee0ad693b90729706ca7bccd8feef894eec696549f2c22faf1928bf",
+        "after": "5599f73f3991692cb2cb5795210961f0621d46d63c7f7d765f3e73a06e047e50",
         "before": "2fd9f93681deb84661de8ce238afaf17dbc1e18b28624df995d4fb33d22c2db9"
       },
       "to_revision": 34
@@ -3932,7 +3932,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.15",
         "resulting_revision": 35,
-        "resulting_state_digest": "145464a51c2c01f4a9753dace16d3be69b7581c3bcbad612dbeef7a097416640"
+        "resulting_state_digest": "4bd683a0a288107368047b640b82fe0631e36b8ee9f526976cc573710930239d"
       },
       "encountered_definition_ids": [
         609
@@ -4028,8 +4028,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "145464a51c2c01f4a9753dace16d3be69b7581c3bcbad612dbeef7a097416640",
-        "before": "9c1e07f26ee0ad693b90729706ca7bccd8feef894eec696549f2c22faf1928bf"
+        "after": "4bd683a0a288107368047b640b82fe0631e36b8ee9f526976cc573710930239d",
+        "before": "5599f73f3991692cb2cb5795210961f0621d46d63c7f7d765f3e73a06e047e50"
       },
       "to_revision": 35
     },
@@ -4048,7 +4048,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.16",
         "resulting_revision": 36,
-        "resulting_state_digest": "fbd8169fcbecfa463829753c33492d2ada0eb4596d813a4254c3744b6dfab35b"
+        "resulting_state_digest": "89c8a4622ff9dd701d4c9a57d354c667d5cab2885486eb89d6b4c30bb8cfa514"
       },
       "encountered_definition_ids": [
         905
@@ -4149,8 +4149,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "fbd8169fcbecfa463829753c33492d2ada0eb4596d813a4254c3744b6dfab35b",
-        "before": "145464a51c2c01f4a9753dace16d3be69b7581c3bcbad612dbeef7a097416640"
+        "after": "89c8a4622ff9dd701d4c9a57d354c667d5cab2885486eb89d6b4c30bb8cfa514",
+        "before": "4bd683a0a288107368047b640b82fe0631e36b8ee9f526976cc573710930239d"
       },
       "to_revision": 36
     },
@@ -4169,7 +4169,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.20",
         "resulting_revision": 37,
-        "resulting_state_digest": "009f6f1329ff7ebc9861b71837b1adfa50ac20cb5c76aecb35ff81bd206f0090"
+        "resulting_state_digest": "d2b4a07c7c87dae8d5b859c27972eef6a14dd3d279d02f2443e9909cf67539f8"
       },
       "encountered_definition_ids": [
         370,
@@ -4336,8 +4336,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "009f6f1329ff7ebc9861b71837b1adfa50ac20cb5c76aecb35ff81bd206f0090",
-        "before": "fbd8169fcbecfa463829753c33492d2ada0eb4596d813a4254c3744b6dfab35b"
+        "after": "d2b4a07c7c87dae8d5b859c27972eef6a14dd3d279d02f2443e9909cf67539f8",
+        "before": "89c8a4622ff9dd701d4c9a57d354c667d5cab2885486eb89d6b4c30bb8cfa514"
       },
       "to_revision": 37
     },
@@ -4356,7 +4356,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.21",
         "resulting_revision": 38,
-        "resulting_state_digest": "98c85006a999d85abdb1b050c5aff0b69d87ec81bda23ec91f7bbebc57b43d6b"
+        "resulting_state_digest": "b9bc5be0a966436a636efc6cc892c012748512c47ebd57f4f656de233bc89b1e"
       },
       "encountered_definition_ids": [
         609,
@@ -4517,8 +4517,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "98c85006a999d85abdb1b050c5aff0b69d87ec81bda23ec91f7bbebc57b43d6b",
-        "before": "009f6f1329ff7ebc9861b71837b1adfa50ac20cb5c76aecb35ff81bd206f0090"
+        "after": "b9bc5be0a966436a636efc6cc892c012748512c47ebd57f4f656de233bc89b1e",
+        "before": "d2b4a07c7c87dae8d5b859c27972eef6a14dd3d279d02f2443e9909cf67539f8"
       },
       "to_revision": 38
     },
@@ -4537,7 +4537,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.17",
         "resulting_revision": 39,
-        "resulting_state_digest": "4a8b0eb0a368f4754f5f5b6768dd4c88674e139a08354a3ed7d8629c1a710911"
+        "resulting_state_digest": "dc59a0838a87646e363a46a1dfca73d07422e6fcf608203b06a1314693990286"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -4567,8 +4567,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4a8b0eb0a368f4754f5f5b6768dd4c88674e139a08354a3ed7d8629c1a710911",
-        "before": "98c85006a999d85abdb1b050c5aff0b69d87ec81bda23ec91f7bbebc57b43d6b"
+        "after": "dc59a0838a87646e363a46a1dfca73d07422e6fcf608203b06a1314693990286",
+        "before": "b9bc5be0a966436a636efc6cc892c012748512c47ebd57f4f656de233bc89b1e"
       },
       "to_revision": 39
     },
@@ -4587,7 +4587,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.18",
         "resulting_revision": 40,
-        "resulting_state_digest": "9fe026fa95726f7c9544dd3f58c235998204dda21598c2960d06f1ff622c1cc2"
+        "resulting_state_digest": "11c2f3bf4e25bdbd345a06bce7ac063f1ad8116722c2c8d1327526375cb6226e"
       },
       "encountered_definition_ids": [
         651
@@ -4670,8 +4670,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "9fe026fa95726f7c9544dd3f58c235998204dda21598c2960d06f1ff622c1cc2",
-        "before": "4a8b0eb0a368f4754f5f5b6768dd4c88674e139a08354a3ed7d8629c1a710911"
+        "after": "11c2f3bf4e25bdbd345a06bce7ac063f1ad8116722c2c8d1327526375cb6226e",
+        "before": "dc59a0838a87646e363a46a1dfca73d07422e6fcf608203b06a1314693990286"
       },
       "to_revision": 40
     },
@@ -4690,7 +4690,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.22",
         "resulting_revision": 41,
-        "resulting_state_digest": "9ee4eff58cacb1add41abb8922ebf42d1f5a04bb819898eadac5a8987638ab5f"
+        "resulting_state_digest": "cf893484c1beb69e2f0514cf6ba726bce08fd34ebb8933a4798abe3999b8a2a2"
       },
       "encountered_definition_ids": [
         370
@@ -4784,8 +4784,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9ee4eff58cacb1add41abb8922ebf42d1f5a04bb819898eadac5a8987638ab5f",
-        "before": "9fe026fa95726f7c9544dd3f58c235998204dda21598c2960d06f1ff622c1cc2"
+        "after": "cf893484c1beb69e2f0514cf6ba726bce08fd34ebb8933a4798abe3999b8a2a2",
+        "before": "11c2f3bf4e25bdbd345a06bce7ac063f1ad8116722c2c8d1327526375cb6226e"
       },
       "to_revision": 41
     },
@@ -4804,7 +4804,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.23",
         "resulting_revision": 42,
-        "resulting_state_digest": "bbd2e229ee23e4925df129aed1535300d2d56d9beae6c1a0eb895df4625b9b3b"
+        "resulting_state_digest": "4ed56a39944471ff81a96680097c8c721178464d5c4d1c749ced67a0be87014a"
       },
       "encountered_definition_ids": [
         172
@@ -4863,8 +4863,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "bbd2e229ee23e4925df129aed1535300d2d56d9beae6c1a0eb895df4625b9b3b",
-        "before": "9ee4eff58cacb1add41abb8922ebf42d1f5a04bb819898eadac5a8987638ab5f"
+        "after": "4ed56a39944471ff81a96680097c8c721178464d5c4d1c749ced67a0be87014a",
+        "before": "cf893484c1beb69e2f0514cf6ba726bce08fd34ebb8933a4798abe3999b8a2a2"
       },
       "to_revision": 42
     },
@@ -4883,7 +4883,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.24",
         "resulting_revision": 43,
-        "resulting_state_digest": "a339caf851ab5c83ba93dce65d4f6e7f079608149570a932085c711502f3d9eb"
+        "resulting_state_digest": "1500f511dc53b81effc8af5a3e0655105187800fee1ab11f224d019f0919c7eb"
       },
       "encountered_definition_ids": [
         370,
@@ -5014,8 +5014,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "a339caf851ab5c83ba93dce65d4f6e7f079608149570a932085c711502f3d9eb",
-        "before": "bbd2e229ee23e4925df129aed1535300d2d56d9beae6c1a0eb895df4625b9b3b"
+        "after": "1500f511dc53b81effc8af5a3e0655105187800fee1ab11f224d019f0919c7eb",
+        "before": "4ed56a39944471ff81a96680097c8c721178464d5c4d1c749ced67a0be87014a"
       },
       "to_revision": 43
     },
@@ -5034,7 +5034,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.25",
         "resulting_revision": 44,
-        "resulting_state_digest": "cfe32796a2f5aed943d9ab95ddd8ebf40e2aab6915831110b1007505d24d7aa0"
+        "resulting_state_digest": "683fdfe578f82a3beaaa41a27f9ea2a5c8b1de01e4cfde5a3105927b487d4808"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -5064,8 +5064,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "cfe32796a2f5aed943d9ab95ddd8ebf40e2aab6915831110b1007505d24d7aa0",
-        "before": "a339caf851ab5c83ba93dce65d4f6e7f079608149570a932085c711502f3d9eb"
+        "after": "683fdfe578f82a3beaaa41a27f9ea2a5c8b1de01e4cfde5a3105927b487d4808",
+        "before": "1500f511dc53b81effc8af5a3e0655105187800fee1ab11f224d019f0919c7eb"
       },
       "to_revision": 44
     },
@@ -5084,7 +5084,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.26",
         "resulting_revision": 45,
-        "resulting_state_digest": "1ca17a48225e055fff7ef3cb95125870ec149fb8905b9acaaa96d6233290c0c3"
+        "resulting_state_digest": "498ffcbc848d95c8ea493b807e8623810f25fcf18a27f94efed975d3f2e7ea91"
       },
       "encountered_definition_ids": [
         997
@@ -5135,8 +5135,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "1ca17a48225e055fff7ef3cb95125870ec149fb8905b9acaaa96d6233290c0c3",
-        "before": "cfe32796a2f5aed943d9ab95ddd8ebf40e2aab6915831110b1007505d24d7aa0"
+        "after": "498ffcbc848d95c8ea493b807e8623810f25fcf18a27f94efed975d3f2e7ea91",
+        "before": "683fdfe578f82a3beaaa41a27f9ea2a5c8b1de01e4cfde5a3105927b487d4808"
       },
       "to_revision": 45
     },
@@ -5155,7 +5155,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.27",
         "resulting_revision": 46,
-        "resulting_state_digest": "802ccc5c56042888762803d004137d22be247fdb66f8c1ae50993cd9d72a98ac"
+        "resulting_state_digest": "8096601151d309f429b318d39778ad65607332e41ad5fb14013843af8af3326f"
       },
       "encountered_definition_ids": [
         651
@@ -5208,8 +5208,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "802ccc5c56042888762803d004137d22be247fdb66f8c1ae50993cd9d72a98ac",
-        "before": "1ca17a48225e055fff7ef3cb95125870ec149fb8905b9acaaa96d6233290c0c3"
+        "after": "8096601151d309f429b318d39778ad65607332e41ad5fb14013843af8af3326f",
+        "before": "498ffcbc848d95c8ea493b807e8623810f25fcf18a27f94efed975d3f2e7ea91"
       },
       "to_revision": 46
     },
@@ -5228,7 +5228,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.28",
         "resulting_revision": 47,
-        "resulting_state_digest": "16fed30524297d2d9209313a1e7d3747f6feb2c2467fe07667678cb2f141e82c"
+        "resulting_state_digest": "6e3d8bf2129eeb19f3572313a56a742f1ac4ec01cbe8e20ca9d633411d4ff339"
       },
       "encountered_definition_ids": [
         227
@@ -5326,8 +5326,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "16fed30524297d2d9209313a1e7d3747f6feb2c2467fe07667678cb2f141e82c",
-        "before": "802ccc5c56042888762803d004137d22be247fdb66f8c1ae50993cd9d72a98ac"
+        "after": "6e3d8bf2129eeb19f3572313a56a742f1ac4ec01cbe8e20ca9d633411d4ff339",
+        "before": "8096601151d309f429b318d39778ad65607332e41ad5fb14013843af8af3326f"
       },
       "to_revision": 47
     },
@@ -5346,7 +5346,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.19",
         "resulting_revision": 48,
-        "resulting_state_digest": "fbb789b5806c2da3d2f4f4f293e728ca5a3be549adcd3ea0cc32bc0313c1e5ee"
+        "resulting_state_digest": "3d28f25280be0f766c4a3c5e06960818c9197d4a067e18ccaf6142b16d9c7dc5"
       },
       "encountered_definition_ids": [
         461
@@ -5405,8 +5405,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "fbb789b5806c2da3d2f4f4f293e728ca5a3be549adcd3ea0cc32bc0313c1e5ee",
-        "before": "16fed30524297d2d9209313a1e7d3747f6feb2c2467fe07667678cb2f141e82c"
+        "after": "3d28f25280be0f766c4a3c5e06960818c9197d4a067e18ccaf6142b16d9c7dc5",
+        "before": "6e3d8bf2129eeb19f3572313a56a742f1ac4ec01cbe8e20ca9d633411d4ff339"
       },
       "to_revision": 48
     },
@@ -5425,7 +5425,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.20",
         "resulting_revision": 49,
-        "resulting_state_digest": "8081d0982e75e28eea1e5d686c6bb2c1a0f6b8ad289369c513cdf1dd9997f21e"
+        "resulting_state_digest": "361b9e84c647f9bb8a306b7d7283ff841bf68e445ad172a40a205b9e29f16691"
       },
       "encountered_definition_ids": [
         905
@@ -5479,8 +5479,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "8081d0982e75e28eea1e5d686c6bb2c1a0f6b8ad289369c513cdf1dd9997f21e",
-        "before": "fbb789b5806c2da3d2f4f4f293e728ca5a3be549adcd3ea0cc32bc0313c1e5ee"
+        "after": "361b9e84c647f9bb8a306b7d7283ff841bf68e445ad172a40a205b9e29f16691",
+        "before": "3d28f25280be0f766c4a3c5e06960818c9197d4a067e18ccaf6142b16d9c7dc5"
       },
       "to_revision": 49
     },
@@ -5499,7 +5499,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.21",
         "resulting_revision": 50,
-        "resulting_state_digest": "712e6d7414593b959694672f4265c054489c9ca065cacf3fb1a83ee94bde2d29"
+        "resulting_state_digest": "1c84121be148b965fd59fa89dcc1839bdd5b383a059bc6d9c2e47331c15362b1"
       },
       "encountered_definition_ids": [
         461,
@@ -5627,8 +5627,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "712e6d7414593b959694672f4265c054489c9ca065cacf3fb1a83ee94bde2d29",
-        "before": "8081d0982e75e28eea1e5d686c6bb2c1a0f6b8ad289369c513cdf1dd9997f21e"
+        "after": "1c84121be148b965fd59fa89dcc1839bdd5b383a059bc6d9c2e47331c15362b1",
+        "before": "361b9e84c647f9bb8a306b7d7283ff841bf68e445ad172a40a205b9e29f16691"
       },
       "to_revision": 50
     },
@@ -5647,7 +5647,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.22",
         "resulting_revision": 51,
-        "resulting_state_digest": "381d24d216c34f6104dfebc41ba91a113dec72a3ec9e94bc7a5be309e3a32253"
+        "resulting_state_digest": "6050eeef8c2d94aac1c620b827a65a77768da4f97bacca1b2396b8fb05cf38f9"
       },
       "encountered_definition_ids": [
         369,
@@ -5873,8 +5873,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "381d24d216c34f6104dfebc41ba91a113dec72a3ec9e94bc7a5be309e3a32253",
-        "before": "712e6d7414593b959694672f4265c054489c9ca065cacf3fb1a83ee94bde2d29"
+        "after": "6050eeef8c2d94aac1c620b827a65a77768da4f97bacca1b2396b8fb05cf38f9",
+        "before": "1c84121be148b965fd59fa89dcc1839bdd5b383a059bc6d9c2e47331c15362b1"
       },
       "to_revision": 51
     },
@@ -5893,7 +5893,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.23",
         "resulting_revision": 52,
-        "resulting_state_digest": "6284c8c07b7f0428f68e03bee8ec79ed359cd01f14e23b44bba5973414287e93"
+        "resulting_state_digest": "c1ab5ebbd7bd086479439c0fd3745e5b30d73237025e2037f78e955e7b57573d"
       },
       "encountered_definition_ids": [
         609
@@ -6034,8 +6034,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "6284c8c07b7f0428f68e03bee8ec79ed359cd01f14e23b44bba5973414287e93",
-        "before": "381d24d216c34f6104dfebc41ba91a113dec72a3ec9e94bc7a5be309e3a32253"
+        "after": "c1ab5ebbd7bd086479439c0fd3745e5b30d73237025e2037f78e955e7b57573d",
+        "before": "6050eeef8c2d94aac1c620b827a65a77768da4f97bacca1b2396b8fb05cf38f9"
       },
       "to_revision": 52
     },
@@ -6054,7 +6054,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.29",
         "resulting_revision": 53,
-        "resulting_state_digest": "78edfb02b8c099c659a8ee4a600ddea89ace3ba433fc4022647bcea3a4132e8f"
+        "resulting_state_digest": "b55373e8383ddd36f8b2697810453350ece2dc9a9ceb1fd86fc1d9e1579a975d"
       },
       "encountered_definition_ids": [
         651
@@ -6148,8 +6148,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "78edfb02b8c099c659a8ee4a600ddea89ace3ba433fc4022647bcea3a4132e8f",
-        "before": "6284c8c07b7f0428f68e03bee8ec79ed359cd01f14e23b44bba5973414287e93"
+        "after": "b55373e8383ddd36f8b2697810453350ece2dc9a9ceb1fd86fc1d9e1579a975d",
+        "before": "c1ab5ebbd7bd086479439c0fd3745e5b30d73237025e2037f78e955e7b57573d"
       },
       "to_revision": 53
     },
@@ -6168,7 +6168,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.30",
         "resulting_revision": 54,
-        "resulting_state_digest": "8aab5e76842544ba31e5d5c707032cac40455948368fedf67708aa8a82c9c7c8"
+        "resulting_state_digest": "e44175cac3dc5a9b935aed1c1306e400d8cd8d0b8f36f0e4e8a3c094dfe3c751"
       },
       "encountered_definition_ids": [
         988
@@ -6227,8 +6227,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8aab5e76842544ba31e5d5c707032cac40455948368fedf67708aa8a82c9c7c8",
-        "before": "78edfb02b8c099c659a8ee4a600ddea89ace3ba433fc4022647bcea3a4132e8f"
+        "after": "e44175cac3dc5a9b935aed1c1306e400d8cd8d0b8f36f0e4e8a3c094dfe3c751",
+        "before": "b55373e8383ddd36f8b2697810453350ece2dc9a9ceb1fd86fc1d9e1579a975d"
       },
       "to_revision": 54
     },
@@ -6247,7 +6247,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.31",
         "resulting_revision": 55,
-        "resulting_state_digest": "ebff1667603769bdbd02829f897da8806cdd4bf6a5665d70eba93fcb244702ac"
+        "resulting_state_digest": "d4131cd694f78cd1104ddb49f63cd424a35cd142d5221de17295576e5d7fbc07"
       },
       "encountered_definition_ids": [
         370,
@@ -6378,8 +6378,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ebff1667603769bdbd02829f897da8806cdd4bf6a5665d70eba93fcb244702ac",
-        "before": "8aab5e76842544ba31e5d5c707032cac40455948368fedf67708aa8a82c9c7c8"
+        "after": "d4131cd694f78cd1104ddb49f63cd424a35cd142d5221de17295576e5d7fbc07",
+        "before": "e44175cac3dc5a9b935aed1c1306e400d8cd8d0b8f36f0e4e8a3c094dfe3c751"
       },
       "to_revision": 55
     },
@@ -6398,7 +6398,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.32",
         "resulting_revision": 56,
-        "resulting_state_digest": "3e25817ddda4eb5d52e5189b79e3ca7b2c637410e0a04d150926711590bd8e00"
+        "resulting_state_digest": "e0f8dcb87a2494e43b88d8922eb31b6fc4a089ebe3d8da7f5fbeac2f0c18cf7a"
       },
       "encountered_definition_ids": [
         988
@@ -6457,8 +6457,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "3e25817ddda4eb5d52e5189b79e3ca7b2c637410e0a04d150926711590bd8e00",
-        "before": "ebff1667603769bdbd02829f897da8806cdd4bf6a5665d70eba93fcb244702ac"
+        "after": "e0f8dcb87a2494e43b88d8922eb31b6fc4a089ebe3d8da7f5fbeac2f0c18cf7a",
+        "before": "d4131cd694f78cd1104ddb49f63cd424a35cd142d5221de17295576e5d7fbc07"
       },
       "to_revision": 56
     },
@@ -6477,7 +6477,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.33",
         "resulting_revision": 57,
-        "resulting_state_digest": "c2c0c822d655de5b445abe198ff8f710a61c66feaac4b1538dead319886e0ac4"
+        "resulting_state_digest": "cca4e5f2c55481f995864000d72dd0f66a4d5905062eed6d38a3ea87753bebcb"
       },
       "encountered_definition_ids": [
         172
@@ -6530,8 +6530,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "c2c0c822d655de5b445abe198ff8f710a61c66feaac4b1538dead319886e0ac4",
-        "before": "3e25817ddda4eb5d52e5189b79e3ca7b2c637410e0a04d150926711590bd8e00"
+        "after": "cca4e5f2c55481f995864000d72dd0f66a4d5905062eed6d38a3ea87753bebcb",
+        "before": "e0f8dcb87a2494e43b88d8922eb31b6fc4a089ebe3d8da7f5fbeac2f0c18cf7a"
       },
       "to_revision": 57
     },
@@ -6550,7 +6550,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.34",
         "resulting_revision": 58,
-        "resulting_state_digest": "87d013d35d0eec89ffb91767835e59d8ffcaadee7fca8d1fc0e8405f21348bdc"
+        "resulting_state_digest": "904dff7e8beded8e49b607a8c49f7e7d3dc5c2a361e82796c2411f0d2299a6b6"
       },
       "encountered_definition_ids": [
         370,
@@ -6638,8 +6638,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "87d013d35d0eec89ffb91767835e59d8ffcaadee7fca8d1fc0e8405f21348bdc",
-        "before": "c2c0c822d655de5b445abe198ff8f710a61c66feaac4b1538dead319886e0ac4"
+        "after": "904dff7e8beded8e49b607a8c49f7e7d3dc5c2a361e82796c2411f0d2299a6b6",
+        "before": "cca4e5f2c55481f995864000d72dd0f66a4d5905062eed6d38a3ea87753bebcb"
       },
       "to_revision": 58
     },
@@ -6658,7 +6658,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.35",
         "resulting_revision": 59,
-        "resulting_state_digest": "73601d8cab3a084a4d3fa771ac0929d91b87c9130e76accce1a95c60f3e72fb4"
+        "resulting_state_digest": "0da91f1e4b0964ab5f41f3666b434e45da7c0a9ccbfcfd1ea39a16865270421b"
       },
       "encountered_definition_ids": [
         31,
@@ -6713,8 +6713,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "73601d8cab3a084a4d3fa771ac0929d91b87c9130e76accce1a95c60f3e72fb4",
-        "before": "87d013d35d0eec89ffb91767835e59d8ffcaadee7fca8d1fc0e8405f21348bdc"
+        "after": "0da91f1e4b0964ab5f41f3666b434e45da7c0a9ccbfcfd1ea39a16865270421b",
+        "before": "904dff7e8beded8e49b607a8c49f7e7d3dc5c2a361e82796c2411f0d2299a6b6"
       },
       "to_revision": 59
     },
@@ -6733,7 +6733,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.36",
         "resulting_revision": 60,
-        "resulting_state_digest": "8dd024a049b6f769f40bb457bc62be20710db07856df578b33421d78b76dad9b"
+        "resulting_state_digest": "ab2ee23cd55e1ac848df30e38a8c028ba55ee5cb4d543736a24fe7efd9e8b200"
       },
       "encountered_definition_ids": [
         988
@@ -6786,8 +6786,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "8dd024a049b6f769f40bb457bc62be20710db07856df578b33421d78b76dad9b",
-        "before": "73601d8cab3a084a4d3fa771ac0929d91b87c9130e76accce1a95c60f3e72fb4"
+        "after": "ab2ee23cd55e1ac848df30e38a8c028ba55ee5cb4d543736a24fe7efd9e8b200",
+        "before": "0da91f1e4b0964ab5f41f3666b434e45da7c0a9ccbfcfd1ea39a16865270421b"
       },
       "to_revision": 60
     },
@@ -6806,7 +6806,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.37",
         "resulting_revision": 61,
-        "resulting_state_digest": "23e37c6581478ee67cf4f7040c32d226c854001882140267e6eafd653a4e84dd"
+        "resulting_state_digest": "14e3d7904fdbcbbc7e8a7f8e6440bd40765e01fbc4aa335a263660f3ac2252ce"
       },
       "encountered_definition_ids": [
         997
@@ -6904,8 +6904,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "23e37c6581478ee67cf4f7040c32d226c854001882140267e6eafd653a4e84dd",
-        "before": "8dd024a049b6f769f40bb457bc62be20710db07856df578b33421d78b76dad9b"
+        "after": "14e3d7904fdbcbbc7e8a7f8e6440bd40765e01fbc4aa335a263660f3ac2252ce",
+        "before": "ab2ee23cd55e1ac848df30e38a8c028ba55ee5cb4d543736a24fe7efd9e8b200"
       },
       "to_revision": 61
     },
@@ -6924,7 +6924,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.24",
         "resulting_revision": 62,
-        "resulting_state_digest": "4df313e55773750f7bf6153d597c3de6ec714e2a3f233cc544f195aef21bee68"
+        "resulting_state_digest": "6abb11bb03de0b1a0080eb5e12985270a13f9983014d819ff0528a9daa99f6f3"
       },
       "encountered_definition_ids": [
         369
@@ -6983,8 +6983,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4df313e55773750f7bf6153d597c3de6ec714e2a3f233cc544f195aef21bee68",
-        "before": "23e37c6581478ee67cf4f7040c32d226c854001882140267e6eafd653a4e84dd"
+        "after": "6abb11bb03de0b1a0080eb5e12985270a13f9983014d819ff0528a9daa99f6f3",
+        "before": "14e3d7904fdbcbbc7e8a7f8e6440bd40765e01fbc4aa335a263660f3ac2252ce"
       },
       "to_revision": 62
     },
@@ -7003,7 +7003,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.25",
         "resulting_revision": 63,
-        "resulting_state_digest": "e2a8eed9e4b266004f19c3e61b80d0db57d7ba38587381df0ffea469401ef699"
+        "resulting_state_digest": "409d74baa58546ce2cec70a8f6b460c6ad034cf06f966f87204077933ad0520f"
       },
       "encountered_definition_ids": [
         490,
@@ -7164,8 +7164,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e2a8eed9e4b266004f19c3e61b80d0db57d7ba38587381df0ffea469401ef699",
-        "before": "4df313e55773750f7bf6153d597c3de6ec714e2a3f233cc544f195aef21bee68"
+        "after": "409d74baa58546ce2cec70a8f6b460c6ad034cf06f966f87204077933ad0520f",
+        "before": "6abb11bb03de0b1a0080eb5e12985270a13f9983014d819ff0528a9daa99f6f3"
       },
       "to_revision": 63
     },
@@ -7184,7 +7184,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.26",
         "resulting_revision": 64,
-        "resulting_state_digest": "f73f915d4dc98b03d6c359f9945bbaa20a96d77c9c425ca85666812a0fbba406"
+        "resulting_state_digest": "7ee58e920bd67370690d09375a5328f4913ff738fba272b92e840b6af556d453"
       },
       "encountered_definition_ids": [
         168
@@ -7243,8 +7243,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "f73f915d4dc98b03d6c359f9945bbaa20a96d77c9c425ca85666812a0fbba406",
-        "before": "e2a8eed9e4b266004f19c3e61b80d0db57d7ba38587381df0ffea469401ef699"
+        "after": "7ee58e920bd67370690d09375a5328f4913ff738fba272b92e840b6af556d453",
+        "before": "409d74baa58546ce2cec70a8f6b460c6ad034cf06f966f87204077933ad0520f"
       },
       "to_revision": 64
     },
@@ -7263,7 +7263,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.27",
         "resulting_revision": 65,
-        "resulting_state_digest": "9a23fedf2dab9256e934c0bf4bdf764ecbba4a52964bb3c80da9f6234c1a72b3"
+        "resulting_state_digest": "48cd86bb291a8a4172e87a5d7f72688b6be5103673a5de84df877309407c220c"
       },
       "encountered_definition_ids": [
         490,
@@ -7330,8 +7330,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "9a23fedf2dab9256e934c0bf4bdf764ecbba4a52964bb3c80da9f6234c1a72b3",
-        "before": "f73f915d4dc98b03d6c359f9945bbaa20a96d77c9c425ca85666812a0fbba406"
+        "after": "48cd86bb291a8a4172e87a5d7f72688b6be5103673a5de84df877309407c220c",
+        "before": "7ee58e920bd67370690d09375a5328f4913ff738fba272b92e840b6af556d453"
       },
       "to_revision": 65
     },
@@ -7350,7 +7350,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.28",
         "resulting_revision": 66,
-        "resulting_state_digest": "8aa6ed9f3bdf37ac89c17e91e14dd3336635f987399cf768255f5b565ff618f6"
+        "resulting_state_digest": "efa639a9e79b6dd54cef803b3304a3a464718fa4bc4255961d181fc5869a4a41"
       },
       "encountered_definition_ids": [
         609
@@ -7474,8 +7474,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "8aa6ed9f3bdf37ac89c17e91e14dd3336635f987399cf768255f5b565ff618f6",
-        "before": "9a23fedf2dab9256e934c0bf4bdf764ecbba4a52964bb3c80da9f6234c1a72b3"
+        "after": "efa639a9e79b6dd54cef803b3304a3a464718fa4bc4255961d181fc5869a4a41",
+        "before": "48cd86bb291a8a4172e87a5d7f72688b6be5103673a5de84df877309407c220c"
       },
       "to_revision": 66
     },
@@ -7494,7 +7494,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.38",
         "resulting_revision": 67,
-        "resulting_state_digest": "c5b9c77885349b4867670a067c9d9ba914e4a386d4dab66c5316f07264bb3992"
+        "resulting_state_digest": "8356913ee6cf330de4ff0cdd4fb22e5ecde022f041ef959cd3efbd932fafa450"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7540,8 +7540,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c5b9c77885349b4867670a067c9d9ba914e4a386d4dab66c5316f07264bb3992",
-        "before": "8aa6ed9f3bdf37ac89c17e91e14dd3336635f987399cf768255f5b565ff618f6"
+        "after": "8356913ee6cf330de4ff0cdd4fb22e5ecde022f041ef959cd3efbd932fafa450",
+        "before": "efa639a9e79b6dd54cef803b3304a3a464718fa4bc4255961d181fc5869a4a41"
       },
       "to_revision": 67
     },
@@ -7560,7 +7560,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.39",
         "resulting_revision": 68,
-        "resulting_state_digest": "c28f4f88a86d40e355a64e91ea8ceb9ea77351808510df24616146ef64e6ce11"
+        "resulting_state_digest": "3895eb57acc391a076bb0b5234b8d05f0338bd2b1bb3b91668822d7dd7680434"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -7590,8 +7590,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "c28f4f88a86d40e355a64e91ea8ceb9ea77351808510df24616146ef64e6ce11",
-        "before": "c5b9c77885349b4867670a067c9d9ba914e4a386d4dab66c5316f07264bb3992"
+        "after": "3895eb57acc391a076bb0b5234b8d05f0338bd2b1bb3b91668822d7dd7680434",
+        "before": "8356913ee6cf330de4ff0cdd4fb22e5ecde022f041ef959cd3efbd932fafa450"
       },
       "to_revision": 68
     },
@@ -7610,7 +7610,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.40",
         "resulting_revision": 69,
-        "resulting_state_digest": "ce13327fb7c43177c72df41197823627e96a95663f69c35586330b7137f6b242"
+        "resulting_state_digest": "4ac4b8b2a19240ddd2ca5b2dbad9632e8df5b89e2c4280d8e329c5e861378ab9"
       },
       "encountered_definition_ids": [
         370
@@ -7706,8 +7706,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "ce13327fb7c43177c72df41197823627e96a95663f69c35586330b7137f6b242",
-        "before": "c28f4f88a86d40e355a64e91ea8ceb9ea77351808510df24616146ef64e6ce11"
+        "after": "4ac4b8b2a19240ddd2ca5b2dbad9632e8df5b89e2c4280d8e329c5e861378ab9",
+        "before": "3895eb57acc391a076bb0b5234b8d05f0338bd2b1bb3b91668822d7dd7680434"
       },
       "to_revision": 69
     },
@@ -7726,7 +7726,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.41",
         "resulting_revision": 70,
-        "resulting_state_digest": "399a94899f6c2eb1a6740caea49080a4bef423e6c8591356d0bd0b2d6f67b644"
+        "resulting_state_digest": "27f7622edead740b0a4d5c09a81b8151fd55b4f5258e020a672ee68b7efc6be6"
       },
       "encountered_definition_ids": [
         68
@@ -7786,8 +7786,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "399a94899f6c2eb1a6740caea49080a4bef423e6c8591356d0bd0b2d6f67b644",
-        "before": "ce13327fb7c43177c72df41197823627e96a95663f69c35586330b7137f6b242"
+        "after": "27f7622edead740b0a4d5c09a81b8151fd55b4f5258e020a672ee68b7efc6be6",
+        "before": "4ac4b8b2a19240ddd2ca5b2dbad9632e8df5b89e2c4280d8e329c5e861378ab9"
       },
       "to_revision": 70
     },
@@ -7806,7 +7806,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.42",
         "resulting_revision": 71,
-        "resulting_state_digest": "40b4fe29df5c13d894c67690f9eac4eccdd9802c96bbfb0df1a771f766696848"
+        "resulting_state_digest": "cd35530be0a9dae60ea6536eadc5b38caef9f3997b1ead5edb5530e213c4fd41"
       },
       "encountered_definition_ids": [
         68,
@@ -7894,8 +7894,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "40b4fe29df5c13d894c67690f9eac4eccdd9802c96bbfb0df1a771f766696848",
-        "before": "399a94899f6c2eb1a6740caea49080a4bef423e6c8591356d0bd0b2d6f67b644"
+        "after": "cd35530be0a9dae60ea6536eadc5b38caef9f3997b1ead5edb5530e213c4fd41",
+        "before": "27f7622edead740b0a4d5c09a81b8151fd55b4f5258e020a672ee68b7efc6be6"
       },
       "to_revision": 71
     },
@@ -7914,7 +7914,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.43",
         "resulting_revision": 72,
-        "resulting_state_digest": "e7b43462c0d4a408d12bbd5cd577e3fa88d4866b4226eda4cd2d451e3178e7df"
+        "resulting_state_digest": "ac3c797962b1df5c3844180b9c60ea65d18e3ac9f8233b89a98944e27c1c6ac9"
       },
       "encountered_definition_ids": [
         68,
@@ -7976,8 +7976,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "e7b43462c0d4a408d12bbd5cd577e3fa88d4866b4226eda4cd2d451e3178e7df",
-        "before": "40b4fe29df5c13d894c67690f9eac4eccdd9802c96bbfb0df1a771f766696848"
+        "after": "ac3c797962b1df5c3844180b9c60ea65d18e3ac9f8233b89a98944e27c1c6ac9",
+        "before": "cd35530be0a9dae60ea6536eadc5b38caef9f3997b1ead5edb5530e213c4fd41"
       },
       "to_revision": 72
     },
@@ -7996,7 +7996,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.44",
         "resulting_revision": 73,
-        "resulting_state_digest": "edec977fd64035c180bfa99837353f7ef5e44c9878af4da6f16026ae1a7d9a86"
+        "resulting_state_digest": "338b34b45f17393e3fa49a0b233e06623415334ec419fc1d01e4a42121577ee1"
       },
       "encountered_definition_ids": [
         68,
@@ -8056,8 +8056,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "edec977fd64035c180bfa99837353f7ef5e44c9878af4da6f16026ae1a7d9a86",
-        "before": "e7b43462c0d4a408d12bbd5cd577e3fa88d4866b4226eda4cd2d451e3178e7df"
+        "after": "338b34b45f17393e3fa49a0b233e06623415334ec419fc1d01e4a42121577ee1",
+        "before": "ac3c797962b1df5c3844180b9c60ea65d18e3ac9f8233b89a98944e27c1c6ac9"
       },
       "to_revision": 73
     },
@@ -8076,7 +8076,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.45",
         "resulting_revision": 74,
-        "resulting_state_digest": "bf3cf80949b7079a55a1a8d9ad2b24b51c4c147dc6a10d444e40e1d42e44739b"
+        "resulting_state_digest": "873826d03f8dace9b9234867b3129275007fb06c5a7d205e2eb770f648ae2b4f"
       },
       "encountered_definition_ids": [
         68,
@@ -8178,8 +8178,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "bf3cf80949b7079a55a1a8d9ad2b24b51c4c147dc6a10d444e40e1d42e44739b",
-        "before": "edec977fd64035c180bfa99837353f7ef5e44c9878af4da6f16026ae1a7d9a86"
+        "after": "873826d03f8dace9b9234867b3129275007fb06c5a7d205e2eb770f648ae2b4f",
+        "before": "338b34b45f17393e3fa49a0b233e06623415334ec419fc1d01e4a42121577ee1"
       },
       "to_revision": 74
     },
@@ -8198,7 +8198,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.46",
         "resulting_revision": 75,
-        "resulting_state_digest": "6aeb24e33031d21db8c4daca85b3c6e1b41120d3f8d2ea231f9cf935f36ed677"
+        "resulting_state_digest": "d0bceec762a5673c170dceb5bdd20258a6b58a9f5e80cf33b5876a562b800751"
       },
       "encountered_definition_ids": [
         370
@@ -8267,8 +8267,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "6aeb24e33031d21db8c4daca85b3c6e1b41120d3f8d2ea231f9cf935f36ed677",
-        "before": "bf3cf80949b7079a55a1a8d9ad2b24b51c4c147dc6a10d444e40e1d42e44739b"
+        "after": "d0bceec762a5673c170dceb5bdd20258a6b58a9f5e80cf33b5876a562b800751",
+        "before": "873826d03f8dace9b9234867b3129275007fb06c5a7d205e2eb770f648ae2b4f"
       },
       "to_revision": 75
     },
@@ -8287,7 +8287,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.47",
         "resulting_revision": 76,
-        "resulting_state_digest": "cd2931d395e8b15a71d9d3c02f9f8bdacdaa2dc80645a30fb4a19c21c669f91d"
+        "resulting_state_digest": "faa362bba5c8a117ffd4ed0b48ac703204db660e5063d637ccef2db75cebe975"
       },
       "encountered_definition_ids": [
         988
@@ -8340,8 +8340,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "cd2931d395e8b15a71d9d3c02f9f8bdacdaa2dc80645a30fb4a19c21c669f91d",
-        "before": "6aeb24e33031d21db8c4daca85b3c6e1b41120d3f8d2ea231f9cf935f36ed677"
+        "after": "faa362bba5c8a117ffd4ed0b48ac703204db660e5063d637ccef2db75cebe975",
+        "before": "d0bceec762a5673c170dceb5bdd20258a6b58a9f5e80cf33b5876a562b800751"
       },
       "to_revision": 76
     },
@@ -8360,7 +8360,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.48",
         "resulting_revision": 77,
-        "resulting_state_digest": "d80865e29d20e96c7b78c9fe97d0f304292fbd27442be09734f15a1fd7021151"
+        "resulting_state_digest": "f0898f0b18653e6ce2554a87cf33eacf18d3ae3d3c4dbfb90160c33fa47a359f"
       },
       "encountered_definition_ids": [
         172
@@ -8419,8 +8419,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "d80865e29d20e96c7b78c9fe97d0f304292fbd27442be09734f15a1fd7021151",
-        "before": "cd2931d395e8b15a71d9d3c02f9f8bdacdaa2dc80645a30fb4a19c21c669f91d"
+        "after": "f0898f0b18653e6ce2554a87cf33eacf18d3ae3d3c4dbfb90160c33fa47a359f",
+        "before": "faa362bba5c8a117ffd4ed0b48ac703204db660e5063d637ccef2db75cebe975"
       },
       "to_revision": 77
     },
@@ -8439,7 +8439,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.49",
         "resulting_revision": 78,
-        "resulting_state_digest": "65c2fd27e371c6669e48b956f00b8f1f60d172737f2f6ae1d28736a0838db2ec"
+        "resulting_state_digest": "fa2df809a9fc094519c981268af5be30e46fae8dd44eaa96e5f4fd84ab024731"
       },
       "encountered_definition_ids": [
         172,
@@ -8565,8 +8565,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "65c2fd27e371c6669e48b956f00b8f1f60d172737f2f6ae1d28736a0838db2ec",
-        "before": "d80865e29d20e96c7b78c9fe97d0f304292fbd27442be09734f15a1fd7021151"
+        "after": "fa2df809a9fc094519c981268af5be30e46fae8dd44eaa96e5f4fd84ab024731",
+        "before": "f0898f0b18653e6ce2554a87cf33eacf18d3ae3d3c4dbfb90160c33fa47a359f"
       },
       "to_revision": 78
     },
@@ -8585,7 +8585,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.50",
         "resulting_revision": 79,
-        "resulting_state_digest": "0702175c1d375c7221d6c5089f95d4d733e8adec1b5a2b45e3dcad0b9a946b9c"
+        "resulting_state_digest": "2389d09ca9751bda36a4a76945047fdd96e58fcf968b1e6dce63fa9b5dfd33a8"
       },
       "encountered_definition_ids": [
         988
@@ -8638,8 +8638,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "0702175c1d375c7221d6c5089f95d4d733e8adec1b5a2b45e3dcad0b9a946b9c",
-        "before": "65c2fd27e371c6669e48b956f00b8f1f60d172737f2f6ae1d28736a0838db2ec"
+        "after": "2389d09ca9751bda36a4a76945047fdd96e58fcf968b1e6dce63fa9b5dfd33a8",
+        "before": "fa2df809a9fc094519c981268af5be30e46fae8dd44eaa96e5f4fd84ab024731"
       },
       "to_revision": 79
     },
@@ -8658,7 +8658,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.29",
         "resulting_revision": 80,
-        "resulting_state_digest": "fd2720ac5eee13ec44ecb89e59cff33a147196d6ab0b4d6a1d06fbb1fc4549b4"
+        "resulting_state_digest": "2d1cd59933cc4619ebba68b33216e0d471b1851d8aa815686d11fbaa714414f7"
       },
       "encountered_definition_ids": [
         172,
@@ -8832,8 +8832,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "fd2720ac5eee13ec44ecb89e59cff33a147196d6ab0b4d6a1d06fbb1fc4549b4",
-        "before": "0702175c1d375c7221d6c5089f95d4d733e8adec1b5a2b45e3dcad0b9a946b9c"
+        "after": "2d1cd59933cc4619ebba68b33216e0d471b1851d8aa815686d11fbaa714414f7",
+        "before": "2389d09ca9751bda36a4a76945047fdd96e58fcf968b1e6dce63fa9b5dfd33a8"
       },
       "to_revision": 80
     },
@@ -8852,7 +8852,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.30",
         "resulting_revision": 81,
-        "resulting_state_digest": "0511836507bb5105ea751a2612017cc34b023eda7c5222a15638000187ef9ff7"
+        "resulting_state_digest": "98e0f20368ca7529ab1c6d9142a09ed6e089eebb40dd8f05640014f8fd52fd34"
       },
       "encountered_definition_ids": [
         905
@@ -8912,8 +8912,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "0511836507bb5105ea751a2612017cc34b023eda7c5222a15638000187ef9ff7",
-        "before": "fd2720ac5eee13ec44ecb89e59cff33a147196d6ab0b4d6a1d06fbb1fc4549b4"
+        "after": "98e0f20368ca7529ab1c6d9142a09ed6e089eebb40dd8f05640014f8fd52fd34",
+        "before": "2d1cd59933cc4619ebba68b33216e0d471b1851d8aa815686d11fbaa714414f7"
       },
       "to_revision": 81
     },
@@ -8932,7 +8932,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.31",
         "resulting_revision": 82,
-        "resulting_state_digest": "34caeec5ac1e542f42e3cf5940e1ba4f68b6d48a1d804e8ec232684a878bf476"
+        "resulting_state_digest": "aba8a234d5dfaed9850af5733d1eb722b3138fa896b9747ebe68cbe09632790c"
       },
       "encountered_definition_ids": [
         490
@@ -9061,8 +9061,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "34caeec5ac1e542f42e3cf5940e1ba4f68b6d48a1d804e8ec232684a878bf476",
-        "before": "0511836507bb5105ea751a2612017cc34b023eda7c5222a15638000187ef9ff7"
+        "after": "aba8a234d5dfaed9850af5733d1eb722b3138fa896b9747ebe68cbe09632790c",
+        "before": "98e0f20368ca7529ab1c6d9142a09ed6e089eebb40dd8f05640014f8fd52fd34"
       },
       "to_revision": 82
     },
@@ -9081,7 +9081,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.32",
         "resulting_revision": 83,
-        "resulting_state_digest": "49bc92fc27a74bacaa249238969a7e9aa285263a0e206aa885cc5674b4d97d42"
+        "resulting_state_digest": "42424f9c5c92da3c11308bf7d83be96edce4885709bb67343758350e7630d53a"
       },
       "encountered_definition_ids": [
         351
@@ -9138,8 +9138,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "49bc92fc27a74bacaa249238969a7e9aa285263a0e206aa885cc5674b4d97d42",
-        "before": "34caeec5ac1e542f42e3cf5940e1ba4f68b6d48a1d804e8ec232684a878bf476"
+        "after": "42424f9c5c92da3c11308bf7d83be96edce4885709bb67343758350e7630d53a",
+        "before": "aba8a234d5dfaed9850af5733d1eb722b3138fa896b9747ebe68cbe09632790c"
       },
       "to_revision": 83
     },
@@ -9158,7 +9158,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.33",
         "resulting_revision": 84,
-        "resulting_state_digest": "210b22244d9951c98d17f65b946b5e98341ab07dbe45c1e2b08e6d1eb1be3c5d"
+        "resulting_state_digest": "93604c843348427f1835fd36de075c73b099baf298972274570079de20730c41"
       },
       "encountered_definition_ids": [
         490,
@@ -9289,8 +9289,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "210b22244d9951c98d17f65b946b5e98341ab07dbe45c1e2b08e6d1eb1be3c5d",
-        "before": "49bc92fc27a74bacaa249238969a7e9aa285263a0e206aa885cc5674b4d97d42"
+        "after": "93604c843348427f1835fd36de075c73b099baf298972274570079de20730c41",
+        "before": "42424f9c5c92da3c11308bf7d83be96edce4885709bb67343758350e7630d53a"
       },
       "to_revision": 84
     },
@@ -9309,7 +9309,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.34",
         "resulting_revision": 85,
-        "resulting_state_digest": "43bb770b9143ee6cc4e1818ee0542eb6151f6bc10803e2022b903cbcedd71999"
+        "resulting_state_digest": "6384cd241aa586ba18f3e531db0614816b62d3674ea5ec270dcee8673ca64615"
       },
       "encountered_definition_ids": [
         461
@@ -9368,8 +9368,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "43bb770b9143ee6cc4e1818ee0542eb6151f6bc10803e2022b903cbcedd71999",
-        "before": "210b22244d9951c98d17f65b946b5e98341ab07dbe45c1e2b08e6d1eb1be3c5d"
+        "after": "6384cd241aa586ba18f3e531db0614816b62d3674ea5ec270dcee8673ca64615",
+        "before": "93604c843348427f1835fd36de075c73b099baf298972274570079de20730c41"
       },
       "to_revision": 85
     },
@@ -9388,7 +9388,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.35",
         "resulting_revision": 86,
-        "resulting_state_digest": "7562b3dace762dd693389133cbe055f14163902dc15d90a42eb3ee6d63f43510"
+        "resulting_state_digest": "23711c419fb0b59690c4ab40fa844703c3061f2c891b28b0d6e5985115af7372"
       },
       "encountered_definition_ids": [
         351,
@@ -9545,8 +9545,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "7562b3dace762dd693389133cbe055f14163902dc15d90a42eb3ee6d63f43510",
-        "before": "43bb770b9143ee6cc4e1818ee0542eb6151f6bc10803e2022b903cbcedd71999"
+        "after": "23711c419fb0b59690c4ab40fa844703c3061f2c891b28b0d6e5985115af7372",
+        "before": "6384cd241aa586ba18f3e531db0614816b62d3674ea5ec270dcee8673ca64615"
       },
       "to_revision": 86
     },
@@ -9565,7 +9565,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.36",
         "resulting_revision": 87,
-        "resulting_state_digest": "96de84e14a264fbcfc1e29116250ed3a62dcc1734d3f11982398915ea108c724"
+        "resulting_state_digest": "f630f1fa51a2a570f67ce5ee08a2e8ebd479a6d9b6ec138a3ec5725f661c3da2"
       },
       "encountered_definition_ids": [
         351,
@@ -9756,8 +9756,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "96de84e14a264fbcfc1e29116250ed3a62dcc1734d3f11982398915ea108c724",
-        "before": "7562b3dace762dd693389133cbe055f14163902dc15d90a42eb3ee6d63f43510"
+        "after": "f630f1fa51a2a570f67ce5ee08a2e8ebd479a6d9b6ec138a3ec5725f661c3da2",
+        "before": "23711c419fb0b59690c4ab40fa844703c3061f2c891b28b0d6e5985115af7372"
       },
       "to_revision": 87
     },
@@ -9776,7 +9776,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.37",
         "resulting_revision": 88,
-        "resulting_state_digest": "e31297a41949c76aa5e026ebf28e62b5822a3b73dc27c9586d9fa0b0d1e9162f"
+        "resulting_state_digest": "26712d7fd19c0aa2e5f83357c163e3acaa3b358e2b91f4d391134813a8cc7a2f"
       },
       "encountered_definition_ids": [
         369,
@@ -9880,8 +9880,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e31297a41949c76aa5e026ebf28e62b5822a3b73dc27c9586d9fa0b0d1e9162f",
-        "before": "96de84e14a264fbcfc1e29116250ed3a62dcc1734d3f11982398915ea108c724"
+        "after": "26712d7fd19c0aa2e5f83357c163e3acaa3b358e2b91f4d391134813a8cc7a2f",
+        "before": "f630f1fa51a2a570f67ce5ee08a2e8ebd479a6d9b6ec138a3ec5725f661c3da2"
       },
       "to_revision": 88
     },
@@ -9900,7 +9900,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.51",
         "resulting_revision": 89,
-        "resulting_state_digest": "952459aba59edf595f97ca340ddb5008dedc78468dc862e35d95d4b3f2d8858b"
+        "resulting_state_digest": "1d2a2fdbeca0df69c460e97dcd8fa9a6444fa33920a840be3a126cea9855daec"
       },
       "encountered_definition_ids": [
         370
@@ -9996,8 +9996,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "952459aba59edf595f97ca340ddb5008dedc78468dc862e35d95d4b3f2d8858b",
-        "before": "e31297a41949c76aa5e026ebf28e62b5822a3b73dc27c9586d9fa0b0d1e9162f"
+        "after": "1d2a2fdbeca0df69c460e97dcd8fa9a6444fa33920a840be3a126cea9855daec",
+        "before": "26712d7fd19c0aa2e5f83357c163e3acaa3b358e2b91f4d391134813a8cc7a2f"
       },
       "to_revision": 89
     },
@@ -10016,7 +10016,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.52",
         "resulting_revision": 90,
-        "resulting_state_digest": "4b1aba857fcfc1b058a5f9124bbfcba0ce303258ad3aa6fa6ef7a9f550b1ae24"
+        "resulting_state_digest": "6225bf7d2dd552f761f6a4d2de199c60b82092f204728c262a7356c202164021"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -10046,8 +10046,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "4b1aba857fcfc1b058a5f9124bbfcba0ce303258ad3aa6fa6ef7a9f550b1ae24",
-        "before": "952459aba59edf595f97ca340ddb5008dedc78468dc862e35d95d4b3f2d8858b"
+        "after": "6225bf7d2dd552f761f6a4d2de199c60b82092f204728c262a7356c202164021",
+        "before": "1d2a2fdbeca0df69c460e97dcd8fa9a6444fa33920a840be3a126cea9855daec"
       },
       "to_revision": 90
     },
@@ -10066,7 +10066,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.53",
         "resulting_revision": 91,
-        "resulting_state_digest": "6da5e2540678c1ed98e4d9d3498dfad0046a89df07c82bbba96b56bae58f479a"
+        "resulting_state_digest": "8b5a25c5f64840451b08cc19c8494ad5794531618c3445bfb36092bf5dd9a832"
       },
       "encountered_definition_ids": [
         68
@@ -10126,8 +10126,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "6da5e2540678c1ed98e4d9d3498dfad0046a89df07c82bbba96b56bae58f479a",
-        "before": "4b1aba857fcfc1b058a5f9124bbfcba0ce303258ad3aa6fa6ef7a9f550b1ae24"
+        "after": "8b5a25c5f64840451b08cc19c8494ad5794531618c3445bfb36092bf5dd9a832",
+        "before": "6225bf7d2dd552f761f6a4d2de199c60b82092f204728c262a7356c202164021"
       },
       "to_revision": 91
     },
@@ -10146,7 +10146,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.54",
         "resulting_revision": 92,
-        "resulting_state_digest": "3f7e13cf0f0587463123d76dc7ecace2e7a65b42bc537dd10046880c264b958a"
+        "resulting_state_digest": "38f0459aa1bd0021f94e9946f0d46b790ac7263f97a69b03afc1b22f3c44296d"
       },
       "encountered_definition_ids": [
         370
@@ -10205,8 +10205,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "3f7e13cf0f0587463123d76dc7ecace2e7a65b42bc537dd10046880c264b958a",
-        "before": "6da5e2540678c1ed98e4d9d3498dfad0046a89df07c82bbba96b56bae58f479a"
+        "after": "38f0459aa1bd0021f94e9946f0d46b790ac7263f97a69b03afc1b22f3c44296d",
+        "before": "8b5a25c5f64840451b08cc19c8494ad5794531618c3445bfb36092bf5dd9a832"
       },
       "to_revision": 92
     },
@@ -10225,7 +10225,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.55",
         "resulting_revision": 93,
-        "resulting_state_digest": "b57db7696bd97246818880e4c701d23e1effe426054156a10a35bf6235734946"
+        "resulting_state_digest": "9f76abcb5f7c605ab37c43e69d089ef66afca7c81befffc555fb971d63f30e8c"
       },
       "encountered_definition_ids": [
         172
@@ -10284,8 +10284,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "b57db7696bd97246818880e4c701d23e1effe426054156a10a35bf6235734946",
-        "before": "3f7e13cf0f0587463123d76dc7ecace2e7a65b42bc537dd10046880c264b958a"
+        "after": "9f76abcb5f7c605ab37c43e69d089ef66afca7c81befffc555fb971d63f30e8c",
+        "before": "38f0459aa1bd0021f94e9946f0d46b790ac7263f97a69b03afc1b22f3c44296d"
       },
       "to_revision": 93
     },
@@ -10304,7 +10304,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.56",
         "resulting_revision": 94,
-        "resulting_state_digest": "0c7df3806c32983fc278fac40874f9de1d4625bf81fb6d7d543df022a9e4cc4e"
+        "resulting_state_digest": "f44cf8b9120b8fe7037a9d5b18df95816073a762f109a9250e0bbdee104fb43e"
       },
       "encountered_definition_ids": [
         997
@@ -10361,8 +10361,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "0c7df3806c32983fc278fac40874f9de1d4625bf81fb6d7d543df022a9e4cc4e",
-        "before": "b57db7696bd97246818880e4c701d23e1effe426054156a10a35bf6235734946"
+        "after": "f44cf8b9120b8fe7037a9d5b18df95816073a762f109a9250e0bbdee104fb43e",
+        "before": "9f76abcb5f7c605ab37c43e69d089ef66afca7c81befffc555fb971d63f30e8c"
       },
       "to_revision": 94
     },
@@ -10381,7 +10381,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.57",
         "resulting_revision": 95,
-        "resulting_state_digest": "922915d50c281a5af604b4ea70bfd4a7e64a6976ea6128c3c178db4f072abd98"
+        "resulting_state_digest": "d628c5a9f2829487bc8ba4c3caf6fa82a2bb5efd49735dd746f95f0442bd4fdf"
       },
       "encountered_definition_ids": [
         68,
@@ -10604,8 +10604,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "922915d50c281a5af604b4ea70bfd4a7e64a6976ea6128c3c178db4f072abd98",
-        "before": "0c7df3806c32983fc278fac40874f9de1d4625bf81fb6d7d543df022a9e4cc4e"
+        "after": "d628c5a9f2829487bc8ba4c3caf6fa82a2bb5efd49735dd746f95f0442bd4fdf",
+        "before": "f44cf8b9120b8fe7037a9d5b18df95816073a762f109a9250e0bbdee104fb43e"
       },
       "to_revision": 95
     },
@@ -10624,7 +10624,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.58",
         "resulting_revision": 96,
-        "resulting_state_digest": "b47288f5ac909ff2145f0a210d154c6dc4099badbc147cfd206b4a72f6183b28"
+        "resulting_state_digest": "ec234b3818753954c5303d79108b2fb2e6afa41ccf9e30945a9954f1da9e121b"
       },
       "encountered_definition_ids": [
         172
@@ -10677,8 +10677,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "b47288f5ac909ff2145f0a210d154c6dc4099badbc147cfd206b4a72f6183b28",
-        "before": "922915d50c281a5af604b4ea70bfd4a7e64a6976ea6128c3c178db4f072abd98"
+        "after": "ec234b3818753954c5303d79108b2fb2e6afa41ccf9e30945a9954f1da9e121b",
+        "before": "d628c5a9f2829487bc8ba4c3caf6fa82a2bb5efd49735dd746f95f0442bd4fdf"
       },
       "to_revision": 96
     },
@@ -10697,7 +10697,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.38",
         "resulting_revision": 97,
-        "resulting_state_digest": "040d7b6fd96967cd092f363f38e2b1b3a3c2283bf39cc19d856f3eebc878cff7"
+        "resulting_state_digest": "30976f6ec79815f053756595d460c9cd9ec109d1f19e10a00abf442f9d091726"
       },
       "encountered_definition_ids": [
         351,
@@ -10767,8 +10767,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "040d7b6fd96967cd092f363f38e2b1b3a3c2283bf39cc19d856f3eebc878cff7",
-        "before": "b47288f5ac909ff2145f0a210d154c6dc4099badbc147cfd206b4a72f6183b28"
+        "after": "30976f6ec79815f053756595d460c9cd9ec109d1f19e10a00abf442f9d091726",
+        "before": "ec234b3818753954c5303d79108b2fb2e6afa41ccf9e30945a9954f1da9e121b"
       },
       "to_revision": 97
     },
@@ -10787,7 +10787,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.39",
         "resulting_revision": 98,
-        "resulting_state_digest": "738136a55fe0c47ca2c7fa7842656a4e1fee17cff07d2b2de423e43cef553ae3"
+        "resulting_state_digest": "be6af8d4b14838f24fab10059284bc3f9c566b77d636a63c6b32ddbda5da9ed8"
       },
       "encountered_definition_ids": [
         172,
@@ -10859,8 +10859,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "738136a55fe0c47ca2c7fa7842656a4e1fee17cff07d2b2de423e43cef553ae3",
-        "before": "040d7b6fd96967cd092f363f38e2b1b3a3c2283bf39cc19d856f3eebc878cff7"
+        "after": "be6af8d4b14838f24fab10059284bc3f9c566b77d636a63c6b32ddbda5da9ed8",
+        "before": "30976f6ec79815f053756595d460c9cd9ec109d1f19e10a00abf442f9d091726"
       },
       "to_revision": 98
     },
@@ -10879,7 +10879,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.40",
         "resulting_revision": 99,
-        "resulting_state_digest": "b9b3e8cd5c90d79dc6e7568d4e1cf4a6a4a35169319fb85e203c3111cc957a25"
+        "resulting_state_digest": "31bb2aa7b3d07bdf4f8ac64b293421d2bee1ad2b7fc60c30ea597a6c2524dc18"
       },
       "encountered_definition_ids": [
         68,
@@ -11772,8 +11772,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "b9b3e8cd5c90d79dc6e7568d4e1cf4a6a4a35169319fb85e203c3111cc957a25",
-        "before": "738136a55fe0c47ca2c7fa7842656a4e1fee17cff07d2b2de423e43cef553ae3"
+        "after": "31bb2aa7b3d07bdf4f8ac64b293421d2bee1ad2b7fc60c30ea597a6c2524dc18",
+        "before": "be6af8d4b14838f24fab10059284bc3f9c566b77d636a63c6b32ddbda5da9ed8"
       },
       "to_revision": 99
     },
@@ -11792,7 +11792,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.59",
         "resulting_revision": 100,
-        "resulting_state_digest": "fb6137f440d0a8d3ad4d13d8e523035f40bff289a49426fa8c0740176cf9c9e2"
+        "resulting_state_digest": "7d6496ada1c5d81e29e14ee8b46a73c07ef6450a7f78a15cd147794679f149ab"
       },
       "encountered_definition_ids": [
         255
@@ -11851,8 +11851,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "fb6137f440d0a8d3ad4d13d8e523035f40bff289a49426fa8c0740176cf9c9e2",
-        "before": "b9b3e8cd5c90d79dc6e7568d4e1cf4a6a4a35169319fb85e203c3111cc957a25"
+        "after": "7d6496ada1c5d81e29e14ee8b46a73c07ef6450a7f78a15cd147794679f149ab",
+        "before": "31bb2aa7b3d07bdf4f8ac64b293421d2bee1ad2b7fc60c30ea597a6c2524dc18"
       },
       "to_revision": 100
     },
@@ -11871,7 +11871,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.60",
         "resulting_revision": 101,
-        "resulting_state_digest": "7b91e36d5307af7b50cb8f0d58b28399e182d7e35913f177adfa3a0435e6a4f5"
+        "resulting_state_digest": "b9946834d4698f086acccb668c32dfa039a088214bb00c9637de634a54e000f7"
       },
       "encountered_definition_ids": [
         370,
@@ -12062,8 +12062,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "7b91e36d5307af7b50cb8f0d58b28399e182d7e35913f177adfa3a0435e6a4f5",
-        "before": "fb6137f440d0a8d3ad4d13d8e523035f40bff289a49426fa8c0740176cf9c9e2"
+        "after": "b9946834d4698f086acccb668c32dfa039a088214bb00c9637de634a54e000f7",
+        "before": "7d6496ada1c5d81e29e14ee8b46a73c07ef6450a7f78a15cd147794679f149ab"
       },
       "to_revision": 101
     },
@@ -12082,7 +12082,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.41",
         "resulting_revision": 102,
-        "resulting_state_digest": "d830c65a10834d2761f1ffdcb11732852702dbd212851a4e4dfbbfd2c137299d"
+        "resulting_state_digest": "cad47e56700dcccb4f64c6994d0155db3929c8068998e183004e4c49f50646a5"
       },
       "encountered_definition_ids": [
         346
@@ -12141,8 +12141,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "d830c65a10834d2761f1ffdcb11732852702dbd212851a4e4dfbbfd2c137299d",
-        "before": "7b91e36d5307af7b50cb8f0d58b28399e182d7e35913f177adfa3a0435e6a4f5"
+        "after": "cad47e56700dcccb4f64c6994d0155db3929c8068998e183004e4c49f50646a5",
+        "before": "b9946834d4698f086acccb668c32dfa039a088214bb00c9637de634a54e000f7"
       },
       "to_revision": 102
     },
@@ -12161,7 +12161,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.42",
         "resulting_revision": 103,
-        "resulting_state_digest": "18c934eb00956b6f079d4ff052b2d93cbad3ed902a47f03d85daadbde4a756da"
+        "resulting_state_digest": "bfbe39eb70b4d9716d5cfbf971b26450eab0abea508b0234c392cb4bdc7075e3"
       },
       "encountered_definition_ids": [
         346
@@ -12214,8 +12214,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "18c934eb00956b6f079d4ff052b2d93cbad3ed902a47f03d85daadbde4a756da",
-        "before": "d830c65a10834d2761f1ffdcb11732852702dbd212851a4e4dfbbfd2c137299d"
+        "after": "bfbe39eb70b4d9716d5cfbf971b26450eab0abea508b0234c392cb4bdc7075e3",
+        "before": "cad47e56700dcccb4f64c6994d0155db3929c8068998e183004e4c49f50646a5"
       },
       "to_revision": 103
     },
@@ -12234,7 +12234,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.43",
         "resulting_revision": 104,
-        "resulting_state_digest": "cc7e21a3b0e8086dad65f75797a383f36e36caa9ecf9f8b5d339feb48c64075c"
+        "resulting_state_digest": "e4b4d828372c0f4293cd91f0d7668438c54c3dbda340d3fa0c30808292dc6164"
       },
       "encountered_definition_ids": [
         255
@@ -12287,8 +12287,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "cc7e21a3b0e8086dad65f75797a383f36e36caa9ecf9f8b5d339feb48c64075c",
-        "before": "18c934eb00956b6f079d4ff052b2d93cbad3ed902a47f03d85daadbde4a756da"
+        "after": "e4b4d828372c0f4293cd91f0d7668438c54c3dbda340d3fa0c30808292dc6164",
+        "before": "bfbe39eb70b4d9716d5cfbf971b26450eab0abea508b0234c392cb4bdc7075e3"
       },
       "to_revision": 104
     },
@@ -12307,7 +12307,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.44",
         "resulting_revision": 105,
-        "resulting_state_digest": "e36c15ba97f4b6b97d5fd064ad73187e06eb98c3436b469a108a6e9f5ee723eb"
+        "resulting_state_digest": "9db4ea0a72ceb8cb6ac5d44757ab7c17ca4114fabcbcbccfd7e2c56958c2289a"
       },
       "encountered_definition_ids": [
         255,
@@ -12555,8 +12555,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e36c15ba97f4b6b97d5fd064ad73187e06eb98c3436b469a108a6e9f5ee723eb",
-        "before": "cc7e21a3b0e8086dad65f75797a383f36e36caa9ecf9f8b5d339feb48c64075c"
+        "after": "9db4ea0a72ceb8cb6ac5d44757ab7c17ca4114fabcbcbccfd7e2c56958c2289a",
+        "before": "e4b4d828372c0f4293cd91f0d7668438c54c3dbda340d3fa0c30808292dc6164"
       },
       "to_revision": 105
     },
@@ -12575,7 +12575,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.45",
         "resulting_revision": 106,
-        "resulting_state_digest": "695433fbb201b3631915f2fd38dd3f2edbd3bb67b1b3d5fe6787d085e0b35838"
+        "resulting_state_digest": "1c3cb04d6147e568bad553cac08f17864205eaf1ef7964e2cd1b7ba15e27f8de"
       },
       "encountered_definition_ids": [
         351
@@ -12626,8 +12626,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "695433fbb201b3631915f2fd38dd3f2edbd3bb67b1b3d5fe6787d085e0b35838",
-        "before": "e36c15ba97f4b6b97d5fd064ad73187e06eb98c3436b469a108a6e9f5ee723eb"
+        "after": "1c3cb04d6147e568bad553cac08f17864205eaf1ef7964e2cd1b7ba15e27f8de",
+        "before": "9db4ea0a72ceb8cb6ac5d44757ab7c17ca4114fabcbcbccfd7e2c56958c2289a"
       },
       "to_revision": 106
     },
@@ -12646,7 +12646,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.46",
         "resulting_revision": 107,
-        "resulting_state_digest": "64a3e38a72764f23a969ea1e498820a5a8efeac546baf16558fc35b24207b31d"
+        "resulting_state_digest": "7fe87efeded8c81b3765f37555dfd0da0e5a63476755f53b87bfc1b0df255390"
       },
       "encountered_definition_ids": [
         369
@@ -12747,8 +12747,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "64a3e38a72764f23a969ea1e498820a5a8efeac546baf16558fc35b24207b31d",
-        "before": "695433fbb201b3631915f2fd38dd3f2edbd3bb67b1b3d5fe6787d085e0b35838"
+        "after": "7fe87efeded8c81b3765f37555dfd0da0e5a63476755f53b87bfc1b0df255390",
+        "before": "1c3cb04d6147e568bad553cac08f17864205eaf1ef7964e2cd1b7ba15e27f8de"
       },
       "to_revision": 107
     },
@@ -12767,7 +12767,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.61",
         "resulting_revision": 108,
-        "resulting_state_digest": "696c12c1ac38c7c55ddcb7a11629b3d093ee7b0398f8c4a0bdbe976acb91b0ae"
+        "resulting_state_digest": "0ec5ea5d702936afdf00c4a5cbb0c3cd5c994c9399d586cefc2b0a15f1ac2a9a"
       },
       "encountered_definition_ids": [
         346,
@@ -13058,8 +13058,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "696c12c1ac38c7c55ddcb7a11629b3d093ee7b0398f8c4a0bdbe976acb91b0ae",
-        "before": "64a3e38a72764f23a969ea1e498820a5a8efeac546baf16558fc35b24207b31d"
+        "after": "0ec5ea5d702936afdf00c4a5cbb0c3cd5c994c9399d586cefc2b0a15f1ac2a9a",
+        "before": "7fe87efeded8c81b3765f37555dfd0da0e5a63476755f53b87bfc1b0df255390"
       },
       "to_revision": 108
     },
@@ -13078,7 +13078,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.62",
         "resulting_revision": 109,
-        "resulting_state_digest": "ce61cad04b1df0ed404ded341d0c290052d61cdb012207913dc5f7c013711e3b"
+        "resulting_state_digest": "19f84cafaa7cedfad6db928d85ddb76ec95e589721bd6fc4486243ba295eb73e"
       },
       "encountered_definition_ids": [
         68
@@ -13138,8 +13138,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "ce61cad04b1df0ed404ded341d0c290052d61cdb012207913dc5f7c013711e3b",
-        "before": "696c12c1ac38c7c55ddcb7a11629b3d093ee7b0398f8c4a0bdbe976acb91b0ae"
+        "after": "19f84cafaa7cedfad6db928d85ddb76ec95e589721bd6fc4486243ba295eb73e",
+        "before": "0ec5ea5d702936afdf00c4a5cbb0c3cd5c994c9399d586cefc2b0a15f1ac2a9a"
       },
       "to_revision": 109
     },
@@ -13158,7 +13158,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.63",
         "resulting_revision": 110,
-        "resulting_state_digest": "558c4455bb8c7cbfd762403eff402e804a596ccd68e4ed974192a3476b95166f"
+        "resulting_state_digest": "11bdd238efb72496d72c70e3c27ad5eba189aefe2740ad1e8a369caf1f3c9763"
       },
       "encountered_definition_ids": [
         370
@@ -13287,8 +13287,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "558c4455bb8c7cbfd762403eff402e804a596ccd68e4ed974192a3476b95166f",
-        "before": "ce61cad04b1df0ed404ded341d0c290052d61cdb012207913dc5f7c013711e3b"
+        "after": "11bdd238efb72496d72c70e3c27ad5eba189aefe2740ad1e8a369caf1f3c9763",
+        "before": "19f84cafaa7cedfad6db928d85ddb76ec95e589721bd6fc4486243ba295eb73e"
       },
       "to_revision": 110
     },
@@ -13307,7 +13307,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.64",
         "resulting_revision": 111,
-        "resulting_state_digest": "2269516472496c752031ec457118329f5f59cb28ac7dddfecf0dcd1fdcbc9f17"
+        "resulting_state_digest": "67a3e9b9c4cef535c3711dd01fca083ecddb309a13d1b01952b85f4dfb9bf7c5"
       },
       "encountered_definition_ids": [
         651
@@ -13376,8 +13376,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "2269516472496c752031ec457118329f5f59cb28ac7dddfecf0dcd1fdcbc9f17",
-        "before": "558c4455bb8c7cbfd762403eff402e804a596ccd68e4ed974192a3476b95166f"
+        "after": "67a3e9b9c4cef535c3711dd01fca083ecddb309a13d1b01952b85f4dfb9bf7c5",
+        "before": "11bdd238efb72496d72c70e3c27ad5eba189aefe2740ad1e8a369caf1f3c9763"
       },
       "to_revision": 111
     },
@@ -13396,7 +13396,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.65",
         "resulting_revision": 112,
-        "resulting_state_digest": "c00360926468387b0fb3cf81798d55a6d1d96fc98e89c49b80db2b8db5dfdedf"
+        "resulting_state_digest": "1e41385f887654f6df8b4fdab8b53f1c028ff62f566ec15ed0b70f631f97ad5f"
       },
       "encountered_definition_ids": [
         651
@@ -13492,8 +13492,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c00360926468387b0fb3cf81798d55a6d1d96fc98e89c49b80db2b8db5dfdedf",
-        "before": "2269516472496c752031ec457118329f5f59cb28ac7dddfecf0dcd1fdcbc9f17"
+        "after": "1e41385f887654f6df8b4fdab8b53f1c028ff62f566ec15ed0b70f631f97ad5f",
+        "before": "67a3e9b9c4cef535c3711dd01fca083ecddb309a13d1b01952b85f4dfb9bf7c5"
       },
       "to_revision": 112
     },
@@ -13512,7 +13512,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.66",
         "resulting_revision": 113,
-        "resulting_state_digest": "d1b43c66fc2dc7bea0357809a56e8fc1e41654b47d38caad4c6d2b8dc68953d6"
+        "resulting_state_digest": "5f8e41a968f42ba054737b6c00bf52d23dee1b34b6ecac900d43a238846e180a"
       },
       "encountered_definition_ids": [
         651
@@ -13565,8 +13565,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "d1b43c66fc2dc7bea0357809a56e8fc1e41654b47d38caad4c6d2b8dc68953d6",
-        "before": "c00360926468387b0fb3cf81798d55a6d1d96fc98e89c49b80db2b8db5dfdedf"
+        "after": "5f8e41a968f42ba054737b6c00bf52d23dee1b34b6ecac900d43a238846e180a",
+        "before": "1e41385f887654f6df8b4fdab8b53f1c028ff62f566ec15ed0b70f631f97ad5f"
       },
       "to_revision": 113
     },
@@ -13585,7 +13585,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.67",
         "resulting_revision": 114,
-        "resulting_state_digest": "97d0ae1abc42f67ec6214847ff2ab2f41e867f86f1bdc58c0063dbfdd6d6eb07"
+        "resulting_state_digest": "d93f78d0c119770e0f7782cb61c013873052f933f0652fe5c264279f09a55835"
       },
       "encountered_definition_ids": [
         68
@@ -13639,8 +13639,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "97d0ae1abc42f67ec6214847ff2ab2f41e867f86f1bdc58c0063dbfdd6d6eb07",
-        "before": "d1b43c66fc2dc7bea0357809a56e8fc1e41654b47d38caad4c6d2b8dc68953d6"
+        "after": "d93f78d0c119770e0f7782cb61c013873052f933f0652fe5c264279f09a55835",
+        "before": "5f8e41a968f42ba054737b6c00bf52d23dee1b34b6ecac900d43a238846e180a"
       },
       "to_revision": 114
     },
@@ -13659,7 +13659,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.68",
         "resulting_revision": 115,
-        "resulting_state_digest": "7b12336c8ab9787a7e138f70766b46e7485bfeeeb853b8f5ab1d7970cc05062e"
+        "resulting_state_digest": "5f82f1b5d0c541738ab157203589f3ec662d0151064bc4a6489498078bc4ce30"
       },
       "encountered_definition_ids": [
         370
@@ -13718,8 +13718,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "7b12336c8ab9787a7e138f70766b46e7485bfeeeb853b8f5ab1d7970cc05062e",
-        "before": "97d0ae1abc42f67ec6214847ff2ab2f41e867f86f1bdc58c0063dbfdd6d6eb07"
+        "after": "5f82f1b5d0c541738ab157203589f3ec662d0151064bc4a6489498078bc4ce30",
+        "before": "d93f78d0c119770e0f7782cb61c013873052f933f0652fe5c264279f09a55835"
       },
       "to_revision": 115
     },
@@ -13738,7 +13738,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.69",
         "resulting_revision": 116,
-        "resulting_state_digest": "e8126940f1a80c0ab3b6b197f19a31c51d72edd6ddadd2cf630db16792c48c3d"
+        "resulting_state_digest": "1647eda73dcf5eaf11826c11f5d3fbae9c1c38b22bc6bffdc56fc439d6d636c1"
       },
       "encountered_definition_ids": [
         370,
@@ -13834,8 +13834,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "e8126940f1a80c0ab3b6b197f19a31c51d72edd6ddadd2cf630db16792c48c3d",
-        "before": "7b12336c8ab9787a7e138f70766b46e7485bfeeeb853b8f5ab1d7970cc05062e"
+        "after": "1647eda73dcf5eaf11826c11f5d3fbae9c1c38b22bc6bffdc56fc439d6d636c1",
+        "before": "5f82f1b5d0c541738ab157203589f3ec662d0151064bc4a6489498078bc4ce30"
       },
       "to_revision": 116
     },
@@ -13854,7 +13854,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.47",
         "resulting_revision": 117,
-        "resulting_state_digest": "dce7a73619c5ccb9e87d63594d6a8119eecf03a45eeb84fe3633f451377f4f76"
+        "resulting_state_digest": "df4db6069738eb2fa30bdc7f31930801eae1bd14f36455db4b2e74f99889b4c5"
       },
       "encountered_definition_ids": [
         351,
@@ -14029,8 +14029,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "dce7a73619c5ccb9e87d63594d6a8119eecf03a45eeb84fe3633f451377f4f76",
-        "before": "e8126940f1a80c0ab3b6b197f19a31c51d72edd6ddadd2cf630db16792c48c3d"
+        "after": "df4db6069738eb2fa30bdc7f31930801eae1bd14f36455db4b2e74f99889b4c5",
+        "before": "1647eda73dcf5eaf11826c11f5d3fbae9c1c38b22bc6bffdc56fc439d6d636c1"
       },
       "to_revision": 117
     },
@@ -14049,7 +14049,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.48",
         "resulting_revision": 118,
-        "resulting_state_digest": "49c723e52f98a4625e7a4571650854832f4d0cd5bb7f649b2f1d0e53466f4c9c"
+        "resulting_state_digest": "0f2af8ed78fb7a0cb7369e8f1b1d9941992191d64cdde221b06fbb63d41966f6"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -14079,8 +14079,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "49c723e52f98a4625e7a4571650854832f4d0cd5bb7f649b2f1d0e53466f4c9c",
-        "before": "dce7a73619c5ccb9e87d63594d6a8119eecf03a45eeb84fe3633f451377f4f76"
+        "after": "0f2af8ed78fb7a0cb7369e8f1b1d9941992191d64cdde221b06fbb63d41966f6",
+        "before": "df4db6069738eb2fa30bdc7f31930801eae1bd14f36455db4b2e74f99889b4c5"
       },
       "to_revision": 118
     },
@@ -14099,7 +14099,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.49",
         "resulting_revision": 119,
-        "resulting_state_digest": "7ebca13ba774530794b652d3c7cac582e2a0f75d6602b95fe720dd7cbd5949b4"
+        "resulting_state_digest": "6a67a780fe863e85d6324799cc78e9ac203fcf8c1b8caee575778490abf16c67"
       },
       "encountered_definition_ids": [
         238
@@ -14159,8 +14159,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "7ebca13ba774530794b652d3c7cac582e2a0f75d6602b95fe720dd7cbd5949b4",
-        "before": "49c723e52f98a4625e7a4571650854832f4d0cd5bb7f649b2f1d0e53466f4c9c"
+        "after": "6a67a780fe863e85d6324799cc78e9ac203fcf8c1b8caee575778490abf16c67",
+        "before": "0f2af8ed78fb7a0cb7369e8f1b1d9941992191d64cdde221b06fbb63d41966f6"
       },
       "to_revision": 119
     },
@@ -14179,7 +14179,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.50",
         "resulting_revision": 120,
-        "resulting_state_digest": "df5b1d97669b42856af2a9e752cc36732abec9a5c5ef534ad446008f1fef9766"
+        "resulting_state_digest": "d668f40ebf1629be3a139555f05c65808ad8a69eaa655d26621714cba6772497"
       },
       "encountered_definition_ids": [
         227,
@@ -14275,8 +14275,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "df5b1d97669b42856af2a9e752cc36732abec9a5c5ef534ad446008f1fef9766",
-        "before": "7ebca13ba774530794b652d3c7cac582e2a0f75d6602b95fe720dd7cbd5949b4"
+        "after": "d668f40ebf1629be3a139555f05c65808ad8a69eaa655d26621714cba6772497",
+        "before": "6a67a780fe863e85d6324799cc78e9ac203fcf8c1b8caee575778490abf16c67"
       },
       "to_revision": 120
     },
@@ -14295,7 +14295,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.51",
         "resulting_revision": 121,
-        "resulting_state_digest": "397327c6a2abe41f076b3c9fd3024c4997e571ea6b6252b9643622295c571887"
+        "resulting_state_digest": "1950e50ee62841c6789c985474ed3bc28cc3286181ad04d0aa1b7705d09242a1"
       },
       "encountered_definition_ids": [
         227,
@@ -14382,8 +14382,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "397327c6a2abe41f076b3c9fd3024c4997e571ea6b6252b9643622295c571887",
-        "before": "df5b1d97669b42856af2a9e752cc36732abec9a5c5ef534ad446008f1fef9766"
+        "after": "1950e50ee62841c6789c985474ed3bc28cc3286181ad04d0aa1b7705d09242a1",
+        "before": "d668f40ebf1629be3a139555f05c65808ad8a69eaa655d26621714cba6772497"
       },
       "to_revision": 121
     },
@@ -14402,7 +14402,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.52",
         "resulting_revision": 122,
-        "resulting_state_digest": "7633cf60b7a8afd32bfb8daa2ca9653e04848682ebbeba4cb6d159353e885ad1"
+        "resulting_state_digest": "af0e24dda671f44f5a76a82b1ed33212873b86912f5cc412012bffd0d1d90555"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -14432,8 +14432,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "7633cf60b7a8afd32bfb8daa2ca9653e04848682ebbeba4cb6d159353e885ad1",
-        "before": "397327c6a2abe41f076b3c9fd3024c4997e571ea6b6252b9643622295c571887"
+        "after": "af0e24dda671f44f5a76a82b1ed33212873b86912f5cc412012bffd0d1d90555",
+        "before": "1950e50ee62841c6789c985474ed3bc28cc3286181ad04d0aa1b7705d09242a1"
       },
       "to_revision": 122
     },
@@ -14452,7 +14452,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.53",
         "resulting_revision": 123,
-        "resulting_state_digest": "74766fa616c8354f0b498eae115a296d6a684b14d5f7b69ca5b3b36989de0cf9"
+        "resulting_state_digest": "e3c3a5e6eb792ca5d73f32a799a6e27f6fd85df9ef49e79043501d92b6861c3c"
       },
       "encountered_definition_ids": [
         13
@@ -14511,8 +14511,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "74766fa616c8354f0b498eae115a296d6a684b14d5f7b69ca5b3b36989de0cf9",
-        "before": "7633cf60b7a8afd32bfb8daa2ca9653e04848682ebbeba4cb6d159353e885ad1"
+        "after": "e3c3a5e6eb792ca5d73f32a799a6e27f6fd85df9ef49e79043501d92b6861c3c",
+        "before": "af0e24dda671f44f5a76a82b1ed33212873b86912f5cc412012bffd0d1d90555"
       },
       "to_revision": 123
     },
@@ -14531,7 +14531,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.54",
         "resulting_revision": 124,
-        "resulting_state_digest": "839a342daaf24174c8e49ebfdba8b79e73fc42c7a7f9671df849d17ccd133529"
+        "resulting_state_digest": "8881f7cde43e03e9993c913c0987724e6892befad5d9bdb5358f03b1e8ff7323"
       },
       "encountered_definition_ids": [
         461,
@@ -14711,8 +14711,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "839a342daaf24174c8e49ebfdba8b79e73fc42c7a7f9671df849d17ccd133529",
-        "before": "74766fa616c8354f0b498eae115a296d6a684b14d5f7b69ca5b3b36989de0cf9"
+        "after": "8881f7cde43e03e9993c913c0987724e6892befad5d9bdb5358f03b1e8ff7323",
+        "before": "e3c3a5e6eb792ca5d73f32a799a6e27f6fd85df9ef49e79043501d92b6861c3c"
       },
       "to_revision": 124
     },
@@ -14731,7 +14731,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.55",
         "resulting_revision": 125,
-        "resulting_state_digest": "6b9969651f31bf0b9c1e036872668d1548b45b17b287be8d5aa13a8c94a14617"
+        "resulting_state_digest": "3d438fd65ff263de2f852cae28c93282825e0c136eee7c48de9e22ea65e98ac5"
       },
       "encountered_definition_ids": [
         351
@@ -14788,8 +14788,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "6b9969651f31bf0b9c1e036872668d1548b45b17b287be8d5aa13a8c94a14617",
-        "before": "839a342daaf24174c8e49ebfdba8b79e73fc42c7a7f9671df849d17ccd133529"
+        "after": "3d438fd65ff263de2f852cae28c93282825e0c136eee7c48de9e22ea65e98ac5",
+        "before": "8881f7cde43e03e9993c913c0987724e6892befad5d9bdb5358f03b1e8ff7323"
       },
       "to_revision": 125
     },
@@ -14808,7 +14808,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.56",
         "resulting_revision": 126,
-        "resulting_state_digest": "13e656b7a625011c87aec43ac380bd5eeacec0f8a53f1d7df7f40fe440796669"
+        "resulting_state_digest": "533d19298bfe92c48912010af2f645a2135bcbe761aaad194eeaa1bdb299c2c6"
       },
       "encountered_definition_ids": [
         351,
@@ -14931,8 +14931,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "13e656b7a625011c87aec43ac380bd5eeacec0f8a53f1d7df7f40fe440796669",
-        "before": "6b9969651f31bf0b9c1e036872668d1548b45b17b287be8d5aa13a8c94a14617"
+        "after": "533d19298bfe92c48912010af2f645a2135bcbe761aaad194eeaa1bdb299c2c6",
+        "before": "3d438fd65ff263de2f852cae28c93282825e0c136eee7c48de9e22ea65e98ac5"
       },
       "to_revision": 126
     },
@@ -14951,7 +14951,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.70",
         "resulting_revision": 127,
-        "resulting_state_digest": "b55ecf405e4cf6158e7be19601b1f8e80648a2fa032415a44d329fcfc5aef361"
+        "resulting_state_digest": "3791650a69108c769b4d446960584bbe1c61d55741eafffffc24da84291b120e"
       },
       "encountered_definition_ids": [
         68,
@@ -15023,8 +15023,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "b55ecf405e4cf6158e7be19601b1f8e80648a2fa032415a44d329fcfc5aef361",
-        "before": "13e656b7a625011c87aec43ac380bd5eeacec0f8a53f1d7df7f40fe440796669"
+        "after": "3791650a69108c769b4d446960584bbe1c61d55741eafffffc24da84291b120e",
+        "before": "533d19298bfe92c48912010af2f645a2135bcbe761aaad194eeaa1bdb299c2c6"
       },
       "to_revision": 127
     },
@@ -15043,7 +15043,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.71",
         "resulting_revision": 128,
-        "resulting_state_digest": "5cfcedce92e0a550dab66f3e38c2f7d1c236223fd6087e7a30fe86d881960065"
+        "resulting_state_digest": "382bed6e518f86b7f639ad5fc4f10eafc4040c58b28f4d8cbf085f29478ac63d"
       },
       "encountered_definition_ids": [
         651
@@ -15096,8 +15096,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5cfcedce92e0a550dab66f3e38c2f7d1c236223fd6087e7a30fe86d881960065",
-        "before": "b55ecf405e4cf6158e7be19601b1f8e80648a2fa032415a44d329fcfc5aef361"
+        "after": "382bed6e518f86b7f639ad5fc4f10eafc4040c58b28f4d8cbf085f29478ac63d",
+        "before": "3791650a69108c769b4d446960584bbe1c61d55741eafffffc24da84291b120e"
       },
       "to_revision": 128
     },
@@ -15116,7 +15116,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.72",
         "resulting_revision": 129,
-        "resulting_state_digest": "e8d956a4f869f9fa1462a8465b753c2153b4763dfd4e83217be3a59f14f1e3c6"
+        "resulting_state_digest": "f4a4dd8bb2c9e9b13fc5f0c392a3212421152d045d7ebe385aeab3ed37845f62"
       },
       "encountered_definition_ids": [
         68
@@ -15170,8 +15170,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "e8d956a4f869f9fa1462a8465b753c2153b4763dfd4e83217be3a59f14f1e3c6",
-        "before": "5cfcedce92e0a550dab66f3e38c2f7d1c236223fd6087e7a30fe86d881960065"
+        "after": "f4a4dd8bb2c9e9b13fc5f0c392a3212421152d045d7ebe385aeab3ed37845f62",
+        "before": "382bed6e518f86b7f639ad5fc4f10eafc4040c58b28f4d8cbf085f29478ac63d"
       },
       "to_revision": 129
     },
@@ -15190,7 +15190,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.73",
         "resulting_revision": 130,
-        "resulting_state_digest": "c99d5c011840150ebe31fedb3b5c94ac1ad4fabd38005ecc3005619660cda7d6"
+        "resulting_state_digest": "c6c0303f611658a444d2e0dfc60905aa99766fee11e3f9c70928bb8b8b6085b8"
       },
       "encountered_definition_ids": [
         68,
@@ -15328,8 +15328,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "c99d5c011840150ebe31fedb3b5c94ac1ad4fabd38005ecc3005619660cda7d6",
-        "before": "e8d956a4f869f9fa1462a8465b753c2153b4763dfd4e83217be3a59f14f1e3c6"
+        "after": "c6c0303f611658a444d2e0dfc60905aa99766fee11e3f9c70928bb8b8b6085b8",
+        "before": "f4a4dd8bb2c9e9b13fc5f0c392a3212421152d045d7ebe385aeab3ed37845f62"
       },
       "to_revision": 130
     },
@@ -15348,7 +15348,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.57",
         "resulting_revision": 131,
-        "resulting_state_digest": "e2cf4f53ad6f35f63d987cfc0ddc42ab7f5474af06cbfcded839ad8236f74847"
+        "resulting_state_digest": "c499b4ed94191d7985d7fb7860c0caff01ba9058b8a0a5287435632c1dee4219"
       },
       "encountered_definition_ids": [
         68,
@@ -15746,8 +15746,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "e2cf4f53ad6f35f63d987cfc0ddc42ab7f5474af06cbfcded839ad8236f74847",
-        "before": "c99d5c011840150ebe31fedb3b5c94ac1ad4fabd38005ecc3005619660cda7d6"
+        "after": "c499b4ed94191d7985d7fb7860c0caff01ba9058b8a0a5287435632c1dee4219",
+        "before": "c6c0303f611658a444d2e0dfc60905aa99766fee11e3f9c70928bb8b8b6085b8"
       },
       "to_revision": 131
     },
@@ -15766,7 +15766,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.58",
         "resulting_revision": 132,
-        "resulting_state_digest": "97bfeda1b4dc9813e77280fcfc54bb76830709f058ad43f178af97d3c373f5fe"
+        "resulting_state_digest": "1071513a34f94dcd48ef03eb1d4c0937d81dc908e9665f8a790d27be5ee1a2eb"
       },
       "encountered_definition_ids": [
         461,
@@ -15864,8 +15864,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "97bfeda1b4dc9813e77280fcfc54bb76830709f058ad43f178af97d3c373f5fe",
-        "before": "e2cf4f53ad6f35f63d987cfc0ddc42ab7f5474af06cbfcded839ad8236f74847"
+        "after": "1071513a34f94dcd48ef03eb1d4c0937d81dc908e9665f8a790d27be5ee1a2eb",
+        "before": "c499b4ed94191d7985d7fb7860c0caff01ba9058b8a0a5287435632c1dee4219"
       },
       "to_revision": 132
     },
@@ -15884,7 +15884,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.59",
         "resulting_revision": 133,
-        "resulting_state_digest": "8df7e5fe9114e4fcd563690568046f1beff1b503527083185bcd93652ac1c81f"
+        "resulting_state_digest": "7ce839fb409d9eb75a772e630a314d7d239dfc69cfde19e4c3ea24b03e419be0"
       },
       "encountered_definition_ids": [
         651
@@ -15967,8 +15967,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "8df7e5fe9114e4fcd563690568046f1beff1b503527083185bcd93652ac1c81f",
-        "before": "97bfeda1b4dc9813e77280fcfc54bb76830709f058ad43f178af97d3c373f5fe"
+        "after": "7ce839fb409d9eb75a772e630a314d7d239dfc69cfde19e4c3ea24b03e419be0",
+        "before": "1071513a34f94dcd48ef03eb1d4c0937d81dc908e9665f8a790d27be5ee1a2eb"
       },
       "to_revision": 133
     },
@@ -15987,7 +15987,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.74",
         "resulting_revision": 134,
-        "resulting_state_digest": "22c44fc87e6b42ee6ef3aed08e585633558ba0ac800a767d12377f23dc7d519a"
+        "resulting_state_digest": "27ee646ed1f83f8ce972b023ac0f4bec5f7090e33f542e2d1669ea8f4d502e60"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -16017,8 +16017,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "22c44fc87e6b42ee6ef3aed08e585633558ba0ac800a767d12377f23dc7d519a",
-        "before": "8df7e5fe9114e4fcd563690568046f1beff1b503527083185bcd93652ac1c81f"
+        "after": "27ee646ed1f83f8ce972b023ac0f4bec5f7090e33f542e2d1669ea8f4d502e60",
+        "before": "7ce839fb409d9eb75a772e630a314d7d239dfc69cfde19e4c3ea24b03e419be0"
       },
       "to_revision": 134
     },
@@ -16037,7 +16037,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.75",
         "resulting_revision": 135,
-        "resulting_state_digest": "1539f97545dbf909cc8fce2af418bfe5cdad93d015229e51931599282c9f5e96"
+        "resulting_state_digest": "b9b607e9c1a946c96cd78d57dacbcb3f563ca44a06cc14ae4c15addac6ab9ee6"
       },
       "encountered_definition_ids": [
         68
@@ -16091,8 +16091,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "1539f97545dbf909cc8fce2af418bfe5cdad93d015229e51931599282c9f5e96",
-        "before": "22c44fc87e6b42ee6ef3aed08e585633558ba0ac800a767d12377f23dc7d519a"
+        "after": "b9b607e9c1a946c96cd78d57dacbcb3f563ca44a06cc14ae4c15addac6ab9ee6",
+        "before": "27ee646ed1f83f8ce972b023ac0f4bec5f7090e33f542e2d1669ea8f4d502e60"
       },
       "to_revision": 135
     },
@@ -16111,7 +16111,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.76",
         "resulting_revision": 136,
-        "resulting_state_digest": "e8cca2949e0c5d886252e9c58d8db1cabb16055ce3e7ce25e26a0e1f13d76627"
+        "resulting_state_digest": "49fc6f9f0c1edf1e2abd226a4502047bf4d303182661655fc82b8bb61f00a39b"
       },
       "encountered_definition_ids": [
         651
@@ -16164,8 +16164,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "e8cca2949e0c5d886252e9c58d8db1cabb16055ce3e7ce25e26a0e1f13d76627",
-        "before": "1539f97545dbf909cc8fce2af418bfe5cdad93d015229e51931599282c9f5e96"
+        "after": "49fc6f9f0c1edf1e2abd226a4502047bf4d303182661655fc82b8bb61f00a39b",
+        "before": "b9b607e9c1a946c96cd78d57dacbcb3f563ca44a06cc14ae4c15addac6ab9ee6"
       },
       "to_revision": 136
     },
@@ -16184,7 +16184,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.77",
         "resulting_revision": 137,
-        "resulting_state_digest": "0cda97857f22637e251b62d06ab0dbf613f9fcc210d359cc680b874820ce1730"
+        "resulting_state_digest": "d2cdce4572b7690fbcddaae62661d3be877f49f247f25b9b534024f007c714e2"
       },
       "encountered_definition_ids": [
         68
@@ -16244,8 +16244,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "0cda97857f22637e251b62d06ab0dbf613f9fcc210d359cc680b874820ce1730",
-        "before": "e8cca2949e0c5d886252e9c58d8db1cabb16055ce3e7ce25e26a0e1f13d76627"
+        "after": "d2cdce4572b7690fbcddaae62661d3be877f49f247f25b9b534024f007c714e2",
+        "before": "49fc6f9f0c1edf1e2abd226a4502047bf4d303182661655fc82b8bb61f00a39b"
       },
       "to_revision": 137
     },
@@ -16264,7 +16264,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.78",
         "resulting_revision": 138,
-        "resulting_state_digest": "cf9b2f4887d320c58ab53852bb602684a52caa2d2db95c63a6bfb3530d05e20d"
+        "resulting_state_digest": "4526e8e86cc7933c344a88179c37f8c7a0ec2f2857fc3698b36f419f11ff5260"
       },
       "encountered_definition_ids": [
         370
@@ -16317,8 +16317,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "cf9b2f4887d320c58ab53852bb602684a52caa2d2db95c63a6bfb3530d05e20d",
-        "before": "0cda97857f22637e251b62d06ab0dbf613f9fcc210d359cc680b874820ce1730"
+        "after": "4526e8e86cc7933c344a88179c37f8c7a0ec2f2857fc3698b36f419f11ff5260",
+        "before": "d2cdce4572b7690fbcddaae62661d3be877f49f247f25b9b534024f007c714e2"
       },
       "to_revision": 138
     },
@@ -16337,7 +16337,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.79",
         "resulting_revision": 139,
-        "resulting_state_digest": "b5a33c112cc9f4c4ae2ff8a649f310bbeb64256b124d72a53c61501e0e40228a"
+        "resulting_state_digest": "55334b8dea288a1a1ff7d0b9828b8033f787410110dc2187c10566be3e807580"
       },
       "encountered_definition_ids": [
         68,
@@ -16461,8 +16461,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "b5a33c112cc9f4c4ae2ff8a649f310bbeb64256b124d72a53c61501e0e40228a",
-        "before": "cf9b2f4887d320c58ab53852bb602684a52caa2d2db95c63a6bfb3530d05e20d"
+        "after": "55334b8dea288a1a1ff7d0b9828b8033f787410110dc2187c10566be3e807580",
+        "before": "4526e8e86cc7933c344a88179c37f8c7a0ec2f2857fc3698b36f419f11ff5260"
       },
       "to_revision": 139
     },
@@ -16481,7 +16481,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.60",
         "resulting_revision": 140,
-        "resulting_state_digest": "296bec4623e2f1202564dc87d41477502abaf7d7725f48e32c72becff17806d2"
+        "resulting_state_digest": "99ce2c68473ea3beb588d314b05efa1ccecd5c4f5aef7a0e04da5bacda6cab65"
       },
       "encountered_definition_ids": [
         68,
@@ -16858,8 +16858,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "296bec4623e2f1202564dc87d41477502abaf7d7725f48e32c72becff17806d2",
-        "before": "b5a33c112cc9f4c4ae2ff8a649f310bbeb64256b124d72a53c61501e0e40228a"
+        "after": "99ce2c68473ea3beb588d314b05efa1ccecd5c4f5aef7a0e04da5bacda6cab65",
+        "before": "55334b8dea288a1a1ff7d0b9828b8033f787410110dc2187c10566be3e807580"
       },
       "to_revision": 140
     },
@@ -16878,7 +16878,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.80",
         "resulting_revision": 141,
-        "resulting_state_digest": "80e4212628a7c5b872981b8515f57f33b68b3ee15727ee7e2127448cf62da184"
+        "resulting_state_digest": "0c7f68e4e29582442fdfa9872679bc8dd54192eec4824df0c7740c4f0fcd07b1"
       },
       "encountered_definition_ids": [
         13,
@@ -17023,8 +17023,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "80e4212628a7c5b872981b8515f57f33b68b3ee15727ee7e2127448cf62da184",
-        "before": "296bec4623e2f1202564dc87d41477502abaf7d7725f48e32c72becff17806d2"
+        "after": "0c7f68e4e29582442fdfa9872679bc8dd54192eec4824df0c7740c4f0fcd07b1",
+        "before": "99ce2c68473ea3beb588d314b05efa1ccecd5c4f5aef7a0e04da5bacda6cab65"
       },
       "to_revision": 141
     },
@@ -17043,7 +17043,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.61",
         "resulting_revision": 142,
-        "resulting_state_digest": "a98b10497fc73fc8824051c31087da0c73ee1432b5322e0b5ce89fc0bbeff1d3"
+        "resulting_state_digest": "84882be88f0045d5ca81866f80adb4d7edcd19ea0e38065307710f53014a5948"
       },
       "encountered_definition_ids": [
         227
@@ -17102,8 +17102,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "a98b10497fc73fc8824051c31087da0c73ee1432b5322e0b5ce89fc0bbeff1d3",
-        "before": "80e4212628a7c5b872981b8515f57f33b68b3ee15727ee7e2127448cf62da184"
+        "after": "84882be88f0045d5ca81866f80adb4d7edcd19ea0e38065307710f53014a5948",
+        "before": "0c7f68e4e29582442fdfa9872679bc8dd54192eec4824df0c7740c4f0fcd07b1"
       },
       "to_revision": 142
     },
@@ -17122,7 +17122,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.62",
         "resulting_revision": 143,
-        "resulting_state_digest": "acbc32767d8e4435e396d6eee15d15b0fe78ebdd4b3d0f3661f0d75c95ca1b7f"
+        "resulting_state_digest": "43e852765a4312c799e50737bd34e0f2ae9bc2242123e04ee4cfb8444b8cc35b"
       },
       "encountered_definition_ids": [
         997
@@ -17173,8 +17173,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "acbc32767d8e4435e396d6eee15d15b0fe78ebdd4b3d0f3661f0d75c95ca1b7f",
-        "before": "a98b10497fc73fc8824051c31087da0c73ee1432b5322e0b5ce89fc0bbeff1d3"
+        "after": "43e852765a4312c799e50737bd34e0f2ae9bc2242123e04ee4cfb8444b8cc35b",
+        "before": "84882be88f0045d5ca81866f80adb4d7edcd19ea0e38065307710f53014a5948"
       },
       "to_revision": 143
     },
@@ -17193,7 +17193,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.63",
         "resulting_revision": 144,
-        "resulting_state_digest": "f1b25c636df3a4cab13dc10462a20b7e45f6b5d4d29d5d880dc78430231865fb"
+        "resulting_state_digest": "210ba3b18b8953f84cd86b794f9c22404e719615796eb5ed5bc65dfe45e9187b"
       },
       "encountered_definition_ids": [
         13,
@@ -17312,8 +17312,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "f1b25c636df3a4cab13dc10462a20b7e45f6b5d4d29d5d880dc78430231865fb",
-        "before": "acbc32767d8e4435e396d6eee15d15b0fe78ebdd4b3d0f3661f0d75c95ca1b7f"
+        "after": "210ba3b18b8953f84cd86b794f9c22404e719615796eb5ed5bc65dfe45e9187b",
+        "before": "43e852765a4312c799e50737bd34e0f2ae9bc2242123e04ee4cfb8444b8cc35b"
       },
       "to_revision": 144
     },
@@ -17332,7 +17332,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.64",
         "resulting_revision": 145,
-        "resulting_state_digest": "211917367358dbf9b8ed393517f4fca588546f6960a0b1958c91cf22b35bb26e"
+        "resulting_state_digest": "4115557a06c53da49d770e60581bbee9bab2254bbb1b91625e501163aa162334"
       },
       "encountered_definition_ids": [
         227,
@@ -17386,8 +17386,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "211917367358dbf9b8ed393517f4fca588546f6960a0b1958c91cf22b35bb26e",
-        "before": "f1b25c636df3a4cab13dc10462a20b7e45f6b5d4d29d5d880dc78430231865fb"
+        "after": "4115557a06c53da49d770e60581bbee9bab2254bbb1b91625e501163aa162334",
+        "before": "210ba3b18b8953f84cd86b794f9c22404e719615796eb5ed5bc65dfe45e9187b"
       },
       "to_revision": 145
     },
@@ -17406,7 +17406,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.65",
         "resulting_revision": 146,
-        "resulting_state_digest": "d2a18ffd117d84c8d29aa8e2a64131e68ab7580d05f57fa75899af288a34b7a0"
+        "resulting_state_digest": "f7705d8ac1883f2a9ae276218acffe02cc6367422e98b38ff5f8f81c14ba9900"
       },
       "encountered_definition_ids": [
         13,
@@ -17563,8 +17563,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "d2a18ffd117d84c8d29aa8e2a64131e68ab7580d05f57fa75899af288a34b7a0",
-        "before": "211917367358dbf9b8ed393517f4fca588546f6960a0b1958c91cf22b35bb26e"
+        "after": "f7705d8ac1883f2a9ae276218acffe02cc6367422e98b38ff5f8f81c14ba9900",
+        "before": "4115557a06c53da49d770e60581bbee9bab2254bbb1b91625e501163aa162334"
       },
       "to_revision": 146
     },
@@ -17583,7 +17583,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.66",
         "resulting_revision": 147,
-        "resulting_state_digest": "4a4e6df0e4adc1a560e0d4172ab4102c3904fed67bb92b8b63dfb68a717117ae"
+        "resulting_state_digest": "e4ffcd27236d6449bb14ec3cf23b0cf710734fb677c36bbb8602eccb78475f54"
       },
       "encountered_definition_ids": [
         635
@@ -17642,8 +17642,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4a4e6df0e4adc1a560e0d4172ab4102c3904fed67bb92b8b63dfb68a717117ae",
-        "before": "d2a18ffd117d84c8d29aa8e2a64131e68ab7580d05f57fa75899af288a34b7a0"
+        "after": "e4ffcd27236d6449bb14ec3cf23b0cf710734fb677c36bbb8602eccb78475f54",
+        "before": "f7705d8ac1883f2a9ae276218acffe02cc6367422e98b38ff5f8f81c14ba9900"
       },
       "to_revision": 147
     },
@@ -17662,7 +17662,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.67",
         "resulting_revision": 148,
-        "resulting_state_digest": "fdfe12d2e238570ac7c7f73d806846b136ff09541a4d3e8ca28187d3744bd5d5"
+        "resulting_state_digest": "1b580e3a70ac523f1876a7a71ecfe7ce111557c52f6924752bfa5524cbaadca2"
       },
       "encountered_definition_ids": [
         490,
@@ -17793,8 +17793,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "fdfe12d2e238570ac7c7f73d806846b136ff09541a4d3e8ca28187d3744bd5d5",
-        "before": "4a4e6df0e4adc1a560e0d4172ab4102c3904fed67bb92b8b63dfb68a717117ae"
+        "after": "1b580e3a70ac523f1876a7a71ecfe7ce111557c52f6924752bfa5524cbaadca2",
+        "before": "e4ffcd27236d6449bb14ec3cf23b0cf710734fb677c36bbb8602eccb78475f54"
       },
       "to_revision": 148
     },
@@ -17813,7 +17813,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.68",
         "resulting_revision": 149,
-        "resulting_state_digest": "2fa1fdc5285f8d8776cb86f701295568f1158519a5ee485e59e169de27e2e595"
+        "resulting_state_digest": "302a69bad1fb37d2aea472f813d575080d5f97a49e7f14b8a41f589eb507fe50"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -17843,8 +17843,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "2fa1fdc5285f8d8776cb86f701295568f1158519a5ee485e59e169de27e2e595",
-        "before": "fdfe12d2e238570ac7c7f73d806846b136ff09541a4d3e8ca28187d3744bd5d5"
+        "after": "302a69bad1fb37d2aea472f813d575080d5f97a49e7f14b8a41f589eb507fe50",
+        "before": "1b580e3a70ac523f1876a7a71ecfe7ce111557c52f6924752bfa5524cbaadca2"
       },
       "to_revision": 149
     },
@@ -17863,7 +17863,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.69",
         "resulting_revision": 150,
-        "resulting_state_digest": "60a2a9143cbcb72e47d5f33fb814dfffecc6ec0abf9f31b6ba4c25db6a05a5ee"
+        "resulting_state_digest": "6046a1f30ef772ae2b8649b60ce8c996b5ed31b52e569a684fc1565b21ede463"
       },
       "encountered_definition_ids": [
         238
@@ -17923,8 +17923,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "60a2a9143cbcb72e47d5f33fb814dfffecc6ec0abf9f31b6ba4c25db6a05a5ee",
-        "before": "2fa1fdc5285f8d8776cb86f701295568f1158519a5ee485e59e169de27e2e595"
+        "after": "6046a1f30ef772ae2b8649b60ce8c996b5ed31b52e569a684fc1565b21ede463",
+        "before": "302a69bad1fb37d2aea472f813d575080d5f97a49e7f14b8a41f589eb507fe50"
       },
       "to_revision": 150
     },
@@ -17943,7 +17943,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.70",
         "resulting_revision": 151,
-        "resulting_state_digest": "d4486a37c6d65b86ca935bd9adcce48063451a8438b4af2a9d5bebec392d48f5"
+        "resulting_state_digest": "ff5c2b326dc5fa0e9e378d57661afa368aeabcf40765235524539dd4cced90ed"
       },
       "encountered_definition_ids": [
         227,
@@ -18116,8 +18116,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "d4486a37c6d65b86ca935bd9adcce48063451a8438b4af2a9d5bebec392d48f5",
-        "before": "60a2a9143cbcb72e47d5f33fb814dfffecc6ec0abf9f31b6ba4c25db6a05a5ee"
+        "after": "ff5c2b326dc5fa0e9e378d57661afa368aeabcf40765235524539dd4cced90ed",
+        "before": "6046a1f30ef772ae2b8649b60ce8c996b5ed31b52e569a684fc1565b21ede463"
       },
       "to_revision": 151
     },
@@ -18136,7 +18136,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.71",
         "resulting_revision": 152,
-        "resulting_state_digest": "3db9d28334bec85587ae74ba01300e374ed0be4b8bdaa968b220872ebdb4253a"
+        "resulting_state_digest": "14ed88e9c1992376af04ab20bbe4fd7eee8cf9e6a985051c8b385ab3744bda94"
       },
       "encountered_definition_ids": [
         490
@@ -18230,8 +18230,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "3db9d28334bec85587ae74ba01300e374ed0be4b8bdaa968b220872ebdb4253a",
-        "before": "d4486a37c6d65b86ca935bd9adcce48063451a8438b4af2a9d5bebec392d48f5"
+        "after": "14ed88e9c1992376af04ab20bbe4fd7eee8cf9e6a985051c8b385ab3744bda94",
+        "before": "ff5c2b326dc5fa0e9e378d57661afa368aeabcf40765235524539dd4cced90ed"
       },
       "to_revision": 152
     },
@@ -18250,7 +18250,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.72",
         "resulting_revision": 153,
-        "resulting_state_digest": "f19c29e6fde92b044391ed82ceb3f6b3f7fb39e2f52de1dea00e54ede062f9e2"
+        "resulting_state_digest": "2801575696499576fc527e4ee2b8880994b321940b68f7e46bac3e431812ca20"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -18327,8 +18327,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "f19c29e6fde92b044391ed82ceb3f6b3f7fb39e2f52de1dea00e54ede062f9e2",
-        "before": "3db9d28334bec85587ae74ba01300e374ed0be4b8bdaa968b220872ebdb4253a"
+        "after": "2801575696499576fc527e4ee2b8880994b321940b68f7e46bac3e431812ca20",
+        "before": "14ed88e9c1992376af04ab20bbe4fd7eee8cf9e6a985051c8b385ab3744bda94"
       },
       "to_revision": 153
     },
@@ -18347,7 +18347,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.81",
         "resulting_revision": 154,
-        "resulting_state_digest": "263fb743449ab0871a0bff1f3f2c644d92f8b5041f883b5253ff969b26ddef9e"
+        "resulting_state_digest": "8caac19cbdc9ba5a2292e183c8560a77e8ddd7b086bf97bab17c09e9538e75d3"
       },
       "encountered_definition_ids": [
         997
@@ -18404,8 +18404,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "263fb743449ab0871a0bff1f3f2c644d92f8b5041f883b5253ff969b26ddef9e",
-        "before": "f19c29e6fde92b044391ed82ceb3f6b3f7fb39e2f52de1dea00e54ede062f9e2"
+        "after": "8caac19cbdc9ba5a2292e183c8560a77e8ddd7b086bf97bab17c09e9538e75d3",
+        "before": "2801575696499576fc527e4ee2b8880994b321940b68f7e46bac3e431812ca20"
       },
       "to_revision": 154
     },
@@ -18424,7 +18424,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.82",
         "resulting_revision": 155,
-        "resulting_state_digest": "192e491e1f119c24de754b61b5626021421694ec3c4c35c0c4b5523d5a895b38"
+        "resulting_state_digest": "0da4d39c976a7e5fb8e746a7f8d2a0e3f63944454d215fedbbaf75a14ef596e0"
       },
       "encountered_definition_ids": [
         370,
@@ -18565,8 +18565,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "192e491e1f119c24de754b61b5626021421694ec3c4c35c0c4b5523d5a895b38",
-        "before": "263fb743449ab0871a0bff1f3f2c644d92f8b5041f883b5253ff969b26ddef9e"
+        "after": "0da4d39c976a7e5fb8e746a7f8d2a0e3f63944454d215fedbbaf75a14ef596e0",
+        "before": "8caac19cbdc9ba5a2292e183c8560a77e8ddd7b086bf97bab17c09e9538e75d3"
       },
       "to_revision": 155
     },
@@ -18585,7 +18585,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.83",
         "resulting_revision": 156,
-        "resulting_state_digest": "b7746931fe2631144316411428a0699239863bce8ed069cdf9230a89dea5c1b8"
+        "resulting_state_digest": "9787d6f75dfb27d8971dc33f1b3d77aa9504a06f6dadcdfbd09720ccc7f47241"
       },
       "encountered_definition_ids": [
         651
@@ -18681,8 +18681,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "b7746931fe2631144316411428a0699239863bce8ed069cdf9230a89dea5c1b8",
-        "before": "192e491e1f119c24de754b61b5626021421694ec3c4c35c0c4b5523d5a895b38"
+        "after": "9787d6f75dfb27d8971dc33f1b3d77aa9504a06f6dadcdfbd09720ccc7f47241",
+        "before": "0da4d39c976a7e5fb8e746a7f8d2a0e3f63944454d215fedbbaf75a14ef596e0"
       },
       "to_revision": 156
     },
@@ -18701,7 +18701,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.84",
         "resulting_revision": 157,
-        "resulting_state_digest": "2702ae49dba3fac7e52cd232f4ea3272f197d625646b1942ef086846d9042cb6"
+        "resulting_state_digest": "ca5bcbe4f48a331e8cd1cca1db681253c1ae1f93514fc6819b22635069559b15"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -18731,8 +18731,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "2702ae49dba3fac7e52cd232f4ea3272f197d625646b1942ef086846d9042cb6",
-        "before": "b7746931fe2631144316411428a0699239863bce8ed069cdf9230a89dea5c1b8"
+        "after": "ca5bcbe4f48a331e8cd1cca1db681253c1ae1f93514fc6819b22635069559b15",
+        "before": "9787d6f75dfb27d8971dc33f1b3d77aa9504a06f6dadcdfbd09720ccc7f47241"
       },
       "to_revision": 157
     },
@@ -18751,7 +18751,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.85",
         "resulting_revision": 158,
-        "resulting_state_digest": "a69769a3db2364cd5ed86457cb16680ce9cc83e5420af67a4177855327f12cb3"
+        "resulting_state_digest": "ad18e86077cd484f1d379f9cdb80e36422de7e5527c45583f1f04aac8b323980"
       },
       "encountered_definition_ids": [
         68
@@ -18805,8 +18805,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "a69769a3db2364cd5ed86457cb16680ce9cc83e5420af67a4177855327f12cb3",
-        "before": "2702ae49dba3fac7e52cd232f4ea3272f197d625646b1942ef086846d9042cb6"
+        "after": "ad18e86077cd484f1d379f9cdb80e36422de7e5527c45583f1f04aac8b323980",
+        "before": "ca5bcbe4f48a331e8cd1cca1db681253c1ae1f93514fc6819b22635069559b15"
       },
       "to_revision": 158
     },
@@ -18825,7 +18825,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.86",
         "resulting_revision": 159,
-        "resulting_state_digest": "5a4a86c6e82973cab24497dac5e88c26c57324e63336fe6cbfa09a9b20e6c25f"
+        "resulting_state_digest": "ac82d957b3d5dc33bb1c290622cf2118fa12be62902d4c2cae1c216b915dd037"
       },
       "encountered_definition_ids": [
         651
@@ -18884,8 +18884,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "5a4a86c6e82973cab24497dac5e88c26c57324e63336fe6cbfa09a9b20e6c25f",
-        "before": "a69769a3db2364cd5ed86457cb16680ce9cc83e5420af67a4177855327f12cb3"
+        "after": "ac82d957b3d5dc33bb1c290622cf2118fa12be62902d4c2cae1c216b915dd037",
+        "before": "ad18e86077cd484f1d379f9cdb80e36422de7e5527c45583f1f04aac8b323980"
       },
       "to_revision": 159
     },
@@ -18904,7 +18904,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.87",
         "resulting_revision": 160,
-        "resulting_state_digest": "b3dd0a11d3984f9d7f4e7a74344252a1b2ef7a1783452bcccb8afae3c2185e38"
+        "resulting_state_digest": "a568df3a3322879c746bbcf42e5c712c9a21ef79f408c69620f48eefcf148e3c"
       },
       "encountered_definition_ids": [
         370,
@@ -19028,8 +19028,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "b3dd0a11d3984f9d7f4e7a74344252a1b2ef7a1783452bcccb8afae3c2185e38",
-        "before": "5a4a86c6e82973cab24497dac5e88c26c57324e63336fe6cbfa09a9b20e6c25f"
+        "after": "a568df3a3322879c746bbcf42e5c712c9a21ef79f408c69620f48eefcf148e3c",
+        "before": "ac82d957b3d5dc33bb1c290622cf2118fa12be62902d4c2cae1c216b915dd037"
       },
       "to_revision": 160
     },
@@ -19048,7 +19048,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.73",
         "resulting_revision": 161,
-        "resulting_state_digest": "3d2efa3b475b5ab583b38ef159f82dd59980dbb26e7e6d3bf920e0316cb0295f"
+        "resulting_state_digest": "a48e342011c3b1608d1bf9bfc22a8f616dc9fb19f30475e1e4d4c21ffe4f8d36"
       },
       "encountered_definition_ids": [
         370,
@@ -19119,8 +19119,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "3d2efa3b475b5ab583b38ef159f82dd59980dbb26e7e6d3bf920e0316cb0295f",
-        "before": "b3dd0a11d3984f9d7f4e7a74344252a1b2ef7a1783452bcccb8afae3c2185e38"
+        "after": "a48e342011c3b1608d1bf9bfc22a8f616dc9fb19f30475e1e4d4c21ffe4f8d36",
+        "before": "a568df3a3322879c746bbcf42e5c712c9a21ef79f408c69620f48eefcf148e3c"
       },
       "to_revision": 161
     },
@@ -19139,7 +19139,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.74",
         "resulting_revision": 162,
-        "resulting_state_digest": "f63055f9b9ba0573397fab41cfcd6414694434ae6b7711d9dd82ecc7c89efb6b"
+        "resulting_state_digest": "d19992720fdb43a5105d0235d51d29bc39adf9697373495b77c20c06a454a32f"
       },
       "encountered_definition_ids": [
         351,
@@ -19675,8 +19675,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "f63055f9b9ba0573397fab41cfcd6414694434ae6b7711d9dd82ecc7c89efb6b",
-        "before": "3d2efa3b475b5ab583b38ef159f82dd59980dbb26e7e6d3bf920e0316cb0295f"
+        "after": "d19992720fdb43a5105d0235d51d29bc39adf9697373495b77c20c06a454a32f",
+        "before": "a48e342011c3b1608d1bf9bfc22a8f616dc9fb19f30475e1e4d4c21ffe4f8d36"
       },
       "to_revision": 162
     },
@@ -19695,7 +19695,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.88",
         "resulting_revision": 163,
-        "resulting_state_digest": "9e33653d53aca667a83377d47f8ad459fe64f9472390b390c39b9927a71922f5"
+        "resulting_state_digest": "81acf9937b5ecaf6e9c1c69b3cfaeba7763e9e6c97425b0302ed6bcd0b5e2703"
       },
       "encountered_definition_ids": [
         370
@@ -19794,8 +19794,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "9e33653d53aca667a83377d47f8ad459fe64f9472390b390c39b9927a71922f5",
-        "before": "f63055f9b9ba0573397fab41cfcd6414694434ae6b7711d9dd82ecc7c89efb6b"
+        "after": "81acf9937b5ecaf6e9c1c69b3cfaeba7763e9e6c97425b0302ed6bcd0b5e2703",
+        "before": "d19992720fdb43a5105d0235d51d29bc39adf9697373495b77c20c06a454a32f"
       },
       "to_revision": 163
     },
@@ -19814,7 +19814,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.89",
         "resulting_revision": 164,
-        "resulting_state_digest": "6bafdd87988da42c7fbb4f286341c290adcb3dfa593f4cc15e635d9370590867"
+        "resulting_state_digest": "01419a7fb7be00ef34fc7d18a949f06e62036c94b0aa9949bb66564d2d73f7a4"
       },
       "encountered_definition_ids": [
         253
@@ -19874,8 +19874,8 @@
       "semantic_events": [],
       "source": "policy",
       "state": {
-        "after": "6bafdd87988da42c7fbb4f286341c290adcb3dfa593f4cc15e635d9370590867",
-        "before": "9e33653d53aca667a83377d47f8ad459fe64f9472390b390c39b9927a71922f5"
+        "after": "01419a7fb7be00ef34fc7d18a949f06e62036c94b0aa9949bb66564d2d73f7a4",
+        "before": "81acf9937b5ecaf6e9c1c69b3cfaeba7763e9e6c97425b0302ed6bcd0b5e2703"
       },
       "to_revision": 164
     },
@@ -19894,7 +19894,7 @@
         "actor": 1,
         "command_id": "authority.policy.authored-authority-match.90",
         "resulting_revision": 165,
-        "resulting_state_digest": "922bb1a96aaff0827da547346aeacf30c99a75854341c66d9479f7a3c76d605f"
+        "resulting_state_digest": "810889bad451bd5dd5094c6f7beab75a5814cecf0c4d4ef86f9f422d99155694"
       },
       "encountered_definition_ids": [
         346,
@@ -20089,8 +20089,8 @@
       ],
       "source": "policy",
       "state": {
-        "after": "922bb1a96aaff0827da547346aeacf30c99a75854341c66d9479f7a3c76d605f",
-        "before": "6bafdd87988da42c7fbb4f286341c290adcb3dfa593f4cc15e635d9370590867"
+        "after": "810889bad451bd5dd5094c6f7beab75a5814cecf0c4d4ef86f9f422d99155694",
+        "before": "01419a7fb7be00ef34fc7d18a949f06e62036c94b0aa9949bb66564d2d73f7a4"
       },
       "to_revision": 165
     },
@@ -20109,7 +20109,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.75",
         "resulting_revision": 166,
-        "resulting_state_digest": "dff0a65fc2eb52400be82dc2bfa9c56dafe8c8e686c00c99a68f59c84a689e68"
+        "resulting_state_digest": "cde296eb5e408b13ab04ef8812597a2126a99c76ae6ac6f032eaff4de0f6fec9"
       },
       "encountered_definition_ids": [],
       "encountered_programs": [],
@@ -20139,8 +20139,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "dff0a65fc2eb52400be82dc2bfa9c56dafe8c8e686c00c99a68f59c84a689e68",
-        "before": "922bb1a96aaff0827da547346aeacf30c99a75854341c66d9479f7a3c76d605f"
+        "after": "cde296eb5e408b13ab04ef8812597a2126a99c76ae6ac6f032eaff4de0f6fec9",
+        "before": "810889bad451bd5dd5094c6f7beab75a5814cecf0c4d4ef86f9f422d99155694"
       },
       "to_revision": 166
     },
@@ -20159,7 +20159,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.76",
         "resulting_revision": 167,
-        "resulting_state_digest": "414d71ab06ab81462650ce1957935e7608d9bc7ec8c723d24b1fb6d646736ab8"
+        "resulting_state_digest": "d1d2aabc4784a05008914b6702f5e5a8861a395562584990835f899d9dba88f9"
       },
       "encountered_definition_ids": [
         346
@@ -20218,8 +20218,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "414d71ab06ab81462650ce1957935e7608d9bc7ec8c723d24b1fb6d646736ab8",
-        "before": "dff0a65fc2eb52400be82dc2bfa9c56dafe8c8e686c00c99a68f59c84a689e68"
+        "after": "d1d2aabc4784a05008914b6702f5e5a8861a395562584990835f899d9dba88f9",
+        "before": "cde296eb5e408b13ab04ef8812597a2126a99c76ae6ac6f032eaff4de0f6fec9"
       },
       "to_revision": 167
     },
@@ -20238,7 +20238,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.77",
         "resulting_revision": 168,
-        "resulting_state_digest": "8d1ba8222d273b714ffcb11f7550041c07dba5aec6d6faabacee72e4b1ba2a53"
+        "resulting_state_digest": "a3bec1a4fb03c0301ecb5c17ce762fcbdb2b57fc0fe312e143a2c84732f10854"
       },
       "encountered_definition_ids": [
         346
@@ -20291,8 +20291,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "8d1ba8222d273b714ffcb11f7550041c07dba5aec6d6faabacee72e4b1ba2a53",
-        "before": "414d71ab06ab81462650ce1957935e7608d9bc7ec8c723d24b1fb6d646736ab8"
+        "after": "a3bec1a4fb03c0301ecb5c17ce762fcbdb2b57fc0fe312e143a2c84732f10854",
+        "before": "d1d2aabc4784a05008914b6702f5e5a8861a395562584990835f899d9dba88f9"
       },
       "to_revision": 168
     },
@@ -20311,7 +20311,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.78",
         "resulting_revision": 169,
-        "resulting_state_digest": "84cefcfa2ce9551f5f304b172bbcbb4e37807e76e060ed59cfc47e8638a58090"
+        "resulting_state_digest": "e0337238d2912263c9b77318e86de1355b767f81b7adaa4b39efcb0a63ea1fb9"
       },
       "encountered_definition_ids": [
         68
@@ -20365,8 +20365,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "84cefcfa2ce9551f5f304b172bbcbb4e37807e76e060ed59cfc47e8638a58090",
-        "before": "8d1ba8222d273b714ffcb11f7550041c07dba5aec6d6faabacee72e4b1ba2a53"
+        "after": "e0337238d2912263c9b77318e86de1355b767f81b7adaa4b39efcb0a63ea1fb9",
+        "before": "a3bec1a4fb03c0301ecb5c17ce762fcbdb2b57fc0fe312e143a2c84732f10854"
       },
       "to_revision": 169
     },
@@ -20385,7 +20385,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.79",
         "resulting_revision": 170,
-        "resulting_state_digest": "0771f073738bc3a6ce3075e7577c1c6b93b5b4d7c899583c815dd69bd58431db"
+        "resulting_state_digest": "ecf56a3554222191b9e3421196f60bf57d8fcc86b9889973d78790f5ed52fbb4"
       },
       "encountered_definition_ids": [
         68,
@@ -20647,8 +20647,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "0771f073738bc3a6ce3075e7577c1c6b93b5b4d7c899583c815dd69bd58431db",
-        "before": "84cefcfa2ce9551f5f304b172bbcbb4e37807e76e060ed59cfc47e8638a58090"
+        "after": "ecf56a3554222191b9e3421196f60bf57d8fcc86b9889973d78790f5ed52fbb4",
+        "before": "e0337238d2912263c9b77318e86de1355b767f81b7adaa4b39efcb0a63ea1fb9"
       },
       "to_revision": 170
     },
@@ -20667,7 +20667,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.80",
         "resulting_revision": 171,
-        "resulting_state_digest": "892b6cd81f35b2c01f0d802d350fda9f91f3a163e9675be6b30e2a6b2283a2da"
+        "resulting_state_digest": "4df3f515126a06f46f8df08d8a46b4f9cd44cf9ad1772d0f189edc8f5bc741dd"
       },
       "encountered_definition_ids": [
         351
@@ -20724,8 +20724,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "892b6cd81f35b2c01f0d802d350fda9f91f3a163e9675be6b30e2a6b2283a2da",
-        "before": "0771f073738bc3a6ce3075e7577c1c6b93b5b4d7c899583c815dd69bd58431db"
+        "after": "4df3f515126a06f46f8df08d8a46b4f9cd44cf9ad1772d0f189edc8f5bc741dd",
+        "before": "ecf56a3554222191b9e3421196f60bf57d8fcc86b9889973d78790f5ed52fbb4"
       },
       "to_revision": 171
     },
@@ -20744,7 +20744,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.81",
         "resulting_revision": 172,
-        "resulting_state_digest": "1c5e522fa199e797a5d899744ef37d6d6a603ec8571e5b1488786730610e0311"
+        "resulting_state_digest": "056ae851a081a972dbb1e5ba7c234462cf564a3c6b4ca8109f767770ea1cdc41"
       },
       "encountered_definition_ids": [
         490,
@@ -20875,8 +20875,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "1c5e522fa199e797a5d899744ef37d6d6a603ec8571e5b1488786730610e0311",
-        "before": "892b6cd81f35b2c01f0d802d350fda9f91f3a163e9675be6b30e2a6b2283a2da"
+        "after": "056ae851a081a972dbb1e5ba7c234462cf564a3c6b4ca8109f767770ea1cdc41",
+        "before": "4df3f515126a06f46f8df08d8a46b4f9cd44cf9ad1772d0f189edc8f5bc741dd"
       },
       "to_revision": 172
     },
@@ -20895,7 +20895,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.82",
         "resulting_revision": 173,
-        "resulting_state_digest": "4262015bc811a46bcb36f0ef61d7dcc75b4cae52f0bf9e9b8e63190af4511773"
+        "resulting_state_digest": "b49ff74ac89178c485c2e9f3e1cd884dd2e429d5433f2d9e801dd88d70988bc8"
       },
       "encountered_definition_ids": [
         238
@@ -20955,8 +20955,8 @@
       "semantic_events": [],
       "source": "client",
       "state": {
-        "after": "4262015bc811a46bcb36f0ef61d7dcc75b4cae52f0bf9e9b8e63190af4511773",
-        "before": "1c5e522fa199e797a5d899744ef37d6d6a603ec8571e5b1488786730610e0311"
+        "after": "b49ff74ac89178c485c2e9f3e1cd884dd2e429d5433f2d9e801dd88d70988bc8",
+        "before": "056ae851a081a972dbb1e5ba7c234462cf564a3c6b4ca8109f767770ea1cdc41"
       },
       "to_revision": 173
     },
@@ -20975,7 +20975,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.83",
         "resulting_revision": 174,
-        "resulting_state_digest": "b3c9657873de617e6fee8c46dd9f25541bdc4333b9d90a3c27447db5819bfe7a"
+        "resulting_state_digest": "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876"
       },
       "encountered_definition_ids": [
         227,
@@ -21251,8 +21251,8 @@
       ],
       "source": "client",
       "state": {
-        "after": "b3c9657873de617e6fee8c46dd9f25541bdc4333b9d90a3c27447db5819bfe7a",
-        "before": "4262015bc811a46bcb36f0ef61d7dcc75b4cae52f0bf9e9b8e63190af4511773"
+        "after": "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876",
+        "before": "b49ff74ac89178c485c2e9f3e1cd884dd2e429d5433f2d9e801dd88d70988bc8"
       },
       "to_revision": 174
     }
@@ -27314,7 +27314,7 @@
       }
     ],
     "revision": 174,
-    "state_digest": "b3c9657873de617e6fee8c46dd9f25541bdc4333b9d90a3c27447db5819bfe7a",
+    "state_digest": "a1b6932d0fd9a06e884d93237b118713cc36e23973d1f500d3c246b680425876",
     "terminal": true,
     "turn": {
       "active_player_id": 0,

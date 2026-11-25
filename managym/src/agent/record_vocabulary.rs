@@ -163,9 +163,14 @@ fn execution_names(out: &mut Vec<RecordName>) {
         add(TokenKind::Text, name);
     }
     add(TokenKind::Variant, "CostComponent::Discard");
-    // A play grant's condition reaches its fact program as rules text.
+    // A departed permanent's last known name (a token's, or one an effect
+    // set) and a play grant's condition reach fact programs as rules text.
     for (_, definition) in default_content_pack().definition_entries() {
+        add(TokenKind::Text, &definition.name);
         let json = serde_json::to_value(definition).expect("serializable definition");
+        for name in set_names(&json) {
+            add(TokenKind::Text, &name);
+        }
         for condition in play_grant_conditions(&json) {
             add(TokenKind::Text, &condition_text("permanent", &condition));
         }

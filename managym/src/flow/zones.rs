@@ -717,7 +717,7 @@ impl Game {
                 ) => {}
             Some(ZoneType::Library) => {
                 self.place_library_arrival(owner, first, usize::MAX);
-                self.remember_library_objects(owner, &[first, second]);
+                self.arrange_library_objects(owner, &[first, second]);
             }
             // Exile appends appearances in timestamp order (earliest first).
             Some(ZoneType::Exile) if second_first => {
@@ -758,7 +758,7 @@ impl Game {
         self.place_library_arrival(owner, first, index);
         if let Some(second) = second {
             self.place_library_arrival(owner, second, index);
-            self.remember_library_objects(owner, &[first, second]);
+            self.arrange_library_objects(owner, &[first, second]);
         }
     }
 

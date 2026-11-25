@@ -1282,6 +1282,9 @@ pub(crate) fn project_pending_trigger(
     frame: &mut ContinuationFrame,
 ) {
     let mut out = Projection::new(game, viewer, false);
+    if frame.trigger_damage > 0 {
+        out.field("DamageEvent::Amount", &frame.trigger_damage);
+    }
     if let Some(target) = trigger.context.filter(|_| {
         trigger_reads(
             || game.pending_trigger_face(trigger),
@@ -1293,6 +1296,13 @@ pub(crate) fn project_pending_trigger(
     }) {
         out.retained_target(target);
     }
+    out.finish(frame);
+}
+
+/// The damage occurrence remains visible while its trigger is stacked.
+pub(crate) fn project_trigger_damage(game: &Game, viewer: PlayerId, frame: &mut ContinuationFrame) {
+    let mut out = Projection::new(game, viewer, false);
+    out.field("DamageEvent::Amount", &frame.trigger_damage);
     out.finish(frame);
 }
 

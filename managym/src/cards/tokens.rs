@@ -425,6 +425,9 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
             Some(field) if CARD_NAME_FIELDS.contains(&field) => {
                 Some(self.pack.definition_id(value))
             }
+            // "named [name]" compares names (CR 201.2); a name that is a card
+            // in the pack is that card's reference, any other name stays text.
+            Some("named") => self.pack.definition_id(value).map(Some),
             _ => None,
         };
         if let Some(row) = reference {
