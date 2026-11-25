@@ -686,8 +686,8 @@ until the pointer leaves and returns; **Pin the card preview** in Settings keeps
 instead, showing the last card you inspected. Along
 the bottom of the screen runs the step bar: the turn number and whose turn it is,
 then one cell per step, a line between
-phases, the current step shaded in that side's colour, and in each cell the stop for your turn above
-the step's name and the stop for the opponent's turn below it. Press a stop to
+phases, the current step shaded in that side's colour, and in each cell the stop for the opponent's turn above
+the step's name and the stop for your turn below it. Press a stop to
 change it (see [priority stops](#choosing-priority-stops)).
 Cards in hand are large, 136 to 150 px wide, and sit side by side while the
 strip has room; with 24 permanents or more on the battlefield the board may
@@ -958,7 +958,7 @@ it; there is no general browser undo.
 
 ### Choosing priority stops
 
-To hold up a response during the opponent's upkeep, press the lower stop in the
+To hold up a response during the opponent's upkeep, press the upper stop in the
 **Upkeep** cell of the step bar, or open **Menu**, keep **Use priority stops**
 checked and check **Upkeep** under **Opponent turn**; the two are the same
 setting. Academy pauses at a priority window there when you have a real choice.
