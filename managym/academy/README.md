@@ -59,6 +59,9 @@ pending choice with the same legal offers and permitted information.
 - **`analysis.py`**: a policy's reading of one seat of a played game
   (`analyse_game`), saved per decision in the `analyses` and
   `analysed_decisions` tables beside the game, never in its trace.
+- **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
+  `managym.statistics` over one re-execution and saved in
+  `attempts.numbers_json`; `wilson_interval` for the My games record.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -358,6 +361,21 @@ a seat that is not choosing.
 
 A runner error or divergence stops the analysis with its reason; saved
 decisions stay. A `running` row whose process is gone reads as stopped.
+
+### Numbers and record
+
+When a played game is no longer being played, `game_numbers` walks it once
+with `Behaviour` and `Totals` (`managym.statistics`), checking each step's
+actor and action description as an analysis does, and saves the result in
+`attempts.numbers_json`. A failed count never affects the saved game.
+`GET /api/traces/{id}/numbers` returns it, counting a game saved before
+numbers were on its first read; a game that does not re-execute here, a Watch
+game or a game still being played reads `null`. `GET /api/traces` rows carry
+`numbers` from the column and never re-execute.
+
+`GET /api/traces/record` groups the caller's completed games by opponent
+identity and both decks: games, wins, draws, losses and a 95% Wilson interval
+on wins over games.
 
 
 ## Elemental roster

@@ -1046,8 +1046,13 @@ game you played, **Review this game** on the result card opens it from the
 first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
-newest first, with filters for player, deck, status, result and date. **My games**
-narrows the list to this browser. A trained bot appears under its
+newest first, with filters for player, deck, status, result and date. Player 1
+is always on the play. A finished game you played shows its turns and how long
+it took. **My games** narrows the list to this browser, under **My record**:
+your completed games across sessions, grouped by opponent and by the two decks,
+with wins, losses and draws and the win rate with its 95% Wilson interval.
+Draws count as games, not wins. Rows that differ only in seat or disclosure are
+combined. These are counts of recorded games, not a rating. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
 [launch a replay directly](#open-a-replay-directly). `/replay` alone lists
@@ -1155,6 +1160,29 @@ finished game see its saved analyses; only you can start one.
 A policy with Search is not offered: Search plays out from the real hidden
 cards. One analysis runs per game at a time; a stopped or interrupted game is
 analysed up to its last recorded position.
+
+#### The game in numbers
+
+The result card of a game you played ends with one line of its numbers, such as
+**9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
+2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
+the play or the draw and how long the game took, and a table of both seats:
+
+| Count | What it counts |
+|---|---|
+| Lands played | Your decisions that played a land. |
+| Spells cast | Cards you cast. Copies of a spell are never cast and do not count. |
+| Attacks | Your decisions that declared an attacker. |
+| Cards drawn | Cards drawn from your library after the opening hand. |
+| Damage dealt | Damage your sources dealt to your opponent. |
+| Damage taken | Damage dealt to you by any source, your own included. |
+
+With an analysis shown, **This game** also reads **Decisions with a choice: 20 ·
+chose as Reader would: 8 of 20**, where the policy's first choice was yours,
+and the policy's estimate from your seat at the start, at its highest and at
+the end. A game that stopped early is counted to where it stopped. Academy
+counts each game once, by replaying it when it ends. An older game is counted
+the first time you open it. A game recorded by another build has no counts.
 
 #### Continue a live Watch
 
