@@ -815,6 +815,13 @@ readability of the chart with a strong current-world checkpoint.
 Left as questions (page 4, 5): Show both hands stays behind the Hand plate's
 dialog; "This game" and the analysis selector stay in Review's Menu.
 
+**Second concept review (2026-11-25, at ef4cbf4447): nothing to change before
+gate.** Items 1–3 are built and line up; `Board readOnly` is now the one owner
+of "this board is a recording". One small mismatch, left as page question 6:
+`TraceEvent.analysis_shown` is a bool, so which policy was shown is not
+recorded and Review cannot say it; adding an optional policy id later is
+additive. Next: gate.
+
 ## Slices
 
 1. **(built)** **A played game plays again.** `record_of`, the walk's self-check

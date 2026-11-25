@@ -239,3 +239,8 @@ Rail pass (2026-11-25, headless):
 - The analysis summary no longer says "Reader would choose X." / "You chose
   as Reader would."; the list's "its choice" / "you" tags say it. Without
   this a game whose decision also had a recap showed six moves.
+
+Second concept review (2026-11-25, headless):
+
+- No change before gate. `analysis_shown` stays a bool; recording which policy
+  was shown (page question 6) is additive and left open.

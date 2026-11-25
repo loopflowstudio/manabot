@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>MTG-389 Study — concept review (built, 2026-11-25)</title>
+<title>MTG-389 Study — concept review (built, second pass 2026-11-25)</title>
 <style>
   :root { --bg:#fbfaf7; --ink:#1d1b18; --ink2:#5c574f; --rule:#d9d4ca; --yes:#2f6b3a; --no:#9a3b25; --prop:#2c5d8a; --card:#fff; }
   @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --ink:#e9e6df; --ink2:#a6a196; --rule:#3a3d42; --yes:#7fc48d; --no:#e8907a; --prop:#8cbcea; --card:#1f2226; } }
@@ -70,6 +70,18 @@
 <p><b>Counterexample tested:</b> a game watched (bot v bot) has no Play on (not a participant) — Try another line stays its only branch, unchanged. A just-finished played game within 15 minutes shows both; that is honest (an ephemeral branch with Reveal versus a recorded game), named differently, and no longer joined by a disabled button.</p>
 <p><b>Passed over:</b> removing the Study branch from played games (it carries Reveal and Compare plans, which Play on lacks, and has its own specs); merging Play on into Study (Study's roots expire; Play on's record does not).</p>
 
+<h2>Second pass, after the rail pass (2026-11-25, at <code>ef4cbf4447</code>)</h2>
+<p>The three "no" rows above are built: <i>Try another line</i> appears only with <code>can_study</code>; a recording draws no stop toggles, no empty Stack and no disabled answer buttons; Moves take the remaining height and the choices list at most 26%, one line per option. <code>Board</code> now takes an explicit <code>readOnly</code> (set by Replay everywhere but a live Study branch), so <i>See its line</i> keeps Review's layout: one owner for "this board is a recording", where before it was inferred from whether moves jump.</p>
+<div class="box exist"><h3>Review at a nine-option decision</h3><img src="shots/qa-rail-9-options-light.png" alt="Review rail at a Learn decision: See its line, Play on from here, Try another line; Stack with Pop Quiz; Analysis list with four of nine one-line options; Moves with six rows."></div>
+<table>
+<tr><th>What a person knows / does</th><th>In the code</th><th></th><th>Note</th></tr>
+<tr><td>Another line from this decision</td><td><code>agent_line</code> (watch it), <code>played_from</code> (play it, recorded), Study branch only while retained</td><td class="yes">yes</td><td>Two verbs always, a third only where it works and means something else (ephemeral, with Reveal).</td></tr>
+<tr><td>Reviewing is read-only</td><td><code>Board readOnly</code></td><td class="yes">yes</td><td>One flag instead of an inference from <code>onjump</code>.</td></tr>
+<tr><td>Read the moves against the analysis</td><td>Rail: Moves fill, choices ≤ 26%</td><td class="yes">yes</td><td>Nine moves without a Stack; six with one, four of nine options visible.</td></tr>
+<tr><td>"I had analysis by <i>X</i> on when I chose this"</td><td><code>TraceEvent.analysis_shown: bool</code></td><td class="no">partly</td><td>Which policy was shown is a fact no re-execution recovers, and the event keeps only that one was. If you showed a policy other than the opponent, Review's default analysis (the opponent's) marks the same move with a different policy's reading, and nothing says which you saw. Adding an optional policy id later is additive (absent on older events), so it is left as question 6, not built now.</td></tr>
+</table>
+<p><b>Outcome of this pass: nothing to change before gate.</b> The concepts line up; the remaining mismatch is small and additive.</p>
+
 <h2>Larger than this work</h2>
 <ul>
 <li>A Study branch rooted in a re-executed position (no TTL) would let <i>Try another line</i> work on every game and retire the disabled state everywhere; it needs a <code>StudyForkProvider</code> over a walk and Reveal evidence from an analysis. Its own Task.</li>
@@ -88,6 +100,8 @@
   <ol><li>keeps the opponent's cards behind the Hand plate's dialog (as built);</li><li>turns them face up in the top seat.</li></ol></li>
 <li>"This game" and the analysis selector live in the Review Menu beside recording tools and feedback
   <ol><li>keep (an expandable place, per "probably needs to be expandable");</li><li>give Study its own disclosure in the rail.</li></ol></li>
+<li>A decision made with analysis shown records
+  <ol><li>only that analysis was shown (as built);</li><li>also which policy was shown, so Review can say "shown: <i>X</i>" and default to that analysis.</li></ol></li>
 </ol>
 </body>
 </html>
