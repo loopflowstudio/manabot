@@ -51,6 +51,10 @@ const STATES: &[(&str, &str)] = &[
     ("lathril-elves", "Lathril and N other untapped Elves; the planner checks a complete payment per next tap. Defaults 10,11,12"),
     ("entry-cascade", "Arahbo, Impact Tremors, Doubling Season, Gratuitous Violence and Goblin Oriflamme beside N creatures cycling Helpful Hunter, Ajani's Pridemate, Hinterland Sanctifier, Felidar Savior and Fog Bank; a Cat token's entry orders Tremors and N/5 Sanctifiers, whose life gains trigger every Pridemate (rules-quadratic); Fog Bank's prevention competes with Violence's doubling in combat"),
     ("storm-copies", "Thousand-Year Storm after N earlier Pillar Launch casts, with 2N creatures available for each copy"),
+    ("entry-choices", "N Secluded Courtyards with distinct chosen creature types beside up to 8 differently chosen Heraldic Banners and Adaptive Automatons; payment restrictions and layer evaluation"),
+    ("changeling-anthems", "N Three Tree Mascots (Changeling) per side under up to 8 differently chosen Adaptive Automatons and Ballyrush Banneret"),
+    ("genesis-wave", "Genesis Wave cast for X = N over N+3 Forests; X-cost offer, top-N library reveal/selection and simultaneous battlefield/graveyard split"),
+    ("ventmaw-pools", "N attacking Savage Ventmaws floating N EndOfTurn {R}{R}{R}{G}{G}{G} pools alongside lands and spells in hand"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
@@ -219,6 +223,59 @@ fn recipe(name: &str, size: usize) -> Recipe {
             seats[0].add("Forest", size + 2);
             seats[0].hand = vec!["Pillar Launch".into(); size + 2];
             seats[0].graveyard.push("Thousand-Year Storm".into());
+        }
+        "entry-choices" => {
+            let seat = &mut seats[0];
+            seat.add("Secluded Courtyard", size);
+            let anthems = size.min(8);
+            seat.add("Heraldic Banner", anthems);
+            seat.add("Adaptive Automaton", anthems);
+            for creature in [
+                "Gray Ogre",
+                "Helpful Hunter",
+                "Spectral Sailor",
+                "Three Tree Mascot",
+            ] {
+                seat.add(creature, 1);
+            }
+            seat.hand.extend([
+                "Three Tree Mascot".into(),
+                "Gray Ogre".into(),
+                "Helpful Hunter".into(),
+                "Pillar Launch".into(),
+            ]);
+            seats[1].add("Gray Ogre", 2);
+            seats[1].add("Forest", 2);
+            seats[1].hand.push("Pillar Launch".into());
+        }
+        "changeling-anthems" => {
+            for seat in &mut seats {
+                seat.add("Three Tree Mascot", size);
+                seat.add("Adaptive Automaton", size.min(8));
+                seat.add("Ballyrush Banneret", 1);
+                seat.add("Secluded Courtyard", 2);
+                seat.add("Forest", 2);
+                seat.hand.push("Pillar Launch".into());
+            }
+            seats[0].hand.push("Three Tree Mascot".into());
+        }
+        "genesis-wave" => {
+            seats[0].add("Forest", size + 3);
+            seats[0].hand.push("Genesis Wave".into());
+            seats[1].add("Mountain", 1);
+            seats[1].hand.push("Lightning Bolt".into());
+        }
+        "ventmaw-pools" => {
+            seats[0].add("Savage Ventmaw", size);
+            seats[0].add("Forest", 2);
+            seats[0].add("Mountain", 2);
+            seats[0].hand.extend([
+                "Sokka, Bold Boomeranger".into(),
+                "Pillar Launch".into(),
+                "Genesis Wave".into(),
+            ]);
+            seats[1].add("Mountain", 1);
+            seats[1].hand.push("Lightning Bolt".into());
         }
         "collector-food" | "mixed-life-gain" => {
             let seat = &mut seats[0];
@@ -676,6 +733,69 @@ fn build(recipe: &Recipe) -> Env {
     if recipe.state == "herald-statics" {
         env.fixture_game_mut().state.players[0].life = 0;
     }
+    if matches!(
+        recipe.state.as_str(),
+        "entry-choices" | "changeling-anthems"
+    ) {
+        use managym::state::{mana::Color, permanent::EntryChoice};
+        const CHOSEN_TYPES: &[&str] = &[
+            "Elf", "Goblin", "Ally", "Dragon", "Human", "Soldier", "Wizard", "Cat", "Angel",
+            "Demon", "Spirit", "Zombie", "Beast", "Bird", "Warrior", "Knight",
+        ];
+        const CHOSEN_COLORS: &[Color] = &[
+            Color::White,
+            Color::Blue,
+            Color::Black,
+            Color::Red,
+            Color::Green,
+        ];
+        let game = env.fixture_game_mut();
+        let mut courtyard = [0usize; 2];
+        let mut automaton = [0usize; 2];
+        let mut banner = [0usize; 2];
+        let state = &mut *game.state;
+        let ids: Vec<_> = state
+            .permanents
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                p.as_ref().map(|p| {
+                    (
+                        managym::state::game_object::PermanentId(i),
+                        p.controller.0,
+                        state[p.object].name.clone(),
+                    )
+                })
+            })
+            .collect();
+        for (pid, seat, name) in ids {
+            let choice = match name.as_str() {
+                "Secluded Courtyard" => {
+                    let i = courtyard[seat];
+                    courtyard[seat] += 1;
+                    Some(EntryChoice::CreatureType(
+                        CHOSEN_TYPES[i % CHOSEN_TYPES.len()].into(),
+                    ))
+                }
+                "Adaptive Automaton" => {
+                    let i = automaton[seat];
+                    automaton[seat] += 1;
+                    Some(EntryChoice::CreatureType(
+                        CHOSEN_TYPES[i % CHOSEN_TYPES.len()].into(),
+                    ))
+                }
+                "Heraldic Banner" => {
+                    let i = banner[seat];
+                    banner[seat] += 1;
+                    Some(EntryChoice::Color(CHOSEN_COLORS[i % CHOSEN_COLORS.len()]))
+                }
+                _ => None,
+            };
+            if let Some(choice) = choice {
+                state.permanents[pid].as_mut().unwrap().chosen = Some(std::sync::Arc::new(choice));
+            }
+        }
+    }
     env.scenario_refresh().unwrap();
     env
 }
@@ -908,9 +1028,9 @@ fn reach(root: &Env, label: &str) -> Env {
 /// Stop at the real response to a single stack object. In the Connoisseur
 /// position its first resolution must already have recorded the ordinal.
 fn before_resolution(mut env: Env, after_first: bool) -> Env {
-    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    let turn = env.fixture_game_mut().state.turn.turn_number;
     for _ in 0..32 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
         let ready = game.state.stack_objects.len() == 1
             && game.state.priority.consecutive_passes == 1
@@ -940,7 +1060,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
-                        env.benchmark_game_mut()
+                        env.fixture_game_mut()
                             .create_token("token.ally", PlayerId(0), false)
                             .unwrap();
                     }
@@ -957,6 +1077,56 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
             result.push(("resolution".into(), resolution));
             result.push(("after-resolution".into(), resolved));
             return result;
+        }
+        "genesis-wave" => {
+            let mut cast = follow(root, &[("cast", 0)]);
+            // Pick X = size (the highest offered X value) so the top `size`
+            // library cards are revealed and offered for selection.
+            let max_x = actions(&mut cast)
+                .iter()
+                .enumerate()
+                .filter_map(|(i, a)| match a {
+                    Action::ChooseMode { mode, .. } => Some((i, *mode)),
+                    _ => None,
+                })
+                .max_by_key(|&(_, v)| v)
+                .expect("Genesis Wave offers X choices")
+                .0;
+            cast.step(max_x as i64).unwrap();
+            let resolution = before_resolution(cast, false);
+            let resolved = follow(&resolution, &[("resolve", 0)]);
+            result.push(("resolution".into(), resolution));
+            result.push(("after-resolution".into(), resolved));
+            return result;
+        }
+        "ventmaw-pools" => {
+            // Declare every Savage Ventmaw attacking and resolve every attack
+            // trigger so the EndOfTurn mana pools are populated at priority.
+            let mut env = combat(root, false).expect("ventmaw-pools reaches DeclareAttackers");
+            for _ in 0..256 {
+                if env.action_space_kind() == Some(ActionSpaceKind::Priority)
+                    && env.fixture_game_mut().state.stack_objects.is_empty()
+                    && !env.fixture_game_mut().state.players[0]
+                        .mana_pool
+                        .mana
+                        .is_empty()
+                {
+                    result.push(("pooled".into(), env));
+                    return result;
+                }
+                let offered = actions(&mut env);
+                let index = offered
+                    .iter()
+                    .position(|a| matches!(a, Action::DeclareAttacker { attack: true, .. }))
+                    .or_else(|| {
+                        offered
+                            .iter()
+                            .position(|a| matches!(a, Action::PassPriority { .. }))
+                    })
+                    .unwrap_or(0);
+                env.step(index as i64).unwrap();
+            }
+            panic!("ventmaw-pools never resolved its attack triggers");
         }
         "lathril-elves" => {
             if recipe.size >= 10 {
