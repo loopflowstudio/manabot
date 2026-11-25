@@ -63,6 +63,24 @@ click-only.
 
 The board's `interaction` distinguishes play, Study retries and read-only positions. Only play starts a gesture. During a block drag, the dragged blocker determines the legal highlights and its standing line is hidden. The click-selected blocker survives cancellation. Release hit-tests the final pointer coordinates. A consumed drag click stays suppressed until that click or the next primary press.
 
+### Joint-combat lifecycle and connect affordances (Pass 5)
+
+Post-build review of `HEAD` (`437101a9fe`) found two conceptual mismatches and two minor `play`-drag edge cracks to resolve before gate:
+
+1. **Separate live-play table mode from millisecond `inputReady` waits.**
+   - Today `+page.svelte` ties `combatPreview` to `canSubmitLive` (which drops during `commandPending`, `work.running`, and `stopsPending`), `Rail.svelte` folds per-creature offers on `{#if draft && live}`, and `Board.svelte` drops `draftMarks` and restores `asked` while `running`. Confirming a draft therefore flashes the closed "Each creature's choice" list open and pops single-creature `asked` outlines between every step; clicking a stop in the Stop Bar mid-draft tears down the draft and clears `armed`; and a same-revision Command rejection wedges `running` forever because the runner ignores `revision === sending.sentAt` without watching `pending`.
+   - **Target model:**
+     - `+page.svelte`: pass `combatPreview` whenever the table is an active live-play table (`gameActive && pilotCanAct && !participantStudying && !gameStore.branchProjection`), independent of transient `inputReady` waits (`commandPending`, `work.running`, `stopsPending`). Keep `interaction` (`'play' | 'study' | 'read-only'`) gating actual submissions and pointer drags.
+     - `Board.svelte`: `declaring = combatPreview !== undefined && isDeclaration(frame)`. Keep `drafting` and `running` as one steady joint surface (`joint = drafting || running`): suppress single-creature `asked` whenever `joint` is true, keep drafted creatures marked while `running`, disable Confirm/Clear/pile-steppers and disallow draft edits (`onDraft`, `confirmDraft`, `Space`) when `!live`, and let the combat-preview fetch run while `declaring && !running`.
+     - `Board.svelte` runner: when `revision === sending.sentAt` and `!pending && live` (a step was rejected at the same revision or failed to send), clear `running`; keep `draft` intact when `sending.at === 0` (nothing committed yet), or clear `draft` with a `stopNote` when `sending.at > 0` (earlier steps already committed).
+     - `Rail.svelte`: fold per-creature offers on `{#if draft}` alone (never `draft && live`). Replay and Study never pass `draft`, so they stay unchanged; live joint combat never flashes the raw numbered list during Confirm, `work: running`, or stop updates.
+2. **Show exact legal permanent recipients during a `connect` drag.**
+   - Today `.tcard.attacking` (`BoardCard.svelte:370`) overwrites `.tcard.legal`'s `box-shadow`, and permanent targets have no outline while dragging a line (only `Plate` and `Rail` draw a `--legal` ring), so QA observed that players had to fish around to discover legal targets on lands and attackers.
+   - **Target model:** Derive `connectTargets: ReadonlySet<number>` in `Board.svelte` for the active `connect` drag — the exact `can_block` attacker IDs during a block-draft drag (never other blockers), or permanents in `fieldById` with `offers.length > 0` during targeting / previewless `DECLARE_BLOCKER`. Pass `connectTarget` through `Field.svelte` to `BoardCard.svelte` (`data-connect-target`), styled in `Board.svelte` with a dashed `--accent` outline (`button[data-connect-target]:not([data-drop])`) that upgrades to solid `--accent` on `data-drop`. Also let `.tcard.legal` compose with `.tcard.attacking` instead of being clobbered.
+3. **Close two `play`-drag edge cracks.**
+   - `promote(gesture, offerId)` in `drag.ts` / `Board.svelte`: promote `holding('menu')` to `'pending'` only when `offerId` belongs to the held card's `offers`; if the player commits a different offer while the menu is open, settle the held card home instead.
+   - `overField` in `Board.svelte`: match `!!hit?.closest('.board .half, .board .tray')` so an open `.tray` panel during Priority does not punch a "Release to cancel" hole in the middle of the drawn `.drop-zone`.
+
 ### Marquee attacker draft (`marquee`)
 
 - Active only when `drafting && preview.kind === 'attackers'`.
@@ -207,11 +225,15 @@ No earlier drag attempt exists in the tree.
 
 Pass 3 checks covered 23 drag/combat unit cases and eight focused browser cases, including pointer and keyboard combat, block reassignment and five marquee cases. Svelte reported zero errors or warnings. The 1280×800 screenshots show the selection box and both card outlines in light mode with normal motion and dark mode with reduced motion.
 
-4. **QA in a real game, and the joint-combat steer — built in this pass.** Played two live games against the real server (Elemental GR vs Search 16; goblins vs Passive). Every gesture committed exactly one Command, or none on cancel. Two fixes:
+4. **QA in a real game, and the joint-combat steer — built in `437101a9fe`.** Played two live games against the real server (Elemental GR vs Search 16; goblins vs Passive). Every gesture committed exactly one Command, or none on cancel. Two fixes:
    - Real servers answer an accepted step twice (`work` running, then complete). The draft runner stopped on the first, so every multi-creature attack or block declared one creature and printed "Stopped after 1 of N". This happened on the base commit too. The runner now waits until the board is live again. The combat fixture now answers the same way, and the old runner fails four combat tests.
    - Steer (2026-11-24/25, from the Task's comment: "Joint UX only in live play (UI-only, zero engine change)"; "regardless of drag, making the UX for combat only about the select-all-at-once UI rather than mixing individual decisions with click whatever you want"). While a live draft is open, the rail's per-creature offers sit in a closed "Each creature's choice" disclosure without key badges, and number keys do nothing. Replay and Study are unchanged. The attack caption now says "Drag across creatures, or click each". Scripted players in `game-history`, `laptop-comfort` and `experience-proof` open that disclosure through `showEachCreaturesChoice` (`e2e/fixtures/combat.ts`). Release proof: everything passes except `unified-replay`'s verified evaluation import, whose fixture server needs a full manabot environment rather than the play-runtime venv (unchecked locally).
+5. **Post-build concept fixes (next pass).** Implement in order so the biggest mismatch is verified first:
+   - **Joint-combat lifecycle & rejection recovery** (`+page.svelte`, `Board.svelte`, `Rail.svelte`): keep `combatPreview` steady for any active live-play table across transient `inputReady` waits; fold `Rail` on `{#if draft}` alone; suppress `asked` and keep draft marks steady while `running`; disable draft edits/confirm while `!live`; recover `running` cleanly on same-revision rejection (`!pending && live`). Add E2E proofs in `e2e/combat-presentation.spec.ts` covering: (a) per-creature disclosure stays closed and `asked` stays suppressed during Confirm's `work: running` window, (b) toggling a priority stop mid-draft preserves the draft and armed blocker without flashing raw choices, and (c) rejecting step 0 at the same revision recovers out of `running` with the draft intact.
+   - **Exact `connectTargets` affordance** (`Board.svelte`, `Field.svelte`, `BoardCard.svelte`): highlight exact legal permanent recipients with dashed `--accent` (`data-connect-target`) during `connect` drags, upgrading to solid `--accent` on snap (`data-drop`), and keep `.tcard.legal` visible on attacking creatures. Add E2E assertions in `e2e/drag-play.spec.ts` verifying legal recipients (and not ineligible creatures or other blockers) receive `data-connect-target` mid-drag, plus `design.test.ts`.
+   - **`play`-drag edge fixes** (`drag.ts`, `drag.test.ts`, `Board.svelte`): `promote(gesture, offerId)` checks offer membership (settling home on a different offer); `overField` includes `.board .tray`.
 
-**Next:** Gate runs the acceptance commands above, including the full release proof.
+**Next:** Implement Pass 5, run `npm test && npm run check` and the focused drag/combat E2E specs, then proceed to gate.
 
 ## Done when
 

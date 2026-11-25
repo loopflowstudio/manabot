@@ -27,3 +27,10 @@
 - **Scrolling battlefield rows.** A sweep counts only the visible portion of
   each card inside a scrolling row. In other rows it follows the card's drawn
   position, including an attacker leaning over the row edge.
+- **Joint-combat mode across transient waits.** Keep `combatPreview` and the
+  closed per-creature disclosure steady across `commandPending`, `work.running`,
+  and `stopsPending` (disabling edits/confirm while `!live`), and preserve the
+  draft when step 0 is rejected at the same revision.
+- **Legal recipient outline during `connect` drags.** Outline exact legal
+  permanent recipients (`connectTargets`, never other blockers) with dashed
+  `--accent` while dragging a line, upgrading to solid `--accent` on snap.

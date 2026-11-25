@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Concept Review (Post-Build) — MTG-441 Academy Board Drag &amp; Combat Surface</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --surface: #fafaf9;
+      --muted: #f2f2f0;
+      --field: #ffffff;
+      --border: #dadad6;
+      --border-strong: #b4b4ae;
+      --ink: #1c1c1e;
+      --ink-2: #55555b;
+      --ink-3: #67676e;
+      --accent: #1c1c1e;
+      --on-accent: #ffffff;
+      --yes: #2f6230;
+      --yes-bg: #ecf5ec;
+      --yes-border: #a5cea6;
+      --no: #9a2019;
+      --no-bg: #fbeeed;
+      --no-border: #e5aba7;
+      --head: #6f4b07;
+      --head-bg: #faf4e4;
+      --head-border: #ddc282;
+      --proposed: #234e86;
+      --proposed-bg: #edf3fb;
+      --proposed-border: #a7c3e6;
+      --serif: Georgia, 'Times New Roman', serif;
+      --sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --r-sm: 4px;
+      --r-md: 8px;
+      --r-lg: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121213;
+        --surface: #1d1d20;
+        --muted: #171719;
+        --field: #252529;
+        --border: #323236;
+        --border-strong: #4d4d54;
+        --ink: #ececee;
+        --ink-2: #b0b0b8;
+        --ink-3: #909099;
+        --accent: #ececee;
+        --on-accent: #121213;
+        --yes: #8cc79a;
+        --yes-bg: #1b2b1f;
+        --yes-border: #385c41;
+        --no: #f2846c;
+        --no-bg: #311d1a;
+        --no-border: #6c362c;
+        --head: #ecc779;
+        --head-bg: #2e2616;
+        --head-border: #6b5628;
+        --proposed: #8ab8e8;
+        --proposed-bg: #192635;
+        --proposed-border: #355477;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 400 15px/1.6 var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 36px 24px 80px;
+      display: grid;
+      gap: 32px;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .kicker {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--ink-3);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    h1 { margin: 0; font: 600 28px/1.2 var(--serif); }
+    h2 { margin: 0 0 12px; font: 600 20px/1.3 var(--serif); }
+    h3 { margin: 0 0 8px; font: 600 15px/1.35 var(--sans); }
+    p { margin: 0; }
+    p + p { margin-top: 10px; }
+    code {
+      font: 400 13px/1.4 var(--mono);
+      background: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 1px 5px;
+    }
+    .lead { font-size: 15.5px; color: var(--ink-2); max-width: 82ch; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 16px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .tag.head { background: var(--head-bg); border-color: var(--head-border); color: var(--head); }
+    .tag.proposed { background: var(--proposed-bg); border-color: var(--proposed-border); color: var(--proposed); }
+    .tag.yes { background: var(--yes-bg); border-color: var(--yes-border); color: var(--yes); }
+    .tag.no { background: var(--no-bg); border-color: var(--no-border); color: var(--no); }
+
+    .area-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--r-md);
+      padding: 14px 18px;
+      display: grid;
+      gap: 8px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--surface);
+    }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    th { background: var(--muted); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+    td.verdict { width: 84px; }
+    td.prod { width: 25%; }
+    td.code { width: 28%; }
+    .subnote { display: block; margin-top: 6px; font-size: 13px; color: var(--ink-2); }
+    .issue-list { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 5px; }
+
+    .callout {
+      border: 1px solid var(--no-border);
+      background: var(--no-bg);
+      border-radius: var(--r-lg);
+      padding: 18px 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .callout h2 { margin: 0; color: var(--no); font-size: 19px; }
+
+    .compare {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 16px 18px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .card.before { border-top: 3px solid var(--head); }
+    .card.after { border-top: 3px solid var(--proposed); }
+    .card ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 14px; }
+
+    /* Visual mockups */
+    .visuals {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 16px;
+    }
+    .mockup-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 14px 16px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .mockup-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .mini-rail {
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      background: var(--field);
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+      font-size: 12.5px;
+    }
+    .mini-heading {
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink-2);
+      font-weight: 600;
+      font-size: 11.5px;
+      border-top: 1px solid var(--border);
+      padding-top: 6px;
+    }
+    .mini-btn {
+      border: 1px solid var(--border-strong);
+      border-radius: var(--r-sm);
+      padding: 5px 8px;
+      background: var(--muted);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mini-kbd {
+      display: inline-block;
+      border: 1px solid var(--border-strong);
+      border-radius: 3px;
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .mini-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 6px;
+      border-radius: 3px;
+      background: var(--no-bg);
+      border: 1px dashed var(--no-border);
+      color: var(--ink);
+      font-family: var(--serif);
+    }
+    .mini-disclosure {
+      font-size: 12px;
+      color: var(--ink-2);
+      padding: 3px 6px;
+      border-radius: 3px;
+      background: var(--yes-bg);
+      border: 1px solid var(--yes-border);
+    }
+
+    .mini-board {
+      position: relative;
+      height: 168px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--border);
+      background: var(--muted);
+      overflow: hidden;
+      font-size: 11px;
+    }
+    .mini-card {
+      position: absolute;
+      width: 68px;
+      height: 46px;
+      border-radius: 4px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      line-height: 1.2;
+      font-weight: 600;
+      color: var(--ink);
+      padding: 2px 4px;
+    }
+    .mini-card.atk { top: 18px; transform: rotate(2deg); box-shadow: 0 6px 12px rgb(0 0 0 / 0.22); }
+    .mini-card.blk { bottom: 16px; }
+    .mini-card.armed { border-style: dashed; border-color: var(--accent); }
+    .mini-card.cand { outline: 2px dashed var(--proposed); outline-offset: 2px; }
+    .mini-card.snap { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .mini-card.muted-tag { opacity: 0.72; }
+    .mini-note { font-size: 13px; color: var(--ink-2); }
+
+    /* Traces */
+    .traces {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+    }
+    .trace {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 14px 16px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      font-size: 13.5px;
+    }
+    .trace ol { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+    /* State diagram */
+    .diagram-frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    svg.diagram {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--r-sm);
+      background: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .outside {
+      background: var(--surface);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--r-md);
+      padding: 14px 18px;
+      font-size: 14px;
+      display: grid;
+      gap: 6px;
+    }
+    .questions { display: grid; gap: 14px; }
+    .q-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 16px 18px;
+      display: grid;
+      gap: 10px;
+    }
+    .q-card ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .q-card li { display: grid; grid-template-columns: 28px 1fr; gap: 6px; align-items: baseline; font-size: 14px; }
+    .opt-key { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--proposed); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="kicker">
+      <span>MTG-441 · Post-build concept review against base <code>3be5a0cfb2</code> (at <code>HEAD 437101a9fe</code>)</span>
+      <span class="tag head">Built at HEAD</span>
+      <span class="tag proposed">Proposed (Pass 5)</span>
+      <span class="tag yes">Aligned</span>
+      <span class="tag no">Mismatch</span>
+    </div>
+    <h1>Do Academy’s board drag &amp; combat concepts line up with the built code?</h1>
+    <p class="lead">
+      <strong>Area reviewed:</strong> Academy’s live-play board direct-manipulation and combat-declaration surface
+      (<code>academy/ui/src/lib/board/</code>, <code>routes/+page.svelte</code>, <code>routes/replay/+page.svelte</code>,
+      <code>DESIGN.md</code>, and <code>docs/academy.md</code>), reviewed as built from base <code>3be5a0cfb2</code> through
+      <code>437101a9fe</code>. Widened to the whole live-play interaction + combat-draft lifecycle because the drag
+      gestures and the joint-combat steer share the same table readiness gate (<code>interaction</code> / <code>live</code> /
+      <code>combatPreview</code>), board highlights, and rail disclosure contract.
+    </p>
+  </header>
+
+  <section class="area-box">
+    <div>
+      <strong>Verdict:</strong> The drag state machine itself (<code>drag.ts</code>, <code>play</code>, <code>marquee</code>,
+      and <code>Endpoint</code>’s <code>stack-entry</code>/<code>stack</code> split) is clean and matches the product model.
+      <strong>Three mismatches remain</strong> across the built surface, led by a structural lifecycle split in
+      <strong>joint-combat mode</strong> (introduced when the steer landed on top of <code>canSubmitLive</code>) and a
+      <strong>missing visual affordance on <code>connect</code> drag recipients</strong> confirmed by real-game QA.
+    </div>
+    <div style="color: var(--ink-2); font-size: 14px;">
+      Plan updated with <strong>Pass 5</strong> to separate live-play table mode from transient input waits, recover
+      <code>running</code> drafts on same-revision rejection, outline exact legal recipients during <code>connect</code> drags,
+      and close two small <code>play</code>-drag edge cracks.
+    </div>
+  </section>
+
+  <!-- 1. Alignment table -->
+  <section>
+    <h2>1. Product concepts vs. code concepts at HEAD</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product concept (what the player sees &amp; does)</th>
+            <th>Code concept (types, DOM, and owners at <code>HEAD</code>)</th>
+            <th>Lines up?</th>
+            <th>Diagnosis &amp; proposed change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="prod">
+              <strong>1. Pointer gesture &amp; click/drag split</strong>
+              <span class="subnote">Press &lt; 6 px is a click; dragging suppresses its trailing click without wedging the next real click; one pointer at a time; Esc / read-out / new frame cancels cleanly.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> Pure <code>Gesture</code> union in <code>board/drag.ts</code> (148 lines, <code>pointerId</code> + <code>revision</code>) + <code>swallowClick</code> cleared on capture <code>pointerdown</code> in <code>Board.svelte:508–541</code>.
+            </td>
+            <td class="verdict"><span class="tag yes">Yes</span></td>
+            <td>Single owner, DOM-free transitions, cleanly compressed in <code>5cad3a2c14</code>, thoroughly unit- and E2E-tested.</td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>2. Stack entry identity</strong>
+              <span class="subnote">Any spell or cardless ability on the stack can start or receive a target drag; resolved spells in the recap still draw standing lines to surviving targets.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>Endpoint</code> in <code>recent.ts:36–42</code> separates <code>{ kind: 'stack-entry', id }</code> (<code>data-stack-entry</code>) from <code>{ kind: 'stack', id }</code> (<code>data-stack-card</code>).
+            </td>
+            <td class="verdict"><span class="tag yes">Yes</span></td>
+            <td>Two distinct lifetimes are now two distinct variants, documented in <code>recent.ts</code> and shared by <code>Lines.svelte</code> and <code>Rail.svelte</code>.</td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>3. Sweep to draft attackers (<code>marquee</code>)</strong>
+              <span class="subnote">Drag a box starting in battlefield rows during an attack draft; caught declarable creatures highlight live (clipped in scrolling rows, individual fanned copies reachable); release adds them.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>marqueeBounds</code> / <code>overlap</code> in <code>drag.ts</code>, <code>canMarquee</code> / <code>dropPermanents</code> in <code>Board.svelte:796–812</code>, <code>addAttackers</code> in <code>combat.ts</code>.
+            </td>
+            <td class="verdict"><span class="tag yes">Yes</span></td>
+            <td>Clean and verified in light/dark, reduced motion, fanned piles, and overflowing rows.</td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>4. Play a card from hand (<code>play</code>)</strong>
+              <span class="subnote">Carry a playable land or castable spell onto the battlefield; see planned land taps and drop label; drop commits (and travels from drop point) or opens choices; cancel/refusal settles home.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>PlayDrag</code>, <code>holding('pending' | 'menu')</code>, <code>promote(gesture)</code>, <code>overField</code> (<code>Board.svelte:645, 861</code>).<br />
+              <span class="tag proposed">Pass 5</span> <code>promote(gesture, offerId)</code>; <code>overField</code> covers <code>.board .half, .board .tray</code>.
+            </td>
+            <td class="verdict"><span class="tag no">No</span></td>
+            <td>
+              <strong>Two small cracks:</strong>
+              <ul class="issue-list">
+                <li><code>send(offer)</code> calls <code>promote(gesture)</code> unconditionally: if a dropped multi-offer card’s menu is open and the player commits a <em>different</em> offer (clicks another card or presses Space), the held card is promoted to <code>'pending'</code> instead of settling back to hand.</li>
+                <li><code>overField</code> tests <code>hit?.closest('.board .half')</code>: if a centered <code>.tray</code> panel is open during Priority (e.g. flashback/exile offer), dragging a hand card across the middle of the drawn <code>.drop-zone</code> flips it to “Release to cancel”.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>5. Connect source to recipient (<code>connect</code>)</strong>
+              <span class="subnote">Pull a line from a blocker or targeting source onto a legal permanent, player plate, or stack entry. Legal recipients are visible while pulling; hovering snaps, outlines solidly, and previews payment.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>ConnectDrag</code>, <code>placingBlocker</code>, <code>standingLines</code>; legal cards rely on <code>BoardCard.svelte:363</code> <code>.tcard.legal</code>.<br />
+              <span class="tag proposed">Pass 5</span> Derive <code>connectTargets</code> in <code>Board.svelte</code> → <code>data-connect-target</code> dashed outline + compose <code>.tcard.attacking</code> shadow.
+            </td>
+            <td class="verdict"><span class="tag no">No</span></td>
+            <td>
+              <strong>Legal permanent recipients are visually invisible mid-drag (confirmed in QA):</strong>
+              <ul class="issue-list">
+                <li>In <code>BoardCard.svelte:370</code>, <code>.tcard.attacking</code> overwrites <code>.tcard.legal</code>’s <code>box-shadow</code> (line 363). During a block drag, blockable and unblockable attackers (e.g. flyers) look nearly identical until hovered, contradicting <code>docs/academy.md:755</code> (“lights up legal attackers”).</li>
+                <li>During targeting, <code>Plate</code> and <code>Rail</code> draw a 2 px <code>--legal</code> ring, while <code>BoardCard</code> draws no edge and lands/opponent permanents never dim (<code>Field.svelte:67</code>). Players must fish around to find legal targets (<code>scratch/qa.html</code>).</li>
+                <li>Fix: derive exact <code>connectTargets</code> (never other blockers!) and draw a dashed <code>--accent</code> outline that upgrades to solid <code>--accent</code> on <code>data-drop</code>.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>6. Joint combat declaration as one continuous live surface</strong>
+              <span class="subnote">In live play, combat is one joint draft from opening through Confirm to completion (or clean recovery on refusal). Toggling a priority stop or stepping through confirmed creatures never flashes the raw one-creature-at-a-time UI.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>canSubmitLive</code> in <code>+page.svelte:188,454</code>; <code>declaring</code> / <code>drafting</code> / <code>running</code> / <code>live</code> in <code>Board.svelte:186–327</code>; <code>{#if draft &amp;&amp; live}</code> in <code>Rail.svelte:291</code>.<br />
+              <span class="tag proposed">Pass 5</span> Pass <code>combatPreview</code> for any live-play table; keep joint mode steady across transient waits; fold rail on <code>{#if draft}</code>; recover <code>running</code> on same-revision rejection.
+            </td>
+            <td class="verdict"><span class="tag no">No</span></td>
+            <td>
+              <strong>Biggest mismatch — two concepts collapsed into <code>canSubmitLive</code>, and four flags disagree on every transient wait:</strong>
+              <ul class="issue-list">
+                <li><strong>Confirm flashes the raw list open:</strong> <code>send(offer)</code> flips <code>live = false</code> synchronously → <code>Rail.svelte:291</code> <code>{#if draft &amp;&amp; live}</code> turns false → closed “Each creature’s choice” unmounts and flashes the full numbered per-creature list on every creature step.</li>
+                <li><strong>Confirm flashes single-creature <code>asked</code> rings:</strong> <code>Board.svelte:1089–1098</code> checks <code>drafting</code> (false while <code>running</code>), dropping draft rings and popping each creature up one-by-one.</li>
+                <li><strong>Same-revision rejection wedges <code>running</code> forever:</strong> <code>Board.svelte:313</code> returns when <code>revision === sending.sentAt</code> and never checks <code>!pending</code>; if a step is rejected without advancing revision, “Declaring 1 of N…” stays stuck until manual Esc.</li>
+                <li><strong>Clicking a stop in the Stop Bar mid-draft tears down the draft:</strong> <code>stopsPending</code> flips <code>canSubmitLive</code> false → <code>combatPreview = undefined</code> → <code>declaring = false</code>, wiping <code>armed</code>, flashing single-creature UI, and re-fetching <code>/combat-preview</code>.</li>
+              </ul>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="prod">
+              <strong>7. Shared decision surface &amp; exclusions</strong>
+              <span class="subnote">Drops add no silent choice; multi-offer drops open the card menu; per-creature offers stay reachable in the closed disclosure live and open in Replay/Study; no land marquee or cast+target combo drag.</span>
+            </td>
+            <td class="code">
+              <span class="tag head">HEAD</span> <code>activate()</code>, <code>combat.ts</code> + <code>/combat-preview</code>, <code>Rail.svelte</code> disclosure, Replay/Study keep <code>combatPreview = undefined</code>.
+            </td>
+            <td class="verdict"><span class="tag yes">Yes</span></td>
+            <td>Contract holds across live play, Replay, Watch, and Study.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 2. Biggest mismatch -->
+  <section class="callout">
+    <h2>2. The biggest mismatch</h2>
+    <p>
+      <code>+page.svelte</code> collapses two distinct facts into one boolean, <code>canSubmitLive</code>:
+      <strong>(A) “this table is in live Play”</strong> (owns the joint-combat surface) and
+      <strong>(B) “a Command can be transmitted at this exact millisecond”</strong> (<code>inputReady</code>, which drops for
+      20–50 ms on every Command send, every two-phase <code>work: running</code> frame, and every priority-stop click).
+    </p>
+    <p>
+      Because both <code>combatPreview</code> and <code>Rail.svelte:291</code> (<code>{#if draft &amp;&amp; live}</code>) depend on
+      <code>inputReady</code>, every transient wait drops the board out of joint-combat mode — flashing the exact raw numbered
+      per-creature list the steer asked to keep out of live combat, popping individual <code>asked</code> cards while sending,
+      tearing down a draft when you toggle a stop, and leaving <code>running</code> wedged forever if a step is rejected at the
+      same revision.
+    </p>
+  </section>
+
+  <!-- 3. Visual before/after showing both main fixes -->
+  <section>
+    <h2>3. What it looks like — before (HEAD) vs. after (Pass 5)</h2>
+    <div class="visuals">
+      <div class="mockup-box">
+        <div class="mockup-head">
+          <h3>Rail while Confirm sends step 1 of 3</h3>
+          <span class="tag head">HEAD · flashes raw list</span>
+        </div>
+        <div class="mini-rail">
+          <div style="font-weight: 600;">Declaring 1 of 3…</div>
+          <div class="mini-btn"><span class="mini-kbd">Esc</span> Stop sending</div>
+          <div class="mini-heading"><span>All legal choices</span><span>2</span></div>
+          <div class="mini-row"><span class="mini-kbd">1</span> Attack with Raging Goblin</div>
+          <div class="mini-row"><span class="mini-kbd">2</span> Do not attack with Raging Goblin</div>
+        </div>
+        <p class="mini-note">
+          Because <code>live</code> flips <code>false</code> synchronously on Confirm, <code>{#if draft &amp;&amp; live}</code> unmounts
+          <code>&lt;details&gt;</code> and flashes numbered per-creature rows between every step.
+        </p>
+      </div>
+
+      <div class="mockup-box">
+        <div class="mockup-head">
+          <h3>Rail while Confirm sends step 1 of 3</h3>
+          <span class="tag proposed">Pass 5 · stays joint</span>
+        </div>
+        <div class="mini-rail">
+          <div style="font-weight: 600;">Declaring 1 of 3…</div>
+          <div class="mini-btn"><span class="mini-kbd">Esc</span> Stop sending</div>
+          <div class="mini-heading"><span>All legal choices</span><span>2</span></div>
+          <div class="mini-disclosure">▸ Each creature's choice</div>
+        </div>
+        <p class="mini-note">
+          <code>Rail.svelte</code> folds on <code>{#if draft}</code> alone (only ever passed in live joint combat, never Replay or Study).
+          No flash on Confirm, <code>work: running</code>, or priority-stop clicks.
+        </p>
+      </div>
+
+      <div class="mockup-box">
+        <div class="mockup-head">
+          <h3>Connect drag (blocker → attacker)</h3>
+          <span class="tag head">HEAD · legal attackers flat</span>
+        </div>
+        <div class="mini-board">
+          <div class="mini-card atk" style="left: 18px;">Flyer 2/2<br /><span style="font-weight:400;opacity:.7">can't block</span></div>
+          <div class="mini-card atk" style="left: 112px;">Cub 2/2<br /><span style="font-weight:400;opacity:.7">legal</span></div>
+          <div class="mini-card atk" style="left: 206px;">Ally 1/1<br /><span style="font-weight:400;opacity:.7">legal</span></div>
+          <div class="mini-card blk armed" style="left: 112px;">Otter 2/2</div>
+          <svg viewBox="0 0 300 168" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
+            <path d="M 146 128 Q 160 98 188 84" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 4" />
+            <circle cx="188" cy="84" r="3.5" fill="var(--ink-2)" />
+          </svg>
+        </div>
+        <p class="mini-note">
+          <code>.tcard.attacking</code> overwrites <code>.tcard.legal</code>’s shadow: Flyer, Cub, and Ally look the same until the pointer snaps onto one.
+        </p>
+      </div>
+
+      <div class="mockup-box">
+        <div class="mockup-head">
+          <h3>Connect drag (blocker → attacker)</h3>
+          <span class="tag proposed">Pass 5 · exact recipients outlined</span>
+        </div>
+        <div class="mini-board">
+          <div class="mini-card atk muted-tag" style="left: 18px;">Flyer 2/2<br /><span style="font-weight:400;opacity:.7">can't block</span></div>
+          <div class="mini-card atk cand" style="left: 112px;">Cub 2/2<br /><span style="font-weight:400;opacity:.7">legal</span></div>
+          <div class="mini-card atk snap" style="left: 206px;">Ally 1/1<br /><span style="font-weight:400;opacity:.7">snapped</span></div>
+          <div class="mini-card blk armed" style="left: 112px;">Otter 2/2</div>
+          <svg viewBox="0 0 300 168" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
+            <path d="M 146 128 Q 186 102 222 66" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="4 4" />
+            <circle cx="222" cy="66" r="4" fill="var(--ink-2)" />
+          </svg>
+        </div>
+        <p class="mini-note">
+          Exact <code>connectTargets</code> (never other blockers) take a dashed <code>--accent</code> outline while dragging; the snapped target upgrades to solid <code>--accent</code>. Works equally for targeting lands and opponent permanents.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Before / After across layers -->
+  <section>
+    <h2>4. Recommendation — before and after across layers</h2>
+    <div class="compare">
+      <div class="card before">
+        <div><span class="tag head">Before · HEAD (437101a9fe)</span></div>
+        <h3>Live-play mode tied to millisecond readiness</h3>
+        <ul>
+          <li><code>+page.svelte:454</code>: <code>combatPreview</code> drops to <code>undefined</code> whenever <code>commandPending</code>, <code>work.running</code>, or <code>stopsPending</code> is set.</li>
+          <li><code>Rail.svelte:291</code>: folds per-creature offers on <code>{#if draft &amp;&amp; live}</code>, flashing open whenever <code>live</code> is false during sending.</li>
+          <li><code>Board.svelte:1089–1098</code>: <code>asked={drafting ? empty : board.asked}</code> flashes single-creature highlights during <code>running</code>; <code>running</code> never clears on same-revision rejection.</li>
+          <li><code>BoardCard.svelte:370</code>: <code>.tcard.attacking</code> clobbers <code>.tcard.legal</code>; no candidate outline during <code>connect</code> drags.</li>
+          <li><code>drag.ts:140</code>: <code>promote(gesture)</code> ignores which offer was sent; <code>overField</code> misses <code>.board .tray</code>.</li>
+        </ul>
+      </div>
+      <div class="card after">
+        <div><span class="tag proposed">After · Pass 5</span></div>
+        <h3>One steady joint-combat surface + honest connect affordances</h3>
+        <ul>
+          <li><code>+page.svelte</code>: pass <code>combatPreview</code> for any live-play table (<code>gameActive &amp;&amp; pilotCanAct &amp;&amp; !participantStudying &amp;&amp; !branchProjection</code>); keep <code>interaction</code> gating submissions and drags.</li>
+          <li><code>Board.svelte</code>: <code>declaring = combatPreview !== undefined &amp;&amp; isDeclaration(frame)</code>; <code>joint = drafting || running</code> drives <code>draft</code> snippet, suppressed <code>asked</code>, and steady draft visuals (controls disabled while <code>!live</code>).</li>
+          <li><code>Board.svelte</code> runner: if <code>revision === sending.sentAt &amp;&amp; !pending &amp;&amp; live</code>, clear <code>running</code> (preserving <code>draft</code> when <code>at === 0</code>, or resetting with <code>stopNote</code> when <code>at &gt; 0</code>).</li>
+          <li><code>Rail.svelte:291</code>: fold on <code>{#if draft}</code> alone — steady across Confirm, <code>work: running</code>, and stop updates; Replay and Study never pass <code>draft</code>.</li>
+          <li><code>Board.svelte</code> / <code>Field.svelte</code> / <code>BoardCard.svelte</code>: derive <code>connectTargets</code> (exact legal permanent recipients for the active <code>connect</code> drag) → dashed <code>--accent</code> outline, solid on <code>data-drop</code>; compose <code>.tcard.attacking</code> with <code>.tcard.legal</code>.</li>
+          <li><code>drag.ts</code> / <code>Board.svelte</code>: <code>promote(gesture, offerId)</code> promotes only if <code>offerId</code> belongs to the held card (else settles home); <code>overField</code> accepts <code>.board .half, .board .tray</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Lifecycle diagram -->
+  <section class="diagram-frame">
+    <div>
+      <h2>5. Proposed live-combat declaration lifecycle</h2>
+      <p class="mini-note">
+        Transient waits (<code>stopsPending</code>, <code>commandPending</code>, <code>work: running</code>) disable edits/confirm without tearing down joint-combat mode or flashing the raw per-creature list.
+      </p>
+    </div>
+    <svg class="diagram" viewBox="0 0 980 210" role="img" aria-label="Joint combat lifecycle from drafting through sending to complete or clean recovery on rejection">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+        </marker>
+      </defs>
+      <g style="color: var(--ink-2); font-family: var(--sans); font-size: 12px;">
+        <rect x="24" y="70" width="210" height="62" rx="8" fill="var(--proposed-bg)" stroke="var(--proposed)" stroke-width="1.6" />
+        <text x="129" y="96" text-anchor="middle" fill="var(--ink)" font-weight="600" font-size="14">drafting (joint)</text>
+        <text x="129" y="116" text-anchor="middle" fill="var(--proposed)">disclosure closed · asked hidden</text>
+
+        <rect x="330" y="70" width="250" height="62" rx="8" fill="var(--proposed-bg)" stroke="var(--proposed)" stroke-width="1.6" />
+        <text x="455" y="96" text-anchor="middle" fill="var(--ink)" font-weight="600" font-size="14">running (joint, step at / N)</text>
+        <text x="455" y="116" text-anchor="middle" fill="var(--proposed)">waits for live · disclosure stays closed</text>
+
+        <rect x="690" y="70" width="260" height="62" rx="8" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="1.5" />
+        <text x="820" y="96" text-anchor="middle" fill="var(--ink)" font-weight="600" font-size="14">next decision / phase</text>
+        <text x="820" y="116" text-anchor="middle" fill="var(--ink-3)">running = null · draft cleared</text>
+
+        <line x1="234" y1="101" x2="326" y2="101" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" />
+        <text x="280" y="92" text-anchor="middle">Confirm (Space)</text>
+
+        <line x1="580" y1="101" x2="686" y2="101" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)" />
+        <text x="633" y="92" text-anchor="middle">last step accepted</text>
+
+        <!-- Stop-toggle loop on drafting -->
+        <path d="M 80 70 C 80 24, 180 24, 180 66" fill="none" stroke="var(--proposed)" stroke-width="1.4" marker-end="url(#arr)" />
+        <text x="130" y="22" text-anchor="middle" fill="var(--ink)">stopsPending / brief !live: stays drafting (controls disabled)</text>
+
+        <!-- Step loop on running -->
+        <path d="M 410 70 C 410 24, 500 24, 500 66" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#arr)" />
+        <text x="455" y="22" text-anchor="middle">rev advances &amp; live → send next step</text>
+
+        <!-- Rejection / mismatch return -->
+        <path d="M 455 132 C 455 186, 129 186, 129 136" fill="none" stroke="var(--no)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr)" />
+        <text x="292" y="176" text-anchor="middle" fill="var(--no)">same-rev rejection (!pending &amp;&amp; live) · Esc · unexpected frame → recover to drafting</text>
+      </g>
+    </svg>
+  </section>
+
+  <!-- 6. Normal, failure and recovery checks -->
+  <section>
+    <h2>6. Normal, failure &amp; recovery checks</h2>
+    <div class="traces">
+      <div class="trace">
+        <h3>Normal: confirm 2-creature attack (2-phase server)</h3>
+        <ol>
+          <li>Sweep 2 creatures → Confirm (<code>Space</code>). <code>running</code> starts at step 0 (<code>sentAt: 10</code>); <code>pending</code> flips <code>true</code>, <code>live</code> flips <code>false</code>.</li>
+          <li><code>combatPreview</code> stays defined; <code>Rail</code> keeps <code>&lt;details&gt;</code> closed; board keeps drafted marks and empty <code>asked</code>.</li>
+          <li>Rev 11 arrives with <code>work: running</code> (<code>live: false</code>): runner waits, rail stays steady.</li>
+          <li>Rev 11 completes (<code>work: complete</code>, <code>live: true</code>): runner validates <code>stepOffer</code> and sends step 1; rev 12 clears <code>running</code> and <code>draft</code>.</li>
+        </ol>
+      </div>
+
+      <div class="trace">
+        <h3>Failure: step 0 rejected at same revision</h3>
+        <ol>
+          <li>Confirm sets <code>running(at: 0, sentAt: 10)</code> and sends step 0 (<code>pending: true</code>).</li>
+          <li>Server rejects without advancing revision: <code>pending</code> becomes <code>false</code>, <code>live</code> becomes <code>true</code>, error notice shows.</li>
+          <li>Runner sees <code>revision === sending.sentAt &amp;&amp; !pending &amp;&amp; live</code> → clears <code>running</code>, keeps <code>draft</code> intact so the player can edit or re-confirm immediately.</li>
+        </ol>
+      </div>
+
+      <div class="trace">
+        <h3>Failure: click a priority stop mid-draft</h3>
+        <ol>
+          <li>Player drafts 2 attackers (or arms a blocker), then clicks Opponent’s Damage step in Stop Bar.</li>
+          <li><code>stopsPending</code> briefly flips <code>live</code> false; <code>combatPreview</code> stays defined so <code>declaring</code> stays true.</li>
+          <li>Draft, <code>armed</code>, and closed disclosure remain intact; Confirm re-enables as soon as the stop echo returns.</li>
+        </ol>
+      </div>
+
+      <div class="trace">
+        <h3>Edge: pick another action while multi-offer drop menu is open</h3>
+        <ol>
+          <li>Drop Shock (2 offers) on battlefield → <code>holding(reason: 'menu')</code>.</li>
+          <li>Player clicks Island in hand instead of Shock’s menu.</li>
+          <li><code>promote(gesture, islandOfferId)</code> sees the offer is not Shock’s → returns <code>IDLE</code> and settles Shock back to hand while Island commits normally.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Outside -->
+  <section class="outside">
+    <h3>Outside MTG-441 (separate outcomes)</h3>
+    <p><strong>Marquee over lands / mana payment draft:</strong> Needs a native read-only payment-draft contract (like <code>/combat-preview</code>) so selecting multiple lands does not chain irreversible per-land Commands.</p>
+    <p><strong>Cast-and-target in one drag:</strong> Needs a native cast-preview authority that knows legal targets before the cast Command is committed.</p>
+  </section>
+
+  <!-- Numbered questions -->
+  <section>
+    <h2>7. Choices made for review (Pass 5)</h2>
+    <p class="lead" style="margin-bottom: 12px;">
+      Written into <code>scratch/plan.md</code> as Pass 5 so the next pass can build and verify them.
+      Reply with a code like <code>2b</code> to change any choice.
+    </p>
+    <div class="questions">
+      <div class="q-card">
+        <h3>1. Joint-combat stability across Confirm and Stop Bar clicks</h3>
+        <ol>
+          <li><span class="opt-key">1a</span><span><strong>Keep joint-combat mode steady across transient waits (chosen for review).</strong> Pass <code>combatPreview</code> for any active live-play table, fold the rail disclosure on <code>{#if draft}</code> alone, keep <code>asked</code> suppressed while sending, and recover <code>running</code> on same-revision rejection.</span></li>
+          <li><span class="opt-key">1b</span><span>Keep <code>combatPreview</code> tied to <code>canSubmitLive</code> and only patch <code>Rail.svelte</code> during <code>running</code> (leaves stop-click draft teardown and rejection wedge).</span></li>
+        </ol>
+      </div>
+
+      <div class="q-card">
+        <h3>2. Highlighting legal permanent recipients during a <code>connect</code> drag</h3>
+        <ol>
+          <li><span class="opt-key">2a</span><span><strong>Dashed <code>--accent</code> outline on exact <code>connectTargets</code> while dragging, upgrading to solid <code>--accent</code> on snap (chosen for review).</strong> Never highlights other blockers; works on attacking creatures, lands, and opponent permanents; uses existing <code>DESIGN.md</code> tokens only.</span></li>
+          <li><span class="opt-key">2b</span><span>Keep permanent recipients un-outlined until snap (matches static Lift + Quiet, but keeps the QA discoverability gap on lands and attackers).</span></li>
+        </ol>
+      </div>
+
+      <div class="q-card">
+        <h3>3. Behavior when step 0 of a confirmed draft is rejected at the same revision</h3>
+        <ol>
+          <li><span class="opt-key">3a</span><span><strong>Clear <code>running</code> and keep the player’s <code>draft</code> intact (chosen for review)</strong> when <code>at === 0</code> (nothing committed yet), and reset <code>draft</code> with a <code>stopNote</code> if a later step (<code>at &gt; 0</code>) is rejected after earlier steps already committed.</span></li>
+          <li><span class="opt-key">3b</span><span>Always clear <code>draft</code> on any rejection and ask the player to redraft from scratch.</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
