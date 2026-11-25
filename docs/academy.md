@@ -665,8 +665,9 @@ Rest the pointer on a card for a moment, or focus it with the keyboard, to
 inspect it: its rules text, type line and cost, effective keywords and keyword
 abilities (including `Flash`, and `Defender · can attack anyway` when Defender
 is overridden) with why it has each (printed, the effect that granted it with
-source and duration, or "another ability" for a grant from another permanent's
-static ability), where its power and toughness come from (printed or set,
+source and duration, the counter for a keyword counter such as a double strike
+counter, or "another ability" for a grant from another permanent's static
+ability), where its power and toughness come from (printed or set,
 counters, each effect by its source and duration, and whatever those do not
 explain as "other effects"), and its full battlefield state (summoning sickness
 in words, attacking or blocking, active restrictions from static abilities or

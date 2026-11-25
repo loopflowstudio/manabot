@@ -61,6 +61,15 @@ describe('effective battlefield state', () => {
       "Doesn't untap · Frost", 'first-strike participant', 'blocking Badgermole', 'attacking', 'Flash', 'entered this turn', 'attacked this turn',
     ]));
   });
+
+  it('names a keyword counter as the source of its keyword, on one chip', () => {
+    const mai = creature({ counters: { double_strike: 1 }, keywords: ['double_strike'], keyword_grants: { double_strike: null },
+      keyword_abilities: [{ label: 'Prowess' }] });
+    expect(board(mai).map(b => [badgeReading(b), b.granted])).toEqual([['Double strike · 1 double strike counter', true], ['Prowess', undefined]]);
+    expect(badgesOf(mai).map(badgeReading)).toContain('1 double strike counter');
+    const shocked = creature({ counters: { stun: 1 } });
+    expect(board(shocked).map(b => b.label)).toEqual(['Stun ×1']);
+  });
 });
 
 describe('whole-chip fitting', () => {

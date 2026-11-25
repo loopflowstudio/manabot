@@ -44,7 +44,10 @@ function abilitiesOf(p: PermanentState, face: CardFace | null): Badge[] {
   };
   const abilities: Badge[] = (p.keywords ?? []).map(keyword => {
     let source: string | undefined;
-    if (p.keyword_grants) {
+    const counters = p.counters?.[keyword] ?? 0;
+    // A keyword counter grants its keyword (CR 122.1b); the grant has no record.
+    if (counters > 0 && (p.keyword_grants?.[keyword] ?? null) === null) source = counterTerm(keyword, counters);
+    else if (p.keyword_grants) {
       if (Object.hasOwn(p.keyword_grants, keyword)) source = fromRecord(p.keyword_grants[keyword]);
     } else {
       // Older recordings contain the effective keywords, but only record grants have a source.
@@ -111,8 +114,9 @@ export function badgesOf(p: PermanentState, face: CardFace | null = null, blocks
   const counters = { '+1/+1': p.plus1_counters, ...p.counters };
   for (const [kind, amount] of Object.entries(counters)) {
     if (amount <= 0) continue;
+    // The keyword chip already names a keyword counter as its source.
     badges.push({ kind: 'counter', label: kind === '+1/+1' ? `+${amount}/+${amount}` : `${labelText(kind)} ×${amount}`,
-      detail: counterTerm(kind, amount) });
+      detail: counterTerm(kind, amount), inspectOnly: p.keywords?.includes(kind) });
   }
   badges.push(...abilities);
   const states = [

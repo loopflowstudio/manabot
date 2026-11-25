@@ -16,3 +16,6 @@ Choices made with nobody present during concept review (see `scratch/concept-rev
 
 - A turned card with a two-line name can have less than 16 px of art above its power/toughness plate. Put the overflow count beside its name in that case.
 - Use the resolved effect timestamp for provenance on a granted trigger or evergreen keyword. The record already carries the source and duration. Current evergreen rows include an empty grant map when all keywords are the card’s own.
+
+- QA: a keyword counter (Mai's double strike counter) gives its keyword with no record timestamp. The keyword chip now names the counter as its source, and the counter chip moves to Inspect only, so the board does not show the same fact twice.
+- QA: in the 1280×800 real game, upright cards about 80 px wide often collapse to `+N` (Fire Nation Cadets `+1`, Ty Lee `+2`). Left as designed; whether to shorten labels or grow cards is a design question.
