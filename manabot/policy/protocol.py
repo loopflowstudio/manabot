@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
 import numpy as np
 
+from manabot.belief.encoding import BeliefRows
 from manabot.env.observation import (
     ObservationSpace,
     PolicyObservation,
@@ -152,7 +153,11 @@ class BackendPolicy(Protocol):
         ...
 
     def prepare(
-        self, obs: PolicyObservation, *, inference: bool = False
+        self,
+        obs: PolicyObservation,
+        *,
+        inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
     ) -> Prepared[np.ndarray]:
         """Index one admitted observation batch (`inference`: compact as
         PyTorch CPU inference does)."""

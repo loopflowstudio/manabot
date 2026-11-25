@@ -26,6 +26,7 @@ from typing import Literal, get_args
 
 import numpy as np
 
+from manabot.belief.encoding import BeliefRows
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
     ACTION_TYPE_DIM,
@@ -513,18 +514,6 @@ class EffectRoutes[A]:
 
 
 @dataclass(frozen=True)
-class BeliefRows[A]:
-    """Explicit belief inputs; no hidden state persists between forwards."""
-
-    cards: A
-    owners: A
-    zones: A
-    probabilities: A
-    validity: A
-    globals: A
-
-
-@dataclass(frozen=True)
 class EventRows[A]:
     """Public history joins and integer ages; log1p stays in the backend."""
 
@@ -750,6 +739,7 @@ def prepare(
     obs: ObservationBuffers | BucketedObservation | ObservationSpans,
     tables: Tables,
     *,
+    belief: BeliefRows[Array] | None = None,
     attention: AttentionLayout = "padded",
     facts: FactLayout = "padded",
     value_token: bool = False,
@@ -848,7 +838,6 @@ def prepare(
     validity_rows = [obs[key] for key in OBJECT_VALIDITY_KEYS]
     if stack is not None:
         validity_rows.append(obs["stack_valid"])
-    belief = _belief(obs)
     if belief is not None:
         validity_rows.extend(
             (belief.validity, np.ones((len(belief.validity), 1), np.float32))
@@ -857,9 +846,8 @@ def prepare(
     columns = None
     packed_attention = None
     if attention in ("used_columns", "bucketed_columns", "packed_groups"):
-        if native is None:
-            valid = validity != 0
-            used = np.flatnonzero(valid.any(0))
+        if native is None or belief is not None:
+            used = np.flatnonzero(validity.any(0))
         else:
             start = 0
             segments = []
@@ -871,9 +859,7 @@ def prepare(
             used = np.concatenate(segments)
         # Row groups carry no per-row value token or memory summaries.
         if attention == "packed_groups" and not value_token and not memory_summaries:
-            packed_attention = pack_attention(
-                valid if native is None else validity != 0, len(used)
-            )
+            packed_attention = pack_attention(validity != 0, len(used))
         if packed_attention is None:
             columns = select_attention_columns(
                 used, validity.shape[1], bucketed=attention == "bucketed_columns"
@@ -1002,7 +988,8 @@ def prepare(
         ownership.extend((belief.owners == 0, np.zeros((batch, 1), bool)))
     live_index = live_offsets = compact_attention = None
     if attention == "live_tokens":
-        if native is None:
+        # Belief masks can have holes. Only native game tables certify live prefixes.
+        if native is None or belief is not None:
             present = validity != 0
             if value_token:
                 present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
@@ -1408,19 +1395,6 @@ def _effects(
         schedule=pack(3 + counts),
         routes=member_batches * objects + object_slots(targets, object_remap),
         member_records=records,
-    )
-
-
-def _belief(obs: ObservationBuffers) -> BeliefRows[Array] | None:
-    if "belief_card_def_ids" not in obs:
-        return None
-    return BeliefRows(
-        cards=obs["belief_card_def_ids"].astype(np.int64),
-        owners=obs["belief_owner_role_ids"].astype(np.int64),
-        zones=obs["belief_hidden_zone_ids"].astype(np.int64),
-        probabilities=obs["belief_count_probabilities"].astype(np.float32),
-        validity=obs["belief_validity"].astype(np.float32),
-        globals=obs["belief_globals"].astype(np.float32),
     )
 
 

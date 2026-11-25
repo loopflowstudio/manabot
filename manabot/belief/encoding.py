@@ -207,6 +207,18 @@ def belief_checkpoint_fields(
     return BeliefCheckpointBinding.from_schema(schema).checkpoint_fields()
 
 
+@dataclass(frozen=True)
+class BeliefRows[A]:
+    """Explicit belief inputs; no hidden state persists between forwards."""
+
+    cards: A
+    owners: A
+    zones: A
+    probabilities: A
+    validity: A
+    globals: A
+
+
 @dataclass(frozen=True, slots=True)
 class BeliefTensorView:
     """Receipt-bound marginal view consumed by policy and value inference."""
@@ -221,28 +233,24 @@ class BeliefTensorView:
     effective_support: float
     encoding_receipt: str
 
-    def observation(self, *, batch_size: int) -> dict[str, np.ndarray]:
-        """Broadcast one immutable view across a model inference batch."""
-
+    def rows(self, batch_size: int = 1) -> BeliefRows[np.ndarray]:
+        """Broadcast these viewer marginals across decisions sharing this belief."""
         if batch_size < 1:
             raise BeliefError("belief batch size must be positive")
 
-        def repeated(values: NDArray, dtype: np.typing.DTypeLike) -> np.ndarray:
-            array = np.asarray(values, dtype=dtype)
-            return np.broadcast_to(array, (batch_size, *array.shape)).copy()
+        def repeat(values: NDArray) -> np.ndarray:
+            return np.broadcast_to(values, (batch_size, *values.shape)).copy()
 
-        return {
-            "belief_card_def_ids": repeated(self.card_def_ids, np.int64),
-            "belief_owner_role_ids": repeated(self.owner_role_ids, np.int64),
-            "belief_hidden_zone_ids": repeated(self.hidden_zone_ids, np.int64),
-            "belief_count_probabilities": repeated(
-                self.count_probabilities, np.float32
+        return BeliefRows(
+            cards=repeat(self.card_def_ids),
+            owners=repeat(self.owner_role_ids),
+            zones=repeat(self.hidden_zone_ids),
+            probabilities=repeat(self.count_probabilities),
+            validity=repeat(self.validity),
+            globals=repeat(
+                np.array([self.entropy, self.effective_support], np.float32)
             ),
-            "belief_validity": repeated(self.validity, np.float32),
-            "belief_globals": repeated(
-                np.asarray([self.entropy, self.effective_support]), np.float32
-            ),
-        }
+        )
 
 
 def belief_schema_from_engine(

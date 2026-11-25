@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import time
-from typing import Mapping
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,6 +17,8 @@ from manabot.belief.state import (
     BeliefUpdate,
     ViewerHistory,
 )
+from manabot.env.observation import encode_policy_batch
+import managym
 from managym.decision import Command
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -33,7 +34,7 @@ def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
 class ViewerDecision:
     """One viewer-safe policy decision and its authoritative belief domain."""
 
-    observation: Mapping[str, np.ndarray]
+    observation: managym.Observation
     world_space: PossibleWorldSpace
     viewer_history: ViewerHistory
     legal_commands: tuple[Command, ...]
@@ -50,11 +51,10 @@ class ViewerDecision:
             != self.world_space.source_viewer_state_hash
         ):
             raise BeliefError("decision history does not match its world space")
-        valid = self.observation.get("actions_valid")
-        if valid is None or valid.ndim != 2 or valid.shape[0] != 1:
-            raise BeliefError("ViewerDecision requires one batched action mask")
-        if int((valid[0] > 0).sum().item()) != len(self.legal_commands):
-            raise BeliefError("legal Commands do not match the observation action mask")
+        if self.observation.agent.player_index != self.viewer_history.viewer:
+            raise BeliefError("decision observation belongs to another viewer")
+        if len(self.observation.action_space.actions) != len(self.legal_commands):
+            raise BeliefError("legal Commands do not match the observation offers")
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,9 +141,16 @@ class Manabot:
         view = encode_belief(belief, self.belief_schema)
         encoding_seconds = time.perf_counter() - encoded_started
 
-        observation = dict(decision.observation)
-        observation.update(view.observation(batch_size=1))
-        prepared = self.policy_value.prepare(observation, inference=True)
+        observation = encode_policy_batch(
+            self.policy_value.observation_space, [decision.observation]
+        )
+        prepared = self.policy_value.prepare(
+            observation, inference=True, belief=view.rows()
+        )
+        if np.count_nonzero(prepared.legal) != len(decision.legal_commands):
+            raise BeliefError(
+                "belief decision requires all legal Commands to fit the policy"
+            )
         inference_started = time.perf_counter()
         probabilities, value = self.policy_value.evaluate_probabilities(prepared)
         policy = np.asarray(probabilities[0], dtype=np.float32).copy()

@@ -9,6 +9,7 @@ import torch
 
 from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
+from manabot.belief.encoding import BeliefRows
 from manabot.env.match import Match
 from manabot.env.observation import (
     FACT_CONTINUATION_PROGRAM,
@@ -61,24 +62,6 @@ def _observations(
         rows.append(encode_observation(space, obs))
         env.step(0)
     return space, {key: np.stack([row[key] for row in rows]) for key in rows[0]}
-
-
-def _belief_observations() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
-    space, original = _observations(9, False)
-    obs = dict(original)
-    obs.update(
-        {
-            "belief_card_def_ids": np.array([[1, 2]] * 3),
-            "belief_owner_role_ids": np.array([[0, 1]] * 3),
-            "belief_hidden_zone_ids": np.array([[1, 2]] * 3),
-            "belief_count_probabilities": np.array(
-                [[[0.2, 0.8], [1, 0]]] * 3, np.float32
-            ),
-            "belief_validity": np.array([[1, 0]] * 3, np.float32),
-            "belief_globals": np.zeros((3, 2), np.float32),
-        }
-    )
-    return space, obs
 
 
 def _tables(agent: ActorCritic) -> Tables:
@@ -310,8 +293,26 @@ def test_padded_numeric_features_match_dense_readings_at_each_slot() -> None:
     )
 
 
+def belief_batch() -> tuple[
+    ObservationSpace, managym.ObservationBatch, BeliefRows[np.ndarray]
+]:
+    space = ObservationSpace()
+    game = managym.Env(seed=11)
+    raw, _ = game.reset(Match().to_rust())
+    obs = managym.encode_observation_batch([raw, raw, raw], space.layout)
+    belief = BeliefRows(
+        cards=np.array([[1, 2]] * 3),
+        owners=np.array([[0, 1]] * 3),
+        zones=np.array([[1, 2]] * 3),
+        probabilities=np.array([[[0.2, 0.8], [1, 0]]] * 3, np.float32),
+        validity=np.array([[0, 1], [0, 0], [0, 1]], np.float32),
+        globals=np.zeros((3, 2), np.float32),
+    )
+    return space, obs, belief
+
+
 def test_belief_rows_extend_all_flat_object_coordinates() -> None:
-    space, obs = _belief_observations()
+    space, obs, belief = belief_batch()
     config = ModelConfig(
         hidden_dim=8,
         num_attention_heads=2,
@@ -321,22 +322,46 @@ def test_belief_rows_extend_all_flat_object_coordinates() -> None:
     agent = ActorCritic(space, config)
     tables = _tables(agent)
     spec = Spec(config, space, tables, agent.card_definitions.num_embeddings)
-    check(obs, spec, obs["actions_valid"].astype(bool))
-    batch = prepare(obs, tables, attention="live_tokens", value_token=True)
-    assert batch.belief is not None
-    visible_objects = sum(obs[key].shape[1] for key in OBJECT_VALIDITY_KEYS)
-    assert batch.validity.shape[1] == visible_objects + 3
-    np.testing.assert_array_equal(batch.validity[:, -3:], [[1, 0, 1]] * 3)
-    np.testing.assert_array_equal(batch.is_agent[:, -3:], [[True, False, False]] * 3)
-    b, a = np.nonzero(batch.legal)
-    np.testing.assert_array_equal(
-        batch.focus,
-        b[:, None] * batch.validity.shape[1] + obs["action_focus"][b, a].clip(min=0),
+    spans = admit_native(obs, spec, bucketed=False, belief=belief)
+    batch = prepare(
+        spans, tables, belief=belief, attention="live_tokens", value_token=True
     )
-    assert batch.live_offsets[-1] == np.count_nonzero(batch.validity) + batch.batch
-    obs["belief_count_probabilities"] = np.zeros((3, 2, 2), np.float32)
+    assert batch.belief is belief
+    visible_objects = sum(
+        space.shapes[key][0] for key in (*OBJECT_VALIDITY_KEYS, "stack_valid")
+    )
+    assert batch.validity.shape[1] == visible_objects + 3
+    np.testing.assert_array_equal(
+        batch.validity[:, -3:], [[0, 1, 1], [0, 0, 1], [0, 1, 1]]
+    )
+    np.testing.assert_array_equal(batch.is_agent[:, -3:], [[True, False, False]] * 3)
+    decisions, offers = np.nonzero(batch.legal)
+    focus = spans.dense("action_focus")[decisions, offers]
+    np.testing.assert_array_equal(
+        batch.focus, decisions[:, None] * batch.validity.shape[1] + focus.clip(min=0)
+    )
+    expected = np.column_stack((batch.validity, np.ones(batch.batch)))
+    np.testing.assert_array_equal(batch.live_index, np.flatnonzero(expected))
+    np.testing.assert_array_equal(np.diff(batch.live_offsets), expected.sum(1))
+    for attention in ("used_columns", "bucketed_columns"):
+        columns = prepare(
+            spans, tables, belief=belief, attention=attention
+        ).attention_columns
+        assert columns is not None
+        assert set(np.flatnonzero(batch.validity.any(0))).issubset(columns)
     with pytest.raises(ValueError, match="valid belief rows must be normalized"):
-        check(obs, spec, obs["actions_valid"].astype(bool))
+        agent.prepare(
+            obs,
+            belief=replace(belief, probabilities=np.zeros_like(belief.probabilities)),
+        )
+    with pytest.raises(ValueError, match="batch size"):
+        agent.prepare(obs, belief=replace(belief, cards=belief.cards[:1]))
+    with pytest.raises(ValueError, match="binary"):
+        agent.prepare(obs, belief=replace(belief, validity=belief.validity + 0.5))
+    with pytest.raises(ValueError, match="belief-free"):
+        admit_native(
+            obs, replace(spec, model=ModelConfig()), bucketed=False, belief=belief
+        )
 
 
 @pytest.mark.parametrize("legacy", [False, True])
@@ -711,9 +736,12 @@ DEVICES = ["cpu", *(["mps"] if torch.backends.mps.is_available() else [])]
 )
 def test_bucketed_columns_keep_logits_and_values(kind: str, device: str) -> None:
     torch.manual_seed(0)
-    space, obs = (
-        _belief_observations() if kind == "belief" else _observations(11, False)
-    )
+    belief = None
+    if kind == "belief":
+        space, native, belief = belief_batch()
+        obs = observation_spans(native, space, bucketed=False, objects=False)
+    else:
+        space, obs = _observations(11, False)
     aggregations = ("masked_mean", "value_token", "attention_readout")
     config = ModelConfig(
         hidden_dim=16,
@@ -740,6 +768,7 @@ def test_bucketed_columns_keep_logits_and_values(kind: str, device: str) -> None
             rows,
             tables,
             attention=attention,
+            belief=belief,
             value_token=agent.value_token is not None,
             binding=agent._binding(),
         )

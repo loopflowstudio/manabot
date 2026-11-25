@@ -129,14 +129,8 @@ def row_needs(obs: ObservationBuffers, space: ObservationSpace) -> np.ndarray | 
     shapes differ from the declared layout: it is not trimmed, so the model
     rejects it exactly as it would without buckets.
     """
-    # Belief features belong to the policy, outside the native observation.
-    native = (
-        {key: value for key, value in obs.items() if not key.startswith("belief_")}
-        if "belief_card_def_ids" in obs
-        else obs
-    )
     extents = space.layout.axis_extents(
-        native, omit_decision_memory=isinstance(obs, PrefixObservation)
+        obs, omit_decision_memory=isinstance(obs, PrefixObservation)
     )
     if extents is None:
         return None

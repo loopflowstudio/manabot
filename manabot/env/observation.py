@@ -21,7 +21,7 @@ before writing, so every buffer is derived from the space the caller supplies,
 never a native default.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, ItemsView, KeysView, ValuesView
 import warnings
 
@@ -331,6 +331,26 @@ def encode_observation(
         obs, space.layout, out, space.config.action_overflow
     )
     return out
+
+
+def encode_policy_batch(
+    space: ObservationSpace, observations: Sequence[managym.Observation]
+) -> PolicyObservation:
+    """Encode viewer projections in order using the checkpoint's capacity and overflow policy."""
+    if space.one_token:
+        return managym.encode_observation_batch(
+            observations, space.layout, space.config.action_overflow
+        )
+    # v9/v10 only, removed with the legacy encoder in 0.3.0.
+    buffers = space.allocate(len(observations))
+    for index, observation in enumerate(observations):
+        managym.encode_observation_into(
+            observation,
+            space.layout,
+            {key: rows[index] for key, rows in buffers.items()},
+            space.config.action_overflow,
+        )
+    return buffers
 
 
 def __getattr__(name: str) -> Any:

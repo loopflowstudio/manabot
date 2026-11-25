@@ -1,6 +1,5 @@
 """Focused test fixtures for belief contracts; production demos use managym."""
 
-import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
@@ -15,8 +14,10 @@ from manabot.belief import (
     ViewerDecision,
     ViewerHistory,
 )
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
+import managym
 from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -74,17 +75,8 @@ def fixture_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
     )
 
 
-def fixture_observation() -> dict[str, np.ndarray]:
-    # Use the policy's allocation contract, including versioned fact capacity.
-    observation = ObservationSpace().allocate(1)
-    observation["action_focus"].fill(-1)
-    observation["agent_player_valid"].fill(1)
-    observation["opponent_player_valid"].fill(1)
-    observation["actions"][0, 0, 0] = 1.0
-    observation["actions"][0, 1, 1] = 1.0
-    observation["actions"][0, 2, 2] = 1.0
-    observation["action_focus"][0, :3, 0] = 0
-    observation["actions_valid"][0, :3] = 1.0
+def fixture_observation() -> managym.Observation:
+    observation, _ = managym.Env(seed=19).reset(Match().to_rust())
     return observation
 
 
@@ -97,9 +89,8 @@ def fixture_decision() -> tuple[ViewerDecision, BeliefEncodingSchema]:
             world_space=space,
             viewer_history=history,
             legal_commands=(
-                Command("retained-pass", 17, 0),
-                Command("retained-cast", 17, 1),
-                Command("retained-activate", 17, 2),
+                Command("opening-0", 17, 0),
+                Command("opening-1", 17, 1),
             ),
         ),
         fixture_schema(space),

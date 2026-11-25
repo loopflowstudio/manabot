@@ -38,6 +38,7 @@ from manabot.backends.torch.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
+from manabot.belief.encoding import BeliefRows
 from manabot.env.observation import (
     FACT_KINDS,
     ObservationBuffers,
@@ -58,7 +59,6 @@ from manabot.policy.checkpoint import Dimensions
 from manabot.policy.collection_memory import CollectionMemory
 from manabot.policy.prepare import (
     AttentionLayout,
-    BeliefRows,
     FactLayout,
     Layout,
     Prepared,
@@ -495,24 +495,29 @@ class ActorCritic(nn.Module):
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
         """Validate host buffers and build the shared policy input exactly once."""
-        bucketed, tables = self._admit_observation(obs)
-        return self._prepare_rows(bucketed or obs, tables, inference, memory_roots)
+        bucketed, tables = self._admit_observation(obs, belief)
+        return self._prepare_rows(
+            bucketed or obs, tables, inference, belief, memory_roots
+        )
 
-    def check_observation(self, obs: PolicyObservation) -> np.ndarray | None:
+    def check_observation(
+        self, obs: PolicyObservation, *, belief: BeliefRows[np.ndarray] | None = None
+    ) -> np.ndarray | None:
         """Validate the current rows and return their measured extents when bucketed."""
-        bucketed, _ = self._admit_observation(obs)
+        bucketed, _ = self._admit_observation(obs, belief)
         return None if bucketed is None else bucketed.needs
 
     def _admit_observation(
-        self, obs: PolicyObservation
+        self, obs: PolicyObservation, belief: BeliefRows[np.ndarray] | None
     ) -> tuple[BucketedObservation | ObservationSpans | None, Tables]:
         spec = self._admission_spec()
         if type(obs) in (managym.ObservationBatch, ObservationSelection):
             return admission.admit_native(
-                obs, spec, bucketed=self.bucketed_shapes
+                obs, spec, bucketed=self.bucketed_shapes, belief=belief
             ), spec.tables
         mask = np.asarray(obs["actions_valid"])
         try:
@@ -528,7 +533,7 @@ class ActorCritic(nn.Module):
                 },
             ) from error
         return admission.admit(
-            obs, spec, legal, bucketed=self.bucketed_shapes
+            obs, spec, legal, bucketed=self.bucketed_shapes, belief=belief
         ), spec.tables
 
     def prepare_admitted(
@@ -536,6 +541,7 @@ class ActorCritic(nn.Module):
         obs: PolicyObservation,
         *,
         inference: bool = False,
+        belief: BeliefRows[np.ndarray] | None = None,
         needs: np.ndarray | None = None,
         memory_roots: Mapping[str, int] | None = None,
     ) -> Prepared[np.ndarray]:
@@ -555,7 +561,7 @@ class ActorCritic(nn.Module):
                 minimum_needs=needs,
             )
             return self._prepare_rows(
-                rows, self._admission_spec().tables, inference, memory_roots
+                rows, self._admission_spec().tables, inference, belief, memory_roots
             )
         bucketed = (
             bucket_observation(
@@ -565,7 +571,11 @@ class ActorCritic(nn.Module):
             else None
         )
         return self._prepare_rows(
-            bucketed or obs, self._admission_spec().tables, inference, memory_roots
+            bucketed or obs,
+            self._admission_spec().tables,
+            inference,
+            belief,
+            memory_roots,
         )
 
     def _prepare_rows(
@@ -573,6 +583,7 @@ class ActorCritic(nn.Module):
         obs: ObservationBuffers | BucketedObservation | ObservationSpans,
         tables: Tables,
         inference: bool,
+        belief: BeliefRows[np.ndarray] | None,
         memory_roots: Mapping[str, int] | None,
     ) -> Prepared[np.ndarray]:
         device = self.device_type
@@ -596,6 +607,7 @@ class ActorCritic(nn.Module):
             obs,
             tables,
             attention=attention,
+            belief=belief,
             facts=facts,
             value_token=self.value_token is not None,
             memory_summaries=self.memory_summaries,

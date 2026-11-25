@@ -14,6 +14,7 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.belief.encoding import BeliefRows
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import RewardConfig
@@ -146,17 +147,19 @@ def test_learning_admits_each_trained_row_once(
             legal: np.ndarray,
             *,
             bucketed: bool,
+            belief: BeliefRows[np.ndarray] | None = None,
         ) -> BucketedObservation | None:
             rows.append(len(legal))
-            return admit(obs, spec, legal, bucketed=bucketed)
+            return admit(obs, spec, legal, bucketed=bucketed, belief=belief)
 
         def counting_native(
             obs: object,
             spec: admission.Spec,
             *,
             bucketed: bool,
+            belief: BeliefRows[np.ndarray] | None = None,
         ) -> object:
-            result = admit_native(obs, spec, bucketed=bucketed)  # type: ignore[arg-type]
+            result = admit_native(obs, spec, bucketed=bucketed, belief=belief)  # type: ignore[arg-type]
             rows.append(len(result.tables["actions"].counts))
             return result
 

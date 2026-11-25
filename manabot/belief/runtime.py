@@ -20,6 +20,8 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
+from manabot.env.env import Env
+import managym
 from managym.decision import Command, Observation, SemanticTransition
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -28,32 +30,12 @@ def _engine(runtime_env: Any) -> Any:
     return getattr(runtime_env, "_engine", runtime_env)
 
 
-def _batched_observation(
-    observation: Mapping[str, np.ndarray],
-) -> dict[str, np.ndarray]:
-    if "actions_valid" not in observation:
-        raise BeliefError("runtime observation is missing its legal-action mask")
-    action_mask = np.asarray(observation["actions_valid"])
-    if action_mask.ndim not in {1, 2}:
-        raise BeliefError(
-            "runtime legal-action mask must be unbatched or singly batched"
-        )
-    already_batched = action_mask.ndim == 2
-    if already_batched and action_mask.shape[0] != 1:
-        raise BeliefError("ManabotPlayer consumes one engine decision at a time")
-    tensors: dict[str, np.ndarray] = {}
-    for key, value in observation.items():
-        tensor = np.asarray(value)
-        tensors[key] = tensor if already_batched else tensor[None]
-    return tensors
-
-
 def viewer_decision_from_engine(
     engine: Any,
-    observation: Mapping[str, np.ndarray],
+    observation: managym.Observation,
     history: ViewerHistory,
 ) -> ViewerDecision:
-    """Bind one encoded observation to native semantic and world authority."""
+    """Bind one viewer observation to native semantic and world authority."""
 
     semantic = Observation.from_json(engine.semantic_observation_json(history.viewer))
     if semantic.revision != history.current_revision:
@@ -66,14 +48,6 @@ def viewer_decision_from_engine(
     if frame.revision != semantic.revision:
         raise BeliefError("semantic decision revision differs from its Observation")
 
-    tensors = _batched_observation(observation)
-    legal_indexes = tuple(
-        int(index) for index in np.flatnonzero(tensors["actions_valid"][0] > 0)
-    )
-    if legal_indexes != tuple(range(len(frame.offers))):
-        raise BeliefError(
-            "native semantic offers are not aligned with the encoded action surface"
-        )
     commands = tuple(
         Command(
             command_id=f"manabot-{frame.revision}-{int(offer['id'])}",
@@ -84,7 +58,7 @@ def viewer_decision_from_engine(
     )
     space = PossibleWorldSpace.from_engine(engine, history.viewer)
     return ViewerDecision(
-        observation=tensors,
+        observation=observation,
         world_space=space,
         viewer_history=history,
         legal_commands=commands,
@@ -146,11 +120,19 @@ class ManabotPlayer:
     def act(
         self,
         env: Any,
-        observation: Mapping[str, np.ndarray],
+        observation: Mapping[str, np.ndarray] | managym.Observation,
     ) -> int:
         if self.manabot is None or self.viewer is None or self.history is None:
             raise RuntimeError("start_game must run before ManabotPlayer.act")
-        decision = viewer_decision_from_engine(_engine(env), observation, self.history)
+        # Scalar simulation supplies an Env with its last live viewer projection.
+        engine = _engine(env)
+        if isinstance(observation, managym.Observation):
+            raw = observation
+        elif isinstance(env, Env):
+            raw = env.last_raw_obs
+        else:
+            raw = engine.observation_for_player(self.viewer)
+        decision = viewer_decision_from_engine(engine, raw, self.history)
         step = self.manabot.decide(decision, self.memory)
         action = int(np.argmax(step.result.policy))
         self.memory = step.next_memory

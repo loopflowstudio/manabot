@@ -7,8 +7,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Protocol
 
-import numpy as np
-
 from manabot.belief.agent import AgentStep
 from manabot.belief.encoding import (
     HAND_ZONE_ID,
@@ -22,12 +20,14 @@ from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.policy.protocol import PolicyLoader
 from manabot.sim.search.flat_mc import make_player
 from manabot.training.state.backend import FreshPolicies
 from manabot.verify.games import INTERACTIVE_DECK
+from manabot.verify.text_observation import keep_opening_index
+import managym
 from managym import GameSetup
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
@@ -44,7 +44,7 @@ class BeliefDemoBackend(FreshPolicies, PolicyLoader, Protocol):
     ) -> None: ...
 
 
-def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
+def runtime_env() -> tuple[Env, managym.Observation]:
     observation_space = ObservationSpace()
     match = Match(
         MatchConfig(
@@ -62,8 +62,8 @@ def runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
         enable_profiler=False,
         enable_behavior_tracking=False,
     )
-    observation, _ = env.reset(seed=19)
-    return env, observation
+    env.reset(seed=19)
+    return env, env.last_raw_obs
 
 
 def _schema_and_agent(
@@ -94,14 +94,13 @@ def _schema_and_agent(
 
 def _run_swapped_world(
     engine: Any,
-    observation: ObservationBuffers,
     viewer: int,
     policy_value: BeliefPolicy,
     schema: BeliefEncodingSchema,
 ) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)
     player.start_game(engine, viewer)
-    player.act(engine, observation)
+    player.act(engine, engine.observation_for_player(viewer))
     if player.last_step is None:
         raise RuntimeError("materialized ManabotPlayer did not produce an AgentStep")
     return player.last_step
@@ -111,7 +110,11 @@ def run_demo(*, backend: BeliefDemoBackend) -> dict[str, Any]:
     """Run the keystone checks through one real managym decision."""
 
     env, observation = runtime_env()
-    viewer = int(env.last_raw_obs.agent.player_index)
+    # Opening keep/mulligan modes have no object focus for this actor head.
+    while observation.turn.turn_number == 0:
+        env.step(keep_opening_index(observation))
+        observation = env.last_raw_obs
+    viewer = int(observation.agent.player_index)
     schema, policy_value = _schema_and_agent(env._engine, viewer, backend=backend)
     with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:
         checkpoint_path = Path(tmp_dir) / "belief.safetensors"
@@ -170,8 +173,8 @@ def run_demo(*, backend: BeliefDemoBackend) -> dict[str, Any]:
     lacks_engine = generated.space.materialize(lacks_indexes[0], seed=101)
     has_observation = has_engine.semantic_observation_json(viewer)
     lacks_observation = lacks_engine.semantic_observation_json(viewer)
-    swap_a = _run_swapped_world(has_engine, observation, viewer, policy_value, schema)
-    swap_b = _run_swapped_world(lacks_engine, observation, viewer, policy_value, schema)
+    swap_a = _run_swapped_world(has_engine, viewer, policy_value, schema)
+    swap_b = _run_swapped_world(lacks_engine, viewer, policy_value, schema)
 
     legal_actions = tuple(
         zip(

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from manabot.belief.encoding import BeliefRows
 from manabot.env.decision_memory import MEMORY_FIELDS
 from manabot.env.memory_store import CompactObservation
 from manabot.env.observation import (
@@ -195,7 +196,12 @@ def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
 
 
 def admit(
-    obs: ObservationBuffers, spec: Spec, legal: np.ndarray, *, bucketed: bool
+    obs: ObservationBuffers,
+    spec: Spec,
+    legal: np.ndarray,
+    *,
+    bucketed: bool,
+    belief: BeliefRows[np.ndarray] | None = None,
 ) -> BucketedObservation | None:
     """Validate a dense observation dict in original coordinates and return measured views.
 
@@ -272,9 +278,7 @@ def admit(
     keys = (*OBJECT_KEYS, "stack") if spec.space.one_token else OBJECT_KEYS
     objects = sum(raw[k].shape[1] for k in keys)
     validity = np.concatenate([raw[k + "_valid"] for k in keys], 1)
-    if spec.model.belief_count_buckets:
-        beliefs(obs, spec.model)
-        objects += obs["belief_card_def_ids"].shape[1] + 1
+    beliefs(belief, spec.model, len(legal))
     permanent_links(obs, objects)
     if spec.space.one_token:
         sources = obs["stack"][..., STACK_SOURCE_INDEX]
@@ -320,10 +324,7 @@ def admit(
         and (validity.sum(1) == 0).any()
     ):
         raise ValueError("value aggregation requires a valid object")
-    valid_objects = validity.shape[1]
-    if spec.model.belief_count_buckets:
-        valid_objects += obs["belief_validity"].shape[1] + 1
-    actions(obs, legal, valid_objects, spec.tables.name_definitions, lookup)
+    actions(obs, legal, objects, spec.tables.name_definitions, lookup)
     return measured
 
 
@@ -332,6 +333,7 @@ def admit_native(
     spec: Spec,
     *,
     bucketed: bool,
+    belief: BeliefRows[np.ndarray] | None = None,
 ) -> ObservationSpans:
     """The encoder owns row boundaries and native joins. Admit model-dependent lookups."""
     rows = observation_spans(
@@ -340,9 +342,7 @@ def admit_native(
     if rows.memory is not None:
         check_memory_contract(rows.memory, spec)
     data = rows.tables
-    if spec.model.belief_count_buckets:
-        # Belief state is supplied by the policy and needs an external mapping.
-        beliefs({}, spec.model)
+    beliefs(belief, spec.model, data["actions"].groups[0])
     lookup = spec.tables.definition_rows
     size = spec.definition_count if lookup is None else len(lookup)
     ids = [
@@ -821,27 +821,28 @@ def recent_events(
         categorical(status, 3)
 
 
-def beliefs(obs: ObservationBuffers, model: ModelConfig) -> None:
-    """Admit explicit semantic belief rows, retaining their normalization contract."""
-    keys = (
-        "belief_card_def_ids",
-        "belief_owner_role_ids",
-        "belief_hidden_zone_ids",
-        "belief_count_probabilities",
-        "belief_validity",
-        "belief_globals",
-    )
-    missing = sorted(set(keys).difference(obs))
-    if missing:
-        raise ValueError(f"belief-enabled ActorCritic is missing inputs: {missing}")
-    card_ids = obs[keys[0]].astype(np.int64)
-    owner_ids = obs[keys[1]].astype(np.int64)
-    zone_ids = obs[keys[2]].astype(np.int64)
-    probabilities = obs[keys[3]].astype(np.float32)
-    validity = obs[keys[4]].astype(np.float32)
-    globals_ = obs[keys[5]].astype(np.float32)
-    if card_ids.ndim != 2:
-        raise ValueError("belief ids must have shape [batch, rows]")
+def beliefs(
+    rows: BeliefRows[np.ndarray] | None, model: ModelConfig, batch_size: int
+) -> None:
+    """Validate external marginals against the checkpoint and the game batch."""
+    if rows is None:
+        if model.belief_count_buckets:
+            raise ValueError("belief-enabled ActorCritic requires belief rows")
+        return
+    if not model.belief_count_buckets:
+        raise ValueError("belief rows supplied to a belief-free policy")
+    card_ids, owner_ids, zone_ids = rows.cards, rows.owners, rows.zones
+    probabilities, validity, globals_ = rows.probabilities, rows.validity, rows.globals
+    if any(ids.dtype != np.int64 for ids in (card_ids, owner_ids, zone_ids)):
+        raise ValueError("belief semantic ids must be int64")
+    if any(
+        values.dtype != np.float32 for values in (probabilities, validity, globals_)
+    ):
+        raise ValueError("belief probabilities, validity and globals must be float32")
+    if card_ids.ndim != 2 or card_ids.shape[0] != batch_size:
+        raise ValueError(
+            "belief ids must match the observation batch size and have shape [batch, rows]"
+        )
     expected_ids = card_ids.shape
     if owner_ids.shape != expected_ids or zone_ids.shape != expected_ids:
         raise ValueError("belief semantic ids must share shape [batch, rows]")
@@ -857,6 +858,8 @@ def beliefs(obs: ObservationBuffers, model: ModelConfig) -> None:
         raise ValueError("belief probabilities must be finite and non-negative")
     if not np.isfinite(globals_).all():
         raise ValueError("belief globals must be finite")
+    if not ((validity == 0) | (validity == 1)).all():
+        raise ValueError("belief validity must be binary")
     valid_rows = validity > 0
     if valid_rows.any() and not np.allclose(
         probabilities.sum(axis=-1)[valid_rows], 1, atol=1e-5, rtol=0

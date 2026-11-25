@@ -460,8 +460,9 @@ world. The cross-package contracts are in the
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.
-`belief-demo` uses a freshly initialized policy to prove intervention wiring;
-`belief-learn-demo` trains a belief scorer on one scripted population and holds
+`belief-demo` keeps the opening hands, then compares the same in-game choice
+under two beliefs about whether the opponent holds Lightning Bolt. It reports the
+change in each legal action’s probability. `belief-learn-demo` trains a belief scorer on one scripted population and holds
 out whole episodes. Neither demonstrates strategic strength or opponent
 transfer. The generic PPO trainer does not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical

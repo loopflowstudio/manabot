@@ -424,17 +424,24 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     rollout = self_play_batch(
         behavior, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
     )
-    rows = rollout.observations(np.arange(rollout.actions.size))
+    indexes = np.arange(rollout.actions.size)
+    rows = (
+        rollout.policy_rows(indexes)
+        if config.belief_count_buckets
+        else rollout.observations(indexes)
+    )
     obs = rows.observation
-    # Put an ability on the stack with a source on the acting battlefield.
-    source = 2 + obs["agent_cards"].shape[1] + obs["opponent_cards"].shape[1]
-    obs["agent_permanents_valid"][0, 0] = 1
-    obs["stack_valid"][0, 0] = 1
-    obs["stack"][0, 0, STACK_SOURCE_INDEX] = source + 1
-    obs["player_turn_state"][0, 0, 0] = 1
-    obs["card_turn_state"][0, 0, 0] = 1
+    if not config.belief_count_buckets:
+        # Put an ability on the stack with a source on the acting battlefield.
+        source = 2 + obs["agent_cards"].shape[1] + obs["opponent_cards"].shape[1]
+        obs["agent_permanents_valid"][0, 0] = 1
+        obs["stack_valid"][0, 0] = 1
+        obs["stack"][0, 0, STACK_SOURCE_INDEX] = source + 1
+        obs["player_turn_state"][0, 0, 0] = 1
+        obs["card_turn_state"][0, 0, 0] = 1
 
     policy = assemble(checkpoint, bucketed_shapes=bucketed, live_tokens=memory)
+    belief_rows = None
     if config.belief_count_buckets:
         decision, schema = fixture_decision()
         belief = (
@@ -446,8 +453,8 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
             )
             .belief
         )
-        obs.update(
-            encode_belief(belief, schema).observation(batch_size=len(obs["actions"]))
+        belief_rows = encode_belief(belief, schema).rows(
+            batch_size=rollout.actions.size
         )
         backend = resolve("mlx")
         path = tmp_path / "policy.safetensors"
@@ -466,8 +473,8 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
     for name, expected in checkpoint.parameters.items():
         np.testing.assert_array_equal(round_tripped[name], expected)
 
-    torch_batch = agent.prepare(obs)
-    mlx_batch = policy.prepare(obs)
+    torch_batch = agent.prepare(obs, belief=belief_rows)
+    mlx_batch = policy.prepare(obs, belief=belief_rows)
     torch_logits, torch_values = agent.evaluate(torch_batch)
     if memory:
         assert mlx_batch.memory is not None and max(mlx_batch.memory.lengths) > 0
@@ -477,7 +484,7 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
         live.load_state_dict(agent.state_dict())
         for candidate in (padded, live):
             for actual, reference in zip(
-                candidate.evaluate(candidate.prepare(obs)),
+                candidate.evaluate(candidate.prepare(obs, belief=belief_rows)),
                 (torch_logits, torch_values),
                 strict=True,
             ):
@@ -493,9 +500,11 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
 
     # Collection can trim globally empty columns. The token remains neutral and
     # every focus index still addresses its original object after attention.
-    probs, values = policy.evaluate_probabilities(policy.prepare(obs, inference=True))
+    probs, values = policy.evaluate_probabilities(
+        policy.prepare(obs, inference=True, belief=belief_rows)
+    )
     ref_probs, ref_values = agent.evaluate_probabilities(
-        agent.prepare(obs, inference=True)
+        agent.prepare(obs, inference=True, belief=belief_rows)
     )
     np.testing.assert_allclose(probs, ref_probs, rtol=0, atol=LOGIT_TOLERANCE)
     np.testing.assert_allclose(values, ref_values, rtol=0, atol=LOGIT_TOLERANCE)

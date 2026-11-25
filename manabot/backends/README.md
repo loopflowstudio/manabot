@@ -231,9 +231,11 @@ Frozen-choice inspection accepts a `PolicyLoader`. It permutes native
 policy with Torch absent. Numerical parity also takes a fresh learner and the
 framework's gradient and parameter mappings.
 
-Belief inference passes native observations and explicit
-`BeliefTensorView.rows()` (`belief=`) to `policy.prepare(...)` and
-`policy.evaluate(...)`. Search receives a hand sampler. Both Torch and MLX expose
+For a v11 belief checkpoint, encode the viewer’s observation into an
+`ObservationBatch`, then call `policy.prepare(batch, belief=view.rows(), inference=True)`.
+The checkpoint’s schema determines the row order and count buckets.
+`policy.evaluate_probabilities(prepared)` returns the legal-action probabilities
+and value for that belief. Search receives a hand sampler. Both Torch and MLX expose
 `backend.belief` (`SamplerCodec` / `BeliefSampling`, owning sampling arithmetic,
 the random stream and learned state) and lazy `backend.belief_fit`
 (`BeliefTrainer`), and read and write one portable `belief.safetensors`
