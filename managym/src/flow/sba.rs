@@ -423,7 +423,9 @@ mod tests {
     use crate::{
         flow::{game::Game, sba::SbaProgress},
         state::{
-            card::{CardType, PrintedCharacteristics, StateBasedAction, StaticAbility, StaticScope},
+            card::{
+                CardType, PrintedCharacteristics, StateBasedAction, StaticAbility, StaticScope,
+            },
             effect::{EffectDuration, Modification},
             game_object::{Object, ObjectKind, PermanentId, PlayerId},
             permanent::CounterKind,

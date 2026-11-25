@@ -622,7 +622,7 @@ fn build(recipe: &Recipe) -> Env {
         }
         for token in &seat.tokens {
             let game = env.fixture_game_mut();
-            let id = game.create_token(token, PlayerId(i), false).unwrap();
+            let id = game.create_token(token, PlayerId(i)).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
         for _ in 0..seat.manifests {
@@ -1013,7 +1013,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
                         env.fixture_game_mut()
-                            .create_token("token.ally", PlayerId(0), false)
+                            .create_token("token.ally", PlayerId(0))
                             .unwrap();
                     }
                     // Injection left a pass-only priority. Start measurement
@@ -1059,7 +1059,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
         let mut entered = root.fork().unwrap();
         entered
             .fixture_game_mut()
-            .create_token(token, PlayerId(0), false)
+            .create_token(token, PlayerId(0))
             .unwrap();
         result.push(("order".into(), reach(&entered, "order")));
     }

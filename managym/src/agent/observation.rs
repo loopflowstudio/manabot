@@ -2936,12 +2936,8 @@ mod characteristics_tests {
     #[test]
     fn identical_tokens_keep_distinct_effective_characteristics_and_focus() {
         let mut game = game();
-        let first = game
-            .create_token("token.spirit", PlayerId(0), false)
-            .unwrap();
-        let second = game
-            .create_token("token.spirit", PlayerId(0), false)
-            .unwrap();
+        let first = game.create_token("token.spirit", PlayerId(0)).unwrap();
+        let second = game.create_token("token.spirit", PlayerId(0)).unwrap();
         game.state.permanents[first]
             .as_mut()
             .unwrap()

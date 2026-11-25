@@ -2323,7 +2323,11 @@ impl Game {
                     .batch
                     .as_mut()
                     .expect("attacking token entry batch");
-                batch.events[batch.cursor].attack_target = Some(defender);
+                if let crate::flow::proposed_event::ProposedEvent::ZoneMove { entry, .. } =
+                    &mut batch.events[batch.cursor].event
+                {
+                    entry.attack_target = Some(defender);
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -3989,7 +3993,7 @@ mod learn_tests {
     fn card_choices_exclude_transient_tokens_without_removing_them() {
         let mut game = game(&[]);
         let player = PlayerId(0);
-        let permanent = game.create_token("token.spirit", player, false).unwrap();
+        let permanent = game.create_token("token.spirit", player).unwrap();
         let token = game.state.permanents[permanent].as_ref().unwrap().object;
         let token = game.move_object(token, ZoneType::Hand);
         learn(&mut game);

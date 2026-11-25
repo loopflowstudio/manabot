@@ -1335,10 +1335,8 @@ impl<'a> Context<'a> {
             }
             StaticAbility::StateBasedActionDoesntApply { action, scope } => {
                 plan.scope = scope.clone();
-                plan.parts.push((
-                    Layer::Ability,
-                    Operation::ExemptStateBasedAction(*action),
-                ));
+                plan.parts
+                    .push((Layer::Ability, Operation::ExemptStateBasedAction(*action)));
             }
             _ => return None,
         }

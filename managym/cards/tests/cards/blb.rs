@@ -100,7 +100,7 @@ fn feed_the_cycle_forages_with_a_food_or_three_cards_or_pays_black() {
             s.force_permanent_on_battlefield(0, "Swamp");
             let food = s
                 .game_mut()
-                .create_token("token.food", PlayerId(0), false)
+                .create_token("token.food", PlayerId(0))
                 .unwrap();
             let food = s.game().state.permanents[food].as_ref().unwrap().object;
             let cards: Vec<_> = (0..3)

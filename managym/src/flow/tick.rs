@@ -334,8 +334,12 @@ impl Game {
                     let declared = combat.attack_targets[first..].to_vec();
                     let permanent_defenders: Vec<_> = declared
                         .iter()
-                        .copied()
-                        .filter(|(_, t)| matches!(t, super::combat::AttackTarget::Permanent(_)))
+                        .filter_map(|&(attacker, target)| match target {
+                            Some(target @ super::combat::AttackTarget::Permanent(_)) => {
+                                Some((attacker, target))
+                            }
+                            _ => None,
+                        })
                         .collect();
                     if !declared.is_empty() {
                         let mut attackers = Vec::with_capacity(declared.len());
@@ -344,7 +348,9 @@ impl Game {
                             attackers.push(attacker);
                             let object =
                                 self.permanent_object(attacker).expect("declared attacker");
-                            self.state.turn.record_attack(object, target);
+                            if let Some(target) = target {
+                                self.state.turn.record_attack(object, target);
+                            }
                         }
                         let visible_defenders = permanent_defenders
                             .iter()

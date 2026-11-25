@@ -433,3 +433,55 @@ fn a_block_the_engine_already_declared_is_kept_by_the_plan() {
     }
     assert!(reached_predeclared, "one order declares the Spider first");
 }
+
+#[test]
+fn tomik_refusal_names_the_restricted_planeswalker_defender() {
+    use managym::{flow::combat_preview::PlannedAttack, state::permanent::CounterKind};
+    let jace_name = "The Theorist, Jace Beleren";
+    let tomik_name = "Tomik, Orzhov Lawmage";
+    let mut s = five_color_setup(&["Gray Ogre", jace_name, tomik_name]);
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, first);
+    clear_summoning_sickness(&mut s, second);
+    let jace = s.force_permanent_on_battlefield(1, jace_name);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 3);
+    s.force_permanent_on_battlefield(1, tomik_name);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let game = s.game();
+    let jace_id = render(game, jace);
+    let both_on_jace = CombatPlan {
+        attackers: vec![
+            PlannedAttack {
+                creature: render(game, first),
+                defender: Some(jace_id),
+            },
+            PlannedAttack {
+                creature: render(game, second),
+                defender: Some(jace_id),
+            },
+        ],
+        blocks: Vec::new(),
+    };
+    let refused = preview(game, 0, &both_on_jace)
+        .refused
+        .expect("Tomik refuses a second attacker on the same planeswalker");
+    assert_eq!(
+        refused.reason,
+        format!("Gray Ogre can't attack {jace_name}.")
+    );
+
+    let split = CombatPlan {
+        attackers: vec![
+            PlannedAttack {
+                creature: render(game, first),
+                defender: Some(jace_id),
+            },
+            render(game, second).into(),
+        ],
+        blocks: Vec::new(),
+    };
+    let ok = preview(game, 0, &split);
+    assert!(ok.refused.is_none(), "{:?}", ok.refused);
+    assert_eq!(ok.declared_attackers.len(), 2);
+}

@@ -181,10 +181,9 @@ struct CanonicalCombat {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     regular_damage_step: bool,
     attackers: Vec<PermanentId>,
+    /// Omitted when every attacker attacks a player, preserving v31 player-only hashes.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    permanent_defenders: Vec<(PermanentId, crate::flow::combat::AttackTarget)>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    attackers_without_defender: Vec<PermanentId>,
+    non_player_defenders: Vec<(PermanentId, Option<crate::flow::combat::AttackTarget>)>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     #[serde(skip_serializing_if = "Option::is_none")]
     already_attacking: Option<usize>,
@@ -198,13 +197,12 @@ impl From<&CombatState> for CanonicalCombat {
             first_strikers: combat.first_strikers.clone(),
             regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers().collect(),
-            permanent_defenders: combat
+            non_player_defenders: combat
                 .attack_targets
                 .iter()
                 .copied()
-                .filter(|(_, t)| matches!(t, crate::flow::combat::AttackTarget::Permanent(_)))
+                .filter(|(_, t)| !matches!(t, Some(crate::flow::combat::AttackTarget::Player(_))))
                 .collect(),
-            attackers_without_defender: combat.attackers_without_defender.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
                 .iter()

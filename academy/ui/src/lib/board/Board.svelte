@@ -32,7 +32,7 @@
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
-    setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
+    setAttackerDefender, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft, type RenderId } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
@@ -149,7 +149,7 @@
   // draft; nothing is sent until Confirm, which sends them one at a time and
   // stops at any frame the preview did not predict.
   let draft = $state.raw<Draft>(EMPTY_DRAFT);
-  /** The blocker a person is placing: the next attacker clicked is the one it blocks. */
+  /** The blocker being placed (blockers), or the drafted attacker last touched (attackers). */
   let armed = $state<number | null>(null);
   let previewed = $state.raw<{ frameHash: string; plan: string; preview: CombatPreview } | null>(null);
   /** Confirmed steps being sent: `at` was sent at frame `sentAt`. */
@@ -201,17 +201,39 @@
 
   const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names, committedOf(frame)) : null);
   const declarable = $derived(new Map((preview?.declarable ?? []).map(creature => [creature.creature.entity, creature])));
+  /** The drafted attacker that clicking an opposing planeswalker retargets. */
+  const activeAttacker = $derived.by(() => {
+    if (!drafting || preview?.kind !== 'attackers') return null;
+    if (armed !== null && draft.attackers.includes(armed) && (declarable.get(armed)?.can_attack?.length ?? 0) > 0) return armed;
+    for (let i = draft.attackers.length - 1; i >= 0; i -= 1) {
+      const id = draft.attackers[i];
+      if ((declarable.get(id)?.can_attack?.length ?? 0) > 0) return id;
+    }
+    return null;
+  });
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
     if (!drafting || !preview) return null;
     const places = new Map<number, 'can' | 'in' | 'armed'>();
     const notes = new Map<number, string>();
     if (preview.kind === 'attackers') {
+      const retarget = activeAttacker;
       for (const [id, creature] of declarable) {
         const drafted = draft.attackers.includes(id);
         places.set(id, drafted ? 'in' : 'can');
         notes.set(id, drafted ? 'in the drafted attack; press to leave it out'
           : creature.must_attack ? 'must attack; press to add it to the attack' : 'can attack; press to add it to the attack');
+      }
+      if (retarget !== null) {
+        const currentTarget = draft.defenders?.[retarget] ?? null;
+        for (const defender of declarable.get(retarget)?.can_attack ?? []) {
+          const id = defender.entity;
+          const targetedByActive = currentTarget === id;
+          places.set(id, targetedByActive ? 'in' : 'can');
+          notes.set(id, targetedByActive
+            ? `retarget ${names.get(retarget) ?? 'attacker'} to ${said}`
+            : `attack ${names.get(id) ?? 'planeswalker'} with ${names.get(retarget) ?? 'attacker'}`);
+        }
       }
     } else {
       const blocks = new Map(draft.blocks);
@@ -241,13 +263,29 @@
     return draftPiles(preview.declarable, draft, id => pileOf.get(id) ?? null);
   });
 
+  function defenderOptionLabel(entity: number, targets: RenderId[]): string {
+    const label = names.get(entity) ?? `permanent #${entity}`;
+    const duplicates = targets.filter(target => (names.get(target.entity) ?? `permanent #${target.entity}`) === label).length;
+    return duplicates > 1 ? `${label} (#${entity})` : label;
+  }
+
   function onDraft(id: number): boolean {
     if (!drafting || !preview) return false;
     stopNote = null;
     if (preview.kind === 'attackers') {
-      if (!declarable.has(id)) return false;
-      draft = toggleAttacker(draft, id);
-      return true;
+      if (declarable.has(id)) {
+        const adding = !draft.attackers.includes(id);
+        draft = toggleAttacker(draft, id);
+        armed = adding ? id : (armed === id ? null : armed);
+        return true;
+      }
+      const attacker = activeAttacker;
+      if (attacker !== null && declarable.get(attacker)?.can_attack?.some(target => target.entity === id)) {
+        const current = draft.defenders?.[attacker] ?? null;
+        draft = setAttackerDefender(draft, attacker, current === id ? null : id);
+        return true;
+      }
+      return false;
     }
     const blocker = declarable.get(id);
     if (blocker) {
@@ -264,11 +302,9 @@
     return false;
   }
 
-  const needsDefender = $derived(draft.attackers.some(id => (declarable.get(id)?.can_attack?.length ?? 0) > 0 && draft.defenders?.[id] === undefined));
-
   function confirmDraft(): void {
     const ready = exact;
-    if (needsDefender || !ready || ready.refused || !ready.steps.length) return;
+    if (!ready || ready.refused || !ready.steps.length) return;
     const offer = stepOffer(frame, ready.kind, ready.steps[0]);
     if (!offer) { stopNote = 'The board changed before the plan was sent; draft again.'; return; }
     running = { kind: ready.kind, steps: ready.steps, at: 0, sentAt: frame.revision };
@@ -900,27 +936,31 @@
       {#if running}
         <button type="button" class="btn btn-secondary" data-testid="combat-stop" aria-disabled={readingOut || undefined} onclick={stopSending}><kbd>Esc</kbd>Stop sending</button>
       {:else if words}
-        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={!needsDefender && exact !== null && !exact.refused}
+        <button type="button" class="btn btn-primary primary" data-testid="primary-action" data-draft-ready={exact !== null && !exact.refused}
           aria-label={`Confirm: ${exact?.refused ? exact.refused.reason : words.plan}`} title={words.plan}
-          disabled={needsDefender || !exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
+          disabled={!exact || exact.refused !== null} aria-disabled={readingOut || undefined} onclick={confirmDraft}>
           <span>{words.text}</span><kbd>Space</kbd>
         </button>
         {#each draft.attackers as attacker (attacker)}
           {@const targets = declarable.get(attacker)?.can_attack ?? []}
           {#if targets.length}
-            <label>Attack with {names.get(attacker)}
-              <select value={draft.defenders?.[attacker] === null ? 'player' : draft.defenders?.[attacker] ?? ''} onchange={event => {
-                const defenders = { ...draft.defenders };
-                defenders[attacker] = event.currentTarget.value === 'player' ? null : Number(event.currentTarget.value);
-                draft = { ...draft, defenders };
-              }}>
-                <option value="" disabled>Choose a defender</option>
-                <option value="player">Defending player</option>
+            <div class="attack-target" data-testid="attack-target">
+              <span class="type-caption attack-who">{names.get(attacker)}</span>
+              <span class="type-caption text-ink-3" aria-hidden="true">→</span>
+              <select class="type-caption" aria-label={`Defender for ${names.get(attacker)}`}
+                value={draft.defenders?.[attacker] == null ? 'player' : String(draft.defenders[attacker])}
+                onfocus={() => { armed = attacker; }}
+                onchange={event => {
+                  armed = attacker;
+                  const chosen = event.currentTarget.value === 'player' ? null : Number(event.currentTarget.value);
+                  draft = setAttackerDefender(draft, attacker, chosen);
+                }}>
+                <option value="player">{said}</option>
                 {#each targets as target (target.entity)}
-                  <option value={target.entity}>{names.get(target.entity)} (object {target.entity})</option>
+                  <option value={String(target.entity)}>{defenderOptionLabel(target.entity, targets)}</option>
                 {/each}
               </select>
-            </label>
+            </div>
           {/if}
         {/each}
         {#each counts as group (group.ids[0])}
@@ -1112,6 +1152,9 @@
   .pile-count span { flex: 1; }
   .pile-count .step { width: 24px; height: 22px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-weight: 600; }
   .pile-count .step:disabled { opacity: 0.4; }
+  .attack-target { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .attack-target .attack-who { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attack-target select { max-width: 55%; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-field); color: var(--text); }
   .rail-slot { min-height: 0; grid-row: 2 / span 2; grid-column: 2; }
   .strip-toggle { font: 14px/20px var(--font-sans); color: var(--text-secondary); white-space: nowrap; }
   .strip-toggle:hover { color: var(--text); }

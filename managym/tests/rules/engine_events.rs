@@ -35,8 +35,7 @@ use managym::{
 fn mana_activation_keeps_the_nonactive_players_priority() {
     let mut s = five_color_setup(&[]);
     s.allow_priority_floats();
-    s.game_mut()
-        .create_token("token.treasure", PlayerId(1), false);
+    s.game_mut().create_token("token.treasure", PlayerId(1));
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     let source = s.battlefield_permanents_named(1, "Treasure")[0];
@@ -93,7 +92,7 @@ fn modal_mode_two_draws_a_card() {
 #[test]
 fn creature_token_ceases_to_exist_after_dying() {
     let mut s = Scenario::new(deck(&[("Plains", 40)]), deck(&[("Plains", 40)]), 37);
-    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0));
     resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
     let token_card = permanent(&s, token).object;
@@ -609,7 +608,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
         101,
     );
     // A token with counters on the battlefield.
-    s.game_mut().create_token("token.ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0));
     resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
     set_counters(&mut s, token, CounterKind::PlusOnePlusOne, 3);

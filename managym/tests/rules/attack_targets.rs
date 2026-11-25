@@ -316,3 +316,66 @@ fn regaining_planeswalker_type_does_not_restore_an_earlier_attack() {
     assert_eq!(s.life(1), before);
     assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 3);
 }
+
+#[test]
+fn planeswalker_defender_candidate_comes_from_structured_offers_and_rejects_stale_defender() {
+    use managym::decision::{Command, SemanticError};
+    let mut s = five_color_setup(&["Gray Ogre", JACE]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    let jace = defending_planeswalker(&mut s);
+    let jace_object = s.game().permanent_object(jace).unwrap();
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    assert_eq!(frame.object_candidates.len(), 1);
+    let address = frame.object_candidates[0].clone();
+    assert_eq!(address.offer_id, 0);
+    assert_eq!(address.role, 0);
+    assert_eq!(address.candidate_id, 1);
+    let attack_jace = s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| {
+            matches!(
+                a,
+                Action::DeclareAttacker {
+                    attack: Some(AttackTarget::Permanent(d)),
+                    ..
+                } if *d == jace_object
+            )
+        })
+        .unwrap();
+    let mut stale_branch = s.clone();
+    move_card(&mut stale_branch, jace_object, ZoneType::Hand);
+    let cmd = Command {
+        command_id: "stale-jace".into(),
+        expected_revision: frame.revision,
+        offer_id: attack_jace as u32,
+        answers: Vec::new(),
+        object_preconditions: vec![address.clone()],
+    };
+    assert_eq!(
+        stale_branch
+            .game_mut()
+            .execute_semantic_command(&cmd)
+            .unwrap_err(),
+        SemanticError::StaleObject
+    );
+
+    let live_cmd = Command {
+        command_id: "attack-jace".into(),
+        ..cmd
+    };
+    s.game_mut().execute_semantic_command(&live_cmd).unwrap();
+    let combat = s.game().state.combat.as_ref().unwrap();
+    assert_eq!(
+        combat.defender(ogre),
+        Some(AttackTarget::Permanent(jace_object))
+    );
+    move_card(&mut s, jace_object, ZoneType::Hand);
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    let combat = s.game().state.combat.as_ref().unwrap();
+    assert_eq!(combat.attack_targets, vec![(ogre, None)]);
+    assert_eq!(combat.defender(ogre), None);
+}

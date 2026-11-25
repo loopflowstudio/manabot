@@ -339,7 +339,7 @@ impl Game {
             .map(|&(attacker, target)| PlannedAttack {
                 creature: self.render_id(attacker),
                 defender: match target {
-                    AttackTarget::Permanent(object) => {
+                    Some(AttackTarget::Permanent(object)) => {
                         self.object_event_ref(object).map(Into::into)
                     }
                     _ => None,
@@ -415,21 +415,20 @@ impl Game {
                 }
                 let declared = self.declared_attackers();
                 for (index, attack) in plan.attackers.iter().enumerate() {
-                    if !asked(attack.creature) && !declared.contains(attack) {
-                        return refuse(
-                            attack.creature,
-                            if attack.defender.is_some() {
-                                "can't attack that defender now."
-                            } else {
-                                "can't attack now."
-                            },
-                        );
-                    }
                     if attack
                         .defender
                         .is_some_and(|id| self.permanent_by_render_id(id).is_none())
                     {
                         return refuse(attack.creature, "can't attack a defender that has left.");
+                    }
+                    if !asked(attack.creature) && !declared.contains(attack) {
+                        let reason = match attack.defender {
+                            Some(defender) => {
+                                format!("can't attack {}.", self.render_label(defender))
+                            }
+                            None => "can't attack now.".to_string(),
+                        };
+                        return refuse(attack.creature, &reason);
                     }
                     if plan.attackers[..index]
                         .iter()
@@ -523,7 +522,28 @@ impl Game {
                 format!("{label} can't block {}.", self.label(attacker))
             }
             Answer::Attack(None) => format!("{label} must attack."),
-            Answer::Attack(Some(_)) => format!("{label} can't attack now."),
+            Answer::Attack(Some(AttackTarget::Permanent(object))) => {
+                format!(
+                    "{label} can't attack {}.",
+                    self.observed_object_name(object)
+                )
+            }
+            Answer::Attack(Some(AttackTarget::Player(_))) => {
+                let can_attack_other = space.actions.iter().any(|action| {
+                    matches!(
+                        action,
+                        Action::DeclareAttacker {
+                            attack: Some(_),
+                            ..
+                        }
+                    )
+                });
+                if can_attack_other {
+                    format!("{label} can't attack the defending player.")
+                } else {
+                    format!("{label} can't attack now.")
+                }
+            }
         };
         DeclarationRefusal {
             creature: self.render_id(creature),

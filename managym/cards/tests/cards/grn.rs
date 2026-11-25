@@ -22,7 +22,7 @@ fn midnight_reaper_pings_and_draws_for_each_nontoken_death() {
     let copy = card_of(&s, island);
     s.game_mut().state[copy].become_copy_of(&original, &[]);
     s.game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(0), false)
+        .create_token("token.cat_1_1_w", PlayerId(0))
         .unwrap();
     let before = hand(&s, 0).len();
     cast(&mut s, "Fumigate");

@@ -755,7 +755,7 @@ fn lunar_insight_counts_distinct_controlled_nonland_values_at_resolution() {
         *s.game_mut() = pending.clone();
         for _ in 0..foods {
             s.game_mut()
-                .create_token("token.food", PlayerId(0), false)
+                .create_token("token.food", PlayerId(0))
                 .unwrap();
         }
         for creature in creatures {
@@ -1002,7 +1002,7 @@ fn high_society_hunter_can_sacrifice_a_token_or_decline() {
     let prowler = s.force_permanent_on_battlefield(0, "Cackling Prowler");
     let token = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(0), false)
+        .create_token("token.cat_1_1_w", PlayerId(0))
         .unwrap();
     let cat = card_of(&s, token);
     clear_summoning_sickness(&mut s, hunter);
@@ -1483,7 +1483,11 @@ fn linden_and_chart_ignore_entry_attacking_and_empty_declarations() {
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::BeginningOfCombat);
     s.game_mut()
-        .create_token("token.soldier", PlayerId(1), true)
+        .create_token_attacking(
+            "token.soldier",
+            PlayerId(1),
+            managym::flow::combat::AttackTarget::Player(PlayerId(0)),
+        )
         .unwrap();
     s.advance_to_active_step(1, StepKind::DeclareAttackers);
     let root = s.game().clone();
@@ -1671,7 +1675,7 @@ fn attack_batch_midnight_snack_reads_total_after_sacrifice() {
     s.force_permanent_on_battlefield(0, "Ancestor Dragon");
     let food = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     s.set_player_mana_pool(0, "2");
     activate(&mut s, food, 0);
@@ -2360,7 +2364,7 @@ fn eat_food(s: &mut crate::support::game::Scenario) {
     use managym::agent::action::Action;
     let food = s
         .game_mut()
-        .create_token("token.food", PlayerId(0), false)
+        .create_token("token.food", PlayerId(0))
         .unwrap();
     if s.game().state.players[0].mana_pool.total() < 2 {
         s.set_player_mana_pool(0, "2");
@@ -3956,7 +3960,7 @@ fn anthem_bonuses_parent_and_its_cat_while_in_play() {
     let mut s = five_color_setup(&["Anthem of Champions", "Prideful Parent"]);
     let opponent = s
         .game_mut()
-        .create_token("token.cat_1_1_w", PlayerId(1), false)
+        .create_token("token.cat_1_1_w", PlayerId(1))
         .unwrap();
     enter_and_settle(&mut s, "Prideful Parent");
     let parent = permanent_named(&s, "Prideful Parent");
@@ -7645,13 +7649,13 @@ fn named_coil_copies_inherit_electroduplicate_but_only_the_recipient_gains_life(
     s.game_mut().mana_payment[0] = ManaPayment::Auto;
     let original = s
         .game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false)
+        .create_token("token.komas_coil", PlayerId(0))
         .unwrap();
     let opponent = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let land = s.force_permanent_on_battlefield(1, "Island");
     let clue = s
         .game_mut()
-        .create_token("token.clue", PlayerId(1), false)
+        .create_token("token.clue", PlayerId(1))
         .unwrap();
     s.force_permanent_on_battlefield(1, "Doubling Season");
     cast(&mut s, "Electroduplicate");
@@ -7793,11 +7797,11 @@ fn named_coil_upkeep_copies_only_another_controlled_nonland() {
     s.force_permanent_on_battlefield(0, "Extravagant Replication");
     let coil = s
         .game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false)
+        .create_token("token.komas_coil", PlayerId(0))
         .unwrap();
     let clue = s
         .game_mut()
-        .create_token("token.clue", PlayerId(0), false)
+        .create_token("token.clue", PlayerId(0))
         .unwrap();
     s.force_permanent_on_battlefield(0, "Island");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -8296,7 +8300,7 @@ fn departure_granted_returns_follow_owner_controller_and_one_incarnation() {
     s.restore(&root);
     let token = s
         .game_mut()
-        .create_token("token.flying_spirit", PlayerId(0), false)
+        .create_token("token.flying_spirit", PlayerId(0))
         .unwrap();
     let token_object = card_of(&s, token);
     cast(&mut s, "Fake Your Own Death");
@@ -8900,7 +8904,7 @@ fn chandra_flameshaper_loyalty_abilities() {
     let beasts: Vec<_> = (0..8)
         .map(|_| {
             s.game_mut()
-                .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+                .create_token("token.beast_4_4_g_trample", PlayerId(1))
                 .unwrap()
         })
         .collect();

@@ -129,10 +129,8 @@ def test_declared_defender_is_bound_to_the_offer_and_survives_cold_replay() -> N
         ("source", step.creature.model_dump()),
         ("target", defender.model_dump()),
     ]
-    bindings = tuple(
-        a for a in frame.object_candidates if a["offer_id"] == step.action_index
-    )
-    assert len(bindings) == 2
+    bindings = frame.object_candidates
+    assert len(bindings) == 1
     command = Command(
         "attack-Jace", frame.revision, step.action_index, object_preconditions=bindings
     )

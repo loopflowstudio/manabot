@@ -1671,7 +1671,7 @@ fn ajani_unrelenting_loyalty_abilities() {
     let opp_nontoken = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let opp_token = s
         .game_mut()
-        .create_token("token.cadet", PlayerId(1), false)
+        .create_token("token.cadet", PlayerId(1))
         .unwrap();
     let own_cadets_before = s.battlefield_permanents_named(0, "Cadet").len();
     activate(&mut s, ajani, 2);

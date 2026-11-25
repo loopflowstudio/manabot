@@ -585,12 +585,12 @@ mod tests {
         game.keep_opening_hands();
         game.scenario_force_battlefield(payer, "Izzet Guildgate", true)
             .unwrap();
-        game.create_token("token.treasure", payer, false).unwrap();
+        game.create_token("token.treasure", payer).unwrap();
         let prism = game
             .scenario_force_battlefield(payer, "Prophetic Prism", true)
             .unwrap();
         // This creature can convoke or waterbend but produces no mana.
-        game.create_token("token.ally", payer, false).unwrap();
+        game.create_token("token.ally", payer).unwrap();
         game.state
             .combat_mana_pool_mut(payer)
             .add(&Mana::parse("R"), None);
@@ -606,7 +606,7 @@ mod tests {
         )
         .unwrap();
         // A second source arriving on the same turn increases the peak.
-        game.create_token("token.treasure", payer, false).unwrap();
+        game.create_token("token.treasure", payer).unwrap();
         game.capture_priority_mana(payer);
         let turn = &game.exposure_mut().unwrap().mana_turns[0][0];
         assert_eq!((turn.available, turn.paid), (4, 1));
@@ -635,10 +635,10 @@ mod tests {
         game.state.turn.step_initialized = false;
         game.state.combat = Some(Default::default());
         let attackers: Vec<_> = (0..4)
-            .map(|_| game.create_token("token.ally", active, false).unwrap())
+            .map(|_| game.create_token("token.ally", active).unwrap())
             .collect();
         let blockers: Vec<_> = (0..4)
-            .map(|_| game.create_token("token.ally", defender, false).unwrap())
+            .map(|_| game.create_token("token.ally", defender).unwrap())
             .collect();
         game.mark_permanents_not_summoning_sick(active);
         for &attacker in &attackers {
@@ -666,14 +666,14 @@ mod tests {
 
         // One more blocker receives lethal damage in the same batch as its
         // controller. Only earlier, committed deaths count on this branch.
-        let extra = game.create_token("token.ally", active, false).unwrap();
+        let extra = game.create_token("token.ally", active).unwrap();
         game.mark_permanents_not_summoning_sick(active);
         game.declare_attacker(
             extra,
             Some(crate::flow::combat::AttackTarget::Player(defender)),
         )
         .unwrap();
-        let last = game.create_token("token.ally", defender, false).unwrap();
+        let last = game.create_token("token.ally", defender).unwrap();
         game.declare_blocker(last, Some(extra)).unwrap();
         *game.state.life_mut(defender).unwrap() = 1;
         assert!(game.tick());

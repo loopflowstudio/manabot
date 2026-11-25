@@ -57,6 +57,15 @@ export function toggleAttacker(draft: Draft, id: number): Draft {
   return withAttackers(draft, attackers);
 }
 
+/** Assign a drafted attacker to a planeswalker (entity id) or the defending player (null). */
+export function setAttackerDefender(draft: Draft, attacker: number, defender: number | null): Draft {
+  if (!draft.attackers.includes(attacker)) return draft;
+  const defenders = { ...draft.defenders };
+  if (defender === null) delete defenders[attacker];
+  else defenders[attacker] = defender;
+  return { attackers: draft.attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
+}
+
 function withAttackers(draft: Draft, attackers: number[]): Draft {
   const defenders = Object.fromEntries(Object.entries(draft.defenders ?? {}).filter(([id]) => attackers.includes(Number(id))));
   return { attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
@@ -104,7 +113,12 @@ export function drawDraft(frame: ExperienceFrame, draft: Draft): ExperienceFrame
   const attacking = new Set(draft.attackers);
   const blocking = new Map(draft.blocks);
   const draw = (permanent: ExperienceFrame['projection']['agent']['battlefield'][number]) =>
-    attacking.has(permanent.id) ? { ...permanent, attacking: true }
+    attacking.has(permanent.id)
+      ? {
+          ...permanent,
+          attacking: true,
+          ...(draft.defenders?.[permanent.id] != null ? { attacked_permanent: draft.defenders[permanent.id]! } : {}),
+        }
       : blocking.has(permanent.id) ? { ...permanent, blocking: blocking.get(permanent.id) } : permanent;
   const { agent, opponent } = frame.projection;
   return {

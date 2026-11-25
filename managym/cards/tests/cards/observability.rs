@@ -3404,7 +3404,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
         );
 
         let (mut game, _) = ogre_game();
-        game.create_token(token.key, PlayerId(0), false);
+        game.create_token(token.key, PlayerId(0));
         let (observation, encoded) = observe(&game, 0);
         let slot = observation
             .agent_permanents
@@ -5077,7 +5077,12 @@ fn declare(
     s.game_mut().state.combat = Some(Box::new(managym::flow::combat::CombatState {
         attack_targets: attackers
             .iter()
-            .map(|&id| (id, managym::flow::combat::AttackTarget::Player(PlayerId(0))))
+            .map(|&id| {
+                (
+                    id,
+                    Some(managym::flow::combat::AttackTarget::Player(PlayerId(0))),
+                )
+            })
             .collect(),
         attacker_to_blockers: blocks
             .map(|(attacker, blocker)| (attacker, vec![blocker]))
@@ -5798,7 +5803,7 @@ fn bargain_and_forage_sacrifices_reach_the_stack_frame() {
         s.force_permanent_on_battlefield(0, land);
         s.force_permanent_on_battlefield(0, "Mountain");
         s.game_mut()
-            .create_token(token, PlayerId(0), false)
+            .create_token(token, PlayerId(0))
             .unwrap();
         let card = crate::support::game::force_new_card_in_hand(&mut s, 0, spell);
         crate::support::play::cast_card(&mut s, card);
@@ -6480,9 +6485,9 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
     assert!(rules.contains(&(TokenKind::Field, name_value("predicate"))));
 
     let (mut game, _) = ogre_game();
-    let plain_id = game.create_token(plain.key, PlayerId(0), false).unwrap();
-    let tla_id = game.create_token(tla.key, PlayerId(0), false).unwrap();
-    let vehicle = game.create_token(zeppelin.key, PlayerId(0), false).unwrap();
+    let plain_id = game.create_token(plain.key, PlayerId(0)).unwrap();
+    let tla_id = game.create_token(tla.key, PlayerId(0)).unwrap();
+    let vehicle = game.create_token(zeppelin.key, PlayerId(0)).unwrap();
     let (observation, encoded) = observe(&game, 0);
     let plain_row = card_row(&game, &observation, &encoded, plain_id);
     let tla_row = card_row(&game, &observation, &encoded, tla_id);

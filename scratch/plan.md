@@ -23,13 +23,36 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   (`division_remaining`, `EffectValue::TargetDivision`, v11 `action::DIVISION`
   column 31), `SpellTargeting` factored, `−X` offers filtered by target
   availability; directed witnesses in `flow/target_authority_tests.rs`.
-- Pass 2 (`18e676eb64`; no test results recorded, rerun in Pass 4): removed `FactKind::EmblemAbility` and `"Emblem::Static"` /
+- Pass 2 (`18e676eb64`; `sba::tests` verified in Pass 3, full suite rerun in Pass 4): removed `FactKind::EmblemAbility` and `"Emblem::Static"` /
   `"Emblem::Triggered"` record tokens (emblems observed via `agent_cards` /
   `opponent_cards` `ZONE_COMMAND` + `semantic_cards` → `catalog_tokens`);
   projected `StaticAbility::StateBasedActionDoesntApply { action: ZeroLoyalty, .. }`
   onto `Characteristics.exempt_from_zero_loyalty` in `flow/layers.rs` (`Layer::Ability`,
   covering battlefield and command-zone sources) and restored the zero-allocation
   streaming `layer_views` loop in `flow/sba.rs` with unit tests in `sba::tests`.
+- Pass 3 (this commit): folded `attackers_without_defender` into
+  `CombatState.attack_targets: Vec<(PermanentId, Option<AttackTarget>)>` and
+  updated `CanonicalCombat` (`non_player_defenders`), `combat_actions.rs`,
+  `combat_preview.rs`, and `tick.rs`; removed the `Action::DeclareAttacker`
+  bypass in `decision.rs::bind_frame_candidates` and bound permanent attack
+  defenders in `structured_offer.rs::object_candidate_bindings` (updating
+  `tests/academy/test_loyalty.py` accordingly); moved `attack_target` from
+  `PendingEvent` onto `ZoneEntry` (applied directly in `zones.rs::commit_zone_move`),
+  deleted `finish_created_token`, and replaced the player-hardcoded
+  `tapped_and_attacking: bool` shortcut on `zones.rs::create_token` with
+  explicit `create_token_attacking(key, controller, target)`; moved
+  `Modification::ExileIfWouldDie` and finality-counter exile rewriting from
+  `normalize_proposal()` into `collect_replacements()`; updated
+  `combat_preview.rs` to report defender-specific refusals (`"<creature> can't
+  attack <defender>."`) and updated `academy/ui/src/lib/board/Board.svelte` +
+  `combat.ts` to default drafted attackers to the defending player with compact
+  inline and board-click planeswalker retargeting (`academy/ui/node_modules` is
+  absent in this worktree, so `npm run check` / `vitest` run in Pass 4).
+  Verified: `managym --lib` (18 passed: `proposed_event::tests`, `decision::tests`,
+  `sba::tests`), `rules_tests` (22 passed: `attack_targets`, `combat_preview`,
+  `structured_attacker_offers`, `engine_events`), `match_state_hash_tests`
+  (11 passed), `managym-cards --test cards` (104 passed: `gtc`, `fdn`, `kld`,
+  `fin`, `fra`).
 
 ## Target model (updated by concept review)
 
@@ -39,34 +62,7 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; Pass 3 repairs the remaining items before the Pass 4 gate. Build Pass 3 next.
-
-### Pass 3 — Unify combat-defender state, candidate binding, `ZoneEntry.attack_target`, death-to-exile replacement, and Academy drafting
-
-- **Single `CombatState` defender list:** Replace
-  `CombatState.attack_targets: Vec<(PermanentId, AttackTarget)>` +
-  `attackers_without_defender: Vec<PermanentId>` with one field:
-  `attack_targets: Vec<(PermanentId, Option<AttackTarget>)>` (`None` = CR
-  506.4c defender left combat). Update `CanonicalCombat`, `combat_actions.rs`,
-  `combat_preview.rs`, and `tick.rs`.
-- **Single candidate-binding owner:** Remove the raw-`ActionSpace`
-  `Action::DeclareAttacker` bypass in `decision.rs::bind_frame_candidates` so
-  object candidate bindings come solely from `structured_offer.rs`.
-- **Entry metadata on `ZoneEntry`:** Move `attack_target: Option<AttackTarget>`
-  from `PendingEvent` (`proposed_event.rs`) onto `ZoneEntry`, and remove the
-  player-hardcoded `tapped_and_attacking` shortcut on `zones.rs::create_token`.
-- **Single death-to-exile replacement pipeline:** Move
-  `Modification::ExileIfWouldDie` and finality-counter exile rewriting from
-  `normalize_proposal()` into `collect_replacements()` alongside
-  `ReplacementEffect::ExileIfWouldDie` so CR 614.1a / 616.1 death replacements
-  share one ordering authority (single candidates still auto-apply).
-- **Academy combat drafting & Tomik refusals:** In `combat_preview.rs`, report
-  defender-specific refusals (`"<creature> can't attack <defender>."`) instead
-  of `"<creature> can't attack now."`. In `academy/ui/src/lib/board/Board.svelte`,
-  default newly drafted attackers to the defending player (when legal) with
-  compact inline retarget controls for planeswalkers, instead of blocking Space
-  behind mandatory blank `<select>` dropdowns. (Choice made for review in
-  `scratch/concept-review.html` Q3.)
+code; Passes 1–3 repaired all six. Pass 4 (the gate) is next.
 
 ### Pass 4 — Gate & contract fixes
 

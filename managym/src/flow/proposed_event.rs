@@ -42,6 +42,9 @@ pub(crate) struct ZoneEntry {
     pub prepared: bool,
     /// Battlefield: enters tapped.
     pub tapped: bool,
+    /// Battlefield: enters attacking this defender (CR 508.4).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attack_target: Option<super::combat::AttackTarget>,
     /// Battlefield or exile: enters with these counters ("exile it with a
     /// stash counter on it").
     pub counters: Counters,
@@ -438,8 +441,13 @@ impl ReplacementCandidate {
         candidate
     }
 
-    /// The prevention `record` places on `object`, named for its source.
-    fn shield(object: ObjectId, record: &ContinuousEffect) -> Self {
+    /// A replacement placed on `object` by resolved continuous effect `record`,
+    /// named for its source.
+    fn effect_replacement(
+        object: ObjectId,
+        record: &ContinuousEffect,
+        effect: ReplacementEffect,
+    ) -> Self {
         Self {
             identity: ReplacementId {
                 source: object,
@@ -447,9 +455,14 @@ impl ReplacementCandidate {
                 static_ability: false,
                 effect: Some(record.timestamp),
             },
-            effect: ReplacementEffect::PreventCombatDamage,
+            effect,
             source_definition: record.source,
         }
+    }
+
+    /// The prevention `record` places on `object`, named for its source.
+    fn shield(object: ObjectId, record: &ContinuousEffect) -> Self {
+        Self::effect_replacement(object, record, ReplacementEffect::PreventCombatDamage)
     }
 
     pub(crate) fn source(&self) -> ObjectId {
@@ -516,8 +529,6 @@ pub(crate) struct PendingEvent {
     pub(crate) copy_chosen: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) second_card_first: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) attack_target: Option<super::combat::AttackTarget>,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -704,14 +715,11 @@ impl Game {
             sacrifice,
             applied: Vec::new(),
             copy_chosen: false,
-            attack_target: None,
             second_card_first: None,
         })
     }
 
     fn normalize_proposal(&self, event: &mut ProposedEvent) {
-        // CR 614.1a: replace any death of the exact affected incarnation,
-        // including sacrifice and zero toughness, not only lethal damage.
         if let ProposedEvent::ZoneMove {
             object_id: object,
             from: Some(ZoneType::Battlefield),
@@ -726,21 +734,6 @@ impl Game {
                 && self
                     .lookup_current_permanent(*object)
                     .is_ok_and(|id| self.exiled_if_it_would_leave(id))
-            {
-                *to = ZoneType::Exile;
-                return;
-            }
-            if *to == ZoneType::Graveyard
-                && self
-                    .lookup_current_permanent(*object)
-                    .ok()
-                    .is_some_and(|id| {
-                        // A finality counter (CR 122.1h) or an effect.
-                        self.exiled_if_it_would_die(id)
-                            || self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                                permanent.counter_count(CounterKind::Finality) > 0
-                            })
-                    })
             {
                 *to = ZoneType::Exile;
             }
@@ -801,30 +794,35 @@ impl Game {
                     }
                     if let (
                         EventBinding::Created { attacking: true },
-                        None,
                         ProposedEvent::ZoneMove {
                             object_id,
                             to: ZoneType::Battlefield,
                             entry,
                             ..
                         },
-                    ) = (&batch.binding, pending.attack_target, &pending.event)
+                    ) = (&batch.binding, &pending.event)
                     {
-                        let player = entry
-                            .controller
-                            .unwrap_or(self.state.entry_object(*object_id).owner);
-                        if player == self.active_player() && self.state.combat.is_some() {
-                            let defenders: Vec<_> = self.attack_targets(player).collect();
-                            if defenders.len() > 1 {
-                                return BatchProgress::Decision(Box::new(
-                                    Decision::EnterAttacking {
-                                        player,
-                                        object: *object_id,
-                                        defenders,
-                                    },
-                                ));
+                        if entry.attack_target.is_none() {
+                            let player = entry
+                                .controller
+                                .unwrap_or(self.state.entry_object(*object_id).owner);
+                            if player == self.active_player() && self.state.combat.is_some() {
+                                let defenders: Vec<_> = self.attack_targets(player).collect();
+                                if defenders.len() > 1 {
+                                    return BatchProgress::Decision(Box::new(
+                                        Decision::EnterAttacking {
+                                            player,
+                                            object: *object_id,
+                                            defenders,
+                                        },
+                                    ));
+                                }
+                                if let ProposedEvent::ZoneMove { entry, .. } =
+                                    &mut batch.events[batch.cursor].event
+                                {
+                                    entry.attack_target = defenders.first().copied();
+                                }
                             }
-                            batch.events[batch.cursor].attack_target = defenders.first().copied();
                         }
                     }
                     batch.cursor += 1;
@@ -962,11 +960,6 @@ impl Game {
                 self.order_meld_arrivals(&mut result, second_first, &batch.binding);
             }
             if result.committed {
-                if let Some(defender) = pending.attack_target {
-                    for object in result.arrivals() {
-                        self.finish_created_token(object, defender);
-                    }
-                }
                 if matches!(
                     batch.binding,
                     EventBinding::Moved {
@@ -1337,6 +1330,35 @@ impl Game {
                             }
                         }
                     }
+                }
+                // Resolved "if it would die this turn, exile it instead" effects
+                // on the dying permanent (CR 614.1a, 616.1).
+                let exile_on_death = ReplacementEffect::ExileIfWouldDie {
+                    controlled_by: Actor::AnyPlayer,
+                    predicate: crate::state::predicate::CardPredicate::default(),
+                };
+                out.extend(
+                    self.effects_on(dying_id)
+                        .filter(|effect| effect.modification == Modification::ExileIfWouldDie)
+                        .map(|effect| {
+                            ReplacementCandidate::effect_replacement(
+                                *object_id,
+                                effect,
+                                exile_on_death.clone(),
+                            )
+                        }),
+                );
+                // CR 122.1h: a finality counter on a permanent replaces dying
+                // with exile through the same CR 616.1 replacement authority.
+                if self.state.permanents[dying_id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.counter_count(CounterKind::Finality) > 0)
+                {
+                    out.push(ReplacementCandidate::printed(
+                        *object_id,
+                        self.state[*object_id].replacement_effects.len(),
+                        exile_on_death,
+                    ));
                 }
                 out
             }
@@ -2155,10 +2177,10 @@ mod tests {
         let power = game.characteristics(fog).pt().0;
         assert_eq!(power, 1);
         let cat = game
-            .create_token("token.cat_1_1_w_lifelink", PlayerId(0), false)
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(0))
             .unwrap();
         let other = game
-            .create_token("token.cat_1_1_w_lifelink", PlayerId(1), false)
+            .create_token("token.cat_1_1_w_lifelink", PlayerId(1))
             .unwrap();
         let damage = |source, target, combat, amount| ProposedEvent::Damage {
             source: Some(source),
@@ -2262,7 +2284,7 @@ mod tests {
             let mate_object = game.permanent_object(mate).unwrap();
             let mut cat = |owner| {
                 let id = game
-                    .create_token("token.cat_1_1_w_lifelink", owner, false)
+                    .create_token("token.cat_1_1_w_lifelink", owner)
                     .unwrap();
                 game.permanent_object(id).unwrap()
             };
@@ -2339,5 +2361,84 @@ mod tests {
                 gain_ordinal: 0,
             }]
         );
+    }
+
+    #[test]
+    fn death_to_exile_effects_and_finality_share_replacement_pipeline() {
+        use super::{BatchProgress, Decision};
+        use crate::state::{
+            ability::Actor,
+            card::ReplacementEffect,
+            effect::{Affected, EffectDuration, Modification},
+            predicate::CardPredicate,
+        };
+
+        // Single finality counter auto-applies through collect_replacements and exiles.
+        let (mut game, ogre) = game_with_ogre();
+        let object = game.permanent_object(ogre).unwrap();
+        game.state.permanents[ogre]
+            .as_mut()
+            .unwrap()
+            .change_counters(CounterKind::Finality, 1);
+        let batch = game.event_batch(
+            EventBinding::Deaths,
+            [ProposedEvent::Destroy { target: object }],
+        );
+        assert!(
+            matches!(
+                batch.events[0].event,
+                ProposedEvent::ZoneMove {
+                    to: ZoneType::Graveyard,
+                    ..
+                }
+            ),
+            "normalize_proposal leaves death replacement to collect_replacements"
+        );
+        let results = game.complete_immediate_batch(batch);
+        let exiled = results[0].arrivals().next().unwrap();
+        assert_eq!(game.state.zones.zone_of(exiled), Some(ZoneType::Exile));
+
+        // Modification::ExileIfWouldDie + printed ReplacementEffect::ExileIfWouldDie
+        // both enter CR 616.1 ordering in collect_replacements.
+        let (mut game, ogre) = game_with_ogre();
+        let object = game.permanent_object(ogre).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(1),
+            [Affected::Object(object)],
+            Modification::ExileIfWouldDie,
+            EffectDuration::EndOfTurn,
+        );
+        let watcher = game
+            .scenario_force_battlefield(PlayerId(1), "Mountain", true)
+            .unwrap();
+        let watcher_object = game.permanent_object(watcher).unwrap();
+        game.state[watcher_object].replacement_effects = vec![ReplacementEffect::ExileIfWouldDie {
+            controlled_by: Actor::Opponent,
+            predicate: CardPredicate::creature(),
+        }];
+        let mut batch = game.event_batch(
+            EventBinding::Deaths,
+            [ProposedEvent::Destroy { target: object }],
+        );
+        let BatchProgress::Decision(decision) = game.advance_event_batch(&mut batch, None) else {
+            panic!("competing death-to-exile replacements should ask OrderReplacement")
+        };
+        let Decision::OrderReplacement { candidates, .. } = *decision else {
+            panic!("expected OrderReplacement")
+        };
+        assert_eq!(candidates.len(), 2);
+        for candidate in &candidates {
+            let mut branch = game.clone();
+            let mut pending = batch.clone();
+            branch.choose_replacement(&mut pending, candidate);
+            let BatchProgress::Complete { results, .. } =
+                branch.advance_event_batch(&mut pending, None)
+            else {
+                panic!("choosing one exile replacement completes the move")
+            };
+            let arrival = results[0].arrivals().next().unwrap();
+            assert_eq!(branch.state.zones.zone_of(arrival), Some(ZoneType::Exile));
+        }
     }
 }

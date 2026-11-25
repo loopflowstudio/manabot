@@ -1393,13 +1393,13 @@ fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x
         .unwrap()
         .change_counters(CounterKind::Loyalty, 5);
     let b1 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
     let b2 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
     let b3 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
 
     // Grant −X: deal X damage divided among at least 1 target creature.
@@ -1614,10 +1614,10 @@ fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
         .unwrap()
         .change_counters(CounterKind::Loyalty, 6);
     let b1 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
     let b2 = game
-        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .create_token("token.beast_4_4_g_trample", PlayerId(1))
         .unwrap();
     // Give both Beasts +0/+3 so they survive 4+ damage and exact damage can be asserted.
     for id in [b1, b2] {

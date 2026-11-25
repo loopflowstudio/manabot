@@ -28,15 +28,15 @@ fn lita_untaps_only_other_artifact_creatures_on_her_controllers_end_step() {
     let lita = s.force_permanent_on_battlefield(0, LITA);
     let own = s
         .game_mut()
-        .create_token("token.ballistic_boulder", PlayerId(0), false)
+        .create_token("token.ballistic_boulder", PlayerId(0))
         .unwrap();
     let enemy = s
         .game_mut()
-        .create_token("token.ballistic_boulder", PlayerId(1), false)
+        .create_token("token.ballistic_boulder", PlayerId(1))
         .unwrap();
     let vehicle = s
         .game_mut()
-        .create_token("token.zeppelin", PlayerId(0), false)
+        .create_token("token.zeppelin", PlayerId(0))
         .unwrap();
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     for turn in [1, 0] {

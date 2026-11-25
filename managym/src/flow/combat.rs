@@ -30,10 +30,9 @@ pub struct CombatState {
     pub first_strikers: Vec<PermanentId>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub regular_damage_step: bool,
-    pub attack_targets: Vec<(PermanentId, AttackTarget)>,
-    /// Creatures still attacking after their defender left combat (CR 506.4c).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub attackers_without_defender: Vec<PermanentId>,
+    /// Attacking creatures and their current defender (`None` once a
+    /// non-player defender has left combat, CR 506.4c).
+    pub attack_targets: Vec<(PermanentId, Option<AttackTarget>)>,
     pub attacker_to_blockers: BTreeMap<PermanentId, Vec<PermanentId>>,
     /// Prefix already in combat before declaration (CR 508.4).
     pub already_attacking: usize,
@@ -47,23 +46,18 @@ impl CombatState {
     }
 
     pub fn remove_defender(&mut self, object: ObjectId) {
-        for &(attacker, target) in &self.attack_targets {
-            if target == AttackTarget::Permanent(object)
-                && !self.attackers_without_defender.contains(&attacker)
-            {
-                self.attackers_without_defender.push(attacker);
+        for (_, target) in &mut self.attack_targets {
+            if *target == Some(AttackTarget::Permanent(object)) {
+                *target = None;
             }
         }
     }
 
     pub fn defender(&self, attacker: PermanentId) -> Option<AttackTarget> {
-        if self.attackers_without_defender.contains(&attacker) {
-            return None;
-        }
         self.attack_targets
             .iter()
             .find(|(id, _)| *id == attacker)
-            .map(|&(_, target)| target)
+            .and_then(|&(_, target)| target)
     }
 
     pub fn in_first_strike_damage_step(&self) -> bool {

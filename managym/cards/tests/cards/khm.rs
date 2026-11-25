@@ -33,10 +33,10 @@ fn koma_coils_each_upkeep_and_sacrifices_them_to_lock_or_protect() {
     let koma = s.force_permanent_on_battlefield(0, "Koma, Cosmos Serpent");
     let clue = s
         .game_mut()
-        .create_token("token.clue", PlayerId(0), false)
+        .create_token("token.clue", PlayerId(0))
         .unwrap();
     s.game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false);
+        .create_token("token.komas_coil", PlayerId(0));
     assert!(offers_ability(&mut s, clue, 0));
 
     activate(&mut s, koma, 0);
@@ -56,7 +56,7 @@ fn koma_coils_each_upkeep_and_sacrifices_them_to_lock_or_protect() {
     );
 
     s.game_mut()
-        .create_token("token.komas_coil", PlayerId(0), false);
+        .create_token("token.komas_coil", PlayerId(0));
     activate(&mut s, koma, 1);
     settle(&mut s);
     assert!(keywords(&s, koma).has(Keyword::Indestructible));

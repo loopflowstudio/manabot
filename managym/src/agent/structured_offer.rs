@@ -319,6 +319,22 @@ impl StructuredOfferSet {
                         (*offer_id, *role, *candidate_id, *object_ref)
                     }));
                 }
+                InternalOffer::CombatAssignments {
+                    kind: ActionSpaceKind::DeclareAttacker,
+                    choices,
+                } => {
+                    for choice in choices {
+                        for (candidate_id, action) in &choice.targets {
+                            if let Action::DeclareAttacker {
+                                attack: Some(crate::flow::combat::AttackTarget::Permanent(defender)),
+                                ..
+                            } = action
+                            {
+                                bindings.push((*offer_id, choice.role, *candidate_id, *defender));
+                            }
+                        }
+                    }
+                }
                 // Compound-only bindings lower through exact canonical actions;
                 // they are not projected into canonical DecisionFrame offers.
                 InternalOffer::CombatAssignments { .. }

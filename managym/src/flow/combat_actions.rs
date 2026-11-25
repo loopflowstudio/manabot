@@ -66,7 +66,7 @@ impl Game {
                 || !self.state.combat.iter().any(|c| {
                     c.attack_targets[c.already_attacking..]
                         .iter()
-                        .any(|(_, d)| *d == target)
+                        .any(|(_, d)| *d == Some(target))
                 })
         })
     }
@@ -118,7 +118,7 @@ impl Game {
             self.tap_permanent(permanent_id, false);
         }
         if let Some(combat) = self.state.combat.as_mut() {
-            combat.attack_targets.push((permanent_id, target));
+            combat.attack_targets.push((permanent_id, Some(target)));
             combat.attacker_to_blockers.entry(permanent_id).or_default();
             if let Some(exposure) = self.exposure_mut() {
                 exposure.combat.attackers.push(permanent_id);
@@ -222,10 +222,9 @@ impl Game {
         let removed: Vec<_> = combat
             .attack_targets
             .iter()
-            .filter_map(|&(attacker, target)| match target {
-                AttackTarget::Permanent(object)
-                    if !combat.attackers_without_defender.contains(&attacker)
-                        && !self.is_valid_permanent_defender(object) =>
+            .filter_map(|&(_, target)| match target {
+                Some(AttackTarget::Permanent(object))
+                    if !self.is_valid_permanent_defender(object) =>
                 {
                     Some(object)
                 }

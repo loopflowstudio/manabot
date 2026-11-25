@@ -263,10 +263,7 @@ fn card_zone_readers_preserve_transient_token_occupants() {
     ] {
         let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_709);
         let player = PlayerId(0);
-        let permanent = s
-            .game_mut()
-            .create_token("token.spirit", player, false)
-            .unwrap();
+        let permanent = s.game_mut().create_token("token.spirit", player).unwrap();
         let token = s.game().state.permanents[permanent]
             .as_ref()
             .unwrap()
@@ -522,7 +519,7 @@ fn cr_400_7_token_creation_does_not_add_a_physical_card() {
     let roster_size = s.game().state.cards.len();
     let permanent = s
         .game_mut()
-        .create_token("token.spirit", PlayerId(0), false)
+        .create_token("token.spirit", PlayerId(0))
         .unwrap();
     let object = s.game().state.permanents[permanent]
         .as_ref()
@@ -576,7 +573,7 @@ fn cr_400_7_checked_object_lookup_rejects_a_token_that_ceased_to_exist() {
     let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_716);
     let token = s
         .game_mut()
-        .create_token("token.spirit", PlayerId(0), false)
+        .create_token("token.spirit", PlayerId(0))
         .unwrap();
     let object = s.game().state.permanents[token].as_ref().unwrap().object;
     let appearance = s.game_mut().move_object(object, ZoneType::Graveyard);

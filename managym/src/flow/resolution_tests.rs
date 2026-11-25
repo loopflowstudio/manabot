@@ -2996,7 +2996,12 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     }
     root.state.combat = Some(Box::new(CombatState {
         attack_targets: [first, second]
-            .map(|id| (id, crate::flow::combat::AttackTarget::Player(defender)))
+            .map(|id| {
+                (
+                    id,
+                    Some(crate::flow::combat::AttackTarget::Player(defender)),
+                )
+            })
             .to_vec(),
         ..Default::default()
     }));
@@ -4491,7 +4496,7 @@ fn hidden_knowledge_transient_departures_cannot_leave_false_hidden_zone_facts() 
             game.remember_library_objects(owner, &inspected);
             game.remember_hand(owner);
             let expected_hand = game.state.players[owner.0].known_hand.clone();
-            let token = game.create_token("token.ally", owner, false).unwrap();
+            let token = game.create_token("token.ally", owner).unwrap();
             let object = game.permanent_object(token).unwrap();
             game.move_object(object, zone);
             game.finish_state_based_batch();
@@ -4652,7 +4657,7 @@ fn venom_connoisseur_only_resolved_triggers_advance_their_source() {
     let player = PlayerId(0);
     let original = game.permanent_object(source).unwrap();
     let trigger = |game: &mut Game| {
-        game.create_token("token.ally", player, false);
+        game.create_token("token.ally", player);
         game.process_game_events();
         assert!(game.flush_triggers().is_none());
         game.state.stack_objects.last().unwrap().id()
@@ -4712,7 +4717,7 @@ fn separate_printed_abilities_on_one_source_each_resolve_for_the_first_time() {
     let source = game.permanent_object(permanent).unwrap();
     let original = game.state[source].abilities[0].clone();
     game.state[source].abilities.push(original);
-    game.create_token("token.ally", PlayerId(0), false);
+    game.create_token("token.ally", PlayerId(0));
     game.process_game_events();
     let choices = game
         .flush_triggers()

@@ -377,11 +377,32 @@ impl Game {
     /// `GameState::objects`, never a card; state-based actions remove it once it
     /// leaves the battlefield (CR 704.5d).
     /// Returns the token's permanent, absent if it did not stay on the battlefield.
-    pub fn create_token(
+    pub fn create_token(&mut self, key: &str, controller: PlayerId) -> Option<PermanentId> {
+        self.create_token_with_entry(key, controller, ZoneEntry::default())
+    }
+
+    pub fn create_token_attacking(
         &mut self,
         key: &str,
         controller: PlayerId,
-        tapped_and_attacking: bool,
+        target: crate::flow::combat::AttackTarget,
+    ) -> Option<PermanentId> {
+        self.create_token_with_entry(
+            key,
+            controller,
+            ZoneEntry {
+                tapped: true,
+                attack_target: Some(target),
+                ..Default::default()
+            },
+        )
+    }
+
+    fn create_token_with_entry(
+        &mut self,
+        key: &str,
+        controller: PlayerId,
+        entry: ZoneEntry,
     ) -> Option<PermanentId> {
         let batch = self.event_batch(
             EventBinding::None,
@@ -391,22 +412,10 @@ impl Game {
                 )),
                 controller,
                 count: 1,
-                entry: ZoneEntry {
-                    tapped: tapped_and_attacking,
-                    ..Default::default()
-                },
+                entry,
             }],
         );
-        let results = self.complete_immediate_batch(batch);
-        for object in results.iter().flat_map(|result| result.arrivals()) {
-            if tapped_and_attacking {
-                self.finish_created_token(
-                    object,
-                    crate::flow::combat::AttackTarget::Player(self.next_player(controller)),
-                );
-            }
-        }
-        results
+        self.complete_immediate_batch(batch)
             .iter()
             .flat_map(|result| result.arrivals())
             .find_map(|object| self.lookup_current_permanent(object).ok())
@@ -449,20 +458,6 @@ impl Game {
         };
 
         Some(self.add_object(object))
-    }
-
-    pub(crate) fn finish_created_token(
-        &mut self,
-        object: ObjectId,
-        target: crate::flow::combat::AttackTarget,
-    ) {
-        if let Some(id) = self.state.permanent_of(object) {
-            self.state.permanents[id].as_mut().expect("token").attacking = true;
-            if let Some(combat) = self.state.combat.as_mut() {
-                combat.attack_targets.push((id, target));
-                combat.attacker_to_blockers.entry(id).or_default();
-            }
-        }
     }
 
     /// Create a token that's a copy of `source` under `controller` (CR 707.2,
@@ -1088,6 +1083,12 @@ impl Game {
             permanent.entry_turn = self.state.turn.turn_number;
             permanent.spell_entry = entry.spell.or_else(|| cast.map(std::sync::Arc::new));
             permanent.tapped = entry.tapped;
+            if let (Some(target), Some(combat)) = (entry.attack_target, self.state.combat.as_mut())
+            {
+                permanent.attacking = true;
+                combat.attack_targets.push((permanent_id, Some(target)));
+                combat.attacker_to_blockers.entry(permanent_id).or_default();
+            }
             permanent.counters = entry.counters;
             permanent.attached_to = entry.attached_to;
             self.state.permanents.push(Some(permanent));

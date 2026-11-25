@@ -844,6 +844,12 @@ impl<'a> Projection<'a> {
         if let Some(object) = entry.attached_to {
             self.object("enters attached to", object);
         }
+        if let Some(subject) = entry
+            .attack_target
+            .and_then(|t| self.game.attack_target_subject(t))
+        {
+            self.target("attacked defender", subject);
+        }
     }
 
     fn batch(&mut self, batch: &EventBatch) {
@@ -857,12 +863,6 @@ impl<'a> Projection<'a> {
         });
         for pending in &batch.events {
             self.field("event ordinal", &pending.ordinal);
-            if let Some(subject) = pending
-                .attack_target
-                .and_then(|t| self.game.attack_target_subject(t))
-            {
-                self.target("attacked defender", subject);
-            }
             match &pending.event {
                 ProposedEvent::Damage {
                     source,

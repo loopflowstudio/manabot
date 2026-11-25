@@ -272,59 +272,20 @@ impl Game {
 
     fn bind_frame_candidates(&self, fingerprint: &str) -> Vec<ObjectCandidateAddress> {
         let mut object_candidates = Vec::new();
-        use crate::{
-            agent::{
-                action::Action,
-                structured_offer::{CandidateId, RoleId},
-            },
-            flow::combat::AttackTarget,
-        };
-        let actions = self
-            .action_space()
-            .map_or(&[][..], |space| space.actions.as_slice());
-        let bindings = if actions.iter().any(|action| {
-            matches!(
-                action,
-                Action::DeclareAttacker {
-                    attack: Some(AttackTarget::Permanent(_)),
-                    ..
-                }
-            )
-        }) {
-            let mut bindings = Vec::new();
-            for (index, action) in actions.iter().enumerate() {
-                if let Action::DeclareAttacker {
-                    permanent, attack, ..
-                } = action
-                {
-                    let offer = OfferId(index as u32);
-                    bindings.push((
-                        offer,
-                        RoleId(1),
-                        CandidateId(0),
-                        self.permanent_object(*permanent).expect("offered attacker"),
-                    ));
-                    if let Some(AttackTarget::Permanent(defender)) = attack {
-                        bindings.push((offer, RoleId(2), CandidateId(0), *defender));
-                    }
-                }
+        if let Ok(presentation) = self.structured_offers() {
+            let mut private = self.semantic_object_candidates.borrow_mut();
+            for (offer_id, role, candidate_id, object_ref) in
+                presentation.object_candidate_bindings()
+            {
+                let address = ObjectCandidateAddress {
+                    decision_fingerprint: fingerprint.to_owned(),
+                    offer_id: offer_id.0,
+                    role: role.0,
+                    candidate_id: candidate_id.0,
+                };
+                private.insert(address.clone(), object_ref);
+                object_candidates.push(address);
             }
-            bindings
-        } else {
-            self.structured_offers()
-                .map(|p| p.object_candidate_bindings())
-                .unwrap_or_default()
-        };
-        let mut private = self.semantic_object_candidates.borrow_mut();
-        for (offer_id, role, candidate_id, object_ref) in bindings {
-            let address = ObjectCandidateAddress {
-                decision_fingerprint: fingerprint.to_owned(),
-                offer_id: offer_id.0,
-                role: role.0,
-                candidate_id: candidate_id.0,
-            };
-            private.insert(address.clone(), object_ref);
-            object_candidates.push(address);
         }
         object_candidates
     }

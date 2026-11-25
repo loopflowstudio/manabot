@@ -96,7 +96,7 @@ fn liliana_dreadhorde_general_loyalty_abilities() {
     let boulders: Vec<_> = (0..10)
         .map(|_| {
             s.game_mut()
-                .create_token("token.ballistic_boulder", PlayerId(1), false)
+                .create_token("token.ballistic_boulder", PlayerId(1))
                 .unwrap()
         })
         .collect();
