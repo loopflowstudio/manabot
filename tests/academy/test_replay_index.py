@@ -473,6 +473,14 @@ def test_recording_legacy_empty_and_no_event_transitions() -> None:
     assert empty.read("latest")["decision"] is None
 
 
+def test_recording_rejects_a_malformed_command_zone() -> None:
+    payload = _terminal_recording()
+    payload.pop("canonical_replay")
+    payload["final_observation"]["agent"]["command"] = {}
+    with pytest.raises(ValueError, match="recording_board_unavailable"):
+        Recording("broken", payload)
+
+
 def test_recording_rejects_a_missing_legacy_board() -> None:
     payload = _terminal_recording()
     payload.pop("canonical_replay")

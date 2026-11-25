@@ -61,3 +61,7 @@
   the exact pair of instructions to “Empower Jace N”.
 - Use the existing count of moved objects filtered by destination for
   Overwrite. Token creation writes a separate result and preserves that count.
+
+- Emblems use a public “Emblem — <planeswalker>” label. Their rules name
+  stays empty in naming and predicate evaluation. Chandra’s first +1 uses
+  the paid resolution cast decision and the exact exiled object.

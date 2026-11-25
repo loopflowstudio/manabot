@@ -167,11 +167,16 @@ class Recording:
                 for key in ("phase", "step")
             ):
                 raise ValueError("recording_board_unavailable")
+            required_zones = ("hand", "battlefield", "graveyard", "exile", "stack")
             for side in ("agent", "opponent"):
                 player = observation.get(side)
-                if not isinstance(player, dict) or any(
-                    not isinstance(player.get(zone), list)
-                    for zone in ("hand", "battlefield", "graveyard", "exile", "stack")
+                if (
+                    not isinstance(player, dict)
+                    or not isinstance(player.get("command", []), list)
+                    or any(
+                        not isinstance(player.get(zone), list)
+                        for zone in required_zones
+                    )
                 ):
                     raise ValueError("recording_board_unavailable")
         self.replay: CanonicalReplayV1 | None = (

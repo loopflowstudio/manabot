@@ -2,7 +2,7 @@
 
 Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`) and
 later main (`964699a20b`). MTG-420 supplies exact object identity for stacked
-abilities. Slice 3 must extend live ability sources to the command zone.
+abilities. Live layers and triggers also resolve exact command-zone sources.
 
 Done:
 - Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
@@ -28,14 +28,14 @@ Done:
 - Slice 4, empower and `token.jace` with its 22 FRA cards (`4966204033`,
   fixtures `2327a41b94`).
 
+- Slice 3, command-zone emblems and four planeswalkers (`833f67e3ed`). All
+  24 FRA cases and both effect and selector token guards passed.
+
 ## Passes remaining
 
-1. Slice 3: live ability sources by exact object in both evaluators (layers
-   and `TriggerIndex`), then emblems and the four emblem cards. Teaches
-   whether command-zone sources keep Engine Budget's layer rebuild cost.
-2. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
+1. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
    loyalty activation events and their cards.
-3. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
+2. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
    debug nextest, Engine Budget and the pinned pilot, recording a reason if
    its output moves. Keep main’s MTG-420 receipts at their original revision.
 
@@ -61,9 +61,9 @@ o:loyalty or o:emblem)`, `set:fra o:planeswalker`, `set:fdn t:planeswalker`).
   `AbilityGrant { grantor, index }`; `Duration::UntilYourNextTurn`;
   `EffectValue::ExcessDamage`, `ExileTopCardsToPlay`, `CreateTokenCopy`,
   `AdditionalLandPlay`, `CantBeCountered`, `EntersTappedUnlessControls`.
-- `ZoneType::Command` storage exists; nothing ever moves there.
+- Emblems are created directly in their controller’s command zone.
 
-The Theorist and Tomik are defined. Remaining primitives: emblems, divided
+The Theorist and Tomik are defined. Remaining primitives: divided
 damage, loyalty activation events, a zero-loyalty SBA exception (proliferate
 and behold are pending elsewhere).
 
@@ -109,47 +109,13 @@ targets, `0674982740`, fixtures `5ecb50ceee`) are built; their design is in
 `--reason` if the attack row moved) and Engine Budget (`bench_steps` digest
 expected unchanged; curated decks attack no planeswalker).
 
-### Slice 3 — Emblems in the command zone (next)
+### Slice 3 — Command-zone emblems (built)
 
-- `EmblemDefinition { key: "emblem.<name>", printed: PrintedCharacteristics }`
-  in `managym/cards/src/emblems.rs`, reached through
-  `managym_cards::emblem_catalog()`, keyed like tokens (CR 114: abilities only,
-  no other characteristics; owned/controlled by its player). Registered as an
-  `ObjectDefinition` row with status `Emblem` so learning tokens and the
-  observation join one row (shifts definition ids → refresh Academy fixtures).
-- The live source enumeration assumed in the original plan does not exist.
-  `Game::indexed_sources` drops anything that cannot produce a
-  permanent snapshot. `TriggerSourceSnapshot` owns `ObjectLki`, which requires
-  a battlefield slot. `layers::Node` also requires a `PermanentId` for its
-  existence, controller and scope. An emblem has no such slot (CR 114.5).
-  Before registering emblem cards, change the live source identity in both
-  evaluators to the exact object. Read its controller from its zone, and
-  retain battlefield LKI only for triggers whose source occupied that zone.
-  Keep permanent targets and existing serialized battlefield snapshots.
-  The first proof is an emblem with a live static and one with a cast
-  trigger, both still active after the creating planeswalker leaves.
-- `Effect::CreateEmblem { key }` places an emblem object in the player's
-  `ZoneType::Command`. Emblem statics join the layer board and emblem triggers
-  join `TriggerIndex` as ability sources outside the battlefield, using
-  MTG-420's persistent ability-source representation (do not add a parallel
-  source kind). They never leave; no SBA, no zone change.
-- Observation: a command-zone row per emblem (public to both viewers), its
-  abilities as fact rows; LLM text "Emblem — Vivien Reid: Creatures you control
-  get +2/+2 …"; Academy shows emblems beside the player. Search clones and
-  forks copy them; recording/replay round-trips them.
-
-Cards: Vivien Reid −8 and Kaito −9 (FDN), Ajani Resolute −10, Chandra, Torch
-of Defiance −7 (FRA reprint, defined in `kld.rs`). Chandra, Chill's emblem
-waits with that card (pending).
-
-Checks: directed: emblem buff persists after its planeswalker dies; emblem
-trigger (Kaito: any player's spell) fires for both players' casts; two copies
-stack; viewer observation shows the opponent's emblem; replay/fork identity.
-Observability guard row for `CreateEmblem` and the command-zone object.
-Stress state: 4 emblems of each kind per player with a full board (layer
-board scan includes command-zone sources every rebuild).
-
-Deletes: none.
+Vivien Reid, Kaito, Cunning Infiltrator, Ajani Resolute and Chandra, Torch of
+Defiance each create a public command-zone object. Layers and triggers read its
+own abilities after the walker leaves. Each battlefield trigger retains its
+battlefield LKI. Chandra’s first +1 binds the exact exiled object to the paid
+cast decision and deals damage when the cast is declined or unavailable.
 
 ### Slice 4 — Empower (built: `4966204033`, fixtures `2327a41b94`)
 
@@ -192,7 +158,7 @@ in the activation enumeration and layer rebuild).
 Deletes: the single-target activated-ability accessor (replaced by clauses);
 `AttachedHas` if fully subsumed by the selector-scoped grant.
 
-### Slice 6 — Loyalty activation events (primitive + 7 cards)
+### Slice 6 — Loyalty activation events
 
 - `GameEvent::LoyaltyAbilityActivated { player, source, counters_removed }`
   emitted by activation (after costs, CR 602.2i), with the cost receipt.
@@ -205,8 +171,7 @@ Deletes: the single-target activated-ability accessor (replaced by clauses);
 
 Cards: Ajani Unrelenting (static trigger), Gideon the Oathless, Way of the
 Mind Sculptor, Way of the Paradox (cumulative `AdditionalLandPlay`), Kiora of
-Salt and Sand (attack condition), Ajani Resolute's life-gain loyalty trigger
-(existing `GainsLife`), Garruk, Curse Breaker's ETB draw.
+Salt and Sand (attack condition) and Garruk, Curse Breaker's ETB draw.
 
 Checks: granted and printed loyalty activations both fire; Mind Sculptor's
 −X with X=1 doesn't draw, X=2 does; Paradox allows two extra lands after two
@@ -215,13 +180,11 @@ before any activation.
 
 Deletes: none.
 
-### Slice 7 — Planeswalker cards (13 cards; two small primitives)
+### Slice 7 — Remaining planeswalker cards and two primitives
 
 FDN: Ajani, Caller of the Pride (−8 X = life total via `LifeTotal`), Chandra,
-Flameshaper, Kaito, Cunning Infiltrator, Liliana, Dreadhorde General, Vivien
-Reid. FRA: Ajani Resolute, Ajani Unrelenting, Chandra, Torch of Defiance,
-Garruk, Curse Breaker, Garruk, Veiled Butcher, Jace, Reality Sculptor, The
-Theorist, Jace Beleren.
+Flameshaper, Liliana, Dreadhorde General. FRA: Ajani Unrelenting, Garruk,
+Curse Breaker, Garruk, Veiled Butcher, Jace, Reality Sculptor.
 
 Small primitives this slice owns:
 - Divided damage (Chandra, Flameshaper −4: 8 among any number of target
@@ -237,12 +200,8 @@ Small primitives this slice owns:
   one type also satisfies the others (it is kept once). Stress state: 30
   permanents of mixed and multi-type permanents (artifact creature lands).
 
-Composing pieces to verify per card: Kaito's combat-damage loyalty trigger
-(`DealsCombatDamage`), Vivien +1 (look at top four, `SelectCards`), Chandra
-Flameshaper +2 (`ExileTopCardsToPlay` choose one of three) and +1
-(`CreateTokenCopy` with haste and end-step sacrifice), Chandra Torch +1
-(exile top, may cast, else 2 to each opponent — `WhenYouDo`/`If` over the cast
-result), Garruk Veiled Butcher's opponent death-exile replacement and
+Composing pieces to verify per card: Chandra Flameshaper +2 (`ExileTopCardsToPlay` choose one of three) and +1
+(`CreateTokenCopy` with haste and end-step sacrifice), Garruk Veiled Butcher's opponent death-exile replacement and
 discard-receipt draw, Jace Reality Sculptor 0 (aggregate Jace loyalty
 condition via `BattlefieldMatching` sum — add `EffectValue::CountersAmong`
 if absent). The Theorist’s draw trigger and optional opposing permanent
