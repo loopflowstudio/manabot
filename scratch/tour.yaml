@@ -1,4 +1,4 @@
-at: 4a0fb4136c0e290fe2b8e8f69751dca579294ea0
+at: 73d93c963ec109fe82fd6d2d9c4613679bc85651
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -65,7 +65,7 @@ first:
   - path: manabot/policy/prepare.py
     why: Route chosen_name facts into the name vocabulary
   - path: manabot/semantic/text_observation.py
-    why: Render mana expiry, retarget pending lines, and keep_permanents stage
+    why: Render mana expiry, graveyard arrivals, retargets, keep_permanents
   - path: managym/experience_projection.py
     why: Surface permanent entry choices and non-step mana expiry to Academy
   - path: academy/ui/src/lib/mana.ts
@@ -101,6 +101,12 @@ first:
   - path: tests/semantic/test_text_observation.py
     why: Text play and Academy replay for choices, piles, shares, retarget, expiry
 hide:
+  - path: conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-battlefield-history.json
+    why: Regenerated authored-match parity receipt for v33 digests
+  - path: conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-battlefield-history.json
+    why: Regenerated authored-match authority receipt for v33 digests
+  - path: conformance/semantic-kernel-w17-v6/evidence-battlefield-history-v1.json
+    why: Regenerated semantic-kernel evidence for v33 digests
   - path: managym/academy/fixtures/choice-navigation-opening-v1.json
     why: Regenerated Academy opening frames
   - path: managym/academy/fixtures/convoke-demo-opening-v1.json
