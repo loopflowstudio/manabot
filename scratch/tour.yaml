@@ -1,4 +1,4 @@
-at: 7f38f08705d02b839bcd105e9c32246f1d854aca
+at: 38aeeb671611746a884064c9ae1083426fb3386d
 first:
   - path: scratch/plan.md
     why: Outcome, determinism rule, and verified passes.
@@ -8,23 +8,29 @@ first:
     why: Which payments skip and which choices stay open.
   - path: managym/state/src/card.rs
     why: Shared predicate for simple mana tap abilities.
+  - path: managym/state/src/effect.rs
+    why: Creature-type grant check for self-animating lands.
+  - path: managym/state/src/ability.rs
+    why: Recursive effect check for self-animating lands.
   - path: managym/src/flow/mana.rs
     why: Source offers, color equivalence, and surplus-pruned automatic taps.
   - path: managym/src/flow/mana/interchangeable.rs
-    why: Indistinguishable source classes and single-unit tap count proofs.
+    why: Indistinguishable source classes (including played-this-turn plain lands) and single-unit tap count proofs.
   - path: managym/src/flow/payment.rs
     why: Unified skip check and produced-mana commitment.
   - path: managym/src/flow/decision.rs
-    why: Resolution mana offers and frame source references.
+    why: Unified resolution mana offers and frame source references.
   - path: managym/src/agent/ability_description.rs
     why: Unified tap-for-mana wording across choice sources.
   - path: managym/src/flow/action.rs
   - path: managym/tests/source_taps.rs
-    why: Engine tests for forced skips, labels, and guards.
+    why: Engine tests for forced skips, real PlayLand turns, labels, resolution payments, and guards.
   - path: tests/academy/test_dual_land_payment.py
-    why: Academy session checks for dual-land skip and labels.
+    why: Academy session checks for dual-land skip, real PlayLand turns, and labels.
   - path: tests/academy/test_payment_preview.py
     why: Payment preview checks with a distinct blue dual.
+  - path: tests/academy/test_choice_navigation.py
+    why: Updated Accumulate Wisdom prefix after played-this-turn basic payment skip.
 hide:
-  - path: managym/python/managym/academy/fixtures/
+  - path: managym/academy/fixtures/
     why: Regenerated fixture prefixes after redundant-basic skips.
