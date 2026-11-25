@@ -29,3 +29,9 @@ Read when CI fails, a test fails locally, or the change touches CI or test timin
   `experiments/data/`. Reproduce CI by moving the named paths aside and running
   with `MANABOT_DATA_CACHE=<empty .runs dir>`: the test must report `SKIPPED
   ... needs experiment data`, not error. Restore the files afterwards.
+- Job selection: drive `.github/ci/select-tests.sh` as `ci.yml` does, with
+  NUL-delimited paths on stdin:
+  `printf '%s\0' tests/belief/test_tracker.py | bash .github/ci/select-tests.sh | grep =true`.
+  Empty input selects every job; `--only <job>` rejects an unknown name with
+  exit 1. `test_all_test_files_are_covered_by_ci_workflows` checks that each
+  test file's selected jobs include a workflow that runs it.
