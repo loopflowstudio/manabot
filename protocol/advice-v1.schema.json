@@ -2700,6 +2700,18 @@
           "default": null,
           "title": "Blocking"
         },
+        "chosen": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chosen"
+        },
         "combat_damage_to_players": {
           "type": "array",
           "items": {

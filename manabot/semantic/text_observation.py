@@ -117,6 +117,8 @@ _STAGES = frozenset(
         "discard",
         "select_milled",
         "select_cards",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",
@@ -225,9 +227,11 @@ _OBLIGATIONS = (
     "order replacements",
     "enter as a copy",
     "spend mana",
-    "order melded cards",
-    "manifest dread",
     "assign combat damage",
+    "manifest dread",
+    "order melded cards",
+    "order entry choices",
+    "choose as a permanent enters",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -1054,6 +1058,8 @@ class _Renderer:
                 optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
             if permanent.keyword_counter_timestamps:
                 optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
+            if permanent.chosen:
+                optional += f"; chosen {permanent.chosen}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:

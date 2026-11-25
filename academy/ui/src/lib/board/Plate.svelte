@@ -12,6 +12,7 @@
   interface Props {
     player: PlayerState;
     name: string;
+    definitionNames?: Record<string, string>;
     deck: string | null;
     offers: PlacedOffer[];
     live: boolean;
@@ -24,7 +25,7 @@
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, deck, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { player, name, definitionNames, deck, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -33,6 +34,8 @@
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
   ]);
+  const knownHand = $derived(Object.entries(player.known_hand ?? {}).flatMap(([id, count]) =>
+    definitionNames?.[id] && count > 0 ? [`${count} × ${definitionNames[id]}`] : []));
   const total = $derived(floatingTotal(player));
   const pool = $derived(total.some(Boolean) ? manaText(total) : null);
   // Mana that is not plain (restricted, with an effect when spent, or lasting
@@ -77,6 +80,9 @@
       </li>
     {/each}
   </ul>
+  {#if knownHand.length}
+    <details class="type-caption"><summary>Known hand cards</summary><ul>{#each knownHand as card}<li>{card}</li>{/each}</ul></details>
+  {/if}
   <p class="type-caption pool" class:empty={!pool} data-testid="mana-pool">
     {#if pool}<span class="text-ink-3" aria-hidden="true">Floating</span><span aria-hidden="true"><Pips cost={poolSymbols(total)} size={16} /></span><span class="sr-only">Floating: {pool}</span>{:else}No floating mana{/if}
   </p>

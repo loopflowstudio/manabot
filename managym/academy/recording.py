@@ -45,6 +45,8 @@ RESOLVING_STAGES = frozenset(
         "surveil",
         "order_library_bottom",
         "order_library_top",
+        "entry_choice",
+        "order_entry_choices",
         "order_replacement",
         "order_melded_cards",
         "manifest_dread",

@@ -160,6 +160,7 @@
     tapped ? 'tapped' : '',
     permanent?.summoning_sick && creature ? 'summoning sick' : '',
     permanent?.attacking ? 'attacking' : '',
+    permanent?.chosen ? `chosen ${permanent.chosen}` : '',
     permanent?.first_strike_participant ? 'first-strike participant' : '',
     permanent?.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',
     permanent?.damage ? `${permanent.damage} damage` : '',

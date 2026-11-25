@@ -97,6 +97,7 @@ export interface ContinuousEffect {
 export interface PermanentState {
   types?: CardTypes;
   is_token?: boolean;
+  chosen?: string;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
   /** Exhaust abilities this object has used. */

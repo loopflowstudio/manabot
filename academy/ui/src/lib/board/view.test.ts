@@ -200,6 +200,17 @@ describe('where decisions land', () => {
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
+  it('separates lands with different entry choices', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const lands = boardView(frame, PLAYERS).you.support.find(pile => pile.items.length > 2)!.items;
+    for (const [i, { permanent }] of lands.entries()) {
+      permanent.name = 'Uncharted Haven';
+      permanent.chosen = i === 0 ? 'color Red' : 'color Blue';
+    }
+    const piles = boardView(frame, PLAYERS).you.support.filter(pile => pile.items[0].permanent.name === 'Uncharted Haven');
+    expect(piles.map(pile => pile.items.length).sort((a, b) => a - b)).toEqual([1, lands.length - 1]);
+  });
+
   it('fans identical lands into one pile, keeping each copy', () => {
     const view = boardView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const piles = [...view.you.support, ...view.you.creatures];

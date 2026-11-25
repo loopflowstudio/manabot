@@ -19,441 +19,441 @@
     {
       "label": "Keep hand",
       "offer_id": 0,
-      "before_digest": "97bce955617783be4b4474a54c103b19ceaf2855703811c58398af730633a4ae"
+      "before_digest": "ce9d1bb584aa423c787d172c264dd88e87f93368dd5ba9498f6793d894b2f74f"
     },
     {
       "label": "Play Forest",
       "offer_id": 0,
-      "before_digest": "2baa6f82ae6648d9602f6354d4abf120ceb4729861a5176b0e9f27fac4962def"
+      "before_digest": "eae1490e0e2122cef0d82572946b9a121e9d019443da4551bf7fd5ebc102c0d5"
     },
     {
       "label": "Cast Llanowar Elves",
       "offer_id": 0,
-      "before_digest": "c2795c48a7d2a685bbe23a17a5b7d702d92f0233428617e27c8954d5fb3ff65e"
+      "before_digest": "1a8ff04a0da4273845cea1da91edd2686963046ddfcea16d0988e62f2825f130"
     },
     {
       "label": "Play Plains",
       "offer_id": 0,
-      "before_digest": "61bcac74beac8f383bc4f617843d3f808792b79767cf681cfd6f86ccf30cb9be"
+      "before_digest": "466448d37918e19cb2eb26c8ffbaf6e9773ea5dd19e6c1b918acb9e79f49fe27"
     },
     {
       "label": "Cast Savannah Lions",
       "offer_id": 1,
-      "before_digest": "38f28fee79be84b1de3a9e03bb642ef6c1627925bde1fbd6bd1365921dbe5970"
+      "before_digest": "efc8882a77805e37aab13a55edf7c5c524568a24686406978a3a6857d40c8b78"
     },
     {
       "label": "Do not attack with Llanowar Elves",
       "offer_id": 1,
-      "before_digest": "9316f6faa3b20b46dd7deeb35daf4757864f1212763095cc1f6a60824ad4a959"
+      "before_digest": "fa2c2730bc93c58a58a6a87cb17ed5176724816a9a7d0bc335655da4d524eb06"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "d93acb946bfe0c97e8eaf54ccba039ed7ad18d271eacba053cbeb96d4b0cdd94"
+      "before_digest": "c9418f40270bcf5af54cf29bee7dd4edee1c6adcf6864a090d30be78554364fc"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "d06822ea288a42602cabd430594157bc24d116eae428b17a706f5edd79db5a24"
+      "before_digest": "ee5bac0695d5f9bfd051ac454ebdb55d7eccfd16e7aaff8c0d1c2f5a525b7d88"
     },
     {
       "label": "Play Forest",
       "offer_id": 4,
-      "before_digest": "c31bf4c67a0c24a8265407e05dc7ef43aad01a563ddaf4907c4feb02a6475fb8"
+      "before_digest": "1570912938cfaea5e78d85c2d24502adc1b1b09d7f66ae1bffaa37b430260848"
     },
     {
       "label": "Cast Healer's Hawk",
       "offer_id": 0,
-      "before_digest": "3f5a8637028fd8a327bf2d7120ced209fc72f5d73397ea0053da672a2dcd6368"
+      "before_digest": "bc5c802789ac26eeaa1f57a6e2773bebb6a2ebfcf8338e87c5410f074952e0a4"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "f91f753e3ec5b3f6619c9083e70de59e90b779b273cbf882a956526428953442"
+      "before_digest": "322d4f88fe0d11b1921c43c50a4db9a612008b8aa26975ad2f0ffc5430e14bc1"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "9b15588c4605172ae91d302ddf5f2e90aa9ba9fe92f97215aa3fcdbe1cd64a18"
+      "before_digest": "6a1771d403c269c0a6fb253dccb214dea1e5fe8895caac992d54e6d959cc86e9"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "94a9508da7fffb3edc68c74297752cb54b0793b750d67fa0e8c542329861ab64"
+      "before_digest": "32eb24efa22e57680e7b2eaf302571a368563bcefa6a4d930ef93f4c1769802d"
     },
     {
       "label": "Do not attack with Savannah Lions",
       "offer_id": 1,
-      "before_digest": "e98ec0edccb11ac94a1aabe9d2b8ee6035324201ce18770b3c9412178dc7f492"
+      "before_digest": "b01053ac6ce29e0f9b9a57accfe70ea2ff9515e6795822b9cb473ec43a616f73"
     },
     {
       "label": "Do not attack with Llanowar Elves",
       "offer_id": 1,
-      "before_digest": "f46048336c78b8d7d3200b96963978d563e6d872333d60a413ab015dfda4d0a4"
+      "before_digest": "f3b349fedc80bea6af15299b81ea935ae1967ba7a89a6c8e77e0a6b6d19e84c8"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "580d71784ad0e750ea8948a56297f4c0b87d7f3618012942118c2a7a1e12af94"
+      "before_digest": "f35d9f9cdda0a3502f21c4421a6d8a46484aa9a3174454bd461773ba41e7ea96"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "9f18780bd6e2c5c60ba022ee0ee02517f92af4b910fa43daa0c2ae3671b630f7"
+      "before_digest": "3dca3faf00247f4e685a58c19cd0b13c8d3466051282d94066b6356a642c8ef1"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "ade67c8df61d33b088e70a3be50025e33c6db921bb12fb542baa5d9a30661054"
+      "before_digest": "d7b21ec7927e9fd8bed0fadad1195dbbc941aab2a0c47008d30ec3e7c70225af"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "a8c310f0dad4375744215919b358861df4dec1eff0ba8f47fc73d234f28cb46b"
+      "before_digest": "8a79b7639c58a3df10a2c16640e395a4b5c70afc05809b10c53d9bd34c15a744"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "40557a3bee796a303f1ddd95435b01598d3f7d42dc64697597b566da4534afa6"
+      "before_digest": "e00bc85b8763d3a71617d605b0bd1a7979cf9c09ae56180867390b5b91b83425"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "e5fc3faf3f58bfe093ae904992b55be76e02722d67fb5970ec19c5daea783982"
+      "before_digest": "c261840511d7964f69e1c4e033d236e2b475e938d909d556846ccac825948136"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "ce7ab4fa48231e5f4efaf98393b16fbffb8bcedfa96e1e3edb222671d0667d00"
+      "before_digest": "2fc5cb7c9bdea6cc7ed048ff30b48d83e7238c21cd5ff41eb7bda78137a8a76d"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "9300f37b1fb946e1ca98493649b91ff56fd2cc07337346383bfc4d04a6bcbe60"
+      "before_digest": "4f03ae8254f35a4c1d815fcc824b3dcea55cfe56f94ef6b751ffc143dec61472"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "c2ac28d427af9d10d784bfe1f4429cd10462e16b071154b670c270f107f0f1b1"
+      "before_digest": "34c237009eb66a311c551bbaaeb0005eb1a8415f9dc97fae8ce25bef61bf7a5a"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "dc723b9b3713c7f5cb5318a6e2d6a942028fc2ac5c7de473d040b0125695d579"
+      "before_digest": "090ba6ccad6dfc210f2226e83f1759b2a84e1254e64ad12b44df0930a4e3f580"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "0eb775c7d32f3dc1b5565166ecf28dd2bb349adc5dc78a65632803518b6323a4"
+      "before_digest": "2955ea41e915f0f6383c5780057fe5efbf615a4b005ef2e99c745c033a019951"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "8840d5ccdb1ce8aa0441b21b433a01e9ccb3d90ec62c8accc6f3434c36a5f636"
+      "before_digest": "08e4f4980e4c4d26fc2c11a6ad876d81fd9b4d83d32b0a53fa2e40812a22bb7b"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "cc9512f9d68280b831afe33abf6b941c88d3ee901390f9d419f2bf4c7411d7ea"
+      "before_digest": "796d4d58e077f422332a5c4a98e44d573acf2ec2024344b7a0e4a6159bce9a51"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "5b0359c099208e6ccdf96834a02e17bbf4b7155469c8ef4fa2a1a1528e13151e"
+      "before_digest": "2cc457fb1097396ea6be4f549e861521a51a4db34b5c505295ffae7f0b1ed821"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "5e71f34e831dd9845dc38512bb30eb085924797e1d794a3d9140eb0e1a84044c"
+      "before_digest": "8ab67a2289f9c931f21041210d17d9deb8bca63f6351796a54467961c78f175b"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "c7d9d29b80679d9914498030cfd5fc94cdfa195973374b1780ba3580114ac53e"
+      "before_digest": "3be5a1d564743e6fd6844cd4ac3a8785e64b8600a28cafcf26ac43cf0801f2d2"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "fb7e43544bbb277abd247a3723d9d4eeb18f6a87091946999969534dc4046fc3"
+      "before_digest": "7c08141919d1c10947dbe5aca6b34f0cd3797cebb848a0e49c168f7560081ff8"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "561dbd6b5d3609a514adaad5edfa7ebb806950d24c1c2eb4c4c2f6d68d78d7cb"
+      "before_digest": "53d71612f8ea335ff59efcbe1eba402d204f3442a7f6c41ffc97acdd116e5d3f"
     },
     {
       "label": "Play Plains",
       "offer_id": 3,
-      "before_digest": "16c8c105b91c382363a82b6a1934b394d5a2aa689b7f13b44c159ccc482125c7"
+      "before_digest": "b3766137ad04f3c57c4ad7ef0ef867e14429677cdc11559e1d3aaafe6dd41f0a"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "f020a2f910c069626ce352e19a86153e668542a835144f9f02ecfd34e2bcbfb7"
+      "before_digest": "26c313ba48a367fb5b36a6c418eaac69179e2bdfadbdd2396e56500931151b74"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "6ecd68858e8831a421af91269736a65f5a11a7074f722f2180e79699b85c41f4"
+      "before_digest": "76464d8d1179560ad6741229895ac46d1e98381b437074d266961bdbc03b8443"
     },
     {
       "label": "Do not attack with Healer's Hawk",
       "offer_id": 1,
-      "before_digest": "f1b3944ac8556260c31ceec5b5e2621e03fd3c1e8b52719380713e379e1cb448"
+      "before_digest": "13af3f5992541f1f3d90f64d1510e36c5c5cc6abf601f290aaf592825b68b023"
     },
     {
       "label": "Do not attack with Savannah Lions",
       "offer_id": 1,
-      "before_digest": "96e35f775a5574f2c37f19195125da517a1b1fdb02f9393798b3dff70d859b5e"
+      "before_digest": "9413d592f9ae4a968f46e504b150c9aae7e6360dd4e0ebf3505058d9be0d0376"
     },
     {
       "label": "Do not attack with Llanowar Elves",
       "offer_id": 1,
-      "before_digest": "33c9acd13ee9b5b4bcc292e13d82befaa390062242f45332784a6b9e0a0c3fa4"
+      "before_digest": "4aa55a554b6956588e960cdf24d6b3dd8d73afb824d8cbaea7288110c36e11e1"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "179a75194f765432f0f1b55ca6f8310198cf5214aa10c12189cc57969c6c152a"
+      "before_digest": "6b426be436076883005f164f7418758b34558d4cee1c05a2bdf0b26b29cc4abb"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "ad7a82b15fe96fdec3ea41ee028e73b8b3d8132188bf04dc7d16cca65efbd4f6"
+      "before_digest": "65737f3d2af9e8df0ae5cf71e51fa31446421da0d2cb39f4b47532b96db4f00b"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "539027891e7e1dccf054cf696bc72d06c74919c05ef86abb037800c175c923ca"
+      "before_digest": "13e26c416734e030f7df8d3bfa6130fcf02353d2895d8335a30d5c4c21353903"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "268e41479ac206b9523f395f34f3a3b3f10e46ca0e7e2fc8a91256bab1abe9b4"
+      "before_digest": "4d94d320a5548e58b1ba4327faa1e6214bd8242d4878ea0f29bf8c334f85b233"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "320a5c81be091ffef0c93c1aaf52919cde01224e7695b0c26f143b8aeaa66761"
+      "before_digest": "bce9480aa301f986bb0dd1af96fd0cffeb4790c5a5eab17635b97e419b26c5f4"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "73b9f8825caff6ce3c190824559033b1de44bdbef0faf36ac9e507e7ff27f6f3"
+      "before_digest": "a2075f7848b12574beae2ef164de52a3def702c65bb577606e79dc5dc6a13055"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "f4a26433a8c35cd53b3f4e6cdf4ea2c8b40e1624d10d3efe5d2e548ad50e0a2e"
+      "before_digest": "96e6c91916d0422fe35d80b7ec74f8b66c5a94a5d3a821b86b75a1d2242c9d97"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "641d066affa2d0c6e99c573a8f1a1ad9b14efbba0cfd725e2ef0216c81e38d1f"
+      "before_digest": "de004a6e859dda0798312fe21ad5d6e87e32f13eb1055c1569c8fd815b20236d"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "1f8bfed2c8d49318720af8f012ef77d003f318f32d604e1dd02a517805561054"
+      "before_digest": "ad3fb96e17ae9de2b3783e46e5b08290f23105e4da0101c5bd8ebf5975db29b5"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "7e3cdf8b52ac69771fc06c3a1ab5c2f9aaad360a0446dfe8d35c3ef90688b8cf"
+      "before_digest": "0958f34e9be15acd2c87b46d81ac3ce6726ee97de1a7d65acfec9a218e8437b6"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "62f3e5d75ff5472e1a9ebb779b5c2cb5ffbbbaff1d919b1cc9959d71a0467ffc"
+      "before_digest": "34d8b840a83d4f439c982387232b13ddfbd5eb0a0cc94c5599e81ff70a257692"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "10ab1be9c71cf3ebc5ad65795127a3914f120d0c1b82ee13b4b64abdac4cbf19"
+      "before_digest": "8a5a5b33b763bf8aad14add1fb8b955b7708da95891ac2b1775b6b965438b0d8"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "317dbd8656bb5848bd0ec3f12248141c1205d5eb54e7acb8826817f5e03c0455"
+      "before_digest": "293ddc384ddd6b6489485f1428e3a320499cf93be9ba27eef7d0320ee6a61e44"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "0c970cd9f73267a2866d864c77c5794cce0bf93d9134bb696a62a3508f64ba18"
+      "before_digest": "8f7a7e9b085f3270321372ef14b4ed242cbd3b08e63b97d90338eff56b173e2e"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "479f6bf3178df360f97c5aadd76bb8c0c9196a4019024d1736f32a4a1db8d304"
+      "before_digest": "6ae0496938df2dc332ff308383d0409751bbb3e9ba09e7ad61f608911907042f"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "64bf56aa3487bac5474214a118ec6301b8c87e20aceaba9e896e54500a7e1a51"
+      "before_digest": "b6b152451ceaa8d73e082fc4bbfcacb19ef40be4e9c2aafd0f866d65b31673c5"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "78272162d6828599038e3452b0d811b9f898eb50b67126a918297db42958a0ab"
+      "before_digest": "af3277dbbd3687c4d869543d43f309cd8819974986969cd2a30a634d2e6917a8"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "e2ac5c598630572886ca3c097ef36b6bded5be5f675fcdbb61dc8e07a63a8be8"
+      "before_digest": "38cc7e2d691cf24b98d33a5779d2bca1a4ab5cd75db8e7e24b50e33acc14f8ea"
     },
     {
       "label": "Play Plains",
       "offer_id": 3,
-      "before_digest": "2b1055232db8bc0264f197cf8ce052101b85d610c7f4ef8f8d5dd549846b6d57"
+      "before_digest": "5f984d46d3571899b2d55e68cfa2a9e589d617712b49410cc6fe342a57997028"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "21b33194f1b45afa57f1c429105d3b902f1117fe7443277cb05257fab067fe07"
+      "before_digest": "3f1c2ef33a87324c0abace9ecbf16d8981ea71752a9562bbc76419f615022a15"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "d7a8f5c6be0fa015dd763452883cb0b9e5cd50c2a9cf898a5ddffe523e20c9ec"
+      "before_digest": "fe9aeaca74c4c25586c628bae2e1fbb22335b8f7a2d44da3dc397cf286b89e67"
     },
     {
       "label": "Do not attack with Healer's Hawk",
       "offer_id": 1,
-      "before_digest": "c28b7a4607912a77044f83ecca02dd0afcc4b25b7f29b30a6d1f3bedec2bfed5"
+      "before_digest": "e6176dee502a094a70e56218d30db91a6c99b4d7723fc69fa307e273b210d992"
     },
     {
       "label": "Do not attack with Savannah Lions",
       "offer_id": 1,
-      "before_digest": "0f1adb6c6d316544bd87e81c00faa8bad02ae3d0d16cb82c3c2ca7afb2e91c41"
+      "before_digest": "66521e5b171c01b6ffc757be5934b7c48019af1a9a34abf1acec326826d44422"
     },
     {
       "label": "Do not attack with Llanowar Elves",
       "offer_id": 1,
-      "before_digest": "e78ccac259a64082355177b185997c9e680d90b43942e9036840262fcfbfe7a1"
+      "before_digest": "85ddefea59766e7c7282ff71d583177e531e55f134a82d74729707f9912d74b9"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "36b12ad69d9f01467226b0f593d7d0075d0a197c5bcab5b03e5fba760353be3c"
+      "before_digest": "492e8e2b8c74957c1e894065755996e41c85b860280e8ded34a924bedde3fd26"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "b10ae504129ba6073e1353d3b97bca32d90970f5f73087781d0f7e34b0693cf0"
+      "before_digest": "0e335df3a2eaa5a60c5ff2c1b1774a35a807df361af75e11f73b22109433b793"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "35c21a9bd77992392302d21299af11b4604dc2c6742e13ae18d27c2842f4c15d"
+      "before_digest": "f4c17377cdc1bdaad6a7b6e084717c62917bbe4efa4c5a4f5f4437de20a8419d"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "18bd392efd8d543138d3fb455539583891878f37f6ddba7fb6bf9452b96d7e2d"
+      "before_digest": "bd0dd0d0bd4e082c29a61709d4beed333a76b11d5e9eb0a3f732a4d6bfaf6802"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "026ac89f8f402ef0fc0574ac84d514e7d8ebf8a1b3e65874b10830082f19b092"
+      "before_digest": "a4e35b6bf95e7ab60c037ce7f34af72b9aa35c4799e9c5ad261b186b3689a789"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "7a488f2de285f419842aafae7813bfe9d3bd09b10e539db0dea48665f66b6ddd"
+      "before_digest": "022bbc8cf497557bfaf72f3b11de352e35b8ee711d291d4278dfb5b0e122cbca"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "4d2b27fe611fe865cbc00dafb8123da407897d82e96f59af02cf8829706c9669"
+      "before_digest": "cfc2302e18402ba142f1694c302625617a9380f9c1acc51538329361e8c70028"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "c8451b4676ebfd3c5e2b8f0c699e12a614abe04b91f80c2dc531cb2b1a6e1b94"
+      "before_digest": "097eac1ceb0bb5c3370737c23752c26c6896f19544bd04b24c07e70e78d724e3"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "b907668de4b3eb22f49e1f050257dcce7cfe5e3f8763d4156a25241cfeb6c9da"
+      "before_digest": "aa122673453ecec5788164c1ece64744c2404f3d2b63bf6f5594916c61fb256a"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "eb25281f3be1882fa89bc215ec40ffe206c5edd242d0283d4156e6a9d8c6b90e"
+      "before_digest": "6b4ccbd01db17d33bdf0a288d805a0c115fa65f5f57df4a3215a17aff71f1361"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "f515062e460ea477c223c51ba8312a8284138ecc41afa8812f8cced6a4e042fe"
+      "before_digest": "25192e1c40e1b75e228d16f89a85a5dd2defdf77edab44c8cf003f8a913eec43"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "4102cb96efd21993370a67d95adf53389eba41bf387dc585e7d79ccfb8c53fee"
+      "before_digest": "4a6bfae6a91d485caac770c1642a5e72f65e829352b4f32c29aae0edf81a7743"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "5913a7832f950121d2dc84a9677be4b7b404aafba898b83c0b0407ca4677a111"
+      "before_digest": "3a0434118242cb24e987792495a53356051ad7e8d3bfd548b7d391b218c4a91e"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "6b50fbbbc8b21c3841bedaa962cebdfba5c061e42df7cd591e6124ff0ef95678"
+      "before_digest": "69ec50b657056ebcfd9cc9aa1f5ec2774c1841fbf9946b70aae858fe9297eeca"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "329e5dd4e1de5d9d97ebc379eb0c0aec45b9ce30fd019f65479dfa7bcc3aaa88"
+      "before_digest": "4a18baef898097aedefcdc985fb87d2c42469803fe812594dfd81636e458f601"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "3fa250d6d1462299fdc23c2cccb849d7f6b4b8a86a424541f57f97af7c9d51f7"
+      "before_digest": "8d5a0e4114970f9f1895525895e59e0e815a01338f8bb7406025f46ac51a4fde"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "a3e669da3e74fe36df3f60a871e9d5aca03224f44e95446a9d99aaa9bc8b34ed"
+      "before_digest": "10697898117093ffa0e4cacf5e9994b1c25c379d894c9d42904c07f227470edb"
     },
     {
       "label": "Pass priority",
       "offer_id": 3,
-      "before_digest": "8e19352ed3e267fde847ea3d73ec949fdd489adef418de269be64cbfdee2968c"
+      "before_digest": "16e50343d027cd609be61f3d3a33bc7c712f53de4be05be275976faf6d11cae1"
     },
     {
       "label": "Cast Savannah Lions",
       "offer_id": 3,
-      "before_digest": "51eb339c51cdd27c3a6a125f5f318a8cc3d2aff85b31cf8318477e15b281137f"
+      "before_digest": "320c3ccedfcb7448da196d2127a4296c021bf1ff623a0b377c1376e79018356b"
     },
     {
       "label": "Tap Plains for {W}",
       "offer_id": 0,
-      "before_digest": "1a8adc17a4c7187381b4233ac2edbc54468c84f7e300778fde35e9de4303c112"
+      "before_digest": "a5ae02bafb78b6a0f0a959e020373532292a1fcd6bf43185ce771d8b963be334"
     },
     {
       "label": "Cast Appeal to Eirdu",
       "offer_id": 0,
-      "before_digest": "fe0d6e89493ffc244fb0a72f823c25088b87aecb122715304e552bcfaede5ebd"
+      "before_digest": "2552375e00b0801b55e8629acb3a9f86fe844f40fb6f4a629daef38aa47233bd"
     },
     {
       "label": "Target Llanowar Elves",
       "offer_id": 0,
-      "before_digest": "950d77311440bda0e677303d546d6641cf8abda71530ad5912805e4873cd1f09"
+      "before_digest": "e61844a55a2be566a6d52862325e65ef58e4578ab5c7df35afc5b8347d9f4663"
     },
     {
       "label": "Target Savannah Lions",
       "offer_id": 0,
-      "before_digest": "1a87f49ab3e6b0dcd29b89629383fc716a274e89cf4706198884673424ccee3a"
+      "before_digest": "d60eeb50c2018399111ad4bad3f220db78c9dbbc318b080b0062f00e13508298"
     },
     {
       "label": "Tap Llanowar Elves to pay {1} (convoke)",
       "offer_id": 5,
-      "before_digest": "3af70a150b5231ff6c242e9fd553e8afa42846ee7fd4d5740166d946bc3781c4"
+      "before_digest": "d65938ecc29a5eb56742d7ef6a13d9f72417c0f8e253f41f793120fdc651a406"
     }
   ],
-  "decision_digest": "944a640bbaf68e47ad379ee16b9a2a2e69fc9a6fa901c41f49a8f1744c11a1f3",
+  "decision_digest": "a5eb2525c378692cb8c50b2739896111ca1d0f651449b46ff4e156247b5778bf",
   "decision_revision": 103,
   "decision_kind": "PAY_OR_NOT",
-  "manifest_digest": "35c876c04e74b276daf0393abe9e43021299b917e53cfce866d69266b644b8d6"
+  "manifest_digest": "5e80440b342a9a259a391e797dd8cd19cf37410534591b1881c5dd7027aed846"
 }

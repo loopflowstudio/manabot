@@ -418,6 +418,7 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_token: bool | None = Field(default=None, exclude_if=lambda value: value is None)
+    chosen: str | None = Field(default=None, exclude_if=lambda value: value is None)
     temp_subtypes: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )

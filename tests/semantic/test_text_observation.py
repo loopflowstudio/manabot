@@ -1016,6 +1016,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "is_animated": "animated",
         "has_exile_link": "holds exile link",
         "exile_if_dies_this_turn": "exile if dies this turn",
+        "chosen": "chosen color, creature type or card name",
         "temp_subtypes": "temporary subtypes",
         "keywords": "effective keywords",
         "counters": "<kind> counters",
@@ -2688,3 +2689,26 @@ def test_arahbo_and_hunter_replay_both_trigger_commands_with_a_private_draw() ->
         opponent = decision_surface_view(branch, 1)
         assert not opponent["opponent"]["hand"]
         assert "Gray Ogre" not in opponent["definition_names"].values()
+
+
+def test_entry_choice_replays_through_text_and_academy() -> None:
+    env = priority_root(("Uncharted Haven",), ("Forest",))
+    opening = capture_text_decision(env)
+    play = next(
+        a
+        for a in opening.actions
+        if "Play" in a.description and "Haven" in a.description
+    )
+    submit_response(env, opening, play.reference)
+    decision = capture_text_decision(env)
+    assert len(decision.actions) == 5
+    _assert_policy_input_holds_the_decision(env, decision)
+    blue = next(a for a in decision.actions if "Choose Blue" in a.description)
+    branch = _replay_text_choice(env, blue.reference)
+    assert "chosen color Blue" in capture_text_decision(branch).text
+    for viewer in (0, 1):
+        board = decision_surface_view(branch, viewer)
+        lands = board["agent"]["battlefield"] + board["opponent"]["battlefield"]
+        haven = next(p for p in lands if p["name"] == "Uncharted Haven")
+        assert haven["chosen"] == "color Blue"
+        assert haven["tapped"]
