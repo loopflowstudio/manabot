@@ -45,13 +45,64 @@ use crate::{
         },
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::{
-            Color, Mana, ManaCost, ManaExpiry, ManaPool, ManaSpendChoice, SpellSnapshot,
-            SpendOrder, SpendingContext,
+            Color, Mana, ManaClass, ManaCost, ManaExpiry, ManaPool, ManaRestriction,
+            ManaSpendChoice, SpellSnapshot, SpendOrder, SpendingContext,
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
     },
 };
+
+/// Immutable output alternatives with a precomputed hash digest so
+/// `Obligation::Output` hashes in O(1) inside payment search.
+#[derive(Clone, Debug)]
+struct ManaChoices(Arc<ManaChoicesInner>);
+
+#[derive(Debug)]
+struct ManaChoicesInner {
+    modes: Vec<Mana>,
+    digest: u64,
+}
+
+impl From<Vec<Mana>> for ManaChoices {
+    fn from(modes: Vec<Mana>) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        modes.hash(&mut hasher);
+        Self(Arc::new(ManaChoicesInner {
+            modes,
+            digest: hasher.finish(),
+        }))
+    }
+}
+
+impl ManaChoices {
+    fn as_slice(&self) -> &[Mana] {
+        &self.0.modes
+    }
+}
+
+impl std::ops::Deref for ManaChoices {
+    type Target = [Mana];
+    fn deref(&self) -> &Self::Target {
+        &self.0.modes
+    }
+}
+
+impl PartialEq for ManaChoices {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.0.digest == other.0.digest && self.0.modes == other.0.modes)
+    }
+}
+
+impl Eq for ManaChoices {}
+
+impl std::hash::Hash for ManaChoices {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.0.digest);
+    }
+}
 
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
@@ -65,7 +116,7 @@ enum Obligation {
     Output {
         // Alternatives and candidate sets are immutable query payloads. Branches
         // and memo keys share them while keeping their own progress and pool.
-        choices: Arc<Vec<Mana>>,
+        choices: ManaChoices,
         life_cost: u32,
     },
     Tap {
@@ -132,42 +183,73 @@ struct ManaActivation {
     sacrifice_source: bool,
     ability_index: usize,
     cost: ManaCost,
-    outputs: Arc<Vec<Mana>>,
+    outputs: ManaChoices,
     life_cost: u32,
 }
 
-/// The union of output modes, projected onto one spending purpose. The bound
-/// only asks color feasibility, so it needs no owned restriction or rider
-/// metadata. Maxima are taken within each class *before* combining classes:
-/// two modes with different classes can both contribute to the old bound.
-fn optimistic_pool(outputs: &[Mana], cost: &ManaCost) -> Mana {
-    let mut upper = Mana::default();
+/// Optimistic color upper bound and maximum single-mode usable total over
+/// `outputs`, projected onto one spending purpose. Maxima are taken within
+/// each allowed class *before* combining classes so two modes with different
+/// classes both contribute to the bound.
+fn optimistic_supply(
+    outputs: &[Mana],
+    mut allows: impl FnMut(&ManaClass) -> bool,
+) -> ([u8; 6], u64) {
+    let mut upper = [0_u8; 6];
+    let mut max_usable = 0_u64;
+    let mut has_classes = false;
     for output in outputs {
-        for (amount, more) in upper.mana.iter_mut().zip(output.mana) {
+        let mut mode_usable = 0_u64;
+        for (amount, more) in upper.iter_mut().zip(output.mana) {
             *amount = (*amount).max(more);
+            mode_usable += u64::from(more);
         }
+        if !output.classes().is_empty() {
+            has_classes = true;
+            for (class, amounts) in output.classes() {
+                if allows(class) {
+                    for &more in amounts {
+                        mode_usable += u64::from(more);
+                    }
+                }
+            }
+        }
+        max_usable = max_usable.max(mode_usable);
+    }
+    if !has_classes {
+        return (upper, max_usable);
+    }
+    if outputs.len() == 1 {
+        for (class, amounts) in outputs[0].classes() {
+            if allows(class) {
+                for (amount, more) in upper.iter_mut().zip(amounts) {
+                    *amount = amount.saturating_add(*more);
+                }
+            }
+        }
+        return (upper, max_usable);
     }
     for (index, output) in outputs.iter().enumerate() {
         for (class, _) in output.classes() {
-            if !class.allows(&cost.purpose)
+            if !allows(class)
                 || outputs[..index]
                     .iter()
                     .any(|previous| previous.classes().iter().any(|(seen, _)| seen == class))
             {
                 continue;
             }
-            let mut amounts = [0; 6];
+            let mut amounts = [0_u8; 6];
             for mode in &outputs[index..] {
                 for (amount, more) in amounts.iter_mut().zip(mode.class_of(class)) {
                     *amount = (*amount).max(more);
                 }
             }
-            for (amount, more) in upper.mana.iter_mut().zip(amounts) {
+            for (amount, more) in upper.iter_mut().zip(amounts) {
                 *amount = amount.saturating_add(more);
             }
         }
     }
-    upper
+    (upper, max_usable)
 }
 
 /// Reserve incompatible uses, not the whole object. A tapped mana creature
@@ -239,7 +321,7 @@ impl PaymentStep {
 /// A source's presence, untapped resource and per-ability limited uses are
 /// independent. A tapped source can still pay a sacrifice cost; a repeatable
 /// ability can consume other objects without consuming its own source.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 struct PaymentResources {
     present: Vec<bool>,
     untapped: Vec<bool>,
@@ -248,22 +330,153 @@ struct PaymentResources {
     used: Vec<(usize, usize)>,
 }
 
-impl PaymentResources {
-    /// Omit trailing false flags: this keeps the dense row's lexicographic
-    /// order, because every nonempty suffix ends with a true flag.
-    fn used_on(&self, index: usize) -> Vec<bool> {
-        let mut flags = Vec::new();
-        for &(_, ability) in self.used.iter().filter(|(source, _)| *source == index) {
-            flags.resize(ability + 1, false);
-            flags[ability] = true;
+impl std::hash::Hash for PaymentResources {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        fn hash_bits<H: std::hash::Hasher>(bits: &[bool], state: &mut H) {
+            state.write_usize(bits.len());
+            for chunk in bits.chunks(64) {
+                let mut word = 0_u64;
+                for (bit, &flag) in chunk.iter().enumerate() {
+                    word |= u64::from(flag) << bit;
+                }
+                state.write_u64(word);
+            }
         }
-        flags
+        hash_bits(&self.present, state);
+        hash_bits(&self.untapped, state);
+        self.used.hash(state);
+    }
+}
+
+impl PaymentResources {
+    /// Contiguous slice of sorted `(source, ability)` uses for `index`.
+    fn used_slice(&self, index: usize) -> &[(usize, usize)] {
+        if self.used.is_empty() {
+            return &[];
+        }
+        let start = self.used.partition_point(|&(source, _)| source < index);
+        let rest = &self.used[start..];
+        let len = rest.partition_point(|&(source, _)| source == index);
+        &rest[..len]
+    }
+
+    /// Allocation-free total order over one source's resource state for
+    /// canonicalizing interchangeable sources.
+    fn cmp_source(&self, a: usize, b: usize) -> std::cmp::Ordering {
+        (self.present[a], self.untapped[a])
+            .cmp(&(self.present[b], self.untapped[b]))
+            .then_with(|| {
+                if self.used.is_empty() {
+                    return std::cmp::Ordering::Equal;
+                }
+                self.used_slice(a)
+                    .iter()
+                    .map(|&(_, ability)| ability)
+                    .cmp(self.used_slice(b).iter().map(|&(_, ability)| ability))
+            })
     }
 
     fn use_ability(&mut self, source: usize, ability: usize) {
         let entry = (source, ability);
         if let Err(index) = self.used.binary_search(&entry) {
             self.used.insert(index, entry);
+        }
+    }
+}
+
+struct AbilitySupply {
+    upper: [u8; 6],
+    max_usable: u64,
+    max_net: u64,
+}
+
+struct SourceSupply {
+    fixed_upper: [u8; 6],
+    fixed_usable: u64,
+    fixed_net: u64,
+    abilities_start: usize,
+    abilities_len: usize,
+}
+
+/// Per-`SpendingContext` supply memo for one `PaymentSearch`: caches
+/// `ManaRestriction::allows` and each immutable source/ability's optimistic
+/// color and usable-total bounds.
+struct PurposeSupply {
+    purpose: SpendingContext,
+    allows: std::collections::HashMap<ManaRestriction, bool>,
+    sources: Vec<SourceSupply>,
+    abilities: Vec<AbilitySupply>,
+}
+
+impl PurposeSupply {
+    fn class_allows(
+        class: &ManaClass,
+        purpose: &SpendingContext,
+        allows: &mut std::collections::HashMap<ManaRestriction, bool>,
+    ) -> bool {
+        let Some(restriction) = &class.restriction else {
+            return true;
+        };
+        if let Some(&allowed) = allows.get(restriction) {
+            return allowed;
+        }
+        let allowed = restriction.allows(purpose);
+        allows.insert(restriction.clone(), allowed);
+        allowed
+    }
+
+    fn allows(&mut self, class: &ManaClass) -> bool {
+        Self::class_allows(class, &self.purpose, &mut self.allows)
+    }
+
+    fn build(model: &PaymentModel, purpose: &SpendingContext) -> Self {
+        let mut allows = std::collections::HashMap::new();
+        let mut sources = Vec::with_capacity(model.sources.len());
+        let mut abilities = Vec::new();
+        for source in model.sources.iter() {
+            let (fixed_upper, fixed_usable, fixed_net) = match &source.fixed {
+                Some(output) => {
+                    let (upper, usable) =
+                        optimistic_supply(std::slice::from_ref(output), |class| {
+                            Self::class_allows(class, purpose, &mut allows)
+                        });
+                    (upper, usable, u64::from(output.total()))
+                }
+                None => ([0; 6], 0, 0),
+            };
+            let abilities_start = abilities.len();
+            for ability in &source.abilities {
+                let (upper, max_usable) = optimistic_supply(&ability.outputs, |class| {
+                    Self::class_allows(class, purpose, &mut allows)
+                });
+                let max_net = ability
+                    .outputs
+                    .iter()
+                    .map(|output| {
+                        u64::from(output.total()).saturating_sub(u64::from(ability.cost.mana_value))
+                    })
+                    .max()
+                    .unwrap_or(0);
+                abilities.push(AbilitySupply {
+                    upper,
+                    max_usable,
+                    max_net,
+                });
+            }
+            let abilities_len = abilities.len() - abilities_start;
+            sources.push(SourceSupply {
+                fixed_upper,
+                fixed_usable,
+                fixed_net,
+                abilities_start,
+                abilities_len,
+            });
+        }
+        Self {
+            purpose: purpose.clone(),
+            allows,
+            sources,
+            abilities,
         }
     }
 }
@@ -303,6 +516,8 @@ struct PaymentSearch {
     /// Classes of interchangeable sources, built when the search grows.
     groups: Option<Vec<Vec<usize>>>,
     visited: std::collections::HashSet<Arc<PaymentSearchState>>,
+    /// Per-purpose supply and restriction-allowance memos for this search.
+    purposes: Vec<PurposeSupply>,
     #[cfg(test)]
     max_states: Option<usize>,
     /// Reference search for tests: skip the color-set bound.
@@ -382,45 +597,85 @@ impl PaymentSearch {
         let mut key = state.clone();
         let mut changed = false;
         let resources = &state.resources;
-        let resource_key = |index: usize| {
-            (
-                resources.present[index],
-                resources.untapped[index],
-                resources.used_on(index),
-            )
-        };
+        let has_used = !resources.used.is_empty();
         for group in groups {
             // Source-order success usually consumes an already sorted prefix.
             // Allocate a permutation only for branches that need one.
             if group
                 .windows(2)
-                .all(|pair| resource_key(pair[0]) <= resource_key(pair[1]))
+                .all(|pair| resources.cmp_source(pair[0], pair[1]) != std::cmp::Ordering::Greater)
             {
                 continue;
             }
             let mut order = group.clone();
-            order.sort_unstable_by_key(|&index| resource_key(index));
+            order.sort_unstable_by(|&a, &b| resources.cmp_source(a, b));
             let key = Arc::make_mut(&mut key);
             changed = true;
-            key.resources
-                .used
-                .retain(|(source, _)| !group.contains(source));
+            if has_used {
+                key.resources
+                    .used
+                    .retain(|(source, _)| !group.contains(source));
+            }
             for (&to, from) in group.iter().zip(order) {
                 key.resources.present[to] = resources.present[from];
                 key.resources.untapped[to] = resources.untapped[from];
-                key.resources.used.extend(
-                    resources
-                        .used
-                        .iter()
-                        .filter(|(source, _)| *source == from)
-                        .map(|(_, ability)| (to, *ability)),
-                );
+                if has_used {
+                    key.resources.used.extend(
+                        resources
+                            .used_slice(from)
+                            .iter()
+                            .map(|&(_, ability)| (to, ability)),
+                    );
+                }
             }
         }
-        if changed {
+        if changed && has_used {
             Arc::make_mut(&mut key).resources.used.sort_unstable();
         }
         key
+    }
+
+    fn purpose_index(&mut self, model: &PaymentModel, purpose: &SpendingContext) -> usize {
+        if let Some(index) = self
+            .purposes
+            .iter()
+            .position(|entry| entry.purpose == *purpose)
+        {
+            return index;
+        }
+        self.purposes.push(PurposeSupply::build(model, purpose));
+        self.purposes.len() - 1
+    }
+
+    /// Distinct `Pay` purpose indices for `obligations`, cached on `self`.
+    fn pay_purposes(&mut self, model: &PaymentModel, obligations: &[Obligation]) -> Vec<usize> {
+        let mut indices = Vec::new();
+        for obligation in obligations {
+            if let Obligation::Pay { cost, .. } = obligation {
+                let index = self.purpose_index(model, &cost.purpose);
+                if !indices.contains(&index) {
+                    indices.push(index);
+                }
+            }
+        }
+        indices
+    }
+
+    /// Mana by kind that any pending cost in `purpose_indices` could spend,
+    /// reading cached restriction allowances.
+    fn usable_for(&mut self, purpose_indices: &[usize], mana: &Mana) -> [u64; 6] {
+        let mut usable = mana.mana.map(u64::from);
+        for (class, amounts) in mana.classes() {
+            if purpose_indices
+                .iter()
+                .any(|&pi| self.purposes[pi].allows(class))
+            {
+                for (amount, more) in usable.iter_mut().zip(amounts) {
+                    *amount += u64::from(*more);
+                }
+            }
+        }
+        usable
     }
 
     fn insert(&mut self, model: &PaymentModel, state: &Arc<PaymentSearchState>) -> bool {
@@ -448,27 +703,6 @@ impl PaymentSearch {
             );
         }
         inserted
-    }
-}
-
-impl PaymentSearchState {
-    /// Mana by kind that the pending payment could spend, for the optimistic
-    /// bounds: restricted mana counts if any pending cost can spend it.
-    /// Future activation costs are not owed yet; the gross outputs the bounds
-    /// add already overestimate what converting restricted mana could buy.
-    fn usable(&self, mana: &Mana) -> [u64; 6] {
-        let mut usable = mana.mana.map(u64::from);
-        for (class, amounts) in mana.classes() {
-            if self.obligations.iter().any(|obligation| {
-                matches!(obligation, Obligation::Pay { cost, .. }
-                    if class.allows(&cost.purpose))
-            }) {
-                for (amount, more) in usable.iter_mut().zip(amounts) {
-                    *amount += u64::from(*more);
-                }
-            }
-        }
-        usable
     }
 }
 
@@ -598,12 +832,58 @@ impl PaymentModel<'_> {
         });
     }
 
+    /// Gross usable output and net new units for one precomputed purpose.
+    fn source_bounds_for_purpose(
+        &self,
+        resources: &PaymentResources,
+        supply: &PurposeSupply,
+        pays_by_tap: impl Fn(&ManaSource) -> bool,
+    ) -> (u64, u64) {
+        let mut net_total = 0;
+        let mut total = 0;
+        for (index, source) in self.sources.iter().enumerate() {
+            if !resources.present[index] {
+                continue;
+            }
+            let src = &supply.sources[index];
+            let mut tap_total = 0;
+            let mut net_tap_total = 0;
+            if resources.untapped[index] {
+                tap_total = src.fixed_usable;
+                net_tap_total = src.fixed_net;
+                if pays_by_tap(source) {
+                    tap_total = tap_total.max(1);
+                    net_tap_total = net_tap_total.max(1);
+                }
+            }
+            for (ability_index, ability) in source.abilities.iter().enumerate() {
+                let uses = self.uses(resources, index, ability_index) as u64;
+                if uses == 0 {
+                    continue;
+                }
+                let ab = &supply.abilities[src.abilities_start + ability_index];
+                let output = uses * ab.max_usable;
+                let net_output = uses * ab.max_net;
+                if ability.tap_source {
+                    net_tap_total = net_tap_total.max(net_output);
+                    tap_total = tap_total.max(output);
+                } else {
+                    total += output;
+                    net_total += net_output;
+                }
+            }
+            total += tap_total;
+            net_total += net_tap_total;
+        }
+        (total, net_total)
+    }
+
     /// Gross usable output and net new units. Each tap can choose one mode.
     fn source_bounds(
         &self,
         resources: &PaymentResources,
         life: u32,
-        usable_total: impl Fn(&Mana) -> u64,
+        mut usable_total: impl FnMut(&Mana) -> u64,
         pays_by_tap: impl Fn(&ManaSource) -> bool,
     ) -> (u64, u64) {
         let mut net_total = 0;
@@ -617,7 +897,7 @@ impl PaymentModel<'_> {
             let mut tap_total = 0;
             let mut net_tap_total = 0;
             if resources.untapped[index] {
-                tap_total = source.fixed.as_ref().map_or(0, &usable_total);
+                tap_total = source.fixed.as_ref().map_or(0, &mut usable_total);
                 net_tap_total = source
                     .fixed
                     .as_ref()
@@ -632,7 +912,13 @@ impl PaymentModel<'_> {
                 if uses == 0 || ability.life_cost > life {
                     continue;
                 }
-                let output = uses * ability.outputs.iter().map(&usable_total).max().unwrap_or(0);
+                let output = uses
+                    * ability
+                        .outputs
+                        .iter()
+                        .map(&mut usable_total)
+                        .max()
+                        .unwrap_or(0);
                 let net_output = uses
                     * ability
                         .outputs
@@ -784,7 +1070,7 @@ impl PaymentModel<'_> {
         // Bound the whole pending payment, not just its first obligation:
         // otherwise an impossible later cost retries every way to fund an
         // earlier one.
-        let usable_total = |mana: &Mana| -> u64 { state.usable(mana).iter().sum() };
+        let purpose_indices = visited.pay_purposes(self, &state.obligations);
         // Whether some pending cost lets tapping `source` pay {1} of it.
         let pays_by_tap = |source: &ManaSource| {
             state.obligations.iter().any(|obligation| {
@@ -796,13 +1082,29 @@ impl PaymentModel<'_> {
         // activations. Restricted seeds can fund filters without being lost
         // from this accounting. Already saved outputs remain gross supply;
         // their upfront fees are explicit pending Pay obligations.
-        let (gross, net) =
-            self.source_bounds(&state.resources, u32::MAX, usable_total, pays_by_tap);
-        let mut total = usable_total(&state.pool) + gross;
+        let (gross, net) = if let [only] = purpose_indices.as_slice() {
+            self.source_bounds_for_purpose(&state.resources, &visited.purposes[*only], pays_by_tap)
+        } else {
+            self.source_bounds(
+                &state.resources,
+                u32::MAX,
+                |mana| visited.usable_for(&purpose_indices, mana).iter().sum(),
+                pays_by_tap,
+            )
+        };
+        let mut total = visited
+            .usable_for(&purpose_indices, &state.pool)
+            .iter()
+            .sum::<u64>()
+            + gross;
         let mut net_total = u64::from(state.pool.total()) + net;
         for obligation in &state.obligations {
             if let Obligation::Output { choices, .. } = obligation {
-                total += choices.iter().map(&usable_total).max().unwrap_or(0);
+                total += choices
+                    .iter()
+                    .map(|mana| visited.usable_for(&purpose_indices, mana).iter().sum())
+                    .max()
+                    .unwrap_or(0);
                 net_total += choices
                     .iter()
                     .map(|output| u64::from(output.total()))
@@ -825,7 +1127,8 @@ impl PaymentModel<'_> {
         // Only states that need exploration need an owned visited key.
         if total < owed
             || net_total < owed
-            || (visited.bounds_colors() && !self.colors_coverable(&state, visited))
+            || (visited.bounds_colors()
+                && !self.colors_coverable(&state, &purpose_indices, visited))
         {
             return None;
         }
@@ -881,7 +1184,7 @@ impl PaymentModel<'_> {
             }
             Obligation::Pay { cost, taps } => {
                 let pooled = state.pool.can_pay(cost);
-                if !pooled && !self.cost_coverable(&state, cost, *taps) {
+                if !pooled && !self.cost_coverable(&state, cost, *taps, visited) {
                     return None;
                 }
                 // Pool the whole current cost before spending starts;
@@ -993,44 +1296,53 @@ impl PaymentModel<'_> {
     /// Optimistic color/restriction supply for the current cost. Shared
     /// resources are relaxed and every output mode contributes its colors;
     /// the whole-payment and color-set bounds handle competing obligations.
-    fn cost_coverable(&self, state: &PaymentSearchState, cost: &ManaCost, taps: Taps) -> bool {
-        let mut optimistic = optimistic_pool(std::slice::from_ref(&state.pool), cost);
-        let mut usable = u64::from(state.pool.usable_total(cost));
+    fn cost_coverable(
+        &self,
+        state: &PaymentSearchState,
+        cost: &ManaCost,
+        taps: Taps,
+        visited: &mut PaymentSearch,
+    ) -> bool {
+        let supply_index = visited.purpose_index(self, &cost.purpose);
+        let supply = &mut visited.purposes[supply_index];
+        let (mut upper, mut usable) =
+            optimistic_supply(std::slice::from_ref(&state.pool), |class| {
+                supply.allows(class)
+            });
         for (index, source) in self.sources.iter().enumerate() {
             if !state.resources.present[index] {
                 continue;
             }
+            let src = &supply.sources[index];
             if state.resources.untapped[index] {
-                if let Some(output) = &source.fixed {
-                    optimistic.add(&optimistic_pool(std::slice::from_ref(output), cost));
-                    usable += u64::from(output.usable_total(cost));
+                if source.fixed.is_some() {
+                    for (slot, &more) in upper.iter_mut().zip(&src.fixed_upper) {
+                        *slot = slot.saturating_add(more);
+                    }
+                    usable += src.fixed_usable;
                 }
                 if source.pays_by_tap(taps) {
-                    optimistic.add(&Mana {
-                        mana: [0, 0, 0, 0, 0, 1],
-                        ..Default::default()
-                    });
+                    upper[5] = upper[5].saturating_add(1);
                     usable += 1;
                 }
             }
-            for (ability_index, ability) in source.abilities.iter().enumerate() {
+            for ability_index in 0..src.abilities_len {
                 let uses = self.uses(&state.resources, index, ability_index);
                 if uses == 0 {
                     continue;
                 }
-                let upper = optimistic_pool(&ability.outputs, cost);
-                for _ in 0..uses {
-                    optimistic.add(&upper);
+                let ab = &supply.abilities[src.abilities_start + ability_index];
+                let mul = uses.min(u8::MAX as usize) as u8;
+                for (slot, &more) in upper.iter_mut().zip(&ab.upper) {
+                    *slot = slot.saturating_add(more.saturating_mul(mul));
                 }
-                usable += uses as u64
-                    * ability
-                        .outputs
-                        .iter()
-                        .map(|m| u64::from(m.usable_total(cost)))
-                        .max()
-                        .unwrap_or(0);
+                usable += uses as u64 * ab.max_usable;
             }
         }
+        let optimistic = Mana {
+            mana: upper,
+            classes: None,
+        };
         usable >= u64::from(cost.mana_value) && optimistic.can_pay(cost)
     }
 
@@ -1041,20 +1353,23 @@ impl PaymentModel<'_> {
     /// in S; generic pips and waterbend taps are left to the total bound.
     ///
     /// Supply is optimistic in the same way as the total bound: mana counts
-    /// when the payment could spend it (`PaymentSearchState::usable`), one tap yields the best
+    /// when the payment could spend it (`PaymentSearch::usable_for`), one tap yields the best
     /// of the fixed output and the tapping abilities, and non-tapping
     /// abilities and pending outputs add their best choice. Unlike the
     /// per-cost check, each use contributes one output choice, not the union
     /// of its modes, so one "U or R" source cannot cover {U}{R}. Mana is never
     /// spent as another color during payment (`Mana::spending_choices`), so
     /// a failed set has no witness and pruning it keeps the first witness.
-    fn colors_coverable(&self, state: &PaymentSearchState, search: &PaymentSearch) -> bool {
+    fn colors_coverable(
+        &self,
+        state: &PaymentSearchState,
+        purpose_indices: &[usize],
+        search: &mut PaymentSearch,
+    ) -> bool {
         #[cfg(test)]
         if search.total_bound_only {
             return true;
         }
-        #[cfg(not(test))]
-        let _ = search;
         const KINDS: usize = 6;
         let mut pips = [0_u64; KINDS];
         let mut hybrid: Vec<u8> = Vec::new();
@@ -1081,7 +1396,6 @@ impl PaymentModel<'_> {
         if owed_kinds == 0 || (owed_kinds.count_ones() < 2 && pays < 2) {
             return true;
         }
-        let amounts = |mana: &Mana| state.usable(mana);
         // Each group is one exclusive choice: the supply of S is the pool
         // plus, per group, its best member counted inside S.
         let mut choices: Vec<[u64; KINDS]> = Vec::new();
@@ -1094,7 +1408,7 @@ impl PaymentModel<'_> {
             let tap_group = choices.len();
             if state.resources.untapped[index] {
                 if let Some(output) = &source.fixed {
-                    choices.push(amounts(output));
+                    choices.push(search.usable_for(purpose_indices, output));
                 }
             }
             let mut separate: Vec<(u64, &[Mana])> = Vec::new();
@@ -1104,7 +1418,12 @@ impl PaymentModel<'_> {
                     continue;
                 }
                 if ability.tap_source {
-                    choices.extend(ability.outputs.iter().map(&amounts));
+                    choices.extend(
+                        ability
+                            .outputs
+                            .iter()
+                            .map(|output| search.usable_for(purpose_indices, output)),
+                    );
                 } else {
                     separate.push((uses, &ability.outputs));
                 }
@@ -1113,21 +1432,25 @@ impl PaymentModel<'_> {
                 groups.push(choices.len());
             }
             for (uses, outputs) in separate {
-                choices.extend(
-                    outputs
-                        .iter()
-                        .map(|output| amounts(output).map(|amount| amount.saturating_mul(uses))),
-                );
+                choices.extend(outputs.iter().map(|output| {
+                    search
+                        .usable_for(purpose_indices, output)
+                        .map(|amount| amount.saturating_mul(uses))
+                }));
                 groups.push(choices.len());
             }
         }
         for obligation in &state.obligations {
             if let Obligation::Output { choices: modes, .. } = obligation {
-                choices.extend(modes.iter().map(&amounts));
+                choices.extend(
+                    modes
+                        .iter()
+                        .map(|output| search.usable_for(purpose_indices, output)),
+                );
                 groups.push(choices.len());
             }
         }
-        let pool = amounts(&state.pool);
+        let pool = search.usable_for(purpose_indices, &state.pool);
         let within = |amounts: &[u64; KINDS], set: u8| -> u64 {
             (0..KINDS)
                 .filter(|kind| set & (1 << kind) != 0)
@@ -1703,7 +2026,7 @@ impl Game {
                             });
                         }
                     }
-                    ManaRestriction::Only(purposes)
+                    ManaRestriction::only_predicates(purposes)
                 });
                 let output = |color: Color| {
                     let mut amounts = [0; 6];

@@ -82,14 +82,78 @@ impl SpendPredicate {
     }
 }
 
+/// Sorted, deduplicated spending predicates with a precomputed hash digest,
+/// shared across cloned pools and payment-search states.
+#[derive(Clone, Debug)]
+pub struct SpendPredicates {
+    predicates: BTreeSet<SpendPredicate>,
+    digest: u64,
+}
+
+impl SpendPredicates {
+    pub fn new(predicates: BTreeSet<SpendPredicate>) -> Arc<Self> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        predicates.hash(&mut hasher);
+        Arc::new(Self {
+            predicates,
+            digest: hasher.finish(),
+        })
+    }
+
+    pub fn iter(&self) -> std::collections::btree_set::Iter<'_, SpendPredicate> {
+        self.predicates.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.predicates.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.predicates.is_empty()
+    }
+}
+
+impl PartialEq for SpendPredicates {
+    fn eq(&self, other: &Self) -> bool {
+        self.digest == other.digest && self.predicates == other.predicates
+    }
+}
+
+impl Eq for SpendPredicates {}
+
+impl PartialOrd for SpendPredicates {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for SpendPredicates {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.predicates.cmp(&other.predicates)
+    }
+}
+
+impl std::hash::Hash for SpendPredicates {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.digest);
+    }
+}
+
+impl serde::Serialize for SpendPredicates {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.predicates.serialize(serializer)
+    }
+}
+
 /// The spending restriction that mana keeps until it is spent or lost
 /// (CR 106.6). A [`ManaClass`] can carry this restriction independently of its
 /// spend effect and expiry; ordinary mana lives in [`Mana::mana`].
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub enum ManaRestriction {
     /// Spend only on a purpose matching one of these ("spend this mana only
     /// to cast a Lesson spell"). Resolving costs match none of them.
-    Only(BTreeSet<SpendPredicate>),
+    Only(Arc<SpendPredicates>),
     /// Spend on anything but casting a nonartifact spell (Powerstone),
     /// resolving costs included.
     ExceptNonartifactSpells,
@@ -98,7 +162,66 @@ pub enum ManaRestriction {
     ExceptSpellsFromHand,
 }
 
+impl PartialEq for ManaRestriction {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Only(a), Self::Only(b)) => Arc::ptr_eq(a, b) || a == b,
+            (Self::ExceptNonartifactSpells, Self::ExceptNonartifactSpells)
+            | (Self::ExceptSpellsFromHand, Self::ExceptSpellsFromHand) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for ManaRestriction {}
+
+impl PartialOrd for ManaRestriction {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ManaRestriction {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let rank = |r: &Self| match r {
+            Self::Only(_) => 0_u8,
+            Self::ExceptNonartifactSpells => 1,
+            Self::ExceptSpellsFromHand => 2,
+        };
+        rank(self)
+            .cmp(&rank(other))
+            .then_with(|| match (self, other) {
+                (Self::Only(a), Self::Only(b)) => {
+                    if Arc::ptr_eq(a, b) {
+                        std::cmp::Ordering::Equal
+                    } else {
+                        a.cmp(b)
+                    }
+                }
+                _ => std::cmp::Ordering::Equal,
+            })
+    }
+}
+
+impl std::hash::Hash for ManaRestriction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Only(predicates) => {
+                state.write_u8(0);
+                state.write_u64(predicates.digest);
+            }
+            Self::ExceptNonartifactSpells => state.write_u8(1),
+            Self::ExceptSpellsFromHand => state.write_u8(2),
+        }
+    }
+}
+
 impl ManaRestriction {
+    /// Spend only on one of `predicates`.
+    pub fn only_predicates(predicates: BTreeSet<SpendPredicate>) -> Self {
+        Self::Only(SpendPredicates::new(predicates))
+    }
+
     /// Spend only to cast spells with `spell_subtypes` or to activate
     /// abilities of sources with `ability_source_subtypes`.
     pub fn only<'a>(
@@ -115,7 +238,7 @@ impl ManaRestriction {
             )
             .collect::<BTreeSet<_>>();
         assert!(!predicates.is_empty(), "a restriction names a purpose");
-        Self::Only(predicates)
+        Self::only_predicates(predicates)
     }
 
     /// Spend only to cast spells with one of these subtypes.
@@ -160,7 +283,7 @@ impl ManaRestriction {
 
     fn predicates(&self) -> impl Iterator<Item = &SpendPredicate> {
         match self {
-            Self::Only(predicates) => Some(predicates),
+            Self::Only(predicates) => Some(predicates.iter()),
             Self::ExceptNonartifactSpells | Self::ExceptSpellsFromHand => None,
         }
         .into_iter()

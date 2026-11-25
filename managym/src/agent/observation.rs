@@ -197,7 +197,7 @@ impl RestrictedManaData {
             .iter()
             .cloned()
             .map(SpendPredicate::ActivateSubtype);
-        ManaRestriction::Only(spells.chain(sources).collect())
+        ManaRestriction::only_predicates(spells.chain(sources).collect())
     }
 
     /// Whether this mana may pay for a spell or an ability source with `subtype`.

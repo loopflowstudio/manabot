@@ -516,7 +516,9 @@ fn payment_shared_outputs_keep_cached_witness_after_source_change() {
     let blue = model.plan(Mana::default(), vec![pay("U")], SourcePolicy::All);
     assert!(blue.is_some());
     let ability = &mut Arc::make_mut(&mut model.sources)[0].abilities[0];
-    Arc::make_mut(&mut ability.outputs)[0] = Mana::parse("G");
+    let mut updated = ability.outputs.to_vec();
+    updated[0] = Mana::parse("G");
+    ability.outputs = updated.into();
     assert!(model
         .plan(Mana::default(), vec![pay("U")], SourcePolicy::All)
         .is_none());
@@ -1410,14 +1412,33 @@ fn projected_output_bound_keeps_class_maxima_and_saturation() {
                 for mode in modes {
                     reference.max_with(mode);
                 }
-                let projected = super::optimistic_pool(modes, &cost);
-                assert!(projected.classes().is_empty());
+                let (upper, max_usable) =
+                    super::optimistic_supply(modes, |class| class.allows(&cost.purpose));
+                let projected = Mana {
+                    mana: upper,
+                    classes: None,
+                };
+                assert_eq!(
+                    max_usable,
+                    modes
+                        .iter()
+                        .map(|mode| u64::from(mode.usable_total(&cost)))
+                        .max()
+                        .unwrap_or(0)
+                );
                 assert_eq!(projected.can_pay(&cost), reference.can_pay(&cost));
                 // Adding repeated outputs preserves the same saturation
                 // even when their allowed classes differ.
                 for mode in &outputs {
+                    let (mode_upper, _) =
+                        super::optimistic_supply(std::slice::from_ref(mode), |class| {
+                            class.allows(&cost.purpose)
+                        });
                     let mut combined = projected.clone();
-                    combined.add(&super::optimistic_pool(std::slice::from_ref(mode), &cost));
+                    combined.add(&Mana {
+                        mana: mode_upper,
+                        classes: None,
+                    });
                     let mut single_reference = reference.clone();
                     single_reference.add(mode);
                     assert_eq!(combined.can_pay(&cost), single_reference.can_pay(&cost));
@@ -1563,10 +1584,12 @@ fn payment_color_bound_keeps_payable_costs_at_the_bound() {
         })
     };
     let mut herbalist = modal_source(9, &["U", "R"], "");
-    Arc::make_mut(&mut herbalist.abilities[0].outputs).push(Mana::restricted_to(
+    let mut outputs = herbalist.abilities[0].outputs.to_vec();
+    outputs.push(Mana::restricted_to(
         ManaRestriction::spell(["Lesson"]),
         [0, 2, 0, 0, 0, 0],
     ));
+    herbalist.abilities[0].outputs = outputs.into();
     let cases: Vec<(Vec<ManaSource>, Mana, Vec<Obligation>)> = vec![
         // Two U/R sources and a Forest pay two hybrid pips and green.
         (
