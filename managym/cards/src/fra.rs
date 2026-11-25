@@ -2,7 +2,7 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, Aggregate, AttackedSubject, CompareOp, Condition, DamageKind,
+        Ability, Actor, Aggregate, AttackSize, AttackedKind, CompareOp, Condition, DamageKind,
         DamageRecipientFilter, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
         Except, KeywordAction, LibraryEnd, ObjectProperty, ObjectSelector, PaymentCost, Per,
         PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
@@ -2147,11 +2147,14 @@ fn garruk_curse_breaker() -> CardDefinition {
                 loyalty(
                     -4,
                     vec![Effect::CreateDelayedTrigger {
-                        event: DelayedEvent::Attacks {
+                        event: DelayedEvent::Whenever(Box::new(TriggerCondition::Attacks {
                             subject: TriggerSubject::any(CardPredicate::creature()),
                             per: Per::Batch,
-                            attacked: AttackedSubject::Player(Actor::Opponent),
-                        },
+                            attackers: AttackSize::Any,
+                            attacked: Actor::Opponent,
+                            attacked_kind: AttackedKind::Player,
+                            nth: None,
+                        })),
                         frequency: DelayedFrequency::EachMatch,
                         expiry: DelayedExpiry::UntilYourNextTurn,
                         remember: None,
@@ -2266,11 +2269,14 @@ fn jace_reality_sculptor() -> CardDefinition {
                 loyalty(
                     -3,
                     vec![Effect::CreateDelayedTrigger {
-                        event: DelayedEvent::Attacks {
+                        event: DelayedEvent::Whenever(Box::new(TriggerCondition::Attacks {
                             subject: TriggerSubject::any(CardPredicate::creature()),
                             per: Per::Object,
-                            attacked: AttackedSubject::YouOrYourPlaneswalker,
-                        },
+                            attackers: AttackSize::Any,
+                            attacked: Actor::You,
+                            attacked_kind: AttackedKind::PlayerOrPlaneswalker,
+                            nth: None,
+                        })),
                         frequency: DelayedFrequency::EachMatch,
                         expiry: DelayedExpiry::UntilYourNextTurn,
                         remember: None,

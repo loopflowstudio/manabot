@@ -174,13 +174,8 @@ pub enum DelayedTriggerEvent {
     YouCastSpell(Box<CardPredicate>),
     /// "At the beginning of upkeep".
     Upkeep,
-    /// "Whenever [a creature / one or more creatures] attack [attacked]".
-    Attacks {
-        subject: crate::state::ability::TriggerSubject,
-        per: crate::state::ability::Per,
-        #[serde(skip_serializing_if = "crate::state::ability::AttackedSubject::is_any")]
-        attacked: crate::state::ability::AttackedSubject,
-    },
+    /// Any ordinary [`TriggerCondition`], matched by the shared trigger matcher.
+    Whenever(Box<crate::state::ability::TriggerCondition>),
 }
 
 /// A card exiled with an exact `source` object (CR 607.2a). "Until [source]

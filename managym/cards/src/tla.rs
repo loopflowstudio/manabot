@@ -8510,7 +8510,8 @@ fn sokka_lateral_strategist() -> CardDefinition {
                     subject: TriggerSubject::This,
                     per: Per::Object,
                     attackers: AttackSize::AtLeast(2),
-                    attacked: Default::default(),
+                    attacked: Actor::AnyPlayer,
+                    attacked_kind: Default::default(),
                     nth: None,
                 },
                 effects: vec![Effect::DrawCards {
@@ -8997,7 +8998,8 @@ fn team_avatar() -> CardDefinition {
                     }),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
-                    attacked: Default::default(),
+                    attacked: Actor::AnyPlayer,
+                    attacked_kind: Default::default(),
                     nth: None,
                 },
                 effects: vec![Effect::until_end_of_turn(

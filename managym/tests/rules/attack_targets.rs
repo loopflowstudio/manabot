@@ -158,8 +158,7 @@ fn attack_triggers_distinguish_you_and_your_planeswalker() {
     use crate::support::{game::inject_ability, inspect::card_of};
     use managym::state::{
         ability::{
-            Ability, Actor, AttackSize, AttackedSubject, Effect, Per, TriggerCondition,
-            TriggerSubject,
+            Ability, Actor, AttackSize, AttackedKind, Effect, Per, TriggerCondition, TriggerSubject,
         },
         predicate::CardPredicate,
     };
@@ -169,10 +168,9 @@ fn attack_triggers_distinguish_you_and_your_planeswalker() {
         clear_summoning_sickness(&mut s, ogre);
         let jace = defending_planeswalker(&mut s);
         let object = card_of(&s, jace);
-        for (attacked, amount) in [
-            (AttackedSubject::YouOrYourPlaneswalker, 1),
-            (AttackedSubject::Player(Actor::You), 2),
-            (AttackedSubject::PlaneswalkerControlledBy(Actor::You), 4),
+        for (attacked_kind, amount) in [
+            (AttackedKind::PlayerOrPlaneswalker, 1),
+            (AttackedKind::Player, 4),
         ] {
             inject_ability(
                 &mut s,
@@ -186,7 +184,8 @@ fn attack_triggers_distinguish_you_and_your_planeswalker() {
                         ),
                         per: Per::Object,
                         attackers: AttackSize::Any,
-                        attacked,
+                        attacked: Actor::You,
+                        attacked_kind,
                         nth: None,
                     },
                     intervening_if: None,
@@ -203,7 +202,9 @@ fn attack_triggers_distinguish_you_and_your_planeswalker() {
             |a| matches!(a,Action::DeclareAttacker{attack:Some(target),..} if matches!(target, AttackTarget::Permanent(_)) == walker),
         );
         s.advance_to_active_step(0, StepKind::EndOfCombat);
-        assert_eq!(s.life(1) - before, if walker { 5 } else { 1 });
+        // Attacking the player fires both triggers (+1 +4) and takes 2 combat damage (+3);
+        // attacking the planeswalker fires only PlayerOrPlaneswalker (+1) and takes 0 damage.
+        assert_eq!(s.life(1) - before, if walker { 1 } else { 3 });
     }
 }
 

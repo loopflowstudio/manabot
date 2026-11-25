@@ -222,13 +222,13 @@ fn condition_description(condition: &TriggerCondition, attached: &str) -> String
         TriggerCondition::Attacks {
             subject,
             per,
-            attackers, nth, attacked,
+            attackers, nth, attacked, attacked_kind,
         } => {
             let attack = match per {
                 Per::Object => format!("{} attacks", subject_description(subject, attached)),
                 Per::Batch => format!("{} attack", one_or_more(subject, "permanents", attached)),
             };
-            let attack = attack_with_subject(attack, *attacked);
+            let attack = attack_with_defender(attack, *attacked, *attacked_kind);
             let prefix = nth.map_or_else(|| "Whenever".to_string(), |n| format!("On attack {n} this turn, when"));
             match attackers {
                 AttackSize::Any => format!("{prefix} {attack}"),
@@ -481,16 +481,20 @@ fn actor_noun(who: Actor) -> &'static str {
     }
 }
 
-fn attack_with_subject(attack: String, attacked: crate::state::ability::AttackedSubject) -> String {
-    use crate::state::ability::AttackedSubject;
-    match attacked {
-        AttackedSubject::Any => attack,
-        AttackedSubject::Player(who) => format!("{attack} {}", actor_noun(who)),
-        AttackedSubject::PlaneswalkerControlledBy(who) => {
-            format!("{attack} a planeswalker controlled by {}", actor_noun(who))
-        }
-        AttackedSubject::YouOrYourPlaneswalker => {
+fn attack_with_defender(
+    attack: String,
+    attacked: Actor,
+    attacked_kind: crate::state::ability::AttackedKind,
+) -> String {
+    use crate::state::ability::AttackedKind;
+    match (attacked, attacked_kind) {
+        (Actor::AnyPlayer, AttackedKind::PlayerOrPlaneswalker) => attack,
+        (who, AttackedKind::Player) => format!("{attack} {}", actor_noun(who)),
+        (Actor::You, AttackedKind::PlayerOrPlaneswalker) => {
             format!("{attack} you or a planeswalker you control")
+        }
+        (Actor::Opponent, AttackedKind::PlayerOrPlaneswalker) => {
+            format!("{attack} an opponent or a planeswalker they control")
         }
     }
 }
@@ -1596,8 +1600,9 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         WhenYouDo { effects } => format!("When you do: {}", effects_description_in(triggering, effects)),
         CreateDelayedTrigger { event, frequency, expiry, remember, effects } => format!(
-            "{}When {}{} ({}), {}",
+            "{}{}{}{} ({}), {}",
             remember.as_ref().map_or_else(String::new, |what| format!("Remember {}. ", selector_description(triggering, what))),
+            if matches!(event, DelayedEvent::Whenever(_)) { "" } else { "When " },
             match event {
                 DelayedEvent::Dies => "that creature dies".into(),
                 DelayedEvent::CreatureDies => "a creature dies".into(),
@@ -1605,13 +1610,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
                 DelayedEvent::EndStep { your_turn: true } => "your end step begins".into(),
                 DelayedEvent::Upkeep => "upkeep begins".into(),
                 DelayedEvent::YouCastSpell(predicate) => format!("you cast a {}", predicate_description(predicate, "spell")),
-                DelayedEvent::Attacks { subject, per, attacked } => {
-                    let who = match per {
-                        Per::Batch => format!("{} attack", one_or_more(subject, "permanents", "")),
-                        Per::Object => format!("{} attacks", subject_description(subject, "")),
-                    };
-                    attack_with_subject(who, *attacked)
-                }
+                DelayedEvent::Whenever(condition) => condition_description(condition, ""),
             },
             match expiry {
                 DelayedExpiry::ThisTurn => " this turn",
@@ -2067,7 +2066,8 @@ mod tests {
                     subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
-                    attacked: Default::default(),
+                    attacked: Actor::AnyPlayer,
+                    attacked_kind: Default::default(),
                     nth: None,
                 },
                 "Whenever a creature you control attacks alone",

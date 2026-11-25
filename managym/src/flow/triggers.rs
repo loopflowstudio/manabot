@@ -16,10 +16,11 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Actor, DamageRecipientFilter, DelayedFrequency, Effect, EffectiveTrigger,
-            KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject, TurnStep,
+            Ability, Actor, AttackedKind, DamageRecipientFilter, DelayedFrequency, Effect,
+            EffectiveTrigger, KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject, TurnStep,
         },
+        binding::ObjectBinding,
         card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
         game_object::{
@@ -33,9 +34,10 @@ use crate::{
 
 /// One occurrence of a matched triggered ability, before it waits to be
 /// placed: a printed ability by index, or a granted one's effects.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct FiredTrigger<'a> {
     context: Option<Target>,
+    remembered: Vec<ObjectBinding>,
     player: Option<PlayerId>,
     amount: i32,
     once: bool,
@@ -49,11 +51,13 @@ enum TriggerAbility<'a> {
     Granted(&'a EffectiveTrigger),
 }
 
-/// The event member bound by a per-object ability. Batch abilities observe the whole event.
-#[derive(Clone, Copy)]
+/// The event member bound by a per-object ability, or the matching batch
+/// attackers for a batch attack trigger.
+#[derive(Clone)]
 enum TriggerMember {
     Event,
     Attacker(PermanentId),
+    AttackBatch(Vec<PermanentId>),
     CombatHit(CombatPlayerHit),
     CombatTotal(ObjectId, u32),
 }
@@ -175,10 +179,10 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
 /// The amount a fired trigger binds from its event (`EffectValue::TriggeringAmount`):
 /// the damage of its own combat hit, combat total, or damage event, or the life
 /// a player actually lost.
-fn event_amount(event: &GameEvent, member: TriggerMember) -> i32 {
+fn event_amount(event: &GameEvent, member: &TriggerMember) -> i32 {
     match (event, member) {
         (_, TriggerMember::CombatHit(hit)) => hit.amount,
-        (_, TriggerMember::CombatTotal(_, total)) => total as i32,
+        (_, TriggerMember::CombatTotal(_, total)) => *total as i32,
         (GameEvent::LifeChanged { old, new, .. }, _) if new < old => old - new,
         (GameEvent::DamageDealt { amount, .. }, _) => *amount as i32,
         (GameEvent::SourceDealtDamage { amount, .. }, _) => *amount,
@@ -1037,11 +1041,11 @@ impl Game {
                 }
                 let mut copies = once.then_some(1);
                 let mut emitted = false;
-                self.collect_occurrences(leaf, event, source, |member| {
+                self.collect_occurrences(leaf, event, source, true, |member| {
                     if once && emitted {
                         return;
                     }
-                    let context = self.trigger_context(ability, member, event);
+                    let context = self.trigger_context(ability, &member, event);
                     if intervening_if.as_ref().is_some_and(|condition| {
                         !self.check_intervening_if(
                             condition,
@@ -1052,6 +1056,12 @@ impl Game {
                     }) {
                         return;
                     }
+                    let remembered = match &member {
+                        TriggerMember::AttackBatch(matching) if ability.reads_remembered() => {
+                            self.batch_attacker_bindings(matching)
+                        }
+                        _ => Vec::new(),
+                    };
                     // CR 603.2d doubles each occurrence; a once-per-turn limit caps it at one.
                     let count =
                         *copies.get_or_insert_with(|| 1 + self.additional_trigger_times(source));
@@ -1060,8 +1070,9 @@ impl Game {
                             source,
                             ability: origin,
                             context,
-                            player: self.event_player(leaf, event, member),
-                            amount: event_amount(event, member),
+                            remembered,
+                            player: self.event_player(leaf, event, &member),
+                            amount: event_amount(event, &member),
                             once,
                         },
                         count,
@@ -1086,6 +1097,7 @@ impl Game {
         crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
             context,
+            remembered,
             player,
             amount,
             once,
@@ -1139,6 +1151,7 @@ impl Game {
                 triggering_amount: amount,
                 source_lki: source.lki.clone(),
                 context,
+                remembered,
                 player,
                 attacker,
                 inline_effects: granted,
@@ -1179,15 +1192,17 @@ impl Game {
         condition: &TriggerCondition,
         event: &GameEvent,
         source: &TriggerSourceSnapshot,
+        source_was_on_battlefield: bool,
         mut emit: impl FnMut(TriggerMember),
     ) {
         match (condition, event) {
             (
                 TriggerCondition::Attacks {
                     subject,
-                    per: Per::Object,
+                    per,
                     attackers: size,
                     attacked,
+                    attacked_kind,
                     nth,
                 },
                 GameEvent::AttackersDeclared {
@@ -1197,17 +1212,30 @@ impl Game {
                 },
             ) => {
                 if size.matches(attackers.len()) {
-                    for &id in attackers {
-                        if self.attack_matches(subject, *nth, source.object, source.controller, id)
-                            && self.attacked_subject_matches(
-                                *attacked,
-                                source.controller,
-                                *player,
-                                permanent_defenders.iter().any(|(a, _)| *a == id),
-                            )
-                        {
-                            emit(TriggerMember::Attacker(id));
+                    let matching: Vec<PermanentId> = attackers
+                        .iter()
+                        .copied()
+                        .filter(|&id| {
+                            self.attack_matches(subject, *nth, source.object, source.controller, id)
+                                && self.attack_defender_matches(
+                                    *attacked,
+                                    *attacked_kind,
+                                    source.controller,
+                                    *player,
+                                    permanent_defenders.iter().any(|(a, _)| *a == id),
+                                )
+                        })
+                        .collect();
+                    match per {
+                        Per::Object => {
+                            for id in matching {
+                                emit(TriggerMember::Attacker(id));
+                            }
                         }
+                        Per::Batch if !matching.is_empty() => {
+                            emit(TriggerMember::AttackBatch(matching));
+                        }
+                        Per::Batch => {}
                     }
                 }
             }
@@ -1248,7 +1276,7 @@ impl Game {
                 condition,
                 source.object,
                 source.controller,
-                true,
+                source_was_on_battlefield,
                 event,
             ) =>
             {
@@ -1257,6 +1285,18 @@ impl Game {
             }
             _ => {}
         }
+    }
+
+    fn batch_attacker_bindings(&self, matching: &[PermanentId]) -> Vec<ObjectBinding> {
+        matching
+            .iter()
+            .filter_map(|&id| self.permanent_object(id))
+            .map(|object| ObjectBinding {
+                object,
+                selection: None,
+                known_to: [true, true],
+            })
+            .collect()
     }
 
     fn permanent_or_lki(&self, object: ObjectId) -> Option<PermanentId> {
@@ -1270,19 +1310,28 @@ impl Game {
     fn trigger_context(
         &self,
         ability: &Ability,
-        member: TriggerMember,
+        member: &TriggerMember,
+        event: &GameEvent,
+    ) -> Option<Target> {
+        self.event_trigger_context(ability.reads_triggering_object(), member, event)
+    }
+
+    fn event_trigger_context(
+        &self,
+        reads_triggering: bool,
+        member: &TriggerMember,
         event: &GameEvent,
     ) -> Option<Target> {
         match member {
-            TriggerMember::Attacker(id) => return Some(Target::Permanent(id)),
-            TriggerMember::CombatHit(hit) if ability.reads_triggering_object() => {
+            TriggerMember::Attacker(id) => return Some(Target::Permanent(*id)),
+            TriggerMember::CombatHit(hit) if reads_triggering => {
                 return self.permanent_or_lki(hit.source).map(Target::Permanent);
             }
             TriggerMember::CombatHit(_) => return None,
             TriggerMember::CombatTotal(source, _) => {
-                return self.permanent_or_lki(source).map(Target::Permanent)
+                return self.permanent_or_lki(*source).map(Target::Permanent)
             }
-            TriggerMember::Event => {}
+            TriggerMember::Event | TriggerMember::AttackBatch(_) => {}
         }
         match event {
             GameEvent::PermanentTargeted { by, .. } => Some(*by),
@@ -1291,7 +1340,7 @@ impl Game {
                 attacker: Some(_),
                 ..
             } => Some(Target::StackAbility(*ability)),
-            _ if !ability.reads_triggering_object() => None,
+            _ if !reads_triggering => None,
             GameEvent::SpellCast { object_id, .. } => Some(Target::StackSpell(*object_id)),
             // "That creature" / "that source" of a damage trigger: the dealing
             // permanent live or as it last existed, else the dealing spell,
@@ -1340,7 +1389,7 @@ impl Game {
         &self,
         leaf: &TriggerCondition,
         event: &GameEvent,
-        member: TriggerMember,
+        member: &TriggerMember,
     ) -> Option<PlayerId> {
         match event {
             GameEvent::CombatDamageToPlayers { .. } => match member {
@@ -1427,11 +1476,15 @@ impl Game {
         let mut fired = Vec::new();
         let mut spent = Vec::new();
         for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
-            let mut occurrences: Vec<(Option<Target>, Vec<crate::state::binding::ObjectBinding>)> =
-                Vec::new();
+            let mut occurrences: Vec<(
+                Option<Target>,
+                Vec<ObjectBinding>,
+                Option<PlayerId>,
+                i32,
+            )> = Vec::new();
             match (&trigger.event, event) {
                 (DelayedTriggerEvent::CreatureDies, _) if dead_creature.is_some() => {
-                    occurrences.push((dead_creature, Vec::new()));
+                    occurrences.push((dead_creature, Vec::new(), None, 0));
                 }
                 (
                     DelayedTriggerEvent::EndStep { your_turn },
@@ -1439,7 +1492,7 @@ impl Game {
                         step: StepKind::End,
                     },
                 ) if !your_turn || self.active_player() == trigger.controller => {
-                    occurrences.push((None, Vec::new()));
+                    occurrences.push((None, Vec::new(), None, 0));
                 }
                 (
                     DelayedTriggerEvent::Upkeep,
@@ -1447,7 +1500,7 @@ impl Game {
                         step: StepKind::Upkeep,
                     },
                 ) => {
-                    occurrences.push((None, Vec::new()));
+                    occurrences.push((None, Vec::new(), None, 0));
                 }
                 (
                     DelayedTriggerEvent::YouCastSpell(predicate),
@@ -1459,59 +1512,43 @@ impl Game {
                 ) if *caster == trigger.controller
                     && self.object_matches_predicate(*object, predicate) =>
                 {
-                    occurrences.push((Some(Target::StackSpell(*object)), Vec::new()));
+                    occurrences.push((Some(Target::StackSpell(*object)), Vec::new(), None, 0));
                 }
-                (
-                    DelayedTriggerEvent::Attacks {
-                        subject,
-                        per,
-                        attacked,
-                    },
-                    GameEvent::AttackersDeclared {
-                        attackers,
-                        player,
-                        permanent_defenders,
-                    },
-                ) => {
-                    let matching: Vec<PermanentId> = attackers
-                        .iter()
-                        .copied()
-                        .filter(|&id| {
-                            self.attack_matches(
-                                subject,
-                                None,
-                                trigger.source_object(),
-                                trigger.controller,
-                                id,
-                            ) && self.attacked_subject_matches(
-                                *attacked,
-                                trigger.controller,
-                                *player,
-                                permanent_defenders.iter().any(|(a, _)| *a == id),
-                            )
-                        })
-                        .collect();
-                    if matching.is_empty() {
+                (DelayedTriggerEvent::Whenever(condition), _) => {
+                    let source_object = trigger.source_object();
+                    let Some((leaf, _once)) = self.match_trigger_wrappers(
+                        condition,
+                        event,
+                        source_object,
+                        trigger.controller,
+                    ) else {
                         continue;
-                    }
-                    match per {
-                        Per::Object => {
-                            for id in matching {
-                                occurrences.push((Some(Target::Permanent(id)), Vec::new()));
+                    };
+                    let source = TriggerSourceSnapshot {
+                        object: source_object,
+                        controller: trigger.controller,
+                        definition: self
+                            .observed_source_definition(source_object)
+                            .unwrap_or(CardDefId::ANONYMOUS),
+                        lki: None,
+                    };
+                    let effects = trigger.effects.effects();
+                    let reads_triggering = effects.iter().any(Effect::reads_triggering_object);
+                    let reads_remembered = effects.iter().any(Effect::reads_remembered);
+                    self.collect_occurrences(leaf, event, &source, false, |member| {
+                        let context = self.event_trigger_context(reads_triggering, &member, event);
+                        let remembered = match &member {
+                            TriggerMember::AttackBatch(matching) if reads_remembered => {
+                                self.batch_attacker_bindings(matching)
                             }
-                        }
-                        Per::Batch => {
-                            let bindings: Vec<_> = matching
-                                .into_iter()
-                                .filter_map(|id| self.permanent_object(id))
-                                .map(|object| crate::state::binding::ObjectBinding {
-                                    object,
-                                    selection: None,
-                                    known_to: [true, true],
-                                })
-                                .collect();
-                            occurrences.push((None, bindings));
-                        }
+                            _ => Vec::new(),
+                        };
+                        let player = self.event_player(leaf, event, &member);
+                        let amount = event_amount(event, &member);
+                        occurrences.push((context, remembered, player, amount));
+                    });
+                    if occurrences.is_empty() {
+                        continue;
                     }
                 }
                 _ => continue,
@@ -1519,18 +1556,20 @@ impl Game {
             if trigger.frequency == DelayedFrequency::Once {
                 spent.push(index);
             }
-            for (context, extra_remembered) in occurrences {
-                fired.push((trigger.clone(), context, extra_remembered));
+            for (context, extra_remembered, player, amount) in occurrences {
+                fired.push((trigger.clone(), context, extra_remembered, player, amount));
             }
         }
         for index in spent.into_iter().rev() {
             self.state.delayed_triggers_mut().remove(index);
         }
-        for (mut trigger, context, extra_remembered) in fired {
+        for (mut trigger, context, extra_remembered, player, amount) in fired {
             if !extra_remembered.is_empty() {
                 trigger.remembered.extend(extra_remembered);
             }
-            self.fire_delayed_trigger(&trigger, context);
+            let pending = self.fire_delayed_trigger(&trigger, context);
+            pending.player = player;
+            pending.triggering_amount = amount;
         }
     }
 
@@ -1539,7 +1578,7 @@ impl Game {
         &mut self,
         trigger: &DelayedTrigger,
         context: Option<Target>,
-    ) {
+    ) -> &mut PendingTrigger {
         let pending = self.enqueue_inline_trigger(
             trigger.source_identity,
             trigger.controller,
@@ -1548,6 +1587,7 @@ impl Game {
         );
         pending.remembered = trigger.remembered.clone();
         pending.program = true;
+        pending
     }
 
     /// A fresh identity for the trigger occurrence about to be enqueued.
@@ -2083,6 +2123,7 @@ impl Game {
                     subject,
                     attackers: size,
                     attacked,
+                    attacked_kind,
                     nth,
                     ..
                 },
@@ -2095,8 +2136,9 @@ impl Game {
                 size.matches(attackers.len())
                     && attackers.iter().any(|&id| {
                         self.attack_matches(subject, *nth, source_object, source_controller, id)
-                            && self.attacked_subject_matches(
+                            && self.attack_defender_matches(
                                 *attacked,
+                                *attacked_kind,
                                 source_controller,
                                 *player,
                                 permanent_defenders.iter().any(|(a, _)| *a == id),
@@ -2376,23 +2418,17 @@ impl Game {
         }
     }
 
-    fn attacked_subject_matches(
+    fn attack_defender_matches(
         &self,
-        attacked: crate::state::ability::AttackedSubject,
+        attacked: Actor,
+        attacked_kind: AttackedKind,
         controller: PlayerId,
         active: PlayerId,
         planeswalker: bool,
     ) -> bool {
-        use crate::state::ability::AttackedSubject;
         let defender = self.next_player(active);
-        match attacked {
-            AttackedSubject::Any => true,
-            AttackedSubject::Player(who) => !planeswalker && who.includes(controller, defender),
-            AttackedSubject::PlaneswalkerControlledBy(who) => {
-                planeswalker && who.includes(controller, defender)
-            }
-            AttackedSubject::YouOrYourPlaneswalker => defender == controller,
-        }
+        attacked.includes(controller, defender)
+            && (!planeswalker || attacked_kind == AttackedKind::PlayerOrPlaneswalker)
     }
 
     fn attack_matches(

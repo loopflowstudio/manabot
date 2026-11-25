@@ -2341,15 +2341,9 @@ impl Game {
                         vec![DelayedTriggerEvent::YouCastSpell(predicate.clone())]
                     }
                     DelayedEvent::Upkeep => vec![DelayedTriggerEvent::Upkeep],
-                    DelayedEvent::Attacks {
-                        subject,
-                        per,
-                        attacked,
-                    } => vec![DelayedTriggerEvent::Attacks {
-                        subject: subject.clone(),
-                        per: *per,
-                        attacked: *attacked,
-                    }],
+                    DelayedEvent::Whenever(condition) => {
+                        vec![DelayedTriggerEvent::Whenever(condition.clone())]
+                    }
                 };
                 // A death count is already fixed by the departed appearance.
                 // Store its literal in the scheduled return so every viewer and

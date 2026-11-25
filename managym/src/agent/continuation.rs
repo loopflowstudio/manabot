@@ -194,7 +194,7 @@ pub const MAX_DELAYED_EVENT_CODE: u8 = 8;
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
 /// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the end
 /// step, 5 its controller casts a matching spell, 6 upkeep,
-/// 7 its controller's end step, 8 creatures attack. Frequency is projected separately.
+/// 7 its controller's end step, 8 a `TriggerCondition` watcher. Frequency is projected separately.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -212,7 +212,7 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
         } => 7,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
         DelayedTriggerEvent::Upkeep => 6,
-        DelayedTriggerEvent::Attacks { .. } => 8,
+        DelayedTriggerEvent::Whenever(_) => 8,
     }
 }
 
@@ -585,7 +585,7 @@ impl Game {
             | DelayedTriggerEvent::CreatureDies
             | DelayedTriggerEvent::YouCastSpell(_)
             | DelayedTriggerEvent::Upkeep
-            | DelayedTriggerEvent::Attacks { .. } => None,
+            | DelayedTriggerEvent::Whenever(_) => None,
         };
         let mut frame = ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),

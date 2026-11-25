@@ -111,6 +111,10 @@ impl Ability {
         self.reads(ContextRead::TriggeringObject)
     }
 
+    pub fn reads_remembered(&self) -> bool {
+        self.reads(ContextRead::Remembered)
+    }
+
     fn reads(&self, read: ContextRead) -> bool {
         let Self::Triggered {
             effects,
@@ -190,8 +194,10 @@ pub enum TriggerCondition {
         subject: TriggerSubject,
         per: Per,
         attackers: AttackSize,
-        #[serde(skip_serializing_if = "AttackedSubject::is_any")]
-        attacked: AttackedSubject,
+        #[serde(skip_serializing_if = "Actor::is_any")]
+        attacked: Actor,
+        #[serde(skip_serializing_if = "AttackedKind::is_any")]
+        attacked_kind: AttackedKind,
         #[serde(skip_serializing_if = "Option::is_none")]
         nth: Option<u32>,
     },
@@ -559,25 +565,25 @@ impl TriggerCondition {
             subject,
             per,
             attackers: AttackSize::Any,
-            attacked: Default::default(),
+            attacked: Actor::AnyPlayer,
+            attacked_kind: AttackedKind::PlayerOrPlaneswalker,
             nth: None,
         }
     }
 }
 
-/// The player or planeswalker a matching creature was declared attacking.
+/// Whether an attack trigger counts attacks against planeswalkers too, or
+/// only attacks against a player.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
-pub enum AttackedSubject {
+pub enum AttackedKind {
+    Player,
     #[default]
-    Any,
-    Player(Actor),
-    PlaneswalkerControlledBy(Actor),
-    YouOrYourPlaneswalker,
+    PlayerOrPlaneswalker,
 }
 
-impl AttackedSubject {
+impl AttackedKind {
     pub fn is_any(&self) -> bool {
-        *self == Self::Any
+        *self == Self::PlayerOrPlaneswalker
     }
 }
 
@@ -633,6 +639,8 @@ enum ContextRead {
     /// A characteristic of the source other than power, read as it last
     /// existed once it has left (CR 608.2h).
     SourceLki,
+    /// Batch objects bound onto the trigger's `remembered` set ("those creatures").
+    Remembered,
 }
 
 impl Condition {
@@ -754,6 +762,10 @@ pub enum Actor {
 }
 
 impl Actor {
+    pub fn is_any(&self) -> bool {
+        *self == Self::AnyPlayer
+    }
+
     /// Whether `player` is this actor for an ability controlled by `you`.
     pub fn includes(self, you: PlayerId, player: PlayerId) -> bool {
         match self {
@@ -2155,15 +2167,8 @@ pub enum DelayedEvent {
     /// The matching spell supplies event context, separate from captured subjects.
     YouCastSpell(Box<CardPredicate>),
     Upkeep,
-    /// "Whenever [a creature / one or more creatures] attack [attacked]".
-    /// `Per::Object` triggers once per matching attacker with it as context;
-    /// `Per::Batch` triggers once with the matching attackers remembered.
-    Attacks {
-        subject: TriggerSubject,
-        per: Per,
-        #[serde(skip_serializing_if = "AttackedSubject::is_any")]
-        attacked: AttackedSubject,
-    },
+    /// Any ordinary [`TriggerCondition`], matched by the shared trigger matcher.
+    Whenever(Box<TriggerCondition>),
 }
 
 /// Whether a matching event consumes the watcher, independently of resolution.
@@ -2297,7 +2302,9 @@ impl ObjectSelector {
     fn reads(&self, read: ContextRead) -> bool {
         match self {
             Self::Triggering => read == ContextRead::TriggeringObject,
+            Self::Remembered => read == ContextRead::Remembered,
             Self::Paid(_) => read == ContextRead::PaidCost,
+            Self::Matching { of, .. } => of.reads(read),
             Self::Each {
                 exact_mana_value,
                 max_mana_value,
@@ -2416,6 +2423,10 @@ impl Effect {
     }
     pub fn reads_triggering_object(&self) -> bool {
         self.reads(ContextRead::TriggeringObject)
+    }
+
+    pub fn reads_remembered(&self) -> bool {
+        self.reads(ContextRead::Remembered)
     }
 
     fn reads(&self, read: ContextRead) -> bool {

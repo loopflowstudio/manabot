@@ -2575,7 +2575,8 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             subject: TriggerSubject::you_control(CardPredicate::creature()),
             per: Per::Batch,
             attackers,
-            attacked: Default::default(),
+            attacked: Actor::AnyPlayer,
+            attacked_kind: Default::default(),
             nth: None,
         });
         expected.push(match attackers {
@@ -4825,7 +4826,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
         DelayedTriggerEvent::EndStep { your_turn } => (if *your_turn { 7 } else { 4 }, false),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
         DelayedTriggerEvent::Upkeep => (6, false),
-        DelayedTriggerEvent::Attacks { .. } => (8, false),
+        DelayedTriggerEvent::Whenever(_) => (8, false),
     }
 }
 
@@ -4846,11 +4847,14 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
         DelayedTriggerEvent::EndStep { your_turn: true },
         DelayedTriggerEvent::YouCastSpell(Box::new(CardPredicate::subtype("Lesson"))),
         DelayedTriggerEvent::Upkeep,
-        DelayedTriggerEvent::Attacks {
+        DelayedTriggerEvent::Whenever(Box::new(TriggerCondition::Attacks {
             subject: TriggerSubject::any(CardPredicate::creature()),
             per: Per::Batch,
-            attacked: managym::state::ability::AttackedSubject::Player(Actor::Opponent),
-        },
+            attackers: AttackSize::Any,
+            attacked: Actor::Opponent,
+            attacked_kind: managym::state::ability::AttackedKind::Player,
+            nth: None,
+        })),
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
     assert_eq!(codes.len(), events.len());

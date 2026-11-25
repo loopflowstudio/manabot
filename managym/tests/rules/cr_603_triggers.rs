@@ -400,3 +400,104 @@ fn chosen_mode_trigger_keeps_its_printed_ability_and_intervening_if() {
         "one creature left: the intervening if fails"
     );
 }
+
+/// Ordinary `Per::Batch` attack triggers bind their matching attackers onto
+/// `ObjectSelector::Remembered`, and `DelayedEvent::Whenever` matches any
+/// `TriggerCondition` through the same shared matcher.
+#[test]
+fn batch_attack_trigger_binds_remembered_and_delayed_whenever_uses_shared_matcher() {
+    use crate::support::{
+        inspect::card_of,
+        play::{choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::{
+            combat::AttackTarget,
+            trigger::{DelayedEffects, DelayedTrigger, DelayedTriggerEvent},
+        },
+        state::{
+            ability::{
+                Ability, Actor, AttackSize, AttackedKind, DelayedExpiry, DelayedFrequency, Effect,
+                ObjectSelector, Per, TriggerCondition, TriggerSubject,
+            },
+            effect::Modification,
+            predicate::CardPredicate,
+        },
+    };
+    let mut s = five_color_setup(&["Gray Ogre", "Hill Giant", "Ajani, Caller of the Pride"]);
+    let watcher = s.force_permanent_on_battlefield(0, "Hill Giant");
+    let watcher_obj = card_of(&s, watcher);
+    let ogre_a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_b = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre_a);
+    clear_summoning_sickness(&mut s, ogre_b);
+    let opp_pw = s.force_permanent_on_battlefield(1, "Ajani, Caller of the Pride");
+    set_counters(&mut s, opp_pw, managym::state::permanent::CounterKind::Loyalty, 4);
+    let opp_pw_obj = card_of(&s, opp_pw);
+
+    // Printed Per::Batch attack trigger reading Remembered buffs only player-attackers.
+    s.game_mut().state[watcher_obj].abilities = vec![Ability::Triggered {
+        condition: TriggerCondition::Attacks {
+            subject: TriggerSubject::any(CardPredicate::creature()),
+            per: Per::Batch,
+            attackers: AttackSize::Any,
+            attacked: Actor::Opponent,
+            attacked_kind: AttackedKind::Player,
+            nth: None,
+        },
+        intervening_if: None,
+        effects: vec![Effect::until_end_of_turn(
+            ObjectSelector::Remembered,
+            Modification::pump(1, 0),
+        )],
+    }];
+    // Delayed Whenever trigger matching an opponent's planeswalker attack via TriggerCondition.
+    s.game_mut().state.delayed_triggers.push(DelayedTrigger {
+        event: DelayedTriggerEvent::Whenever(Box::new(TriggerCondition::Attacks {
+            subject: TriggerSubject::any(CardPredicate::creature()),
+            per: Per::Object,
+            attackers: AttackSize::Any,
+            attacked: Actor::Opponent,
+            attacked_kind: AttackedKind::PlayerOrPlaneswalker,
+            nth: None,
+        })),
+        controller: PlayerId(0),
+        source_identity: AbilitySource::new(watcher_obj, Some(watcher_obj)),
+        remembered: Vec::new(),
+        effects: DelayedEffects::new(vec![Effect::until_end_of_turn(
+            ObjectSelector::Triggering,
+            Modification::pump(0, 2),
+        )]),
+        frequency: DelayedFrequency::EachMatch,
+        expiry: DelayedExpiry::ThisTurn,
+    });
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let offered = match s.action_space().actions[0] {
+            Action::DeclareAttacker { permanent, .. } => permanent,
+            _ => unreachable!(),
+        };
+        if offered == ogre_a {
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(_)), .. } if *permanent == ogre_a),
+            );
+        } else if offered == ogre_b {
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == ogre_b && *obj == opp_pw_obj),
+            );
+        } else {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { attack: None, .. })
+            });
+        }
+    }
+    settle(&mut s);
+    // ogre_a attacked the opponent: +1/+0 from printed batch Remembered AND +0/+2 from delayed Whenever.
+    assert_eq!(s.game().characteristics(ogre_a).pt(), (3, 4));
+    // ogre_b attacked the planeswalker: NOT in printed batch Remembered, YES in delayed Whenever (+0/+2).
+    assert_eq!(s.game().characteristics(ogre_b).pt(), (2, 4));
+}
