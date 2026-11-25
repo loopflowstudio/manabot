@@ -355,7 +355,12 @@ impl Game {
                 .current_clause_targets()
                 .any(|chosen| chosen == target)
             || !self.fits_trigger_target_clause(trigger, requirement, target)
-            || !self.target_meets_requirement(target, requirement, player, trigger.source_identity)
+            || !self.target_meets_requirement(
+                target,
+                requirement,
+                &self.targeting_source(player, trigger.source_identity.object()),
+                trigger.source_identity,
+            )
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -714,10 +719,20 @@ impl Game {
         controller: PlayerId,
         source: AbilitySource,
     ) -> impl Iterator<Item = Target> + 'a {
-        self.target_candidates(&requirement.spec, controller)
+        let targeting = self.targeting_source(controller, source.object());
+        self.targets_for_characteristics(requirement, source, targeting)
+    }
+
+    pub(super) fn targets_for_characteristics<'a>(
+        &'a self,
+        requirement: &'a TargetRequirement,
+        source: AbilitySource,
+        targeting: super::resolution::TargetingSource,
+    ) -> impl Iterator<Item = Target> + 'a {
+        self.target_candidates(&requirement.spec, targeting.controller)
             .into_iter()
             .filter(move |target| {
-                self.target_meets_requirement(*target, requirement, controller, source)
+                self.target_meets_requirement(*target, requirement, &targeting, source)
             })
     }
 
@@ -729,7 +744,7 @@ impl Game {
     ) -> Vec<Target> {
         self.target_candidates(spec, controller)
             .into_iter()
-            .filter(|target| self.target_is_legal(*target, spec, controller))
+            .filter(|target| self.test_target_is_legal(*target, spec, controller))
             .collect()
     }
 

@@ -7,12 +7,14 @@ use managym_state::card::{
     ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
     Keywords, PrintedCharacteristics,
 };
+use managym_state::effect::Modification;
 use managym_state::mana::{Color, Mana, ManaCost, SpendEffect};
 use managym_state::predicate::CardPredicate;
 use std::sync::Arc;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        joraga_invocation(),
         dwynens_elite(),
         boggart_brute(),
         demonic_pact(),
@@ -219,6 +221,32 @@ fn harbinger_of_the_tides() -> CardDefinition {
                     }],
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn joraga_invocation() -> CardDefinition {
+    let text_box = "Each creature you control gets +3/+3 until end of turn and must be blocked this turn if able.";
+    CardDefinition {
+        key: "ori.joraga_invocation",
+        scryfall_id: "65c89431-0881-4aa6-ac15-d4c13b075273",
+        printed: PrintedCharacteristics {
+            name: "Joraga Invocation".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::pump(3, 3),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate::creature()),
+                    Modification::MustBeBlocked,
+                ),
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

@@ -2809,6 +2809,12 @@
           "title": "Granted Firebending",
           "type": "integer"
         },
+        "hexproof_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2868,6 +2874,12 @@
             }
           ],
           "title": "Power"
+        },
+        "protection_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "summoning_sick": {
           "title": "Summoning Sick",
@@ -3046,6 +3058,9 @@
           ],
           "default": null,
           "title": "Hand Only Until"
+        },
+        "hexproof": {
+          "type": "boolean"
         },
         "id": {
           "maximum": 4294967295,

@@ -1442,6 +1442,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "hexproof_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "id": {
           "type": "integer",
           "format": "uint32",
@@ -1480,6 +1486,12 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "protection_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "summoning_sick": {
           "type": "boolean"
@@ -1615,6 +1627,9 @@
           ],
           "format": "uint32",
           "minimum": 0
+        },
+        "hexproof": {
+          "type": "boolean"
         },
         "id": {
           "type": "integer",

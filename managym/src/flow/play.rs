@@ -592,7 +592,7 @@ impl Game {
             let applies = match targets {
                 Some(targets) => targets.iter().any(earns),
                 None => card_ref.target_requirements().iter().any(|requirement| {
-                    self.legal_targets_for_requirement(player, object, requirement)
+                    self.legal_targets_for_requirement(player, object, cast.profile, requirement)
                         .iter()
                         .any(earns)
                 }),
@@ -859,7 +859,8 @@ impl Game {
         // "X targets" (CR 601.2c): X can't exceed the legal candidates.
         for requirement in cast.spell(&self.state[object]).target_requirements() {
             if requirement.exact_x() {
-                let legal = self.legal_targets_for_requirement(player, object, &requirement);
+                let legal =
+                    self.legal_targets_for_requirement(player, object, cast.profile, &requirement);
                 values.retain(|x| usize::from(*x) <= legal.len());
             }
         }
@@ -1081,7 +1082,12 @@ impl Game {
                         .all(|req| {
                             req.min == 0
                                 || self
-                                    .legal_targets_for_requirement(player, object, req)
+                                    .legal_targets_for_requirement(
+                                        player,
+                                        object,
+                                        cast.profile,
+                                        req,
+                                    )
                                     .len()
                                     >= req.min
                         })
@@ -1156,6 +1162,7 @@ impl Game {
                 .remaining_legal_targets(
                     player,
                     object,
+                    cast,
                     requirement,
                     &chosen
                         .iter()
@@ -1163,7 +1170,6 @@ impl Game {
                         .filter(|(_, index)| **index == requirement_index)
                         .map(|(target, _)| *target)
                         .collect::<Vec<_>>(),
-                    cast.x,
                 )
                 .into_iter()
                 .filter(|target| {
@@ -1216,14 +1222,14 @@ impl Game {
         &self,
         player: PlayerId,
         object: ObjectId,
+        cast: CastChoices,
         requirement: &TargetRequirement,
         chosen: &[Target],
-        x: u8,
     ) -> Vec<Target> {
-        self.legal_targets_for_requirement(player, object, requirement)
+        self.legal_targets_for_requirement(player, object, cast.profile, requirement)
             .into_iter()
             .filter(|target| {
-                self.fits_target_clause(requirement, x, chosen.iter().copied(), *target)
+                self.fits_target_clause(requirement, cast.x, chosen.iter().copied(), *target)
             })
             // Distinctness and the budget are local to this clause.
             .filter(|target| !chosen.contains(target))
@@ -1308,6 +1314,7 @@ impl Game {
         let legal = self.remaining_legal_targets(
             player,
             object,
+            cast,
             requirement,
             &chosen
                 .iter()
@@ -1315,7 +1322,6 @@ impl Game {
                 .filter(|(_, index)| **index == requirement_index)
                 .map(|(target, _)| *target)
                 .collect::<Vec<_>>(),
-            cast.x,
         );
         if legal.is_empty() {
             return self.advance_target_selection(
@@ -2222,10 +2228,18 @@ impl Game {
         &self,
         player: PlayerId,
         object: ObjectId,
+        profile: SpellProfile,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
-        self.targets_for_source(requirement, player, AbilitySource::new(object, None))
-            .filter(|target| *target != Target::StackSpell(object))
-            .collect()
+        let face = crate::cards::content_pack::default_content_pack()
+            .spell_definition(&self.state[object], profile)
+            .expect("offered spell profile");
+        self.targets_for_characteristics(
+            requirement,
+            AbilitySource::new(object, None),
+            super::resolution::TargetingSource::printed(player, face),
+        )
+        .filter(|target| *target != Target::StackSpell(object))
+        .collect()
     }
 }

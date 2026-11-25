@@ -27,7 +27,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::default_content_pack;
-use managym::state::card::{AdditionalCost, CardType, Keyword, PrintedCharacteristics};
+use managym::state::card::{
+    AdditionalCost, CardType, Keyword, PrintedCharacteristics, StaticAbility,
+};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -282,6 +284,10 @@ fn every_registered_real_card_matches_scryfall() {
 
         // Engine-supported keyword flags.
         let kw = |k: &str| fx.keywords.iter().any(|f| f == k);
+        let qualified_hexproof = def
+            .statics
+            .iter()
+            .any(|a| matches!(a, StaticAbility::HexproofFrom(_)));
         let checks = [
             ("Flying", def.keywords.has(Keyword::Flying)),
             ("Reach", def.keywords.has(Keyword::Reach)),
@@ -295,7 +301,17 @@ fn every_registered_real_card_matches_scryfall() {
             ("Lifelink", def.keywords.has(Keyword::Lifelink)),
             ("Defender", def.keywords.has(Keyword::Defender)),
             ("Menace", def.keywords.has(Keyword::Menace)),
-            ("Hexproof", def.keywords.has(Keyword::Hexproof)),
+            (
+                "Hexproof",
+                def.keywords.has(Keyword::Hexproof) || qualified_hexproof,
+            ),
+            ("Hexproof from", qualified_hexproof),
+            (
+                "Protection",
+                def.statics
+                    .iter()
+                    .any(|a| matches!(a, StaticAbility::Protection(_))),
+            ),
             ("Ward", def.ward().is_some()),
             (
                 "Kicker",

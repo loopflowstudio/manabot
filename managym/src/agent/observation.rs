@@ -84,6 +84,8 @@ pub struct PlayerData {
     /// No maximum hand size for the rest of the game (Spirit Water Revival).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hexproof: bool,
     pub known_hand: BTreeMap<u32, u32>,
     /// Exact definitions at zero-based library positions, counted from top.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -648,7 +650,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 40] = [
+pub const MODIFICATION_NAMES: [&str; 42] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -689,6 +691,8 @@ pub const MODIFICATION_NAMES: [&str; 40] = [
     "AdditionalLandPlay",
     "SetName",
     "PreventCombatDamage",
+    "MustBeBlocked",
+    "Hexproof",
 ];
 
 impl ContinuousEffectData {
@@ -782,6 +786,7 @@ impl ContinuousEffectData {
             Modification::DoesntUntap => "DoesntUntap",
             Modification::Saddled => "Saddled",
             Modification::CantActivateAbilities => "CantActivateAbilities",
+            Modification::MustBeBlocked => "MustBeBlocked",
             Modification::MustBeBlockedByAllAble => "MustBeBlockedByAllAble",
             Modification::LoseKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
@@ -799,6 +804,7 @@ impl ContinuousEffectData {
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
             Modification::LifeTotalCantChange => "LifeTotalCantChange",
+            Modification::Hexproof => "Hexproof",
             Modification::ProtectionFromEverything => "ProtectionFromEverything",
             Modification::PhasedOut => "PhasedOut",
             Modification::Control => "Control",
@@ -889,6 +895,8 @@ pub struct PermanentData {
     /// It has lost all abilities (CR 613.1f), until end of turn or while an
     /// Aura sets its characteristics.
     pub abilities_lost: bool,
+    pub hexproof_from: Vec<String>,
+    pub protection_from: Vec<String>,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     pub used_abilities: Vec<usize>,
@@ -1436,6 +1444,7 @@ impl Observation {
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
+            hexproof: game.player_has(player, &Modification::Hexproof),
             no_maximum_hand_size: game.has_no_maximum_hand_size_effect(player),
             known_library: game
                 .library_facts(player, viewer)
@@ -1741,6 +1750,26 @@ impl Observation {
                     .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
                     .map(|attacker| attacker.id.0 as i32)
             }),
+            hexproof_from: characteristics
+                .static_abilities
+                .iter()
+                .filter_map(|ability| match ability {
+                    crate::state::card::StaticAbility::HexproofFrom(quality) => {
+                        Some(quality.token_name())
+                    }
+                    _ => None,
+                })
+                .collect(),
+            protection_from: characteristics
+                .static_abilities
+                .iter()
+                .filter_map(|ability| match ability {
+                    crate::state::card::StaticAbility::Protection(quality) => {
+                        Some(quality.token_name())
+                    }
+                    _ => None,
+                })
+                .collect(),
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             attacked_this_turn: game.state.turn.attack_count(permanent.object) > 0,

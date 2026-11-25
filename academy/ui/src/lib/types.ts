@@ -136,6 +136,8 @@ export interface PermanentState {
   blocking?: number;
   /** It has lost all abilities. */
   abilities_lost?: boolean;
+  protection_from?: string[];
+  hexproof_from?: string[];
   /** Keywords it has after continuous effects; absent when it has none. */
   keywords?: string[];
   /** Activated abilities (indices in its ability list) whose limit is spent. */
@@ -193,6 +195,7 @@ export interface PlayerState {
   /** Player id whose next turn ends this player's hand-only casting. */
   spent_graveyard_types?: [number, string][];
   hand_only_until?: number;
+  hexproof?: boolean;
   no_maximum_hand_size?: boolean;
   counters?: Record<string, number>;
   combat_mana?: number;

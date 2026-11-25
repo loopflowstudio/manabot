@@ -7,10 +7,14 @@
   `pjou`, Dryad Militant `prtr`), matching the existing `pm15.rs`.
 - Assumed: control becomes a real layer-2 computation (slice 1) with `Permanent.controller` as its
   cached result, rather than adding a static-only control path beside resolution records.
-- Open: whether `StaticAbility::NoMaximumHandSize` folds into `ControllerHas` cleanly; only fold
-  it if its readers become simpler.
+- Kept printed `NoMaximumHandSize` distinct. The existing observation field
+  describes a rest-of-game record. A battlefield grant can expire when its source leaves.
 - Slice 1 retains the entry controller as one bit relative to the current controller
   in the two-seat permanent record. This preserves the existing permanent size
   and leaves ordinary unchanged-control state hashes free of a redundant seat.
 - Harmless Offering reads its opponent through a clause index. Existing player
   selectors keep the active clause, including the binding used inside modal effects.
+- Coupled blocker declarations keep their sequential structured offers. Independent
+  blocker choices can form an illegal group under menace or competing requirements.
+- Protection supplies a `PreventAll` damage replacement now. Slice 8 can use the
+  same transform. Numeric prevention remains meaningful for smaller shields.

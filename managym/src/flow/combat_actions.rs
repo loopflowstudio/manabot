@@ -396,7 +396,9 @@ impl Game {
                 StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(predicate)) => {
                     self.permanent_matches_predicate(blocker_id, predicate)
                 }
-                _ => false,
+                _ => ability.protects_from(|quality| {
+                    quality.matches(&blocker_view.colors, &blocker_view.types)
+                }),
             })
         {
             return false;
@@ -416,8 +418,8 @@ impl Game {
             return false;
         }
 
-        let attacker_keywords = self.characteristics(attacker_id).keywords;
-        let blocker_keywords = self.characteristics(blocker_id).keywords;
+        let attacker_keywords = attacker_view.keywords;
+        let blocker_keywords = blocker_view.keywords;
         if attacker_keywords.has(Keyword::Flying)
             && !(blocker_keywords.has(Keyword::Flying) || blocker_keywords.has(Keyword::Reach))
         {
@@ -425,39 +427,5 @@ impl Game {
         }
 
         true
-    }
-
-    pub(crate) fn cleanup_illegal_menace_blocks(&mut self) {
-        let attackers = match self.state.combat.as_ref() {
-            Some(combat) => combat.attackers.clone(),
-            None => return,
-        };
-        for attacker_id in attackers {
-            if self.state.permanents[attacker_id].is_none() {
-                continue;
-            }
-            if !self
-                .characteristics(attacker_id)
-                .keywords
-                .has(Keyword::Menace)
-            {
-                continue;
-            }
-            let Some(combat) = self.state.combat.as_mut() else {
-                return;
-            };
-            let Some(blockers) = combat.attacker_to_blockers.get_mut(&attacker_id) else {
-                continue;
-            };
-            if blockers.len() == 1 {
-                blockers.clear();
-                if let Some(exposure) = self.exposure_mut() {
-                    exposure
-                        .combat
-                        .blocks
-                        .retain(|&(_, target)| target != attacker_id);
-                }
-            }
-        }
     }
 }

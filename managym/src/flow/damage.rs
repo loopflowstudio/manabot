@@ -99,7 +99,10 @@ impl Game {
         match target {
             ProposedDamageTarget::Player(player) => {
                 // Protection from everything prevents all damage (CR 702.16e).
-                if self.has_protection_from_everything(player) {
+                if self.player_has(
+                    player,
+                    &crate::state::effect::Modification::ProtectionFromEverything,
+                ) {
                     return result;
                 }
                 // Damage is still dealt to a player whose life total can't

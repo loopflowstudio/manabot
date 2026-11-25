@@ -225,6 +225,8 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
+        "hexproof_from": list(permanent.hexproof_from) or None,
+        "protection_from": list(permanent.protection_from) or None,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
         "combat_damage_to_players": list(permanent.combat_damage_to_players) or None,
@@ -451,6 +453,7 @@ def _serialize_player(
             if (spent := player.spent_graveyard_types)
             else {}
         ),
+        **({"hexproof": True} if player.hexproof else {}),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],

@@ -19,7 +19,7 @@ use crate::{
     flow::{cast_permission::PlayRoute, game::Game, play::CastAuthority},
     state::{
         ability::TargetSpec,
-        card::{Keyword, Restriction, SpellProfile},
+        card::SpellProfile,
         game_object::{ObjectId, PermanentId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
@@ -741,12 +741,8 @@ impl Game {
         }
     }
 
-    /// Independent blocker assignments are a product of authoritative pair
-    /// supports. Menace couples assignments and the current engine repairs an
-    /// illegal singleton after declaration; a blocker limit refuses a second
-    /// blocker; an attacker every able creature must block removes later
-    /// blockers' declines. All retain the sequential path until a dependent
-    /// joint support can exclude those aliases before sampling.
+    /// Coupled block declarations use the sequential offers. A product of
+    /// independent roles would admit plans the next decision must reject.
     fn structured_blocker_offers(
         &self,
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
@@ -763,13 +759,11 @@ impl Game {
             .combat
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
-        if combat.attackers.iter().any(|attacker| {
-            self.characteristics(*attacker)
-                .keywords
-                .has(Keyword::Menace)
-                || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
-                || self.must_be_blocked_by_all_able(*attacker)
-        }) {
+        if combat
+            .attackers
+            .iter()
+            .any(|&attacker| self.blocks_are_coupled(attacker))
+        {
             return Ok(None);
         }
         let first = space
@@ -785,11 +779,10 @@ impl Game {
         for blocker in
             std::iter::once(first).chain(combat.blockers_to_declare.iter().rev().copied())
         {
-            let targets: Vec<_> = combat
-                .attackers
-                .iter()
-                .copied()
-                .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
+            let targets: Vec<_> = self
+                .block_options(blocker, &[])
+                .into_iter()
+                .flatten()
                 .collect();
             // Optionless later declarations are auto-resolved by tick(). Keep
             // them explicit only when that engine facility is disabled.
@@ -1105,7 +1098,14 @@ impl Game {
             && requirement.spec == TargetSpec::AnyTarget
             && requirement.min == 1
             && requirement.max == 1)
-            .then(|| self.legal_targets_for_requirement(*player, *object, requirement))
+            .then(|| {
+                self.legal_targets_for_requirement(
+                    *player,
+                    *object,
+                    SpellProfile::Front,
+                    requirement,
+                )
+            })
     }
 
     fn single_target_offer(
@@ -1235,7 +1235,7 @@ impl Game {
             return None;
         }
         Some(
-            self.legal_targets_for_requirement(player, object, requirement)
+            self.legal_targets_for_requirement(player, object, profile, requirement)
                 .into_iter()
                 .filter(|target| {
                     self.target_leaves_cost_payable(player, object, cast, &[], *target)

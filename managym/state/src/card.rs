@@ -491,6 +491,7 @@ pub enum Restriction {
 pub enum DamageTransform {
     Double,
     Prevent(u32),
+    PreventAll,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -1010,10 +1011,41 @@ pub struct StaticContinuous {
     pub modifications: Vec<crate::effect::Modification<LayerValue>>,
 }
 
+/// The quality named by protection or "hexproof from" (CR 702.11, 702.16).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SourceQuality {
+    Everything,
+    Color(Color),
+    CardType(CardType),
+}
+
+impl SourceQuality {
+    /// The leaf variant in this quality's learning-token representation.
+    pub fn token_name(self) -> String {
+        match self {
+            Self::Everything => "SourceQuality::Everything".into(),
+            Self::Color(color) => format!("Color::{color:?}"),
+            Self::CardType(kind) => format!("CardType::{kind:?}"),
+        }
+    }
+
+    pub fn matches(self, colors: &Colors, types: &CardTypes) -> bool {
+        match self {
+            Self::Everything => true,
+            Self::Color(color) => colors.contains(&color),
+            Self::CardType(card_type) => types.types.contains(&card_type),
+        }
+    }
+}
+
 /// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
     BeginOnBattlefield,
+    HexproofFrom(SourceQuality),
+    Protection(SourceQuality),
+    ControllerHas(Box<crate::effect::Modification>),
+    SpellsCantBeCountered(CardPredicate),
     /// One continuous effect whose parts may apply in different layers.
     Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's
@@ -1175,6 +1207,10 @@ pub enum StaticAbility {
 }
 
 impl StaticAbility {
+    pub fn protects_from(&self, matches: impl Fn(SourceQuality) -> bool) -> bool {
+        matches!(self, Self::Protection(quality) if *quality == SourceQuality::Everything || matches(*quality))
+    }
+
     /// A battlefield effect applying its modifications together across layers (CR 613.6).
     pub fn continuous(
         scope: StaticScope,

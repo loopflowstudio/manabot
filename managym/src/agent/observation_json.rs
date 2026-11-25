@@ -859,6 +859,10 @@ pub(super) struct WirePermanentData {
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hexproof_from: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub protection_from: Vec<String>,
     /// Activated abilities (indices in its ability list) whose limit is
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1015,6 +1019,8 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            hexproof_from: w.hexproof_from,
+            protection_from: w.protection_from,
             combat_damage_to_players: w.combat_damage_to_players,
             damaged_permanents: w.damaged_permanents,
             ability_resolutions: w.ability_resolutions,
@@ -1091,6 +1097,8 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            hexproof_from: self.hexproof_from.clone(),
+            protection_from: self.protection_from.clone(),
             combat_damage_to_players: self.combat_damage_to_players.clone(),
             damaged_permanents: self.damaged_permanents.clone(),
             ability_resolutions: self.ability_resolutions.clone(),

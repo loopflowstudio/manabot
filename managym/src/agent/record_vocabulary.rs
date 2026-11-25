@@ -30,7 +30,10 @@ use crate::{
         tokens::{name_value, TokenKind},
     },
     state::{
-        card::Keyword, mana::Color, permanent::CounterKind, predicate::CardPredicate,
+        card::{Keyword, StaticAbility},
+        mana::Color,
+        permanent::CounterKind,
+        predicate::CardPredicate,
         subtype::subtypes,
     },
 };
@@ -121,6 +124,8 @@ pub fn record_names() -> Vec<RecordName> {
     }
     out.push(record(Token, "CopyEffect", None));
     out.push(record(Token, POOLED_MANA, None));
+    out.push(variant("StaticAbility::HexproofFrom"));
+    out.push(variant("StaticAbility::Protection"));
     out.push(record(Token, WARD, None));
     out.push(record(Token, PLAY_GRANT, None));
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
@@ -128,6 +133,13 @@ pub fn record_names() -> Vec<RecordName> {
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
+        for ability in &definition.statics {
+            if let StaticAbility::HexproofFrom(quality) | StaticAbility::Protection(quality) =
+                ability
+            {
+                out.push(variant(&quality.token_name()));
+            }
+        }
         let json = serde_json::to_value(definition).expect("serializable definition");
         for name in set_names(&json) {
             out.push(record(Name, &name, None));
@@ -196,7 +208,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         // Retained execution can refer to a spell already on the stack;
         // printed card programs do not supply this zone's token.
         ("ZoneType", &["Stack"][..]),
-        ("DamageTransform", &["Prevent"][..]),
+        ("DamageTransform", &["Prevent", "PreventAll"][..]),
         // Offered only by a resolved shield record, never printed.
         (
             "ReplacementEffect",

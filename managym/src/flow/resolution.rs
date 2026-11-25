@@ -25,12 +25,14 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectProperty, ObjectSelector, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
+        card::{
+            CardDefId, CardTypes, Keyword, PrintedCharacteristics, SourceQuality, StaticAbility,
+        },
         effect::{Affected, EffectDuration, Modification},
         game_object::{
             AbilitySource, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
         },
-        mana::ManaCost,
+        mana::{Colors, ManaCost},
         payment::How,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
@@ -41,7 +43,85 @@ use crate::{
     },
 };
 
+/// Characteristics of the spell or ability source, with its decision's
+/// controller. An ability keeps its controller even if its source changes hands.
+pub(crate) struct TargetingSource {
+    pub(super) controller: PlayerId,
+    colors: Colors,
+    types: CardTypes,
+}
+
+impl TargetingSource {
+    pub(crate) fn printed(controller: PlayerId, face: &PrintedCharacteristics) -> Self {
+        Self {
+            controller,
+            colors: face.colors(),
+            types: face.types.clone(),
+        }
+    }
+
+    pub(super) fn matches(&self, quality: SourceQuality) -> bool {
+        quality.matches(&self.colors, &self.types)
+    }
+}
+
 impl Game {
+    pub(super) fn targeting_source(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+    ) -> TargetingSource {
+        if let Some(id) = self.state.permanent_of(source) {
+            let view = self.layer_view(id);
+            TargetingSource {
+                controller,
+                colors: view.colors.clone(),
+                types: view.types.clone(),
+            }
+        } else if let Some(lki) = self.object_lki(source) {
+            TargetingSource {
+                controller,
+                colors: lki.colors.clone(),
+                types: lki.types.clone(),
+            }
+        } else if let Some(spell) = self.state.spell_lki.get(&source) {
+            TargetingSource {
+                controller,
+                colors: spell.colors.clone(),
+                types: self
+                    .recorded_spell_printing(source, spell.profile)
+                    .types
+                    .clone(),
+            }
+        } else {
+            TargetingSource::printed(controller, self.state.source_base(source).1)
+        }
+    }
+
+    /// Protection on a permanent applies to damage, enchant/equip, blocks,
+    /// and targeting alike. Resolve source qualities only for a protected object.
+    pub(super) fn protected_from(
+        &self,
+        permanent: PermanentId,
+        matches: impl Fn(SourceQuality) -> bool,
+    ) -> bool {
+        self.layer_view(permanent)
+            .static_abilities
+            .iter()
+            .any(|ability| ability.protects_from(&matches))
+    }
+
+    pub(super) fn protected_from_permanent(
+        &self,
+        recipient: PermanentId,
+        source: PermanentId,
+    ) -> bool {
+        self.protected_from(recipient, |quality| {
+            let view = self.layer_view(source);
+            quality.matches(&view.colors, &view.types)
+        })
+    }
+
     pub(crate) fn permanent_power_or_lki(&self, object: ObjectId) -> Option<i32> {
         self.object_property_or_lki(object, ObjectProperty::Power)
     }
@@ -415,14 +495,7 @@ impl Game {
     /// owner's graveyard unless the effect says otherwise); a spell that
     /// can't be countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, object: ObjectId, by: Option<ObjectId>, to: ZoneType) {
-        if self.stack_spell(object).is_none() {
-            return;
-        }
-        if self.state[object]
-            .statics
-            .iter()
-            .any(|ability| matches!(ability, StaticAbility::CantBeCountered))
-        {
+        if !self.spell_can_be_countered(object) {
             return;
         }
         self.move_object(object, to);
@@ -430,6 +503,23 @@ impl Game {
             object_id: object,
             by,
         });
+    }
+
+    fn spell_can_be_countered(&self, object: ObjectId) -> bool {
+        let Some(spell) = self.stack_spell(object) else {
+            return false;
+        };
+        if self.state[object]
+            .statics
+            .contains(&StaticAbility::CantBeCountered)
+        {
+            return false;
+        }
+        !self.static_sources().any(|(id, owner, view)| {
+            owner == spell.controller && !self.is_phased_out(id) && view.static_abilities.iter().any(|ability| {
+                matches!(ability, StaticAbility::SpellsCantBeCountered(predicate) if self.object_matches_predicate(object, predicate))
+            })
+        })
     }
 
     /// The face an ability on the stack came from: the card as it stands
@@ -638,6 +728,10 @@ impl Game {
         controller: PlayerId,
         source: AbilitySource,
     ) -> Option<Vec<ResolutionTarget>> {
+        if targets.is_empty() {
+            return Some(Vec::new());
+        }
+        let targeting = self.targeting_source(controller, source.object());
         let mut slots: Vec<_> = targets
             .iter()
             .enumerate()
@@ -647,7 +741,7 @@ impl Game {
                     target: *target,
                     requirement,
                     legal: requirements.get(requirement).is_some_and(|req| {
-                        self.target_meets_requirement(*target, req, controller, source)
+                        self.target_meets_requirement(*target, req, &targeting, source)
                     }),
                 }
             })
@@ -2719,6 +2813,12 @@ impl Game {
         let Some(object) = self.permanent_object(permanent_id) else {
             return;
         };
+        if self
+            .source_permanent_id(frame)
+            .is_some_and(|source| self.protected_from_permanent(permanent_id, source))
+        {
+            return;
+        }
         let timestamp = self.state.id_gen_mut().next_id();
         if let Some(equipment) = self.source_permanent_mut(frame) {
             equipment.attached_to = Some(object);
@@ -2773,14 +2873,33 @@ impl Game {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_target_is_legal(
+        &self,
+        target: Target,
+        spec: &TargetSpec,
+        controller: PlayerId,
+    ) -> bool {
+        self.target_is_legal(
+            target,
+            spec,
+            &TargetingSource {
+                controller,
+                colors: Default::default(),
+                types: Default::default(),
+            },
+        )
+    }
+
     /// Check whether a target is (still) legal for a given TargetSpec, from
     /// the perspective of `controller` ("you").
     pub(crate) fn target_is_legal(
         &self,
         target: Target,
         spec: &TargetSpec,
-        controller: PlayerId,
+        source: &TargetingSource,
     ) -> bool {
+        let controller = source.controller;
         match target {
             Target::Permanent(id) => {
                 let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref())
@@ -2789,15 +2908,27 @@ impl Game {
                 };
                 // CR 702.11b applies regardless of target wording. Recheck live
                 // presence and hexproof at selection and resolution (608.2b).
+                let view = self.layer_view(id);
+                let opposing = permanent.controller != controller;
+                let disallowed = (opposing && view.keywords.has(Keyword::Hexproof))
+                    || view.static_abilities.iter().any(|ability| match ability {
+                        StaticAbility::HexproofFrom(q) => opposing && source.matches(*q),
+                        _ => ability.protects_from(|q| source.matches(q)),
+                    });
                 self.state.zones.zone_of(permanent.object) == Some(ZoneType::Battlefield)
                     && !self.is_phased_out(id)
-                    && (permanent.controller == controller
-                        || !self.characteristics(id).keywords.has(Keyword::Hexproof))
+                    && !disallowed
                     && self.permanent_matches_spec(id, spec, controller)
             }
             // Protection from everything: no spell or ability can target
             // the player, theirs included (CR 702.16b, 702.16j).
-            Target::Player(player) if self.has_protection_from_everything(player) => false,
+            Target::Player(player)
+                if self.player_has(player, &Modification::ProtectionFromEverything)
+                    || (player != controller
+                        && self.player_has(player, &Modification::Hexproof)) =>
+            {
+                false
+            }
             Target::Player(player) => match spec {
                 TargetSpec::Player | TargetSpec::AnyTarget | TargetSpec::PlayerOrPlaneswalker => {
                     true
@@ -2861,10 +2992,10 @@ impl Game {
         &self,
         target: Target,
         requirement: &TargetRequirement,
-        controller: PlayerId,
+        targeting: &TargetingSource,
         source: AbilitySource,
     ) -> bool {
-        if !self.target_is_legal(target, &requirement.spec, controller) {
+        if !self.target_is_legal(target, &requirement.spec, targeting) {
             return false;
         }
         if requirement.another

@@ -759,7 +759,7 @@ fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
         panic!("the counter is a spell");
     };
     let counter = counter.object;
-    assert!(!game.target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
+    assert!(!game.test_target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
     assert!(!game
         .legal_targets_for_spec(&spec, PlayerId(0))
         .contains(&Target::StackSpell(counter)));
@@ -790,7 +790,7 @@ fn counter_spell_cannot_target_an_ability() {
     assert!(game
         .legal_targets_for_spec(&TargetSpec::Spell, PlayerId(0))
         .is_empty());
-    assert!(!game.target_is_legal(
+    assert!(!game.test_target_is_legal(
         Target::StackAbility(ability),
         &TargetSpec::Spell,
         PlayerId(0)

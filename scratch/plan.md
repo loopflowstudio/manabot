@@ -93,114 +93,56 @@ Offering through CR 613.1b layer-2 control. Directed Rust checks, pilot replays,
 checks and Academy replays passed; the full debug nextest suite is deferred to gate.
 Player hexproof target tests come with Crystal Barricade (slice 3).
 
-Open from slice 1: release `bench_states` showed the existing `attachments` priority
-check at 17.3 µs (52 permanents) vs 296.4 µs (100 permanents), superlinear. Find
-the blow-up while slice 3 touches attachment legality (CR 704.5m/n).
+**2 · Implemented.** Joraga Invocation and Vampire Soulcaller use native block
+offers that maximize the number of satisfied requirements over the entire
+declaration. Mixed flying/reach, overlapping lure, and competing attackers have
+directed fixtures. The matching oracle also compares against enumeration on all
+two-attacker, three-blocker edge sets with menace, blocker limits and fixed prefixes.
 
-### 2 · Block requirements are maximized over the whole declaration (Joraga Invocation, Vampire Soulcaller)
+**3 · Implemented.** The Knights, Elenda and Sphinx use source characteristics
+on announcement and resolution, including last known information. Progenitus
+has protection across damage, attachments, blocks and targets. Crystal Barricade
+grants player hexproof. Progenitus still needs its graveyard replacement in
+slice 5 and Barricade its noncombat prevention in slice 8.
 
-Blocks are offered one blocker at a time (`tick.rs:410-436`). `MustBeBlockedByAllAble`
-is a greedy per-blocker filter, duplicated in `combat_preview.rs:258-279` and
-`structured_offer.rs:771`. Nothing counts satisfied requirements (CR 509.1c).
+**What the combat cases changed.** Checking menace after an ordinary matching
+can reject a legal tied or lower-scoring completion. The solver instead reserves
+a partner for any committed singleton and branches when a relaxed optimum
+leaves an undecided menace attacker with just one blocker. The two branches
+are leaving it unblocked and requiring a pair. Ordinary Joraga and lure boards
+use weighted bipartite matching. Worst-case work with multiple ambiguous menace
+attackers grows exponentially in their number.
 
-- Add `Modification::MustBeBlocked` ("must be blocked if able"): one requirement
-  per attacker, satisfied by one or more blockers.
-- One function, `Game::block_requirement_bound(partial)`, gives the most
-  requirements any completion of the partial declaration can satisfy. It counts
-  one requirement per lure attacker per able blocker that blocks it, plus one per
-  MustBeBlocked attacker that is blocked. It is a bipartite matching over the
-  undeclared blockers and the pairs they can legally make.
-  `blocker_can_block_attacker` is the edge test; menace and
-  `CantBeBlockedByMoreThanOne` are checked on the completed matching.
-- The offer for the current blocker keeps exactly the choices, "no block"
-  included, after which the bound is still reachable. Tick, preview and the
-  structured offer all call it.
-- Vampire Soulcaller composes: `BlockRestriction::CantBlock(default)` plus an ETB
-  `return_to_hand(Target(GraveyardCardYouOwn{creature}))`. It is the "can't
-  block" witness: it never becomes a matching edge.
-- Obsolete: the greedy `required` closure in `tick.rs` and its copies in
-  `combat_preview.rs` and `structured_offer.rs`.
-- Checks: `cargo test -p managym-cards --test cards -- ori:: fdn::vampire_soulcaller`
-  and the existing lure test (`ptk.rs:125`). Interactions:
-  - Joraga with three attackers against two untapped blockers: every legal full
-    declaration blocks two distinct attackers.
-  - One blocker that can only block a flier: it must block the flier.
-  - A menace attacker under Joraga with one blocker: no requirement can be met, so
-    "no block" is offered.
-  - Lure plus Joraga on different attackers.
-  - Every completion the offers allow is legal. Brute-force the small cases and
-    compare.
-- Stress: a combat state with 8/16 Joraga attackers and 8/16 blockers of mixed
-  flying/reach. Measure `step:block` and `actions` at each blocker. Matching is
-  polynomial, but it reruns for each offered choice.
+**Attachment investigation.** Seven release runs on the slice 1 binary measured
+the same priority checkpoint at 52 and 100 permanents. Cold characteristics
+medians were 51.25 and 93.67 µs, with one board rebuild and zero source plans at
+both sizes. Action medians were 31.62 and 65.42 µs, with zero board rebuilds.
+The original 296.4 µs sample did not recur.
 
-### 3 · Targeting knows its source; protection and player hexproof (Knight of Grace, Knight of Malice, Elenda, Sphinx of the Final Word, Progenitus' protection, Crystal Barricade's hexproof)
+Seven runs on the new binary gave cold-characteristics medians of 48.83
+and 101.75 µs and action medians of 39.96 and 96.50 µs. The sample ranges
+overlapped the earlier ranges at both sizes. These observations do not isolate
+a cause for the original spike.
 
-`target_is_legal(target, spec, controller)` (resolution.rs:2769) is the one
-legality check, called on selection and resolution. It sees only the targeting
-player. There is no protection on permanents, no hexproof-from and no player
-hexproof.
+**Pass 2 release measurements.** In `bench_states joraga-blocks`, the 8-on-8
+and 16-on-16 positions exposed six and fourteen block choices along the sampled
+line; the engine completed the forced answers. Enumeration took 9.79–25.00 µs
+and 12.92–67.04 µs per decision, respectively. Whole block steps took
+66.42–230.71 µs and 67.50–146.00 µs. The `quality-targets` recipe enumerated
+10–17 targets per spell for eight spells against sixteen creatures in
+1.67–2.12 µs per spell. These are ranges of per-checkpoint three-sample medians
+on a shared machine.
 
-- `SourceQuality` (state): `Color(Color)`, `CardType(CardType)` ("instants"),
-  `Everything`. It describes the source of a spell or ability (CR 702.11d, 702.16).
-- Two layer-6 abilities: `StaticAbility::HexproofFrom(SourceQuality)` and
-  `StaticAbility::Protection(SourceQuality)`. Printed, or granted through
-  `GrantStatic`. `Characteristics` exposes them, and lose-all-abilities removes
-  them. Plain `Keyword::Hexproof` stays a keyword.
-- `TargetingSource { controller, colors, card_types }` is built once from the
-  `AbilitySource`: the spell's own characteristics on the stack, or the ability
-  source's current characteristics or LKI. `target_is_legal` takes it.
-  `target_meets_requirement` already holds the `AbilitySource`.
-- Protection from everything is DEBT. The same predicate gates damage
-  (`damage.rs` prevention), attachment legality (CR 704.5m/n: an Aura or
-  Equipment can't stay on it), blocks (`blocker_can_block_attacker`) and targets.
-  The player version, `Modification::ProtectionFromEverything` (Teferi's
-  Protection), shares the predicate. Its `has_protection_from_everything` becomes
-  `player_protected_from(player, &TargetingSource)`.
-- Player hexproof: the player-side reader also reads battlefield statics that
-  give their controller a player modification:
-  `StaticAbility::ControllerHas(Modification)`, used for `Modification::Hexproof`,
-  a new player modification. `Game::player_has(player, &Modification)` is the
-  one reader of records and statics.
-- Uncounterability: `StaticAbility::SpellsCantBeCountered(CardPredicate)` on a
-  battlefield permanent covers matching spells its controller controls (Sphinx:
-  instant or sorcery). `counter_spell` asks `Game::spell_can_be_countered`, which
-  reads the spell's own `CantBeCountered` and those statics.
-- Cards: the Knights use `HexproofFrom(Color)`, first strike, and
-  `PtBuff{This, condition: BattlefieldAtLeast{1, colors_any}}`. Elenda uses
-  `HexproofFrom(CardType(Instant))` with two `Compare(LifeAboveStarting)` static
-  continuous effects: +1/+1 and menace, plus an additional +5/+5 at ≥10. Sphinx
-  is `CantBeCountered` + flying + hexproof + the static. Progenitus is
-  `Protection(Everything)` (its replacement comes in slice 5). Crystal Barricade
-  is defender + `ControllerHas(Hexproof)` (its prevention comes in slice 8).
-- Obsolete: `has_protection_from_everything` (folds into the source-aware
-  predicate) and `StaticAbility::NoMaximumHandSize`, which becomes
-  `ControllerHas(Modification::NoMaximumHandSize)` if its readers fold cleanly.
-  Do not force it.
-- Checks: `dom:: fdn::elenda ogw:: con::` and `flow::target_authority_tests`.
-  Interactions:
-  - A black removal spell cannot target Knight of Grace, and neither can a black
-    creature's activated ability. A colorless spell can.
-  - The Knight's own controller can target it with black spells (hexproof is
-    opponents only).
-  - A spell turned black after targeting rechecks on resolution.
-  - Elenda can't be targeted by instants, but sorceries and abilities of instants
-    on the stack (copies) can follow the quality rule.
-  - Elenda at starting life +1 and +10: P/T, menace and the threshold boundary.
-  - Sphinx: an opponent's counterspell on your instant does nothing, and your own
-    Sphinx can't be countered.
-  - Progenitus: unblockable by any creature, damage prevented, Confiscate can't
-    target it, a forced Aura falls off (SBA), and global non-target effects (wrath)
-    still destroy it.
-  - Crystal Barricade: an opponent's "target player" spell has no legal player
-    target, while your own still can.
-  - Offers stay complete: protection removes target choices, never hides them.
-    Observation, LLM text and tokens carry `HexproofFrom`/`Protection` and their
-    quality (`observability.rs` guards for StaticAbility and player status), and a
-    directed test reads them back.
-- Stress: target enumeration over a board of 16 creatures with mixed
-  hexproof-from qualities and 8 different targeting sources. Add
-  `quality-targets` and measure `actions` (target offers per spell).
+**Pass 2 checks.** Directed card fixtures, the 4,096-case matching oracle, native
+target authority, menace, combat previews, subtype admission, static/effect
+tokens, both viewers’ policy rows, Scryfall conformance and native protocol
+schemas passed. On the rebuilt CPython 3.13 extension the v9 and v11 pinned
+games replayed, all LLM field checks passed, and a real board with the Knight,
+Progenitus and Barricade rendered their effective abilities in text and Academy.
+The optional frontier checkpoint was unavailable. Academy replayed all 192
+retained Commands and refreshed five navigation positions. Python schema parity
+and the Svelte type check passed. Gate owns the full debug suite and Engine
+Budget reference.
 
 ### 4 · Changeling and counted static P/T, with the composing cards (Taurean Mauler, Tempest Djinn, Blanchwood Armor, Dreadwing Scavenger, Dwynen, Garruk's Uprising, Crossway Troublemakers, New Horizons)
 
@@ -393,11 +335,11 @@ except `EntersAsCopy`.
 - `ModifyDamage` gets `combat: Option<bool>` and a recipient
   `DamageRecipient { by: Actor, players: bool, permanents: Option<CardPredicate>,
   except_source: bool }` in place of `recipient_by: Actor`.
-  `DamageTransform::PreventAll` replaces `Prevent(u32)`, which no card uses.
+  Reuse the protection prevention transform `DamageTransform::PreventAll` from Pass 2. Retain partial prevention for existing numeric shields and their tests.
 - Cards: Angel of Vitality is flying, `ModifyLifeGain{You, 1}`, and `PtBuff This`
   under `LifeAtLeast{25}`. Crystal Barricade prevents noncombat damage to other
   creatures you control.
-- Obsolete: `DamageTransform::Prevent(u32)`; `ModifyDamage.recipient_by`
+- Obsolete: `ModifyDamage.recipient_by`
   (convert `ons.rs:50`, `fdn.rs:2016`).
 - Checks: `m20:: fdn::crystal_barricade`. Interactions:
   - Angel plus lifelink combat damage gains +1 once per event, and two Angels give
@@ -411,12 +353,8 @@ except `EntersAsCopy`.
 
 ## Passes
 
-Remaining slices regroup into four passes (five across the Task):
+Passes 1 and 2 built slices 1–3. Three passes remain.
 
-- **Pass 2 · legality authorities:** slices 2 and 3 (block-requirement matching;
-  source-aware targeting, protection, player hexproof, uncounterability), plus the
-  `attachments` blow-up. Needs no #593. Teaches whether one source-aware predicate
-  serves targets, blocks, damage and attachments.
 - **Pass 3 · characteristics and graveyard routes:** slices 4 and 5, after #593.
 - **Pass 4 · proposed-event replacements:** slices 6, 7 and 8.
 - **Pass 5 · integration:** the cross-slice synergies below, ledger rows, Engine

@@ -3864,7 +3864,7 @@ mod learn_tests {
             predicate: CardPredicate::default(),
         };
         let token_target = Target::GraveyardCard(game.state.live(token).unwrap());
-        assert!(!game.target_is_legal(token_target, &spec, player));
+        assert!(!game.test_target_is_legal(token_target, &spec, player));
         assert_eq!(
             game.legal_targets_for_spec(&spec, player),
             vec![Target::GraveyardCard(

@@ -379,3 +379,126 @@ fn dwynens_elite_makes_an_elf_warrior_with_another_elf() {
     enter_and_settle(&mut s, "Dwynen's Elite");
     assert_eq!(s.battlefield_permanents_named(0, "Elf Warrior").len(), 1);
 }
+
+/// Each offered prefix must extend to an optimum. With three attackers and
+/// two blockers every pair of distinct attackers is a possible declaration.
+#[test]
+fn joraga_invocation_offers_every_maximal_declaration() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        play::{cast, choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+    };
+    let mut s = five_color_setup(&["Joraga Invocation", "Gray Ogre", "Vampire Soulcaller"]);
+    for _ in 0..3 {
+        let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        clear_summoning_sickness(&mut s, a);
+    }
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    let vampire = s.force_permanent_on_battlefield(1, "Vampire Soulcaller");
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    let attackers = s.battlefield_permanents_named(0, "Gray Ogre");
+    for &a in &attackers {
+        assert_eq!(s.game().characteristics(a).pt(), (5, 5));
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |action| {
+            matches!(action, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+    assert_eq!(s.action_space().actions.len(), 3);
+    for first in &attackers {
+        let mut line = s.clone();
+        choose(
+            &mut line,
+            |a| matches!(a, Action::DeclareBlocker {attacker: Some(id), blocker,..} if id == first && *blocker != vampire),
+        );
+        assert_eq!(line.action_space().actions.len(), 2);
+        for second in attackers.iter().filter(|&id| id != first) {
+            let mut done = line.clone();
+            choose(
+                &mut done,
+                |a| matches!(a, Action::DeclareBlocker {attacker: Some(id), blocker,..} if id == second && *blocker != vampire),
+            );
+            assert_ne!(done.action_space().kind, ActionSpaceKind::DeclareBlocker);
+            let blocks = &done
+                .game()
+                .state
+                .combat
+                .as_ref()
+                .unwrap()
+                .attacker_to_blockers;
+            assert_eq!((blocks[first].len(), blocks[second].len()), (1, 1));
+        }
+    }
+}
+
+/// The Spider can block either attacker, but the Ogre can block only the Ogre.
+/// A lure on the ground attacker makes piling both blockers onto it equally good.
+#[test]
+fn joraga_invocation_counts_overlapping_lure_and_flying_requirements() {
+    use crate::support::{
+        game::{clear_summoning_sickness, until_end_of_turn},
+        play::{cast, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::effect::Modification,
+    };
+    let mut s = five_color_setup(&[
+        "Joraga Invocation",
+        "Wind Drake",
+        "Gray Ogre",
+        "Giant Spider",
+    ]);
+    let flier = s.force_permanent_on_battlefield(0, "Wind Drake");
+    let ground = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    for a in [flier, ground] {
+        clear_summoning_sickness(&mut s, a);
+    }
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let spider = s.force_permanent_on_battlefield(1, "Giant Spider");
+    cast(&mut s, "Joraga Invocation");
+    settle(&mut s);
+    for lure in [false, true] {
+        let mut line = s.clone();
+        if lure {
+            until_end_of_turn(&mut line, ground, Modification::MustBeBlockedByAllAble);
+        }
+        line.advance_to_active_step(0, StepKind::DeclareAttackers);
+        while line.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            line.declare_attack();
+        }
+        line.advance_to_active_step(0, StepKind::DeclareBlockers);
+        // In either declaration order the ground blocker has one assignment.
+        while line.action_space().kind == ActionSpaceKind::DeclareBlocker {
+            let actions = &line.action_space().actions;
+            if matches!(actions[0],Action::DeclareBlocker {blocker,..} if blocker==spider) {
+                assert!(actions.iter().any(
+                    |a| matches!(a,Action::DeclareBlocker{attacker:Some(id),..} if *id==flier)
+                ));
+                assert_eq!(
+                    actions.iter().any(
+                        |a| matches!(a,Action::DeclareBlocker{attacker:Some(id),..} if *id==ground)
+                    ),
+                    lure
+                );
+                assert_eq!(actions.len(), 1 + usize::from(lure));
+            } else {
+                assert!(
+                    matches!(actions.as_slice(), [Action::DeclareBlocker{attacker:Some(id),..}] if *id==ground)
+                );
+            }
+            line.step_action(0);
+        }
+    }
+}

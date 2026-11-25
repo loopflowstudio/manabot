@@ -102,6 +102,8 @@ pub enum Modification<N = i32> {
     CantActivateAbilities,
     /// Rules effect: every creature able to block it does so (CR 509.1c).
     MustBeBlockedByAllAble,
+    /// At least one creature must block this attacker if able (CR 509.1c).
+    MustBeBlocked,
     /// Layer 6: loses these keywords, whatever grants them.
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
@@ -135,6 +137,8 @@ pub enum Modification<N = i32> {
     /// Rules effect on a player: protection from everything (CR 702.16j).
     /// Nothing can target them, and all damage to them is prevented.
     ProtectionFromEverything,
+    /// The affected player has hexproof.
+    Hexproof,
     /// Rules effect: the permanent is phased out (CR 702.26). It stays on
     /// the battlefield with its counters and attachments, but the game
     /// treats it as though it doesn't exist; `Game::is_phased_out` is the
@@ -207,6 +211,7 @@ impl<N> Modification<N> {
             Self::DoesntUntap => Modification::DoesntUntap,
             Self::Saddled => Modification::Saddled,
             Self::CantActivateAbilities => Modification::CantActivateAbilities,
+            Self::MustBeBlocked => Modification::MustBeBlocked,
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
@@ -218,6 +223,7 @@ impl<N> Modification<N> {
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
             Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
+            Self::Hexproof => Modification::Hexproof,
             Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
             Self::PhasedOut => Modification::PhasedOut,
             Self::Control => Modification::Control,
@@ -274,6 +280,7 @@ impl Modification {
             | Self::DoesntUntap
             | Self::Saddled
             | Self::CantActivateAbilities
+            | Self::MustBeBlocked
             | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)
             | Self::ExileIfWouldDie
@@ -285,6 +292,7 @@ impl Modification {
             | Self::NextCreatureCastFlash
             | Self::SkipsCombatPhasesNextTurn
             | Self::LifeTotalCantChange
+            | Self::Hexproof
             | Self::ProtectionFromEverything
             | Self::PhasedOut
             | Self::Control

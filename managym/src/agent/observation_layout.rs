@@ -288,6 +288,7 @@ columns! { player {
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
     73: DECKLISTS_OPEN => ("decklists_open", ValueLayout::FLAG),
     74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
+    75: HEXPROOF => ("hexproof", ValueLayout::FLAG),
 } }
 
 // Input v10 player turn state, one row per seat (agent first).

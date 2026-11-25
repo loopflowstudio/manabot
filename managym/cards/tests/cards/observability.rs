@@ -344,6 +344,8 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::CantActivateAbilities",
             Seen::Via("its effect fact row; the action tensor omits its activations"),
         ),
+        Modification::Hexproof => ("Modification::Hexproof", Seen::Via("the player hexproof column and target offers")),
+        Modification::MustBeBlocked => ("Modification::MustBeBlocked", Seen::Via("its effect fact row and legal block offers")),
         Modification::MustBeBlockedByAllAble => (
             "Modification::MustBeBlockedByAllAble",
             Seen::Via("its effect fact row; the action tensor offers only its blocks"),
@@ -464,6 +466,8 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::DoesntUntap),
         permanent(Modification::Saddled),
         permanent(Modification::CantActivateAbilities),
+        (true, Modification::Hexproof),
+        permanent(Modification::MustBeBlocked),
         permanent(Modification::MustBeBlockedByAllAble),
         permanent(Modification::LoseKeywords(Keywords::of(&[
             Keyword::Hexproof,
@@ -1626,6 +1630,10 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "roe",
             "training_grounds_reduces_creature_activations_to_no_less_than_one_mana",
         ),
+        StaticAbility::HexproofFrom(_) => witnessed("StaticAbility::HexproofFrom", Seen::Via("its learning tokens and the legal actions"), "Knight of Grace", "dom", "knights_restrict_opposing_sources_and_count_either_battlefield"),
+        StaticAbility::Protection(_) => witnessed("StaticAbility::Protection", Seen::Via("its learning tokens and the legal actions"), "Progenitus", "con", "progenitus_protection_covers_targets_blocks_damage_and_attachments"),
+        StaticAbility::ControllerHas(_) => witnessed("StaticAbility::ControllerHas", Seen::Via("its learning tokens and the legal actions"), "Crystal Barricade", "fdn", "crystal_barricade_gives_its_controller_hexproof"),
+        StaticAbility::SpellsCantBeCountered(_) => witnessed("StaticAbility::SpellsCantBeCountered", Seen::Via("its learning tokens and the legal actions"), "Sphinx of the Final Word", "ogw", "sphinx_keeps_its_controllers_instant_on_the_stack"),
         StaticAbility::CantBeCountered => witnessed(
             "StaticAbility::CantBeCountered",
             Seen::Via("the spell's learning tokens; a counter leaves it on the stack"),
@@ -2006,6 +2014,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
         }),
         StaticAbility::CostsLessPerPermanent(creature()),
         StaticAbility::CostsLessPerPermanentOnBattlefield(creature()),
+        StaticAbility::HexproofFrom(managym::state::card::SourceQuality::Color(Color::Black)),
+        StaticAbility::Protection(managym::state::card::SourceQuality::Everything),
+        StaticAbility::ControllerHas(Box::new(Modification::Hexproof)),
+        StaticAbility::SpellsCantBeCountered(CardPredicate::instant_or_sorcery()),
         StaticAbility::CantBeCountered,
         StaticAbility::CostsLessPerGraveyardCard(creature()),
         StaticAbility::CostsLessByGreatestPower(creature()),
@@ -3501,6 +3513,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         sideboard_counts => [Rows("decklists")],
         remaining_sideboard_counts => [Rows("decklists")],
         keeps_red_mana => [column(Player, player::KEEPS_RED_MANA)],
+        hexproof => [column(Player, player::HEXPROOF)],
         no_maximum_hand_size => [column(Player, player::NO_MAXIMUM_HAND_SIZE)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
@@ -3693,6 +3706,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         creature_types => [Fact(FactKind::SetCreatureType)],
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
+        hexproof_from => [FactOccurrence(FactKind::EffectProgram)],
+        protection_from => [FactOccurrence(FactKind::EffectProgram)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
         attacked_this_turn => [column(Permanent, permanent::ATTACKED_THIS_TURN)],
         entered_this_turn => [column(Permanent, permanent::ENTERED_THIS_TURN)],
@@ -4313,6 +4328,37 @@ fn fact_row(rows: &[Vec<f32>], kind: FactKind, id: i32) -> Vec<f32> {
         })
         .unwrap_or_else(|| panic!("no {kind:?} fact {id}: {rows:?}"))
         .clone()
+}
+
+#[test]
+fn qualified_abilities_and_player_hexproof_reach_policy_rows() {
+    let mut s = five_color_setup(&["Knight of Grace", "Progenitus", "Crystal Barricade"]);
+    let knight = s.force_permanent_on_battlefield(0, "Knight of Grace");
+    let hydra = s.force_permanent_on_battlefield(1, "Progenitus");
+    s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    for viewer in 0..2 {
+        let observation = encoded(&s, viewer);
+        assert_eq!(observation.agent_player[player::HEXPROOF], viewer as f32);
+        assert_eq!(
+            observation.opponent_player[player::HEXPROOF],
+            (1 - viewer) as f32
+        );
+        for (permanent, ability, quality) in [
+            (knight, "StaticAbility::HexproofFrom", "Color::Black"),
+            (
+                hydra,
+                "StaticAbility::Protection",
+                "SourceQuality::Everything",
+            ),
+        ] {
+            let rows = facts_about(&s, viewer, object_index(&s, viewer, permanent));
+            let row = fact_row(&rows, FactKind::EffectProgram, name_value(ability));
+            assert_eq!(
+                row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2],
+                id_columns(name_value(quality))
+            );
+        }
+    }
 }
 
 /// Two states only the fact rows tell apart: every object, relation, action

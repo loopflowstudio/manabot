@@ -377,6 +377,10 @@ impl ReplacementCandidate {
             ReplacementEffect::PreventCombatDamageToOrFromSelf
             | ReplacementEffect::PreventCombatDamage => "Prevent all combat damage".into(),
             ReplacementEffect::ModifyDamage {
+                transform: DamageTransform::PreventAll,
+                ..
+            } => "Prevent all damage".into(),
+            ReplacementEffect::ModifyDamage {
                 transform: DamageTransform::Prevent(amount),
                 ..
             } => {
@@ -1240,6 +1244,35 @@ impl Game {
                         }
                     }
                 }
+                // Protection is a prevention effect. The affected player may
+                // order it with other replacements before the damage commits.
+                if let ProposedDamageTarget::Object(object) = target {
+                    let id = self
+                        .state
+                        .permanent_of(*object)
+                        .expect("live damage target");
+                    let view = self.layer_view(id);
+                    for (index, ability) in view.static_abilities.iter().enumerate() {
+                        if ability.protects_from(|quality| {
+                            damage_source.zip(source_controller).is_some_and(
+                                |(source, controller)| {
+                                    self.targeting_source(controller, source).matches(quality)
+                                },
+                            )
+                        }) {
+                            out.push(ReplacementCandidate::printed_static(
+                                *object,
+                                index,
+                                ReplacementEffect::ModifyDamage {
+                                    creature_source: false,
+                                    source_by: Actor::AnyPlayer,
+                                    recipient_by: Actor::AnyPlayer,
+                                    transform: DamageTransform::PreventAll,
+                                },
+                            ));
+                        }
+                    }
+                }
                 // A resolved shield on the damaged permanent ("prevent all
                 // combat damage that would be dealt to it this turn") is an
                 // effect record, not one of its abilities, so losing all
@@ -1453,7 +1486,11 @@ impl Game {
             (
                 ProposedEvent::Damage { amount, .. },
                 ReplacementEffect::PreventCombatDamageToOrFromSelf
-                | ReplacementEffect::PreventCombatDamage,
+                | ReplacementEffect::PreventCombatDamage
+                | ReplacementEffect::ModifyDamage {
+                    transform: DamageTransform::PreventAll,
+                    ..
+                },
             ) => *amount = 0,
             (
                 ProposedEvent::CreateTokens { count, .. },

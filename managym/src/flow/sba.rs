@@ -264,7 +264,9 @@ impl Game {
                 self.state.permanents[id].as_ref().is_some_and(|equipment| {
                     equipment.attached_to.is_some()
                         && self.state[equipment.object].enchant().is_none()
-                }) && self.attached_creature(id).is_none()
+                }) && self
+                    .attached_creature(id)
+                    .is_none_or(|target| self.protected_from_permanent(target, id))
             })
             .collect();
         for permanent_id in detached {
@@ -380,7 +382,9 @@ impl Game {
             return false;
         };
         !self.attached_permanent(aura).is_some_and(|object| {
-            object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
+            object != aura
+                && !self.protected_from_permanent(object, aura)
+                && self.permanent_matches_spec(object, enchant, permanent.controller)
         })
     }
 }

@@ -209,6 +209,7 @@ pub(super) struct StaticPlayPermissions {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct LayerBoard {
+    pub(super) player_modifications: [Vec<Modification>; 2],
     control_changes: Vec<(PermanentId, PlayerId)>,
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
@@ -274,6 +275,7 @@ impl Game {
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
         let mut control_changes = Vec::new();
+        let mut player_modifications: [Vec<Modification>; 2] = Default::default();
         let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
@@ -288,6 +290,9 @@ impl Game {
                 let permissions = &mut play_permissions[controller.0];
                 for ability in &object.view.static_abilities {
                     match ability {
+                        StaticAbility::ControllerHas(grant) => {
+                            player_modifications[controller.0].push((**grant).clone())
+                        }
                         StaticAbility::Restriction(rule) => {
                             restrictions.push((id, controller, rule.clone()))
                         }
@@ -327,6 +332,7 @@ impl Game {
             permissions.extra_land_plays += land_plays_each_player;
         }
         LayerBoard {
+            player_modifications,
             control_changes,
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
@@ -1389,16 +1395,9 @@ mod cache_tests {
     /// revisions, as a write that advanced no revision would leave it.
     #[cfg(debug_assertions)]
     fn with_stale_board(game: &Game) {
-        let board = game.layer_board();
-        game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
-            play_permissions: board.play_permissions.clone(),
-            restrictions: board.restrictions.clone(),
-            objects: board.objects.clone(),
-            reads_mana: !board.reads_mana,
-            reads_tapped: board.reads_tapped,
-            reads_life: board.reads_life,
-            dynamic_activations: board.dynamic_activations,
-        }));
+        let mut board = game.compute_board(None);
+        board.reads_mana = !board.reads_mana;
+        game.derived.borrow_mut().at(game.state.revisions()).board = Some(Arc::new(board));
     }
 
     #[cfg(debug_assertions)]

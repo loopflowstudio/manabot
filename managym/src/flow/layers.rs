@@ -370,6 +370,9 @@ impl Operation {
                 Modification::SetTypes { .. } => CARD_TYPES | SUBTYPES,
                 Modification::Nonlegendary => SUPERTYPES,
                 Modification::SetColors(_) | Modification::AddColors(_) => COLORS,
+                Modification::LoseKeywords(keywords) if keywords.has(Keyword::Hexproof) => {
+                    ABILITIES | KEYWORDS
+                }
                 Modification::AddKeywords(_) | Modification::LoseKeywords(_) => KEYWORDS,
                 Modification::LoseAllAbilities | Modification::LoseNonManaAbilities => {
                     ABILITIES | KEYWORDS
@@ -1416,7 +1419,12 @@ impl<'a> Context<'a> {
                         view.keywords = view.keywords.union(*keywords)
                     }
                     Modification::LoseKeywords(keywords) => {
-                        view.keywords = view.keywords.without(*keywords)
+                        view.keywords = view.keywords.without(*keywords);
+                        if keywords.has(Keyword::Hexproof) {
+                            object.statics.retain(|entry| {
+                                !matches!(entry.ability, StaticAbility::HexproofFrom(_))
+                            });
+                        }
                     }
                     Modification::LoseNonManaAbilities => {
                         lose_nonmana_abilities(view, &mut object.statics)

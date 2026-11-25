@@ -33,6 +33,7 @@ mod chk;
 mod clb;
 mod cmd;
 mod cmr;
+mod con;
 mod csp;
 mod dft;
 mod dgm;
@@ -201,6 +202,7 @@ const SETS: &[fn() -> Vec<CardDefinition>] = &[
     clb::cards,
     cmd::cards,
     cmr::cards,
+    con::cards,
     csp::cards,
     dft::cards,
     dis::cards,

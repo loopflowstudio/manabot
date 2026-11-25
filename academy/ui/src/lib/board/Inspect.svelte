@@ -25,6 +25,11 @@
 
   let { name, text, permanent = null, card = null, castTerms = [], blocks = null, art = 128 }: Props = $props();
 
+  function sourceQuality(quality: string): string {
+    const label = quality.split('::').at(-1)!.toLowerCase();
+    return quality.startsWith('CardType::') ? `${label} sources` : label;
+  }
+
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
   const statuses = $derived(permanent ? statusesOf(permanent) : []);
@@ -33,6 +38,8 @@
   const facts = $derived(permanent ? [
     permanent.tapped ? 'Tapped' : 'Untapped',
     permanent.summoning_sick && permanent.types?.is_creature ? 'summoning sick' : '',
+    ...(permanent.hexproof_from ?? []).map(quality => `hexproof from ${sourceQuality(quality)}`),
+    ...(permanent.protection_from ?? []).map(quality => `protection from ${sourceQuality(quality)}`),
     permanent.blocked ? 'blocked' : '',
     permanent.control_differs_from_entry ? 'entered under the other player’s control' : '',
     permanent.first_strike_participant ? 'first-strike participant' : '',

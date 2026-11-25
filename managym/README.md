@@ -1042,6 +1042,14 @@ This is an inspection API for Academy and tools. It adds no action,
 observation field or encoder column, and nothing in `Env.step`, `VectorEnv`,
 search or training calls it.
 
+When choosing targets, a spell uses the colors and card types of the face being
+cast. An ability uses its source’s current characteristics, or its last known
+characteristics if the source has left. The engine checks each target again
+on resolution. Knight of Grace therefore permits its controller’s black
+spells and excludes an opponent’s black spells and abilities from black
+sources. Academy and the text observation show effective protection and
+qualified hexproof on permanents and hexproof on players.
+
 ### Previewing a whole combat declaration
 
 The engine declares attackers and blockers one creature at a time. Ask how a
@@ -1070,8 +1078,10 @@ step, as in play. A block plan names blocker → attacker pairs
 (`PlannedBlock`), and a blocker's `can_block` lists the attackers it may block
 from here. The plan is refused, with a reason, when a planned creature is
 never asked, a planned answer is not offered (a required block) or the
-finished declaration differs from the plan (a lone block of a creature with
-menace, which the engine removes once every blocker is declared).
+finished declaration differs from the plan through a forced answer.
+Each offered block or decline can still complete a
+legal declaration satisfying the greatest possible number of requirements
+(CR 509.1b–c). Blocking a creature with menace commits at least two blockers.
 `declared_attackers` and `declared_blocks` are the declaration as the engine
 would finish it. During attacker selection both viewers can see the attackers
 chosen so far. Raid becomes true for the attacking player when a nonempty

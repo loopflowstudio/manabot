@@ -41,6 +41,8 @@ const STATES: &[(&str, &str)] = &[
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("control-auras", "Each Confiscate controls one opposing Gray Ogre"),
+    ("joraga-blocks", "Joraga Invocation on a mixed flying and ground attack against reach and ground blockers"),
+    ("quality-targets", "Eight targeting spells against a battlefield of Knights, Elenda and ordinary creatures"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
@@ -179,6 +181,36 @@ struct Recipe {
 fn recipe(name: &str, size: usize) -> Recipe {
     let mut seats = [Seat::default(), Seat::default()];
     match name {
+        "joraga-blocks" => {
+            seats[0].cycle(&["Wind Drake", "Gray Ogre"], size);
+            seats[1].cycle(&["Giant Spider", "Gray Ogre"], size);
+            seats[0].add("Forest", 6);
+            seats[0].hand.push("Joraga Invocation".into());
+            // Give each seat a priority stop so the root is before combat.
+            seats[1].add("Mountain", 1);
+            seats[1].hand.push("Lightning Bolt".into());
+        }
+        "quality-targets" => {
+            seats[1].cycle(
+                &["Knight of Grace", "Knight of Malice", "Gray Ogre"],
+                size.saturating_sub(1),
+            );
+            seats[1].add("Elenda, Saint of Dusk", 1);
+            seats[0].cycle(&["Plains", "Swamp", "Forest", "Mountain", "Island"], 10);
+            seats[0].hand.extend(
+                [
+                    "Stab",
+                    "Giant Growth",
+                    "Luminous Rebuke",
+                    "Adamant Will",
+                    "Unsummon",
+                    "Lightning Strike",
+                    "Fleeting Flight",
+                    "Feed the Swarm",
+                ]
+                .map(String::from),
+            );
+        }
         "duplicate-lands" | "herbalist" | "paid-filter" | "counted-tap" | "waterbend-x" => {
             let seat = &mut seats[0];
             seat.add("Forest", size);
@@ -912,6 +944,38 @@ fn before_resolution(mut env: Env, after_first: bool) -> Env {
 fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
     match recipe.state.as_str() {
+        "joraga-blocks" => {
+            let cast = follow(root, &[("cast", 0)]);
+            let resolution = before_resolution(cast, false);
+            let resolved = follow(&resolution, &[("resolve", 0)]);
+            let Some(mut env) = combat(&resolved, true) else {
+                // Trivial declarations are skipped in ordinary play.
+                return result;
+            };
+            let mut step = 0;
+            while env.action_space_kind() == Some(ActionSpaceKind::DeclareBlocker) {
+                result.push((format!("block-{step}"), env.fork().unwrap()));
+                env.step(0).unwrap();
+                step += 1;
+            }
+            return result;
+        }
+        "quality-targets" => {
+            // One fork per spell so every enumeration sees the same battlefield.
+            let mut priority = root.fork().unwrap();
+            for (index, action) in actions(&mut priority).iter().enumerate() {
+                let Action::CastSpell { object, .. } = action else {
+                    continue;
+                };
+                let name = priority.benchmark_game_mut().state[*object].name.clone();
+                let mut cast = root.fork().unwrap();
+                cast.step(index as i64).unwrap();
+                if cast.action_space_kind() == Some(ActionSpaceKind::ChooseTarget) {
+                    result.push((format!("cast-{name}"), cast));
+                }
+            }
+            return result;
+        }
         "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
         | "blast-discard" | "control-auras" => {
             let env = match recipe.state.as_str() {
@@ -1093,7 +1157,14 @@ fn run(
         {
             continue;
         }
-        if layer == "actions" && root.action_space_kind() != Some(ActionSpaceKind::Priority) {
+        let cast_targets = recipe.state == "quality-targets" && checkpoint.starts_with("cast-");
+        if layer == "actions"
+            && !cast_targets
+            && !matches!(
+                root.action_space_kind(),
+                Some(ActionSpaceKind::Priority | ActionSpaceKind::DeclareBlocker)
+            )
+        {
             continue;
         }
         if (layer == "step:damage" && checkpoint != "damage")
@@ -1139,7 +1210,11 @@ fn run(
             let start = Instant::now();
             let output = match layer {
                 "actions" => Output::Actions {
-                    actions: benchmark_layers::actions(env.benchmark_game_mut(), PlayerId(actor)),
+                    actions: if cast_targets {
+                        benchmark_layers::cast_targets(env.benchmark_game_mut())
+                    } else {
+                        benchmark_layers::actions(env.benchmark_game_mut(), PlayerId(actor))
+                    },
                 },
                 "characteristics" => Output::Views {
                     views: benchmark_layers::characteristics(env.benchmark_game_mut()),

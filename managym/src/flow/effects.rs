@@ -184,11 +184,6 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::CantActivateAbilities)
     }
 
-    /// "All creatures able to block [it] this turn do so."
-    pub fn must_be_blocked_by_all_able(&self, permanent_id: PermanentId) -> bool {
-        self.permanent_has_modification(permanent_id, &Modification::MustBeBlockedByAllAble)
-    }
-
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
@@ -257,10 +252,11 @@ impl Game {
             .any(|effect| effect.modification == Modification::LifeTotalCantChange)
     }
 
-    /// Whether `player` has protection from everything (CR 702.16j).
-    pub fn has_protection_from_everything(&self, player: PlayerId) -> bool {
+    /// Player rules granted by records and by effective battlefield abilities.
+    pub fn player_has(&self, player: PlayerId, modification: &Modification) -> bool {
         self.player_effects(player)
-            .any(|effect| effect.modification == Modification::ProtectionFromEverything)
+            .any(|effect| &effect.modification == modification)
+            || self.layer_board().player_modifications[player.0].contains(modification)
     }
 
     /// The most life `player` can pay: none other than 0 while their life

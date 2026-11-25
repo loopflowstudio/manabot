@@ -1663,6 +1663,7 @@ fn continuous_description_in(
         Modification::CantActivateAbilities => {
             format!("{subject}'s activated abilities can't be activated{until}")
         }
+        Modification::MustBeBlocked => format!("{subject} must be blocked if able{until}"),
         Modification::MustBeBlockedByAllAble => {
             format!(
                 "All creatures able to block {}{until} do so",
@@ -1707,6 +1708,7 @@ fn continuous_description_in(
         Modification::LifeTotalCantChange => {
             format!("{subject}: life total can't change{until}")
         }
+        Modification::Hexproof => format!("{subject} has hexproof{until}"),
         Modification::ProtectionFromEverything => {
             format!("{subject}: protection from everything{until}")
         }

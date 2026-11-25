@@ -914,6 +914,8 @@ class _Renderer:
                     f"from elsewhere, until {self.name(player.hand_only_until)} "
                     "begins a turn."
                 )
+            if player.hexproof:
+                lines.append("Has hexproof.")
             if player.no_maximum_hand_size:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
@@ -1097,6 +1099,15 @@ class _Renderer:
             parts.append("land through an effect")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
+        for ability, qualities in (
+            ("hexproof", permanent.hexproof_from),
+            ("protection", permanent.protection_from),
+        ):
+            for quality in qualities:
+                label = quality.rsplit("::", 1)[-1].lower()
+                if quality.startswith("CardType::"):
+                    label += " sources"
+                parts.append(f"{ability} from {label}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")
         if permanent.transforms:

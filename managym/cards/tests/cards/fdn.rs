@@ -7286,3 +7286,79 @@ fn glamdring_cast_from_a_tinybones_stash_spends_any_mana_after_its_reduction() {
         "Gleam of Death milled six"
     );
 }
+
+#[test]
+fn vampire_soulcaller_returns_only_its_owners_creature_card() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::{offered_targets, zone_of},
+        play::enter_until_target,
+    };
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&["Vampire Soulcaller", "Gray Ogre", "Stab"]);
+    let mine = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Stab");
+    enter_until_target(&mut s, "Vampire Soulcaller");
+    assert_eq!(offered_targets(&s), [Target::GraveyardCard(mine)]);
+    assert!(s.choose_target(Target::GraveyardCard(mine)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, mine), Some(ZoneType::Hand));
+}
+
+#[test]
+fn elenda_checks_the_spell_type_and_both_life_thresholds() {
+    use crate::support::{inspect::offered_targets, play::cast};
+    use managym::state::game_object::Target;
+    let mut s = five_color_setup(&[
+        "Elenda, Saint of Dusk",
+        "Gray Ogre",
+        "Stab",
+        "Feed the Swarm",
+    ]);
+    let elenda = s.force_permanent_on_battlefield(1, "Elenda, Saint of Dusk");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    for (life, pt, menace) in [
+        (20, 4, false),
+        (21, 5, true),
+        (29, 5, true),
+        (30, 10, true),
+        (19, 4, false),
+    ] {
+        s.game_mut().state.players[1].life = life;
+        let view = s.game().characteristics(elenda);
+        assert_eq!(view.pt(), (pt, pt));
+        assert_eq!(view.keywords.has(Keyword::Menace), menace);
+    }
+    for (spell, legal) in [("Stab", false), ("Feed the Swarm", true)] {
+        let mut line = s.clone();
+        cast(&mut line, spell);
+        assert_eq!(
+            offered_targets(&line).contains(&Target::Permanent(elenda)),
+            legal
+        );
+    }
+}
+
+#[test]
+fn crystal_barricade_gives_its_controller_hexproof() {
+    use crate::support::{inspect::offered_targets, play::cast};
+    use managym::{agent::observation::Observation, state::game_object::Target};
+    let mut s = five_color_setup(&["Crystal Barricade", "Lightning Bolt"]);
+    let barricade = s.force_permanent_on_battlefield(1, "Crystal Barricade");
+    let mut line = s.clone();
+    cast(&mut line, "Lightning Bolt");
+    let targets = offered_targets(&line);
+    assert!(targets.contains(&Target::Player(PlayerId(0))));
+    assert!(targets.contains(&Target::Permanent(barricade)));
+    assert!(!targets.contains(&Target::Player(PlayerId(1))));
+    assert!(
+        Observation::for_player(line.game(), PlayerId(0))
+            .opponent
+            .hexproof
+    );
+    let object = card_of(&s, barricade);
+    move_card(&mut s, object, ZoneType::Hand);
+    cast(&mut s, "Lightning Bolt");
+    assert!(offered_targets(&s).contains(&Target::Player(PlayerId(1))));
+}

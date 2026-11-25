@@ -981,6 +981,7 @@ class Player:
     remaining_sideboard_counts: Optional[Dict[int, int]]
     keeps_red_mana: bool
     counters: dict[str, int]
+    hexproof: bool
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
@@ -1207,6 +1208,8 @@ class Permanent:
     creature_types: List[str] | None
     is_granted_land: bool
     blocking: int | None
+    hexproof_from: list[str]
+    protection_from: list[str]
     abilities_lost: bool
     combat_damage_to_players: list[int]
     damaged_permanents: list[int]

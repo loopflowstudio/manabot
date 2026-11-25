@@ -1469,6 +1469,7 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
         }
     }
     out[player::HAND_ONLY] = flag(player.hand_only_until.is_some());
+    out[player::HEXPROOF] = flag(player.hexproof);
     out[player::NO_MAXIMUM_HAND_SIZE] = flag(player.no_maximum_hand_size);
     out[player::STEP_FIRST_STRIKE_COMBAT_DAMAGE] =
         flag(turn.step == StepKind::FirstStrikeCombatDamage);
@@ -1916,6 +1917,26 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     if layout == InputLayout::OneToken {
+        for permanent in permanents() {
+            for (ability, qualities) in [
+                ("StaticAbility::HexproofFrom", &permanent.hexproof_from),
+                ("StaticAbility::Protection", &permanent.protection_from),
+            ] {
+                for (ordinal, quality) in qualities.iter().enumerate() {
+                    out.push(Fact {
+                        object: permanent.id,
+                        kind: FactKind::EffectProgram,
+                        id: name_value(ability),
+                        detail: name_value(quality),
+                        values: [
+                            crate::cards::tokens::TokenKind::Variant as i64,
+                            ordinal as i64,
+                        ],
+                        effect: None,
+                    });
+                }
+            }
+        }
         permission_facts(obs, &mut out);
     }
     // Spend effects and combat expiry: one program per pooled class on its player.
@@ -2577,6 +2598,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
@@ -2617,6 +2639,7 @@ mod tests {
                 hand_only_until: None,
                 spent_graveyard_types: vec![],
                 counters: Default::default(),
+                hexproof: false,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },

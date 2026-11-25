@@ -48,6 +48,8 @@ mod clb;
 mod cmd;
 #[path = "cards/cmr.rs"]
 mod cmr;
+#[path = "cards/con.rs"]
+mod con;
 #[path = "cards/csp.rs"]
 mod csp;
 #[path = "cards/definitions.rs"]

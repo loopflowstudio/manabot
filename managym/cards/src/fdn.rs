@@ -6,10 +6,10 @@ use managym_state::ability::{
     TriggerSubject, TurnStep,
 };
 use managym_state::card::{
-    ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
-    CardTypes, DamageTransform, Keyword, Keywords, PrintedCharacteristics, ReplacementEffect,
-    Restriction, SacrificeCost, SpellCostReduction, StaticAbility, StaticRestriction, StaticScope,
-    TargetCostReduction,
+    ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
+    CardType, CardTypes, DamageTransform, Keyword, Keywords, PrintedCharacteristics,
+    ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
+    StaticAbility, StaticRestriction, StaticScope, TargetCostReduction,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::{Color, ManaCost};
@@ -19,6 +19,9 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        crystal_barricade(),
+        elenda_saint_of_dusk(),
+        vampire_soulcaller(),
         fishing_pole(),
         ravenous_amulet(),
         hare_apparent(),
@@ -3578,6 +3581,105 @@ fn sphinx_of_forgotten_lore() -> CardDefinition {
                     },
                 }],
             }],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn vampire_soulcaller() -> CardDefinition {
+    let text_box = "Flying\nThis creature can't block.\nWhen this creature enters, return target creature card from your graveyard to your hand.";
+    CardDefinition {
+        key: "fdn.vampire_soulcaller",
+        scryfall_id: "2d076293-3b45-4878-8f67-978927cc1f68",
+        printed: PrintedCharacteristics {
+            name: "Vampire Soulcaller".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Vampire".into(), "Warlock".into()],
+            power: Some(3),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::BlockRestriction(
+                BlockRestriction::CantBlock(CardPredicate::default()),
+            )],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate::creature(),
+                    },
+                ))],
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn elenda_saint_of_dusk() -> CardDefinition {
+    let text_box = "Lifelink, hexproof from instants\nAs long as your life total is greater than your starting life total, Elenda gets +1/+1 and has menace. Elenda gets an additional +5/+5 as long as your life total is at least 10 greater than your starting life total.";
+    CardDefinition {
+        key: "fdn.elenda_saint_of_dusk",
+        scryfall_id: "24955f5f-093c-4d33-b0c1-911cd36032ce",
+        printed: PrintedCharacteristics {
+            name: "Elenda, Saint of Dusk".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vampire".into(), "Knight".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            statics: vec![
+                StaticAbility::HexproofFrom(SourceQuality::CardType(CardType::Instant)),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::compare(
+                        EffectValue::LifeAboveStarting(PlayerSelector::You),
+                        CompareOp::Gt,
+                        0,
+                    )),
+                    vec![
+                        Modification::pump(1, 1),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    ],
+                ),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::compare(
+                        EffectValue::LifeAboveStarting(PlayerSelector::You),
+                        CompareOp::Ge,
+                        10,
+                    )),
+                    vec![Modification::pump(5, 5)],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn crystal_barricade() -> CardDefinition {
+    let text_box = "Defender (This creature can't attack.)\nYou have hexproof. (You can't be the target of spells or abilities your opponents control.)\nPrevent all noncombat damage that would be dealt to other creatures you control.";
+    CardDefinition {
+        key: "fdn.crystal_barricade",
+        scryfall_id: "905d3e02-ea06-45e7-9adb-c8e7583323a2",
+        printed: PrintedCharacteristics {
+            name: "Crystal Barricade".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            statics: vec![StaticAbility::ControllerHas(Box::new(
+                Modification::Hexproof,
+            ))],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

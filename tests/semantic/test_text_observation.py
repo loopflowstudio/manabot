@@ -896,6 +896,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "id": "the permanent's alias",
         "registry_key": "[definition]",
         "controller_id": "controller",
+        "hexproof_from": "hexproof from the observed source quality",
+        "protection_from": "protection from the observed source quality",
         "control_differs_from_entry": "entered under the other player's control",
         "tapped": "tapped",
         "damage": "damage",
@@ -1025,6 +1027,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "sideboard_counts": "Initial sideboard",
         "remaining_sideboard_counts": "Remaining sideboard",
         "keeps_red_mana": "Keeps unspent red mana",
+        "hexproof": "Has hexproof",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
         "spells_cast": "cast N spells",
@@ -1289,6 +1292,31 @@ def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
     assert "; colors colorless" in text
     assert "keyword counter timestamps {'flying': 77}" in text
     assert "It is blue and black." in text
+
+
+def test_protection_and_hexproof_reach_both_viewer_presentations() -> None:
+    env = priority_root(
+        ("Lightning Bolt",),
+        ("Mountain", "Knight of Grace", "Progenitus", "Crystal Barricade"),
+        opponent=("Crystal Barricade",),
+    )
+    decision = capture_text_decision(env)
+    assert "hexproof from black" in decision.text
+    assert "protection from everything" in decision.text
+    assert "Has hexproof." in decision.text
+    board = serialize_observation(_viewer_observation(decision))["agent"]
+    assert board["hexproof"]
+    assert any(p.get("hexproof_from") == ["Color::Black"] for p in board["battlefield"])
+    assert any(
+        p.get("protection_from") == ["SourceQuality::Everything"] for p in board["battlefield"]
+    )
+    _choose(env, "Cast ")
+    choices = [action.description for action in capture_text_decision(env).actions]
+    assert "Target You" in choices
+    assert len(choices) == 4
+    assert any("Knight of Grace" in choice for choice in choices)
+    assert sum("Crystal Barricade" in choice for choice in choices) == 2
+    assert all("Progenitus" not in choice for choice in choices)
 
 
 def test_permanent_control_and_blocked_status_are_visible() -> None:

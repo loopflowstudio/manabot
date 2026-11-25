@@ -5,15 +5,17 @@ use managym_state::{
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        StaticAbility, StaticScope,
+        SourceQuality, StaticAbility, StaticScope,
     },
     effect::Modification,
-    mana::ManaCost,
+    mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        knight_of_malice(),
+        knight_of_grace(),
         adamant_will(),
         ghitu_lavarunner(),
         lyra_dawnbringer(),
@@ -175,6 +177,74 @@ fn muldrotha() -> CardDefinition {
             power: Some(6),
             toughness: Some(6),
             statics: vec![managym_state::card::StaticAbility::PlayGraveyardByPermanentType],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn knight_of_grace() -> CardDefinition {
+    let text_box = "First strike (This creature deals combat damage before creatures without first strike.)\nHexproof from black (This creature can't be the target of black spells or abilities your opponents control.)\nThis creature gets +1/+0 as long as any player controls a black permanent.";
+    CardDefinition {
+        key: "dom.knight_of_grace",
+        scryfall_id: "7bbbddc0-f8b3-4255-bd82-d50f829ca009",
+        printed: PrintedCharacteristics {
+            name: "Knight of Grace".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            statics: vec![
+                StaticAbility::HexproofFrom(SourceQuality::Color(Color::Black)),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::BattlefieldAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            colors_any: vec![Color::Black],
+                            ..Default::default()
+                        },
+                    }),
+                    vec![Modification::pump(1, 0)],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn knight_of_malice() -> CardDefinition {
+    let text_box = "First strike (This creature deals combat damage before creatures without first strike.)\nHexproof from white (This creature can't be the target of white spells or abilities your opponents control.)\nThis creature gets +1/+0 as long as any player controls a white permanent.";
+    CardDefinition {
+        key: "dom.knight_of_malice",
+        scryfall_id: "b45266f0-eb4f-4a06-bc64-8c2d774b4cc5",
+        printed: PrintedCharacteristics {
+            name: "Knight of Malice".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            statics: vec![
+                StaticAbility::HexproofFrom(SourceQuality::Color(Color::White)),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    Some(Condition::BattlefieldAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            colors_any: vec![Color::White],
+                            ..Default::default()
+                        },
+                    }),
+                    vec![Modification::pump(1, 0)],
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },
