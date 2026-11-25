@@ -22,8 +22,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`, then set
   `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise `site.missing`).
   Plain `npm run build` uses adapter-auto and does not create that directory. Pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
-  port 8000 is often taken. Open READY's `open` address in Playwright. For a
-  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  port 8000 is often taken. Open READY's `open` address in Playwright to start
+  the game. To compare UI revisions, build each into its own directory and
+  point a separate CLI server at each build. Use the same decks, `--opponent
+  search --sims 16`, `--seed` and human choices to compare the same game.
+  Open each launch in its own browser context. For a multi-game evaluation
+  trace, call `manabot.eval.match.play_cell` with
   `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
   `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
   CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`

@@ -41,6 +41,12 @@ describe('gameResult', () => {
       .toBe('10 turns · you cast 1 spell and attacked once; Heuristic · scripted cast 1 and attacked 2 times');
   });
 
+  it('counts every spell a compound move cast', () => {
+    const log = [entry('villain', 'Cast Suki, Kyoshi Warrior; Cast Yip Yip!, targeting Earth Kingdom Jailer', 4)];
+    expect(gameResult(frame(14, 0, 4), log, names, 0).summary)
+      .toBe('4 turns · you cast 0 spells and attacked 0 times; Heuristic · scripted cast 2 and attacked 0 times');
+  });
+
   it('calls a game nobody won a draw', () => {
     expect(gameResult(frame(0, 0), [], names, null)).toMatchObject({ headline: 'Draw', how: 'Neither player won, on turn 9' });
   });
