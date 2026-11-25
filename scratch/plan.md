@@ -737,17 +737,7 @@ change.
 
 ## Passes
 
-1. **Native layer with combat parity and the library kinds.** The pass that
-   could prove the plan wrong. `flow/group/` (shared envelope + driver,
-   `combat.rs`, `library.rs`), `Game`/`Env` entry points, the `combat_preview`
-   wrappers, bindings, `managym/group.py`, `__init__.pyi`, public API record,
-   extension rebuild; `managym/tests/rules/group.rs`.
-   Shows: unedited `combat_preview` tests pass through the wrapper; Scry,
-   Surveil, and OrderLibrary (both `Top` and `Bottom`, including Scry bottom
-   ordering, Preordain post-group draw, 2-card OrderLibrary, and mid-group raw
-   steps) fit the same driver with zero kind-specific branches in the driver;
-   `apply_group` equals following `steps`; the inter-step hidden-info boundary
-   holds for every kind.
+1. **Native layer with combat parity and the library kinds** — done (`b3ae75976c`).
 2. **Academy authority & `testing-house-v1` schema.** `live_group`, `group` in
    `_response_with_participant` (pilot-only, including `role_changed`),
    `/group-preview` (no `steps`), `GroupCommandMessage` in
