@@ -125,10 +125,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   dialog moves focus and scrolls the table, so screenshot it as it is.
   For a demo with specific cards, check that art for an uncached card loads
   through the same launch the person will use. Hover a card name to read
-  `[data-testid=card-rules-text]`. During an active decision, move the pointer
-  between offers and tab through them. Keep the prompt, committed facts and
-  hints distinct, and check that changing a preview leaves the action buttons
-  in place. For a multi-step payment, make a contribution and check that the
+  `[data-testid=card-rules-text]`. During an active decision, hover cards and
+  offers and tab through them. Keep the prompt, committed facts and hints
+  distinct, and check that changing a preview leaves adjacent panels and action
+  buttons in place. For a multi-step payment, make a contribution and check that the
   panel shows what committed, what remains payable and what is still floating.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
@@ -287,9 +287,9 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   additive, this checkout's `.so` serves (the main checkout's may be stale).
   Start the CLI as `python -c 'from managym.cli import main; main()' academy
   ...` (`-m managym.cli` exits silently); stop a `nohup … &` server with
-  SIGTERM. A clicked control during the opponent's read-out only ends the
-  read-out (the click is swallowed by design); click again, as a person
-  would. A real checkpoint from `etude train manabot/recipes/local.py`
+  SIGTERM. Enable live overlays and charts mid-game, not only from turn 1, and
+  check that axes, `%` units and hover readouts are legible. A real checkpoint
+  from `etude train manabot/recipes/local.py`
   analysed a 130-event game in about 5–60 s depending on load.
   The Bolt-deck acceptance spec never meets long option names or a stack
   item; check Review's rail at a Lessons v Allies decision (Learn has nine
