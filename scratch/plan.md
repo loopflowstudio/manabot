@@ -23,7 +23,7 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   (`division_remaining`, `EffectValue::TargetDivision`, v11 `action::DIVISION`
   column 31), `SpellTargeting` factored, `−X` offers filtered by target
   availability; directed witnesses in `flow/target_authority_tests.rs`.
-- Pass 2: removed `FactKind::EmblemAbility` and `"Emblem::Static"` /
+- Pass 2 (`18e676eb64`; no test results recorded, rerun in Pass 4): removed `FactKind::EmblemAbility` and `"Emblem::Static"` /
   `"Emblem::Triggered"` record tokens (emblems observed via `agent_cards` /
   `opponent_cards` `ZONE_COMMAND` + `semantic_cards` → `catalog_tokens`);
   projected `StaticAbility::StateBasedActionDoesntApply { action: ZeroLoyalty, .. }`
