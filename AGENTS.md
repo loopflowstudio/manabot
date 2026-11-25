@@ -315,8 +315,7 @@ change already touches it; do not rewrite a module only for style. Rust in
 - The engine has no world label. New checkpoints, recordings, decision captures
   (v6) and evaluation records write none; a reader ignores one in an older file
   (`manabot.model.world.current_binding_form`, optional `world` fields omitted
-  when absent) and never rewrites stored data. `managym.WORLD_VERSION` is a
-  warning alias until 0.3.0. Matchup ids keep `w17` as the plain string
+  when absent) and never rewrites stored data. Matchup ids keep `w17` as the plain string
   `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
   literal, so retained tournaments find their records. Add no new label.
 - Main carries policy input v11, the fresh default
@@ -324,8 +323,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   game thing. Card rows hold cards outside the battlefield and stack;
   permanents own one effective `CharacteristicsData` projection plus object
   identity and token status; spells own a `SpellData` projection, and abilities
-  carry only source references. Old Python `.card` and flat characteristic
-  getters derive from those records (removed in 0.3.0); the `stack`
+  carry only source references; the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
   one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
@@ -374,10 +372,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   restoring weights. Older runs supply their model settings from the initial raw policy.
 - Model and name rules state and observation fields directly after the
   Comprehensive Rules, not derived consequence flags; new state reaches policy
-  input, LLM text and learning tokens together. To extend an integer-serialized
-  enum, append its discriminant for wire JSON, tag out-of-order values for the
-  next minor release (`0.3.0`), and map them into append-only named policy
-  columns (keeping any legacy coarse column set) for stored checkpoints. Pass
+  input, LLM text and learning tokens together. To extend an enum that crosses
+  a wire or checkpoint boundary, serialize it by name in Observation JSON (or
+  append its discriminant if integer-serialized) and map new variants into
+  append-only named policy columns (keeping any legacy coarse column set) for
+  stored checkpoints. Pass
   `ObservationSpace.layout` to encoding and derive buffers from it, validate
   keys and companion shapes before encoding, read columns by native name
   (`column("facts", "value")`), test new columns on a constructed position, and

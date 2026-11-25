@@ -347,9 +347,7 @@ with serve(port=0) as academy:
   can also select a digest prefix.
 - `launch.read_games(path)` lists the games of a file or directory as
   `RecordedGame` values (`index`, `seed`, `stream`, `players`,
-  `decisions`, `ended`, `digest`), for choosing one in code. The former
-  `deal_seed`, `leg`, `decks` and `game_trace_sha256` properties warn and are
-  removed in 0.3.0.
+  `decisions`, `ended`, `digest`), for choosing one in code.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
   opens it in the default browser; `academy.open()` opens Academy with no game.
