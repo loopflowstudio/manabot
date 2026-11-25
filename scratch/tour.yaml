@@ -1,37 +1,49 @@
-at: 5ea9e99157b4a1d4fcdc5a84547dd9908c29900c
+at: f47bb9b4575269d6e10db67c121df1bedb873ce7
 first:
   - path: docs/engine.md
     why: Planeswalker, loyalty, attack-target, empower and emblem contracts
   - path: managym/state/src/card.rs
     why: Printed loyalty, LoyaltyCost, EmblemDefinition and zero-loyalty SBA exemption
   - path: managym/state/src/ability.rs
-    why: Unified Fight and RevealUntil, TriggerModes.min, AttackedSubject and TargetRequirement.division
+    why: Unified Fight, RevealUntil, TargetDivision and TargetRequirement bounds
   - path: managym/state/src/permanent.rs
     why: Per-turn loyalty activation quota and available loyalty accounting
+  - path: managym/src/flow/game.rs
+    why: SpellTargeting, ActivatedTargeting and DivisionParent pipeline state
   - path: managym/src/flow/play.rs
-    why: Loyalty X, sorcery/instant timing and sequential target division
+    why: Loyalty X filtering, sorcery/instant timing and sequential target division
+  - path: managym/src/flow/combat.rs
+    why: Unified CombatState.attack_targets with optional permanent defenders
   - path: managym/src/flow/combat_actions.rs
     why: Planeswalker defenders, valid-defender authority and trample/damage routing
+  - path: managym/src/flow/proposed_event.rs
+    why: CR 508.4 attacking-token entry and unified death-to-exile replacements
   - path: managym/src/flow/layers.rs
-    why: Command-zone emblem statics and Way loyalty-ability grants
+    why: Command-zone emblem statics, Way grants and zero-loyalty exemption
+  - path: managym/src/flow/sba.rs
+    why: Layer-projected zero-loyalty SBA exemption and streaming checks
   - path: managym/src/flow/triggers.rs
-    why: Command-zone emblem triggers, loyalty activation events and exact multi-mode placement
+    why: Command-zone emblem triggers, loyalty activations and multi-mode placement
   - path: managym/src/flow/resolution.rs
-    why: Unified Fight, RevealUntil, ExileTopCardsToPlay and divided damage resolution
-  - path: managym/src/flow/decision.rs
-    why: EnterAttacking choice, ChooseExiled cast offer and reveal_until zones
-  - path: managym/src/cards/token_renames.rs
-    why: Historical token renames for retired FightLastTarget and RevealUntilToHand
+    why: Unified Fight, RevealUntil, ExileTopCardsToPlay and TargetDivision damage
+  - path: managym/src/agent/structured_offer.rs
+    why: Single authority for planeswalker attack-defender candidate bindings
   - path: managym/src/agent/observation_layout.rs
     why: Appended v11 loyalty, attack-target, division and turn-state columns
+  - path: academy/ui/src/lib/board/combat.ts
+    why: Default-to-player attack drafting and planeswalker defender overrides
+  - path: academy/ui/src/lib/board/Board.svelte
+    why: Inline planeswalker retargeting during Academy attack drafting
   - path: managym/cards/src/emblems.rs
     why: Registered planeswalker emblem definitions
   - path: managym/cards/src/fra.rs
     why: Reality Fracture planeswalkers, Ways, empower cards and adjacent support
+  - path: managym/src/flow/target_authority_tests.rs
+    why: Directed -X target filtering and TargetDivision isolation witnesses
   - path: managym/cards/tests/cards/fra.rs
     why: Directed card tests and integrated planeswalker synergy checks
   - path: managym/tests/rules/attack_targets.rs
-    why: Planeswalker attack declaration, trample and defender-departure rules tests
+    why: Planeswalker attack declaration, trample and defender-departure tests
 hide:
   - path: managym/tests/fixtures/scryfall_cards.json
     why: Regenerated Scryfall oracle snapshot for new cards
@@ -45,6 +57,12 @@ hide:
     why: Regenerated Academy opening digest after catalog additions
   - path: managym/academy/fixtures/precision-mana-demo-opening-v1.json
     why: Regenerated Academy opening digest after catalog additions
+  - path: conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0-planeswalkers.json
+    why: Recorded planeswalker-catalog authored-match parity receipt
+  - path: conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-planeswalkers.json
+    why: Recorded planeswalker-catalog authored-match authority receipt
+  - path: conformance/semantic-kernel-w17-v6/evidence-planeswalkers-v1.json
+    why: Recorded planeswalker-catalog semantic conformance evidence
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Updated set coverage ledger rows
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fra.jsonl
