@@ -53,11 +53,9 @@ pending choice with the same legal offers and permitted information.
   every projection, and each event, decision and presentation event is
   encoded to JSON once (`append_json.py`); the stored bytes are what
   `json.dumps` of the whole record gives.
-- **`recording.py`**: `record_of(attempt)` builds the engine's `GameRecord`
-  from a played game's stored seed, setups and actions, so a played game is
-  re-executed like any other record.
-- **`analysis.py`**: an Analysis, one registered policy's reading of one seat's
-  decisions in a played game, and the `analyses` table that keeps it.
+- **`recording.py`**: positions over retained recordings; `record_of(attempt)`
+  builds the engine's `GameRecord` from a played game's stored seed, setups
+  and actions, so a played game is re-executed like any other record.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -311,44 +309,24 @@ original command bindings.
 ## Reading a played game
 
 A played game retains the boards, seed, both setups and the action at each
-step. Review uses `managym.replay.RecordWalker` to derive additional views,
-statistics and policy analysis. [Guide](../../docs/academy.md#review-a-game-you-played)
-
-| Reading | Made | Kept |
-|---|---|---|
-| Any seat's view at any step; the opponent's moves named from the person's view | When the recording is opened | In memory with the open `Recording` |
-| The game in numbers (`managym.statistics` reducers) | At completion, or on first open for an earlier game | `attempts.summary_json` |
-| An Analysis (per-decision `DecisionAnnotation` and the value's semantic) | When Review opens without one, or on request | The `analyses` table |
+step. `ReplayedViews` re-executes it with `managym.replay.RecordWalker` as far
+as a read asks, so opening a long game costs nothing up front and each step
+forward adds one or two projections. [Guide](../../docs/academy.md#inspect-a-replay)
 
 A played game has no state digests, so the walk checks itself against the
 stored track: each step's acting-seat board and action description must equal
-what was stored, and the result must equal the stored winner. At the first
-difference the reading stops; derived views are used up to that step and the
-stored track after it. A game from another world or card set is not walked and
-opens from its stored track alone. The stored boards stay the authority for
-what the person saw.
+what was stored, and the final board and result must too. At the first
+difference the walk stops; replayed views are used up to it and the stored
+track after it, and the read's `views_stopped` says how far the view was
+replayed. A game from another world or card set is not walked. The stored
+boards stay the authority for what the person saw; replayed views are never
+written back. Narration of the opponent's moves reads the stored track.
 
-An Analysis walks the record with a `PolicyRunner` loaded for the analysed
-seat through `managym.bots`. At each of that seat's non-forced decisions the
-runner reads the seat's observation and the walk's `Env`; its probabilities
-and value are kept, its sampled action is discarded and the walk applies the
-action that was played, so a decision-memory policy sees the history a bot in
-that seat would have. An analysis by search is refused: playouts from the
-walk's `Env` would read the opponent's real hand. Analyses run in the server's
-worker pool, one per game at a time; a `running` row with no process after a
-restart reads as stopped and can be run again.
-
-Access follows the recording. A reading from a participant's seat contains
-nothing that seat did not see. Both seats' views, and an analysis of the other
-seat, need an authoritatively complete game. Derived readings never enter
-`trace_json`, a frame or a trace export.
-
-Selecting **Show analysis** during play starts the analysis from the game
-so far. The server sends each later decision's evidence after the
-decision's frame. A Command committed while that evidence was visible sets
-`TraceEvent.analysis_shown`; it is absent otherwise, and it is the only field
-this adds to a stored game. Study branches keep their own rule: evidence stays
-sealed before Reveal.
+Access follows the recording. A reading from the person's seat contains
+nothing that seat did not see. The opponent's view, for **Show both hands**,
+exists only for an authoritatively complete game (`end_reason == "game_over"`).
+Each `TraceEvent` records `committed_at`, its commit time in UTC; nothing
+shows it yet.
 
 
 ## Elemental roster

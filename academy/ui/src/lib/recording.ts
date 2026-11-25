@@ -35,6 +35,7 @@ export interface Position {
   step: string | null;
   actor: number | null;
   automatic: boolean;
+  /** Both hands may show here: a Watch spectator view, or any position of a complete game you played. */
   can_reveal: boolean;
   /** The revision the position's decision or transition starts at; null at the latest state. */
   revision?: number | null;
@@ -79,6 +80,8 @@ export interface RecordedPosition extends Position {
   cursor: number;
   transition_start: number;
   consequences_recorded: boolean;
+  /** Why this board is the stored track's rather than your replayed view; null where it was replayed or never could be. */
+  views_stopped?: string | null;
 }
 
 /** Seating changes the rendering only, never the information projection. */

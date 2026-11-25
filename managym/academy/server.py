@@ -63,7 +63,6 @@ from managym.experience_projection import (
     HERO_PLAYER_INDEX,
     decision_surface_view,
     definition_names,
-    describe_actions,
     enum_name,
     object_records,
     observation_definition_id,
@@ -824,21 +823,6 @@ def _parse_game_config(config: Any) -> GameConfig:
     if opponent is not None:
         policy_registry().admit(opponent.descriptor.id, parsed.to_rust())
     return parsed
-
-
-def _academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
-    """Relabel player targets by role without changing card names or native offers."""
-    actions = describe_actions(obs)
-    labels = {
-        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
-        for player in (obs.agent, obs.opponent)
-    }
-    for row in actions:
-        focus = row["focus"]
-        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
-            if row["description"] in {"Target Hero", "Target Villain"}:
-                row["description"] = f"Target {labels[focus[0]]}"
-    return actions
 
 
 def observe_policies(
@@ -1741,6 +1725,7 @@ class GameSession:
                 auto=auto,
                 bot_decision=self._bot_decision,
                 analysis_observation=analysis_observation,
+                committed_at=trace_store.utc_now_iso(),
             )
         )
         self.obs = next_obs
@@ -1947,7 +1932,7 @@ class GameSession:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            actions = _academy_actions(self.obs, self.human_seat)
+            actions = trace_store.academy_actions(self.obs, self.human_seat)
             action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
@@ -2135,7 +2120,7 @@ class GameSession:
         viewer: int,
     ) -> DecisionContext:
         """Build one exact actor-safe frame and raw-action lowering map."""
-        actions = _academy_actions(obs, self.human_seat)
+        actions = trace_store.academy_actions(obs, self.human_seat)
         action_space = enum_name(
             ActionSpaceEnum, int(obs.action_space.action_space_type)
         )

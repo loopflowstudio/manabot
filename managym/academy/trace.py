@@ -20,7 +20,7 @@ import managym
 from managym.academy.append_json import encode_list, splice
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
-from managym.experience_projection import redact_observation
+from managym.experience_projection import describe_actions, redact_observation
 from managym.replay import ReplayStop
 from managym.search import SearchConfig
 
@@ -177,6 +177,23 @@ class TraceEvent:
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None
+    # When the step was committed, UTC ISO 8601. None in traces that predate it.
+    committed_at: str | None = None
+
+
+def academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
+    """Relabel player targets by role without changing card names or native offers."""
+    actions = describe_actions(obs)
+    labels = {
+        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
+        for player in (obs.agent, obs.opponent)
+    }
+    for row in actions:
+        focus = row["focus"]
+        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
+            if row["description"] in {"Target Hero", "Target Villain"}:
+                row["description"] = f"Target {labels[focus[0]]}"
+    return actions
 
 
 @dataclass(frozen=True)
@@ -267,7 +284,11 @@ def load_trace(trace_id: str, trace_dir: Path | None = None) -> dict[str, Any]:
     recorded = AttemptStore(target_dir / "play.sqlite").load(trace_id)
     if recorded is not None:
         return recorded
-    path = _trace_path(trace_id, target_dir)
+    return load_legacy_trace(trace_id, target_dir)
+
+
+def load_legacy_trace(trace_id: str, trace_dir: Path) -> dict[str, Any]:
+    path = _trace_path(trace_id, trace_dir)
     if not path.exists():
         raise FileNotFoundError(f"Trace not found: {trace_id}")
     with path.open("r", encoding="utf-8") as handle:

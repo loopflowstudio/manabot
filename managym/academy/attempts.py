@@ -47,6 +47,12 @@ class RecordedPlayer:
     inference: dict | None = None
 
 
+@dataclass(frozen=True)
+class RetainedAttempt:
+    trace: dict[str, Any]
+    world_json: str
+
+
 def bot_player(config: dict[str, Any]) -> RecordedPlayer:
     identity = config.get("opponent") or {}
     policy = config["villain_type"]
@@ -547,14 +553,22 @@ class AttemptStore:
         return None if row is None else row[0]
 
     def load(self, attempt: str) -> dict | None:
+        retained = self.load_attempt(attempt)
+        return retained.trace if retained is not None else None
+
+    def load_attempt(self, attempt: str) -> RetainedAttempt | None:
+        """Read the private trace and its world from the same database snapshot."""
         with self.connect() as db:
-            row = db.execute("SELECT * FROM attempts WHERE id=?", (attempt,)).fetchone()
+            row = db.execute(
+                "SELECT trace_json, world_json, status FROM attempts WHERE id=?",
+                (attempt,),
+            ).fetchone()
         if row is None:
             return None
         trace = json.loads(row["trace_json"])
         if row["status"] == "interrupted":
             trace["end_reason"] = "server_restart"
-        return trace
+        return RetainedAttempt(trace, row["world_json"])
 
     def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:

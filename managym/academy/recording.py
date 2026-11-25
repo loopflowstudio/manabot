@@ -1,8 +1,11 @@
-"""Bounded read projections over retained Academy recordings.
+"""Positions and event prefixes over retained Academy recordings.
 
-Recording owns positions, viewer event prefixes and legacy transition joins. It
-never executes a game. ReadCache validates once per persisted revision; access
-is checked separately on every request, including cache hits.
+Recording joins retained decisions and presentation tracks into positions. A
+played game also re-executes (`record_of`, `ReplayedViews`), so Review shows
+the person's own view at every position, and both hands once the game is
+complete; the stored track stays the fallback wherever re-execution stops.
+ReadCache validates once per persisted revision; access is checked separately
+on every request, including cache hits.
 """
 
 from bisect import bisect_right
@@ -10,12 +13,15 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 from threading import RLock
 from time import monotonic
 from typing import Any, Literal
 
+import managym
+from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
@@ -24,9 +30,16 @@ from managym.academy.replay_index import (
     load_canonical_replay,
     project_replay,
 )
-from managym.academy.trace import load_trace, normalize_observation_to_hero
+from managym.academy.trace import (
+    GameConfig,
+    academy_actions,
+    load_legacy_trace,
+    normalize_observation_to_hero,
+)
 from managym.experience import PresentationEvent
-from managym.experience_projection import redact_observation
+from managym.experience_projection import decision_surface_view, redact_observation
+from managym.recording import GameEnd, GameInputs, GameRecord, PlayerSetup
+from managym.replay import ReplayStop, walk
 
 # Native decision-context stages that continue announcing a spell or ability
 # (`managym/src/decision_context.rs`): the move is named once it is on the stack.
@@ -130,12 +143,163 @@ class Position:
     decision: ReplayDecision | None = None
 
 
+def record_of(attempt: RetainedAttempt) -> GameRecord:
+    """Recover engine inputs from a private Academy Play attempt."""
+    trace = attempt.trace
+    config = GameConfig(**trace["config"])
+    if config.watch_players is not None or type(config.seed) is not int:
+        raise ValueError("Expected a played game with a retained deal seed")
+    world = json.loads(attempt.world_json)
+    ending = trace["end_reason"]
+    return GameRecord(
+        mode="scalar",
+        operation="step",
+        games=[
+            GameInputs(
+                seed=config.seed,
+                players=[
+                    PlayerSetup.retain(player, config.decklists)
+                    for player in config.to_rust()
+                ],
+                actions=[event["action"] for event in trace["events"]],
+                end=GameEnd(status="complete", winner=trace["winner"])
+                if ending == "game_over"
+                else GameEnd(status="interrupted", reason=ending),
+            )
+        ],
+        identities={
+            "world": world["world_version"],
+            "card_digest": world["content_digest"],
+            "engine_extension_sha256": world.get("rules_binary_sha256"),
+        },
+        context={},
+        seconds=0,
+    )
+
+
+class ReplayedViews:
+    """Each seat's board at the positions of a played game, by re-executing it.
+
+    Invariant: a board is exposed only after every step before it re-executed
+    to the stored acting board and action description, and the final board
+    also to the stored final board and result. The walk advances only as far
+    as a read asks (`board`), so opening a long game costs nothing up front.
+    `person[i]` and `opponent[i]` are the boards before event `i`; a verified
+    game has one more, after its last event. Opponent boards exist only for an
+    authoritatively complete game, the one case where both hands may show.
+    """
+
+    def __init__(self, attempt: RetainedAttempt, human_seat: int) -> None:
+        self.events: list[dict[str, Any]] = attempt.trace["events"]
+        self.final = attempt.trace["final_observation"]
+        self.human_seat = human_seat
+        self.complete = attempt.trace["end_reason"] == "game_over"
+        self.build = json.loads(attempt.world_json).get("world_version", "unknown")
+        self.person: list[dict[str, Any]] = []
+        self.opponent: list[dict[str, Any]] = []
+        self.stop: ReplayStop | None = None
+        self._lock = RLock()
+        try:
+            self._walker = walk(record_of(attempt))
+        except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+            self._diverge(type(error).__name__)
+        else:
+            self._decisions = iter(self._walker)
+
+    def board(self, index: int, *, opponent: bool = False) -> dict[str, Any] | None:
+        """The verified board before event `index`, or None where none verified."""
+        boards = self.opponent if opponent else self.person
+        with self._lock:
+            while len(self.person) <= index and self._advance():
+                pass
+            return boards[index] if index < len(boards) else None
+
+    def _advance(self) -> bool:
+        """Verify and keep one more position; False once the walk has stopped."""
+        if self.stop is not None:
+            return False
+        index = len(self.person)
+        env = self._walker.env
+        try:
+            if index == len(self.events):
+                if next(self._decisions, None) is not None or self._walker.stop is None:
+                    return self._diverge("the game continues past its stored track")
+                if self._walker.stop.status == "diverged":
+                    return self._diverge(self._walker.stop.reason or "diverged")
+                final = decision_surface_view(env, self.human_seat)
+                if final != self.final:
+                    return self._diverge("the final board differs")
+                self._keep(final, None, env)
+                self.stop = self._walker.stop
+                return False
+            event = self.events[index]
+            observation = self._walker.observation
+            actor = self.human_seat if event["actor"] == "hero" else 1 - self.human_seat
+            if observation.game_over or int(observation.agent.player_index) != actor:
+                return self._diverge("another player acts")
+            acting = decision_surface_view(env, actor)
+            if acting != event["observation"]:
+                return self._diverge("the board differs")
+            self._keep(acting if actor == self.human_seat else None, acting, env)
+            actions = academy_actions(observation, self.human_seat)
+            action = event["action"]
+            if (
+                not 0 <= action < len(actions)
+                or actions[action]["description"] != event["action_description"]
+            ):
+                return self._diverge("the action differs")
+            if next(self._decisions, None) is None:
+                stop = self._walker.stop
+                return self._diverge(stop.reason if stop and stop.reason else "stopped")
+            return True
+        except (KeyError, TypeError, ValueError, managym.AgentError) as error:
+            # Native errors may name private cards: keep only the kind.
+            return self._diverge(type(error).__name__)
+
+    def _keep(
+        self,
+        person: dict[str, Any] | None,
+        acting: dict[str, Any] | None,
+        env: managym.Env,
+    ) -> None:
+        """Append this position's boards, projecting only those not yet known."""
+        self.person.append(person or decision_surface_view(env, self.human_seat))
+        if self.complete:
+            opponent = 1 - self.human_seat
+            self.opponent.append(
+                acting
+                if acting is not None and person is None
+                else decision_surface_view(env, opponent)
+            )
+
+    def _diverge(self, reason: str) -> bool:
+        verified = len(self.person)
+        self.stop = ReplayStop(
+            "diverged",
+            verified,
+            f"Your own view is replayed through step {verified} ({reason}); later "
+            f"boards are as recorded. Recorded with {self.build}.",
+        )
+        return False
+
+
 class Recording:
-    def __init__(self, trace_id: str, payload: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        trace_id: str,
+        payload: dict[str, Any],
+        attempt: RetainedAttempt | None = None,
+    ) -> None:
         self.id = trace_id
         self.payload = payload
         self.human_seat = payload["config"].get("human_seat", 0)
         self.watch = bool(payload["config"].get("watch_players"))
+        # A played game re-executes to each seat's own view at every position.
+        self.views = (
+            ReplayedViews(attempt, self.human_seat)
+            if attempt is not None and not self.watch
+            else None
+        )
         self.completed_mirror = bool(
             payload["config"].get("mirror") is not None
             and payload.get("end_reason") == "game_over"
@@ -221,6 +385,18 @@ class Recording:
         self._boards: dict[int, dict[str, Any]] = {}
         self._events_by_revision: dict[int, list[PresentationEvent]] | None = None
 
+    def can_reveal(self, position: Position) -> bool:
+        """Both hands at `position`: a Watch spectator view where one was
+        captured, or any position of an authoritatively complete played game."""
+        if self.views is not None:
+            return self.views.complete
+        return bool(
+            position.kind == "choice"
+            and position.decision
+            and self.watch
+            and self.payload["events"][position.event_index].get("analysis_observation")
+        )
+
     def _board(self, position: Position) -> dict[str, Any]:
         """The recorded person's redacted board at `position`. Callers must not mutate it."""
         index = position.event_index + (position.kind == "consequences")
@@ -266,14 +442,7 @@ class Recording:
             "phase": turn.get("phase"),
             "step": turn.get("step"),
             "actor": row.viewer if row else None,
-            "can_reveal": bool(
-                position.kind == "choice"
-                and row
-                and self.watch
-                and self.payload["events"][position.event_index].get(
-                    "analysis_observation"
-                )
-            ),
+            "can_reveal": self.can_reveal(position),
             "automatic": bool(self.payload["events"][position.event_index].get("auto"))
             if position.kind == "consequences"
             else False,
@@ -455,13 +624,31 @@ class Recording:
         decision = (
             {**row.model_dump(mode="json"), "address": position.key} if row else None
         )
+        index = position.event_index + (position.kind == "consequences")
+        # Your own view after any step comes from the replayed game; the stored
+        # track holds the next actor's view, which hides your hand.
+        replayed = self.views.board(index) if self.views and not row else None
         observation = (
             row.frame.projection.model_dump(mode="json")
             if row
-            else deepcopy(self._board(position))
+            else deepcopy(replayed or self._board(position))
         )
         event = self.payload["events"][position.event_index] if row else {}
         analysis = event.get("analysis_observation") if self.watch else None
+        other = (
+            self.views.board(index, opponent=True)
+            if self.views and self.views.complete
+            else None
+        )
+        if reveal and other is not None:
+            analysis = {
+                **observation,
+                "opponent": {
+                    **observation["opponent"],
+                    "hand": other["agent"]["hand"],
+                    "hand_hidden_count": 0,
+                },
+            }
         if reveal and analysis is None:
             raise ValueError("spectator_view_unavailable")
         transition_start = cursor
@@ -485,7 +672,14 @@ class Recording:
             "outputs": deepcopy(event.get("bot_decision")),
             "viewer": viewer,
             "revealed": reveal,
-            "can_reveal": analysis is not None,
+            "can_reveal": other is not None
+            if self.views
+            else self.can_reveal(position),
+            # Why your own view is the stored track's here, when the game could
+            # not be replayed this far; None where it was.
+            "views_stopped": self.views.stop.reason
+            if self.views and not row and replayed is None and self.views.stop
+            else None,
             "history": [event.model_dump(mode="json") for event in events],
             "history_labels": [self._history_labels(event, viewer) for event in events],
             "history_before": start if start else None,
@@ -515,7 +709,11 @@ class ReadCache:
             if cached and cached[0] == stamp:
                 self.entries.move_to_end(key)
                 return cached[2]
-            recording = Recording(trace_id, load_trace(trace_id, directory))
+            attempt = AttemptStore(directory / "play.sqlite").load_attempt(trace_id)
+            payload = (
+                attempt.trace if attempt else load_legacy_trace(trace_id, directory)
+            )
+            recording = Recording(trace_id, payload, attempt)
             self.entries[key] = (stamp, now + 60, recording)
             while len(self.entries) > 2:
                 self.entries.popitem(last=False)

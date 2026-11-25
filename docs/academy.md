@@ -19,7 +19,6 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Playing a series against a model](#playing-a-series-against-a-model)
 - [Reading consequences and controlling narration](#reading-consequences-and-controlling-narration)
 - [Inspect a replay](#inspect-a-replay): timeline, live Watch, perspectives and recovery
-- [Review a game you played](#review-a-game-you-played)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
 - [Playing a trained challenger](#playing-a-trained-challenger)
@@ -52,8 +51,6 @@ Hover or focus any visible card to read it; reading never sends an action.
 loop, training or evaluation, without changing its original evidence. Games links back to recorded positions, their legal
 choices and available recorded policy/search evidence. Trying another line
 creates a separate Study branch with an explicit return to the source decision.
-A game you played opens in Review, where a registered policy reads each of
-your decisions ([Review a game you played](#review-a-game-you-played)).
 There is no live example Advice panel or example-scenario read selector.
 
 ## Running Academy
@@ -463,12 +460,12 @@ through **New game**. Check the matchup, decklist disclosure, priority stops
 and deal mode, then select **Start game**. When the game ends, a result card
 sits over the board, which stays visible around it (**Look at the board**
 folds the card to a corner). It says who won and how ("Heuristic · scripted
-went to −2 life on turn 9"), the final life totals, and
-[the game in numbers](#the-game-in-numbers). Select **Rematch** to
+went to −2 life on turn 9"), the final life totals, and one line from the move
+list: turns, and each player's spells cast and attacks. Select **Rematch** to
 play again with that setup. After the next game, select **Swap sides**: you
 keep your deck and move from playing first to drawing first, or the reverse.
 **Change opponent** opens only the opponent settings, and **Review this game**
-opens [Review](#review-a-game-you-played) at its first position. Both games and the next one belong to the same
+opens the game in Replay from its first position. Both games and the next one belong to the same
 session.
 
 Academy names every opponent with how it decides: **Search 64 · search**,
@@ -543,8 +540,6 @@ creates a separate breakdown. Human exploratory play, automated validation,
 training and evaluation recordings retain their declared origins; unknown
 origin stays unknown. An evaluation label alone does not establish a controlled
 study. These counts describe recorded games, not a strength estimate or rating.
-**My games** in Games keeps the same counts across sessions
-([your record](#your-record)).
 
 Each collapsed breakdown names its recorded opponent and policy identity, where
 available. Expand it for decks and the full execution configuration.
@@ -998,13 +993,11 @@ A recording opens on the same board as live play, read-only. Open **Games**,
 choose a game, and step through it; human games, watched bot games and
 imported training or evaluation games all use these controls. At the end of a
 game you played, **Review this game** on the result card opens it from the
-first position, with a policy's reading of your moves
-([Review a game you played](#review-a-game-you-played)).
+first position.
 
 Every game you start is recorded as you play. **Games** (`/games`) lists them,
 newest first, with filters for player, deck, status, result and date. **My games**
-narrows the list to this browser and adds [your record](#your-record) above
-it. A trained bot appears under its
+narrows the list to this browser. A trained bot appears under its
 [short name and digest](#how-a-trained-opponent-is-named). Open any recorded
 game file through **Watch → Open a game file**, or
 [launch a replay directly](#open-a-replay-directly). `/replay` alone lists
@@ -1014,8 +1007,8 @@ recent recordings.
 
 | Position | What the board shows |
 |---|---|
-| Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). At your own choices in a game you played, the probabilities are an analysis and are headed with the policy that made it. |
-| Consequences | The board after the action, with what it did in the rail's recap. In a game you played this is your own view, whoever acts next. |
+| Choice | The chooser's recorded board and every legal offer, on its card and in the rail's numbered list, read-only. The played offer is marked ✓; where the policy was recorded, each offer's probability is on its card and row, with the value, update and any search detail beside the prompt ("not retained" where nothing was recorded). |
+| Consequences | The board after the action, with what it did in the rail's recap. In a game you played this is your own view, your hand included, whoever acts next. |
 | Result or latest state | The final board under a result card, or the latest retained state of an unfinished recording. An interrupted recording has no invented winner, and one opened from a file says why and where it stops. |
 
 The transport bar sits where live play has your hand's input:
@@ -1050,11 +1043,12 @@ choice's consequences), or a fixed seat (the default for a game you played).
 Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
-Authorized Watch spectators and readers of completed played games can select
-**Show both hands**. Recorded policy evidence and acting-view history still
-come from the chooser's view. When Watch or an imported game has no private
-post-action view, the consequence and result boards use the recorded view of
-the seat named in the perspective line.
+**Show both hands** appears where spectator reveal is authorized: at Watch
+choices that captured a spectator view, and at every position of a game you
+played once it has finished. It does not enrich the bot's recorded evidence or
+acting-view history. In Watch and imported games, consequences and result
+boards use the recorded view of the seat named in the menu's perspective line
+when a private post-action view was not captured.
 
 **Menu** holds the recording's kind and status, each seat's identity (policy
 ID, runner, provenance), **Refresh saved head**, a note for the position,
@@ -1097,172 +1091,22 @@ expired, recorded playback remains available.
 
 Older recordings use the same viewer with the frames they retained. Missing
 legal offers, Study support, consequences or policy outputs are explicitly
-unavailable; they are never inferred from a later frame. A game played in the
-running world is played again when it opens, which is where
-[Review](#review-a-game-you-played) gets your view at every position; a game
-from another world or card set opens from its retained frames alone. Reading
-an existing recording needs no original checkpoint or policy provider. Import
-verification, analysis and live continuation have their own prerequisites.
+unavailable; they are never inferred from a later frame. Reading an existing
+recording needs no original checkpoint or policy provider. Import verification
+and live continuation have their own prerequisites below.
+
+A game you played is also played again from its seed, decks and actions as you
+step through it, which gives your own view at every position and both hands
+after the game. Each step is checked against the stored track: the acting
+board and the action must match, and the final board and result. Where they
+stop matching, or for a game recorded in another world or card set, the board
+is the recorded one, with a line saying how far your own view was replayed and
+which world recorded the game.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same
 directory, or pass the same `--traces-dir`, to see earlier games. The file
 holds private deal seeds; keep it private.
-
-### Review a game you played
-
-Finish a game against a trained policy and select **Review this game** on the
-result card. You can also reopen it from **Games**. The game opens at its
-first position and the opponent's policy starts analysing your decisions.
-
-```text
-Analysis by elemental-10v10 · 3f9c2ab1          Analysing 34 of 81
-
-Turn 4
-  You        Play Mountain                        ✓
-  You        Cast Fire Sages                      8%
-               Policy preferred Cast Lightning Strike, 62%
-  Opponent   Cast Earth Kingdom Soldier
-  You        Attack with Fire Sages               ✓   analysis shown
-```
-
-Use the [replay controls](#follow-the-timeline) while the marks and the line
-under the board fill in.
-
-| Addition | Where | What it shows |
-|---|---|---|
-| Your view throughout | Board | Your hand and what you could see at every position, including while the opponent acts. |
-| Every move named | Rail | The opponent's moves by name, as you saw them. A step you could not see is part of the move where it became visible. |
-| Analysis | Rail, cards, the line under the board | What a policy would have done at each of your decisions. |
-| The game in numbers | Result card and **Menu** | Turns, tempo and how often you and the policy agreed. |
-
-Academy replays the recorded seed, decks and actions and verifies each step
-against the stored track. This also works for earlier games recorded with the
-same rules and card set when the replay verifies.
-
-#### Analysis
-
-For each decision with more than one legal action, an analysis shows the
-probability the policy gave each action and its estimate of the position.
-The policy uses the information available to your seat. Playback follows
-the recorded moves.
-
-Your moves in the rail can carry these marks.
-
-| Mark | Meaning |
-|---|---|
-| ✓ | You played the policy's first choice. |
-| A percentage | The probability the policy gave your move. The row's detail names its first choice and that probability. |
-| *(none)* | The analysis has nothing for this decision. |
-| analysis shown | You could see the analysis when you made this move ([Analysis while you play](#analysis-while-you-play)). |
-
-Step to one of your choices to see the whole distribution: every legal offer
-has its probability on its card and its row, yours is marked, and the heading
-reads **Analysis by** the policy's name and artifact. A probability is the
-policy's preference for a move.
-
-Choose **Analyse with…** in **Menu** to run another registered policy that
-supplies probabilities without search. Use the selector beside the heading
-to switch between saved analyses.
-
-| You see | Why | What to do |
-|---|---|---|
-| Marks appear without asking | Your opponent was a registered policy that gives probabilities; it reads your seat by default. | Nothing. |
-| **No analysis yet** | The opponent was Random, Passive, Heuristic or Search. | **Analyse with…** and choose a policy. |
-| **No analysis: no registered policy can read this game** | This server has no policy that gives probabilities. | [Install manabot or register a policy](#trained-opponents-and-other-bots), then restart Academy. |
-| **Analysing 34 of 81** | The analysis is running. | Keep reading; marks fill in. |
-| **Stopped at decision 34**, with a reason | The policy failed there, or the server restarted. Earlier decisions keep their marks. | **Analyse again**. |
-| **Analyse with…** is disabled, naming a build | The game was recorded by another world or card set and cannot be played again here. Saved analyses still show. | Open it with the build named. |
-
-You can analyse your own unfinished or stopped game up to its last recorded
-position. One analysis runs per game at a time.
-
-#### The value chart
-
-The **Decisions** strip under the board plots the selected policy's estimate
-at each of your decisions. A win-probability estimate uses a **Win chance**
-scale from 0% to 100%. A signed outcome estimate uses the same
-scale labelled **Expected score**, with a draw worth half a win. Both scales
-have a guide at 50%. The caption names the policy and the coverage, for
-example “elemental-10v10’s estimate from your seat · 78 of 81 decisions”.
-Click a point to jump to the decision.
-
-A policy with undeclared value units uses its own scale. A policy that
-supplies only move probabilities draws ticks.
-
-#### Both hands
-
-Once a game has been played to its end, **Show both hands** in the
-**Perspective** control turns the opponent's hand face up at every position.
-With it on, the opponent's recorded probabilities appear at its choices, and
-its own value line joins the strip in a lighter ink, flipped to your seat.
-
-A stopped or interrupted game keeps the opponent's hand hidden. Each analysis
-uses the view of the seat it analyses. To analyse the opponent's seat, first
-enable **Show both hands**.
-
-#### The game in numbers
-
-The result card and Review's **Menu** show the game summary.
-
-```text
-Lost on turn 9 · on the draw · 11 min
-                   You   Search 64
-Lands played         6       7
-Spells cast          8      10
-Attacks              4       6
-Damage dealt        11      20
-Damage taken        20      11
-Cards drawn         12      13
-
-Analysis by elemental-10v10 · 3f9c2ab1
-Policy's first choice    52 of 81 decisions
-Analysis shown           3 decisions
-Largest disagreements    T4 Cast Fire Sages · T6 Pass priority · …
-```
-
-The largest disagreements are the five decisions where the policy's first
-choice had the most probability over your move; each jumps to its position.
-Duration includes pauses. If the current build cannot replay the game, Review
-shows the result, duration and any previously saved summary.
-
-#### Your record
-
-**My games** in **Games** shows your completed games in a table above the
-list, across sessions.
-
-```text
-Opponent                       Matchup                    W   D   L   Win rate        Analysis shown
-elemental-10v10 · 3f9c2ab1     UR Lessons v GW Allies     7   0   5   58% (32–81%)    2
-Search 64 · search             UR Lessons v GW Allies     3   0   1   75% (30–95%)    0
-```
-
-Each row is one exact opponent and one matchup. The win rate divides wins by
-completed games, including draws in the total. The range is the 95% Wilson
-interval and is wider for smaller samples. **Analysis shown** counts games
-with at least one decision made while analysis was visible.
-
-Your games in the list also show turns, duration, play or draw, and agreement
-with the game's default analysis (blank when it has none).
-
-#### Analysis while you play
-
-Analysis is off at the start of every game. **Show analysis** in the rail
-turns it on for the game in progress. Academy reads the game so far from your
-seat, then puts the policy's probability on each offer's card and row under
-**Analysis by** the policy's name. The value chart updates in the folded strip.
-
-Choose from the legal offers as usual. Each stays in its original position.
-
-A decision you commit while analysis is visible is recorded as **analysis
-shown**. Review marks the move, the summary counts it and your record counts
-the game. You can commit while analysis is still loading. A move gets the mark
-only if its probabilities were visible when you committed it.
-
-The policy is the one Review would use by default: your opponent's, when it
-gives probabilities. Against other opponents **Show analysis** asks which
-registered policy to use. If there are none, follow the
-[policy setup instructions](#trained-opponents-and-other-bots).
 
 ### Watch a game from an evaluation
 
@@ -1326,8 +1170,6 @@ against a checkpoint still replays without its provider; continuing it needs
 the original admitted policy. Recorded policy and search evidence comes from
 the saved game and works in installed Academy; missing outputs stay unavailable.
 The live board does not load example analysis from a repository checkout.
-[Analysis](#analysis) of a game you played is separate: it runs a registered
-policy over the saved game, and needs that policy installed.
 
 #### How a trained opponent is named
 
@@ -1787,17 +1629,8 @@ restart it becomes `interrupted` with no invented winner.
 
 Record version 2 tables: `attempts`, `attempt_players` (both seats: public
 `player_id`, `kind` human/bot, name, deck, `version` = exact checkpoint digest
-for bots), `players` (private browser credential hash to public human ID),
-`feedback` (note, author, optional validated decision address) and `analyses`
-(attempt, seat, the policy's full descriptor, status, and one row of
-probabilities and value per decision).
-`attempts.summary_json` holds [the game in numbers](#the-game-in-numbers),
-written once at completion and computed on first open for an earlier game.
-Summaries and analyses are derived from the game and never enter its trace,
-its frames or a trace export: a game in which analysis was never shown is
-stored byte for byte as before. The one recorded addition is
-`TraceEvent.analysis_shown`, present only on a decision committed with
-analysis visible.
+for bots), `players` (private browser credential hash to public human ID) and
+`feedback` (note, author, optional validated decision address).
 `attempts.participant_id` is private table authorization. `deal_seed` is
 hexadecimal text to keep all 64 bits. The file holds private seeds and
 canonical Commands: keep it private and query it with
@@ -1819,14 +1652,6 @@ apply in SQL before filtering. Only authoritatively completed games are
 replayable by non-participants and enable the post-game reveal; unfinished
 replays and feedback remain participant-only. Identity is a browser credential
 with no account recovery.
-
-`GET /api/traces/{id}/analyses` lists a game's analyses, `POST` starts one for
-a seat and a registered Policy ID, and `GET /api/traces/{id}/analyses/{analysis}`
-reads its status and evidence. A participant may analyse their own seat of
-their own game, finished or not. Any reader of a shared completed game may
-read its analyses and start one. The opponent's seat is available only where
-both hands may be shown. The endpoint rejects policies that use search and
-identifies the recording build when its rules or cards cannot be replayed.
 
 ## Experience proof gate
 

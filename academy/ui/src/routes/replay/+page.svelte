@@ -420,6 +420,7 @@
       <p class="type-caption text-ink-3">Legal offers and Study not recorded.</p>
     {/if}
     {#if !current.consequences_recorded}<p class="type-caption text-ink-3">Consequences not recorded.</p>{/if}
+    {#if current.views_stopped}<p class="type-caption text-ink-3" data-testid="views-stopped">{current.views_stopped}</p>{/if}
   {/if}
 {/snippet}
 
@@ -432,7 +433,7 @@
       <option value="1">Seat 2 at the bottom · {nameOf(1)}</option>
     </select>
   </label>
-  {#if current?.kind === 'choice' && current.can_reveal}
+  {#if current?.can_reveal}
     <label class="type-caption reveal"><input type="checkbox" checked={current.revealed} disabled={locked || replayStore.busy}
       onchange={event => { replayStore.reveal = event.currentTarget.checked; void replayStore.seek(replayStore.selected); }} /> Show both hands</label>
   {/if}
