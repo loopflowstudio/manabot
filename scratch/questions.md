@@ -291,3 +291,33 @@ review:
    suggested default — `keyMoments` skips cross-swap `(decision, next)` pairs
    so the seat flip is never flagged as a huge swing, and `Strip.svelte` breaks
    the estimate polyline with a subtle dashed swap rule at each swap boundary.
+
+Post-build concept review, 2026-11-25 (headless; `scratch/concept-review.html`
+rewritten against `HEAD` `b41819eede`). Core in-place swap model stands; choices
+made for review in Pass 3:
+
+10. **Review separates permanent native seat (deck, seat totals) from
+    position-dependent pilot (`You` vs bot via `humanSeatAt`)**: at every
+    position before an odd swap, plates, top bar, and rail heading name who
+    actually piloted each seat then (not who finished in it); `identity(seat)`
+    binds bot provenance to `kind === 'bot'` rather than `seat === 1`; fixed
+    Perspective options and `This game` seat-total columns name seat + deck
+    when swapped. Passed over: keeping static final-seat names with a banner.
+11. **`This game` estimate arc omitted when swapped**: omit the single-line
+    `start · peak · end` arc when `seatSwaps.length > 0` instead of mixing
+    complementary Seat 0 and Seat 1 scores (matching `Strip.svelte` and
+    `keyMoments`). Passed over: rendering per-stint arcs in the narrow menu.
+12. **`GET /api/traces/{id}/decisions` returns `DecisionSource.CLIENT` across
+    seats for Play traces**: fixes both the leak of pre-swap bot `POLICY`
+    decisions and the omission of pre-swap human decisions, matching
+    `Recording`, `_live_decision_summaries`, and `/decisions/{address}`.
+13. **`GameSession.swap_sides` emits the flipped board via `committed(...)`
+    before `_advance()`**: matches `hero_command` so Settings closes and the
+    person immediately sees their new hand while the bot thinks/searches in
+    their old seat (instead of freezing 3–30 s on "Swapping sides…"). Passed
+    over: reusing a warm stateless `PolicyRunner` across seats (separate
+    optimization Task if policy load time still matters).
+14. **Games archive row stays unadorned**: Review shows "Swapped sides at turn
+    T", while Games and My record stay quiet ("however we end it is what
+    counts"). Passed over: adding `seat_swaps` to `GameNumbers` to print a
+    "swapped sides" tag on every Games row.
