@@ -435,9 +435,9 @@ the policies that may read the game (`analysing_policies`, from
 `PolicyAdmissions`) and why none may. The connection admits them off the game
 lock before dispatching the request, so the first Show analysis of a game's
 decks never holds play while checkpoints are admitted. Showing starts a `LiveAnalysis` on its own daemon
-thread: it loads a fresh runner, walks the game so far with `seat_decisions`
-(asking the runner at each earlier decision, as an analysis after the game
-does, so decision memory matches), then applies each step the game commits and
+thread: it loads a fresh runner, walks the game so far with `recorded_steps`
+(asking the runner at each earlier deliberate human decision in that seat, plus
+any other step in that seat when recurrent, so decision memory matches), then applies each step the game commits and
 reads each decision the game publishes to the person (`_publish_current_prompt`)
 with `read_decision`. Steps and decisions reach the worker in the game's order
 on one queue; the worker never reads the game's Env, so nothing it does holds

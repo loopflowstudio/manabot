@@ -295,14 +295,14 @@ describe('mid-game seat swaps in Review', () => {
       position('choice', { key: 'c2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
       position('consequences', { key: 'a2', actor: 1, event: 2, turn: 2, label: 'Play Mountain' }),
     ];
-    const log = replayLog(positions, 1, (seat, currentHero) => (seat === currentHero ? 'You' : 'Reader'), swaps, 0);
+    const log = replayLog(positions, 0, (seat, currentHero) => (seat === currentHero ? 'You' : 'Reader'), swaps);
     expect(log.map(entry => [entry.actor, entry.text])).toEqual([
       ['hero', 'Play Island'],
       ['system', 'Swapped sides · Turn 2'],
       ['hero', 'Play Mountain'],
     ]);
     expect(entryPosition(log[1].id)).toBe('c2');
-    const marks = stripMarks(positions, 1, swaps, 0);
+    const marks = stripMarks(positions, 0, swaps);
     expect(marks.map(mark => [mark.side, Boolean(mark.breakBefore)])).toEqual([
       ['you', false],
       ['you', false],

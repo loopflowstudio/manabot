@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,11 +24,13 @@ from managym.academy.attempts import participant_id
 from managym.academy.numbers import game_numbers
 from managym.academy.opponent import set_policy_registry
 from managym.academy.recording import Recording, ReplayedViews
+from managym.academy.replay_index import DecisionAddressV2
 from managym.academy.trace import GameConfig, human_seat_at
 from managym.policy import (
     PolicyDecision,
     PolicyDescriptor,
     PolicyRegistry,
+    PolicySession,
     PolicyView,
     ValueEstimate,
 )
@@ -98,7 +100,7 @@ class SeatOneOnlyFactory(ReadingFactory):
 
     name: str = "SeatOneOnly"
 
-    def load(self, *, seat: int, seed: int):
+    def load(self, *, seat: int, seed: int) -> PolicySession:
         if seat == 0:
             raise ValueError("policy only supports seat 1")
         return super().load(seat=seat, seed=seed)
@@ -139,7 +141,9 @@ def _play_steps(game: server.GameSession, rng: random.Random, count: int) -> Non
         assert outcome["status"] == "accepted"
 
 
-def _make_publish(delivered: list[dict[str, Any]]):
+def _make_publish(
+    delivered: list[dict[str, Any]],
+) -> Callable[[dict[str, Any]], Future[bool]]:
     def publish(message: dict[str, Any]) -> Future[bool]:
         delivered.append(message)
         fut: Future[bool] = Future()
@@ -251,8 +255,7 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
         entry["actor"] == "system" and entry["text"] == "Swapped sides"
         for entry in swap_msg.get("log", [])
     )
-    # Life totals did not jump on the swap boundary (before any immediate bot moves if life changed,
-    # wait: if bot moved immediately, check seat 1's hand at least has cards and life is consistent).
+    # When no immediate bot steps ran after the swap, life and seat 1's hand match exactly.
     if len(game.trace.events) == pre_swap_event_count:
         assert swap_msg["frame"]["projection"]["agent"]["life"] == pre_swap_life[1]
         assert swap_msg["frame"]["projection"]["opponent"]["life"] == pre_swap_life[0]
@@ -421,8 +424,6 @@ def test_swap_sides_end_to_end_with_auto_mana_analysis_and_review(
     bot_row_decision = next(
         row for row in recording.replay.decisions if row.source.value == "policy"
     )
-    from managym.academy.replay_index import DecisionAddressV2
-
     bot_addr = DecisionAddressV2.from_decision(
         recording.replay, bot_row_decision
     ).serialize()

@@ -223,7 +223,6 @@ export function replayLog(
   heroSeat: 0 | 1,
   seatName?: (seat: 0 | 1, currentHero?: 0 | 1) => string,
   swaps: readonly SeatSwap[] = [],
-  startingSeat: 0 | 1 = heroSeat,
 ): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
   // The first of the person's own steps in this step of the turn whose move
@@ -244,7 +243,7 @@ export function replayLog(
       swapIndex += 1;
     }
     if (position.kind === 'state') return;
-    const currentHero = swaps.length ? humanSeatAt(startingSeat, swaps, position.event ?? null) : heroSeat;
+    const currentHero = (heroSeat ^ (swapIndex & 1)) as 0 | 1;
     // A neutral note where an imported record branched from its source game.
     if (position.kind === 'choice' && position.branched?.length) {
       entries.push({
@@ -348,7 +347,6 @@ export function stripMarks(
   positions: readonly Position[],
   heroSeat: 0 | 1,
   swaps: readonly SeatSwap[] = [],
-  startingSeat: 0 | 1 = heroSeat,
 ): StripMark[] {
   let swapIndex = 0;
   return positions.map((position, at) => {
@@ -358,7 +356,7 @@ export function stripMarks(
       breakBefore = true;
       swapIndex += 1;
     }
-    const currentHero = swaps.length ? humanSeatAt(startingSeat, swaps, position.event ?? null) : heroSeat;
+    const currentHero = (heroSeat ^ (swapIndex & 1)) as 0 | 1;
     return {
       at,
       key: position.key,

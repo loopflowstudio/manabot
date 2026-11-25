@@ -279,24 +279,22 @@ class ReplayedViews:
         self,
         index: int,
         *,
-        opponent: bool = False,
         viewer: int | None = None,
     ) -> dict[str, Any] | None:
         """The verified board before event `index`, or None where none verified."""
         with self._lock:
             while len(self.person) <= index and self._advance():
                 pass
-            if viewer is not None:
-                if index >= len(self.person):
-                    return None
-                seat = self._seat_at(None if index == len(self.events) else index)
-                if viewer == seat:
-                    return self.person[index]
-                if self.complete:
-                    return self.opponent[index]
-                return self._pre_swap.get(index)
-            boards = self.opponent if opponent else self.person
-            return boards[index] if index < len(boards) else None
+            if index >= len(self.person):
+                return None
+            if viewer is None:
+                return self.person[index]
+            seat = self._seat_at(None if index == len(self.events) else index)
+            if viewer == seat:
+                return self.person[index]
+            if self.complete:
+                return self.opponent[index]
+            return self._pre_swap.get(index)
 
     def _advance(self) -> bool:
         """Verify and keep one more position; False once the walk has stopped."""
@@ -348,21 +346,12 @@ class ReplayedViews:
     ) -> None:
         """Append this position's boards, projecting only those not yet known."""
         self.person.append(person or decision_surface_view(env, seat))
+        other = acting if acting is not None and person is None else None
         if self.complete:
-            opponent = 1 - seat
-            self.opponent.append(
-                acting
-                if acting is not None and person is None
-                else decision_surface_view(env, opponent)
-            )
-        elif index in self._swap_set and index > 0:
-            prev_seat = self._seat_at(index - 1)
-            if prev_seat != seat:
-                self._pre_swap[index] = (
-                    acting
-                    if acting is not None and person is None
-                    else decision_surface_view(env, prev_seat)
-                )
+            self.opponent.append(other or decision_surface_view(env, 1 - seat))
+        elif index in self._swap_set and index > 0 and self._seat_at(index - 1) != seat:
+            # Consequences of the last pre-swap event belong to the previous seat.
+            self._pre_swap[index] = other or decision_surface_view(env, 1 - seat)
 
     def _diverge(self, reason: str) -> bool:
         verified = len(self.person)

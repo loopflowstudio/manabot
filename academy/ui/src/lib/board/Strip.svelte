@@ -50,7 +50,10 @@
     }
     return groups.map(group => group.join(' ')).filter(Boolean);
   };
-  const yourSegments = $derived(lineSegments('you'));
+  const yourSegments = $derived.by(() => {
+    const segs = lineSegments('you');
+    return segs.length ? segs : [''];
+  });
   const yourPointCount = $derived(decisions.filter(mark => mark.side === 'you' && mark.value !== null).length);
   const theirSegments = $derived(lineSegments('opponent'));
 
@@ -93,13 +96,9 @@
       {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
       {#if mark.breakBefore}<line class="swap" data-testid="strip-swap" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
     {/each}
-    {#if yourSegments.length === 0}
-      <polyline class="value" points="" data-testid="strip-value" data-points={yourPointCount} />
-    {:else}
-      {#each yourSegments as seg, idx (idx)}
-        <polyline class="value" points={seg} data-testid={idx === 0 ? 'strip-value' : undefined} data-points={idx === 0 ? yourPointCount : undefined} />
-      {/each}
-    {/if}
+    {#each yourSegments as seg, idx (idx)}
+      <polyline class="value" points={seg} data-testid={idx === 0 ? 'strip-value' : undefined} data-points={idx === 0 ? yourPointCount : undefined} />
+    {/each}
     {#if scale !== null}
       {#each valued as mark (mark.key)}<circle class="point" class:theirs={mark.side === 'opponent'} cx={x(mark.at)} cy={y(mark.value!)} r="1.75" />{/each}
     {/if}

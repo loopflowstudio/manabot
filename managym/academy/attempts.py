@@ -299,24 +299,29 @@ class AttemptStore:
         ]
 
     @staticmethod
-    def _save_players(db, attempt, players):
+    def _player_row(
+        player: RecordedPlayer,
+    ) -> tuple[int, str, str, str, str, str | None, str | None]:
+        return (
+            player.seat,
+            player.player_id,
+            player.kind,
+            player.name,
+            player.deck,
+            player.version,
+            json.dumps(player.inference) if player.inference is not None else None,
+        )
+
+    @staticmethod
+    def _save_players(
+        db: sqlite3.Connection, attempt: str, players: list[RecordedPlayer]
+    ) -> None:
         if len(players) != 2 or {p.seat for p in players} != {0, 1}:
             raise ValueError("A game must identify exactly two seats.")
         for player in players:
             db.execute(
                 "INSERT INTO attempt_players VALUES(?,?,?,?,?,?,?,?)",
-                (
-                    attempt,
-                    player.seat,
-                    player.player_id,
-                    player.kind,
-                    player.name,
-                    player.deck,
-                    player.version,
-                    json.dumps(player.inference)
-                    if player.inference is not None
-                    else None,
-                ),
+                (attempt, *AttemptStore._player_row(player)),
             )
 
     def save(
@@ -392,20 +397,7 @@ class AttemptStore:
                     (attempt,),
                 ).fetchall()
                 expected = sorted(
-                    (
-                        (
-                            p.seat,
-                            p.player_id,
-                            p.kind,
-                            p.name,
-                            p.deck,
-                            p.version,
-                            json.dumps(p.inference)
-                            if p.inference is not None
-                            else None,
-                        )
-                        for p in players
-                    ),
+                    (self._player_row(player) for player in players),
                     key=lambda row: row[0],
                 )
                 if [tuple(row) for row in stored] != expected:
@@ -422,18 +414,17 @@ class AttemptStore:
     def _matchup_json(trace: dict[str, Any]) -> str:
         config = trace["config"]
         swapped = bool(len(trace.get("seat_swaps") or ()) & 1)
-        payload = {
-            "hero_deck": config.get("villain_deck" if swapped else "hero_deck"),
-            "villain_deck": config.get("hero_deck" if swapped else "villain_deck"),
-            "hero_sideboard": config.get(
-                "villain_sideboard" if swapped else "hero_sideboard"
-            ),
-            "villain_sideboard": config.get(
-                "hero_sideboard" if swapped else "villain_sideboard"
-            ),
-            "decklists": config.get("decklists"),
-        }
-        return json.dumps(payload, sort_keys=True)
+        hero, villain = ("villain", "hero") if swapped else ("hero", "villain")
+        return json.dumps(
+            {
+                "hero_deck": config.get(f"{hero}_deck"),
+                "villain_deck": config.get(f"{villain}_deck"),
+                "hero_sideboard": config.get(f"{hero}_sideboard"),
+                "villain_sideboard": config.get(f"{villain}_sideboard"),
+                "decklists": config.get("decklists"),
+            },
+            sort_keys=True,
+        )
 
     @staticmethod
     def _start_session_game(

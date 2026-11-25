@@ -444,9 +444,9 @@ class LiveAnalysis:
     one queue and a worker thread alone applies them. Nothing reads the game's
     own Env, so a slow or failed pass never holds the game.
 
-    The worker first loads the policy and walks the game so far (`seat_decisions`),
-    asking the policy at each of the seat's earlier decisions so a
-    decision-memory policy has the history a bot in the seat would have, and
+    The worker first loads the policy and walks the game so far (`recorded_steps`),
+    asking the policy at each of the seat's earlier deliberate human decisions
+    (and warming a recurrent runner across any other steps in the seat), and
     publishes its estimates there as one `history` message; then
     it applies each `advance` and reads each `decide`, giving `publish` one
     message per read. `publish` returns a future that is true once the message

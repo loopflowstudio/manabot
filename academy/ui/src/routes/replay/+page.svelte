@@ -76,7 +76,7 @@
   // "You" in the move list is the person in a Play game, else seat 1.
   const heroSeat = $derived<0 | 1>(index?.players.find(player => player.kind === 'human')?.seat === 1 ? 1 : 0);
   const seatSwaps = $derived(index?.seat_swaps ?? []);
-  const startingHeroSeat = $derived<0 | 1>(index?.starting_human_seat === 1 ? 1 : index?.starting_human_seat === 0 ? 0 : heroSeat);
+  const startingHeroSeat = $derived<0 | 1>(index?.starting_human_seat ?? heroSeat);
   const bottom = $derived(bottomSeat(perspective, positions, replayStore.selected));
   /**
    * A seat's recorded identity; a record that predates recorded players falls back to
@@ -103,10 +103,8 @@
     const said = shortName(name);
     return said === shortName(nameOf(1 - seat)) ? `${said} (seat ${seat + 1})` : said;
   };
-  const saidAt = (seat: 0 | 1, currentHero?: 0 | 1): string => {
-    if (!seatSwaps.length || currentHero === undefined) return saidOf(seat);
-    return seat === currentHero ? saidOf(heroSeat) : saidOf(1 - heroSeat);
-  };
+  const saidAt = (seat: 0 | 1, currentHero: 0 | 1 = heroSeat): string =>
+    saidOf(seat === currentHero ? heroSeat : 1 - heroSeat);
   const deckOf = (seat: number): string | null => {
     const player = index?.players.find(candidate => candidate.seat === seat);
     return player && player.deck !== 'closed' ? player.deck_name ?? player.deck : null;
@@ -169,14 +167,11 @@
     } catch { /* Review stands without its numbers. */ }
   }
 
-  const entries = $derived(replayLog(positions, heroSeat, saidAt, seatSwaps, startingHeroSeat));
+  const entries = $derived(replayLog(positions, startingHeroSeat, saidAt, seatSwaps));
   const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
-  const marks = $derived(
-    analysis
-      ? analysedMarks(stripMarks(positions, heroSeat, seatSwaps, startingHeroSeat), positions, analysed)
-      : stripMarks(positions, heroSeat, seatSwaps, startingHeroSeat)
-  );
+  const baseMarks = $derived(stripMarks(positions, startingHeroSeat, seatSwaps));
+  const marks = $derived(analysis ? analysedMarks(baseMarks, positions, analysed) : baseMarks);
   const marksByMove = $derived(moveMarks(entries, positions, analysed));
   const shownMoves = $derived(analysisShownMoves(entries, positions));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : line ? null : sinceRevision(positions, replayStore.selected));
