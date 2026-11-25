@@ -11,10 +11,16 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.env.observation import (
+    PERMANENT_DEFINITION_INDEX,
+    ObservationSpace,
+    encode_observation,
+)
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import collect, open_collector
-from tests.model.prepared_routes import device_input
+from manabot.verify.text_observation import keep_opening_hands
+import managym
+from tests.model.prepared_routes import dense_action_features, device_input
 
 Aggregation = Literal[
     "historical_mean", "masked_mean", "value_token", "attention_readout"
@@ -127,18 +133,12 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ObservationSpace(),
         ModelConfig(value_aggregation="value_token", attention_layers=depth),
     )
-    collector = open_collector(
-        agent.observation_space,
-        Match(),
-        Reward(RewardConfig()),
-        num_envs=1,
-        seed=29,
-        numerics=TorchCollectionSession(device="cpu", seed=29, precision="float32"),
-    )
-    batch = collect(collector, agent, 1)
+    env = managym.Env(seed=29)
+    raw, _ = env.reset(Match().to_rust())
+    raw = keep_opening_hands(env, raw)
     obs = {
-        key: torch.from_numpy(value[0])
-        for key, value in batch.observations().observation.items()
+        key: torch.from_numpy(value[None])
+        for key, value in encode_observation(agent.observation_space, raw).items()
     }
     state = agent._gather_object_embeddings(device_input(agent, obs))
     objects, owners, valid = state.objects, state.is_agent, state.validity
@@ -146,10 +146,10 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     assert encoded.shape[1] == objects.shape[1] + 1
     # Probe each real-object index, including the final slot, and absent focus.
     # Attention changes representations; the index must still select that row.
+    action_rows = agent.action_embedding(dense_action_features(agent, obs["actions"]))
+    action_rows = action_rows * obs["actions_valid"].unsqueeze(-1)
     for index in range(-1, objects.shape[1]):
         obs["action_focus"].fill_(index)
-        action_rows = agent.action_embedding(obs["actions"][..., :-2])
-        action_rows = action_rows * obs["actions_valid"].unsqueeze(-1)
         focus = torch.zeros_like(encoded[:, 0]) if index == -1 else encoded[:, index]
         focus_rows = focus[:, None, None, :].expand(
             -1, action_rows.shape[1], agent.max_focus_objects, -1

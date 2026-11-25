@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 import random
 from typing import Literal
+from unittest.mock import patch
 import weakref
 
 import numpy as np
@@ -28,9 +29,12 @@ from manabot.env.memory_store import (
     archive_memory,
     gather_memory,
     restore_memory,
+    select_rows,
 )
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig, RewardConfig
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.policy.decision_memory import retained_memory
+from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import (
     Collector,
     RecordedObservations,
@@ -92,7 +96,22 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         restore_memory(replace(archive, chunks=archive.chunks[:-1]))
     with pytest.raises(ValueError):
         before.tail.chunk.rows[0].setflags(write=True)
-    assert space.encoder.shapes["decision_records"] == (4, 74)
+    assert space.shapes["decision_records"] == (4, 74)
+
+
+def test_slicing_a_compact_export_preserves_edits_and_prefix_order() -> None:
+    _, dense = memory_input()
+    store = MemoryStore((4, 1024, 1024, 16384))
+    full = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
+    empty = Prefix(PrefixIdentity("empty", 0, "root"), None)
+    obs = CompactObservation({}, (full, empty, full), (4, 1024, 1024, 16384))
+    obs["decision_records"][2, 0, 3] = 21
+    selected = select_rows(obs, slice(1, 3))
+    assert isinstance(selected, CompactObservation)
+    assert selected.prefixes == (empty, full)
+    assert selected.memory_capacities == obs.memory_capacities
+    assert selected["decision_records"][1, 0, 3] == 21
+    assert np.shares_memory(selected["decision_records"], obs["decision_records"])
 
 
 @pytest.mark.parametrize("encoder", ["transformer", "gru"])
@@ -170,7 +189,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
     try:
         first = collect(original, model, 16)
         before = first.observations(np.array([15, 0, 15])).observation.materialize()
-        assert isinstance(first.next_obs, PrefixObservation)
+        assert retained_memory(first.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         bootstrap_before = first.next_obs.materialize()
         with torch.no_grad():
@@ -197,14 +216,16 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
             assert not gathered  # retained preparation never gathers dense history
-            prefix = first.next_obs.prefixes[0]
+            memory = retained_memory(first.next_obs)
+            assert memory is not None
+            prefix = memory.prefixes[0]
             selected = PrefixObservation(
                 {
                     key: np.repeat(value, 3, axis=0)
                     for key, value in first.next_obs.items()
                 },
                 [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
-                first.next_obs.memory_capacities,
+                memory.memory_capacities,
             )
             selected_batch = replace(
                 first, next_obs=selected, next_done=np.zeros(3, bool)
@@ -230,7 +251,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
         torch.testing.assert_close(actual_value, expected_value)
         assert not set(MEMORY_FIELDS).intersection(first.next_obs)
         second = collect(original, model, 8)
-        assert isinstance(second.next_obs, PrefixObservation)
+        assert retained_memory(second.next_obs) is not None
         # The retained bootstrap survives native buffer reuse by later collection.
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
@@ -325,7 +346,7 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
     try:
         batch = collect(collector, model, 4)
         assert batch.actions.size == 4
-        assert isinstance(batch.next_obs, PrefixObservation)
+        assert retained_memory(batch.next_obs) is not None
         assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
         assert len(batch.recorded.memory) == 4
         assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
@@ -387,18 +408,13 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
             max_decision_members=capacities[3],
         )
     )
-    buffers = space.encoder.allocate(1)
-    buffers.update(
-        rewards=np.zeros(1, np.float64),
-        terminated=np.zeros(1, np.uint8),
-        truncated=np.zeros(1, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 1)
     env = managym.VectorEnv(
         1, seed=11, decision_memory=True, player_policies=("agent", "agent")
     )
-    env.set_buffers(buffers)
+    env.set_buffers(buffers, layout=space.layout)
     env.reset_all_into_buffers(Match().to_rust())
-    dense_buffers = space.encoder.allocate(1)
+    dense_buffers = space.allocate(1)
     store, dense_store = MemoryStore(capacities), MemoryStore(capacities)
     rng = random.Random(19)
     observed: set[int] = set()
@@ -408,7 +424,7 @@ def test_native_live_suffix_counts_and_viewers_match_dense_capture() -> None:
         epoch = env.current_game_generations()[0]
         cursor = env.decision_memory_cursors()[0][viewer]
         counts = cursor[:4]
-        env.write_observations_for_players([viewer], dense_buffers)
+        env.write_observations_for_players([viewer], dense_buffers, layout=space.layout)
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(buffers[key], dense_buffers[key])
         identity = PrefixIdentity(str(env.current_game_seeds()[0]), viewer, "root")
@@ -434,15 +450,10 @@ def test_sharded_native_suffix_metadata_tracks_each_stream() -> None:
             max_decision_members=8192,
         )
     )
-    buffers = space.encoder.allocate(2)
-    buffers.update(
-        rewards=np.zeros(2, np.float64),
-        terminated=np.zeros(2, np.uint8),
-        truncated=np.zeros(2, np.uint8),
-    )
+    buffers = allocate_vector_buffers(space, 2)
     env = ShardedVectorEnv(2, 11, workers=2, decision_memory=True)
     try:
-        env.set_buffers(buffers)
+        env.set_buffers(buffers, layout=space.layout)
         env.reset_all_into_buffers(Match().to_rust())
         generations = env.current_game_generations()
         assert len(set(generations)) == 2
@@ -536,6 +547,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
         epoch: int,
         counts: Sequence[int],
         tail_version: int | None,
+        native_index: int | None = None,
     ) -> Prefix:
         calls.append(row)
         return original(
@@ -545,6 +557,7 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
             epoch=epoch,
             counts=counts,
             tail_version=tail_version,
+            native_index=native_index,
         )
 
     monkeypatch.setattr(store, "_capture_live_admitted", capture)
@@ -567,8 +580,23 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
     # Switching viewers must capture, and changing generation must re-admit.
     seats[0] = 1
     epochs[2] += 1
-    store.capture_live_rows(buffers, np.arange(3), seeds, seats, epochs, cursors)
+    restored = store.capture_live_rows(
+        buffers, np.arange(3), seeds, seats, epochs, cursors
+    )
+    assert restored[2].identity.branch == str(epochs[2])
+    assert restored[2].identity != first[2].identity
+    assert restored[2].tail is first[2].tail
+    assert restored[2].serving.segment is not first[2].serving.segment
+    retained = gather_memory([first[1], changed[1]])
+    assert retained["decision_records"][:, 0, 3].tolist() == [
+        first[1].tail.chunk.rows[0][0, 3],
+        first[1].tail.chunk.rows[0][0, 3] + 1,
+    ]
     assert calls == [1, 0, 2]
+    with pytest.raises(ValueError, match="live seat"):
+        store.capture_live_rows(
+            buffers, np.array([0]), seeds, [-1, 1, 0], epochs, cursors
+        )
     # A seed change inside the same generation is a regression, not a hit.
     seeds[0] += 1
     with pytest.raises(ValueError, match="regressed"):
@@ -579,3 +607,56 @@ def test_bulk_live_capture_skips_unchanged_rows_and_preserves_admission(
     buffers["decision_records"][0, 0, 10] = np.nan
     with pytest.raises(ValueError):
         store.capture_live_rows(buffers, np.array([0]), seeds, seats, epochs, cursors)
+
+
+@pytest.mark.parametrize("closure", ["complete-games", "exact-quota"])
+def test_terminal_bootstrap_retains_empty_memory(closure: BatchClosure) -> None:
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=16,
+            max_decision_references=256,
+            max_decision_reference_details=512,
+            max_decision_members=256,
+            decision_memory_include_own=True,
+        )
+    )
+    model = policy(space, "gru", 1)
+    deck = {"Mountain": 7}
+    collector = open_collector(
+        space,
+        Match(MatchConfig(hero_deck=deck, villain_deck=deck)),
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=197,
+        learning_seats="one",
+        batch_closure=closure,
+        opponent_mode="self",
+        numerics=CollectionSession(device="cpu", seed=197),
+    )
+    try:
+        with patch.object(
+            torch,
+            "multinomial",
+            side_effect=lambda probs, *args, **kwargs: torch.zeros(
+                (len(probs), 1), dtype=torch.long
+            ),
+        ):
+            # With seven lands and the first offer, seat zero decides twice per game.
+            batch = collect(collector, model, 1)
+            assert collector._env.current_game_seeds() == [197, 198]
+            memory = retained_memory(batch.next_obs)
+            assert memory is not None
+            if closure == "exact-quota":
+                assert batch.next_done.tolist() == [False, True]
+                live, parked = memory.prefixes
+                assert live.identity.game == "197" and live.counts[0] > 0
+                assert parked.counts == (0, 0, 0, 0)
+                batch = collect(collector, model, 1)
+                assert collector._env.current_game_seeds() == [197, 200]
+            assert collector._env.current_agent_indices() == [-1, -1]
+            memory = retained_memory(batch.next_obs)
+            assert batch.next_done.all() and memory is not None
+            assert all(prefix.counts == (0, 0, 0, 0) for prefix in memory.prefixes)
+            assert any(prefix.counts[0] > 0 for prefix in batch.recorded.memory)
+    finally:
+        close_collector(collector)

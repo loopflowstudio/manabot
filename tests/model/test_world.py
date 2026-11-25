@@ -12,6 +12,7 @@ from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
+from manabot.model.interface import world_fields
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 from manabot.sim.table_bots import CheckpointVillain
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
@@ -37,9 +38,9 @@ def checkpoint():
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
-            "observation_hypers": space.encoder.config.model_dump(),
+            "observation_hypers": space.config.model_dump(),
         },
-        "world_binding": checkpoint_world(selected_match().to_rust(), space),
+        **world_fields(space, agent.readings, selected_match().to_rust()),
     }
 
 
@@ -65,6 +66,8 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
         "schema",
         "input_version",
         "action_width",
+        "renamed",
+        "seat_width",
         "pack",
     ],
 )
@@ -83,13 +86,25 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
         elif change == "input_version":
             binding["policy_input_version"] = 1
         elif change == "action_width":
-            binding["input_schema"]["actions"]["shape"][1] = 17
+            binding["input_schema"]["actions"]["shape"][1] += 1
+        elif change == "renamed":
+            payload["input_columns"]["actions"][0] = "renamed"
+        elif change == "seat_width":
+            binding["input_schema"]["agent_player"]["shape"][-1] -= 1
+            payload["input_columns"]["agent_player"].pop()
+            payload["input_readings"]["agent_player"].pop()
         else:
             binding["content_manifest"]["content_digest"] = "old"
     payload["model_state_dict"] = {}  # Admission must precede weight loading.
     path = tmp_path / "bad.pt"
     write_checkpoint(payload, path)
-    with pytest.raises(ValueError, match="binding"):
+    reason = {
+        "schema": "actions columns",
+        "action_width": "actions columns",
+        "renamed": "actions columns.*renamed",
+        "seat_width": "between seats",
+    }.get(change, "binding")
+    with pytest.raises(ValueError, match=reason):
         load_checkpoint(str(path))
 
 
@@ -173,7 +188,7 @@ def test_a_refused_checkpoint_names_its_revision_and_the_changed_buffer() -> Non
     with pytest.raises(ValueError) as refused:
         validate_checkpoint_world(payload, ObservationSpace())
     message = str(refused.value)
-    assert "agent_permanents 40x37 -> 40x51" in message
+    assert "agent_permanents columns" in message
     assert (
         "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in message
     )
@@ -193,3 +208,14 @@ def test_a_saved_checkpoint_records_the_revision_that_wrote_it(
     source = read_checkpoint(path, weights_only=False)["source"]
     assert source["commit"] == source_commit()
     assert set(source) == {"commit", "dirty", "etude_experiment", "etude_run"}
+
+
+def test_setup_binding_checks_the_saved_player_projection(tmp_path: Path) -> None:
+    payload = checkpoint()
+    state = payload["model_state_dict"]
+    key = "player_embedding.projection.0.weight"
+    state[key] = state[key][:, :-1]
+    path = tmp_path / "wrong-width.safetensors"
+    write_checkpoint(payload, path)
+    with pytest.raises(ValueError, match="player columns differ from its projection"):
+        load_checkpoint(str(path))

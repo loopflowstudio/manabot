@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 /* Two families (DESIGN.md): Spectral for the game's things and the rail's
-   moves and choices, Work Sans for the interface. Latin and Latin Extended
-   subsets; Work Sans is variable. */
+   moves and choices, DM Sans for the interface. Latin and Latin Extended
+   subsets; DM Sans is variable. */
 @font-face {
   font-family: 'Spectral';
   src: url('/fonts/Spectral-400-latin.woff2') format('woff2');
@@ -40,8 +40,8 @@
 }
 
 @font-face {
-  font-family: 'Work Sans';
-  src: url('/fonts/WorkSans-latin.woff2') format('woff2');
+  font-family: 'DM Sans';
+  src: url('/fonts/DMSans-latin.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400 600;
@@ -49,8 +49,8 @@
 }
 
 @font-face {
-  font-family: 'Work Sans';
-  src: url('/fonts/WorkSans-latin-ext.woff2') format('woff2');
+  font-family: 'DM Sans';
+  src: url('/fonts/DMSans-latin-ext.woff2') format('woff2');
   font-display: swap;
   font-style: normal;
   font-weight: 400 600;
@@ -246,7 +246,7 @@
 @theme inline {
   /* serif is the game's face, sans the interface's; mono is for code alone. */
   --font-serif: 'Spectral', Georgia, serif;
-  --font-sans: 'Work Sans', system-ui, sans-serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /*

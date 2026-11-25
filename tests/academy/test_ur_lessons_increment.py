@@ -48,7 +48,7 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == PERMANENT_DIM
+    assert space.shapes["agent_permanents"][-1] == PERMANENT_DIM
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
     rng = random.Random(seed)

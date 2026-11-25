@@ -2,12 +2,18 @@
 // Determinized-search primitives on Game: hidden-information resampling and
 // uniformly-random playouts to terminal. Used by flat Monte Carlo search.
 
+use std::collections::BTreeSet;
+
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
-    flow::{decision::Decision, game::Game, selection_sampling::HiddenCommitments},
+    flow::{
+        decision::{Decision, ResolutionRef},
+        game::{Game, GameState},
+        selection_sampling::HiddenCommitments,
+    },
     state::{
         game_object::{ObjectId, PlayerId},
         zone::ZoneType,
@@ -32,6 +38,78 @@ impl Game {
         *self.state.rng_mut() = ChaCha8Rng::seed_from_u64(seed);
     }
 
+    /// Shuffle only unobserved, uncommitted positions, in native seat order.
+    /// Zone swaps retain exact appearances and leave the future rules RNG alone.
+    pub fn shuffle_unseen_libraries(&mut self, seed: u64) {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let fixed = self.pending_library_objects();
+        let visible_tops = self.visible_library_tops();
+        for owner in [PlayerId(0), PlayerId(1)] {
+            let knowledge = &self.state.players[owner.0].known_library;
+            let library = self.state.zones.zone_objects(ZoneType::Library, owner);
+            let slots: Vec<_> = library
+                .iter()
+                .enumerate()
+                .filter_map(|(index, object)| {
+                    let rank = library.len() - 1 - index;
+                    let pinned = (rank == 0 && visible_tops[owner.0])
+                        || knowledge.public.contains_key(&rank)
+                        || knowledge.own.contains_key(&rank)
+                        || self.state.library_order_pins[owner.0].contains(object)
+                        || fixed.contains(object);
+                    (!pinned).then_some(index)
+                })
+                .collect();
+            for i in (1..slots.len()).rev() {
+                let j = rng.gen_range(0..=i);
+                self.state
+                    .zones
+                    .swap(ZoneType::Library, owner, slots[i], slots[j]);
+            }
+        }
+    }
+
+    /// Pending instructions retain exact objects. A search over a library
+    /// also retains the entire order presented to its chooser.
+    fn pending_library_objects(&self) -> BTreeSet<ObjectId> {
+        let mut fixed: BTreeSet<_> = self.pending_movers().into_iter().collect();
+        fixed.extend(self.captured_bindings().map(|binding| binding.object));
+        if let Some(suspended) = &self.state.suspended_decision {
+            for part in suspended.continuation() {
+                match part {
+                    ResolutionRef::Frame(frame) => fixed.extend(&frame.selected),
+                    ResolutionRef::Decision(decision) => {
+                        fixed.extend(decision.revealed_objects());
+                        if let Some((_, inspected)) = decision.inspected_library_objects() {
+                            fixed.extend(inspected);
+                        }
+                        let searched = match decision {
+                            Decision::SearchNamed { owner, .. }
+                            | Decision::SearchDistinctNames { player: owner, .. } => Some(*owner),
+                            Decision::SelectCards {
+                                from,
+                                candidates,
+                                selected,
+                                ..
+                            } => {
+                                fixed.extend(candidates);
+                                fixed.extend(selected);
+                                from.as_ref()
+                                    .filter(|s| s.zone == ZoneType::Library)
+                                    .map(|s| s.owner)
+                            }
+                            _ => None,
+                        };
+                        if let Some(owner) = searched {
+                            fixed.extend(self.library_from_top(owner));
+                        }
+                    }
+                }
+            }
+        }
+        fixed
+    }
+
     /// Sample one world consistent with `perspective`'s observation.
     ///
     /// Resample the opponent's residual unknown hand and both library orders.
@@ -44,19 +122,25 @@ impl Game {
     /// - viewer-known library positions reserve distinct definition witnesses;
     ///   only the remaining order is shuffled, for both players.
     ///
-    /// - the opponent's face-down foretold slots are filled from the same
-    ///   unseen pool's first foretell-bearing cards, as possible-world
-    ///   materialization fills them.
+    /// - face-down exile slots hidden from `perspective` (the opponent's
+    ///   foretold cards, either player's unviewable Flameshape cards) are
+    ///   refilled from their owner's unseen pool, foretold slots by its
+    ///   first foretell-bearing cards, as possible-world materialization
+    ///   fills them.
+    ///   Hidden manifests draw from the same pool after reserving foretold cards.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) -> Result<(), AgentError> {
         // Rejection is needed only when a retained unknown choice constrains
         // the deal. Ordinary priority/search roots pay no extra full clone.
         let commitments = self.hidden_commitments(perspective);
-        let original = commitments.constrains().then(|| self.clone());
+        let original = commitments.constrains().then(|| self.rollback_snapshot());
         for attempt in 0..64 {
             if attempt > 0 {
-                *self = original.as_ref().expect("constrained selection").clone();
+                *self = original
+                    .as_ref()
+                    .expect("constrained selection")
+                    .rollback_snapshot();
             }
             let sample_seed = if attempt == 0 {
                 seed
@@ -99,18 +183,37 @@ impl Game {
                 self.shuffle_known_library(opponent, perspective, commitments, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                let reserved = self
+                let mut reserved = self
                     .reserve_library_facts(opponent, perspective, &mut residual, commitments)
                     .expect("known hand and library have distinct witnesses");
-                residual.extend(
-                    self.foretold_cards(opponent)
-                        .map(|card| self.state.object_of(card)),
-                );
-                residual.sort_unstable_by_key(|object| object.slot());
+                if self
+                    .hidden_manifests(opponent, perspective)
+                    .next()
+                    .is_some()
+                {
+                    // A previous private deal can assign different printings to
+                    // the same slots. Equal pools must start the shuffle alike.
+                    residual.sort_unstable_by_key(|object| {
+                        (self.state[*object].retained_base().0, object.slot())
+                    });
+                } else {
+                    residual.sort_unstable_by_key(|object| object.slot());
+                }
                 residual.shuffle(&mut rng);
+                let manifests = self
+                    .draw_manifests(opponent, perspective, &mut residual, &mut rng)
+                    .expect("hidden slots draw from their own pool");
+                self.fill_manifest_slots(
+                    opponent,
+                    perspective,
+                    manifests,
+                    &mut residual,
+                    &mut known,
+                    &mut reserved,
+                );
                 assert!(
-                    self.fill_foretold_slots(opponent, &mut residual),
-                    "foretold cards are in their own pool"
+                    self.refill_hidden_exile_slots(opponent, perspective, &mut residual),
+                    "face-down cards are in their own pool"
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);
@@ -147,6 +250,7 @@ impl Game {
                             suspended.decision,
                             Decision::SelectCards { .. }
                                 | Decision::Scry { .. }
+                                | Decision::ManifestDread { .. }
                                 | Decision::Surveil { .. }
                                 | Decision::LookAndSelect { .. }
                                 | Decision::OrderLibrary { .. }
@@ -157,20 +261,33 @@ impl Game {
                                 | Decision::CastDuringResolution { .. }
                         )
             });
-        if refresh {
-            // Republishing advances the epoch, which invalidates decoded
-            // Commands; a world that left the offers alone keeps its identity.
-            if let Some(space) = self.suspended_decision_action_space() {
-                // The published chooser is resolved at publication, so only
-                // the offers themselves are compared.
-                let unchanged = self.current_action_space.as_ref().is_some_and(|current| {
-                    current.kind == space.kind
-                        && current.actions == space.actions
-                        && current.focus == space.focus
-                });
-                if !unchanged {
-                    self.publish_action_space(space);
-                }
+        let priority = self.current_action_space.as_ref().is_some_and(|space| {
+            space.kind == ActionSpaceKind::Priority
+                && space
+                    .actions
+                    .first()
+                    .is_some_and(|a| a.player() == opponent)
+                && !self.shares_information(perspective, opponent)
+        });
+        let space = if self.state.opening().is_some() {
+            self.opening_actions()
+        } else if refresh {
+            self.suspended_decision_action_space()
+        } else if priority {
+            Some(self.priority_action_space(opponent))
+        } else {
+            None
+        };
+        if let Some(space) = space {
+            // Republishing advances the epoch. Keep an unchanged decision's
+            // Commands valid. Publication resolves the chooser from its actions.
+            let unchanged = self.current_action_space.as_ref().is_some_and(|current| {
+                current.kind == space.kind
+                    && current.actions == space.actions
+                    && current.focus == space.focus
+            });
+            if !unchanged {
+                self.publish_action_space(space);
             }
         }
     }
@@ -184,15 +301,7 @@ impl Game {
     /// Refuse hidden-information sampling for `viewer` when the opponent's
     /// decklist is closed: its unseen pool would be read from the true deck.
     pub fn require_open_decklist(&self, viewer: PlayerId) -> Result<(), AgentError> {
-        let opponent = PlayerId((viewer.0 + 1) % 2);
-        if self.decklist_known(opponent, viewer) {
-            Ok(())
-        } else {
-            Err(AgentError(format!(
-                "decklist closed: player {} cannot sample the opponent's hidden cards",
-                viewer.0
-            )))
-        }
+        self.state.sampling_viewer(viewer.0).map(|_| ())
     }
 
     /// Canonical physical witnesses for public definition counts, plus the
@@ -214,6 +323,8 @@ impl Game {
                         .contains(*object, ZoneType::Library, player)
             })
             .collect();
+        pool.extend(self.hidden_manifests(player, commitments.viewer));
+        pool.extend(self.hidden_face_down_exile(player, commitments.viewer));
         pool.sort_unstable_by_key(|object| object.slot());
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
@@ -232,7 +343,7 @@ impl Game {
             }
         });
         for object in pool {
-            if let Some(count) = counts.get_mut(&self.state[object].definition_id) {
+            if let Some(count) = counts.get_mut(&self.state[object].retained_base().0) {
                 if *count > 0 {
                     known.push(object);
                     *count -= 1;
@@ -253,15 +364,16 @@ impl Game {
     }
 
     pub(crate) fn refresh_priority_actions(&mut self, player: PlayerId) {
-        self.invalidate_mana_cache(PlayerId(0));
-        self.invalidate_mana_cache(PlayerId(1));
-        let actions = self.compute_player_actions(player);
-        self.publish_action_space(ActionSpace {
+        self.publish_action_space(self.priority_action_space(player));
+    }
+
+    pub(crate) fn priority_action_space(&self, player: PlayerId) -> ActionSpace {
+        ActionSpace {
             player: Some(player),
             kind: ActionSpaceKind::Priority,
-            actions,
+            actions: self.compute_player_actions(player),
             focus: Vec::new(),
-        });
+        }
     }
 
     /// Inspection lists describe an ordered prefix. Revealed search selections
@@ -317,5 +429,21 @@ impl Game {
             steps += 1;
         }
         Ok(self.winner_index())
+    }
+}
+
+impl GameState {
+    pub(crate) fn sampling_viewer(&self, viewer: usize) -> Result<PlayerId, AgentError> {
+        if viewer >= self.players.len() {
+            return Err(AgentError(format!(
+                "determinize: perspective {viewer} out of range"
+            )));
+        }
+        if !self.disclosure.is_open() {
+            return Err(AgentError(format!(
+                "decklist closed: player {viewer} cannot sample the opponent's hidden cards"
+            )));
+        }
+        Ok(PlayerId(viewer))
     }
 }

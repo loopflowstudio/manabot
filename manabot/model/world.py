@@ -22,8 +22,11 @@ import os
 import subprocess
 from typing import Any
 
+from manabot.env.decision_memory import MEMORY_FIELDS
+from manabot.env.observation import ObservationSpace
 from manabot.infra.source import source_commit, source_dirty
 from manabot.model.writer_catalog import naming_entries
+from manabot.policy.readings import published_columns
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
@@ -135,7 +138,7 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
 
 def _input_binding(observation_space: Any) -> dict:
     return {
-        "policy_input_version": observation_space.encoder.config.policy_input_version,
+        "policy_input_version": observation_space.config.policy_input_version,
         # The input binds the native group partition through its branching
         # bound; changing it reinterprets every group route.
         "naming_representation": "public-groups-v1",
@@ -148,7 +151,7 @@ def _input_binding(observation_space: Any) -> dict:
         "input_schema": {
             key: {
                 "shape": list(shape),
-                "dtype": str(observation_space.encoder.dtypes[key]),
+                "dtype": str(observation_space.dtypes[key]),
             }
             for key, shape in observation_space.shapes.items()
         },
@@ -249,9 +252,75 @@ def current_binding_form(binding: Mapping[str, Any]) -> dict:
     return current
 
 
+def input_columns(space: ObservationSpace) -> dict[str, list[str]]:
+    return {
+        key: [column.name for column in columns]
+        for key, columns in published_columns(space).items()
+    }
+
+
+def validate_saved_columns(
+    checkpoint: Mapping[str, Any],
+    expected_schema: Mapping[str, Any],
+    space: ObservationSpace,
+    location: str,
+) -> None:
+    """Check each saved array against the runtime's.
+
+    Columns are only appended, so a checkpoint reads the runtime's first N
+    columns; recorded names, when present, must equal that prefix."""
+    schema = checkpoint["world_binding"].get("input_schema")
+    if not isinstance(schema, dict) or schema.keys() != expected_schema.keys():
+        raise ValueError(f"checkpoint input buffers differ; {location}")
+    columns = input_columns(space)
+    recorded = checkpoint.get("input_columns")
+    # Historical memory checkpoints stored exact buffer shapes but omitted
+    # column declarations for all four separately prepared memory buffers.
+    if isinstance(recorded, dict) and recorded.keys() == columns.keys() - set(
+        MEMORY_FIELDS
+    ):
+        columns = {
+            key: names for key, names in columns.items() if key not in MEMORY_FIELDS
+        }
+    if recorded is not None and (
+        not isinstance(recorded, dict) or recorded.keys() != columns.keys()
+    ):
+        raise ValueError(f"checkpoint input column declarations differ; {location}")
+    widths: dict[str, int] = {}
+    for key, actual in expected_schema.items():
+        entry = schema[key]
+        if not isinstance(entry, dict) or entry.get("dtype") != actual["dtype"]:
+            raise ValueError(f"incompatible {key} dtype; {location}")
+        shape = entry.get("shape")
+        current_shape = actual["shape"]
+        if key in columns:
+            if (
+                not isinstance(shape, list)
+                or shape[:-1] != current_shape[:-1]
+                or not shape
+                or type(shape[-1]) is not int
+                or not 0 < shape[-1] <= current_shape[-1]
+            ):
+                raise ValueError(f"incompatible {key} columns {shape}; {location}")
+            width = shape[-1]
+            wanted = columns[key][:width]
+            if recorded is not None and recorded[key] != wanted:
+                raise ValueError(
+                    f"incompatible {key} columns: checkpoint {recorded[key]}, runtime {wanted}; {location}"
+                )
+            widths[key] = width
+        elif shape != current_shape:
+            raise ValueError(f"incompatible {key} shape {shape}; {location}")
+    for group in ("player", "cards", "permanents"):
+        if widths.get(f"agent_{group}") != widths.get(f"opponent_{group}"):
+            raise ValueError(f"{group} column counts differ between seats; {location}")
+
+
 def validate_checkpoint_world(
-    checkpoint: Mapping[str, Any], observation_space: Any, player_configs=None
-) -> dict:
+    checkpoint: Mapping[str, Any],
+    observation_space: ObservationSpace,
+    player_configs: Sequence[managym.PlayerConfig] | None = None,
+) -> dict[str, Any]:
     binding = checkpoint.get("world_binding")
     if not isinstance(binding, dict):
         raise ValueError("checkpoint requires an explicit world binding")
@@ -260,6 +329,8 @@ def validate_checkpoint_world(
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
     current = current_binding_form(binding)
+    current.pop("input_schema", None)
+    expected_schema = expected.pop("input_schema")
     if _digest(current) != _digest(expected):
         manifest = current.get("content_manifest")
         if isinstance(manifest, dict) and manifest != expected.get("content_manifest"):
@@ -271,6 +342,9 @@ def validate_checkpoint_world(
             "checkpoint world/setup/input binding differs from this runtime in "
             f"{binding_difference(current, expected)}; {written_at(checkpoint)}"
         )
+    validate_saved_columns(
+        checkpoint, expected_schema, observation_space, written_at(checkpoint)
+    )
     return binding
 
 
@@ -301,28 +375,9 @@ def written_at(checkpoint: Mapping[str, Any]) -> str:
 
 
 def binding_difference(binding: Mapping[str, Any], expected: Mapping[str, Any]) -> str:
-    """Name the binding fields, and the input buffers, that differ."""
-    names: list[str] = []
-    for key in sorted(set(binding) | set(expected)):
-        if binding.get(key) == expected.get(key):
-            continue
-        saved, now = binding.get(key), expected.get(key)
-        if (
-            key == "input_schema"
-            and isinstance(saved, Mapping)
-            and isinstance(now, Mapping)
-        ):
-            for name in sorted(set(saved) | set(now)):
-                if saved.get(name) != now.get(name):
-                    names.append(
-                        f"{name} {_shape(saved.get(name))} -> {_shape(now.get(name))}"
-                    )
-        else:
-            names.append(key)
-    return ", ".join(names)
-
-
-def _shape(entry: Any) -> str:
-    if not isinstance(entry, Mapping):
-        return "absent"
-    return "x".join(str(size) for size in entry.get("shape", []))
+    """Name differing fields outside the input schema."""
+    return ", ".join(
+        key
+        for key in sorted(binding.keys() | expected.keys())
+        if key not in binding or key not in expected or binding[key] != expected[key]
+    )

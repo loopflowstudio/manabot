@@ -54,7 +54,7 @@ from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import ETUDE_COMPUTE_CLASS
 from manabot.training.decks import UniformDecks
-from manabot.training.panels import ML
+from manabot.training.panels import ML, PERF
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
 from managym.recording import GameRecord
@@ -498,7 +498,8 @@ def report() -> Report:
                 matches=Matches(tag="raw-usable-vs-off"),
             ),
         ),
-        perf=tuple(
+        perf=PERF
+        + tuple(
             Series(title=title, keys=(key,), unit=unit)
             for title, key, unit in (
                 ("Decisions per completed game", "decisions_per_game", "rows/game"),

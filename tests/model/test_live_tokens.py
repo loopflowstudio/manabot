@@ -2,23 +2,31 @@
 
 from copy import deepcopy
 
+import numpy as np
 import pytest
 import torch
 
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.env.observation import encode_observation
 from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
-from manabot.training.rollout.collection import collect
+from manabot.verify.text_observation import priority_root
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
 
 def _pair(
-    case: PolicyFixture, value_aggregation: str, bucketed: bool
+    case: PolicyFixture, value_aggregation: str, bucketed: bool, streams: bool
 ) -> tuple[ActorCritic, ActorCritic]:
-    """Padded and live-token policies with identical, perturbed weights."""
+    """Padded and live-token policies with identical, perturbed weights;
+    `streams` selects the `stream_norm` and `focus_film` layout."""
     config = case.agent.config.model_copy(
-        update={"value_aggregation": value_aggregation, "attention_layers": 2}
+        update={
+            "value_aggregation": value_aggregation,
+            "attention_layers": 2,
+            "stream_norm": streams,
+            "focus_film": streams,
+        }
     )
     space = case.agent.observation_space
     padded = ActorCritic(space, config, bucketed_shapes=bucketed).eval()
@@ -33,30 +41,42 @@ def _pair(
     return padded, live
 
 
-def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
-    """Decisions from played turns, so boards hold different object counts."""
-    batch = collect(case.collector, case.agent, 24)
+def _different_boards(case: PolicyFixture) -> dict[str, torch.Tensor]:
+    """Construct legal priority decisions on boards of two fixed sizes."""
+    space = case.agent.observation_space
+    rows = [
+        encode_observation(
+            space, priority_root(("Lightning Bolt",), lands).scenario_refresh()
+        )
+        for lands in (("Mountain",), ("Mountain", "Gray Ogre"))
+    ]
     return {
-        key: torch.from_numpy(value[-8:, 0]).float()
-        for key, value in batch.observations().observation.items()
+        key: torch.from_numpy(np.stack([row[key] for row in rows])).float()
+        for key in rows[0]
     }
 
 
 @pytest.mark.parametrize(
-    ("value_aggregation", "bucketed"),
-    [("masked_mean", False), ("value_token", False), ("masked_mean", True)],
+    ("value_aggregation", "bucketed", "streams"),
+    [
+        ("masked_mean", False, False),
+        ("value_token", False, False),
+        ("masked_mean", True, False),
+        ("value_token", False, True),
+        ("masked_mean", True, True),
+    ],
 )
 def test_outputs_and_gradients_match_padded(
-    value_aggregation: str, bucketed: bool
+    value_aggregation: str, bucketed: bool, streams: bool
 ) -> None:
     torch.manual_seed(319)
     case = _policy()
-    obs = _later_decisions(case)
+    obs = _different_boards(case)
     valid = sum(
         obs[key].sum(1) for key in ("agent_cards_valid", "agent_permanents_valid")
     )
     assert len(set(valid.tolist())) > 1, "fixture boards should differ in size"
-    padded, live = _pair(case, value_aggregation, bucketed)
+    padded, live = _pair(case, value_aggregation, bucketed, streams)
     outputs = []
     for model in (padded, live):
         logits, values = model.forward_distribution(device_input(model, obs))

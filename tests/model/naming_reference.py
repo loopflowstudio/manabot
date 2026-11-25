@@ -8,10 +8,13 @@ from typing import Dict
 
 import torch
 
-from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic, EmbeddedObservation
-from manabot.env.observation import RELATION_VALID_INDEX
-from tests.model.prepared_routes import device_input
+from manabot.backends.torch.semantic_cards import SemanticCardEncoder
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    RELATION_VALID_INDEX,
+)
+from tests.model.prepared_routes import dense_action_features, device_input
 
 
 def packed_definitions(
@@ -135,9 +138,10 @@ class DenseActionReference(ActorCritic):
     ) -> torch.Tensor:
         action_rows = obs["actions"][:, :action_count]
         valid = obs["actions_valid"][:, :action_count]
-        # The continuation selector is a join, never a numeric strategic feature.
-        actions = self.action_embedding(action_rows[..., :-2])
-        indexes = torch.where(valid.bool(), action_rows[..., -2], 0)
+        actions = self.action_embedding(dense_action_features(self, action_rows))
+        indexes = torch.where(
+            valid.bool(), action_rows[..., ACTION_CONTINUATION_INDEX], 0
+        )
         if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
             raise ValueError("invalid action continuation reference")
         if state.frame_context is not None:

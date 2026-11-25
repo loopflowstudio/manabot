@@ -205,10 +205,29 @@ select an outcome.
 
 The digest is `GameState::deterministic_hash()`, a versioned BLAKE3 digest of
 canonical JSON over every `GameState` field plus the content pack's schema and
-digest (`MATCH_STATE_HASH_VERSION`, now 1). The struct is destructured without
-`..`, so a new field fails to compile until its canonical treatment is chosen;
-pointers, capacities, timings and observation projections are excluded, and
-the RNG is represented by eight draws from a clone, never advanced.
+digest. Version 26 records each life gain's ordinal when it happens. An ability
+that reads its resolution count keeps it for that turn under the source
+incarnation, printed face and ability index. A trigger still on the stack
+keeps that identity after the source leaves. A countered trigger adds zero.
+It also records the winning seat for a card-instructed victory, private
+opening progress and simultaneous loss causes. Version 30 adds a
+`PermanentUntapped` event to the hashed event ledger for each permanent that
+becomes untapped. Version 31 hashes the draw-by-mandatory-loop watch (CR
+104.4b) on `PriorityState`. It counts each forced resolution after state-based
+actions finish and waiting triggers reach the stack. A win or loss at that
+point takes precedence over a loop draw. An empty stabilized stack, a new step, a
+successful non-pass priority action, or a decision with several choices ends
+the watch and cancels any pending count. After 64 resolutions it fingerprints
+the state with life and poison totals, event logs, priority and identity allocation masked
+(`GameState::loop_fingerprint`). A repeated fingerprint with no new low of
+life or high of poison for a player who can lose ends the game as
+`GameOutcome::Draw { mandatory_loop: true }`, and Env reports
+`draw_reason: "mandatory_loop"`. A chain that spends counters, cards or
+permanents never repeats a fingerprint, so it is never drawn; 10,000
+resolutions draw a loop that grows something without bound.
+Destructuring the state without `..` makes every new field an explicit decision
+in the hash contract. The digest excludes pointers, capacities, timings and
+observation projections. It reads eight draws from a clone of the RNG.
 `cargo test --test match_state_hash_tests` in `managym/` proves clone and
 allocation independence, mutation sensitivity and RNG non-mutation. Consumers
 compare version and digest together; a content change changes the hash on
@@ -229,11 +248,39 @@ pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
 ```
 
 The unseen pool is the opponent's unknown hand cards, library and face-down
-foretold cards. Public hand minima and exact viewer-known library positions
+foretold cards, plus the printings under manifested permanents the viewer cannot inspect. The permanents keep their public identities across deals. Public hand minima and exact viewer-known library positions
 reserve distinct definition witnesses; the remaining cards are shuffled.
 Everything the viewer can see is preserved.
 [`possible_worlds.rs`](../managym/src/possible_worlds.rs) defines the same domain exactly, with compatible-deal counts as weights, for beliefs that
 want more than a uniform redraw ([beside the loop](../README.md#beside-the-loop)).
+
+**Snapshot and continuation.** Save a live decision boundary with
+`Env::snapshot`. The immutable `GameSnapshot` is `Send + Sync`, so several
+workers can restore independent games after the source is dropped.
+
+```rust
+use managym::agent::{BranchMode, GameSnapshot, RestoreOptions};
+
+let snapshot = env.snapshot()?;
+let branch = snapshot.restore(RestoreOptions {
+    mode: BranchMode::ShuffleLibraries { seed: 101 },
+    forced_first_action: Some(0),
+    ..Default::default()
+})?;
+let replay = branch.snapshot()?.to_replay_json()?;
+let reopened = GameSnapshot::from_replay_json(&replay)?;
+```
+
+An exact restore continues the RNG, both decision logs, chooser policies and
+issued object bindings. Each restored game has fresh projection caches and
+a new capture generation. Choose a branch mode, optionally change decision
+memory capture, then optionally commit a first action. Restore checks that
+the action still identifies the same choice after sampling.
+
+The private snapshot replay reproduces the original setup, external actions and
+ordered interventions and verifies the resulting digest. See the
+[Python snapshot guide](engine-python.md#save-and-restore-game-positions)
+for the mode contracts, replay limits and Academy Watch import.
 
 ### Remembered library positions
 
@@ -258,6 +305,14 @@ positions before dealing the remaining hand and library. An unshared sampled
 opponent's private position map resets to their public map. Clones preserve
 both maps. Closed opposing decklists still refuse hidden-world sampling.
 
+`BranchMode::ShuffleLibraries` works on both open and closed decks without
+altering either hand, face-down exile, or future rules RNG. Because the
+positional knowledge maps are bounded at ten entries, the engine separately
+pins every library object that was inspected, revealed as a visible top, or
+placed/repositioned in the library until a genuine rules shuffle clears that
+seat's pins (and pins an entire library while a suspended search inspects it).
+Only the remaining exchangeable slots permute in place.
+
 ## Batched games
 
 Training and evaluation step many games in lockstep: one array of actions in,
@@ -265,7 +320,9 @@ one batch of observations out, so a single forward pass serves every active
 game. `VectorEnv` ([`managym/src/agent/vector_env.rs`](../managym/src/agent/vector_env.rs))
 owns the games and their reset seeds; the Python wrapper is
 [`manabot/env/vector_env.py`](../manabot/env/vector_env.py). A finished slot
-is scored and reset in place. By default an observation that exceeds its
+reports its terminal outcome once and parks until the caller loads a new game
+or resets the vector; the Torch wrapper reloads finished slots automatically.
+By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
@@ -308,10 +365,10 @@ The supplied lists are small development decks. Each reset returns an
 zero indices with choices from your learner.
 
 With one external seat, reset and positional step advance built-ins until the
-external chooser or a terminal state. A scalar terminal must be explicitly reset;
-vector steps auto-reset finished slots. Terminal rewards belong to the external
-seat, including when a built-in finishes the game. Reset never silently starts
-a second game if a built-in wins before an external choice.
+external chooser or a terminal state. Both scalar and native vector terminals
+stay parked until explicitly reset or reloaded. Terminal rewards belong to the
+external seat, including when a built-in finishes the game. Reset never silently
+starts a second game if a built-in wins before an external choice.
 
 With two built-in seats, reset only constructs a game. Call scalar `step()`
 (with no action) or vector `step([-1, ...])` to execute exactly one published
@@ -332,7 +389,7 @@ arguments or an unknown name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch a player policy to random play.
 `"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through CapturedVector and Torch. Retained failure evidence keeps its original
+through RecordedVectorEnv and Torch. Retained failure evidence keeps its original
 policy name; replaying a passive-policy receipt requires its original source.
 
 ### Built-in heuristic
@@ -378,7 +435,7 @@ Its rules are deliberately approximate:
   chump to prevent lethal damage.
 - Use its own pumps when they change a fight or make unblocked damage lethal;
   ignore hypothetical opposing combat tricks. Pay offered optional ward and
-  “unless pays” costs.
+  “unless pays” costs, except a ward paid in life that would leave it at 0.
 
 Choices are deterministic for the same visible state and decision history.
 Equal-value casts use the first legal offer; equal-ranked discard and
@@ -403,44 +460,41 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 |---|---|
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
-| Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
-| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
-| Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
-| Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
-| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
-| Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
+| Encoded fixed-viewer observations for all or selected slots, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
+| Live snapshots and batched slot loading (`GameSnapshot`, `RestoreOptions`, `SlotLoad`) | `Env.snapshot` / `restore`; `VectorEnv.snapshot_slots`, `slot_metadata`, `load_slots_into_buffers` ([Batched slot loading and snapshots](engine-python.md#batched-slot-loading-and-snapshots)) |
+| Revision-bound Commands, decision captures, search forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Batched readable observations | `managym.VectorEnv.reset_all` / `step` |
+| Caller-owned NumPy buffers, per-slot setups, sparse slot loading and partial stepping | Native `VectorEnv` buffer methods |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.RecordedVectorEnv` |
+| Torch observation/reward tensors on a selected device with Gym-style automatic reset | `manabot.env.vector_env.VectorEnv` |
 
-Scalar native `Env.step` returns the terminal state and leaves resetting to the
-caller. Native vector steps reset finished slots before returning: reward and
-`terminated` / `truncated` describe the completed game, while its returned
-observation describes the replacement game. The Torch wrapper keeps this
-behavior. Its observation tensors are reused; clone anything retained across
-steps. The Gymnasium wrapper `manabot.env.env.Env` never resets on its own:
-a terminal `step` returns the terminal observation and true done flags, and the
-caller calls `reset`. Its former `auto_reset` argument is removed; passing it
-raises `TypeError`, and step info no longer carries `true_terminated` /
-`true_truncated`. Vector autoreset is the only automatic-reset contract.
+Scalar `Env.step` returns the terminal observation and waits for `reset`.
+Native `VectorEnv` and `RecordedVectorEnv` return the terminal observation,
+reward, flags and winner, then park that slot with chooser `-1`. Restart
+all slots with the matching readable or buffered reset, or use
+`load_slots_into_buffers` to replace individual slots.
+
+Torch `VectorEnv.step` saves the rewards, flags and diagnostics before
+refilling finished slots. Its observation tensors then show the replacement
+games. Clone tensors you need to retain across steps.
 
 Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
 explicit seed, including the current one, so equal seeds reproduce deals.
 `reset()` without a seed continues native seed succession. Its
 `current_agent_indices()` names each slot's chooser.
 
-`CapturedVector` delegates only native reads (seeds, generations, choosers,
-frames, setups, diagnostics). Readable `reset_all` / `step` and other native
-mutators raise `AttributeError`; use its `reset_*_into_buffers` and
-`step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
-new prefix whenever the native game generation changes, so a same-seed reset
-or a replacement at the saturated maximum seed never extends the old game.
+`RecordedVectorEnv` records both readable and buffered steps and resets. Each
+reset or successful slot load starts a new replay prefix, including when the
+seed repeats or saturates at its maximum value.
 
-Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+Native buffered stepping and `RecordedVectorEnv.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;
 the Python buffer bindings clear their rewards and done flags to zero/false.
 Apply the same mask when collecting transitions. The Torch wrapper's `step`
 advances every slot and does not accept an active mask.
 
 Strict batch errors can occur after other slots have advanced. Do not retry
-the same batch assuming nothing changed. `CapturedVector` retains private
+the same batch assuming nothing changed. `RecordedVectorEnv` retains private
 pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
 individual game failures for replacement. Buffer-integrity failures remain
 fatal, and capacity recovery requires its separate opt-in. See
@@ -507,15 +561,17 @@ origin and stale checks still apply independently of these snapshot fields.
 Both methods synchronously read authoritative hand zones, with one native call
 for the whole batch, without stepping, resetting, consuming randomness or
 building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
-game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+game or retained snapshot. `RecordedVectorEnv` and Torch `VectorEnv` expose the same
 method and CPU records. Ordinary reset/step calls do not collect snapshots.
 
 Read before stepping to capture the current hands; copy reused observation
 buffers too if retaining both. After a successful step, snapshots describe the
-returned game states. Scalar games retain their terminal hands until explicit
-reset. Vector done slots describe replacement games; terminal hands are not
-retained by vectors. Partial stepping leaves inactive games unchanged, but
-snapshots still include every slot: apply the same active mask when selecting results.
+current game states. Scalar games and native vector slots retain their terminal
+hands while parked, until reset or reloaded with `load_slots_into_buffers`.
+Torch `VectorEnv` reloads finished slots during `step`, so its done slots
+describe replacement games. Partial stepping leaves inactive games unchanged,
+but snapshots still include every slot: apply the same active mask when
+selecting results.
 
 A wrong-length seat list, a seat outside `0..1` or reading before reset raises
 an error. After a failed step, discard that call's results and recover or reset
@@ -542,11 +598,11 @@ from manabot.env.observation import ObservationSpace
 space = ObservationSpace()
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
 games.reset_all(Match().to_rust())
-buffers = space.encoder.allocate(2)
+buffers = space.allocate(2)
 
 players = [0, 1]
 reads = games.write_observations_for_players(
-    players, buffers, action_overflow=space.encoder.config.action_overflow
+    players, buffers, layout=space.layout, action_overflow=space.config.action_overflow
 )
 # Row i in every array describes players[i] in slot i.
 
@@ -559,18 +615,19 @@ for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
     assert read.player == 1 - hand.player
 ```
 
-`write_observations_for_players(players, buffers, action_overflow="error")`
-writes all slots in one native call, with one explicit native seat (`0` or `1`)
-per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
-slot order, naming the game state each row describes:
+`write_observations_for_players(players, buffers, action_overflow="error", *, layout)`
+takes one entry per slot. Pass seat `0` or `1` to read it, or `None` to
+leave its game and buffer row untouched. This permits reads beside terminal,
+poisoned or unset slots. Each requested slot returns an `ObservationRead` in
+ascending slot order.
 
 | Field | Meaning |
 |---|---|
-| `slot: int` | The row in every array, equal to the list index |
+| `slot: int` | The row in every array (equal to the list index when no slot is `None`) |
 | `player: int` | Requested native seat, unchanged by control effects |
 | `game_id: int`, `seed: int`, `revision: int` | The same values a `HandSnapshot` of that slot reports at this read boundary |
 
-Pair a read with the hand snapshot at the same list index when game ID and
+Pair a read with a hand snapshot at `read.slot` when game ID and
 revision agree, selecting matching or opposite seats as needed. Save a
 collection/run identity too: `game_id` distinguishes resets within the process,
 even to the same seed, but is not a portable replay ID.
@@ -583,22 +640,23 @@ not remap it to its controller or grant access to hidden information. Only the
 published chooser sees legal actions. Hand snapshots are separate privileged
 records and must stay out of viewer-safe inputs and exports.
 
-`space.encoder.allocate(num_envs)` supplies every required writable, contiguous
+`space.allocate(num_envs)` supplies every required writable, contiguous
 NumPy array at the selected version's shapes, dtypes and capacities. No reward
 or done arrays are needed. Keep these buffers separate from ordinary step
 buffers and copy rows you need to retain before the next write.
 
-`CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
-method and CPU identity records. For Torch, allocate from the wrapper's
-`observation_space`, then use `torch.from_numpy` and an explicit device transfer
-as needed. Clone shared CPU tensors you need to retain before the next write.
+`RecordedVectorEnv` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
+method and CPU identity records. The Torch wrapper supplies its own layout.
+Pass `layout=consumer_space.layout` for a consumer with different capacities.
+Use `torch.from_numpy` and an explicit device transfer as needed. Clone shared CPU tensors you need to retain before the next write.
 
-The read does not step, reset or consume randomness. After a successful step,
-done slots describe their replacement games, not the terminal states. Reads
-include every slot, including those left unchanged by an inactive step mask;
-apply that mask when selecting results. Ordinary reset/step calls do not collect
-fixed-seat observations. The read does not replace their chooser observations,
-alter legal choices or create Command or decision-capture authority.
+A fixed-seat read preserves the chooser's observations, legal choices and RNG.
+On native `VectorEnv` and `RecordedVectorEnv`, a parked terminal slot describes
+the finished game until reloaded (or pass `None` to skip it); on Torch
+`VectorEnv`, a finished slot describes its replacement game. The seat list
+selects rows independently of the preceding step's active mask. Ordinary steps
+and resets only encode the chooser's view. Fixed-seat reads confer no Command
+or decision-capture authority.
 
 A wrong-length seat list, an invalid seat, reading before reset, or malformed
 buffers raises an error. Encoding uses supplied capacities and the selected
@@ -610,10 +668,96 @@ the state before retrying. After a failed step, recover or reset the games first
 
 ## Encoded observations
 
-The native encoder turns an observation into NumPy arrays, one layout per
-engine release. manabot reads the same arrays as its policy input
-(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
-[observations and the policy network](observation-and-model.md#policy-inputs).
+One native encoder turns an observation into NumPy arrays, one layout per
+engine release. Every caller's arrays come from it: a single observation, a
+batch of search branches and the vector environment's step buffers. manabot
+reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v11); how its network reads them is
+in [observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Encoding one observation
+
+```python
+import managym
+from manabot.env.observation import ObservationSpace, encode_observation
+
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+
+space = ObservationSpace()
+arrays = encode_observation(space, observation)
+print(int(arrays["agent_cards_valid"].sum()))
+# 7
+
+restored = managym.Observation.from_json(observation.toJSON())
+del game
+print(int(encode_observation(space, restored)["agent_cards_valid"].sum()))
+# 7
+```
+
+`encode_observation(space, obs)` returns freshly allocated arrays at the
+space's shapes, so a caller may keep them. The space builds `space.layout`
+from its `ObservationConfig`. The native layout resolves the shapes for the
+configured input version, optional blocks and capacities. `space.shapes`
+reads those shapes from the layout, and `space.allocate()` uses the layout's
+allocator. The encoder accepts any `managym.Observation`, including the
+one a step returned, a fixed seat's view from `observation_for_player`, or one
+restored with `Observation.from_json`. No game needs to be open. A restored
+observation retains the public history written by `toJSON()`. Older JSON
+without that field loads with empty public history. Semantic `viewer_state`,
+decision captures and search witnesses keep the canonical bytes without it; a
+capture carries its own bounded `history`.
+
+To write into arrays you own, call the function underneath:
+
+```python
+layout = managym.ObservationLayout(max_actions=256, policy_history=True)
+buffers = layout.allocate()
+managym.encode_observation_into(observation, layout, buffers)
+```
+
+The same layout allocates a batch with `layout.allocate(batch_size)`.
+In manabot, pass `space.layout` to use the configured input version, history,
+memory and capacities. Both encoders check every key, shape and dtype before
+writing. Vector stepping also requires the reward and done arrays that
+`allocate_vector_buffers(space, num_envs)` supplies. Register those arrays
+with `games.set_buffers(step_buffers, layout=space.layout)`.
+
+An observation that does not fit raises `managym.ObservationCapacity`, a
+`ValueError` naming the field, the count and the capacity:
+
+```python
+from manabot.infra.config import ObservationConfig
+
+small = ObservationSpace(ObservationConfig(max_cards_per_player=4))
+try:
+    encode_observation(small, observation)
+except managym.ObservationCapacity as error:
+    print(error)
+# observation capacity exceeded: agent_cards plus sideboard 7 > 4
+```
+
+Catch that type to count or recover from a game that outgrew its buffers;
+`encode_observation_into` and the batch `encode_observations_into` raise it,
+including for more legal actions than slots without
+`action_overflow="first-legal"`. A vector environment's step raises
+`managym.AgentError` with the same message for an unrecovered failure (its
+retained evidence names that class) and records `ObservationCapacity` as the
+failure class when it recovers the game. Any other `ValueError` means the
+buffers or the request are wrong: malformed arrays, or state the selected
+input version cannot hold (`managym.input_v10_state(obs)` and
+`managym.unrepresentable_state(obs)` name it). Nothing is truncated to fit.
+Discard the arrays after a failure.
+
+`Env.encode_observation` and `Env.encode_observation_into` are deprecated
+aliases that warn and are removed in 0.3.0. Replace the first with
+`encode_observation(space, obs)` and the second with
+`managym.encode_observation_into`. In manabot, `ObservationSpace.encode(obs)`,
+`space.encoder` (now the space itself) and `ObservationEncoder` (now
+`ObservationSpace`) warn and are removed in 0.3.0 too.
 
 ### Reading arrays by name
 
@@ -631,17 +775,32 @@ print(definition["encoding"])
 # CardDefId + 1; 0 means absent
 ```
 
-The scalar encoder writes the arrays the layout describes. This example starts
-a game with fixed decks and reads only valid permanent rows (the first
-decision can have none):
+A count or number also says whether the encoder already divided it:
 
 ```python
-game = managym.Env(seed=42)
-observation, info = game.reset([
-    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
-    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
-])
-arrays = game.encode_observation(observation)
+columns = layout["agent_permanents"]["columns"]
+print(columns["power"]["kind"], columns["power"]["scale"])
+# number 10
+print(columns["exhausted_abilities"]["kind"], columns["exhausted_abilities"]["scale"])
+# count 1
+```
+
+A category says how many values it has: `size` is its largest code. A code
+above it is not an error, so a category can grow. In the rows the policy reads
+column by column, 0 means absent, except a player's `seat`, where 0 is the
+seat on the play:
+
+```python
+frame_kind = layout["relations"]["columns"]["frame_kind"]
+print(frame_kind["kind"], frame_kind["size"])
+# category 14
+```
+
+The encoder writes the arrays the layout describes. With `arrays` from
+[the example above](#encoding-one-observation), read only valid permanent rows
+(the first decision can have none):
+
+```python
 valid = arrays["agent_permanents_valid"].astype(bool)
 references = arrays["agent_permanents"][valid, definition["index"]]
 definition_ids = [int(reference) - 1 for reference in references if reference != 0]
@@ -652,18 +811,39 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
+`observation_layout(*, policy_history=False, turn_state=True, legacy=False, decision_memory=False)` returns a mapping keyed by the
 encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
 Feature arrays have a `columns` mapping keyed by column name. Each column gives
-its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
-identities and references, categorical codes, flags, counts, numeric values and
-ranks. The encoding explains scaling, join targets, index bases and absence
-sentinels; the range describes stored values, including when no fixed bound
+its zero-based `index`, `kind`, `encoding` and `range`. The kind is one of a
+closed set:
+
+| Kind | The column holds |
+| --- | --- |
+| `flag` | 0 or 1 |
+| `count` | A nonnegative amount, stored divided by `scale` |
+| `mana` | Floating mana in a player pool, stored divided by `scale` |
+| `number` | A signed amount, stored divided by `scale` |
+| `rank` | A one-based order rank; 0 absent |
+| `position` | A one-based position in a zone; 0 absent |
+| `category` | A code from a small fixed set |
+| `selector` | A one-based choice index (a mode, an ability, a frame index a relation row repeats); 0 absent |
+| `reference` | A join to a row of another table: the padded object table, a continuation frame an action continues, the naming catalog; the encoding gives the base |
+| `id` | An identity, such as a card definition or token value; never a magnitude |
+| `tagged` | A value whose meaning depends on its row's kind |
+
+`count`, `mana` and `number` columns also give `scale`, the divisor the encoder
+applied: 1 for an unscaled value, otherwise 10, 20 or 60. No other kind has
+one. The encoding explains join targets, index bases and absence
+sentinels in prose; the range describes stored values, including when no fixed bound
 exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
-row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+row kind in `row_kinds` (integer codes mapped to descriptions); `facts` and
+`effect_details` also name each kind in `row_kind_names` (`"counter"` → 1), and
+`effect_details` maps its program kinds to catalog `TokenKind` codes in
+`program_token_kinds`, so a reader looks kinds up by name rather than copying
+numbers. Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public
@@ -673,11 +853,12 @@ separately. `turn_state=True` adds policy input v10's `player_turn_state` (colum
 `life_lost`, `spells_cast`, then `nonartifact_mana_white` through
 `nonartifact_mana_colorless`) and `card_turn_state`.
 
-Read the stored encoding before adding preprocessing: permanent damage, power
+Read the kind and `scale` before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
-Fact timestamp ranks are stored as ranks; the built-in model divides them by
-128, independently of fact capacity. The layout describes the array values,
-not a blanket normalization to apply to every column.
+Timestamp ranks are stored as ranks. The layout describes the array values,
+not a blanket normalization to apply to every column; the built-in model
+chooses its treatment from the kind
+([how the network reads a column](observation-and-model.md#how-the-network-reads-a-column)).
 
 The layout comes from the column table the native encoder writes through, so
 it cannot drift from the arrays. Reading it starts no game and imports no
@@ -752,13 +933,23 @@ fn lightning_bolt() -> CardDefinition {
 colors, keywords, abilities, text and power/toughness as printed. It is the
 input to the layer system; `Game::characteristics(id)` returns the layered
 view of a game object after continuous effects. A `CardDefinition` adds the
-card's identity (`key` and a required `scryfall_id`) and, for a transforming
-card, its back face's `PrintedCharacteristics` (`back_face`; the outer
-`..Default::default()` leaves it empty).
+card’s identity (`key` and a required `scryfall_id`). Double-faced cards
+register their `back_face` alongside the front. A front with `modal_back`
+offers either printed face when the play permission allows it. Casting Photon
+uses Photon’s cost and abilities, then the permanent enters back face up.
+Monica's activated ability turns the same permanent over to Photon. The
+modal permanent uses the mana value of the face it shows. Moving it to the
+graveyard restores Monica Rambeau.
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- Later instructions can read what an earlier instruction accomplished.
+  Fumigate counts the creatures its destruction moved, including a creature
+  exiled by a finality counter. Exsanguinate reads `LifeLostThisWay` after
+  each opponent loses X life. A player whose life total cannot change
+  contributes zero. A selection's child effects have their own results, and
+  completing the selection restores the caller's results.
 - A trigger is "whenever X does Y": an event over its actor, with the event's
   own parameters as fields. Monastery Swiftspear's prowess
   ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
@@ -784,10 +975,23 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
   (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
   instead, whose controller is the same kind of `Actor` ("a creature an
   opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
-  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
-  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }`,
+  `DealsCombatDamage { subject, to, per }` and
+  `DealsDamage { kind, source, to }`, where `per` says whether "one or
   more" creatures trigger once per batch or once each, and `attackers` says
-  whether the attack is alone or with at least one other creature. The ability
+  whether the attack is alone or with at least one other creature.
+  `DealsDamage` fires once per damage event of its `DamageKind` (any,
+  combat or noncombat) to a `DamageRecipientFilter` (a player actor, or
+  anything). Its source is any object, a spell included, matched as it is
+  or last was with its controller ("a source you control" is
+  `TriggerSubject::you_control(CardPredicate::default())`), and the damage
+  dealt is "that many". `BecomesTapped` and `BecomesUntapped` fire on a
+  transition only: every untap, the untap step's included, goes through
+  `Game::untap_permanent`, and a stun counter removed instead is no untapping.
+  A state trigger (CR 603.8) is `State(Condition)` ("when there are four or
+  more page counters on this artifact"): it is asked of its source whenever a
+  player would receive priority, never of an event, and doesn't trigger again
+  while its occurrence waits or is on the stack. The ability
   description ("Whenever an opponent draws their second card each turn, ...")
   and the learning tokens come from one template per event, so a card that
   needs a new actor or count needs no new variant.
@@ -855,6 +1059,51 @@ The returned Ogre has no damage, no counters, no Auras and no "until end of
 turn" effects, and anything that targeted the old Ogre no longer has a target.
 None of that is cleanup code; the new object never had them.
 
+Cecil, Dark Knight transforms on the battlefield. If Cecil deals three damage
+while you have 13 life, the trigger remembers three. On resolution you fall to
+10, then untap Cecil and turn it over to Cecil, Redeemed Paladin. The same
+object keeps its counters, attachments and any spell already targeting it.
+If Cecil tramples over a blocker, one trigger counts the damage to both
+recipients. You still lose that life if Cecil dies in combat.
+When the Paladin attacks, its trigger gives the other attacking creatures
+indestructible until end of turn.
+
+Vanille’s first-main trigger offers a payment of {3}{B}{G} when you own
+and control her and a creature named Fang, Fearless l'Cie. Paying exiles
+both. The original cards form Ragnarok, Divine Deliverance. Both physical
+card IDs then refer to the same battlefield object. If Lost Days puts
+Ragnarok on the bottom of its owner’s library, the owner chooses which
+card to draw first. Ragnarok stays on the battlefield until that choice
+commits, then both cards move and the spell creates its Clue. A token
+copy of Ragnarok leaves without an ordering choice.
+
+When Manifest Dread resolves, its controller privately inspects the top two library
+cards and chooses one to put onto the battlefield face down. The opponent sees a
+nameless 2/2 creature and can see the other card in the graveyard. With one card
+left, that card enters face down automatically. With an empty library, the spell
+finishes resolving. Copying the face-down creature creates a face-up, nameless
+2/2. It has no back face, even if the manifested card can transform. Copying
+that token again preserves those characteristics. With priority, the controller can
+show a manifested creature card and pay its mana cost to turn it face up. This
+keeps its counters and public object reference. Spells already targeting it
+still target the same permanent. A subsequent token copy sees the revealed
+creature, including its back face when it can transform.
+
+Esper Origins illustrates a zone change with a different face up. Cast it from hand
+to surveil two and gain two life. Cast it from your graveyard for its flashback
+cost and it also exiles itself, then enters as Summon: Esper Maduin with finality
+and lore counters. The stack spell, exiled card and Saga each have their own
+`ObjectId` and share one `CardId`. The Saga has mana value two and no mana cost.
+Its first chapter reveals the top card to both players. A permanent card goes
+to hand and any other card stays known on top.
+Fiendish Panda’s death trigger compares each eligible graveyard card’s mana
+value with the Panda’s power when it died, including its counters. The same
+comparison applies when choosing a new target and when resolving the trigger.
+Returning the Panda to the battlefield leaves that bound intact. If the chosen
+card leaves the graveyard and returns before resolution, it has a new object
+ID and stays in the graveyard. Heartfire Immolator likewise deals damage using
+its power when sacrificed, including bonuses from prowess.
+
 A token is an object with no card behind it. Take one Spirit token through a
 turn:
 
@@ -904,9 +1153,27 @@ kind `Token`, and neither it nor the copy has a `CardId`. A definition's
 `is_token` says only that its catalog row is a token definition's; an object's
 kind is the authority for what it is.
 
-Copies are made through `Object::token_copy` and `Object::spell_copy`, with
-their viewer id, owner and kind set at creation. The zone allocator supplies
-their `ObjectId`.
+Cast Sun-Blessed Healer with kicker and its entry trigger lets you choose a
+nonland permanent card with mana value two or less in your graveyard. Nullpriest
+of Oblivion uses the same trigger to return a creature card of any mana value.
+The trigger remembers kicker if the Cleric dies in response. Exiling and
+returning the Cleric gives it a fresh entry, so it offers no second target.
+
+A copy of a kicked permanent spell enters with the original kicker choice and
+X. Only the cast spell has a payment receipt, including when its cost was zero.
+A battlefield copy takes its characteristics from the permanent and starts with
+its own entry choices. [Zendikar Rising release notes](https://magic.wizards.com/en/news/feature/zendikar-rising-release-notes-2020-09-10)
+
+Fiendish Panda gets one counter each time its controller gains life. When it
+dies, its last battlefield power limits which non-Bear creature cards it can
+return. A Clone that dies as a 4-power Panda can return Driver of the Dead
+(mana value four). It cannot return itself, even though it is a Shapeshifter
+in the graveyard. Changing the trigger's target uses the same restrictions.
+[Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes)
+
+Token creation replacements finish before the allocator assigns the token's
+viewer id, owner and kind. Spell copies use `Object::spell_copy`. The zone
+allocator supplies each copy's `ObjectId`.
 
 A Clone is still a card. A copy effect changes an object's copiable values
 (CR 707.2) and is recorded on that object (`copy`); it does not make a copy
@@ -957,8 +1224,20 @@ An ability keeps one source identity through pending triggers, the stack and
 child resolution frames. Its captured definition and the retained base
 printing supply definition provenance after departure; these reads never
 borrow a later appearance's copy or transformed face. Battlefield facts come
-from LKI. The retained base preserves the engine's existing departure behavior;
-it does not capture additional copy exceptions or transformed mana value.
+from LKI. When an ability creates a token copy of its source, it takes the
+source's copiable values at resolution or, after departure, at the moment it
+left. A Clone that returns as a different creature keeps its new form while
+the earlier ability copies the departed form.
+
+Stack inspection, target changes and resolution use the triggering face captured
+at placement. For example, a Clone that copies an Electroduplicate token can
+return to hand with its sacrifice ability still on the stack. Both players can
+read the ability, and its source reference still names the departed Clone.
+
+Copy exceptions become part of the new token’s copiable characteristics. A Rite
+of Replication copy of an Electroduplicate Koma’s Coil inherits haste and its own
+end-step sacrifice trigger. A temporary death ability granted to the first Coil
+triggers only when that Coil dies.
 
 A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
 on it, and a delayed trigger watching one creature retires on it. Code picks
@@ -970,7 +1249,11 @@ the id for what its rules text means:
   after it has already moved** is a `CardId`; `object_of` finds where it is.
 - **What something was when it left** (power when it died, its controller,
   its counters) is `Game::object_lki(old_id)`, the `ObjectLkiLog` entry
-  recorded as the object departs.
+  recorded as the object departs. Its name and supertypes come from the face
+  it last showed (`Game::lki_face_printing`, a copy's or back face's when they
+  changed) and its mana value from its front face
+  (`Game::lki_mana_printing`, CR 712.8e); the entry stores a name only when an
+  effect changed it (`renamed`).
 
 An `ObjectId` is opaque. It cannot be built from a number, and tests take ids
 from the game (a permanent's `object`, a zone list, a move's return value)
@@ -996,10 +1279,67 @@ crosses a zone change only as a field of it, with the rule that allows it:
 | --- | --- | --- |
 | CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
 | CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | `CardMoved.object_id` is the successor; `departed` names its exact pre-move appearance for LKI |
-| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact exiled `ObjectId` it applies to; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
+| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | the grant holds the exact `ObjectId` in its permitted zone; casting returns the spell's `ObjectId`, and the spell records the zone it was cast from (`SpellOnStack.cast_from`) |
 | CR 400.7i | an effect that lets a land be played finds the land on the battlefield | the entry batch's `EventResult.moved`, bound when the batch completes (an entry replacement may suspend it first) |
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
+| CR 715.3d | resolving an Adventure can give its caster permission to cast the permanent spell from exile | the selected Adventure replacement grants access to the exact exile successor. Bilbo’s competing exile replacement creates no grant. |
+| [Tarkir: Dragonstorm release notes](https://magic.wizards.com/en/news/feature/tarkir-dragonstorm-release-notes) | an Omen uses its own characteristics while casting and on the stack | Vizier permits Twinmaw Stormbrood from the library. Charring Bite resolves into its owner’s library and shuffles it. A counter or loss of its only target sends it to the graveyard. |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
+
+Yue’s hand permission checks the spell being announced, so it can offer
+Spew Flame from Smaug. Solstice Revelations likewise checks Charring Bite’s
+mana value when it exiles Twinmaw Stormbrood. During targeting, the caster
+sees the chosen spell name in the decision context and its profile in the
+continuation. Both viewers see the spell once it reaches the stack.
+
+Omniscience offers the ordinary hand cast and a cast without paying the mana
+cost whenever both are payable. Additional copies grant the same choice.
+Kicker, bargain, and required sacrifices still apply to the free cast.
+High Fae Trickster changes the timing of an otherwise legal cast. Harbinger of
+the Tides can supply its own flash permission for two more mana, including
+when Omniscience pays its printed cost. If another effect grants flash,
+Harbinger also offers the cast without the surcharge.
+
+Sphinx of Forgotten Lore grants its chosen graveyard card flashback at that
+card’s mana cost until cleanup. The permission survives the Sphinx leaving
+play. A card with printed flashback keeps both prices. Either flashback cast
+exiles the spell when it leaves the stack.
+
+On its controller’s turn, Iroh, Grand Lotus grants graveyard Lessons flashback
+for {1} and other instants and sorceries flashback for their mana cost. A
+creature with an Adventure in the graveyard still needs another permission to
+cast either face.
+
+Casting the top card with Vizier of the Menagerie or Planetarium of Wan Shi
+Tong moves each remembered library position up by one. A player who scried
+the second card knows the new top. That knowledge stays private.
+
+When Etali, Primal Storm attacks, its controller exiles the top card of each
+library. They can cast the eligible spells in either order for free, or stop
+and leave the remaining cards in exile. Choosing Charring Bite from an exiled
+Twinmaw Stormbrood asks for its target. Once the cast commits, Etali offers
+the remaining spell before anyone receives priority. The last spell cast
+resolves first.
+
+Volcanic Torrent’s cascade stops at the first nonland card with mana value
+below five. If it finds Scavenger Regent, the chooser can cast Regent, cast
+Exude Toxin at X=0, or decline. The resulting spell must also have mana
+value below five.
+
+Targeting Scavenger Regent with an opposing spell or ability triggers ward.
+The spell or ability’s controller can discard a card of their choice to keep the spell or ability
+on the stack. Declining counters it.
+
+Exude Toxin costs {X}{B}{B}. At X=1 its stack mana value is 3. Casting it
+without paying its mana cost fixes X at zero, spends no mana, and gives it
+stack mana value 2. Both viewers can inspect this value. The v11 stack row
+keeps the selected printing’s base value in `mana_value` and reports the
+on-stack value in `effective_mana_value`.
+
+A spell cast from a prepared copy is a prepared spell; one cast with flashback
+is exiled as it leaves the stack. Both facts belong to the cast, so a copy of
+the spell has neither. Observations, the v11 stack row (`from_prepared`,
+`flashback`), the text and Academy's stack entries show them to both viewers.
 
 Entry replacements supply instructions for the new object, rather than facts
 carried from the old one. An "enters as a copy" choice (CR 614.1c) supplies
@@ -1071,11 +1411,12 @@ a token or copy is created, and a zone change allocates nothing.
 Slots are private to the store, the zone lists and the match-state hash. Cards
 take the first slots in setup order (main decks, then sideboards), followed by
 tokens and copies in creation order, which is the numbering recorded states
-already use. The match-state hash stays at version 16 and its bytes do not
-change: a field recorded as a row number writes its slot, and a field recorded
-as `{"entity", "incarnation"}` writes slot and generation under those keys.
-Version 16 therefore cannot tell a current id from a stale one in the fields
-that used to hold a bare row; the next hash version writes whole ids.
+already use. A field recorded as a row number writes its slot, and a field
+recorded as `{"entity", "incarnation"}` writes slot and generation under those
+keys. The match-state hash therefore cannot tell a current id from a stale one
+in the fields that used to hold a bare row; a later hash version writes whole
+ids. Version 17 adds, with whole ids, the object that produced each pooled
+unit of mana and each unit a payment spent.
 Observations, replays and the Python API are unchanged.
 
 ### Zones
@@ -1108,7 +1449,31 @@ for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() 
 let zone = game.state.zones.zone_of(game.state.object_of(card));
 ```
 
-A token or copy that leaves the battlefield or stack is briefly in another
+A prepared permanent links its battlefield appearance to a spell copy in exile.
+The copy belongs to the controller at preparation. Its casting permission follows
+the permanent’s current controller. Both viewers see the current caster and the
+`follows_source_controller` term before control changes. If Agent of Treachery takes Blossom-Blessed
+Angel, its new controller can pay for the linked Seed Suture and cast it during
+their main phase with an empty stack. Emergency Phytomedic’s controller can
+still cast its own Seed Suture. Casting moves the copy to the stack and ends the
+link, even if the spell is subsequently countered. A source that leaves the
+battlefield loses its link, and the next state-based check removes the exile copy.
+A returning Angel creates a fresh copy. A Command bound to the departed Angel
+is stale even when submitted at the current decision revision.
+
+Skycoach Waypoint can target any creature. When its ability resolves, a creature
+with a prepare spell and no linked copy gains one. Preparing it again keeps the
+same copy and permission. The three FRA creatures that prepare during upkeep
+check the link both when upkeep begins and when their trigger resolves.
+Infinite Coursework taps and unprepares its attached creature when the Aura’s
+entry trigger resolves. Only that creature’s linked copy ceases to exist.
+
+Emeritus of Truce gives the chosen player a flying Inkling before comparing
+creature counts. Its trigger can prepare only the battlefield appearance that
+triggered it. Its prepared Swords to Plowshares exiles the target creature
+and uses its last known power for the life its controller gains.
+
+An ordinary token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
 a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps
@@ -1171,6 +1536,23 @@ when nothing remains. State-based actions discovered together share one
 pre-batch trigger snapshot and commit in `ObjectId` order; a stale id
 is rejected rather than followed after a zone change.
 
+Time Stop and Sundial of the Infinite end the turn during resolution. The
+engine drops earlier waiting triggers, exiles the stack, and checks state-based
+actions while still in the interrupted step. A required legend choice pauses
+the procedure there. New triggers wait until cleanup, after the active player
+discards and marked damage clears. If a player gets priority in cleanup,
+another cleanup step follows. Combat-only control ends when combat ends.
+Turn-long control applies to every cleanup discard that turn.
+
+The Dominion Bracelet locks its activation price using the equipped creature’s
+power. When several Bracelets grant that ability, each offer identifies the
+Bracelet it exiles. The payment receipt retains that object and the mana spent,
+even if the ability is countered. Construct a Cosmic Cube puts its sacrifice
+trigger on the stack when a placement crosses seven plan counters. A successful
+sacrifice puts a separate targeted control trigger on the stack. Once either
+card’s control effect resolves, the chooser makes decisions during the targeted
+opponent’s next turn using that opponent’s resources.
+
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
 Replacement and prevention definitions from the immutable card definitions
@@ -1183,13 +1565,19 @@ order is deterministic so replay, training and search stay exact, and a card
 that needs more stays unsupported rather than approximated.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
-with a `PaymentCost` (mana, or waterbend taps against a generic obligation) and
-`if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
-remaining cost and the exact objects already contributed, and completion
+with a `PaymentCost` (mana, waterbend taps against a generic obligation, or
+life) and `if_paid` / `if_declined` effect lists. `PaymentProgress` owns the payer, the
+`CostComponent` still owed and a `PaymentReceipt` of what has paid, the same
+two records a cast or activation keeps: `CostComponent::resolving` is the one
+place the definition's cost becomes what is owed, and a waterbend tap or a
+life payment is the step an announced cost takes. Completion
 prepends exactly one branch to the effect frame; counter-unless-paid uses the
 same progress with the spell's controller as payer. A mana ability activated
 during payment stays committed if the payment is then declined, and waterbend
-taps are cost payment, never tapping for mana. People and policies see the same
+taps are cost payment, never tapping for mana. A life cost ("Ward—Pay 7
+life.") is one action: Pay is offered only to a player whose life total is at
+least the amount (CR 119.4) and loses the life at once, under manual and
+automatic payment alike; no mana ability is offered for it. People and policies see the same
 native offers (pay or not, waterbend, modal colors, discard), with no
 human-only payment flow.
 
@@ -1200,7 +1588,7 @@ The engine has no world label. `managym.world_identity()`
 digest; checkpoints, recordings and evaluation records written before the
 label was removed still carry one, which nothing compares
 ([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
-removed in 0.4.0. Which checkpoints load is
+removed in 0.3.0. Which checkpoints load is
 [compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
 which measurements line up is
 [evaluation](evaluation.md#comparing-measurements-across-revisions).

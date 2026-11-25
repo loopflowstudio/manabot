@@ -29,6 +29,8 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
+from managym import SlotLoad
+from tests.fixtures.dense_collector import dense_collector
 from tests.model.prepared_routes import device_input
 
 
@@ -53,8 +55,16 @@ class ScriptedGames:
         for row, position in enumerate(self.positions):
             self.buffers["agent_player"][row, 0, 0] = 10 * row + position
 
+    def load_slots_into_buffers(self, requests: list[SlotLoad]) -> None:
+        for request in requests:
+            self.positions[request.slot] = 0
+        self._encode()
+
     def current_agent_indices(self) -> list[int]:
-        return [self.seats[row][pos] for row, pos in enumerate(self.positions)]
+        return [
+            seats[pos] if pos < len(seats) else -1
+            for seats, pos in zip(self.seats, self.positions, strict=True)
+        ]
 
     def step_into_buffers(self, actions: list[int], active: list[bool]) -> None:
         self.buffers["terminated"].fill(0)
@@ -65,7 +75,6 @@ class ScriptedGames:
             self.steps[row] += 1
             self.positions[row] += 1
             if self.positions[row] == len(self.seats[row]):
-                self.positions[row] = 0
                 self.buffers["terminated"][row] = 1
         self._encode()
 
@@ -101,7 +110,7 @@ def _collector(
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
-        collector._env = ScriptedGames(collector._buffers)
+        collector._env = ScriptedGames(dense_collector(collector))
     return collector
 
 

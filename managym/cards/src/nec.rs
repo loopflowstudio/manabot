@@ -30,6 +30,7 @@ fn release_to_memory() -> CardDefinition {
                     EffectValue::Objects {
                         of: Box::new(ObjectSelector::Moved),
                         predicate: Some(CardPredicate::creature()),
+                        in_zone: None,
                     },
                 ),
             ],

@@ -1,7 +1,8 @@
 //! Odyssey.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
+        TriggerCondition,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility,
@@ -13,7 +14,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![entomb(), standstill(), tarnished_citadel()]
+    vec![zombify(), entomb(), standstill(), tarnished_citadel()]
 }
 
 fn entomb() -> CardDefinition {
@@ -93,6 +94,28 @@ fn tarnished_citadel() -> CardDefinition {
                 ],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn zombify() -> CardDefinition {
+    let text_box = "Return target creature card from your graveyard to the battlefield.";
+    CardDefinition {
+        key: "ody.zombify",
+        scryfall_id: "513a2a6f-9ae6-42cb-b75f-6b45fc35f36e",
+        printed: PrintedCharacteristics {
+            name: "Zombify".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::return_to_battlefield(
+                ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                    predicate: CardPredicate::creature(),
+                }),
+                false,
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

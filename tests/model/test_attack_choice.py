@@ -71,7 +71,12 @@ def test_native_attack_choice_can_learn_either_preference(
             assert float(logits.softmax(-1)[0, preferred]) > 0.95
             swapped, _ = agent(
                 device_input(
-                    agent, reorder_offers(attack_observation, torch.tensor([1, 0]))
+                    agent,
+                    reorder_offers(
+                        attack_observation,
+                        torch.tensor([1, 0]),
+                        agent.observation_space.layout,
+                    ),
                 )
             )
             torch.testing.assert_close(swapped[:, :2], logits[:, [1, 0]])
@@ -89,6 +94,8 @@ def test_native_attack_choice_can_learn_either_preference(
 def test_old_checkpoint_is_rejected_before_loading_weights(
     tmp_path: Path, old_world: str, width: int
 ) -> None:
+    """Narrower saved action columns are a readable prefix; the binding admits
+    them, and the missing tensors are refused before any weights load."""
     space = ObservationSpace()
     binding = checkpoint_world(Match().to_rust(), space)
     binding["world"] = old_world
@@ -99,11 +106,33 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
             "world_binding": binding,
             "hypers": {
                 "agent_hypers": ModelConfig().model_dump(),
-                "observation_hypers": space.encoder.config.model_dump(),
+                "observation_hypers": space.config.model_dump(),
             },
             "model_state_dict": {},
         },
         path,
     )
-    with pytest.raises(ValueError, match=f"actions 512x{width} -> 512x"):
+    with pytest.raises(ValueError, match="no player projection weights"):
+        load_checkpoint(str(path))
+
+
+def test_wider_saved_columns_are_rejected_before_loading_weights(
+    tmp_path: Path,
+) -> None:
+    space = ObservationSpace()
+    binding = checkpoint_world(Match().to_rust(), space)
+    binding["input_schema"]["actions"]["shape"][-1] += 1
+    path = tmp_path / "wider.pt"
+    torch.save(
+        {
+            "world_binding": binding,
+            "hypers": {
+                "agent_hypers": ModelConfig().model_dump(),
+                "observation_hypers": space.config.model_dump(),
+            },
+            "model_state_dict": {},
+        },
+        path,
+    )
+    with pytest.raises(ValueError, match="incompatible actions columns"):
         load_checkpoint(str(path))

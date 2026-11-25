@@ -1,9 +1,13 @@
 """Recipes use Etude run inputs and keep downstream policy provenance."""
 
+from collections.abc import Callable
 import hashlib
+import math
 from pathlib import Path
+from typing import Literal
 
 from etude.experiment import observe
+import numpy as np
 import pytest
 
 from experiments import belief
@@ -12,18 +16,22 @@ from manabot.belief.sampling_data import read_dataset
 from manabot.recipes import elemental
 from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
+from manabot.recipes.local import LocalConfig
 from manabot.training.loops.self_play import (
     CLOCKS,
     Counts,
     create,
+    fresh_iteration,
     root_match,
     self_play,
     write_policy,
 )
 from manabot.training.rollout.selection_data import (
     SelectionDataset,
+    SelectionDraw,
     SelectionGameSpec,
     collect_selection,
+    selection_prediction,
 )
 from tests.fixtures.training_records import recording
 
@@ -44,6 +52,38 @@ def test_elemental_records_games_for_one_update(
         )
     )
     assert any(path.stat().st_size for path in (out / "games").glob("*.jsonl"))
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        lambda: LocalConfig(backend="mlx", device="cuda"),
+        lambda: elemental.ElementalConfig(backend="mlx", device="cuda"),
+        lambda: elemental.ElementalConfig(backend="mlx", validate_numerics=True),
+    ],
+)
+def test_recipe_refuses_backend_device_before_opening_a_run(
+    config: Callable[[], object],
+) -> None:
+    # A refusal inside `track` would leave a failed run the corrected config cannot reuse.
+    with pytest.raises(ValueError):
+        config()
+
+
+def test_torch_live_tokens_refused_before_creating_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = elemental.settings(elemental.ElementalConfig(device="cpu")).model_copy(
+        update={"live_tokens": True}
+    )
+    out = tmp_path / "training"
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        fresh_iteration(settings, backend=TORCH, seed=1, out=out)
+    assert not out.exists()
+    monkeypatch.setattr(elemental, "settings", lambda config: settings)
+    monkeypatch.setattr(elemental, "track", lambda **kwargs: pytest.fail("opened run"))
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        elemental.train(elemental.ElementalConfig(device="cpu"))
 
 
 def test_belief_sampler_uses_given_policy_and_restarts_its_work(
@@ -83,7 +123,36 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
     dataset = read_dataset(tmp_path / "sampler/histories.json")
     assert dataset.policy_identity == hashlib.sha256(original).hexdigest()
     assert policy.read_bytes() == original
-    assert (tmp_path / "sampler/belief.pt").is_file()
+    assert (tmp_path / "sampler/belief.safetensors").is_file()
+
+
+@pytest.mark.parametrize(
+    ("reference", "expected_kl"),
+    [
+        ("uniform", 0.5 * math.log(1.5) + 0.5 * math.log(0.75)),
+        ("action_type_uniform", 0.25 * math.log(2)),
+    ],
+)
+def test_selection_statistics_follow_the_draw_and_legal_offer_types(
+    reference: Literal["uniform", "action_type_uniform"], expected_kl: float
+) -> None:
+    # The first two offers share a type. The final slot is padding.
+    encoded = {
+        "actions": np.eye(2)[[0, 0, 1, 1]],
+        "actions_valid": np.array([1, 1, 1, 0]),
+    }
+    prediction = selection_prediction(
+        SelectionDraw(2, -0.75, np.array([0.5, 0.25, 0.25, 0], dtype=np.float32)),
+        encoded,
+        reference,
+    )
+    assert (prediction.action, prediction.value, prediction.probability) == (
+        2,
+        -0.75,
+        0.25,
+    )
+    assert prediction.entropy == pytest.approx(1.5 * math.log(2))
+    assert prediction.reference_kl == pytest.approx(expected_kl)
 
 
 def test_selection_step_keeps_replayed_population_and_refuses_stale_output(

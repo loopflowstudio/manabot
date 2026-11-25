@@ -229,12 +229,19 @@ played, **Evaluation game**, one played afterwards to measure policies, or
 **Recorded game** for a record that says neither.
 
 Any game managym recorded opens this way with only `managym` installed: your
-own loop's ([Record games](engine-python.md#record-games)), a training run's
-or an evaluation's. A record holds the seed, both setups and the actions, so
+own loop's ([Record games](engine-python.md#record-games)), a training run's,
+an evaluation's, or a private snapshot replay exported by
+`GameSnapshot.to_replay_json()` ([Save and restore game positions](engine-python.md#save-and-restore-game-positions)).
+A record holds the seed, both setups, the actions, and any recorded boundary
+interventions (such as library reshuffles or determinizations), so
 Academy plays the game again through the engine, checks the recorded state
-digest before every decision, and saves what it verified to this traces
-directory as a finished recording. It runs no policy and loads no checkpoint,
-and it never changes the file. Opening the same game again returns to the
+digests wherever the source retained them, and saves what it verified to this traces
+directory as a finished recording. A snapshot replay carries its final digest.
+It opens as a **Recorded game**. The acting view hides the opponent’s hand.
+**Show both hands** includes both hands in the spectator response. The board
+draws the bottom seat’s cards and shows the top seat’s hand count. Branch
+seeds stay private in either view.
+Replay runs no policy, loads no checkpoint, and never changes the file. Opening the same game again returns to the
 recording made the first time. At each choice the panel shows what the chooser
 recorded about it (the probability of each legal action, the value and the
 update number) and **not retained** for whatever it did not record.
@@ -342,7 +349,7 @@ with serve(port=0) as academy:
   `RecordedGame` values (`index`, `seed`, `stream`, `players`,
   `decisions`, `ended`, `digest`), for choosing one in code. The former
   `deal_seed`, `leg`, `decks` and `game_trace_sha256` properties warn and are
-  removed in 0.4.0.
+  removed in 0.3.0.
 - `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
   game, setup or replay, subject to the recording access rules above. `academy.open(url)`
   opens it in the default browser; `academy.open()` opens Academy with no game.
@@ -391,7 +398,7 @@ collector = open_collector(..., games_path=Path("runs/jace/games/0.jsonl"))
 ```
 
 or, with no manabot at all, by stepping through a
-[`ScalarCapture` or `CapturedVector`](engine-python.md#record-games).
+[`ScalarCapture` or `RecordedVectorEnv`](engine-python.md#record-games).
 
 **Who played.** The heading takes the players' names from the record: the
 recipe's learner and opponents, first seat first. In one-model self-play both
@@ -412,7 +419,7 @@ other. Statistics over a recorded fraction describe that fraction
 | `replay.rejected` | The games were recorded in another world or with other card content; the message names the build to use. |
 
 `record_games(...)`, `TrainingGames` and `manabot export-game` still work,
-warn, and are removed in 0.4.0. Receipts and
+warn, and are removed in 0.3.0. Receipts and
 exported games they already wrote keep opening.
 
 ### Play a game

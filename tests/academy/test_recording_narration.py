@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from managym.academy import server
-from managym.academy.recording import OwnStep, Recording, narrate_move
+from managym.academy.recording import OwnStep, Recording, narrate_move, own_steps
 
 CONFIG: dict[str, Any] = {
     "hero_deck": {"Island": 20},
@@ -331,4 +331,44 @@ def test_a_reveal_is_the_move_another_seat_made() -> None:
             [own("learn", 0, "Take Kyoshi Warriors")],
         )
         == "Learn: take Kyoshi Warriors"
+    )
+
+
+def assignment(actor: int, chosen: int, *offers: str) -> dict[str, Any]:
+    return {
+        "actor": actor,
+        "action": chosen,
+        "action_description": offers[chosen],
+        "actions": [{"type": "CHOOSE_MODE", "description": o} for o in offers],
+        "observation": {"decision_context": {"stage": "assign_combat_damage"}},
+    }
+
+
+def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
+    elves = tuple(
+        f"Colossal Dreadmaw assigns {n} to Llanowar Elves, {6 - n} left to assign"
+        for n in range(7)
+    )
+    bears = tuple(
+        f"Colossal Dreadmaw assigns {n} to Grizzly Bears, {4 - n} to defending player"
+        for n in range(2, 5)
+    )
+    events = [
+        {
+            "actor": 1,
+            "action": 0,
+            "action_description": "Pass priority",
+            "actions": [{"type": "PRIORITY_PASS_PRIORITY"}],
+            "observation": {"decision_context": {"stage": "priority"}},
+        },
+        assignment(0, 2, *elves),
+        assignment(0, 0, *bears),
+    ]
+    assigning = board("assign_combat_damage")
+    assert narrate_move(assigning, assigning, [], own_steps(events, 1)) is None
+    steps = own_steps(events, 2)
+    assert [step.chosen for step in steps] == [elves[2], bears[0]]
+    assert narrate_move(assigning, board("priority"), [], steps) == (
+        "Colossal Dreadmaw assigns 2 to Llanowar Elves, 4 left to assign, "
+        "Colossal Dreadmaw assigns 2 to Grizzly Bears, 2 to defending player"
     )

@@ -1,9 +1,12 @@
 """Whole-prefix memories reach both heads and survive ordinary policy tooling."""
 
+from dataclasses import asdict, replace
+import json
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
+from pydantic import TypeAdapter
 import pytest
 import torch
 
@@ -13,10 +16,12 @@ from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.collection import CollectionSession
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.decision_memory import blank_memory, encode_records
+from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.policy.admission import admit_native
+from manabot.policy.prepare import RecordNamespace, record_key
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     close_collector,
@@ -33,7 +38,27 @@ from managym.decision_memory import (
 )
 
 
-def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+def encode_with_records(
+    space: ObservationSpace,
+    obs: managym.Observation,
+    records: list[DecisionRecord],
+) -> dict[str, np.ndarray]:
+    """`obs` restored with `records` as its decision memory, encoded natively.
+
+    A decoded log starts a fresh lineage, so the whole log is written.
+    """
+    payload = json.loads(obs.toJSON())
+    payload["decision_memory"] = TypeAdapter(list[DecisionRecord]).dump_python(
+        records, mode="json"
+    )
+    encoded = dict(
+        encode_observation(space, managym.Observation.from_json(json.dumps(payload)))
+    )
+    assert int(encoded["decision_records"].any(axis=1).sum()) == len(records)
+    return encoded
+
+
+def memory_root() -> tuple[ObservationSpace, managym.Observation]:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=4,
@@ -44,7 +69,11 @@ def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
     )
     env = managym.Env(seed=111)
     env.reset(Match().to_rust())
-    encoded = dict(space.encode(env.observation_for_player(env.current_agent_index())))
+    return space, env.observation_for_player(env.current_agent_index())
+
+
+def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+    space, obs = memory_root()
     record = DecisionRecord(
         actor=2,
         ordinal=0,
@@ -72,7 +101,7 @@ def memory_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
             references=[],
         ),
     )
-    encoded.update(encode_records([record], 4, 1024, 1024, 16384))
+    encoded = encode_with_records(space, obs, [record])
     return space, {key: value[None] for key, value in encoded.items()}
 
 
@@ -386,7 +415,7 @@ def test_memory_admission_rejects_invalid_live_and_padding_values(
 
 
 def _shared_reference_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
-    space, obs = memory_input()
+    space, root = memory_root()
     reference = DecisionReference(
         role=2,
         definition=None,
@@ -429,13 +458,8 @@ def _shared_reference_input() -> tuple[ObservationSpace, dict[str, np.ndarray]]:
             references=[],
         ),
     )
-    obs.update(
-        {
-            key: value[None]
-            for key, value in encode_records([record], 4, 1024, 1024, 16384).items()
-        }
-    )
-    return space, obs
+    encoded = encode_with_records(space, root, [record])
+    return space, {key: value[None] for key, value in encoded.items()}
 
 
 def test_decision_memory_snapshot_routes_preserve_groups_repetitions_and_empty_viewer() -> (
@@ -776,9 +800,7 @@ def test_no_head_admission_respects_own_seat_configuration(include_own: bool) ->
 
     space, obs = _shared_reference_input()
     space = ObservationSpace(
-        space.encoder.config.model_copy(
-            update={"decision_memory_include_own": include_own}
-        )
+        space.config.model_copy(update={"decision_memory_include_own": include_own})
     )
     obs["decision_records"][0, 0, 18] = 1
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
@@ -804,3 +826,42 @@ def test_no_head_admission_rejects_changed_companion_capacity(field: str) -> Non
     control = ActorCritic(space, ModelConfig(world=managym.WORLD_SETUP, hidden_dim=16))
     with pytest.raises(ValueError, match="capacity mismatch"):
         control.prepare(obs)
+
+
+def test_native_memory_spans_prepare_the_same_chronological_records() -> None:
+    space, _ = memory_root()
+    env = managym.Env(seed=111, decision_memory=True)
+    env.reset(Match().to_rust())
+    # Adjacent float32 numbers above 2**24 are two integers apart.
+    env.scenario_set_life(0, 16_777_217)
+    env.scenario_set_life(1, 16_777_219)
+    early = env.clone_env()
+    for _ in range(4):
+        env.step(0)
+    games = [early, env]
+    batch = managym.encode_observation_batch(games, space.layout)
+    dense = space.allocate(len(games))
+    managym.encode_observations_into(games, space.layout, dense, len(games))
+    dtype = np.dtype(
+        [
+            (name, dtype)
+            for name, dtype, _ in space.layout.csr_fields["decision_records"]
+        ]
+    )
+    records = np.frombuffer(batch.tables()["decision_records"][2], dtype)
+    assert records["life_viewer"].dtype == np.int32
+    assert set(records["life_viewer"]) | set(records["life_opponent"]) == {
+        16_777_217,
+        16_777_219,
+    }
+    assert np.all(records["valid"] == 1)
+    model = policy(space, "gru", 1)
+    packed = model.prepare(batch)
+    assert packed.memory is not None
+    np.testing.assert_equal(asdict(packed), asdict(model.prepare(dense)))
+    spec = model._admission_spec()
+    key = record_key(RecordNamespace.TOKEN, records["kind"][:1])[0]
+    keys = spec.tables.record_name_keys
+    incomplete = replace(spec.tables, record_name_keys=keys[keys != key])
+    with pytest.raises(ValueError, match="outside the record vocabulary"):
+        admit_native(batch, replace(spec, tables=incomplete), bucketed=False)

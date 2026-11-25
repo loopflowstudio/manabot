@@ -2,6 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup},
+    inspect::offered_targets,
     play::{activate, cast, choose, offers_ability, settle, target_opponent},
 };
 use managym::{
@@ -14,7 +15,8 @@ use managym::{
 };
 
 /// Diaochan's controller chooses the first target and the opponent the
-/// second (here the controller's own creature); both are destroyed. It is
+/// second (here the controller's own creature, though Diaochan itself is
+/// offered); both are destroyed. It is
 /// offered only on its controller's turn before attackers are declared.
 #[test]
 fn diaochan_destroys_a_creature_of_each_players_choice() {
@@ -32,6 +34,10 @@ fn diaochan_destroys_a_creature_of_each_players_choice() {
         s.action_space().player,
         Some(PlayerId(1)),
         "the opponent chooses the second target"
+    );
+    assert!(
+        offered_targets(&s).contains(&Target::Permanent(diaochan)),
+        "the opponent may choose Diaochan itself"
     );
     assert!(s.choose_target(Target::Permanent(mine)));
     settle(&mut s);

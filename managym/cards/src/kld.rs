@@ -1,16 +1,62 @@
 //! Kaladesh.
-use managym_state::{
-    ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject,
-    },
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
-    mana::ManaCost,
-    predicate::CardPredicate,
+use managym_state::ability::{
+    Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Scope,
+    TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
 };
+use managym_state::card::{
+    ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+    PrintedCharacteristics, StaticAbility,
+};
+use managym_state::effect::Modification;
+use managym_state::mana::{Mana, ManaCost};
+use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![dramatic_reversal(), noxious_gearhulk()]
+    vec![
+        cultivators_caravan(),
+        dramatic_reversal(),
+        fumigate(),
+        noxious_gearhulk(),
+        cloudblazer(),
+        brazen_scourge(),
+        authority_of_the_consuls(),
+    ]
+}
+
+fn cultivators_caravan() -> CardDefinition {
+    let text_box = "{T}: Add one mana of any color.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)";
+    CardDefinition {
+        key: "kld.cultivators_caravan",
+        scryfall_id: "b46b3726-4bc8-4e3a-bc6d-402c81663712",
+        printed: PrintedCharacteristics {
+            name: "Cultivator's Caravan".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(5),
+            toughness: Some(5),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(
+                        ["W", "U", "B", "R", "G"].map(Mana::parse),
+                    )],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    crew: Some(3),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::BecomeCreature,
+                    )],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn dramatic_reversal() -> CardDefinition {
@@ -29,6 +75,29 @@ fn dramatic_reversal() -> CardDefinition {
                 },
             ))],
             text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fumigate() -> CardDefinition {
+    let text_box = "Destroy all creatures. You gain 1 life for each creature destroyed this way.";
+    CardDefinition {
+        key: "kld.fumigate",
+        scryfall_id: "f00f27a7-9e92-4fbf-baa8-f47a5eee48a6",
+        printed: PrintedCharacteristics {
+            name: "Fumigate".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            text_box: text_box.into(),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::each(
+                    Scope::Battlefield,
+                    CardPredicate::creature(),
+                )),
+                Effect::gain_life(ObjectSelector::Moved.count()),
+            ],
             ..Default::default()
         },
         ..Default::default()
@@ -54,10 +123,7 @@ fn noxious_gearhulk() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(TargetSpec::Creature)
-                    },
+                    requirement: TargetRequirement::another(TargetSpec::Creature),
                     effects: vec![Effect::OptionalPayment {
                         cost: PaymentCost::Mana(ManaCost::default()),
                         if_paid: vec![
@@ -73,6 +139,71 @@ fn noxious_gearhulk() -> CardDefinition {
                     }],
                 }],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn authority_of_the_consuls() -> CardDefinition {
+    CardDefinition {
+        key: "kld.authority_of_the_consuls",
+        scryfall_id: "324b2f55-1e09-490e-8f7e-bfde85a91ac4",
+        printed: PrintedCharacteristics {
+            name: "Authority of the Consuls".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::OpponentsEnterTapped(CardPredicate::creature())],
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::matching(Actor::Opponent, CardPredicate::creature(), false),
+                vec![Effect::gain_life(1)],
+            )],
+            text_box: "Creatures your opponents control enter tapped.\nWhenever a creature an opponent controls enters, you gain 1 life.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn brazen_scourge() -> CardDefinition {
+    let text_box =
+        "Haste (This creature can attack and {T} as soon as it comes under your control.)";
+    CardDefinition {
+        key: "kld.brazen_scourge",
+        scryfall_id: "68c6fbdb-7b5c-4ad0-88f5-4779deae16ce",
+        printed: PrintedCharacteristics {
+            name: "Brazen Scourge".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Gremlin".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn cloudblazer() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, you gain 2 life and draw two cards.";
+    CardDefinition {
+        key: "kld.cloudblazer",
+        scryfall_id: "3cb12355-abd8-4bf3-aac1-f710ac162585",
+        printed: PrintedCharacteristics {
+            name: "Cloudblazer".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Scout".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::This,
+                vec![Effect::gain_life(2), Effect::DrawCards { count: 2.into() }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -81,9 +81,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').focus();
   await page.getByTestId('opponent-select').selectOption('random');
+  // This deal's only playable opening card is the rightmost card in hand.
+  await page.getByRole('combobox', { name: 'Deal mode' }).selectOption('repeat');
+  await page.getByLabel('Seed', { exact: true }).fill('1467515640');
   await page.getByRole('button', { name: 'Start game', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-testid=game][data-live=true]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('action-option').first()).toContainText('Keep hand');
+  await page.keyboard.press('1');
+  await expect(page.getByTestId('action-panel')).toHaveAttribute('data-action-space-kind', 'PRIORITY');
 
   // Tab visits the regions in reading order, each once, one stop per region,
   // and leaves them only for the top bar's controls and the stop bar (one
@@ -102,14 +108,15 @@ test('a game is played from the keyboard alone', async ({ page }) => {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 
-  // Arrows move within a region: the hand's cards one by one.
-  expect(await reach(page, /^Your hand/, /./)).toBe(true);
-  const { index: first, count } = await focused(page);
-  expect(count).toBeGreaterThan(1);
-  await page.keyboard.press(first < count - 1 ? 'ArrowRight' : 'ArrowLeft');
-  const second = await focused(page);
-  expect(second.region).toMatch(/^Your hand/);
-  expect(second.index).not.toBe(first);
+  // From the rightmost card, both arrows move one card within the hand.
+  expect(await reach(page, /^Your hand/, /^Mountain .*Play Mountain/)).toBe(true);
+  const { region: hand, index: rightmost, count } = await focused(page);
+  expect(rightmost).toBeGreaterThan(0);
+  expect(rightmost).toBe(count - 1);
+  await page.keyboard.press('ArrowLeft');
+  expect(await focused(page)).toMatchObject({ region: hand, index: rightmost - 1 });
+  await page.keyboard.press('ArrowRight');
+  expect(await focused(page)).toMatchObject({ region: hand, index: rightmost });
 
   // Several decisions: a land from the hand, attacks on the field, Space for the rest.
   let byEnter = 0;

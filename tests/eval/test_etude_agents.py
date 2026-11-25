@@ -13,7 +13,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import Sampler, build, game_players, registration
@@ -67,7 +67,7 @@ def test_loader_batches_prepared_rows_without_sampling(
     model = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     match = Match()
     monkeypatch.setattr(
-        "manabot.backends.torch.checkpoint.checkpoint_source",
+        "manabot.policy.checkpoint.checkpoint_source",
         lambda: {"commit": "a" * 40},
     )
     path = tmp_path / "policy.safetensors"
@@ -206,7 +206,9 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
     assert isinstance(sampler, Sampler)
     rows = []
     for env in (shared_effect_root(1), kellan_upgrade_root()):
-        obs = space.encode(env.observation_for_player(env.current_agent_index()))
+        obs = encode_observation(
+            space, env.observation_for_player(env.current_agent_index())
+        )
         rows.append(
             prepare(
                 {k: v[None] for k, v in obs.items()},

@@ -3,13 +3,17 @@
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pytest
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, allocate_vector_buffers
 import managym
 from managym.card_capture import CapturedCards
-from managym.recording import CapturedVector, PlayerSetup, ScalarCapture, read_records
+from managym.recording import (
+    PlayerSetup,
+    RecordedVectorEnv,
+    ScalarCapture,
+    read_records,
+)
 from managym.replay import RecordedDecision, ReplayStop, walk
 from managym.statistics import (
     AnalysisFailure,
@@ -41,19 +45,15 @@ def players() -> list[managym.PlayerConfig]:
     return [managym.PlayerConfig(str(seat), {"Mountain": 12}) for seat in (0, 1)]
 
 
-def buffers(vector: CapturedVector, count: int) -> None:
-    arrays = ObservationSpace().encoder.allocate(count)
-    arrays.update(
-        rewards=np.zeros(count),
-        terminated=np.zeros(count, dtype=np.uint8),
-        truncated=np.zeros(count, dtype=np.uint8),
-    )
-    vector.set_buffers(arrays)
+def buffers(vector: RecordedVectorEnv, count: int) -> None:
+    space = ObservationSpace()
+    arrays = allocate_vector_buffers(space, count)
+    vector.set_buffers(arrays, layout=space.layout)
 
 
 def test_vector_games_and_masked_history_equal_offline_analysis(tmp_path: Path) -> None:
     path = tmp_path / "games.jsonl"
-    vector = CapturedVector(
+    vector = RecordedVectorEnv(
         num_envs=2,
         seed=7,
         games_path=path,
@@ -63,16 +63,18 @@ def test_vector_games_and_masked_history_equal_offline_analysis(tmp_path: Path) 
     vector.reset_all_into_buffers(players())
     completed = [0, 0]
     for _ in range(1000):
-        before = vector.current_game_generations()
         vector.step_into_buffers(
             [0, 0],
             [n < 2 for n in completed],
             annotations=[{"extra": {"update": 42}}, None],
         )
-        after = vector.current_game_generations()
-        completed = [
-            n + int(a != b) for n, a, b in zip(completed, before, after, strict=True)
-        ]
+        reloads = []
+        for slot, chooser in enumerate(vector.current_agent_indices()):
+            if completed[slot] < 2 and chooser == -1:
+                completed[slot] += 1
+                if completed[slot] < 2:
+                    reloads.append(managym.SlotLoad.fresh(slot))
+        vector.load_slots_into_buffers(reloads)
         if min(completed) == 2:
             break
     assert completed == [2, 2]
@@ -88,7 +90,9 @@ def test_vector_games_and_masked_history_equal_offline_analysis(tmp_path: Path) 
 
 
 def test_unrecorded_vector_questions_follow_resets_and_active_mask() -> None:
-    vector = CapturedVector(num_envs=2, seed=7, record_fraction=0, reducers=[History()])
+    vector = RecordedVectorEnv(
+        num_envs=2, seed=7, record_fraction=0, reducers=[History()]
+    )
     buffers(vector, 2)
     vector.reset_all_into_buffers(players())
     vector.step_into_buffers([0, 0], [True, False])
@@ -97,10 +101,10 @@ def test_unrecorded_vector_questions_follow_resets_and_active_mask() -> None:
     vector.close()
     assert sorted(vector.rows()[0]) == sorted(
         [
-            (1, 0, "interrupted", 2),
-            (0, 0, "interrupted", 1),
-            (0, 0, "interrupted", 1),
-            (1, 1, "interrupted", 2),
+            (1, 0, "interrupted", 0),
+            (0, 0, "interrupted", 0),
+            (0, 0, "interrupted", 0),
+            (1, 1, "interrupted", 0),
         ]
     )
 
@@ -124,7 +128,7 @@ def test_unused_vector_hooks_do_not_read_observations(
             return getattr(self.native, name)
 
     monkeypatch.setattr(managym, "VectorEnv", NoAnalysisReads)
-    vector = CapturedVector(num_envs=1)
+    vector = RecordedVectorEnv(num_envs=1)
     vector.reset_all(players())
     vector.step([0])
     vector.close()
@@ -159,7 +163,7 @@ def test_live_analysis_errors_preserve_scalar_and_vector_records(
             raise ValueError("broken analysis")
 
     path = tmp_path / "vector.jsonl"
-    vector = CapturedVector(num_envs=1, seed=7, games_path=path, reducers=[Broken()])
+    vector = RecordedVectorEnv(num_envs=1, seed=7, games_path=path, reducers=[Broken()])
     vector.reset_all(players())
     vector.step([0])
     vector.close()
@@ -181,7 +185,7 @@ def test_live_analysis_errors_preserve_scalar_and_vector_records(
 
 
 def test_isolated_failure_never_reaches_vector_hook() -> None:
-    vector = CapturedVector(num_envs=2, seed=7, reducers=[History()])
+    vector = RecordedVectorEnv(num_envs=2, seed=7, reducers=[History()])
     buffers(vector, 2)
     vector.reset_all_into_buffers(players())
     vector.step_isolated_into_buffers([9999, 0], [True, True])
@@ -191,17 +195,17 @@ def test_isolated_failure_never_reaches_vector_hook() -> None:
 
 
 def test_root_reassignment_ends_old_reducer_before_starting_new_game() -> None:
-    vector = CapturedVector(num_envs=2, seed=7, reducers=[History()])
+    vector = RecordedVectorEnv(num_envs=2, seed=7, reducers=[History()])
     buffers(vector, 2)
     vector.reset_all_into_buffers(players())
-    vector.reassign_roots_into_buffers([players(), None])
+    vector.load_slots_into_buffers([managym.SlotLoad.fresh(0, players())])
     vector.step_into_buffers([0, 0])
     vector.close()
     assert sorted(row[0] for row in vector.rows()[0]) == [0, 1, 1]
 
 
 def test_strict_batch_failure_marks_analysis_coverage_unknown() -> None:
-    vector = CapturedVector(num_envs=2, seed=7, reducers=[History()])
+    vector = RecordedVectorEnv(num_envs=2, seed=7, reducers=[History()])
     vector.reset_all(players())
     with pytest.raises(managym.AgentError):
         vector.step([9999, 0])

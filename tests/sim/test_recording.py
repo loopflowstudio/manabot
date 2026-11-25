@@ -232,7 +232,7 @@ def test_training_helper_writes_only_canonical_records(
     previous = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
-        with pytest.warns(DeprecationWarning, match="0.4.0"):
+        with pytest.warns(DeprecationWarning, match="0.3.0"):
             with record_games(tmp_path, players=("learner", "learner")) as games:
                 train(MinimalConfig(updates=1, streams=2, decisions=16))
     finally:

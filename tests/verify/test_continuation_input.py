@@ -11,7 +11,13 @@ import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import RELATION_ELIGIBILITY_INDEX, ObservationSpace
+from manabot.env.observation import (
+    ACTION_CONTINUATION_INDEX,
+    RELATION_ELIGIBILITY_INDEX,
+    ObservationSpace,
+    allocate_vector_buffers,
+    encode_observation,
+)
 from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
@@ -35,12 +41,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
     space = ObservationSpace()
-    encoded = [space.encode(obs) for obs in observations]
-    for env, obs, expected in zip(branches, observations, encoded, strict=True):
-        actual = env.encode_observation(obs)
-        assert actual.keys() == expected.keys()
-        for key in actual:
-            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+    encoded = [encode_observation(space, obs) for obs in observations]
     differences = [
         key
         for key in encoded[0]
@@ -63,24 +64,19 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     # Enabling history does not conceal the current-state distinction.
     space = ObservationSpace(ObservationConfig(policy_history_version=1))
     assert not np.array_equal(
-        space.encode(observations[0])["relations"],
-        space.encode(observations[1])["relations"],
+        encode_observation(space, observations[0])["relations"],
+        encode_observation(space, observations[1])["relations"],
     )
 
 
-def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
+def test_native_fixture_mana_outputs_and_other_viewer_safety() -> None:
     space = ObservationSpace()
     for name, env in native_fixtures().items():
         actor = env.current_agent_index()
         assert actor is not None
         for viewer in (actor, 1 - actor):
             observation = env.observation_for_player(viewer)
-            expected = space.encode(observation)
-            actual = env.encode_observation(observation)
-            for key in actual:
-                np.testing.assert_array_equal(
-                    actual[key], expected[key], err_msg=f"{name}: {key}"
-                )
+            encoded = encode_observation(space, observation)
             if name == "mana_color" and viewer == actor:
                 outputs = [
                     output
@@ -93,7 +89,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
                     for color in range(5)
                 }
                 assert all(not any(output.lesson) for output in outputs)
-                assert np.count_nonzero(actual["relations"][:, 0] == 6) == 10
+                assert np.count_nonzero(encoded["relations"][:, 0] == 6) == 10
             if viewer != actor:
                 assert all(frame.kind <= 3 for frame in observation.continuation)
     left, right = collision_branches()
@@ -106,7 +102,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
 
 def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
     space = ObservationSpace()
-    version = space.encoder.config.policy_input_version
+    version = space.config.policy_input_version
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     path = tmp_path / "policy.pt"
@@ -116,7 +112,7 @@ def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
     assert payload["hypers"]["observation_hypers"]["policy_input_version"] == version
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.shapes == space.shapes
-    assert restored_space.encoder.config.policy_input_version == version
+    assert restored_space.config.policy_input_version == version
     assert restored.state_dict().keys() == agent.state_dict().keys()
     for key, value in agent.state_dict().items():
         torch.testing.assert_close(restored.state_dict()[key], value)
@@ -144,7 +140,7 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
         any(frame.kind == 1 for frame in obs.continuation) for obs in observations
     )
     space = ObservationSpace()
-    left, right = [space.encode(obs) for obs in observations]
+    left, right = [encode_observation(space, obs) for obs in observations]
     assert not np.array_equal(left["relations"], right["relations"])
 
 
@@ -192,16 +188,14 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
     for record in _eligibility_evidence():
         capture_json = json.dumps(record.capture)
         capture = DecisionInput.model_validate_json(capture_json)
-        observation = managym.Observation.from_json(
-            json.dumps(_without_active_effects(capture.observation.viewer_state))
-        )
         # Schema 7 intentionally excludes continuation. Join the validated capture
-        # frames only for the stateless reference encoder, never an execution Env.
-        tensors = space.encode(observation)
-        rows = space.encoder._encode_relations(
-            capture.frames, observation.agent.player_index
+        # frames only into a stateless observation, never an execution Env.
+        observation = managym.Observation.from_json(
+            json.dumps(_without_active_effects(capture.observation.viewer_state)),
+            continuation_json=json.dumps(record.capture["frames"]),
         )
-        tensors["relations"] = rows
+        tensors = encode_observation(space, observation)
+        rows = tensors["relations"]
         # The receipt retains the columns through eligibility; X and granted
         # keywords follow them and are empty in these positions.
         retained = RELATION_ELIGIBILITY_INDEX + 1
@@ -279,29 +273,20 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
-def test_scalar_and_vector_buffers_match_the_reference_encoder() -> None:
+def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     space = ObservationSpace()
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     scalar = managym.Env(seed=608, skip_trivial=False)
     observation, _ = scalar.reset(players)
-    expected = space.encode(observation)
-    out = {key: np.zeros_like(value) for key, value in expected.items()}
-    scalar.encode_observation_into(observation, out)
+    expected = encode_observation(space, observation)
+    # Every element is written, padding included.
+    out = {key: np.full_like(value, -7) for key, value in expected.items()}
+    managym.encode_observation_into(observation, space.layout, out)
     for key in out:
         np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
-    buffers = {
-        key: np.zeros((1, *value.shape), dtype=value.dtype)
-        for key, value in expected.items()
-    }
-    buffers.update(
-        {
-            "rewards": np.zeros(1, dtype=np.float64),
-            "terminated": np.zeros(1, dtype=np.uint8),
-            "truncated": np.zeros(1, dtype=np.uint8),
-        }
-    )
-    vector.set_buffers(buffers)
+    buffers = allocate_vector_buffers(space, 1)
+    vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(players)
     for key in expected:
         np.testing.assert_array_equal(buffers[key][0], expected[key], err_msg=key)
@@ -314,7 +299,7 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     torch.manual_seed(195)
     _, raw = ordering_root()
     space = ObservationSpace()
-    encoded = space.encode(raw)
+    encoded = encode_observation(space, raw)
     batch = {
         key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
     }
@@ -332,8 +317,10 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
             rows[0, index + 2] = rows[0, index]
             rows[0, index + 2, 0] = 3
             rows[0, index + 2, 24:26] = index + 1
-    batch["actions"][0, 1, :-2] = batch["actions"][0, 0, :-2]
-    batch["actions"][0, :2, -2] = torch.tensor([1, 2])
+    batch["actions"][0, 1, :ACTION_CONTINUATION_INDEX] = batch["actions"][
+        0, 0, :ACTION_CONTINUATION_INDEX
+    ]
+    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([1, 2])
     batch["action_focus"].fill_(-1)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
     logits, _ = agent(device_input(agent, batch))
@@ -342,14 +329,14 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     reordered["relations"] = rows.flip(1)
     torch.testing.assert_close(agent(device_input(agent, reordered))[0], logits)
     swapped = {key: value.clone() for key, value in batch.items()}
-    swapped["actions"][0, :2, -2] = torch.tensor([2, 1])
+    swapped["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([2, 1])
     torch.testing.assert_close(
         agent(device_input(agent, swapped))[0][0, :2], logits[0, :2].flip(0)
     )
-    batch["actions"][0, :2, -2] = 0
+    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = 0
     ablated, _ = agent(device_input(agent, batch))
     torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
-    batch["actions"][0, 0, -2] = 64
+    batch["actions"][0, 0, ACTION_CONTINUATION_INDEX] = 64
     with pytest.raises(ValueError, match="reference has no frame"):
         device_input(agent, batch)
 
@@ -367,6 +354,7 @@ def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_exported_observation_keeps_complete_policy_input_with_continuation() -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=10))
     for env in collision_branches():
@@ -379,8 +367,8 @@ def test_exported_observation_keeps_complete_policy_input_with_continuation() ->
         )
         assert exported.toJSON() == observation.toJSON()
         assert exported.continuation_json() == observation.continuation_json()
-        expected = space.encode(observation)
-        actual = space.encode(exported)
+        expected = encode_observation(space, observation)
+        actual = encode_observation(space, exported)
         for key in expected:
             np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
         frames = json.loads(observation.continuation_json())

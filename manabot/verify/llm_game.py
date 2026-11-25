@@ -22,12 +22,13 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from manabot.env.match import Match
+from manabot.env.observation import encode_observation
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
 from manabot.model.world import validate_agent_setup
-from manabot.policy.protocol import Backend
+from manabot.policy.protocol import SeededPolicyLoader, SimulationBackend
 from manabot.semantic.text_observation import (
     TextDecision,
     capture_text_decision,
@@ -130,7 +131,9 @@ class CheckpointOpponent:
     offer space must fit the checkpoint encoder; truncation fails closed.
     """
 
-    def __init__(self, path: Path, sha256: str, size: int, *, backend: Backend) -> None:
+    def __init__(
+        self, path: Path, sha256: str, size: int, *, backend: SimulationBackend
+    ) -> None:
         started = time.monotonic()
         verify_file(path, sha256, size)
         self.backend = backend
@@ -149,18 +152,17 @@ class CheckpointOpponent:
         started = time.monotonic()
         actor = env.current_agent_index()
         raw = env.observation_for_player(actor)
-        encoder = self.space.encoder
         if (
-            len(raw.action_space.actions) > encoder.max_actions
+            len(raw.action_space.actions) > self.space.config.max_actions
             or max(len(raw.agent_cards), len(raw.opponent_cards))
-            > encoder.cards_per_player
+            > self.space.config.max_cards_per_player
             or max(len(raw.agent_permanents), len(raw.opponent_permanents))
-            > encoder.perms_per_player
+            > self.space.config.max_permanents_per_player
         ):
             raise ValueError(
                 "checkpoint encoding would truncate native observations or offers"
             )
-        encoded = self.space.encode(raw)
+        encoded = encode_observation(self.space, raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
         index = select_agent_action(self.agent, encoded, deterministic=False)
@@ -272,7 +274,7 @@ def play(
     *,
     progress_path: Path | None = None,
     opponent: CheckpointOpponent | None = None,
-    backend: Backend,
+    backend: SeededPolicyLoader,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
@@ -494,7 +496,7 @@ def play(
     return summary
 
 
-def run(config: GameConfig, *, backend: Backend) -> None:
+def run(config: GameConfig, *, backend: SeededPolicyLoader) -> None:
     """Etude entry point; setup has acquired bytes, so inference is offline."""
     os.environ["HF_HUB_OFFLINE"] = "1"
     inference = InferenceConfig.model_validate_json(config.inference.read_text())

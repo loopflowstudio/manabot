@@ -182,6 +182,27 @@ def test_changed_steps_digest_fails_even_when_faster(tmp_path: Path) -> None:
     assert "| candidate steps digest | 44 | 45 | differs |" in output
 
 
+def test_benchmark_feature_build_fails_by_name(tmp_path: Path) -> None:
+    """A candidate built with allocation counting and layer timers is not timed."""
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(BASE))
+    artifact = _write_run(tmp_path / "artifact")
+    with (artifact / "bench_steps.jsonl").open("a") as steps:
+        steps.write(json.dumps({"layer_metrics": {"boards": 1}}) + "\n")
+    reference = _write_run(artifact / "reference", scale=1.4)
+    code, output = _run(
+        "compare",
+        "--baseline",
+        baseline,
+        "--artifact",
+        artifact,
+        "--reference",
+        reference,
+    )
+    assert code != 0, output
+    assert "built with the managym `benchmark` feature" in output
+
+
 def test_reference_not_matching_the_file_fails_the_file(tmp_path: Path) -> None:
     code, output = _compare(tmp_path, scale=1.4, reference_digests=(11, 22, 34))
     assert code == 1, output

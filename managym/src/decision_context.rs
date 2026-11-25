@@ -8,39 +8,54 @@
 
 use crate::state::ability::LibraryEnd;
 use crate::{
-    agent::continuation::ContinuationFrame,
+    agent::{
+        continuation::ContinuationFrame,
+        effect_execution::{contribution_phrase, spent_mana_phrase},
+        observation::spell_profile_code,
+    },
     experience::{
-        DecisionContextView, DecisionObjectView, DecisionTargetView, ObjectRenderId,
-        OfferSubjectView, RequiredNullable, SubjectRef,
+        DecisionContextView, DecisionObjectView, DecisionTargetView, OfferSubjectView, PaidView,
+        RequiredNullable, SubjectRef,
     },
     flow::{
+        action::cost_label,
         decision::Decision,
         game::{Game, PendingChoice},
+        payment::{CostComponent, Help, PaymentProgress},
     },
-    state::game_object::{ObjectId, PlayerId, Target},
+    state::{
+        card::CastOption,
+        game_object::{ObjectId, PlayerId, Target},
+        payment::{PaidWith, PaymentReceipt, Toward},
+    },
 };
 
 impl Game {
     fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         self.state.live(object)?;
-        let display_id = self
-            .state
-            .object_to_permanent
-            .get(object.slot())
-            .and_then(|permanent| *permanent)
-            .and_then(|permanent| self.state.permanents[permanent].as_ref())
-            .map_or(self.state[object].id.0, |permanent| permanent.id.0);
+        let identity = self.observed_identity(object)?;
+        let display_id = identity.reference.entity.0;
         Some(DecisionObjectView {
-            entity_id: object.slot() as u32,
+            entity_id: identity.visible_slot.unwrap_or(display_id),
             subject: SubjectRef::Object {
-                id: ObjectRenderId {
-                    entity: display_id,
-                    incarnation: object.generation(),
-                },
+                id: identity.reference.into(),
             },
             display_id,
-            label: self.state[object].name.clone(),
+            label: self.observed_object_name(object),
         })
+    }
+
+    /// What `viewer` can see now of an object that paid toward a cost: the
+    /// appearance that paid, or the one it became by its one move since (the
+    /// exiled or discarded card).
+    fn paid_object(&self, paid: ObjectId, viewer: PlayerId) -> Option<DecisionObjectView> {
+        let now = if self.state.live(paid).is_some() {
+            paid
+        } else {
+            self.state.zones.successor(paid)?
+        };
+        self.visible_reference(now, viewer).object?;
+        self.decision_object(now)
     }
 
     fn decision_target(&self, target: &Target) -> Option<DecisionObjectView> {
@@ -54,27 +69,12 @@ impl Game {
                 label: format!("Seat {}", player.0 + 1),
             }),
             Target::Permanent(permanent) => {
-                let permanent = self.state.permanents[*permanent].as_ref()?;
-                let mut view = self.decision_object(permanent.object)?;
-                view.display_id = permanent.id.0;
-                if let SubjectRef::Object { ref mut id } = view.subject {
-                    id.entity = permanent.id.0;
-                }
-                Some(view)
+                self.decision_object(self.permanent_object(*permanent)?)
             }
-            Target::StackSpell(object) => self.decision_object(*object),
+            Target::StackSpell(object) | Target::GraveyardCard(object) => {
+                self.decision_object(*object)
+            }
             Target::StackAbility(id) => self.decision_object(self.stack_ability_source(*id)?),
-            Target::GraveyardCard(reference) => {
-                let mut view = self.decision_object(*reference)?;
-                // Keep the announced incarnation even if the card later moved.
-                view.subject = SubjectRef::Object {
-                    id: ObjectRenderId {
-                        entity: view.display_id,
-                        incarnation: reference.generation(),
-                    },
-                };
-                Some(view)
-            }
         }
     }
 
@@ -134,6 +134,7 @@ impl Game {
                             | Action::CastSpell { .. }
                             | Action::ActivateAbility { .. }
                             | Action::ActivateCardAbility { .. }
+                            | Action::TurnFaceUp { .. }
                             | Action::Foretell { .. }
                             // The creature an attack declaration sends in acts;
                             // its decline names the same creature as a choice.
@@ -168,21 +169,14 @@ impl Game {
                 },
             );
         }
-        for (index, permanent) in self.state.permanents.iter().enumerate() {
-            if let Some(permanent) = permanent {
-                if let Some(reference) =
-                    self.permanent_object(crate::state::game_object::PermanentId(index))
-                {
-                    subjects.insert(
-                        format!("permanent:{index}"),
-                        SubjectRef::Object {
-                            id: ObjectRenderId {
-                                entity: permanent.id.0,
-                                incarnation: reference.generation(),
-                            },
-                        },
-                    );
-                }
+        for index in 0..self.state.permanents.len() {
+            if let Some(event) =
+                self.permanent_event_ref(crate::state::game_object::PermanentId(index))
+            {
+                subjects.insert(
+                    format!("permanent:{index}"),
+                    SubjectRef::Object { id: event.into() },
+                );
             }
         }
         for (index, _) in self.state.players.iter().enumerate() {
@@ -192,8 +186,15 @@ impl Game {
                 crate::state::zone::ZoneType::Graveyard,
             ] {
                 for object in self.state.zones.zone_objects(zone, player).iter() {
-                    if let Some(view) = self.decision_object(*object) {
-                        subjects.insert(format!("object:{}", object.slot()), view.subject);
+                    if let Some(identity) = self.observed_identity(*object) {
+                        if let Some(slot) = identity.visible_slot {
+                            subjects.insert(
+                                format!("object:{slot}"),
+                                SubjectRef::Object {
+                                    id: identity.reference.into(),
+                                },
+                            );
+                        }
                     }
                 }
             }
@@ -221,7 +222,7 @@ impl Game {
                     } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state.source_base(*object).1.name
+                        self.observed_object_name(*object)
                     )),
                     GameEvent::SpellCast {
                         object_id: object, ..
@@ -241,7 +242,7 @@ impl Game {
                     )),
                     GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state.source_base(*source_object).1.name
+                        self.observed_object_name(*source_object)
                     )),
                     _ => None,
                 }
@@ -277,16 +278,42 @@ impl Game {
             chosen_mode: RequiredNullable(None),
             recent_facts: Vec::new(),
             announcing: None,
+            paid: Vec::new(),
         };
+        if let Some(opening) = self.state.opening() {
+            let (stage, instruction) = opening.instruction();
+            view.stage = stage.into();
+            view.instruction = if viewer == actor {
+                instruction.into()
+            } else {
+                format!("Waiting for Seat {}.", actor.0 + 1)
+            };
+            return Some(view);
+        }
         if actor != viewer {
             view.stage = format!("{:?}", space.kind).to_lowercase();
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
-        view.pending = frames
-            .iter()
-            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
-            .collect();
+        for frame in frames.iter().filter(|frame| frame.triggering_amount > 0) {
+            let name = frame
+                .source
+                .definition
+                .and_then(|id| {
+                    crate::cards::content_pack::default_content_pack()
+                        .definition(crate::state::card::CardDefId(id))
+                })
+                .map_or("This ability", |card| card.name.as_str());
+            view.pending.push(format!(
+                "{name} triggered on an event amount of {}.",
+                frame.triggering_amount
+            ));
+        }
+        view.pending.extend(
+            frames
+                .iter()
+                .flat_map(|frame| frame.effect_execution_summary.iter().cloned()),
+        );
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
@@ -295,17 +322,41 @@ impl Game {
             .or_else(|| frames.iter().find(|frame| frame.kind == 4))
             .or_else(|| frames.iter().find(|frame| frame.kind == 5))
         {
-            let object = |reference: crate::agent::continuation::VisibleReference| {
-                if let Some(player) = reference.player {
-                    return self.decision_target(&Target::Player(PlayerId(player)));
-                }
+            let live = |reference: crate::agent::continuation::VisibleReference| {
                 let display_id = reference.object? as u32;
                 self.state.latest_objects().find_map(|(object, _)| {
                     self.decision_object(object)
                         .filter(|view| view.display_id == display_id)
+                        .map(|view| (object, view))
                 })
             };
-            view.source = RequiredNullable(object(frame.source));
+            let object = |reference: crate::agent::continuation::VisibleReference| {
+                if let Some(player) = reference.player {
+                    return self.decision_target(&Target::Player(PlayerId(player)));
+                }
+                live(reference).map(|(_, view)| view)
+            };
+            view.source = RequiredNullable(
+                live(frame.source)
+                    .map(|(source, mut view)| {
+                        // An announced inset spell is named for itself, not its card.
+                        if let Some(spell) = self.state[source]
+                            .spell_profiles()
+                            .find(|profile| {
+                                !profile.is_front()
+                                    && spell_profile_code(*profile) == frame.spell_profile
+                            })
+                            .and_then(|profile| {
+                                crate::cards::content_pack::default_content_pack()
+                                    .spell_definition(&self.state[source], profile)
+                            })
+                        {
+                            view.label = spell.name.clone();
+                        }
+                        view
+                    })
+                    .or_else(|| object(frame.source)),
+            );
             view.targets = frame
                 .targets
                 .iter()
@@ -352,26 +403,77 @@ impl Game {
                 view.mana_cost = RequiredNullable(Some(symbols));
             }
         }
+        // What is committed to the pending cost, for a cast, an activation
+        // and a resolving payment alike: each object and each unit of mana
+        // spent toward it as it was produced, in the order paid.
+        view.paid = self
+            .pending_receipt()
+            .iter()
+            .flat_map(PaymentReceipt::in_order)
+            .map(|paid| match paid {
+                PaidWith::Object(paid) => PaidView {
+                    phrase: contribution_phrase(self, viewer, paid),
+                    object: self.paid_object(paid.object, viewer),
+                },
+                PaidWith::Mana(unit) => PaidView {
+                    phrase: spent_mana_phrase(self, viewer, unit),
+                    object: unit
+                        .source
+                        .and_then(|origin| self.paid_object(origin.object, viewer)),
+                },
+            })
+            .collect();
+        // The one yes-or-no cost choice of a cast, named for what the card
+        // offers: `KickerChoice` asks bargain and alternative costs too.
+        let cast_option = match &self.pending_choice {
+            Some(PendingChoice::KickerChoice { object, cast, .. }) => match cast.spell(&self.state[*object]).cast_option() {
+                Some(CastOption::FlashSurcharge(cost)) => format!("Choose whether to pay {} more to cast as though it had flash.", cost_label(cost)),
+                Some(CastOption::ExileFromHand) => "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative.".into(),
+                Some(CastOption::AlternativeMana(cost)) => format!("Choose whether to pay {} rather than the mana cost.", cost_label(cost)),
+                Some(CastOption::Bargain) => "Choose whether to bargain: sacrifice an artifact, enchantment or token as you cast this spell.".into(),
+                Some(CastOption::Kicker) | None => "Choose whether to pay the kicker cost.".into(),
+            },
+            _ => String::new(),
+        };
         let (stage, instruction) = match &self.pending_choice {
-            Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
-                ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
-            Some(PendingChoice::ExileFromHandPayment { .. }) =>
-                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
-            Some(PendingChoice::DiscardPayment { .. }) =>
-                ("additional_cost", "Choose a card to discard as an activation cost."),
-            Some(PendingChoice::TapPayment { .. }) =>
-                ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
-            Some(PendingChoice::SacrificePayment { .. }) =>
-                ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+            Some(PendingChoice::Pay { payment, .. }) => match &payment.owed[0] {
+                CostComponent::Mana { help, .. } if *help != Help::default() =>
+                    ("payment", "Produce mana, pay part of the cost another way, or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. A creature tapped for convoke pays {1} or one mana of its color; an artifact tapped for improvise, a creature or artifact tapped for waterbend, or a graveyard card exiled for delve pays {1}. Each such payment commits immediately. The payment ends once no mana is owed."),
+                CostComponent::Mana { .. } =>
+                    ("payment", "Produce mana or finish the announced payment. Mana produced now pays toward the cost as it is made; mana that cannot pay it, or is surplus, stays in the pool, and so does new mana when pooled mana of another class or color could pay the same pip, for the spend choice. A chosen sacrifice leaves when the payment completes; activated mana abilities commit their own costs immediately. The payment ends once no mana is owed."),
+                CostComponent::ExileFromHand =>
+                    ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
+                CostComponent::Discard if payment.operation.spell().is_some() =>
+                    ("additional_cost", "Choose another card in hand to discard as an additional cost to cast this spell."),
+                CostComponent::Discard =>
+                    ("additional_cost", "Choose a card to discard as an activation cost."),
+                CostComponent::Tap(_, Toward::Station) =>
+                    ("additional_cost", "Choose another untapped creature to tap to station. The ability puts charge counters equal to that creature's power on its source as it resolves."),
+                CostComponent::Tap(..) =>
+                    ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
+                CostComponent::Sacrifice(..) =>
+                    ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
+                CostComponent::Forage { .. } =>
+                    ("additional_cost", "Forage or pay the stated mana instead. To forage, sacrifice a Food, which is reserved until the announced payment completes, or exile three cards from your graveyard one at a time; the first card exiled commits to exiling three."),
+                CostComponent::RemoveCounters { choosing_from: None, .. } =>
+                    ("additional_cost", "Choose a creature you control to remove a counter from. Each removal commits immediately; the cost completes once the stated number of counters, of any kinds, are removed from among your creatures."),
+                CostComponent::RemoveCounters { .. } =>
+                    ("additional_cost", "Choose which kind of counter to remove from the chosen creature. Each mode is one counter kind on it."),
+                CostComponent::TapPays { .. } =>
+                    ("payment", "Choose what the permanent just tapped pays: an owed color or {1} by convoke, {1} by improvise, or {1} of the waterbend cost. Each mode names the same payment in every decision; only payable ones are offered."),
+                CostComponent::Life(_) | CostComponent::RemoveSourceCounters(..) | CostComponent::AddCounters(..) | CostComponent::Source(_) | CostComponent::ExileGrantor(_) | CostComponent::TapGrantor(_) =>
+                    unreachable!("paid as the payment completes, after its mana"),
+                CostComponent::TapPower { toward: Toward::Saddle, .. } =>
+                    ("additional_cost", "Choose a creature to tap to saddle. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the saddle number."),
+                CostComponent::TapPower { .. } =>
+                    ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
+            },
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
-            Some(PendingChoice::Crew { .. }) =>
-                ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
-            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
-            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
-            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
+            Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", cast_option.as_str()),
+            Some(PendingChoice::AnnounceX { object: object_id, cast, .. }) if cast.spell(&self.state[*object_id]).replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -395,10 +497,15 @@ impl Game {
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
                 Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
                 Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
+                Decision::ManifestDread { .. } => ("manifest_dread", "Choose a card to manifest. Put the other into your graveyard."),
                 Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::OrderMeldedCards { .. } => ("order_melded_cards", "Choose the relative order of the two cards leaving the battlefield."),
+                Decision::AssignCombatDamage { .. } => ("assign_combat_damage", "Assign combat damage from the attacker."),
                 Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Discard, .. }) => ("resolution_payment", "Choose a card from your hand to discard, or decline."),
+                Decision::Payment(PaymentProgress { owed: CostComponent::Life(_), .. }) => ("resolution_payment", "Pay the stated life for the resolving effect, or decline. Paying is offered only when your life total is at least that amount, and the life is lost at once."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
                 Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
@@ -414,6 +521,7 @@ impl Game {
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
                 Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
+                Decision::KeepCreatures { sacrifice: Some(_), .. } => ("keep_creatures", "Choose another creature you control to keep; you keep all but the stated number, and every creature not kept is then sacrificed."),
                 Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
@@ -425,7 +533,7 @@ impl Game {
             let choosing_mode = placement
                 .placing
                 .as_ref()
-                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+                .is_some_and(|trigger| self.pending_mode_rule(trigger).is_some());
             view.stage = if choosing_mode {
                 "trigger_mode"
             } else if placement.placing.is_some() {
@@ -435,11 +543,8 @@ impl Game {
             }
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
-                let description = crate::agent::ability_description::trigger_description(
-                    &self.state[trigger.source_object()],
-                    trigger.ability_index,
-                    trigger.inline_effects.as_deref(),
-                );
+                let description =
+                    crate::agent::ability_description::pending_trigger_description(self, trigger)?;
                 if choosing_mode {
                     format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
                 } else {

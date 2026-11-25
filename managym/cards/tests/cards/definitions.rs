@@ -3,8 +3,9 @@
 //! as the condition of an `Effect::If`, never in a static, an `ActiveIf` or an
 //! intervening-if clause, where no resolution exists to ask. A source
 //! question (one that reads the ability's source permanent) may also be an
-//! intervening-if or the "as long as" of a static the source projects on
-//! itself (a type grant, a land-type overwrite), never a scoped static's
+//! intervening-if, a state trigger's condition or the "as long as" of a
+//! static the source projects on itself (a type grant, a land-type
+//! overwrite), never a scoped static's
 //! condition or an `ActiveIf`.
 
 use managym::state::{
@@ -33,7 +34,8 @@ enum Place {
 /// Paths (JSON pointers) of resolution-only conditions outside an
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
 /// condition, an intervening-if clause or a type grant's / land-type
-/// overwrite's / P/T buff's own condition (layers ask those of the source).
+/// overwrite's / P/T buff's / battlefield keyword grant's own condition
+/// (layers ask those of the source).
 fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
@@ -44,12 +46,16 @@ fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<S
 fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     let source_allowed = place != Place::Elsewhere;
     match value {
-        Value::String(name) if matches!(name.as_str(), "Kicked" | "TargetDealtDamageThisTurn") => {
+        Value::String(name) if name == "TargetDealtDamageThisTurn" => {
             if place != Place::IfCondition {
                 found.push(path);
             }
         }
-        Value::String(name) if name == "SourceTapped" && !source_allowed => found.push(path),
+        Value::String(name)
+            if matches!(name.as_str(), "Kicked" | "SourceTapped") && !source_allowed =>
+        {
+            found.push(path)
+        }
         Value::Array(items) => {
             for (index, item) in items.iter().enumerate() {
                 walk(item, format!("{path}/{index}"), place, found);
@@ -78,9 +84,21 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                         }
                     }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
-                    ("TypeGrant" | "SetsLandType" | "PtBuff", Value::Object(ability)) => {
+                    // A state trigger (CR 603.8) asks its condition of its source.
+                    ("State", _) => walk(field, child, Place::SourceStatic, found),
+                    (
+                        "TypeGrant" | "SetsLandType" | "PtBuff" | "KeywordGrant" | "Continuous",
+                        Value::Object(ability),
+                    ) => {
+                        // Layers ask a battlefield grant's condition of its
+                        // source; a grant to spells has no source permanent.
+                        let to_spells = matches!(key.as_str(), "KeywordGrant" | "Continuous")
+                            && ability
+                                .get("scope")
+                                .and_then(Value::as_object)
+                                .is_some_and(|scope| scope.contains_key("SpellsYouControl"));
                         for (part, inner) in ability {
-                            let place = if part == "condition" {
+                            let place = if part == "condition" && !to_spells {
                                 Place::SourceStatic
                             } else {
                                 place

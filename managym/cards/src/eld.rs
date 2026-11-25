@@ -1,12 +1,12 @@
 //! Throne of Eldraine.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        StaticAbility,
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, PrintedCharacteristics, StaticAbility,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -17,10 +17,16 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        syr_alin_the_lions_claw(),
+        bake_into_a_pie(),
+        raging_redcap(),
         epic_downfall(),
         fabled_passage(),
         return_of_the_wildspeaker(),
         the_great_henge(),
+        thrill_of_possibility(),
+        wildborn_preserver(),
+        scorching_dragonfire(),
     ]
 }
 
@@ -72,6 +78,7 @@ fn fabled_passage() -> CardDefinition {
                         Effect::ShuffleLibrary,
                         Effect::If {
                             condition: Condition::ControlsAtLeast {
+                                distinct_names: false,
                                 count: 4,
                                 predicate: CardPredicate {
                                     card_type: Some(CardType::Land),
@@ -154,7 +161,7 @@ fn the_great_henge() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::you_control(CardPredicate {
                         token: Some(false),
-                        ..creature()
+                        ..CardPredicate::creature()
                     }),
                 },
                 effects: vec![
@@ -168,6 +175,162 @@ fn the_great_henge() -> CardDefinition {
                     },
                 ],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn wildborn_preserver() -> CardDefinition {
+    let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nReach (This creature can block creatures with flying.)\nWhenever another non-Human creature you control enters, you may pay {X}. When you do, put X +1/+1 counters on this creature.";
+    CardDefinition {
+        key: "eld.wildborn_preserver",
+        scryfall_id: "55f76830-369e-4224-9ded-7d1ce04c87e4",
+        printed: PrintedCharacteristics {
+            name: "Wildborn Preserver".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Archer".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        not_subtypes: vec!["Human".into()],
+                        ..CardPredicate::creature()
+                    }),
+                },
+                effects: vec![Effect::OptionalManaPaymentX {
+                    if_paid: vec![Effect::WhenYouDo {
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            EffectValue::X,
+                        )],
+                    }],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn thrill_of_possibility() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, discard a card.\nDraw two cards.";
+    CardDefinition {
+        key: "eld.thrill_of_possibility",
+        scryfall_id: "c9021f85-7ab4-4a78-a398-1611fe09cd14",
+        printed: PrintedCharacteristics {
+            name: "Thrill of Possibility".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Discard],
+            spell_effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn raging_redcap() -> CardDefinition {
+    let text_box =
+        "Double strike (This creature deals both first-strike and regular combat damage.)";
+    CardDefinition {
+        key: "eld.raging_redcap",
+        scryfall_id: "d9325398-41c3-4177-a64d-ea38cb7a8737",
+        printed: PrintedCharacteristics {
+            name: "Raging Redcap".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Knight".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::DoubleStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn bake_into_a_pie() -> CardDefinition {
+    let text_box = "Destroy target creature. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")";
+    CardDefinition {
+        key: "eld.bake_into_a_pie",
+        scryfall_id: "42a4d090-1bb7-4334-ab22-e2527391e79b",
+        printed: PrintedCharacteristics {
+            name: "Bake into a Pie".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::Target(TargetSpec::Creature)),
+                Effect::create_tokens("token.food", 1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn syr_alin_the_lions_claw() -> CardDefinition {
+    let text_box = "First strike (This creature deals combat damage before creatures without first strike.)\nWhenever Syr Alin attacks, other creatures you control get +1/+1 until end of turn.";
+    CardDefinition {
+        key: "eld.syr_alin_the_lions_claw",
+        scryfall_id: "4cddb2d2-d813-4b83-a592-380ba4edf54f",
+        printed: PrintedCharacteristics {
+            name: "Syr Alin, the Lion's Claw".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_other_you_control(CardPredicate::creature()),
+                    Modification::pump(1, 1),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn scorching_dragonfire() -> CardDefinition {
+    let text_box = "Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.";
+    let target = || {
+        ObjectSelector::Target(TargetSpec::Permanent {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                ..Default::default()
+            },
+        })
+    };
+    CardDefinition {
+        key: "eld.scorching_dragonfire",
+        scryfall_id: "3b74a806-ed74-458e-8903-d3d084e9f507",
+        printed: PrintedCharacteristics {
+            name: "Scorching Dragonfire".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(3, target()),
+                Effect::until_end_of_turn(target(), Modification::ExileIfWouldDie),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from manabot.belief.protocol import SamplerBackend
 from manabot.belief.sampling_data import collect_frozen_policy, save_dataset
 from manabot.infra.config import MatchConfig
+from manabot.policy.protocol import SeededPolicyLoader
 
 
 def collect_belief(
@@ -14,7 +14,7 @@ def collect_belief(
     match: MatchConfig,
     games: int,
     seed: int,
-    backend: SamplerBackend,
+    backend: SeededPolicyLoader,
     max_steps: int = 2000,
 ) -> Path:
     """Play `games` complete games with the checkpoint `policy`; write `out`.

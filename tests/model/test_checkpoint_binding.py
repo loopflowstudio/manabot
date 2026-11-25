@@ -9,13 +9,22 @@ import torch
 
 from manabot.backends.torch.checkpoint import BACKEND, load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.catalog import inspect_checkpoint
 from manabot.policy import buckets
 from manabot.policy.binding import packed
 from manabot.policy.checkpoint import read_container, write_container
+from manabot.policy.readings import (
+    fresh_readings,
+    input_width,
+    legacy_readings,
+    parse_reading,
+    read_numeric,
+)
+from manabot.recipes.builders import elemental_self_play, gray_ogre_self_play
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
@@ -83,8 +92,9 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     for key in ("agent_player", "opponent_player"):
         binding["input_schema"][key]["shape"][-1] -= 1
         record["input_columns"][key].pop()
+        last = input_width(parse_reading(record["input_readings"][key].pop()))
     player = "player_embedding.projection.0.weight"
-    state[player] = state[player][:, :-1].contiguous()
+    state[player] = state[player][:, :-last].contiguous()
     del record["architecture"]
     if legacy_file:
         torch.save(record, path)
@@ -125,12 +135,15 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     )
     batch = {
         key: value[None]
-        for key, value in space.encode(env.observation_for_player(0)).items()
+        for key, value in encode_observation(
+            space, env.observation_for_player(0)
+        ).items()
     }
     batch["agent_player"][..., -1] = 1
     prepared = loaded.prepare(batch)
     np.testing.assert_array_equal(
-        prepared.agent_player, batch["agent_player"][..., :-1]
+        prepared.agent_player,
+        read_numeric(batch["agent_player"][..., :-1], loaded.readings["agent_player"]),
     )
     assert np.isfinite(loaded.evaluate(prepared)[0]).all()
 
@@ -190,12 +203,15 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
             managym.PlayerConfig("B", {"Forest": 20, "Gray Ogre": 20}),
         ]
     )
-    batch = {key: value[None] for key, value in space.encode(observation).items()}
+    batch = {
+        key: value[None]
+        for key, value in encode_observation(space, observation).items()
+    }
     expected = policy.evaluate(policy.prepare(batch))
 
     # Emulate a later engine with appended columns and an unknown card digest.
     # Without the embedded writer catalog the original file cannot bind here.
-    native_layout = managym.observation_layout
+    native_layout = managym.ObservationLayout
     growing = (
         "agent_cards",
         "opponent_cards",
@@ -205,27 +221,35 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         "events",
     )
 
-    def extended_layout(**options: bool) -> dict[str, Any]:
-        rows = native_layout(**options)
-        for key in growing:
-            columns = rows[key]["columns"]
-            columns["appended"] = {"index": len(columns)}
-        return rows
+    class ExtendedLayout:
+        def __init__(self, **options: Any) -> None:
+            self._inner = native_layout(**options)
 
-    initialize = ObservationSpace.__init__
+        @property
+        def arrays(self) -> dict[str, Any]:
+            rows = self._inner.arrays
+            for key in growing:
+                columns = rows[key]["columns"]
+                columns["appended"] = {"index": len(columns), "kind": "flag"}
+                rows[key]["shape"] = [*rows[key]["shape"][:-1], len(columns)]
+            return rows
 
-    def extended_space(
-        self: ObservationSpace, config: ObservationConfig | None = None
-    ) -> None:
-        initialize(self, config)
-        self.encoder.card_dim += 1
-        self.encoder.action_dim += 1
-        for key in growing:
-            shape = self.shapes[key]
-            self.shapes[key] = (*shape[:-1], shape[-1] + 1)
+        @property
+        def shapes(self) -> dict[str, tuple[int, ...]]:
+            shapes = dict(self._inner.shapes)
+            for key in growing:
+                shapes[key] = (*shapes[key][:-1], shapes[key][-1] + 1)
+            return shapes
 
-    monkeypatch.setattr(managym, "observation_layout", extended_layout)
-    monkeypatch.setattr(ObservationSpace, "__init__", extended_space)
+        @property
+        def dtypes(self) -> dict[str, str]:
+            return self._inner.dtypes
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+    # The space derives its shapes from the layout, so it grows with it.
+    monkeypatch.setattr(managym, "ObservationLayout", ExtendedLayout)
     monkeypatch.setattr(buckets, "_EVENT_WIDTH", space.shapes["events"][-1] + 1)
     loaded, runtime = load_checkpoint(str(path))
     for key in growing:
@@ -237,7 +261,9 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
         np.testing.assert_array_equal(before, after)
     rebound = tmp_path / "rebound.safetensors"
     save_checkpoint(loaded, runtime, rebound, player_configs=None)
-    assert read_checkpoint(rebound)["input_columns"] == record["input_columns"]
+    rewritten = read_checkpoint(rebound)
+    assert rewritten["input_columns"] == record["input_columns"]
+    assert rewritten["input_readings"] == record["input_readings"]
     again, _ = load_checkpoint(str(rebound))
     np.testing.assert_array_equal(again.evaluate(again.prepare(batch))[0], expected[0])
 
@@ -245,3 +271,33 @@ def test_saved_policy_uses_its_embedded_catalog_and_column_prefixes(
     write_checkpoint(record, path)
     with pytest.raises(ValueError, match="agent_cards columns:.*lost_column"):
         load_checkpoint(str(path))
+
+
+@pytest.mark.parametrize("elemental", [False, True])
+@pytest.mark.parametrize("recorded", [False, True])
+def test_setup_policy_keeps_its_pre_x_action_scores(
+    tmp_path: Path, elemental: bool, recorded: bool
+) -> None:
+    settings = elemental_self_play() if elemental else gray_ogre_self_play(horizon=2)
+    space = ObservationSpace(settings.observation)
+    readings = (fresh_readings if recorded else legacy_readings)(space)
+    readings["actions"] = readings["actions"][:23]
+    writer = ActorCritic(space, settings.model, readings=readings).eval()
+    players = Match(settings.match).to_rust()
+    path = tmp_path / "earlier.safetensors"
+    save_checkpoint(writer, space, path, player_configs=players)
+    if not recorded:
+        record = read_checkpoint(path)
+        del record["input_readings"]
+        write_checkpoint(record, path)
+    loaded, runtime = load_checkpoint(str(path))
+    env = managym.Env(seed=17)
+    obs, _ = env.reset(players)
+    batch = {
+        key: value[None] for key, value in encode_observation(runtime, obs).items()
+    }
+    expected = writer.evaluate(writer.prepare(batch))
+    batch["actions"][..., 23:] = 1
+    actual = loaded.evaluate(loaded.prepare(batch))
+    for before, after in zip(expected, actual, strict=True):
+        np.testing.assert_array_equal(before, after)

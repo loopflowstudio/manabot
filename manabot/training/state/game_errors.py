@@ -25,13 +25,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from manabot.env.match import Match
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
-from managym.recording import read_record
+from managym.recording import Intervention, read_record
 from managym.replay import (
     ReplayAgreement,
+    apply_boundary,
+    interventions_by_offset,
     matches_retained_error,
     replay_failure_inputs,
     run_bounded_replay,
@@ -79,12 +81,21 @@ class GameAttempt(BaseModel):
         default=None, exclude_if=lambda value: value is None
     )
     outcome: GameOutcome
-    actions: list[int] = []
+    actions: list[int | str] = []
+    interventions: list[Intervention] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    object_candidate_frames: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     error_class: str | None = None
     error: str | None = None
     frame_json: str | None = None
     native_trace: str | None = None
     observation: ObservationConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    decision_memory: bool | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     discarded_samples: int = 0
@@ -250,7 +261,7 @@ def append_attempt(
 
 
 def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
-    """Bounded positional replay; the final pre-command frame exposes the offer.
+    """Replay retained choices and bind the final attempt to its original offer.
 
     AgentError and PyO3 panic are recorded here only around native gameplay.
     Process interrupts escape. Divergence before the retained failing action is
@@ -259,8 +270,12 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env = managym.Env(
         seed=attempt.seed,
         skip_trivial=True,
-        decision_memory=bool(
-            attempt.observation and attempt.observation.max_decision_records > 0
+        decision_memory=(
+            attempt.decision_memory
+            if attempt.decision_memory is not None
+            else bool(
+                attempt.observation and attempt.observation.max_decision_records > 0
+            )
         ),
         decision_memory_include_own=bool(
             attempt.observation and attempt.observation.decision_memory_include_own
@@ -269,14 +284,19 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
     env.reset(Match(attempt.matchup).to_rust())
     frame: str | None = None
     agreement = ReplayAgreement(attempt.outcome)
-    encoder = (
-        ObservationEncoder(attempt.observation)
+    space = (
+        ObservationSpace(attempt.observation)
         if attempt.outcome == "resource_limit" and attempt.observation is not None
         else None
     )
     # Replay the same fixed allocation at every step, as the collector does.
-    buffers = encoder.allocate() if encoder is not None else {}
+    buffers = space.allocate() if space is not None else {}
+    boundaries = interventions_by_offset(attempt)
+    if any(offset > len(attempt.actions) for offset in boundaries):
+        raise ValueError("intervention outside retained action prefix")
+    remaining_frames = set(attempt.object_candidate_frames)
     for index, action in enumerate(attempt.actions):
+        apply_boundary(env, boundaries.get(index, ()), remaining_frames)
         if index == len(attempt.actions) - 1:
             frame = env.semantic_decision_frame_json()
             if attempt.frame_json is not None:
@@ -290,7 +310,12 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                     }
             agreement.at_retained_failure = True
         try:
-            observation, _, terminated, truncated, _ = env.step(action)
+            if isinstance(action, str):
+                env.execute_semantic_command_json(action)
+                observation = env.observation_for_player(env.current_agent_index() or 0)
+                terminated, truncated = env.is_game_over(), False
+            else:
+                observation, _, terminated, truncated, _ = env.step(action)
         except BaseException as error:
             if (
                 not isinstance(error, managym.AgentError)
@@ -308,19 +333,26 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "error_class": type(error).__name__,
                 "error": str(error),
             }
-        if encoder is not None:
+        if space is not None:
             # Native gameplay alone cannot reproduce an allocation failure.
             try:
-                env.encode_observation_into(
-                    observation, buffers, encoder.config.action_overflow
+                if space.one_token:
+                    managym.encode_observation_batch(
+                        [observation], space.layout, space.config.action_overflow
+                    )
+                else:
+                    # Deprecated v9/v10 dense path; removed in 0.3.0.
+                    managym.encode_observation_into(
+                        observation, space.layout, buffers, space.config.action_overflow
+                    )
+            except managym.ObservationCapacity as error:
+                retained = matches_retained_error(
+                    error, attempt.error_class, attempt.error
                 )
-            except ValueError as error:
                 agreement.matches_error = (
                     None
-                    if attempt.error_class is None or attempt.error is None
-                    else agreement.at_retained_failure
-                    and attempt.error_class == "ObservationCapacity"
-                    and str(error) == attempt.error
+                    if retained is None
+                    else agreement.at_retained_failure and retained
                 )
                 return {
                     **asdict(agreement),
@@ -337,6 +369,9 @@ def replay_attempt(attempt: GameAttempt) -> dict[str, object]:
                 "action_index": index,
                 "frame": frame,
             }
+    apply_boundary(env, boundaries.get(len(attempt.actions), ()), remaining_frames)
+    if remaining_frames:
+        raise ValueError("snapshot object candidate frame missing")
     return {
         **asdict(agreement),
         "status": "advanced",

@@ -314,6 +314,7 @@ for (const [mode, deck] of [
     await page.getByLabel('Your deck source', {exact: true}).fill(deck);
     await page.getByLabel('Opponent deck source', {exact: true}).fill('16 Mountain');
     await page.getByRole('button', {name: 'Start game', exact: true}).click();
+    await page.getByTestId('action-option').filter({ hasText: 'Keep hand' }).click();
     const actions = page.getByTestId('action-option');
     await actions.filter({hasText: 'Play Island'}).first().click();
     const tap = actions.filter({hasText: 'Tap Island for mana'});

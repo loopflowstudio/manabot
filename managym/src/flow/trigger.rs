@@ -2,11 +2,15 @@
 //! Collection owns arrivals; placement owns a detached batch until every
 //! controller has placed its abilities (CR 603.3b, 2026-09-25 rules snapshot).
 
+use std::sync::Arc;
+
+use crate::agent::continuation::ProgramProjection;
+
 use crate::state::binding::ObjectBinding;
 
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
-    game_object::{ObjectId, ObjectLki, PlayerId, Target},
+    game_object::{AbilitySource, ObjectId, ObjectLki, PlayerId, Target},
     predicate::CardPredicate,
 };
 
@@ -52,9 +56,10 @@ impl TriggerPlacement {
 pub struct PendingTrigger {
     /// An inline program granted by a continuous effect, without catalog identity.
     pub program: bool,
+    pub triggering_amount: i32,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     pub remembered: Vec<ObjectBinding>,
-    pub source_identity: crate::state::game_object::AbilitySource,
+    pub source_identity: AbilitySource,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
     pub requirement_index: usize,
@@ -70,18 +75,26 @@ pub struct PendingTrigger {
     /// The player the triggering event names ("they": the caster of the
     /// triggering spell), separate from its context object.
     pub player: Option<PlayerId>,
+    /// Kicker choice carried by the triggering source's spell.
+    pub kicked: bool,
     /// The ability's X: for an entering permanent's own trigger, the X of
-    /// the spell that became it (CR 107.3m); otherwise 0.
+    /// the spell that became it (CR 107.3m); for a counters or per-creature
+    /// combat damage trigger, its event's amount ("that many"); otherwise 0.
     pub x: u8,
     /// For an entering permanent's own trigger, the mana spent to cast the
     /// spell that became it; otherwise empty.
-    pub spent: crate::state::mana::ManaSpent,
+    pub spent: crate::state::payment::PaymentReceipt,
     /// The attacking creature whose attack triggered its own ability.
     pub attacker: Option<crate::state::game_object::PermanentId>,
-    /// The modes of a "choose up to" ability chosen so far.
+    /// The modes of a printed modal ability chosen so far (CR 700.2b).
     pub chosen_modes: Vec<usize>,
-    /// Delayed triggers carry their effects inline instead of referencing
-    /// `Object::abilities` (`ability_index` is unused when set).
+    /// Whether the modal choice is complete, so `chosen_modes` is final;
+    /// distinguishes an "up to" ability that chose none from one not yet
+    /// choosing.
+    pub modes_chosen: bool,
+    /// Non-printed triggers (delayed, reflexive, granted, firebending) carry
+    /// their effects inline instead of referencing `Object::abilities`
+    /// (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -96,10 +109,47 @@ pub struct DelayedTrigger {
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
     #[serde(flatten)]
-    pub source_identity: crate::state::game_object::AbilitySource,
-    pub effects: Vec<Effect>,
+    pub source_identity: AbilitySource,
+    pub effects: DelayedEffects,
     pub frequency: DelayedFrequency,
     pub expiry: DelayedExpiry,
+}
+
+/// A delayed trigger's instructions, fixed when it is created, with their
+/// learning tokens and text: every observation of the waiting trigger shows
+/// that program, so it is projected once rather than per observation. Forks
+/// share it. Serializes as the instruction list alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DelayedEffects(Arc<DelayedProgram>);
+
+#[derive(Debug, PartialEq, Eq)]
+struct DelayedProgram {
+    effects: Vec<Effect>,
+    projection: ProgramProjection,
+}
+
+impl DelayedEffects {
+    pub fn new(effects: Vec<Effect>) -> Self {
+        let projection = ProgramProjection::of(&effects);
+        Self(Arc::new(DelayedProgram {
+            effects,
+            projection,
+        }))
+    }
+
+    pub fn effects(&self) -> &[Effect] {
+        &self.0.effects
+    }
+
+    pub(crate) fn projection(&self) -> &ProgramProjection {
+        &self.0.projection
+    }
+}
+
+impl serde::Serialize for DelayedEffects {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.effects.serialize(serializer)
+    }
 }
 
 /// Event matching only; frequency and expiry belong to the waiting watcher.
@@ -130,7 +180,7 @@ pub enum DelayedTriggerEvent {
 /// leaves the battlefield" (Earth Kingdom Jailer): when it leaves, the
 /// exiled card returns immediately — no trigger, no stack (CR 603.6e).
 /// Otherwise ("exiled with this creature", Boiling Rock Rioter) the card
-/// stays exiled and the link ends. A later incarnation of the same physical
+/// stays linked for abilities of the departed source. A later incarnation of the same physical
 /// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
@@ -151,11 +201,59 @@ fn is_true(value: &bool) -> bool {
 }
 
 impl PendingTrigger {
+    /// A newly fired occurrence, before its controller chooses modes or targets.
+    pub fn new(
+        id: TriggerId,
+        controller: PlayerId,
+        source_identity: AbilitySource,
+        ability_index: usize,
+    ) -> Self {
+        Self {
+            id,
+            controller,
+            source_identity,
+            ability_index,
+            source_lki: None,
+            ordering_class: TriggerOrderingClass::Ordinary,
+            inline_effects: None,
+            program: false,
+            remembered: Vec::new(),
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
+            chosen_modes: Vec::new(),
+            modes_chosen: false,
+            context: None,
+            player: None,
+            attacker: None,
+            triggering_amount: 0,
+            kicked: false,
+            x: 0,
+            spent: Default::default(),
+        }
+    }
+
+    /// Targets already committed to the requirement being filled.
+    pub(super) fn clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
+    }
+
     pub fn source_object(&self) -> ObjectId {
         self.source_identity.object()
     }
     pub fn source_ref(&self) -> Option<ObjectId> {
         self.source_identity.reference()
+    }
+    pub fn current_clause_targets(&self) -> impl Iterator<Item = Target> + Clone + '_ {
+        self.targets
+            .iter()
+            .zip(&self.target_req_indices)
+            .filter(|(_, index)| **index == self.requirement_index)
+            .map(|(target, _)| *target)
     }
 }
 
@@ -170,12 +268,6 @@ impl DelayedTrigger {
 
 // The pending record historically separated its two source projections with
 // target progress. Preserve that field order in v16's streamed state bytes.
-struct ExactReference(Option<ObjectId>);
-impl serde::Serialize for ExactReference {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        crate::state::game_object::exact(&self.0, serializer)
-    }
-}
 impl serde::Serialize for PendingTrigger {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
@@ -190,10 +282,8 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("targets", &self.targets)?;
         map.serialize_entry("target_req_indices", &self.target_req_indices)?;
         map.serialize_entry("requirement_index", &self.requirement_index)?;
-        map.serialize_entry(
-            "source_ref",
-            &ExactReference(self.source_identity.reference()),
-        )?;
+        let source_ref = self.source_identity.reference();
+        map.serialize_entry("source_ref", &crate::state::game_object::Exact(&source_ref))?;
         map.serialize_entry("source_lki", &self.source_lki)?;
         map.serialize_entry("ability_index", &self.ability_index)?;
         map.serialize_entry("controller", &self.controller)?;
@@ -202,6 +292,12 @@ impl serde::Serialize for PendingTrigger {
         map.serialize_entry("context", &self.context)?;
         if self.player.is_some() {
             map.serialize_entry("player", &self.player)?;
+        }
+        if self.kicked {
+            map.serialize_entry("kicked", &true)?;
+        }
+        if self.triggering_amount != 0 {
+            map.serialize_entry("triggering_amount", &self.triggering_amount)?;
         }
         if self.x != 0 {
             map.serialize_entry("x", &self.x)?;
@@ -214,6 +310,9 @@ impl serde::Serialize for PendingTrigger {
         }
         if !self.chosen_modes.is_empty() {
             map.serialize_entry("chosen_modes", &self.chosen_modes)?;
+        }
+        if self.modes_chosen {
+            map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
         map.end()

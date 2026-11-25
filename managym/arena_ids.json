@@ -299,6 +299,12 @@
     "name": "Sold Out",
     "set": "tla"
   },
+  "1bd8e971-c075-4203-8d83-c28f22d4f9b9": {
+    "arena_id": 93814,
+    "collector_number": "101",
+    "name": "Cackling Prowler",
+    "set": "fdn"
+  },
   "1c2e2220-54d1-4180-93a0-964e3b0ba8b8": {
     "arena_id": 97548,
     "collector_number": "267",
@@ -695,6 +701,12 @@
     "name": "Yip Yip!",
     "set": "tla"
   },
+  "4409a063-bf2a-4a49-803e-3ce6bd474353": {
+    "arena_id": 93800,
+    "collector_number": "87",
+    "name": "Goblin Boarders",
+    "set": "fdn"
+  },
   "4490ce65-c73a-4809-abd1-ccc3175bd2a4": {
     "arena_id": null,
     "collector_number": "120",
@@ -832,6 +844,12 @@
     "collector_number": "42",
     "name": "Water Tribe Rallier",
     "set": "tla"
+  },
+  "4ec18e35-05e4-4bfc-b32b-c3e71c95a71d": {
+    "arena_id": null,
+    "collector_number": "143",
+    "name": "Aurelia, the Warleader",
+    "set": "gtc"
   },
   "4f442970-5355-4abf-8684-17daaa8e469b": {
     "arena_id": 97379,
@@ -1084,6 +1102,12 @@
     "collector_number": "174",
     "name": "Earth Rumble",
     "set": "tla"
+  },
+  "62958fc3-55dc-4b97-a070-490d6ed27820": {
+    "arena_id": 93763,
+    "collector_number": "50",
+    "name": "Skyship Buccaneer",
+    "set": "fdn"
   },
   "62a983b4-ac73-4949-9317-05a75a8ce164": {
     "arena_id": 97306,
@@ -1343,6 +1367,12 @@
     "name": "Foggy Swamp Vinebender",
     "set": "tla"
   },
+  "78ce6c40-3452-4aa0-a45b-dbfd70f8d220": {
+    "arena_id": 93802,
+    "collector_number": "89",
+    "name": "Gorehorn Raider",
+    "set": "fdn"
+  },
   "7990ebba-e9f2-4ba4-a352-e26ec81d4bed": {
     "arena_id": null,
     "collector_number": "65",
@@ -1589,6 +1619,12 @@
     "name": "Momo, Playful Pet",
     "set": "tla"
   },
+  "94ad0b97-a318-4e76-ac79-b3e83417c333": {
+    "arena_id": 93806,
+    "collector_number": "93",
+    "name": "Searslicer Goblin",
+    "set": "fdn"
+  },
   "95f2f5af-d405-4534-8683-5a9001f997b4": {
     "arena_id": 97421,
     "collector_number": "145",
@@ -1636,6 +1672,12 @@
     "collector_number": "23",
     "name": "Hakoda, Selfless Commander",
     "set": "tla"
+  },
+  "9ba9d1f0-a864-490c-b258-6bf9de251c4b": {
+    "arena_id": null,
+    "collector_number": "12",
+    "name": "Ancestor Dragon",
+    "set": "gs1"
   },
   "9bb928ae-f636-4aee-9146-a7885e6a8976": {
     "arena_id": 97344,
@@ -1727,6 +1769,12 @@
     "name": "Crashing Wave",
     "set": "tla"
   },
+  "a1f8b199-5d62-485f-b1c3-b30aa550595b": {
+    "arena_id": 93791,
+    "collector_number": "78",
+    "name": "Battlesong Berserker",
+    "set": "fdn"
+  },
   "a20aaa6c-7032-43c1-9e7c-57cf8c8ecfd4": {
     "arena_id": 98191,
     "collector_number": "229",
@@ -1810,6 +1858,12 @@
     "collector_number": "156",
     "name": "Treetop Freedom Fighters",
     "set": "tla"
+  },
+  "a93e3406-4e29-4bc0-ae52-cbd2ac1f99a4": {
+    "arena_id": 93828,
+    "collector_number": "115",
+    "name": "Alesha, Who Laughs at Fate",
+    "set": "fdn"
   },
   "a98b1550-4609-4a2f-9371-4afe1cdc613e": {
     "arena_id": 97516,
@@ -2063,6 +2117,12 @@
     "name": "Fire Lord Azula",
     "set": "tla"
   },
+  "bcaf4196-6bf3-47fa-b5c7-0e77f45cf820": {
+    "arena_id": 93748,
+    "collector_number": "35",
+    "name": "Drake Hatcher",
+    "set": "fdn"
+  },
   "bcf7b9da-d35d-4338-b4d9-83e47dc058ee": {
     "arena_id": 97555,
     "collector_number": "274",
@@ -2111,6 +2171,12 @@
     "name": "Sunbaked Canyon",
     "set": "mh1"
   },
+  "c410d530-e9fc-4dc0-a4bd-70bd70aaf0c7": {
+    "arena_id": null,
+    "collector_number": "9",
+    "name": "Jazal Goldmane",
+    "set": "c14"
+  },
   "c4300d24-1cae-4dd5-be7e-38cc677cf5bd": {
     "arena_id": null,
     "collector_number": "269",
@@ -2129,6 +2195,12 @@
     "name": "Doubling Season",
     "set": "rav"
   },
+  "c80fc380-0499-4499-8a60-c43844c02c9b": {
+    "arena_id": 93716,
+    "collector_number": "3",
+    "name": "Armasaur Guide",
+    "set": "fdn"
+  },
   "c8d6081e-f686-4263-a0a2-21c0d9af5fdb": {
     "arena_id": null,
     "collector_number": "227",
@@ -2140,6 +2212,12 @@
     "collector_number": "268",
     "name": "Fire Nation Palace",
     "set": "tla"
+  },
+  "c9b7543f-2a45-4db6-b560-d15507a58c91": {
+    "arena_id": 93778,
+    "collector_number": "65",
+    "name": "Midnight Snack",
+    "set": "fdn"
   },
   "ca3dae7d-3880-4c0a-acfb-8fd227cf9fab": {
     "arena_id": null,
@@ -2657,6 +2735,12 @@
     "name": "Kellan, Planar Trailblazer",
     "set": "fdn"
   },
+  "f4a73034-e20f-4e7e-ac15-3460b1e9c69b": {
+    "arena_id": null,
+    "collector_number": "8",
+    "name": "Drake",
+    "set": "tfdn"
+  },
   "f59eba51-458a-40e0-b754-999f91d5d839": {
     "arena_id": null,
     "collector_number": "3",
@@ -2674,6 +2758,12 @@
     "collector_number": "225",
     "name": "The Terror of Serpent's Pass",
     "set": "tle"
+  },
+  "f7c33ef4-60bb-4f95-92a5-7abedaac6767": {
+    "arena_id": 66131,
+    "collector_number": "84",
+    "name": "Storm Fleet Spy",
+    "set": "xln"
   },
   "f842c52a-04b6-4625-ba58-45b043ada340": {
     "arena_id": null,

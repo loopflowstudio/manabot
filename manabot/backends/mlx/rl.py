@@ -7,21 +7,59 @@ samples [B]; distributions are over action slots [B,A] with `valid` marking
 the legal support. Targets, behavior likelihoods and references are
 constants: gradients reach only the current policy and value outputs.
 
-Three differences from torch are deliberate. MLX's GPU has no float64, so the
-surrogate ratio is float32 (`clipped_surrogate` states the limit) and
+MLX's GPU has no float64, so the surrogate ratio is float32
+(`clipped_surrogate` states the limit) and
 `float64_operand` is the identity. Returns and advantage selection run on the
 host through `manabot.policy.returns`, whose NumPy functions match torch's
-bit for bit. The categorical critic's functions are absent: the backend
-refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_supported`).
+bit for bit.
 """
 
 from collections.abc import Mapping
+import sys
 from typing import Literal
 
 import mlx.core as mx
+import mlx.nn as nn
 import numpy as np
+from typing_extensions import deprecated
 
 from manabot.policy import returns
+
+
+@deprecated(
+    "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
+    "The backend-bound function will be removed in 0.3.0."
+)
+def damped_policy_loss(
+    logits: mx.array,
+    actions: mx.array,
+    advantages: mx.array,
+    behavior_logs: mx.array,
+    reference: mx.array,
+    valid: mx.array,
+    *,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+    reference_forward_kl: float = 0.0,
+) -> mx.array:
+    # Policy readers also use this module and can run with training unavailable.
+    from manabot.training.updates.objective import damped_policy_loss as objective
+
+    return objective(
+        sys.modules[__name__],
+        logits,
+        actions,
+        advantages,
+        behavior_logs,
+        reference,
+        valid,
+        clip=clip,
+        collection_kl=collection_kl,
+        tau=tau,
+        reference_forward_kl=reference_forward_kl,
+    )
+
 
 # -- Numerical refusals --------------------------------------------------------
 
@@ -65,6 +103,8 @@ def constant(tensor: mx.array) -> mx.array:
 
 def legal_mask(mask: mx.array) -> mx.array:
     """The boolean legal support of a 0/1 mask [*,A]."""
+    if mask.dtype == mx.bool_:
+        return mask
     require(
         mx.isfinite(mask) & ((mask == 0) | (mask == 1)),
         "invalid_action_mask",
@@ -163,6 +203,7 @@ def transition_gae(
     next_value: mx.array,
     gamma: float,
     lam: float,
+    bootstrap_indexes: np.ndarray | None = None,
 ) -> tuple[mx.array, mx.array]:
     """GAE for transition-end flags [T,E], on the host
     (`manabot.policy.returns.transition_gae`)."""
@@ -173,8 +214,49 @@ def transition_gae(
         np.array(next_value),
         gamma,
         lam,
+        bootstrap_indexes,
     )
     return mx.array(advantages), mx.array(value_targets)
+
+
+def standardized_advantages(
+    advantages: mx.array, over: mx.array | None = None
+) -> mx.array:
+    """Standardize every row using the selected rows' population statistics."""
+    reference = advantages if over is None else advantages[over]
+    mean = reference.mean()
+    deviation = mx.sqrt(mx.square(reference - mean).mean())
+    return (advantages - mean) / mx.maximum(deviation, 1e-8)
+
+
+def expected_outcome(probabilities: mx.array) -> mx.array:
+    """Expected signed result of a loss/draw/win mixture."""
+    return probabilities[..., 2] - probabilities[..., 0]
+
+
+def outcome_probabilities(value_logits: mx.array) -> mx.array:
+    return mx.softmax(value_logits, axis=-1)
+
+
+def categorical_lambda_returns(
+    probabilities: mx.array,
+    rewards: mx.array,
+    ends: mx.array,
+    bootstrap: mx.array,
+    trace_lambda: float,
+    bootstrap_indexes: np.ndarray | None = None,
+) -> mx.array:
+    """Frozen loss/draw/win lambda targets from the shared host estimator."""
+    return mx.array(
+        returns.categorical_lambda_returns(
+            np.array(probabilities),
+            np.array(rewards),
+            np.array(ends),
+            np.array(bootstrap),
+            trace_lambda,
+            bootstrap_indexes,
+        )
+    )
 
 
 # -- Losses --------------------------------------------------------------------
@@ -200,12 +282,20 @@ def clipped_surrogate(
     )
 
 
+def legal_kl(left: mx.array, right: mx.array, valid: mx.array) -> mx.array:
+    """KL(left || right) per row, masking log padding before subtraction."""
+    difference = mx.where(valid, left, 0.0) - mx.where(valid, right, 0.0)
+    return (mx.exp(left) * difference).sum(-1)
+
+
 def reverse_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
-    """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
-    difference = mx.where(valid, logs, 0.0) - mx.where(
-        valid, mx.stop_gradient(target_logs), 0.0
-    )
-    return (mx.exp(logs) * difference).sum(-1)
+    """KL(current || frozen target) [B] over legal offers."""
+    return legal_kl(logs, mx.stop_gradient(target_logs), valid)
+
+
+def forward_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
+    """KL(frozen target || current) [B] over legal offers."""
+    return legal_kl(mx.stop_gradient(target_logs), logs, valid)
 
 
 def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
@@ -217,56 +307,19 @@ def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
     return mx.square(values - targets)
 
 
+def categorical_value_loss(value_logits: mx.array, targets: mx.array) -> mx.array:
+    """Cross entropy per decision against its frozen loss/draw/win mixture."""
+    if value_logits.ndim != 2 or value_logits.shape[-1] != 3:
+        raise ValueError("categorical values require [B,3] logits")
+    if targets.shape != value_logits.shape:
+        raise ValueError("categorical targets require [B,3]")
+    logs = nn.log_softmax(value_logits, axis=-1)
+    return -(mx.stop_gradient(targets) * logs).sum(-1)
+
+
 def entropy(logs: mx.array, valid: mx.array) -> mx.array:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(mx.exp(logs) * mx.where(valid, logs, 0.0)).sum(-1)
-
-
-def damped_policy_loss(
-    logits: mx.array,
-    actions: mx.array,
-    advantages: mx.array,
-    behavior_logs: mx.array,
-    reference: mx.array,
-    valid: mx.array,
-    *,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-) -> mx.array:
-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
-
-    Sources and departures: docs/learning.md#fidelity-to-the-sources. Ratios
-    use the actual action likelihood at collection; the reverse KLs sum all
-    legal actions.
-    """
-    if logits.ndim != 2 or logits.shape != valid.shape:
-        raise ValueError("policy logits require [B,A] legal support")
-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
-        raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
-        raise ValueError("invalid damping coefficients")
-    check_logs(behavior_logs, valid)
-    check_probabilities(reference, valid, positive=True)
-    require(
-        mx.isfinite(advantages),
-        "nonfinite_advantages",
-        advantages=advantages,
-        valid=valid,
-    )
-    if bool(((actions < 0) | (actions >= logits.shape[-1])).any()):
-        raise ValueError("action index outside legal support")
-    if not bool(mx.take_along_axis(valid, actions[:, None], axis=-1).all()):
-        raise ValueError("sampled action is not legal")
-    logs = policy_logs(logits, valid)
-    behavior_logs = mx.stop_gradient(behavior_logs)
-    # Each side is gathered before the difference: on padding both are -inf.
-    ratio_logs = action_logs(logs, actions) - action_logs(behavior_logs, actions)
-    return (
-        clipped_surrogate(ratio_logs, advantages, clip)
-        + collection_kl * reverse_kl(logs, behavior_logs, valid)
-        + tau * reverse_kl(logs, reference_logs(reference, valid), valid)
-    )
 
 
 def clip_fraction(log_ratio: mx.array, clip: float) -> float:
@@ -276,6 +329,38 @@ def clip_fraction(log_ratio: mx.array, clip: float) -> float:
 
 
 # -- Selection -----------------------------------------------------------------
+
+
+def selected_magnitudes(
+    advantages: mx.array,
+    kind: Literal["top_count", "quantile"],
+    fraction: float,
+    minimum: float,
+) -> tuple[mx.array, float | None]:
+    """Retained flat indexes and empirical cutoff before the absolute floor."""
+    rows, cutoff = returns.selected_magnitudes(
+        np.array(advantages), kind, fraction, minimum
+    )
+    return mx.array(rows), cutoff
+
+
+def selected_rows(
+    advantages: mx.array,
+    fraction: float,
+    minimum: float,
+    *,
+    kind: Literal["top_count", "quantile"] = "top_count",
+) -> mx.array:
+    return selected_magnitudes(advantages, kind, fraction, minimum)[0]
+
+
+def magnitude_quantile(advantages: mx.array, quantile: float) -> float:
+    return returns.magnitude_quantile(np.array(advantages), quantile)
+
+
+def selected_moves(advantages: mx.array, quantile: float, minimum: float) -> mx.array:
+    threshold = max(magnitude_quantile(advantages, quantile), minimum)
+    return mx.abs(advantages) >= threshold
 
 
 def selection_mask(
@@ -289,6 +374,11 @@ def selection_mask(
     return mx.array(
         returns.selection_mask(np.array(advantages), kind, fraction, minimum)
     )
+
+
+def weighted_sum(values: mx.array, weights: mx.array) -> mx.array:
+    """Sum per-row losses with constant logical-minibatch coefficients."""
+    return (values.astype(mx.float32) * weights.astype(mx.float32)).sum()
 
 
 def selected_mean(values: mx.array, selected: mx.array) -> mx.array:

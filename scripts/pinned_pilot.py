@@ -18,7 +18,8 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import PolicyInference
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.interface import input_columns
+from manabot.model.world import input_columns
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,7 @@ class Game(BaseModel):
     decisions: list[Decision]
     winner: int | None
     player_columns: list[str]
+    opening_hands: bool = False
 
 
 class Recording(BaseModel):
@@ -67,12 +69,14 @@ def play(
         pilot, space = load_checkpoint(str(path))
     except ValueError as exc:
         raise ValueError(f"the loader refused {path.name}: {exc}") from exc
-    width = pilot.column_widths.get("agent_player", space.encoder.player_dim)
+    width = len(pilot.readings["agent_player"])
     columns = input_columns(space)["agent_player"][:width]
     env = managym.Env(seed=seed)
     obs, _ = env.reset(
         [managym.PlayerConfig(str(i), deck) for i, deck in enumerate(decks)]
     )
+    if replay is not None and not replay.opening_hands:
+        obs = keep_opening_hands(env, obs)
     rng = np.random.default_rng(seed)
     decisions: list[Decision] = []
     with PolicyInference(pilot) as scope:
@@ -111,6 +115,7 @@ def play(
         decisions=decisions,
         winner=env.winner_index(),
         player_columns=columns,
+        opening_hands=replay is None or replay.opening_hands,
     )
 
 

@@ -1,22 +1,24 @@
 ---
-requires: baseline, optimization diff and bounded comparison evidence
-produces: performance findings and remaining bottlenecks in the existing design
+requires: baseline measurements, the optimization diff and same-machine comparisons
+produces: performance findings in `scratch/plan.md`
+action_style: procedural
 ---
-Judge measured gains against preserved semantics and the remaining useful opportunities.
+Judge measured engine speedups against unchanged behavior.
 
-1. Compare representative workloads on the same hardware/build profile. Confirm
-   source/workload identities and behavior digests, not just elapsed time.
-   Read the `bench_states` table for the large-board states the change touches
-   beside the ordinary workloads: a cell whose work grows much faster than its
-   size is a finding even when the curated decks are no slower.
-2. Inspect debug invariant checks and affected behavior evidence. If semantics
-   changed, invalidate the speed comparison and repair the working contract before
-   accepting dependent results. Never accept narrower choices or lost observations
-   as an optimization.
-3. Record supported gains, negative results, worthwhile remaining bottlenecks and
-   justified stopping tradeoffs. Do not claim an absolute optimum or treat the
-   regression threshold as proof that optimization is complete. Missing capable
-   hardware is a named gate/CI check, not fabricated measurement.
+1. Compare base and candidate on the same machine and uninstrumented release
+   build (`bench_steps`, `bench_search`), confirming identities and digests.
+   On a contended host, require instructions retired and a CPU profile instead
+   of deferring speed to CI; matching `bench_states` counters alone doesn't
+   clear per-step cost. Flag superlinear `bench_states` growth on touched
+   large-board shapes even when curated decks aren't slower.
+2. Check debug invariants and affected behavior; changed semantics void the
+   speed comparison, and narrower choices or lost observations are never gains.
+3. Update `scratch/plan.md` with supported gains, negative results and open
+   bottlenecks, without editing code.
 
-Update existing findings for the navigation decision. Preserve performance budget
-reference adoption as its existing reviewed operation, not automatic regeneration.
+When deciding whether to continue:
+
+- **Iterate** when a profile shows a credible gain or an unprofiled
+  `bench_steps`/`bench_search` regression remains.
+- **Advance** when none remains, saying what was ruled out. Passing the 10%
+  budget floor alone doesn't finish optimization.

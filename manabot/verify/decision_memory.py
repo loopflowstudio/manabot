@@ -14,10 +14,11 @@ from typing import Literal, Protocol
 
 import numpy as np
 
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision, render_decision
+from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.decision_memory import read_records
 
@@ -74,18 +75,17 @@ class Proof:
                 source
                 == self.replay.observation_for_player(viewer).decision_memory_json()
             )
-            expected = self.space.encode(obs)
-            native = self.space.encoder.allocate()
-            self.env.encode_observation_into(obs, native)
-            restored = self.space.encode(managym.Observation.from_json(obs.toJSON()))
+            live = encode_observation(self.space, obs)
+            restored = encode_observation(
+                self.space, managym.Observation.from_json(obs.toJSON())
+            )
             for key in (
                 "decision_records",
                 "decision_reference_details",
                 "actions",
                 "action_focus",
             ):
-                np.testing.assert_array_equal(native[key], expected[key])
-                np.testing.assert_array_equal(restored[key], expected[key])
+                np.testing.assert_array_equal(restored[key], live[key])
             counts[str(viewer)] = len(read_records(source))
             (directory / f"viewer-{viewer}.json").write_text(source + "\n")
         text = capture_text_decision(self.env)
@@ -113,14 +113,7 @@ def _configs(disclosure: Literal["open", "closed"]) -> managym.GameSetup:
 
 def _root(disclosure: Literal["open", "closed"]) -> managym.Env:
     env = managym.Env(seed=23, decision_memory=True)
-    env.reset(_configs(disclosure))
-    for _ in range(20):
-        contract = SemanticDecisionContract.from_env(env)
-        if int(env.observation_for_player(contract.frame.actor).turn.phase) == 1:
-            break
-        contract.apply(env, contract.frame.find_verb("pass_priority")["id"])
-    else:
-        raise AssertionError("main phase not reached")
+    reset_to_first_main(env, _configs(disclosure))
     for seat in range(2):
         env.scenario_clear_hand(seat)
         for name in ("Accumulate Wisdom", "Lightning Bolt"):
@@ -240,8 +233,8 @@ def run_demo(out: Path, backend: DemoBackend) -> None:
         assert actor is not None
         obs = {
             key: value[None]
-            for key, value in proof.space.encode(
-                proof.env.observation_for_player(actor)
+            for key, value in encode_observation(
+                proof.space, proof.env.observation_for_player(actor)
             ).items()
         }
         policies[disclosure] = backend.prove_policies(

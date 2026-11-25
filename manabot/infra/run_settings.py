@@ -1,4 +1,4 @@
-"""Self-play instrumentation: game recording, statistics, diagnostics and stalls.
+"""Self-play settings for recording, statistics, stall diagnostics and the combat probe.
 
 `RunSettings` is the value SelfPlay and game capture receive. Recipe configs
 subclass it, so the same options are flat keys of every self-play recipe
@@ -18,6 +18,13 @@ class RunSettings(BaseModel):
     diagnostics: Level = "standard"
     stall_seconds: float = Field(default=600, gt=0)
     statistics: bool = False
+
+    combat_probe_every: int = Field(
+        default=5, ge=0, exclude_if=lambda value: value == 5
+    )
+    combat_probe_rows: int = Field(
+        default=256, ge=1, exclude_if=lambda value: value == 256
+    )
 
     @property
     def run_settings(self) -> "RunSettings":

@@ -1,6 +1,6 @@
 [package]
 name = "managym"
-version = "0.2.3"
+version = "0.2.5"
 edition = "2021"
 license = "MIT"
 
@@ -31,10 +31,21 @@ name = "managym"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["mimalloc"]
 python = ["dep:pyo3"]
 # Opt-in measurement only; ordinary wheels have no allocation-counter overhead.
-benchmark = []
+# Feature unification turns a workspace member's dev-dependency features on in
+# every workspace build, including the Engine Budget's: tests that only need
+# constructed positions ask for `fixtures`, never `benchmark`.
+benchmark = ["fixtures"]
+# Constructed-position access to an `Env`'s game; no runtime cost.
+fixtures = []
+mimalloc = ["dep:mimalloc"]
+
+[[example]]
+name = "bench_footprint"
+required-features = ["benchmark"]
+test = true
 
 [[example]]
 name = "bench_observation"
@@ -67,6 +78,7 @@ managym-cards = { path = "cards" }
 managym-state = { path = "state" }
 blake3 = "1"
 base64 = "0.22"
+mimalloc = { version = "0.1", default-features = false, optional = true }
 rand = "0.8"
 rand_chacha = "0.3"
 pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }

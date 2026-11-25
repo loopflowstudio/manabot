@@ -2,7 +2,7 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, mana_description, trigger_description,
+    counter_description, effects_description, mana_description, pending_trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -10,21 +10,147 @@ use crate::cards::names::NameOption;
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     cards::content_pack::default_content_pack,
-    flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
+    flow::{
+        decision::Decision,
+        game::{ActivationSource, CastChoices, Game, PendingChoice},
+        payment::{CostComponent, Operation, Payment, TapPayment},
+        play::CastAuthority,
+    },
     state::{
         ability::Effect,
-        card::ActivationZone,
-        game_object::{CardId, ObjectId, PlayerId, PublicId},
-        mana::Mana,
+        card::{ActivationZone, CastOption},
+        game_object::{CardId, ObjectId, PermanentId, PlayerId, PublicId, Target},
+        mana::{Color, Mana, ManaCost},
+        payment::Toward,
         player::ManaFloats,
         zone::ZoneType,
     },
 };
 
 impl Game {
+    /// Whether a ChooseMode index at this decision is a quantity (X, a
+    /// replicate count, or assigned damage).
+    pub(crate) fn announces_x(&self) -> bool {
+        matches!(
+            self.pending_choice,
+            Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
+        ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
+            matches!(
+                s.decision,
+                Decision::ChoosePaymentX { .. } | Decision::AssignCombatDamage { .. }
+            )
+        })
+    }
+
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
-        use crate::flow::decision::Decision;
+        if let Some(opening) = self.state.opening() {
+            return opening.action_description(self, action);
+        }
         match action {
+            Action::CastSpell {
+                object,
+                route: None,
+                ..
+            } if self.state.suspended_decision.is_none()
+                && let Some(source) = self.preparation_source(*object) =>
+            {
+                Some(format!(
+                    "Cast {} from {} (object {})",
+                    self.state[*object].name, self.state[source].name, self.state[source].id.0
+                ))
+            }
+            Action::CastSpell { object, .. } | Action::PlayLand { object, .. }
+                if let Some(route) = self.resolved_play_route(action) =>
+            {
+                use crate::flow::cast_permission::PlayRoute;
+                let card = default_content_pack()
+                    .spell_definition(&self.state[*object], action.spell_profile())?;
+                let terms = match &route {
+                    PlayRoute::GraveyardType { source, kind, .. } => format!(
+                        "using {} (object {}, {kind:?} for this turn)",
+                        self.state[*source].name, self.state[*source].id.0
+                    ),
+                    PlayRoute::Grant(key) => {
+                        let grant = self.grant_by_key(*object, *key)?;
+                        let price = self.grant_cast_cost(grant, card).map(|cost| {
+                            if cost.mana_value == 0 && cost.x == 0 {
+                                "{0}".into()
+                            } else {
+                                format!("{}{}", "{X}".repeat(cost.x as usize), cost_label(&cost))
+                            }
+                        });
+                        let using = if grant.foretold {
+                            "foretell".to_string()
+                        } else {
+                            grant
+                                .origin
+                                .and_then(|id| default_content_pack().definition(id))
+                                .map(|def| def.name.clone())
+                                .unwrap_or_else(|| format!("permission {}", key + 1))
+                        };
+                        format!(
+                            "using {using}{}",
+                            price.map(|cost| format!(" for {cost}")).unwrap_or_default()
+                        )
+                    }
+                    PlayRoute::PrintedFlashback => "with printed flashback".into(),
+                    PlayRoute::GrantedFlashback => "with granted flashback".into(),
+                    PlayRoute::LibraryTop => "from library".into(),
+                    PlayRoute::Hand => "from hand".into(),
+                    PlayRoute::FreeFromHand => "from hand without paying its mana cost".into(),
+                    PlayRoute::PrintedGraveyard => {
+                        let count = card.graveyard_counter_cast().unwrap_or_default();
+                        format!("from graveyard by removing {count} counters")
+                    }
+                    PlayRoute::ExileCounter(kind) => format!(
+                        "from exile with a {} counter",
+                        kind.name().replace('_', " ")
+                    ),
+                };
+                let verb = if card.types.is_land() { "Play" } else { "Cast" };
+                Some(format!("{verb} {} {terms}", card.name))
+            }
+            Action::CastSpell {
+                object,
+                route: None,
+                ..
+            }
+            | Action::PlayLand {
+                object,
+                route: None,
+                ..
+            } if !action.spell_profile().is_front() => {
+                let face = default_content_pack()
+                    .spell_definition(&self.state[*object], action.spell_profile())?;
+                let verb = if face.types.is_land() { "Play" } else { "Cast" };
+                Some(format!("{verb} {}", face.name))
+            }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let view = self.characteristics(*permanent);
+                let ability = view.activated_abilities.get(*ability_index)?;
+                if !ability.has_grantor_cost() {
+                    return None;
+                }
+                let grantor = self.state.permanent_of(ability.granted_by?.grantor)?;
+                // Two grantors of one ability differ only by the grantor named.
+                let (also_tap, grantor_cost) = match (ability.exile_grantor, ability.tap_source) {
+                    (true, _) => ("", "exile"),
+                    (false, true) => (", {T},", "tap"),
+                    (false, false) => ("", "tap"),
+                };
+                Some(format!(
+                    "Activate ability of {}: pay {}{also_tap} and {grantor_cost} {} (permanent {}) — {}",
+                    view.name,
+                    crate::agent::ability_description::cost_description(&ability.mana_cost),
+                    self.characteristics(grantor).name,
+                    self.state.permanents[grantor].as_ref()?.id.0,
+                    effects_description(&ability.effects)
+                ))
+            }
             Action::ChooseTrigger { trigger_id, player } => {
                 let trigger = self
                     .state
@@ -33,154 +159,127 @@ impl Game {
                     .remaining
                     .iter()
                     .find(|t| t.id == *trigger_id)?;
-                let face = trigger.source_lki.as_ref().map_or_else(
-                    || self.state.source_base(trigger.source_object()).0,
-                    |lki| lki.definition_id,
-                );
-                let record = self.source_face(trigger.source_object(), face)?;
                 let mut label = format!(
                     "Put on stack next — {}",
-                    trigger_description(
-                        record,
-                        trigger.ability_index,
-                        trigger.inline_effects.as_deref()
-                    )
+                    pending_trigger_description(self, trigger)?
                 );
-                if let Some(context) = trigger.context {
-                    let reference = self.target_reference(context, *player);
-                    if let Some(seat) = reference.player {
-                        label.push_str(&format!(" — event: Seat {}", seat + 1));
-                    } else if let Some(definition) = reference.definition.and_then(|id| {
-                        default_content_pack().definition(crate::state::card::CardDefId(id))
-                    }) {
-                        label.push_str(&format!(" — event: {}", definition.name));
-                        if let Some(object) = reference.object {
-                            label.push_str(&format!(" (object {object})"));
-                        }
-                    }
+                if let Some(event) = trigger
+                    .context
+                    .and_then(|context| self.trigger_event_label(context, *player))
+                {
+                    label.push_str(&event);
                 }
                 Some(label)
             }
+            Action::WaterbendTap { player, permanent } => {
+                // A tap says what it pays unless it only waterbends, which
+                // keeps its type name.
+                let (_, payment, _) = self
+                    .paying()
+                    .filter(|_| self.state.suspended_decision.is_none())?;
+                let options = self.help_tap_options(*player, payment, *permanent);
+                if options.iter().all(|paid| paid.toward == Toward::Waterbend) {
+                    return None;
+                }
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
+                Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
+            }
+            // A fixed source tapped while an announced cost is paid: its mana
+            // pays toward that cost as it is made (`commit_produced_mana`).
+            Action::TapForMana { permanent, .. }
+                if self.state.suspended_decision.is_none()
+                    && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
+            {
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
+                let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
+                Some(format!("Tap {name} for {}", mana_description(&output)))
+            }
+            Action::TurnFaceUp { object, .. } => Some(format!(
+                "Turn {} face up for {}",
+                self.state[*object].retained_base().1.name,
+                crate::agent::ability_description::cost_description(self.manifest_cost(*object)?)
+            )),
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
-            Action::ChooseMode { mode, .. }
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
-                ) =>
-            {
-                Some(format!("X = {mode}"))
-            }
-            Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
-                let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                let modes = self.unchosen_trigger_modes(trigger)?;
-                Some(crate::agent::ability_description::effects_description(
-                    modes.get(*mode)?,
-                ))
-            }
-            Action::ChooseMode { mode, .. } => {
-                match &self.state.suspended_decision.as_ref()?.decision {
-                    Decision::OrderReplacement { candidates, .. } => {
-                        let candidate = candidates.get(*mode)?;
-                        let object_id = candidate.source();
-                        Some(format!(
-                            "{}: {}",
-                            self.state[object_id].name,
-                            candidate.description()
-                        ))
-                    }
-                    Decision::NameCard { names, scope, .. } => match scope.option(*mode)? {
-                        NameOption::Group(group) => Some(format!(
-                            "Names {} through {}",
-                            names.get(group.start)?.name,
-                            names.get(group.end - 1)?.name
-                        )),
-                        NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
-                    },
-                    Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
-                    Decision::ManaSpend { player, cost, .. } => {
-                        let choices = self.mana_spend_choices(*player, cost);
-                        let unit = &choices.get(*mode)?.unit;
-                        let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
-                            ""
-                        } else {
-                            " (expires at step end)"
-                        };
-                        Some(format!("Spend {}{expiry}", mana_description(unit)))
-                    }
-                    Decision::ManaChoice { choices, .. } => {
-                        Some(format!("Add {}", mana_description(choices.get(*mode)?)))
-                    }
-                    Decision::Modal { modes, .. } => match modes.get(*mode)?.as_slice() {
-                        [] => Some("Decline".into()),
-                        [Effect::AddMana { mana, .. }] => {
-                            Some(format!("Add {}", mana_description(mana)))
-                        }
-                        [Effect::CreateToken { token, .. }] => Some(format!(
-                            "Create a {} token",
-                            default_content_pack().token_name(token)
-                        )),
-                        [Effect::PlaceTargetInLibrary { second_from_top }] => {
-                            Some(if *second_from_top {
-                                "Second from the top".into()
-                            } else {
-                                "On the bottom".into()
-                            })
-                        }
-                        [Effect::SelectCards {
-                            from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
-                            ..
-                        }] => Some("Search your library".into()),
-                        [Effect::RemoveCounters {
-                            chosen: Some(kind), ..
-                        }] => Some(format!("Remove a {} counter", counter_description(*kind))),
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            }
+            Action::ChooseMode { mode, .. } => self.mode_description(*mode),
             Action::PayCost { .. } => match &self.pending_choice {
-                Some(PendingChoice::KickerChoice {
-                    object: object_id, ..
-                }) if self.state[*object_id].exile_alternative().is_some() => {
-                    Some("Exile a card from your hand instead of paying the mana cost".into())
-                }
-                Some(PendingChoice::SacrificePayment { cost, .. }) => {
-                    cost.or_mana.as_ref().map(|alternative| {
-                        let mut label = String::new();
-                        if alternative.generic() > 0 {
-                            label.push_str(&format!("{{{}}}", alternative.generic()));
+                Some(PendingChoice::KickerChoice { object, cast, .. }) => {
+                    match cast.spell(&self.state[*object]).cast_option()? {
+                        CastOption::ExileFromHand => Some(
+                            "Exile a card from your hand instead of paying the mana cost".into(),
+                        ),
+                        CastOption::AlternativeMana(cost) => {
+                            Some(format!("Pay {} instead of the mana cost", cost_label(cost)))
                         }
-                        let colored = Mana {
-                            mana: alternative.cost[..6]
-                                .try_into()
-                                .expect("six colored mana slots"),
-                            ..Default::default()
-                        };
-                        label.push_str(&mana_description(&colored));
-                        format!("Pay {label} instead of sacrificing")
-                    })
+                        CastOption::Bargain => {
+                            Some("Bargain: sacrifice an artifact, enchantment or token".into())
+                        }
+                        CastOption::FlashSurcharge(cost) => Some(format!(
+                            "Pay {} more to cast as though it had flash",
+                            cost_label(cost)
+                        )),
+                        CastOption::Kicker => None,
+                    }
+                }
+                Some(PendingChoice::Pay { payment, .. }) => {
+                    let (or_mana, instead) = match &payment.owed[0] {
+                        CostComponent::Sacrifice(cost, _) => {
+                            (cost.or_mana.as_ref()?, "sacrificing")
+                        }
+                        CostComponent::Forage { or_mana, .. } => (or_mana, "foraging"),
+                        _ => return None,
+                    };
+                    Some(format!("Pay {} instead of {instead}", cost_label(or_mana)))
                 }
                 _ => None,
             },
             Action::SelectCard {
                 object: object_id, ..
             } => {
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::ExileFromHandPayment { .. })
-                ) {
-                    Some(format!("Exile {} to pay", self.state[*object_id].name))
-                } else if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
-                    Some(format!("Tap {} to crew", self.state[*object_id].name))
-                } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
-                    Some(format!("Tap {} to pay", self.state[*object_id].name))
-                } else if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::SacrificePayment { .. })
-                ) {
-                    Some(format!("Sacrifice {}", self.state[*object_id].name))
+                let name = &self.state[*object_id].name;
+                let paying = self.paying().and_then(|(_, _, component)| match component {
+                    CostComponent::ExileFromHand => Some(format!("Exile {name} to pay")),
+                    CostComponent::TapPower {
+                        toward: Toward::Saddle,
+                        ..
+                    } => Some(format!("Tap {name} to saddle")),
+                    CostComponent::TapPower { .. } => Some(format!("Tap {name} to crew")),
+                    CostComponent::Tap(_, Toward::Station) => {
+                        Some(format!("Tap {name} to station"))
+                    }
+                    CostComponent::Tap(..) => Some(format!("Tap {name} to pay")),
+                    CostComponent::Sacrifice(_, Toward::Bargain) => {
+                        Some(format!("Sacrifice {name} (bargain)"))
+                    }
+                    CostComponent::Sacrifice(..) => Some(format!("Sacrifice {name}")),
+                    CostComponent::Forage { .. } => {
+                        Some(if self.state.permanent_of(*object_id).is_some() {
+                            format!("Sacrifice {name} (forage)")
+                        } else {
+                            format!("Exile {name} (forage)")
+                        })
+                    }
+                    CostComponent::Mana { help, .. }
+                        if help.delve.is_some() && self.state.suspended_decision.is_none() =>
+                    {
+                        Some(format!("Exile {name} to pay {{1}} (delve)"))
+                    }
+                    CostComponent::RemoveCounters { .. } => {
+                        Some(format!("Remove a counter from {name}"))
+                    }
+                    CostComponent::Discard
+                    | CostComponent::Mana { .. }
+                    | CostComponent::TapPays { .. }
+                    | CostComponent::Life(_)
+                    | CostComponent::RemoveSourceCounters(..)
+                    | CostComponent::AddCounters(..)
+                    | CostComponent::Source(_)
+                    | CostComponent::ExileGrantor(_)
+                    | CostComponent::TapGrantor(_) => None,
+                });
+                if paying.is_some() {
+                    paying
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
                         Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => {
@@ -203,6 +302,9 @@ impl Game {
                                 LibraryEnd::Bottom => "bottom",
                             }
                         )),
+                        Decision::ManifestDread { .. } => {
+                            Some(format!("Manifest {}", self.state[*object_id].name))
+                        }
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",
                             self.state[*object_id].name
@@ -229,8 +331,8 @@ impl Game {
             Action::Decline { .. }
                 if matches!(
                     &self.pending_choice,
-                    Some(PendingChoice::KickerChoice { object: object_id, .. })
-                        if self.state[*object_id].exile_alternative().is_some()
+                    Some(PendingChoice::KickerChoice { object, cast, .. })
+                        if cast.spell(&self.state[*object]).cast_option() == Some(CastOption::ExileFromHand)
                 ) =>
             {
                 Some("Pay the mana cost".into())
@@ -244,15 +346,174 @@ impl Game {
         }
     }
 
+    /// " — event: Gray Ogre (object 7)": what a trigger's event is about,
+    /// as `viewer` sees it, for its placement offer and its stack entry.
+    pub(crate) fn trigger_event_label(&self, context: Target, viewer: PlayerId) -> Option<String> {
+        let reference = self.target_reference(context, viewer);
+        if let Some(seat) = reference.player {
+            return Some(format!(" — event: Seat {}", seat + 1));
+        }
+        let definition = default_content_pack()
+            .definition(crate::state::card::CardDefId(reference.definition?))?;
+        let mut label = format!(" — event: {}", definition.name);
+        if let Some(object) = reference.object {
+            label.push_str(&format!(" (object {object})"));
+        }
+        Some(label)
+    }
+
+    fn mode_description(&self, mode: usize) -> Option<String> {
+        match self.state.suspended_decision.as_ref().map(|s| &s.decision) {
+            Some(Decision::AssignCombatDamage {
+                attacker,
+                blocker,
+                remaining,
+                last,
+                ..
+            }) => {
+                let rest = remaining - mode as i32;
+                let recipient = if *last {
+                    "to defending player"
+                } else {
+                    "left to assign"
+                };
+                Some(format!(
+                    "{} assigns {mode} to {}, {rest} {recipient}",
+                    self.observed_object_name(*attacker),
+                    self.observed_object_name(*blocker)
+                ))
+            }
+            _ if self.announces_x() => Some(format!("X = {mode}")),
+            Some(Decision::OrderMeldedCards { cards, .. }) => {
+                let card = self.state.cards[*cards.get(mode)?];
+                Some(format!(
+                    "Place {} first",
+                    default_content_pack().definition(card.definition)?.name
+                ))
+            }
+            Some(Decision::OrderReplacement { candidates, .. }) => {
+                let candidate = candidates.get(mode)?;
+                let name = candidate
+                    .source_definition
+                    .and_then(|definition| default_content_pack().definition(definition))
+                    .map_or_else(
+                        || {
+                            self.spell_on_stack(candidate.source()).map_or_else(
+                                || self.observed_object_name(candidate.source()),
+                                |spell| self.state[spell.object].name.clone(),
+                            )
+                        },
+                        |definition| definition.name.clone(),
+                    );
+                Some(format!("{name}: {}", candidate.description()))
+            }
+            Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
+                NameOption::Group(group) => Some(format!(
+                    "Names {} through {}",
+                    names.get(group.start)?.name,
+                    names.get(group.end - 1)?.name
+                )),
+                NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
+            },
+            Some(Decision::ManaSpend { player, cost, .. }) => {
+                let choices = self.mana_spend_choices(*player, cost);
+                let unit = &choices.get(mode)?.unit;
+                let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                    ""
+                } else {
+                    " (expires at step end)"
+                };
+                Some(format!("Spend {}{expiry}", mana_description(unit)))
+            }
+            Some(Decision::ManaChoice { choices, .. }) => {
+                Some(format!("Add {}", mana_description(choices.get(mode)?)))
+            }
+            Some(Decision::Modal { modes, .. }) => match modes.get(mode)?.as_slice() {
+                [] => Some("Decline".into()),
+                [Effect::AddMana { mana, .. }] => Some(format!("Add {}", mana_description(mana))),
+                [Effect::CreateToken { token, .. }] => Some(format!(
+                    "Create a {} token",
+                    default_content_pack().token_name(token)
+                )),
+                [Effect::PlaceTargetInLibrary { second_from_top }] => Some(if *second_from_top {
+                    "Second from the top".into()
+                } else {
+                    "On the bottom".into()
+                }),
+                [Effect::Move {
+                    to: ZoneType::Library,
+                    library_end: Some(end),
+                    ..
+                }] => Some(match end {
+                    LibraryEnd::Top => "On top".into(),
+                    LibraryEnd::Bottom => "On the bottom".into(),
+                }),
+                [Effect::SelectCards {
+                    from: crate::state::ability::ObjectSelector::Zone(ZoneType::Library),
+                    ..
+                }] => Some("Search your library".into()),
+                [Effect::RemoveCounters {
+                    chosen: Some(kind), ..
+                }] => Some(format!("Remove a {} counter", counter_description(*kind))),
+                effects => Some(effects_description(effects)),
+            },
+            Some(_) => None,
+            None => {
+                if let Some((
+                    _,
+                    _,
+                    CostComponent::RemoveCounters {
+                        choosing_from: Some(object),
+                        ..
+                    },
+                )) = self.paying()
+                {
+                    let kind = self.removable_kind(*object, mode)?;
+                    return Some(format!(
+                        "Remove a {} counter from {}",
+                        counter_description(kind),
+                        self.state[*object].name
+                    ));
+                }
+                if let Some((_, _, CostComponent::TapPays { tapped, options })) = self.paying() {
+                    return Some(format!(
+                        "{} pays {}",
+                        self.observed_object_name(*tapped),
+                        tap_payments_text(std::slice::from_ref(
+                            options.iter().find(|paid| paid.mode() == mode)?
+                        ))
+                    ));
+                }
+                let modes = if let Some(PendingChoice::SpellMode { object, cast, .. }) =
+                    &self.pending_choice
+                {
+                    cast.spell(&self.state[*object]).spell_modes()?
+                } else {
+                    let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
+                    let Effect::TriggerModes { modes, .. } = self.pending_mode_rule(trigger)?
+                    else {
+                        return None;
+                    };
+                    modes
+                };
+                Some(effects_description(modes.get(mode)?))
+            }
+        }
+    }
+
     /// Cards `player` might play at priority: their hand and graveyard, and
     /// exiled cards they hold grants for, and a library top a permanent lets
-    /// them cast. `priority_action_for_card` decides.
-    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+    /// them cast. `priority_actions_for_object` prices each route.
+    fn priority_candidate_objects(&self, player: PlayerId) -> impl Iterator<Item = ObjectId> + '_ {
         self.state
             .zone_cards(ZoneType::Hand, player)
             .chain(self.state.zone_cards(ZoneType::Graveyard, player))
-            .chain(self.exile_granted_cards(player))
-            .chain(self.library_top_castable(player))
+            .map(|card| self.state.object_of(card))
+            .chain(self.exile_playable_objects(player))
+            .chain(
+                self.library_top_card(player)
+                    .map(|card| self.state.object_of(card)),
+            )
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
@@ -261,27 +522,25 @@ impl Game {
         let mode = self.mana_float_mode(player);
         let mut spell_spends = false;
         let mut actions = Vec::new();
-        for card in self.priority_candidate_cards(player) {
-            if let Some((action, mana_value)) = self.priority_action_for_card(player, card) {
+        for object in self.priority_candidate_objects(player) {
+            self.priority_actions_for_object(player, object, |action, mana_value, cast| {
                 if mode == ManaFloats::Usable && !spell_spends {
                     if let Action::CastSpell { object, .. } = action {
+                        let spell = cast.spell(&self.state[object]);
                         spell_spends = mana_value > 0
-                            || self.cast_needs_x_announcement(
-                                player,
-                                object,
-                                CastChoices::default(),
-                            )
-                            || self.state[object]
+                            || spell.flash_surcharge().is_some()
+                            || self.cast_needs_x_announcement(object, cast)
+                            || spell
                                 .optional_cost()
                                 .is_some_and(|cost| cost.mana_value > 0)
-                            || self.state[object]
+                            || spell
                                 .sacrifice_cost()
                                 .and_then(|sac| sac.or_mana.as_ref())
                                 .is_some_and(|cost| cost.mana_value > 0);
                     }
                 }
                 actions.push(action);
-            }
+            });
         }
         let mut floats = Vec::new();
         actions.extend(self.priority_activate_ability_actions(player, mode, &mut floats));
@@ -318,6 +577,11 @@ impl Game {
             } => self.state.card_id(object).and_then(|card| {
                 self.activation_ability(ActivationSource::Card(card), ability_index)
             }),
+            Action::TurnFaceUp { object, .. } => {
+                return self
+                    .manifest_cost(object)
+                    .is_some_and(|cost| cost.mana_value > 0)
+            }
             Action::Foretell { .. } => return true,
             _ => return false,
         };
@@ -332,6 +596,19 @@ impl Game {
         })
     }
 
+    fn manifest_cost(&self, object: ObjectId) -> Option<&ManaCost> {
+        self.state.permanent_of(object)?;
+        let card = &self.state[object];
+        if !card.is_face_down() {
+            return None;
+        }
+        let (_, printing) = card.retained_base();
+        printing
+            .mana_cost
+            .as_ref()
+            .filter(|_| printing.types.is_creature())
+    }
+
     fn priority_activate_ability_actions(
         &self,
         player: PlayerId,
@@ -343,6 +620,15 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
+            if self
+                .manifest_cost(permanent.object)
+                .is_some_and(|cost| self.can_pay_mana_cost(player, cost))
+            {
+                actions.push(Action::TurnFaceUp {
+                    player,
+                    object: permanent.object,
+                });
+            }
             if self.activations_prohibited(permanent_id) {
                 continue;
             }
@@ -359,6 +645,7 @@ impl Game {
                     continue;
                 }
                 if self.check_activation_terms(player, ability).is_err()
+                    || !permanent.can_pay_counters(ability)
                     || permanent.activation_used(ability_index, ability)
                     || (ability.discard_card
                         && self
@@ -381,7 +668,7 @@ impl Game {
                     }
                     continue;
                 }
-                let payment = Payment::Activation {
+                let operation = Operation::Activation {
                     source,
                     ability_index,
                     targets: Vec::new(),
@@ -389,13 +676,13 @@ impl Game {
                 };
                 if let Some(cost) = &ability.sacrifice {
                     if !self
-                        .payment_candidates(player, &payment, cost)
+                        .payment_candidates(player, &operation, cost)
                         .into_iter()
                         .any(|id| {
                             self.can_pay_announced_activation(
                                 player,
                                 &ability.mana_cost,
-                                &payment,
+                                &operation,
                                 Some(id),
                             )
                         })
@@ -403,7 +690,7 @@ impl Game {
                             self.can_pay_announced_activation(
                                 player,
                                 &ability.mana_cost.plus(extra),
-                                &payment,
+                                &operation,
                                 None,
                             )
                         })
@@ -411,21 +698,27 @@ impl Game {
                         continue;
                     }
                 }
-                if ability.tap_source && !self.permanent_can_tap(permanent_id) {
-                    continue;
-                }
-                if ability
-                    .crew
-                    .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+                if (ability.tap_source && !self.permanent_can_tap(permanent_id))
+                    || !self.can_tap_grantor(ability)
                 {
                     continue;
                 }
-                let affordable = if let Some(cost) = &ability.tap_cost {
-                    self.tap_activation_payment_possible(player, &payment, cost.count, None)
-                } else if ability.waterbend {
-                    self.can_pay_waterbend_activation(player, permanent_id, ability)
+                if ability.tap_power().is_some_and(|(power, _)| {
+                    self.crew_power_available(player, permanent_id) < power
+                }) {
+                    continue;
+                }
+                let affordable = if ability.chosen_tap().is_some() {
+                    let payment = Payment {
+                        owed: self.cost_components(player, &operation),
+                        operation,
+                        receipt: Default::default(),
+                    };
+                    self.tap_activation_payment_possible(player, &payment, None)
+                } else if ability.waterbend || ability.mana_cost.x > 0 {
+                    self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
-                    self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
+                    self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
                 };
                 if affordable {
                     actions.push(Action::ActivateAbility {
@@ -469,14 +762,18 @@ impl Game {
                     {
                         continue;
                     }
-                    let payment = Payment::Activation {
+                    let operation = Operation::Activation {
                         source,
                         ability_index,
                         targets: Vec::new(),
                         x: 0,
                     };
-                    if self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
-                    {
+                    if self.can_pay_announced_activation(
+                        player,
+                        &ability.mana_cost,
+                        &operation,
+                        None,
+                    ) {
                         actions.push(Action::ActivateCardAbility {
                             player,
                             object: self.state.object_of(card),
@@ -489,42 +786,58 @@ impl Game {
         actions
     }
 
-    fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<(Action, u8)> {
-        let object = &self.state[self.state.object_of(card)];
-        if !self.may_play_from_zone(player, self.state.object_of(card)) {
-            return None;
+    fn priority_actions_for_object(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        mut offer: impl FnMut(Action, u8, CastChoices),
+    ) {
+        // Preserve the original single-route Command. When routes overlap
+        // for one face, each of its offers names its route, even if only one
+        // survives the affordability check.
+        for profile in self.state[object].spell_profiles() {
+            let routes = self.permitted_play_routes(player, object, profile);
+            for &permission in &routes {
+                let route = (routes.len() > 1).then_some(permission);
+                let Some(cast) =
+                    self.cast_choices(player, object, profile, CastAuthority::Priority(permission))
+                else {
+                    continue;
+                };
+                let spell = cast.spell(&self.state[object]);
+                let types = &spell.types;
+                if types.is_land() {
+                    if self.can_play_land(player) {
+                        offer(
+                            Action::PlayLand {
+                                profile,
+                                player,
+                                object,
+                                route,
+                            },
+                            0,
+                            cast,
+                        );
+                    }
+                } else if types.is_castable()
+                    && (self.can_cast_sorceries(player)
+                        || self.has_instant_timing(player, object, cast))
+                {
+                    if let Some(value) = self.castable_mana_value(player, object, cast) {
+                        offer(
+                            Action::CastSpell {
+                                profile,
+                                player,
+                                object,
+                                route,
+                            },
+                            value,
+                            cast,
+                        );
+                    }
+                }
+            }
         }
-        if object.types.is_land() {
-            return self.can_play_land(player).then_some((
-                Action::PlayLand {
-                    player,
-                    object: self.state.object_of(card),
-                },
-                0,
-            ));
-        }
-        if !object.types.is_castable() {
-            return None;
-        }
-
-        let can_cast_now = if self.has_instant_timing(player, self.state.object_of(card)) {
-            self.can_cast_instants(player)
-        } else {
-            self.can_cast_sorceries(player)
-        };
-        if !can_cast_now {
-            return None;
-        }
-        self.castable_mana_value(player, card, Default::default())
-            .map(|value| {
-                (
-                    Action::CastSpell {
-                        player,
-                        object: self.state.object_of(card),
-                    },
-                    value,
-                )
-            })
     }
 
     /// Mana charged by a legal cast at the given choices, or None when modes,
@@ -532,42 +845,37 @@ impl Game {
     pub(crate) fn castable_mana_value(
         &self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         cast: CastChoices,
     ) -> Option<u8> {
-        let object = &self.state[self.state.object_of(card)];
-        if object.spell_modes().is_some()
-            && self
-                .legal_spell_modes(player, self.state.object_of(card))
-                .is_empty()
+        let spell = cast.spell(&self.state[object]);
+        if spell.spell_modes().is_some() && self.legal_spell_modes(player, object, cast).is_empty()
         {
             return None;
         }
         // Every mandatory targeting requirement needs a legal target.
-        for requirement in object.target_requirements() {
+        for requirement in spell.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, self.state.object_of(card), &requirement)
+                    .legal_targets_for_requirement(player, object, &requirement)
                     .is_empty()
             {
                 return None;
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, self.state.object_of(card), cast, None)
-        else {
-            return Some(0);
-        };
+        // Permission opens the zone. An absent payable cost is distinct from {0}.
+        let cost = self.effective_spell_cost(player, object, cast, None)?;
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
-        let Some(additional) = object.sacrifice_cost() else {
-            if self.can_pay_cast(player, self.state.object_of(card), cast) {
+        let Some(additional) = spell.sacrifice_cost() else {
+            if self.can_pay_cast(player, object, cast) {
                 return Some(cost.mana_value);
             }
-            return (object.exile_alternative().is_some()
+            return (self.alternative_cost_available(player, object, cast)
                 && self.can_pay_cast(
                     player,
-                    self.state.object_of(card),
+                    object,
                     CastChoices {
                         kicked: true,
                         ..cast
@@ -575,15 +883,15 @@ impl Game {
                 ))
             .then_some(0);
         };
-        let payment = Payment::Spell {
-            object: self.state.object_of(card),
+        let operation = Operation::Spell {
+            object,
             cast,
             mode: None,
             targets: Vec::new(),
             target_req_indices: Vec::new(),
         };
         (self
-            .payment_candidates(player, &payment, additional)
+            .payment_candidates(player, &operation, additional)
             .into_iter()
             .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)))
             || additional.or_mana.as_ref().is_some_and(|extra| {
@@ -596,141 +904,9 @@ impl Game {
         let _payments = self.payment_scan();
         let choice = self.pending_choice.as_ref()?;
         match choice {
-            PendingChoice::ManaPayment {
-                player,
-                payment,
-                sacrifice,
-                alternative,
-            } => {
-                let mut actions = self.mana_ability_actions(*player, *sacrifice);
-                actions.extend(self.useful_payment_taps(*player));
-                let cost = self.payment_mana_cost(*player, payment, alternative.as_ref());
-                if self.can_pay_mana_cost(*player, &cost) {
-                    actions.push(Action::PayCost { player: *player });
-                }
-                self.append_mana_floats(*player, &mut actions);
-                Some(ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::PayOrNot,
-                    actions,
-                    focus: Vec::new(),
-                })
+            PendingChoice::Pay { player, payment } => {
+                Some(self.payment_action_space(*player, payment))
             }
-            PendingChoice::SacrificePayment {
-                player,
-                payment,
-                cost,
-            } => {
-                let mut actions: Vec<_> = self
-                    .payment_candidates(*player, payment, cost)
-                    .into_iter()
-                    .filter(|id| {
-                        self.can_pay_with_mana_abilities(
-                            *player,
-                            &self.payment_mana_cost(*player, payment, None),
-                            Some(*id),
-                        )
-                    })
-                    .map(|id| Action::SelectCard {
-                        player: *player,
-                        object: self.state.permanents[id].as_ref().unwrap().object,
-                    })
-                    .collect();
-                if cost.or_mana.as_ref().is_some_and(|extra| {
-                    self.can_pay_with_mana_abilities(
-                        *player,
-                        &self.payment_mana_cost(*player, payment, Some(extra)),
-                        None,
-                    )
-                }) {
-                    actions.push(Action::PayCost { player: *player });
-                }
-                Some(ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::LookAndSelect,
-                    actions,
-                    focus: Vec::new(),
-                })
-            }
-            PendingChoice::TapPayment {
-                player,
-                source,
-                ability_index,
-                targets,
-                remaining,
-            } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: self
-                    .activation_ability(*source, *ability_index)
-                    .map(|ability| self.tap_cost_candidates(*player, &ability))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|id| {
-                        self.tap_activation_payment_possible(
-                            *player,
-                            &Payment::Activation {
-                                source: *source,
-                                ability_index: *ability_index,
-                                targets: targets.clone(),
-                                x: 0,
-                            },
-                            *remaining,
-                            Some(*id),
-                        )
-                    })
-                    .filter_map(|id| self.state.permanents[id].as_ref())
-                    .map(|permanent| Action::SelectCard {
-                        player: *player,
-                        object: permanent.object,
-                    })
-                    .collect(),
-                focus: Vec::new(),
-            }),
-            PendingChoice::ExileFromHandPayment { player, payment } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: self
-                    .payment_source_object(payment)
-                    .map(|object| self.exile_alternative_cards(*player, object))
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        object: self.state.object_of(card),
-                    })
-                    .collect(),
-                focus: Vec::new(),
-            }),
-            PendingChoice::DiscardPayment { player, .. } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::Discard,
-                actions: self
-                    .state
-                    .zone_cards(ZoneType::Hand, *player)
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        object: self.state.object_of(card),
-                    })
-                    .collect(),
-                focus: Vec::new(),
-            }),
-            PendingChoice::Crew {
-                player, permanent, ..
-            } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::LookAndSelect,
-                actions: self
-                    .crew_candidates(*player, *permanent)
-                    .into_iter()
-                    .filter_map(|id| self.state.permanents[id].as_ref())
-                    .map(|crew| Action::SelectCard {
-                        player: *player,
-                        object: crew.object,
-                    })
-                    .collect(),
-                focus: Vec::new(),
-            }),
             PendingChoice::ActivatedTarget {
                 player,
                 source,
@@ -769,11 +945,15 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
-            PendingChoice::SpellMode { player, object, .. } => Some(ActionSpace {
+            PendingChoice::SpellMode {
+                player,
+                object,
+                cast,
+            } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 actions: self
-                    .legal_spell_modes(*player, *object)
+                    .legal_spell_modes(*player, *object, *cast)
                     .into_iter()
                     .map(|mode| Action::ChooseMode {
                         player: *player,
@@ -830,7 +1010,9 @@ impl Game {
                         target,
                     })
                     .collect();
-                let requirements = self.state[object].target_requirements_for_mode(*mode);
+                let requirements = cast
+                    .spell(&self.state[object])
+                    .target_requirements_for_mode(*mode);
                 let chosen_in_req = chosen_req_indices
                     .iter()
                     .filter(|i| **i == *requirement_index)
@@ -849,55 +1031,171 @@ impl Game {
                     focus: vec![self.state[object].id],
                 })
             }
-            PendingChoice::Waterbend {
-                player,
-                payment,
-                remaining_generic,
-                tapped,
-            } => {
-                let (owed, waterbend) =
-                    self.waterbend_owed(*player, payment, *remaining_generic, *tapped);
-                let tapped_source = self.payment_tapped_source(payment);
-                let mut actions = self.mana_ability_actions(*player, None);
-                if waterbend > 0 {
-                    // Only offer taps that keep the rest of the cost payable.
-                    for candidate in self.waterbend_taps_keeping_payable(
-                        *player,
-                        &owed.reduced_generic(1),
-                        waterbend - 1,
-                        self.waterbend_payment_candidates(*player, payment),
-                        tapped_source,
-                    ) {
-                        actions.push(Action::WaterbendTap {
-                            player: *player,
-                            permanent: candidate,
-                        });
-                    }
-                }
-                if self.can_pay_mana_cost(*player, &owed) {
-                    actions.push(Action::PayCost { player: *player });
-                }
-                self.append_mana_floats(*player, &mut actions);
-                let focus = match payment.as_ref() {
-                    Payment::Activation {
-                        source: ActivationSource::Permanent(permanent),
-                        ..
-                    } => self.state.permanents[*permanent]
-                        .as_ref()
-                        .map(|perm| vec![perm.id])
-                        .unwrap_or_default(),
-                    _ => self
-                        .payment_source_object(payment)
-                        .map(|object| vec![self.state[object].id])
-                        .unwrap_or_default(),
-                };
-                Some(ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::Waterbend,
-                    actions,
-                    focus,
-                })
+        }
+    }
+
+    /// The offers for the cost component being paid. Every legal way to pay
+    /// it is offered; an object whose choice would leave the rest of the
+    /// cost unpayable is not.
+    fn payment_action_space(&self, player: PlayerId, payment: &Payment) -> ActionSpace {
+        let select = |objects: Vec<ObjectId>| -> Vec<Action> {
+            objects
+                .into_iter()
+                .map(|object| Action::SelectCard { player, object })
+                .collect()
+        };
+        let permanents = |ids: Vec<PermanentId>| -> Vec<ObjectId> {
+            ids.into_iter()
+                .filter_map(|id| self.state.permanents[id].as_ref())
+                .map(|permanent| permanent.object)
+                .collect()
+        };
+        let source_focus = || -> Vec<PublicId> {
+            match &payment.operation {
+                Operation::Activation {
+                    source: ActivationSource::Permanent(permanent),
+                    ..
+                } => self.state.permanents[*permanent]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+                operation => self
+                    .payment_source_object(operation)
+                    .map(|object| vec![self.state[object].id])
+                    .unwrap_or_default(),
             }
+        };
+        let (kind, actions, focus) = match &payment.owed[0] {
+            CostComponent::TapPower { .. } => {
+                let Operation::Activation {
+                    source: ActivationSource::Permanent(vehicle),
+                    ..
+                } = payment.operation
+                else {
+                    unreachable!("a permanent's ability taps creatures for power")
+                };
+                (
+                    ActionSpaceKind::LookAndSelect,
+                    select(permanents(self.crew_candidates(player, vehicle))),
+                    Vec::new(),
+                )
+            }
+            CostComponent::Tap(cost, toward) => (
+                ActionSpaceKind::LookAndSelect,
+                select(permanents(
+                    self.tap_component_candidates(player, &payment.operation, cost, *toward)
+                        .into_iter()
+                        .filter(|id| {
+                            self.tap_activation_payment_possible(player, payment, Some(*id))
+                        })
+                        .collect(),
+                )),
+                Vec::new(),
+            ),
+            CostComponent::Discard => (
+                ActionSpaceKind::Discard,
+                select(self.discard_candidates(player, payment.operation.spell())),
+                Vec::new(),
+            ),
+            CostComponent::ExileFromHand => (
+                ActionSpaceKind::LookAndSelect,
+                select(self.exile_payment_objects(player, payment)),
+                Vec::new(),
+            ),
+            CostComponent::Forage { or_mana, exiled } => {
+                let mut actions = select(self.forage_objects(player, payment));
+                if *exiled == 0
+                    && self.can_pay_with_mana_abilities(
+                        player,
+                        &payment.mana().0.plus(or_mana),
+                        None,
+                    )
+                {
+                    actions.push(Action::PayCost { player });
+                }
+                (ActionSpaceKind::LookAndSelect, actions, Vec::new())
+            }
+            CostComponent::Sacrifice(cost, _) => {
+                let mana = payment.mana().0;
+                let mut actions = select(permanents(
+                    self.payment_candidates(player, &payment.operation, cost)
+                        .into_iter()
+                        .filter(|id| self.can_pay_with_mana_abilities(player, mana, Some(*id)))
+                        .collect(),
+                ));
+                if cost.or_mana.as_ref().is_some_and(|extra| {
+                    self.can_pay_with_mana_abilities(player, &mana.plus(extra), None)
+                }) {
+                    actions.push(Action::PayCost { player });
+                }
+                (ActionSpaceKind::LookAndSelect, actions, Vec::new())
+            }
+            CostComponent::Mana { .. } => {
+                let owed = payment.mana().0;
+                let mut actions = self.mana_ability_actions(player);
+                actions.extend(self.useful_payment_taps(player));
+                actions.extend(self.help_actions(player));
+                if self.can_pay_mana_cost(player, owed) {
+                    actions.push(Action::PayCost { player });
+                }
+                self.append_mana_floats(player, &mut actions);
+                if payment.waterbends() {
+                    (ActionSpaceKind::Waterbend, actions, source_focus())
+                } else {
+                    (ActionSpaceKind::PayOrNot, actions, Vec::new())
+                }
+            }
+            CostComponent::RemoveCounters {
+                choosing_from: None,
+                ..
+            } => (
+                ActionSpaceKind::LookAndSelect,
+                select(self.counter_removal_candidates(player)),
+                Vec::new(),
+            ),
+            // Each mode is a kind of counter on the creature chosen
+            // (its `CounterKind` index), so the creature is the focus.
+            CostComponent::RemoveCounters {
+                choosing_from: Some(object),
+                ..
+            } => (
+                ActionSpaceKind::Modal,
+                self.removable_kinds(*object)
+                    .into_iter()
+                    .map(|kind| Action::ChooseMode {
+                        player,
+                        mode: kind as usize,
+                    })
+                    .collect(),
+                vec![self.state[*object].id],
+            ),
+            // The offers are about the permanent just tapped, so it is the
+            // focus; each mode names its payment (`TapPayment::mode`).
+            CostComponent::TapPays { tapped, options } => (
+                ActionSpaceKind::Modal,
+                options
+                    .iter()
+                    .map(|paid| Action::ChooseMode {
+                        player,
+                        mode: paid.mode(),
+                    })
+                    .collect(),
+                vec![self.state[*tapped].id],
+            ),
+            CostComponent::Life(_)
+            | CostComponent::RemoveSourceCounters(..)
+            | CostComponent::AddCounters(..)
+            | CostComponent::Source(_)
+            | CostComponent::ExileGrantor(_)
+            | CostComponent::TapGrantor(_) => {
+                unreachable!("paid as the payment completes, after its mana")
+            }
+        };
+        ActionSpace {
+            player: Some(player),
+            kind,
+            actions,
+            focus,
         }
     }
 
@@ -909,18 +1207,49 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
+        if self.state.opening().is_some() {
+            return self.choose_opening(action);
+        }
+        self.dispatch_action(action)?;
+        if matches!(
+            action,
+            Action::PlayLand { .. }
+                | Action::CastSpell { .. }
+                | Action::ActivateAbility { .. }
+                | Action::ActivateCardAbility { .. }
+                | Action::Foretell { .. }
+        ) {
+            // CR 104.4b: a player who acts at priority has broken any loop.
+            // A rejected action changed nothing, so it leaves the watch.
+            self.state.priority_mut().clear_loop_watch();
+        }
+        Ok(())
+    }
+
+    fn dispatch_action(&mut self, action: &Action) -> Result<(), AgentError> {
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)
             }
-            Action::PlayLand { player, object } => {
-                self.play_land(*player, self.chosen_card(*object)?)?;
+            Action::PlayLand {
+                profile,
+                player,
+                object,
+                route,
+            } => {
+                self.play_land(*player, self.chosen_card(*object)?, *route, *profile)?;
                 self.restart_priority_round();
                 Ok(())
             }
-            Action::CastSpell { player, object } => {
-                self.cast_spell_action(*player, self.chosen_card(*object)?)
+            Action::CastSpell { .. } if self.state.suspended_decision.is_some() => {
+                self.execute_decision_action(action)
             }
+            Action::CastSpell {
+                player,
+                object,
+                route,
+                profile,
+            } => self.cast_spell_action(*player, *object, *route, *profile),
             Action::ActivateAbility {
                 player,
                 permanent,
@@ -937,6 +1266,39 @@ impl Game {
                 object,
                 ability_index,
             } => self.activate_card_ability_action(*player, *object, *ability_index),
+            Action::TurnFaceUp { player, object } => {
+                use super::decision::{
+                    Decision, EffectFrame, FrameCompletion, SuspendedResolution,
+                };
+                use super::payment::PaymentProgress;
+                let permanent = self
+                    .lookup_current_permanent(*object)
+                    .map_err(|_| AgentError("manifest has departed".into()))?;
+                if self.state.priority.holder != *player
+                    || self.state.permanents[permanent]
+                        .as_ref()
+                        .unwrap()
+                        .controller
+                        != *player
+                {
+                    return Err(AgentError("manifest controller must have priority".into()));
+                }
+                let cost = self
+                    .manifest_cost(*object)
+                    .ok_or_else(|| AgentError("no manifest turn-up cost".into()))?
+                    .clone();
+                let mut frame = EffectFrame::new(*player, Vec::new());
+                frame.bind_source(Some(*object), Some(*object));
+                frame.completion = FrameCompletion::TurnFaceUp(*object);
+                let mut payment =
+                    PaymentProgress::new(*player, CostComponent::mana(cost), vec![], vec![]);
+                payment.committed = true;
+                *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame,
+                    decision: Decision::Payment(payment),
+                });
+                Ok(())
+            }
             Action::Foretell { player, object } => {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
@@ -994,6 +1356,21 @@ impl Game {
                 self.choose_trigger_mode(*player, *mode)
             }
             Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && matches!(self.paying(), Some((_, _, CostComponent::TapPays { .. }))) =>
+            {
+                self.tap_pays_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && matches!(
+                        self.paying(),
+                        Some((_, _, CostComponent::RemoveCounters { .. }))
+                    ) =>
+            {
+                self.remove_counter_kind_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
             {
                 self.spell_mode_action(*player, *mode)
@@ -1009,38 +1386,9 @@ impl Game {
                 self.choose_activation_x_action(*player, *mode)
             }
             Action::SelectCard { player, object }
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::SacrificePayment { .. })
-                ) =>
+                if self.state.suspended_decision.is_none() && self.paying().is_some() =>
             {
-                self.sacrifice_payment_action(*player, Some(*object))
-            }
-            Action::SelectCard { player, object }
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::ExileFromHandPayment { .. })
-                ) =>
-            {
-                self.exile_payment_action(*player, self.chosen_card(*object)?)
-            }
-            Action::SelectCard { player, object }
-                if matches!(
-                    self.pending_choice,
-                    Some(PendingChoice::DiscardPayment { .. })
-                ) =>
-            {
-                self.discard_payment_action(*player, self.chosen_card(*object)?)
-            }
-            Action::SelectCard { player, object }
-                if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) =>
-            {
-                self.tap_payment_action(*player, *object)
-            }
-            Action::SelectCard { player, object }
-                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) =>
-            {
-                self.crew_tap_action(*player, *object)
+                self.pay_with_object(*player, *object)
             }
             Action::ScryCard { .. }
             | Action::SelectCard { .. }
@@ -1082,13 +1430,7 @@ impl Game {
                     Some(PendingChoice::KickerChoice { .. }) => {
                         self.kicker_choice_action(*player, true)
                     }
-                    Some(PendingChoice::ManaPayment { .. }) => self.finish_mana_payment(*player),
-                    Some(PendingChoice::SacrificePayment { .. }) => {
-                        self.sacrifice_payment_action(*player, None)
-                    }
-                    Some(PendingChoice::Waterbend { .. }) => {
-                        self.waterbend_pay_remainder_action(*player)
-                    }
+                    Some(PendingChoice::Pay { .. }) => self.pay_cost_action(*player),
                     _ => Err(AgentError("no cost payment is pending".to_string())),
                 }
             }
@@ -1096,7 +1438,7 @@ impl Game {
                 if self.state.suspended_decision.is_some() {
                     return self.execute_decision_action(action);
                 }
-                self.waterbend_tap_action(*player, *permanent)
+                self.help_tap_action(*player, *permanent)
             }
             Action::TapForMana { player, permanent } => {
                 self.tap_for_mana_action(*player, *permanent)
@@ -1121,11 +1463,59 @@ fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<PublicId>) -> Ac
     }
 }
 
+/// What a direct tap pays, as "{W} or {1} (convoke)", or "{1} (convoke)
+/// or {1} (waterbend)" when its reasons differ.
+fn tap_payments_text(options: &[TapPayment]) -> String {
+    let mut text = String::new();
+    for (index, paid) in options.iter().enumerate() {
+        if index > 0 {
+            text.push_str(" or ");
+        }
+        let symbol = match paid.color {
+            Color::Generic => "1",
+            color => color.symbol(),
+        };
+        text.push_str(&format!("{{{symbol}}}"));
+        if options
+            .get(index + 1)
+            .is_none_or(|next| next.toward != paid.toward)
+        {
+            text.push_str(&format!(" ({})", toward_keyword(paid.toward)));
+        }
+    }
+    text
+}
+
+/// The keyword a direct tap pays by.
+fn toward_keyword(toward: Toward) -> &'static str {
+    match toward {
+        Toward::Convoke => "convoke",
+        Toward::Improvise => "improvise",
+        _ => "waterbend",
+    }
+}
+
+/// A mana cost as its symbols: generic first, then colors.
+pub(crate) fn cost_label(cost: &ManaCost) -> String {
+    let mut label = String::new();
+    if cost.generic() > 0 {
+        label.push_str(&format!("{{{}}}", cost.generic()));
+    }
+    let colored = Mana {
+        mana: cost.cost[..6].try_into().expect("six colored mana slots"),
+        ..Default::default()
+    };
+    label.push_str(&mana_description(&colored));
+    label
+}
+
 /// The word a `ChooseObject` action starts with: what the instruction does
 /// to the chosen permanent.
 fn choice_verb(effect: &Effect) -> &'static str {
     match effect {
         Effect::Sacrifice { .. } => "Sacrifice",
+        Effect::Prepare { .. } => "Prepare",
+        Effect::Unprepare { .. } => "Unprepare",
         Effect::Tap { .. } => "Tap",
         Effect::Untap { .. } => "Untap",
         Effect::Destroy { .. } => "Destroy",
@@ -1157,6 +1547,7 @@ mod identity_tests {
             400_715,
             false,
         );
+        game.keep_opening_hands();
         let player = game.active_player();
         game.state.turn.current_phase = 1;
         game.state.turn.current_step = 0;
@@ -1168,7 +1559,9 @@ mod identity_tests {
         assert!(game
             .execute_action(&Action::PlayLand {
                 player,
-                object: old
+                object: old,
+                route: None,
+                profile: crate::state::card::SpellProfile::Front,
             })
             .is_err());
         assert_eq!(witness(&game), before);
@@ -1176,12 +1569,281 @@ mod identity_tests {
         assert!(game
             .execute_action(&Action::PlayLand {
                 player,
-                object: returned
+                object: returned,
+                route: None,
+                profile: crate::state::card::SpellProfile::Front,
             })
             .is_ok());
         assert_eq!(
             game.state.zones.zone_of(game.state.object_of(card)),
             Some(ZoneType::Battlefield)
         );
+    }
+
+    /// A land play, like a cast, needs priority and no pending choice.
+    #[test]
+    fn play_land_requires_priority_and_no_pending_choice() {
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            3_051,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        let land = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+        let play = Action::PlayLand {
+            player,
+            object: land,
+            route: None,
+            profile: crate::state::card::SpellProfile::Front,
+        };
+        let before = witness(&game);
+        game.state.priority.holder = PlayerId(1 - player.0);
+        assert!(game.execute_action(&play).is_err());
+        game.state.priority.holder = player;
+        game.pending_choice = Some(PendingChoice::AnnounceX {
+            player,
+            object: land,
+            cast: Default::default(),
+        });
+        assert!(game.execute_action(&play).is_err());
+        game.pending_choice = None;
+        assert_eq!(witness(&game), before);
+        assert!(game.execute_action(&play).is_ok());
+    }
+
+    /// Airbend's grant is "you may cast" (CR 701.65a), and a land can't be
+    /// cast (CR 305.9): an airbent land is never played, even by a Command
+    /// naming its grant.
+    #[test]
+    fn an_airbent_land_cannot_be_played() {
+        use crate::{flow::cast_permission::PlayRoute, state::card::SpellProfile};
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", BTreeMap::from([("Mountain".into(), 40)])),
+                PlayerConfig::new("p1", BTreeMap::from([("Island".into(), 40)])),
+            ],
+            70_165,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        let permanent = game
+            .scenario_force_battlefield(player, "Mountain", true)
+            .unwrap();
+        let mountain = game.state.permanents[permanent].as_ref().unwrap().object;
+        let arrival = game.move_object(mountain, ZoneType::Exile);
+        game.grant_airbend_cast(arrival);
+        let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
+        assert!(game.live_grants(player, exiled).next().is_some());
+        game.scenario_refresh_priority().unwrap();
+        assert!(!game
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::PlayLand { .. })));
+        let before = witness(&game);
+        for route in [None, Some(PlayRoute::Grant(0))] {
+            assert!(game
+                .execute_action(&Action::PlayLand {
+                    player,
+                    object: exiled,
+                    route,
+                    profile: SpellProfile::Front,
+                })
+                .is_err());
+            assert_eq!(witness(&game), before);
+        }
+    }
+
+    /// Commands come from offers, but the executor still owns the
+    /// face-vs-route rules: a land face is never cast or played for free,
+    /// and a spell face is never played as a land.
+    #[test]
+    fn play_land_rejects_a_spell_face_and_a_free_route() {
+        use crate::{flow::cast_permission::PlayRoute, state::card::SpellProfile};
+        let deck = BTreeMap::from([
+            ("Island".into(), 30),
+            ("Tidal Errand".into(), 4),
+            ("Kelp Hollow".into(), 4),
+            ("Omniscience".into(), 2),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            419,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        game.scenario_force_battlefield(player, "Omniscience", true)
+            .unwrap();
+        for name in ["Tidal Errand", "Kelp Hollow"] {
+            game.scenario_force_card_in_hand(player, name).unwrap();
+        }
+        let in_hand = |game: &Game, name: &str| {
+            *game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, player)
+                .iter()
+                .find(|object| game.state[**object].name == name)
+                .unwrap()
+        };
+        let errand = in_hand(&game, "Tidal Errand");
+        let hollow = in_hand(&game, "Kelp Hollow");
+        let before = witness(&game);
+        for (object, profile, route) in [
+            (errand, SpellProfile::Front, Some(PlayRoute::Hand)),
+            (
+                errand,
+                SpellProfile::BackFace,
+                Some(PlayRoute::FreeFromHand),
+            ),
+            (hollow, SpellProfile::Front, Some(PlayRoute::FreeFromHand)),
+            (hollow, SpellProfile::BackFace, Some(PlayRoute::Hand)),
+            (hollow, SpellProfile::Adventure, Some(PlayRoute::Hand)),
+        ] {
+            assert!(
+                game.execute_action(&Action::PlayLand {
+                    profile,
+                    player,
+                    object,
+                    route
+                })
+                .is_err(),
+                "{profile:?} via {route:?}"
+            );
+            assert_eq!(witness(&game), before);
+        }
+        let card = game.state.card_of(errand).unwrap();
+        assert!(game
+            .execute_action(&Action::PlayLand {
+                profile: SpellProfile::BackFace,
+                player,
+                object: errand,
+                route: Some(PlayRoute::Hand),
+            })
+            .is_ok());
+        assert!(game.state[game.state.object_of(card)].is_transformed());
+    }
+
+    /// A resolution cast (CR 608.2g) is authorized by the resolving
+    /// instruction alone: an Adventure offered by a resolving effect never
+    /// names the airbend grant the same exiled card holds at priority.
+    #[test]
+    fn a_resolution_cast_never_inherits_a_priority_route() {
+        use crate::{
+            agent::observation::Observation,
+            flow::decision::{Decision, EffectFrame, ResolutionCastOffer, SuspendedResolution},
+            state::card::SpellProfile,
+        };
+        let deck = BTreeMap::from([
+            ("Plains".into(), 36),
+            ("Bofur, Reliable Guardian".into(), 4),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            6_082,
+            false,
+        );
+        game.keep_opening_hands();
+        let player = game.active_player();
+        game.state.turn.current_phase = 1;
+        game.state.turn.current_step = 0;
+        game.scenario_clear_hand(player);
+        let target = game
+            .scenario_force_battlefield(player, "Bofur, Reliable Guardian", true)
+            .unwrap();
+        let bofur = game
+            .scenario_force_battlefield(player, "Bofur, Reliable Guardian", true)
+            .unwrap();
+        let bofur = game.state.permanents[bofur].as_ref().unwrap().object;
+        let arrival = game.move_object(bofur, ZoneType::Exile);
+        game.grant_airbend_cast(arrival);
+        let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
+        assert!(game.live_grants(player, exiled).next().is_some());
+        let cast = Action::CastSpell {
+            player,
+            object: exiled,
+            route: None,
+            profile: SpellProfile::Adventure,
+        };
+        game.state.suspended_decision = Some(SuspendedResolution {
+            frame: EffectFrame::new(player, vec![]),
+            decision: Decision::CastDuringResolution {
+                player,
+                paid: false,
+                spends: None,
+                offer: ResolutionCastOffer::AmongExiled {
+                    objects: vec![exiled],
+                },
+            },
+        });
+        let space = game.suspended_decision_action_space().unwrap();
+        assert!(space.actions.contains(&cast));
+        game.publish_action_space(space);
+        assert_eq!(game.resolved_play_route(&cast), None);
+        let observation = Observation::for_player(&game, player);
+        let option = observation
+            .action_space
+            .actions
+            .iter()
+            .find(|option| option.description.as_deref() == Some("Cast Concerted Care"))
+            .expect("the resolution offer names only its face");
+        assert_eq!(option.play_route, None);
+        assert_eq!(option.route_mana_value, None);
+        assert_eq!(option.quota_type, None);
+        let forged = Action::CastSpell {
+            player,
+            object: exiled,
+            route: Some(crate::flow::cast_permission::PlayRoute::Grant(0)),
+            profile: SpellProfile::Adventure,
+        };
+        assert_eq!(game.resolved_play_route(&forged), None);
+        assert!(game.execute_decision_action(&forged).is_err());
+        assert!(game.state.suspended_decision.is_some());
+        let index = |game: &Game, action: &Action| {
+            game.current_action_space
+                .as_ref()
+                .unwrap()
+                .actions
+                .iter()
+                .position(|offered| offered == action)
+                .unwrap()
+        };
+        game.step(index(&game, &cast)).unwrap();
+        // Concerted Care's only legal target is the Bofur on the battlefield.
+        if game.state.stack_objects.is_empty() {
+            let choose = Action::ChooseTarget {
+                player,
+                target: crate::state::game_object::Target::Permanent(target),
+            };
+            game.step(index(&game, &choose)).unwrap();
+        }
+        let Some(crate::state::stack_object::StackObject::Spell(spell)) =
+            game.state.stack_objects.last()
+        else {
+            panic!("the resolution cast puts Concerted Care on the stack");
+        };
+        assert_eq!(spell.profile, SpellProfile::Adventure);
+        assert!(game.live_grants(player, spell.object).next().is_none());
     }
 }

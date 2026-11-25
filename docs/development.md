@@ -41,11 +41,11 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.4.1,<0.5`
-(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.1 carries
-the experiment-file and Agents APIs used by the recipes. The repository's
-`uv.lock` records the registry release; dedicated training and play runtime
-groups retain their backend choices.
+The `manabot` public dependency requirements are `etude-sdk>=0.4.7,<0.5`
+(also for its `eval` and `s3` extras) and `torch>=2.15.0`. Etude 0.4.7
+provides the save and restore callbacks used by tracked training and the
+versioned storage listing used by training-time reports. The repository's
+`uv.lock` records the PyPI release for the training and play runtime groups.
 
 Install the locked client and inspect its database:
 
@@ -126,8 +126,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 **Training resume and game errors.**
 `uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
-Resume restores learner state at a saved update and opens fresh native streams;
-it does not restore an unfinished collection.
+Run `uv run --extra dev --extra mlx pytest tests/training/test_cross_backend_continuation.py -q`
+for portable state, sampling-domain changes and historical Torch saves.
+On Apple Silicon, run the Metal subprocess cases serially. Resume restores
+learner state and native streams at the saved update boundary.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
@@ -135,8 +137,15 @@ Collector or batch-closure changes also require
 Fixtures asserting exact rollout shapes or transition counts must explicitly
 select `batch_closure="exact-quota"` as well as one learning seat; whole-game
 closure treats the transition quota as a minimum.
-Run the existing encoder tests alongside cutoff/parity fixtures so callers of
-changed private helpers are checked too. Action overflow is checked at the
+The native encoder is the only one, so an observation change is written once
+in `managym/src/agent/` with a directed test that asserts its named columns or
+rows on a constructed position, and its `observability.rs` entry. Python
+names a column it reads by its native name (`column("facts", "value")` in
+`manabot/env/observation.py`), and `ObservationSpace` takes every shape from
+its native `layout`, so moving or widening a column needs no
+Python edit; renaming one fails the import. Run
+`uv run --extra dev pytest tests/env/test_named_observation_layout.py -q`
+after changing the layout. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 Changes to effects or runtime token registration require the
 [effect vocabulary checks](../managym/cards/tests/cards/README.md#effect-vocabulary-checks):
@@ -155,8 +164,8 @@ includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
 `tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
-and native frontier encoding, against full evidence and the Python per-branch
-encoder: the same roots and seeds must choose identical Commands and write
+and native frontier encoding, against full evidence and per-branch
+encoding: the same roots and seeds must choose identical Commands and write
 identical tensors. It also checks that v3 receipts and registrations omitting
 `rollout_evidence` still read as full evidence. A change to
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
@@ -278,7 +287,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v5` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v6` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -412,7 +421,10 @@ equality across Linux and macOS is not claimed.
 
 There are two ways to pass. If the change forgot something, add it: the
 [rename table](observation-and-model.md#the-rename-table) entry, or append the
-new column instead of inserting it. If the change means to alter what stored
+new column instead of inserting it. A change to how the model reads a column
+belongs in the rule for fresh models
+([how the network reads a column](observation-and-model.md#how-the-network-reads-a-column));
+the pilots record no readings, so they replay unchanged. If the change means to alter what stored
 players compute (a rules fix reaching the recorded game, a corrected encoder
 column), declare it:
 
@@ -663,12 +675,21 @@ increase a known expensive cell just to make it run longer.
 
 **States.** Each uses defined cards or registered tokens and is deterministic.
 `--list` names every state with its cards and known growth; the list lives in
-the harness, not here. They come in three families: many copies of one thing
+the harness, not here. They come in four families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
-`diverse-statics`, `attachments`, `mixed`) and one mechanic at size (`herbalist`,
+`diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
-`names`). Combat states put
+`names`, `face-down`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
+zero-link control `unprepared-copies`) and one way of paying at size
+(`convoke-duplicates`, `convoke-diverse`, `delve-graveyard`,
+`improvise-artifacts`, `float-origins`, `crew-saddle`, `bargain-forage`), each
+measured again at the decision where its cost is chosen. Event-history states
+measure the last priority pass before resolution and the next decision.
+`collector-food` and `mixed-life-gain` open trigger ordering, `fumigate-panda`
+opens graveyard targeting, `blast-discard` opens the optional discard and
+`venom-team` grants the team deathtouch on the second resolution. `lathril-elves` measures each
+successive tap with 10, 11 and 12 other Elves by default. Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
 states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
@@ -681,7 +702,7 @@ naming through rules actions; it is outside the measured region.
 | Layer | Measures | Work reported |
 |---|---|---|
 | `actions` | computing the legal action space at priority, with cached payment answers cleared | payment plans, calls, states; actions offered |
-| `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
+| `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:resolve`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
 | `characteristics` | cold `Game::characteristics` for one permanent then `characteristics_many` for the board | board rebuilds, views, dependency probes |
 | `triggers` | matching one controlled entry event against the indexed trigger sources | sources examined, triggers found |
 | `observe` | the native observation encoder | visible cards, permanents and legal actions (allocated capacities are explicit) |
@@ -710,23 +731,19 @@ and `allocated_bytes` instead of `ms`; setup and root forks stay outside the
 counted region. These are allocation requests and traffic, not live heap size.
 Keep counting disabled for timing comparisons.
 
-The Python-side layers read the same states (the Rust harness prints their
-recipes with `--recipes`) and report time only:
+The LLM text renderer reads the same states (the Rust harness prints their
+recipes with `--recipes`) and reports time only:
 
 ```bash
 uv run --extra play python scripts/bench_states.py diverse-mana
 ```
 
-It adds `encode-py` (the Python policy-input encoder) and `text` (the LLM text
-renderer) time rows. `--recipes` exports the exact native observation and
-atomic decision capture beside each recipe, so both consumers see the same
-checkpoint, including separately serialized continuation frames via
-`Observation.from_json(..., continuation_json=...)`. Academy frame construction
-requires a live Academy session and is not measured here.
-`--recipes-file <path>` reuses an export; `--layers encode-py` selects one
-consumer. The script uses the installed extension, so rebuild after Rust changes.
-Both encoders use input v10 with capacities expanded to hold the complete state;
-neither truncates actions or facts.
+It adds `text` time rows. `--recipes` exports the exact native observation and
+atomic decision capture beside each recipe, so the renderer sees the same
+checkpoint as the Rust layers, including separately serialized continuation
+frames. Academy frame construction requires a live Academy session and is not
+measured here. `--recipes-file <path>` reuses an export. The script uses the
+installed extension, so rebuild after Rust changes.
 
 **Using it.** When a change adds or alters payment, choice, targeting,
 enumeration or continuous-effect behavior, run the states whose shape it could
@@ -853,7 +870,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.1,<0.5`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.7,<0.5`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact

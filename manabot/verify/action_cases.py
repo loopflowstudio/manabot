@@ -12,7 +12,8 @@ import numpy as np
 import torch
 
 from manabot.env import observation as observation_schema
-from manabot.env.observation import ObservationSpace
+from manabot.verify import choice_inputs
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 
@@ -36,7 +37,8 @@ def initial(
             for i in range(2)
         ]
     )
-    env.reset(configs)
+    raw, _ = env.reset(configs)
+    keep_opening_hands(env, raw)
     for seat in range(2):
         env.scenario_clear_hand(seat)
     return env
@@ -60,12 +62,10 @@ def reach(env: managym.Env, kind: int) -> managym.Observation:
     raise AssertionError(f"did not reach decision {kind}")
 
 
-def encode(env: managym.Env, raw: managym.Observation) -> dict[str, torch.Tensor]:
-    native = env.encode_observation(raw)
-    scalar = ObservationSpace().encode(raw)
-    for key in native:
-        np.testing.assert_array_equal(native[key], scalar[key])
-    return {key: torch.as_tensor(value).unsqueeze(0) for key, value in native.items()}
+def encode(raw: managym.Observation) -> dict[str, torch.Tensor]:
+    return {
+        key: torch.from_numpy(value) for key, value in choice_inputs.encode(raw).items()
+    }
 
 
 Family = Literal["attack", "target", "mode", "ability", "land", "learn"]
@@ -254,7 +254,7 @@ def decision_case(
     assert len(candidates) >= 2
     return DecisionCase(
         kind,
-        encode(env, raw),
+        encode(raw),
         candidates,
         preference,
         split,
@@ -288,71 +288,28 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
 
 
 def reorder_offers(
-    obs: dict[str, torch.Tensor], order: torch.Tensor
+    obs: dict[str, torch.Tensor],
+    order: torch.Tensor | list[int],
+    layout: managym.ObservationLayout,
 ) -> dict[str, torch.Tensor]:
-    """Permute legal offers together with their masks and object references."""
-    result = {k: v.clone() for k, v in obs.items()}
-    for key in ("actions", "actions_valid", "action_focus"):
-        result[key][:, : len(order)] = obs[key][:, order]
-    return result
+    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
+    indices = order.cpu().numpy() if isinstance(order, torch.Tensor) else order
+    return tensors_like(choice_inputs.reorder_offers(host, indices, layout), obs)
 
 
-def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Reverse object slots with their identity joins, masks and focus references."""
-    result = {k: v.clone() for k, v in obs.items()}
-    keys = ("agent_cards", "opponent_cards", "agent_permanents", "opponent_permanents")
-    # Permanent links use one-based object references; zero and players stay fixed.
-    references = torch.arange(
-        3 + sum(obs[key].shape[1] for key in keys), device=obs[keys[0]].device
-    )
-    offset = 2  # The two player rows precede cards and permanents.
-    for index, key in enumerate(keys):
-        count = obs[key].shape[1]
-        order = torch.arange(count - 1, -1, -1)
-        references[offset + 1 : offset + count + 1] = offset + 1 + order
-        result[key] = obs[key][:, order]
-        result[key + "_valid"] = obs[key + "_valid"][:, order]
-        if index < 2:
-            result["semantic_cards"][:, index] = obs["semantic_cards"][:, index, order]
-            if "card_turn_state" in obs:
-                result["card_turn_state"][:, index] = obs["card_turn_state"][
-                    :, index, order
-                ]
-        focus = obs["action_focus"]
-        mask = (focus >= offset) & (focus < offset + count)
-        result["action_focus"][mask] = offset + count - 1 - (focus[mask] - offset)
-        if "relations" in obs:
-            # Continuation references use object index + 1 (zero is absence).
-            for column in (6, 24):
-                refs = obs["relations"][..., column]
-                mask = (refs > offset) & (refs <= offset + count)
-                result["relations"][..., column][mask] = (
-                    2 * offset + count + 1 - refs[mask]
-                )
-        if "facts" in obs:
-            refs = obs["facts"][..., 0]  # FACT_OBJECT_INDEX
-            mask = (refs > offset) & (refs <= offset + count)
-            result["facts"][..., 0][mask] = 2 * offset + count + 1 - refs[mask]
-        for block, columns in (("effects", (10, 12)), ("effect_members", (0,))):
-            if block in obs:
-                for column in columns:
-                    refs = obs[block][..., column]
-                    mask = (refs > offset) & (refs <= offset + count)
-                    result[block][..., column][mask] = (
-                        2 * offset + count + 1 - refs[mask]
-                    )
-        offset += count
-    # Remap after moving all source rows: links can cross either owner's slots.
-    for key in ("agent_permanents", "opponent_permanents"):
-        for column in observation_schema.PERMANENT_LINK_INDEXES:
-            result[key][..., column] = references[result[key][..., column].long()]
-    # Input v11 stack rows stay in stack order; their source links name permanents.
-    if "stack" in obs:
-        column = observation_schema.STACK_SOURCE_INDEX
-        result["stack"][..., column] = references[obs["stack"][..., column].long()].to(
-            obs["stack"].dtype
-        )
-    return result
+def tensors_like(
+    host: dict[str, np.ndarray], obs: dict[str, torch.Tensor]
+) -> dict[str, torch.Tensor]:
+    return {
+        key: torch.from_numpy(value).to(obs[key].device) for key, value in host.items()
+    }
+
+
+def reorder_objects(
+    obs: dict[str, torch.Tensor], layout: managym.ObservationLayout
+) -> dict[str, torch.Tensor]:
+    host = {key: value.detach().cpu().numpy() for key, value in obs.items()}
+    return tensors_like(choice_inputs.reorder_objects(host, layout), obs)
 
 
 # Version of the case set `curriculum()` builds; bump it when its digest changes.
@@ -366,8 +323,9 @@ _NATIVE_SEEDS: dict[tuple[Family, int], int] = {("learn", 1): 116}
 
 def _definitions(obs: dict[str, torch.Tensor]) -> set[int]:
     """Card definitions visible anywhere in one observation (registry key + 1)."""
+    hand_def = observation_schema.column("known_hand", "definition")
     found = {int(x) for x in obs["semantic_cards"].flatten() if x > 0}
-    found |= {int(x) for x in obs["known_hand"][..., 0].flatten() if x > 0}
+    found |= {int(x) for x in obs["known_hand"][..., hand_def].flatten() if x > 0}
     for key in ("agent_permanents", "opponent_permanents"):
         rows = obs[key][obs[key + "_valid"] > 0]
         found |= {

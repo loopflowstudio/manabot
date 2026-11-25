@@ -151,8 +151,8 @@
         "action": 0,
         "offers": "80abe63ce704a848dcedbe85b53533d14919449243be24782eb4141dafdda18f",
         "probabilities": [
-          0.5009827017784119,
-          0.49901729822158813
+          0.5009910464286804,
+          0.49900898337364197
         ]
       },
       {
@@ -753,6 +753,6 @@
     "seed": 353,
     "winner": 1
   },
-  "reason": "First complete games on the world-bound loader.",
-  "revision": "2f826aa3db0dbeba6f404bbfa981732182421e79"
+  "reason": "Mana made mid-payment now pays toward the announced cost as it is made (MTG-394), so after a Forest tap the v9 pilot sees an empty pool and a pending receipt instead of floating {G}; same chosen actions, probabilities within 5e-5.",
+  "revision": "0e40cdb049e1452b3f98dc0ab116b418ce1e3a7c"
 }

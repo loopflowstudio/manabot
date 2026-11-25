@@ -1,17 +1,23 @@
 //! Limited Edition Alpha.
-use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        ManaAbility, PrintedCharacteristics, ReplacementEffect,
+        ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, Restriction,
+        StaticAbility, StaticRestriction, StaticScope,
     },
+    effect::Modification,
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        juggernaut(),
+        unsummon(),
+        giant_growth(),
+        disenchant(),
+        fire_elemental(),
         ancestral_recall(),
         clone(),
         counterspell(),
@@ -199,7 +205,7 @@ fn island() -> CardDefinition {
     }
 }
 
-fn lightning_bolt() -> CardDefinition {
+pub(super) fn lightning_bolt() -> CardDefinition {
     let text_box = "Lightning Bolt deals 3 damage to any target.";
 
     CardDefinition {
@@ -455,6 +461,114 @@ fn clone() -> CardDefinition {
                 predicate: CardPredicate::creature(),
                 exceptions: vec![],
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fire_elemental() -> CardDefinition {
+    CardDefinition {
+        key: "lea.fire_elemental",
+        scryfall_id: "da237992-2919-4e37-8f56-2164095f59b5",
+        printed: PrintedCharacteristics {
+            name: "Fire Elemental".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elemental".into()],
+            power: Some(5),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn disenchant() -> CardDefinition {
+    CardDefinition {
+        key: "lea.disenchant",
+        scryfall_id: "2722d7e2-61c6-4934-9c21-875ee78fd06c",
+        printed: PrintedCharacteristics {
+            name: "Disenchant".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                        ..Default::default()
+                    },
+                },
+            ))],
+            text_box: "Destroy target artifact or enchantment.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn giant_growth() -> CardDefinition {
+    CardDefinition {
+        key: "lea.giant_growth",
+        scryfall_id: "367dbefe-3366-408e-9fcf-7dc00f8cc201",
+        printed: PrintedCharacteristics {
+            name: "Giant Growth".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::Target(TargetSpec::Creature),
+                Modification::pump(3, 3),
+            )],
+            text_box: "Target creature gets +3/+3 until end of turn.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn unsummon() -> CardDefinition {
+    let text_box = "Return target creature to its owner's hand.";
+    CardDefinition {
+        key: "lea.unsummon",
+        scryfall_id: "8512f2c1-6361-4b79-843f-80b6bceeeb99",
+        printed: PrintedCharacteristics {
+            name: "Unsummon".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                TargetSpec::Creature,
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn juggernaut() -> CardDefinition {
+    let text_box =
+        "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.";
+    CardDefinition {
+        key: "lea.juggernaut",
+        scryfall_id: "dcd6a291-5282-4f49-8203-d9b416083c48",
+        printed: PrintedCharacteristics {
+            name: "Juggernaut".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Juggernaut".into()],
+            power: Some(5),
+            toughness: Some(3),
+            statics: vec![
+                StaticAbility::Restriction(StaticRestriction {
+                    scope: StaticScope::This,
+                    kind: Restriction::AttacksEachCombat,
+                    unless: None,
+                }),
+                StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(
+                    CardPredicate::subtype("Wall"),
+                )),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },
