@@ -34,7 +34,6 @@ import numpy as np
 import torch
 
 from manabot.backends import resolve
-from manabot.backends.captured_observations import unpack_observation
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import runtime as torch_runtime
 from manabot.backends.torch.arrays import on_device
@@ -42,6 +41,7 @@ from manabot.backends.torch.checkpoint import read_policy, restore_policy
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.policy.captured_observations import unpack_observation
 from manabot.policy.checkpoint import (
     ParameterArrays,
     PolicyCheckpoint,
