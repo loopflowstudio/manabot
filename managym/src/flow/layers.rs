@@ -689,14 +689,8 @@ impl<'a> Context<'a> {
             }
             #[cfg(debug_assertions)]
             {
-                let mut expected = (**object).clone();
-                expected.dirty = DIRTY_ALL;
                 let record = &game.state[game.live_permanent(id).object];
-                Self::finish_object(&mut expected, record);
-                debug_assert_eq!(
-                    expected.view, object.view,
-                    "incremental finish_object diverged from full recomputation"
-                );
+                Self::assert_finished(object, record);
             }
         }
         context
@@ -789,6 +783,64 @@ impl<'a> Context<'a> {
                 .map(|entry| entry.ability.clone())
                 .collect();
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn assert_finished(object: &LayerObject, record: &Object) {
+        let view = &object.view;
+        debug_assert_eq!(
+            view.is_animated,
+            view.is_creature() && !record.types.is_creature(),
+            "incremental finish_object diverged on is_animated"
+        );
+        if !view.types.has_creature_subtypes() {
+            debug_assert!(
+                view.creature_types.is_empty(),
+                "incremental finish_object diverged on creature_types"
+            );
+        } else if !view.creature_types.is_all() {
+            let listed = view.creature_types.listed();
+            debug_assert!(
+                listed.windows(2).all(|w| w[0] < w[1]),
+                "creature_types must be sorted and distinct"
+            );
+            debug_assert!(
+                listed
+                    .iter()
+                    .all(|t| is_creature_type(t) && view.subtypes.iter().any(|s| s == t))
+                    && view
+                        .subtypes
+                        .iter()
+                        .filter(|s| is_creature_type(s))
+                        .all(|s| listed.binary_search(s).is_ok()),
+                "incremental finish_object diverged on creature_types"
+            );
+        }
+        if let Some(first) = view.activated_abilities.first() {
+            let expected_purpose = &first.mana_cost.purpose;
+            debug_assert!(
+                matches!(
+                    expected_purpose,
+                    SpendingContext::Activate {
+                        zone: ZoneType::Battlefield,
+                        source,
+                    } if source.describes(&view.subtypes, view.creature_types.is_all())
+                ),
+                "incremental finish_object diverged on activation spending context"
+            );
+            debug_assert!(
+                view.activated_abilities
+                    .iter()
+                    .all(|ability| ability.mana_cost.purpose == *expected_purpose),
+                "incremental finish_object diverged on shared activation spending context"
+            );
+        }
+        debug_assert!(
+            view.static_abilities
+                .iter()
+                .eq(object.statics.iter().map(|entry| &entry.ability)),
+            "incremental finish_object diverged on static_abilities"
+        );
     }
 
     fn finish_activation_purposes(view: &mut Characteristics) {

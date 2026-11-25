@@ -29,6 +29,7 @@ impl Game {
     /// Duplicate legendary names (layered `is_legendary` and `name`),
     /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<ObjectId>> {
+        let _scan = self.board_scan();
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
@@ -158,57 +159,63 @@ impl Game {
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
-        let mut candidates = Vec::new();
-        for (permanent_id, characteristics) in
-            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-        {
-            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
-            // CR 704.5f — A creature with toughness 0 or less is put into
-            // its owner's graveyard (an earthbent land losing its counters
-            // is a 0/0 and dies).
-            let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
-            // CR 704.5i/v. No supported battle has a defeat trigger; if one
-            // is introduced, its pending trigger must delay this battle SBA.
-            let zero_counters = (characteristics.types.is_planeswalker()
-                && permanent.counter_count(CounterKind::Loyalty) == 0)
-                || (characteristics.types.is_battle()
-                    && permanent.counter_count(CounterKind::Defense) == 0);
-            let legend_loser = legend_losers.contains(&permanent.object);
-            // CR 704.5m — An Aura attached to an illegal object or to
-            // nothing is put into its owner's graveyard.
-            let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
-            let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
-            // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
-            // above do not destroy, even when lethal damage also applies.
-            let destroy = !put_in_graveyard
-                && self.has_lethal_damage(permanent_id, &characteristics)
-                && !characteristics.keywords.has(Keyword::Indestructible);
-            if !put_in_graveyard && !destroy {
-                continue;
-            }
-            let Some(object_ref) = self.permanent_object(permanent_id) else {
-                continue;
-            };
-            candidates.push((object_ref, destroy));
-        }
-        candidates.sort_by_key(|(object_ref, _)| *object_ref);
-
-        let mut events: Vec<_> = candidates
-            .into_iter()
-            .map(|(target, destroy)| {
-                if destroy {
-                    ProposedEvent::Destroy { target }
-                } else {
-                    self.zone_move_proposal(target, ZoneType::Graveyard, Default::default())
+        let events: Vec<_> = {
+            let _scan = self.board_scan();
+            let mut candidates = Vec::new();
+            for (permanent_id, characteristics) in
+                self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+            {
+                let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
+                // CR 704.5f — A creature with toughness 0 or less is put into
+                // its owner's graveyard (an earthbent land losing its counters
+                // is a 0/0 and dies).
+                let zero_toughness =
+                    characteristics.is_creature() && characteristics.toughness <= 0;
+                // CR 704.5i/v. No supported battle has a defeat trigger; if one
+                // is introduced, its pending trigger must delay this battle SBA.
+                let zero_counters = (characteristics.types.is_planeswalker()
+                    && permanent.counter_count(CounterKind::Loyalty) == 0)
+                    || (characteristics.types.is_battle()
+                        && permanent.counter_count(CounterKind::Defense) == 0);
+                let legend_loser = legend_losers.contains(&permanent.object);
+                // CR 704.5m — An Aura attached to an illegal object or to
+                // nothing is put into its owner's graveyard.
+                let illegal_aura = self.aura_attachment_illegal(permanent_id, &characteristics);
+                let put_in_graveyard =
+                    zero_toughness || zero_counters || legend_loser || illegal_aura;
+                // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
+                // above do not destroy, even when lethal damage also applies.
+                let destroy = !put_in_graveyard
+                    && self.has_lethal_damage(permanent_id, &characteristics)
+                    && !characteristics.keywords.has(Keyword::Indestructible);
+                if !put_in_graveyard && !destroy {
+                    continue;
                 }
-            })
-            .collect();
-        events.extend(
-            self.finished_sagas()
+                let Some(object_ref) = self.permanent_object(permanent_id) else {
+                    continue;
+                };
+                candidates.push((object_ref, destroy));
+            }
+            candidates.sort_by_key(|(object_ref, _)| *object_ref);
+
+            let mut events: Vec<_> = candidates
                 .into_iter()
-                .filter_map(|id| self.permanent_object(id))
-                .map(|target| ProposedEvent::Sacrifice { target }),
-        );
+                .map(|(target, destroy)| {
+                    if destroy {
+                        ProposedEvent::Destroy { target }
+                    } else {
+                        self.zone_move_proposal(target, ZoneType::Graveyard, Default::default())
+                    }
+                })
+                .collect();
+            events.extend(
+                self.finished_sagas()
+                    .into_iter()
+                    .filter_map(|id| self.permanent_object(id))
+                    .map(|target| ProposedEvent::Sacrifice { target }),
+            );
+            events
+        };
         if !events.is_empty() {
             let batch = self.event_batch(EventBinding::Deaths, events);
             let mut frame = EffectFrame::new(self.active_player(), Vec::new());

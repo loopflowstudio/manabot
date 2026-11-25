@@ -1562,6 +1562,7 @@ impl Game {
     }
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
+        let _scan = self.board_scan();
         let mut candidates = match event {
             ProposedEvent::LifeChange { player, delta }
                 if *delta > 0 && self.can_gain_life(*player) =>

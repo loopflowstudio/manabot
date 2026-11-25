@@ -1471,6 +1471,7 @@ impl Game {
         if payer != player {
             return Vec::new();
         }
+        let _scan = self.board_scan();
         let (_, waterbend) = payment.mana();
         let mut actions: Vec<Action> = self
             .help_taps(

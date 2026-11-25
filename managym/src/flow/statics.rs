@@ -505,11 +505,15 @@ impl Game {
             .get(id.0)
             .and_then(Clone::clone);
         if let Some(view) = cached {
-            debug_assert_eq!(
-                view,
-                self.finalize_characteristics(id, raw()),
-                "stale characteristics"
-            );
+            #[cfg(debug_assertions)]
+            {
+                let _scan = self.board_scan();
+                debug_assert_eq!(
+                    view,
+                    self.finalize_characteristics(id, raw()),
+                    "stale characteristics"
+                );
+            }
             return view;
         }
         let view = self.finalize_characteristics(id, raw());
