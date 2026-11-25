@@ -1,33 +1,51 @@
-at: b1649e3a8c
+at: 5ea9e99157b4a1d4fcdc5a84547dd9908c29900c
 first:
+  - path: docs/engine.md
+    why: Planeswalker, loyalty, attack-target, empower and emblem contracts
+  - path: managym/state/src/card.rs
+    why: Printed loyalty, LoyaltyCost, EmblemDefinition and zero-loyalty SBA exemption
   - path: managym/state/src/ability.rs
-    why: TriggerModes.min, RevealUntilToHand.to_battlefield, and selector-based Effect::Fight
+    why: Unified Fight and RevealUntil, TriggerModes.min, AttackedSubject and TargetRequirement.division
+  - path: managym/state/src/permanent.rs
+    why: Per-turn loyalty activation quota and available loyalty accounting
+  - path: managym/src/flow/play.rs
+    why: Loyalty X, sorcery/instant timing and sequential target division
+  - path: managym/src/flow/combat_actions.rs
+    why: Planeswalker defenders, valid-defender authority and trample/damage routing
+  - path: managym/src/flow/layers.rs
+    why: Command-zone emblem statics and Way loyalty-ability grants
   - path: managym/src/flow/triggers.rs
-    why: Exact-minimum modal trigger placement (rejects decline before min; removes trigger if fewer than min legal modes)
-  - path: managym/src/flow/decision.rs
-    why: reveal_until supporting battlefield entry via zone_move_proposal alongside hand
+    why: Command-zone emblem triggers, loyalty activation events and exact multi-mode placement
   - path: managym/src/flow/resolution.rs
-    why: Shared fight_permanents helper for FightLastTarget and Effect::Fight, plus RevealUntilToHand battlefield batch
-  - path: managym/src/agent/ability_description.rs
-    why: Human-readable text for exact multi-mode triggers, battlefield reveal-until, and selector Fight
+    why: Unified Fight, RevealUntil, ExileTopCardsToPlay and divided damage resolution
+  - path: managym/src/flow/decision.rs
+    why: EnterAttacking choice, ChooseExiled cast offer and reveal_until zones
+  - path: managym/src/cards/token_renames.rs
+    why: Historical token renames for retired FightLastTarget and RevealUntilToHand
+  - path: managym/src/agent/observation_layout.rs
+    why: Appended v11 loyalty, attack-target, division and turn-state columns
+  - path: managym/cards/src/emblems.rs
+    why: Registered planeswalker emblem definitions
   - path: managym/cards/src/fra.rs
-    why: 28 Slice 8 adjacent planeswalker-aware FRA cards
+    why: Reality Fracture planeswalkers, Ways, empower cards and adjacent support
   - path: managym/cards/tests/cards/fra.rs
-    why: 28 directed card tests plus all integrated plan synergy checks
+    why: Directed card tests and integrated planeswalker synergy checks
+  - path: managym/tests/rules/attack_targets.rs
+    why: Planeswalker attack declaration, trample and defender-departure rules tests
 hide:
   - path: managym/tests/fixtures/scryfall_cards.json
-    why: Oracle characteristics for the 28 Slice 8 FRA cards
+    why: Regenerated Scryfall oracle snapshot for new cards
   - path: managym/academy/fixtures/choice-navigation-opening-v1.json
-    why: Refreshed digests/manifests after Slices 7-8 catalog additions
+    why: Regenerated Academy opening digest after catalog additions
   - path: managym/academy/fixtures/convoke-demo-opening-v1.json
-    why: Refreshed digests/manifests after Slices 7-8 catalog additions
+    why: Regenerated Academy opening digest after catalog additions
   - path: managym/academy/fixtures/learn-demo-opening-v1.json
-    why: Refreshed digests/manifests after Slices 7-8 catalog additions
+    why: Regenerated Academy opening digest after catalog additions
   - path: managym/academy/fixtures/precision-demo-opening-v1.json
-    why: Refreshed digests/manifests after Slices 7-8 catalog additions
+    why: Regenerated Academy opening digest after catalog additions
   - path: managym/academy/fixtures/precision-mana-demo-opening-v1.json
-    why: Refreshed digests/manifests after Slices 7-8 catalog additions
+    why: Regenerated Academy opening digest after catalog additions
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
-    why: Updated moved m13.rs/war.rs evidence paths for FDN planeswalkers
+    why: Updated set coverage ledger rows
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fra.jsonl
-    why: Closed 28 Slice 8 implemented rows and marked Return to the Light Realms / Loot pending with missing authorities
+    why: Updated set coverage ledger rows
