@@ -270,10 +270,9 @@ Import verifies the original receipt, Commands and state digests without invokin
 The imported Academy replay has its own identity; the source digest is retained
 without rewriting the arena evidence. A game's stated source kind is kept
 beside it, and Replay is headed **Training game** or **Evaluation game**
-accordingly; a training game is one exported by
-`manabot.sim.recording`
-([guide](../../docs/academy.md#watch-a-game-from-your-training-loop)), in the
-same Command format and through the same verification. A game that states its
+accordingly; earlier exported training games
+([guide](../../docs/academy.md#watch-a-game-from-your-training-loop)) use the
+same Command format and verification. A game that states its
 world is refused before replay when that world is not the running one. Missing historical policy outputs are
 marked unavailable. Local-update receipts expose only policy/search vectors
 and an acting-view belief summary, never private sampled hands or branch audits.

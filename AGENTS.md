@@ -528,7 +528,7 @@ admission. Admission-rejection fixtures must mark the config as submitted
   class names are `PyAgentError` / `PanicException`. Catch the former through
   its public export `managym.AgentError` (there is no `managym.PyAgentError`).
   Replay compares these through
-  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  `managym.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
 - An observation that does not fit its buffers raises
   `managym.ObservationCapacity` (a `ValueError`, message

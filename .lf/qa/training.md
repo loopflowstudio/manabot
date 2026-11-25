@@ -183,7 +183,7 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   recipe to a later update. Compare saved recipes by `snapshot_id` and
   confirm that the prior policy file is byte-identical.
   For MLX, use the `mlx` extra and pass `"backend":"mlx"` to the recipe.
-  Inspect `continuation.json` beside `training.safetensors` in the current
+  Inspect `continuation.json` beside `learner.safetensors` in the current
   save. Its stream roots record which seed each slot will play after
   resuming. A zero-action `capture closed` row can name the saved opening
   of an interrupted attempt. Compare terminal rows to the completed-game
@@ -297,11 +297,11 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   pty once `out/policies/00000002-raw.safetensors` exists (exit 75),
   `--resume`, and compare tensor bytes of `00000004-*.safetensors` with an
   uninterrupted run; only `bc.counts.training_seconds` differs. A legacy save
-  comes from a detached `main` worktree with this checkout's `.so` when Rust
-  is unchanged (`learner.pt`/`optimizer.pt`/`ema.pt`); MLX refuses it, Torch
-  `--resume` rewrites it in the four-file layout, and a copy then continues
-  on MLX. Editing a seed in `continuation.json` must refuse naming that file
-  and leave `out/` byte-identical (Etude marks the attempt `failed`).
+  holding `learner.pt` (written before portable saves) is refused on both Torch
+  and MLX before model/reading diffing or tensor loading, pointing to manabot
+  0.2.5 or warm-starting from the published policy, and leaves `out/`
+  byte-identical. Editing a seed in `continuation.json` must refuse naming that
+  file and leave `out/` byte-identical (Etude marks the attempt `failed`).
 - Torch MPS inference layout (`attention="bucketed_columns"`): run
   `uv run etude train manabot/recipes/local.py --config '{"device":"mps"}' --until updates=2`,
   then load the policy and its `ObservationSpace` with

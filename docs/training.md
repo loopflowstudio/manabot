@@ -335,11 +335,10 @@ def self_play(
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
         counts, restored = resume_training(settings, run, backend, learner, ema)
-        host = restored.host
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         with self_play_games(
             settings, run, counts, backend=backend,
-            snapshot=host.collector if host is not None else None,
+            snapshot=restored.host.collector if restored is not None else None,
         ) as collector:
             if counts.updates == 0 or is_checkpoint(settings, counts.updates):
                 publish(settings, run, learner, ema, counts, backend=backend)
@@ -355,10 +354,10 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
-            if host is not None:
-                restore_host_rng(host, rng)
-            if restored.sampling is not None:
-                state.restore_sampling(collector.numerics, restored.sampling)
+            if restored is not None:
+                restore_host_rng(restored.host, rng)
+                if restored.sampling is not None:
+                    state.restore_sampling(collector.numerics, restored.sampling)
 
             def export(folder: Path) -> None:
                 export_continuation(
@@ -521,8 +520,9 @@ sampler. Each job's files are in its own run:
 `belief.safetensors` is a portable safetensors container written by both Torch
 and MLX (`manabot.belief.checkpoint`), validated by exact bytes, schema,
 dataset, policy and world identities. A sampler saved by one backend loads on
-the other with matching `log_prob`. Torch retains a legacy `.pt` (`PK\x03\x04`)
-read fallback by magic bytes; MLX refuses legacy `.pt` samplers naming Torch.
+the other with matching `log_prob`. Only the `belief.safetensors` container is
+accepted; legacy `.pt` archives or other non-safetensors payloads are refused
+on both backends with `ValueError("unknown sampler checkpoint format")`.
 
 A policy run taken further publishes later checkpoints beside the one a
 sampler read. Use a new sampler experiment label for a sampler trained from
@@ -1196,7 +1196,7 @@ its rows replace the earlier attempt's, so the record reads as one run.
 
 | Kept across a resume | Started again |
 | --- | --- |
-| Raw weights, EMA, Adam moments and per-parameter step counts, the completed update count and the other cumulative counts, the schedules that follow the update count, every published checkpoint, committed stream roots and action prefixes, host/minibatch RNGs, and — within the same sampling domain (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) — collector and framework sampling RNGs | Any uncommitted work after the last save; across sampling domains (Torch ↔ MLX or Torch across CUDA/MPS/CPU), sampling RNG reseeds deterministically from `(run.seed, counts.updates)` and logs `run/sampling_reseeded=1` on the first resumed update; when resuming a legacy `.pt` save on Torch, native game streams and sampling RNG start fresh |
+| Raw weights, EMA, Adam moments and per-parameter step counts, the completed update count and the other cumulative counts, the schedules that follow the update count, every published checkpoint, committed stream roots and action prefixes, host/minibatch RNGs, and — within the same sampling domain (`mlx`, `torch:cpu`, `torch:cuda`, `torch:mps`) — collector and framework sampling RNGs | Any uncommitted work after the last save; across sampling domains (Torch ↔ MLX or Torch across CUDA/MPS/CPU), sampling RNG reseeds deterministically from `(run.seed, counts.updates)` and logs `run/sampling_reseeded=1` on the first resumed update |
 
 Work after the last save repeats, and Etude charges its hours and dollars to
 the run. Etude writes a save five minutes after the last one and always on the
@@ -1284,12 +1284,17 @@ rates keep their absolute formulas (update 26,001 uses LR
 `6.957944302072213e-6`, tau `0.0023684978179155515` under the default
 schedule).
 
-Legacy Torch saves written by Etude object registration (`learner.pt`,
-`optimizer.pt`, optional `ema.pt`) remain readable on Torch with fresh game and
-sampling streams; their next save writes the canonical four-file layout. MLX
-refuses them with an actionable message to resume once on Torch first.
-For a pre-portable MLX run whose save contains `training.safetensors`, resume
-on the revision that wrote it. Both current backends reject that file.
+Pre-portable saves are refused on both Torch and MLX before model/reading
+diffing or tensor loading, leaving the save bytes and live weights untouched. A
+legacy Torch save holding `learner.pt` fails with:
+
+```text
+ValueError: state.json: this save holds learner.pt, written before portable saves; resume it with manabot 0.2.5, or start a new run warm-started from the run's published policy
+```
+
+A pre-portable MLX save holding `training.safetensors` fails with
+`ValueError: training.safetensors: unsupported pre-portable MLX save`; resume
+it on the revision that wrote it.
 
 ## Game failures
 
@@ -1367,7 +1372,7 @@ uv run python -m manabot.sim.replay .runs/arena/traces/CELL.commands.jsonl.gz --
 uv run python -m manabot.sim.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
 ```
 
-Replay (`manabot.env.replay`) runs in a bounded subprocess. New records require
+Replay (`managym.replay`) runs in a bounded subprocess. Records require
 matching source and native bytes unless `--allow-changed-runtime` is given; a
 world mismatch is always refused. It reports:
 

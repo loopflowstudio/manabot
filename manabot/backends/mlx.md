@@ -178,10 +178,11 @@ MLX restores its original moments and uses its own update count for bias
 correction, including on its first gradient. The first resumed update reports
 the number of these parameters in `run/adam_steps_aligned`.
 
-Legacy Torch saves (`learner.pt` / `optimizer.pt` / `ema.pt`) are refused on MLX
-with `"this save was written by Torch object registration; resume once on Torch
-to write a portable save"`. Pre-unification MLX `training.safetensors` saves are
-refused explicitly on both backends. A missing file, digest mismatch or
+Legacy Torch saves (`learner.pt`) are refused on both backends before
+model/reading diffing or tensor loading with a message pointing to manabot
+0.2.5 or warm-starting a new run from the run's published policy.
+Pre-unification MLX `training.safetensors` saves are refused explicitly on both
+backends. A missing file, digest mismatch or
 nonfinite Adam state fails admission before the loop installs learner tensors.
 A corrupt action prefix or incompatible stream geometry fails during collector
 reconstruction, before the loop can update `state/current.json` or publish a
@@ -254,9 +255,9 @@ Both Torch and MLX write `belief.safetensors` in one portable container holding
 float32 parameters under canonical names alongside the format, schema, dataset,
 policy, world, hyperparameter and metric metadata. `load_belief_sampler` checks
 exact bytes and every binding identity, so a sampler trained on MLX loads in
-Torch (and vice versa) with matching `log_prob`. MLX refuses legacy `.pt`
-belief samplers (`PK\x03\x04`) naming the Torch backend; Torch keeps a legacy
-`.pt` read fallback.
+Torch (and vice versa) with matching `log_prob`. Both backends accept only
+`belief.safetensors` and refuse legacy `.pt` archives or other non-safetensors
+payloads with `ValueError("unknown sampler checkpoint format")`.
 
 ### Architecture mirror and execution
 

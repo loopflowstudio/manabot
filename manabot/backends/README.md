@@ -209,12 +209,11 @@ buffer digest, parameter, Adam tensor, host state and sampling digest before
 installing weights. The collector then verifies the reconstructed games before
 training or publishing a milestone.
 
-Legacy Torch saves written by Etude object registration (`learner.pt`,
-`optimizer.pt`, optional `ema.pt`) still resume read-only on Torch with fresh
-game and sampling streams, and write the canonical four-file layout on their
-next save; MLX refuses them with an actionable message to resume once on Torch
-first. Pre-unification MLX `training.safetensors` saves are refused explicitly
-on both backends. See the
+Pre-portable saves are refused on both backends before model/reading diffing or
+tensor loading, leaving save bytes and live weights untouched: legacy Torch
+saves (`learner.pt`) point to manabot 0.2.5 or warm-starting a new run from
+the run's published policy, and pre-unification MLX `training.safetensors`
+saves are refused explicitly. See the
 [tracked MLX training guide](mlx.md#tracked-training-and-recovery) and
 [training recovery](../../docs/training.md#recovery).
 
@@ -236,8 +235,9 @@ evaluation methods. Search receives a hand sampler. Both Torch and MLX expose
 `backend.belief` (`SamplerCodec` / `BeliefSampling`, owning sampling arithmetic,
 the random stream and learned state) and lazy `backend.belief_fit`
 (`BeliefTrainer`), and read and write one portable `belief.safetensors`
-container (`manabot.belief.checkpoint`). Torch retains a magic-byte fallback
-for reading legacy `.pt` samplers; MLX refuses legacy `.pt` bytes naming Torch.
+container (`manabot.belief.checkpoint`); non-safetensors payloads (including
+legacy `.pt` archives) are refused on both backends with
+`ValueError("unknown sampler checkpoint format")`.
 `manabot.reports.belief` reads sampler metadata without raw `torch.load`, while
 the host pools calibration, Brier scores and support violations per decision.
 
@@ -245,10 +245,8 @@ Health reporting keeps step and rejection counters on the host behind one
 `StepRecorder` protocol (`manabot.training.updates.health.StepRecorder`). Both
 Torch and MLX learners supply sampled gradient and parameter measurements on the
 first optimizer step of iteration 1 and every 25th iteration. An optimizer
-failure after clipping retains the gradient sample. The former
-`manabot.backends.torch.learner.StepRecorder` import is deprecated and will be
-removed in 0.3.0. The update, rollout and search-sampling modules can all be
-imported with Torch absent.
+failure after clipping retains the gradient sample. The update, rollout and
+search-sampling modules can all be imported with Torch absent.
 
 ## Algorithms are written once
 
@@ -320,7 +318,6 @@ checks every installed backend against it:
 
 The shared `damped_policy_loss(rl, ...)` and `minibatch_objective` in
 `manabot.training.updates.objective` compose the policy and critic terms.
-Calling `backend.rl.damped_policy_loss(...)` emits a deprecation warning until removal in 0.3.0.
 
 An update writes its minibatch loss as a closure over the policy forward and
 hands it to the learner, because a functional framework differentiates a
@@ -533,12 +530,13 @@ metadata["world_binding"], metadata["hypers"]["agent_hypers"]
 ```
 
 Tracked training continuation uses the shared four-file safetensors/JSON layout
-across both backends ([continuing a run](#continuing-a-run)); Torch still reads
-legacy `.pt` saves and uses `.pt` for numerical incidents, while MLX writes
-numerical incidents as safetensors. Portable policy exports (`.safetensors`)
-and belief samplers (`belief.safetensors`) load on either backend for
-evaluation and fresh learners; legacy `.pt` policies and belief samplers load
-only on Torch.
+across both backends ([continuing a run](#continuing-a-run)); Torch uses `.pt`
+for numerical incidents, while MLX writes numerical incidents as safetensors.
+Portable policy exports (`.safetensors`) and belief samplers
+(`belief.safetensors`) load on either backend for evaluation and fresh
+learners; legacy `.pt` policies load on Torch (or convert via
+`manabot.backends.convert`), while legacy `.pt` training saves and belief
+samplers are refused on both backends.
 
 ### Convert an older `.pt` checkpoint
 

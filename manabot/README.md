@@ -514,8 +514,7 @@ value and update at each decision. Academy plays it again through the engine
 and steps through it with no policy, checkpoint or manabot. A loop of your own
 passes `games_path=` to its collector. Games cut off when the run stopped open
 as interrupted. A fresh game between current policies is an evaluation game,
-not a training game; evaluation records those the same way. `record_games(...)`
-and `manabot export-game` warn and are removed in 0.3.0. The
+not a training game; evaluation records those the same way. The
 [Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
 selection, naming the seats and failures.
 

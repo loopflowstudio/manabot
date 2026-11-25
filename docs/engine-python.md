@@ -364,10 +364,9 @@ the known prefix and, for this diagnostic command only, can attempt a pending
 indexed action with its retained fresh binding; Academy and `walk` never
 attempt a pending call and show the game as interrupted there. Unknown setup or
 binding is reported as unavailable, and the original interrupted outcome stays
-unknown even if replay succeeds. Older manabot receipts keep their original
-source-digest meaning; when legacy source verification requires manabot, use
-its [replay command](training.md#inspect-and-replay-a-journal) in the original
-environment. Replay does not restore a process or optimizer.
+unknown even if replay succeeds. Older receipts with a legacy source digest
+require `--allow-changed-runtime` or the revision that wrote them. Replay does
+not restore a process or optimizer.
 
 Each boundary requires serialization and fsync, which can reduce throughput;
 no training measurement of that cost exists yet. Automatic atomic compaction
