@@ -1,7 +1,25 @@
 import { CURATED_PACK, ELEMENTAL_WORLD_PACK, JEONG_INCREMENT_PACK } from './curated-pack';
+import { isKeptDeckChoice } from './kept-decks';
 
 export type ElementalDeckChoice = `elemental_${'gr' | 'gw' | 'ur' | 'ub' | 'uw' | 'ug' | 'wr' | 'wb' | 'rb' | 'bg'}`;
-export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'gw_allies_jeong' | 'interactive' | ElementalDeckChoice;
+export type PoolDeckChoice = `pool:${string}`;
+export type KeptDeckChoice = `kept:${string}`;
+export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'gw_allies_jeong' | 'interactive' | ElementalDeckChoice | PoolDeckChoice | KeptDeckChoice;
+
+export interface DeckPoolSummary {
+  id: string;
+  key: PoolDeckChoice;
+  label: string;
+  count: number;
+  default_decklists: 'open' | 'closed';
+}
+
+export function isPoolDeckChoice(value: unknown): value is PoolDeckChoice {
+  return typeof value === 'string' && value.startsWith('pool:') && value.length > 5;
+}
+
+export const ELEMENTAL_DECK_CHOICES: readonly { key: ElementalDeckChoice; label: string }[] =
+  (ELEMENTAL_WORLD_PACK.roster ?? []).map((row) => ({ key: row.deck_id as ElementalDeckChoice, label: row.display_name }));
 
 // The two curated choices and their defaults are derived from the installed
 // manifest. Interactive remains a backwards-compatible, uncurated option.
@@ -16,7 +34,7 @@ export const DECK_CHOICES: readonly { key: DeckChoice; label: string }[] = [
   },
   { key: 'interactive', label: 'Interactive' },
   { key: JEONG_INCREMENT_PACK.matchup.hero.deck_id as DeckChoice, label: JEONG_INCREMENT_PACK.matchup.hero.display_name },
-  ...(ELEMENTAL_WORLD_PACK.roster ?? []).map((row) => ({ key: row.deck_id as ElementalDeckChoice, label: row.display_name })),
+  ...ELEMENTAL_DECK_CHOICES,
 ];
 
 const DECK_KEYS = new Set<string>(DECK_CHOICES.map((deck) => deck.key));
@@ -44,8 +62,8 @@ export function sanitizeDeckSelection(raw: unknown): DeckSelection | null {
   if (
     typeof candidate.hero !== 'string' ||
     typeof candidate.villain !== 'string' ||
-    !DECK_KEYS.has(candidate.hero) ||
-    !DECK_KEYS.has(candidate.villain)
+    (!DECK_KEYS.has(candidate.hero) && !isPoolDeckChoice(candidate.hero) && !isKeptDeckChoice(candidate.hero)) ||
+    (!DECK_KEYS.has(candidate.villain) && !isPoolDeckChoice(candidate.villain) && !isKeptDeckChoice(candidate.villain))
   ) {
     return null;
   }

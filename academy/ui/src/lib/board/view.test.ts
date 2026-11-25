@@ -204,7 +204,7 @@ describe('where decisions land', () => {
     const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
     const copies: Partial<PermanentState>[] = [
       {}, {}, { keywords: ['defender'] }, { keywords: ['defender'], attacks_despite_defender: true },
-      { keywords: ['defender'], keyword_grants: { defender: { source: "Shield" } } },
+      { keywords: ['defender'], keyword_grants: { defender: { source: 'Shield' } } },
       { keyword_abilities: [{ label: 'Firebending 1' }] }, { granted_firebending: 1 },
       { keyword_abilities: [{ label: 'Prowess' }] }, { keyword_abilities: [{ label: 'Prowess', granted: true }] },
       { restrictions: [{ kind: 'cant_block' }] }, { abilities_lost: true },
@@ -218,6 +218,18 @@ describe('where decisions land', () => {
     expect(piles.map(pile => pile.items.map(item => item.permanent.id))).toEqual([
       [1000, 1001], ...copies.slice(2).map((_, i) => [1002 + i]),
     ]);
+  });
+
+  it('draws an opponent\'s Aura with the creature of yours it enchants', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const host = frame.projection.agent.battlefield[0];
+    const aura = { ...host, id: 9001, name: 'Watery Grasp', attached_to: host.id };
+    frame.projection.opponent.battlefield.push(aura);
+    const view = boardView(frame, PLAYERS);
+    const held = permanents(view).find(item => item.permanent.id === host.id)!;
+    expect(held.attached.map(item => item.permanent.id)).toEqual([9001]);
+    const theirs = [...view.opponent.support, ...view.opponent.creatures].flatMap(pile => pile.items);
+    expect(theirs.some(item => item.permanent.id === 9001)).toBe(false);
   });
 
   it('fans identical lands into one pile, keeping each copy', () => {

@@ -551,6 +551,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     data["definition_names"] = {
         str(definition): name for definition, name in definition_names(env).items()
     }
+    subjects = json.loads(env.presentation_subjects_json())
     data["stack_objects"] = [
         {
             "combat_damage_to_players": list(entry.combat_damage_to_players),
@@ -570,6 +571,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
+            "targets": stack_target_subjects(entry, subjects),
             "x": int(entry.x) or None,
             "from_prepared": entry.from_prepared,
             "flashback": entry.flashback,
@@ -585,6 +587,41 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
         }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
+
+
+def stack_target_subjects(
+    entry: managym.StackObject, subjects: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The targets of one stack entry as the subjects the board draws.
+
+    ``subjects`` is the native ``presentation_subjects_json`` of the same
+    position. The observation names a targeted permanent or card by the id
+    the viewer sees, which is the ``entity`` of its public subject. A target
+    with no public subject (a card in a zone the board does not draw) is left
+    out rather than guessed.
+    """
+    objects = {
+        int(subject["id"]["entity"]): subject
+        for subject in subjects.values()
+        if subject["kind"] == "object"
+    }
+    found: list[dict[str, Any]] = []
+    for target in entry.targets:
+        if target.stack_object_id is not None:
+            found.append({"kind": "stack", "id": int(target.stack_object_id)})
+        elif target.player_id is not None:
+            subject = subjects.get(f"player:{int(target.player_id)}")
+            if subject is not None:
+                found.append(subject)
+        else:
+            seen = (
+                target.permanent_id
+                if target.permanent_id is not None
+                else target.card_id
+            )
+            if seen is not None and int(seen) in objects:
+                found.append(objects[int(seen)])
+    return found
 
 
 def definition_names(env: managym.Env) -> dict[int, str]:

@@ -4,6 +4,8 @@
 
   import { currentGame, loadCurrentGame } from '$lib/current-game.svelte';
   import { page } from '$app/state';
+  import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
+  import { followTheme } from '$lib/theme.svelte';
 
   import '../app.css';
 
@@ -12,6 +14,7 @@
   let artCredits = $state<[string, ArtCredit][]>([]);
   onMount(() => {
     loadCurrentGame();
+    const unfollowTheme = followTheme();
     let active = true;
     let revision = 0;
     const update = () => {
@@ -20,7 +23,7 @@
     };
     update();
     window.addEventListener('academy-art-loaded', update);
-    return () => { active = false; window.removeEventListener('academy-art-loaded', update); };
+    return () => { active = false; unfollowTheme(); window.removeEventListener('academy-art-loaded', update); };
   });
 
   const NAV = $derived([
@@ -76,6 +79,7 @@
             {item.label}
           </a>
         {/each}
+        <span class="text-[#f8f1e0]/80 hover:text-[#f8f1e0]"><ThemeSwitch /></span>
       </nav>
     </div>
   </header>

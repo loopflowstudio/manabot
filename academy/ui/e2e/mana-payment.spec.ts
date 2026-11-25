@@ -10,6 +10,7 @@ declare global {
 }
 async function track(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    localStorage.setItem('academy.auto-tap', 'off');
     window.__mana = { frame: null, commands: [], previews: 0 };
     const Native = window.WebSocket;
     class PaymentSocket extends Native {
@@ -94,7 +95,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     await waitForRevision(page, before);
     await expect(page.getByTestId('game')).toHaveAttribute('data-action-space', 'PAY_OR_NOT');
     const primary = page.getByTestId('primary-action');
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}/);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}/);
     await expect(primary).toHaveAccessibleName(/\{1\}\{R\} · \S+/);
     await expect(planned(page)).toHaveCount(2);
     await expect(page.getByTestId('decision-hint')).toContainText('Space pays automatically, or click lands');
@@ -127,7 +128,7 @@ for (const [width, height] of [[1280, 800], [1440, 900]]) {
     });
     await page.mouse.move(x, y);
     await expect(page.locator(`[data-object-id="${ownId}"][data-payment-source="1"]`)).toHaveCount(1);
-    await expect(primary).toHaveText(/^Pay \{1\}\{R\}\s*Space$/);
+    await expect(primary).toHaveText(/^Auto pay \{1\}\{R\}\s*Space$/);
     before = (await frame(page)).revision;
     await clickCard(page.locator(`[data-object-id="${ownId}"]`));
     await waitForRevision(page, before);

@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [model, training, experiment, evaluation, evaluation-long]
+        group: [model, sim, training, experiment, evaluation, evaluation-long]
     env:
       # Sync dependencies once, then build managym below. Later syncs would
       # rebuild the engine.
@@ -60,53 +60,48 @@ jobs:
       - name: Environment and model tests
         if: matrix.group == 'model'
         run: |
-          uv run pytest -n logical --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
+          uv run pytest -n logical --durations=20 \
+            tests/env/ tests/agent/ tests/model/ tests/llm/ tests/bench/ tests/config/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py tests/test_public_api_contract.py \
-            tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py tests/semantic/test_casting_profiles.py \
-            tests/semantic/test_manifest_text.py tests/semantic/test_manifest_two_roots.py \
-            tests/academy/test_trigger_order.py tests/academy/test_qwen_policy.py \
-            tests/sim/test_recording.py tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
-            tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py tests/sim/test_search_command_evidence.py \
-            tests/semantic/test_policy_search.py tests/semantic/test_search_compatibility.py \
-            tests/training/test_scenario_validation.py \
-            tests/belief/test_sampling_data.py tests/belief/test_sampling_report.py tests/belief/test_sampling_fit.py \
-            tests/belief/test_runtime.py tests/belief/test_prepared_likelihood.py \
-            tests/bench/
+            tests/academy/test_trigger_order.py tests/academy/test_qwen_policy.py
+
+      - name: Simulation, belief and semantic tests
+        if: matrix.group == 'sim'
+        run: |
+          uv run pytest -n logical --durations=20 \
+            tests/sim/ tests/belief/ tests/semantic/ \
+            --ignore=tests/semantic/test_elemental_world.py \
+            --ignore=tests/semantic/test_decklist_import.py
 
       - name: Training tests
         if: matrix.group == 'training'
         run: |
           uv run pytest -n logical --durations=20 \
-            tests/training/test_matchups.py tests/training/test_training_decks.py tests/training/test_tla_corpus.py \
-            tests/training/test_deck_building_foundations.py \
-            tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
-            tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/training/test_portable_adam.py \
-            tests/training/test_memory_prefix_storage.py tests/training/test_memory_execution_rows.py \
-            tests/training/test_memory_self_play.py \
-            tests/training/test_rl_objectives.py tests/training/test_collection.py tests/infra/test_external_consumer.py \
-            tests/training/test_action_cutoff.py tests/training/test_packed_action_rollouts.py \
-            tests/training/test_credit_assignment.py \
-            tests/training/test_monitoring.py \
-            tests/training/test_time_cohort.py tests/training/test_pretrained.py \
-            tests/training/test_precision.py tests/training/test_combat_probe.py \
-            tests/training/test_report_helpers.py \
-            tests/training/test_experiment_data.py \
-            tests/training/test_regimes.py tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py \
-            tests/training/test_batch_closure.py tests/training/test_snapshot_rollouts.py \
-            tests/training/test_outcome_tables.py
+            tests/training/ tests/infra/test_external_consumer.py \
+            --ignore=tests/training/test_cross_backend_continuation.py \
+            --ignore=tests/training/test_monitor_evaluation.py \
+            --ignore=tests/training/test_game_errors.py \
+            --ignore=tests/training/test_training_game_journals.py \
+            --ignore=tests/training/test_automatic_game_capture.py \
+            --ignore=tests/training/test_two_seat_learning.py \
+            --ignore=tests/training/test_adaptive_sampler.py \
+            --ignore=tests/training/test_adaptive_two_seat.py \
+            --ignore=tests/training/test_etude_evaluation.py \
+            --ignore=tests/training/test_head_to_head.py \
+            --ignore=tests/training/test_elemental_uniform.py
           uv run pytest -q tests/training/test_cross_backend_continuation.py
 
       - name: Experiment runner, monitoring and verification tests
         if: matrix.group == 'experiment'
         run: |
           uv run pytest -n logical --durations=20 \
+            tests/verify/ \
+            --ignore=tests/verify/test_learning_regression.py \
             tests/training/test_monitor_evaluation.py \
-            tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
-            tests/verify/test_choice_corpus.py tests/semantic/test_ward_life_input.py \
-            tests/verify/test_decision_memory_probe.py \
-            tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
-            tests/verify/test_native_observation_contract.py
+            tests/training/test_game_errors.py \
+            tests/training/test_training_game_journals.py \
+            tests/training/test_automatic_game_capture.py
 
       - name: Two-seat, Elemental and Etude evaluation integration
         if: matrix.group == 'evaluation'

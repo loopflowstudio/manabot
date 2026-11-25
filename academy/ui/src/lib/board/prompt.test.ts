@@ -135,7 +135,7 @@ describe('primaryLabel', () => {
 
   it('shows the cost a payment pays', () => {
     const pay = frames.find(frame => frame.offers.some(offer => offer.verb === 'pay') && frame.projection.decision_context?.mana_cost)!;
-    expect(primaryLabel(pay, boardView(pay, PLAYERS))?.text).toBe(`Pay ${pay.projection.decision_context!.mana_cost}`);
+    expect(primaryLabel(pay, boardView(pay, PLAYERS))?.text).toBe(`Auto pay ${pay.projection.decision_context!.mana_cost}`);
   });
 
   it('says the cost on the button and the lands it taps in its accessible name', () => {
@@ -150,9 +150,9 @@ describe('primaryLabel', () => {
     const names = lands.map(land => land.name);
     const listed = names[0] === names[1] ? `${names[0]} ×2` : names.join(', ');
     const label = primaryLabel(pay, boardView(pay, PLAYERS), preview);
-    expect(label?.text).toBe(`Pay ${cost}`);
+    expect(label?.text).toBe(`Auto pay ${cost}`);
     expect(label?.description).toBe(`${pay.offers.find(offer => offer.verb === 'pay')!.label}: ${cost} · ${listed}`);
     // A preview that is not exact draws nothing; the button keeps the cost.
-    expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Pay ${cost}`);
+    expect(primaryLabel(pay, boardView(pay, PLAYERS), { ...preview, state: 'needs_choice' })?.text).toBe(`Auto pay ${cost}`);
   });
 });
