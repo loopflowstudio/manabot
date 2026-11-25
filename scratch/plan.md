@@ -6,10 +6,11 @@ replacement_events, combat_constraints) are `definition pending` at base
 shared primitive it needs here. Oracle text is Scryfall's; set files are the first
 printing (Scryfall `order=released`, promos included, as `pm15.rs` does).
 
-Sync with main as soon as #593 (MTG-420) merges (auto-merge is on). It adds
-`CreatureTypes::All` / `Characteristics::has_all_creature_types`, which slice 4's
-changeling builds on, and it touches `ZoneEntry`, LKI and layers. Do slice 1 before
-syncing only if #593 is still blocked; rebase slices 4+ onto it.
+Sync with main as soon as #593 (MTG-420) merges (auto-merge is on; still open and
+`BLOCKED` at 2026-11-25T02:23Z). It adds `CreatureTypes::All` /
+`Characteristics::has_all_creature_types`, which slice 4's changeling builds on, and
+it touches `ZoneEntry`, LKI and layers. Slices 2–3 don't need it; before slice 4,
+`gh pr view 593 --json state` and `lf sync main` once merged.
 
 Overlap with MTG-431 (stack copies, choices, costs; no plan at its checkout yet):
 Three Tree Mascot needs changeling (slice 4) and Dragon Mage needs a simultaneous
@@ -87,9 +88,14 @@ Append each printing to `managym/tests/fixtures/scryfall_cards.json`. First-prin
 
 ## Slices, riskiest first
 
-**1 · Built.** Confiscate and Harmless Offering share CR 613.1b control. Ten directed Rust checks passed, as did both bundled pilot replays, the two LLM checks and Academy's land-grouping check. Academy replayed four demos (192 Commands) and five navigation positions. The optional frontier checkpoint was unavailable. Player hexproof joins the target tests with Crystal Barricade in slice 3. Next is slice 2.
+**1 · Built** (`40ba5de05a`, review order `cace2b71ee`): Confiscate and Harmless
+Offering through CR 613.1b layer-2 control. Directed Rust checks, pilot replays, LLM
+checks and Academy replays passed; the full debug nextest suite is deferred to gate.
+Player hexproof target tests come with Crystal Barricade (slice 3).
 
-Release `bench_states` on arm64, median of three on a busy host: at 8/16 Confiscates per seat, cold characteristics took 9.3/17.6 µs before Disenchant and 5.8/17.9 µs afterward. Resolving Disenchant took 38.4/91.7 µs and rebuilt the board three times at both sizes. The existing `attachments` priority check took 17.3/296.4 µs at sizes 8/16 (52/100 permanents). The base revision has no Confiscate benchmark for a same-position comparison.
+Open from slice 1: release `bench_states` showed the existing `attachments` priority
+check at 17.3 µs (52 permanents) vs 296.4 µs (100 permanents), superlinear. Find
+the blow-up while slice 3 touches attachment legality (CR 704.5m/n).
 
 ### 2 · Block requirements are maximized over the whole declaration (Joraga Invocation, Vampire Soulcaller)
 
@@ -402,6 +408,19 @@ except `EntersAsCopy`.
   - Barricade versus a damage doubler: prevention and doubling order is chosen by
     the affected controller.
 - Stress: `mixed-life-gain` with 4/8 Angels; `step:resolve`.
+
+## Passes
+
+Remaining slices regroup into four passes (five across the Task):
+
+- **Pass 2 · legality authorities:** slices 2 and 3 (block-requirement matching;
+  source-aware targeting, protection, player hexproof, uncounterability), plus the
+  `attachments` blow-up. Needs no #593. Teaches whether one source-aware predicate
+  serves targets, blocks, damage and attachments.
+- **Pass 3 · characteristics and graveyard routes:** slices 4 and 5, after #593.
+- **Pass 4 · proposed-event replacements:** slices 6, 7 and 8.
+- **Pass 5 · integration:** the cross-slice synergies below, ledger rows, Engine
+  Budget reference.
 
 ## Cross-slice validation (integrated)
 
