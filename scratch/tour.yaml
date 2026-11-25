@@ -1,11 +1,17 @@
-at: 60b8347589549052fc471fb518b9a3c3a7243b24
+at: 008ddbf3a1942be931e7f329f99bc8f4cf8f19aa
 first:
   - path: scratch/plan.md
-    why: Completed migrations and the v9 retirement condition
+    why: Completed retirement and remaining dense transport work
   - path: docs/training-loop.md
     why: Inspect selected decisions and their behavior probabilities
   - path: docs/engine.md
     why: Read viewer observations and manage parked vector slots
+  - path: manabot/infra/config.py
+    why: Reject retired inputs and identify their last release
+  - path: managym/src/agent/observation_layout.rs
+    why: Publish the single v11 schema
+  - path: managym/src/agent/observation_encoder.rs
+    why: Encode one row per game object
   - path: managym/src/python/observation_batch/archive.rs
     why: Preserve packed layout and validate restored joins
   - path: manabot/env/env.py
@@ -34,6 +40,8 @@ first:
     why: Verify repeated row selection and aligned behavior
   - path: tests/training/test_combat_probe.py
     why: Verify counterfactuals against checkpoint readings
+  - path: tests/model/test_policy_input_rejection.py
+    why: Exercise config, checkpoint, catalog, replay and native admission
   - path: tests/model/test_pinned_pilot.py
-    why: Replay released policies on recorded decisions
+    why: Replay the released v11 pilot on recorded decisions
 hide: []
