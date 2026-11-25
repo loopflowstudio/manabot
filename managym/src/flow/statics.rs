@@ -5,7 +5,7 @@ use crate::{
     flow::{
         decision::EffectFrame,
         game::{Game, Revisions},
-        layers::{matches_view, Context, SourceSeed, StateReads},
+        layers::{matches_view, Context, SourceSeed, StateReads, StaticSourceIndex},
         proposed_event::{EntryFace, ZoneEntry},
         triggers::TriggerIndex,
         turn::RecordedCast,
@@ -229,10 +229,13 @@ pub(super) struct StaticPlayPermissions {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct LayerBoard {
-    objects: Vec<Option<Arc<Characteristics>>>,
+    pub(super) objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
     restrictions: Vec<(PermanentId, PlayerId, StaticRestriction)>,
+    /// Indexed functioning static generators (`O(|generators|)` reads across
+    /// the battlefield and command zone).
+    pub(super) static_sources: StaticSourceIndex,
     reads: StateReads,
     /// Finalization can inspect state beyond the raw layer view. Ordinary
     /// fixed activations retain their finalized entry across state writes
@@ -291,7 +294,7 @@ impl DerivedCache {
 }
 impl Game {
     fn compute_board(&self, sources: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> LayerBoard {
-        let context = Context::evaluate(self, sources);
+        let (context, mut static_sources) = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
         let mut land_plays_each_player = 0;
@@ -332,32 +335,45 @@ impl Game {
                 _ => {}
             };
         for (id, object) in context.objects {
-            dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
-            if !object.view.static_abilities.is_empty() && self.permanent_abilities_function(id) {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                let controller = permanent.controller;
-                let permissions = &mut play_permissions[controller.0];
-                for ability in &object.view.static_abilities {
-                    if !self.static_ability_functions(permanent.object, ability) {
-                        continue;
-                    }
-                    if let StaticAbility::Restriction(rule) = ability {
-                        restrictions.push((id, controller, rule.clone()));
-                    } else {
-                        apply_play_static(
-                            ability,
-                            permanent.object,
-                            permanent.id,
-                            permissions,
-                            &mut land_plays_each_player,
-                            &mut dynamic_activations,
-                        );
-                    }
-                }
+            if !dynamic_activations && !object.view.activated_abilities.is_empty() {
+                dynamic_activations = object.view.has_dynamic_activations();
             }
             objects[id.0] = Some(object.view.clone());
         }
-        for (controller, object) in self.functioning_command_objects() {
+        let mut battlefield_statics: Vec<PermanentId> =
+            static_sources.battlefield_ids(None).collect();
+        if battlefield_statics.len() > 1 {
+            battlefield_statics.sort_unstable();
+        }
+        for id in battlefield_statics {
+            let Some(view) = objects.get(id.0).and_then(Option::as_ref) else {
+                continue;
+            };
+            if view.static_abilities.is_empty() {
+                continue;
+            }
+            let permanent = self.state.permanents[id].as_ref().unwrap();
+            let controller = permanent.controller;
+            let permissions = &mut play_permissions[controller.0];
+            for ability in &view.static_abilities {
+                if !self.static_ability_functions(permanent.object, ability) {
+                    continue;
+                }
+                if let StaticAbility::Restriction(rule) = ability {
+                    restrictions.push((id, controller, rule.clone()));
+                } else {
+                    apply_play_static(
+                        ability,
+                        permanent.object,
+                        permanent.id,
+                        permissions,
+                        &mut land_plays_each_player,
+                        &mut dynamic_activations,
+                    );
+                }
+            }
+        }
+        for (controller, object) in static_sources.command_objects(None) {
             let permissions = &mut play_permissions[controller.0];
             let record = &self.state[object];
             for ability in &record.statics {
@@ -373,6 +389,31 @@ impl Game {
                 }
             }
         }
+        static_sources.finalize_for_board(self, &objects);
+        #[cfg(debug_assertions)]
+        {
+            for (slot, view) in objects.iter().enumerate() {
+                let Some(view) = view else {
+                    continue;
+                };
+                let id = PermanentId(slot);
+                if !view.static_abilities.is_empty() && self.permanent_abilities_function(id) {
+                    let seat = self.state.permanents[id].as_ref().unwrap().controller.0;
+                    debug_assert!(
+                        static_sources.battlefield[seat].contains(&id),
+                        "StaticSourceIndex missed functioning battlefield static {id:?}"
+                    );
+                }
+            }
+            for (seat, object) in self.functioning_command_objects() {
+                if !self.state[object].statics.is_empty() {
+                    debug_assert!(
+                        static_sources.command[seat.0].contains(&object),
+                        "StaticSourceIndex missed functioning command-zone static {object:?}"
+                    );
+                }
+            }
+        }
         for permissions in &mut play_permissions {
             permissions.extra_land_plays += land_plays_each_player;
         }
@@ -380,6 +421,7 @@ impl Game {
             reads: context.reads,
             dynamic_activations,
             restrictions,
+            static_sources,
             objects,
             play_permissions,
         }
@@ -1474,6 +1516,7 @@ mod cache_tests {
         game.derived.borrow_mut().board = Some(Arc::new(LayerBoard {
             play_permissions: board.play_permissions.clone(),
             restrictions: board.restrictions.clone(),
+            static_sources: board.static_sources.clone(),
             objects: board.objects.clone(),
             reads,
             dynamic_activations: board.dynamic_activations,
@@ -1974,5 +2017,117 @@ mod cache_tests {
         assert_eq!(loyalty_branch.characteristics(attacker).pt(), (4, 4));
         assert!(loyalty_branch.commit_counter_change(walker_obj, CounterKind::Loyalty, -1, None));
         assert_eq!(loyalty_branch.characteristics(attacker).pt(), (3, 3));
+    }
+
+    #[test]
+    fn static_source_index_scales_with_generators_and_is_condition_independent() {
+        use crate::state::card::{CardType, StaticPtBuff};
+
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", [("Gray Ogre".into(), 40)].into()),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            431,
+            true,
+        );
+        game.play();
+
+        // Populate 64 vanilla tokens alongside 1 battlefield anthem and 1 command-zone emblem.
+        let mut tokens = Vec::new();
+        for _ in 0..64 {
+            tokens.push(game.create_token("token.ally", PlayerId(0)).unwrap());
+        }
+        let anthem = game
+            .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+            .unwrap();
+        let anthem_obj = game.permanent_object(anthem).unwrap();
+        game.state[anthem_obj].statics = vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::YouControl(CardPredicate::creature()),
+            power: 1,
+            toughness: 1,
+            condition: Some(Condition::ControlsAtLeast {
+                count: 1,
+                predicate: CardPredicate::card_type(CardType::Artifact),
+                distinct_names: false,
+            }),
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        })];
+        let emblem = game.create_emblem("emblem.chandra_torch_of_defiance", PlayerId(0));
+        game.state[emblem].statics = vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::YouControl(CardPredicate::creature()),
+            power: 0,
+            toughness: 1,
+            condition: None,
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        })];
+
+        // Even while the anthem's Artifact condition is false, StaticSourceIndex
+        // still indexes ONLY the 1 anthem and 1 emblem (never the 64 tokens).
+        let board = game.layer_board();
+        assert_eq!(board.static_sources.battlefield[0], vec![anthem]);
+        assert!(board.static_sources.battlefield[1].is_empty());
+        assert_eq!(board.static_sources.command[0], vec![emblem]);
+        assert!(board.static_sources.command[1].is_empty());
+        assert_eq!(game.characteristics(tokens[0]).pt(), (1, 2));
+        assert_eq!(game.characteristics(tokens[63]).pt(), (1, 2));
+
+        // Adding Artifact type in Layer 4 flips the anthem's condition to true
+        // during the same layer rebuild, proving condition-independence.
+        let affected_token = game.affected_permanent(tokens[0]).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_token],
+            Modification::AddTypes(vec![CardType::Artifact]),
+            EffectDuration::Indefinite,
+        );
+        assert_eq!(game.characteristics(tokens[0]).pt(), (2, 3));
+        assert_eq!(game.characteristics(tokens[63]).pt(), (2, 3));
+
+        // Granting a static in Layer 6 to a vanilla token (not initially indexed)
+        // dynamically registers it for discovery and final board indexing.
+        grant_pt_static(
+            &mut game,
+            tokens[1],
+            StaticScope::YouControl(CardPredicate::creature()),
+            None,
+            1,
+        );
+        let board = game.layer_board();
+        assert_eq!(board.static_sources.battlefield[0].len(), 2);
+        assert!(board.static_sources.battlefield[0].contains(&anthem));
+        assert!(board.static_sources.battlefield[0].contains(&tokens[1]));
+        assert_eq!(game.characteristics(tokens[63]).pt(), (3, 4));
+
+        // Losing all abilities removes the token from the finalized static index.
+        let affected_granted = game.affected_permanent(tokens[1]).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_granted],
+            Modification::LoseAllAbilities,
+            EffectDuration::Indefinite,
+        );
+        let board = game.layer_board();
+        assert_eq!(board.static_sources.battlefield[0], vec![anthem]);
+        assert_eq!(game.characteristics(tokens[63]).pt(), (2, 3));
+
+        // Phasing out the anthem removes it from the index (CR 702.26b).
+        let affected_anthem = game.affected_permanent(anthem).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_anthem],
+            Modification::PhasedOut,
+            EffectDuration::EndOfTurn,
+        );
+        let board = game.layer_board();
+        assert!(board.static_sources.battlefield[0].is_empty());
+        assert_eq!(game.characteristics(tokens[63]).pt(), (1, 2));
     }
 }

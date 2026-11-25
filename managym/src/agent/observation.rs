@@ -3075,10 +3075,8 @@ mod characteristics_tests {
             game.scenario_force_battlefield(PlayerId(0), "Forest", true)
                 .unwrap();
         }
-        let _treasure = game
-            .create_token("token.treasure", PlayerId(0), false)
-            .unwrap();
-        let _clue = game.create_token("token.clue", PlayerId(0), false).unwrap();
+        let _treasure = game.create_token("token.treasure", PlayerId(0)).unwrap();
+        let _clue = game.create_token("token.clue", PlayerId(0)).unwrap();
         let actions = game.compute_player_actions(PlayerId(0));
         game.publish_action_space(crate::agent::action::ActionSpace {
             player: Some(PlayerId(0)),

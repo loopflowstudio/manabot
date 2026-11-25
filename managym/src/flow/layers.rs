@@ -63,6 +63,123 @@ impl Layer {
         Self::ModifyPower,
         Self::SwitchPower,
     ];
+
+    #[inline]
+    const fn bit(self) -> u8 {
+        1 << (self as u8)
+    }
+}
+
+/// Condition-independent generator pre-filter for static-bearing objects across
+/// the battlefield and command zone.
+///
+/// Built once at the top of `Context::evaluate` after base reset and before
+/// per-layer gathers. Over-includes conservatively (every functioning
+/// battlefield permanent and command-zone emblem whose base definition carries
+/// a static ability, plus any functioning permanent granted a static in layer 6)
+/// and never evaluates runtime conditions, so dependency changes and condition
+/// flips cannot hide a generator.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StaticSourceIndex {
+    /// Functioning battlefield permanents carrying static abilities, per seat.
+    pub(crate) battlefield: [Vec<PermanentId>; 2],
+    /// Functioning command-zone objects (CR 114.4 emblems) carrying static
+    /// abilities, per seat.
+    pub(crate) command: [Vec<ObjectId>; 2],
+}
+
+impl StaticSourceIndex {
+    /// Collect every functioning battlefield permanent and command-zone emblem
+    /// whose base definition carries a static ability, without evaluating
+    /// runtime conditions.
+    fn collect(game: &Game, objects: &BTreeMap<PermanentId, Arc<LayerObject>>) -> Self {
+        let mut index = Self::default();
+        for (&id, object) in objects {
+            if !object.statics.is_empty() && game.permanent_abilities_function(id) {
+                let seat = game.live_permanent(id).controller.0;
+                index.battlefield[seat].push(id);
+            }
+        }
+        for seat in [PlayerId(0), PlayerId(1)] {
+            for object in game.functioning_command_objects_for(seat) {
+                if !game.state[object].statics.is_empty() {
+                    index.command[seat.0].push(object);
+                }
+            }
+        }
+        index
+    }
+
+    /// Record a permanent that gained a static ability during layer 6
+    /// (`Modification::GrantStatic`). Returns `true` when newly inserted.
+    fn record_battlefield(&mut self, game: &Game, id: PermanentId) -> bool {
+        if !game.permanent_abilities_function(id) {
+            return false;
+        }
+        let seat = game.live_permanent(id).controller.0;
+        if self.battlefield[seat].contains(&id) {
+            return false;
+        }
+        self.battlefield[seat].push(id);
+        true
+    }
+
+    /// Prune permanents that lost all static abilities during layer evaluation
+    /// and restore battlefield zone order for seats with multiple generators,
+    /// matching `iter_battlefield_permanents(seat)`.
+    pub(super) fn finalize_for_board(
+        &mut self,
+        game: &Game,
+        objects: &[Option<Arc<Characteristics>>],
+    ) {
+        for seat in [PlayerId(0), PlayerId(1)] {
+            let list = &mut self.battlefield[seat.0];
+            list.retain(|id| {
+                objects
+                    .get(id.0)
+                    .and_then(Option::as_ref)
+                    .is_some_and(|view| !view.static_abilities.is_empty())
+            });
+            if list.len() > 1 {
+                let remaining = std::mem::take(list);
+                *list = game
+                    .iter_battlefield_including_phased_out(seat)
+                    .filter(|id| remaining.contains(id))
+                    .collect();
+            }
+        }
+    }
+
+    pub(crate) fn battlefield_ids(
+        &self,
+        controller: Option<PlayerId>,
+    ) -> impl Iterator<Item = PermanentId> + '_ {
+        let seats: &[usize] = match controller {
+            Some(PlayerId(0)) => &[0],
+            Some(PlayerId(1)) => &[1],
+            _ => &[0, 1],
+        };
+        seats
+            .iter()
+            .flat_map(|&seat| self.battlefield[seat].iter().copied())
+    }
+
+    pub(crate) fn command_objects(
+        &self,
+        controller: Option<PlayerId>,
+    ) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
+        let seats: &[usize] = match controller {
+            Some(PlayerId(0)) => &[0],
+            Some(PlayerId(1)) => &[1],
+            _ => &[0, 1],
+        };
+        seats.iter().flat_map(|&seat| {
+            self.command[seat]
+                .iter()
+                .copied()
+                .map(move |object| (PlayerId(seat), object))
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -473,8 +590,11 @@ struct Instruction {
     operation: Operation,
 }
 
-fn push_node(reads: &mut StateReads, nodes: &mut Vec<Node>, node: Node) {
+fn push_node(reads: &mut StateReads, nodes: &mut Vec<Node>, active_layers: &mut u8, node: Node) {
     reads.merge(node.reads.state);
+    for &(part, _) in &node.parts {
+        *active_layers |= part.bit();
+    }
     nodes.push(node);
 }
 
@@ -506,7 +626,10 @@ fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
 }
 
 impl<'a> Context<'a> {
-    pub fn evaluate(game: &'a Game, seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>) -> Self {
+    pub fn evaluate(
+        game: &'a Game,
+        seeds: Option<&mut Vec<Option<Arc<SourceSeed>>>>,
+    ) -> (Self, StaticSourceIndex) {
         #[cfg(feature = "benchmark")]
         let _timer = crate::benchmark_layers::Timer::new(|m, ns| {
             m.boards += 1;
@@ -523,7 +646,10 @@ impl<'a> Context<'a> {
             reads: StateReads::default(),
         };
         let mut nodes = Vec::new();
+        let mut active_layers = 0u8;
         let mut known = BTreeSet::new();
+        let mut pt_counters = Vec::new();
+        let has_effects = !game.state.effects.is_empty();
         seeds.resize(game.state.permanents.len(), None);
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
             let Some(p) = permanent else {
@@ -542,52 +668,72 @@ impl<'a> Context<'a> {
             }
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
-            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
-            // A phased-out permanent's static abilities apply to nothing
-            // (CR 702.26b); its own view still takes the records on it.
-            if game.permanent_abilities_function(id) {
-                for node in &seed.nodes {
-                    push_node(&mut context.reads, &mut nodes, node.clone());
+            if !p.counters.is_empty() {
+                let pt_delta = p.counter_count(CounterKind::PlusOnePlusOne)
+                    - p.counter_count(CounterKind::MinusOneMinusOne);
+                if pt_delta != 0 {
+                    pt_counters.push((id, pt_delta));
+                }
+                for (kind, count) in p.counters.iter() {
+                    if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
+                        active_layers |= Layer::Ability.bit();
+                        nodes.push(Node::resolved(
+                            AbilityOrigin::Counter,
+                            p.object,
+                            id,
+                            vec![slot, usize::MAX - 1, kind as usize],
+                            p.keyword_counter_timestamps
+                                .get(&kind)
+                                .copied()
+                                .unwrap_or(p.timestamp),
+                            (
+                                Layer::Ability,
+                                Operation::Modify(Modification::AddKeywords(Keywords::of(&[
+                                    keyword,
+                                ]))),
+                            ),
+                        ));
+                    }
                 }
             }
-            for (kind, count) in p.counters.iter() {
-                if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
+            if has_effects {
+                for (i, record) in game.effects_on(id).enumerate() {
+                    let Some(layer) = layer(&record.modification) else {
+                        continue;
+                    };
+                    let operation = if record.modification == Modification::HasAbilitiesOfSource {
+                        Operation::Inherit
+                    } else {
+                        Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
+                    };
+                    active_layers |= layer.bit();
                     nodes.push(Node::resolved(
-                        AbilityOrigin::Counter,
+                        AbilityOrigin::Effect(record.timestamp),
                         p.object,
                         id,
-                        vec![slot, usize::MAX - 1, kind as usize],
-                        p.keyword_counter_timestamps
-                            .get(&kind)
-                            .copied()
-                            .unwrap_or(p.timestamp),
-                        (
-                            Layer::Ability,
-                            Operation::Modify(Modification::AddKeywords(Keywords::of(&[keyword]))),
-                        ),
+                        vec![slot, usize::MAX, i],
+                        record.timestamp,
+                        (layer, operation),
                     ));
                 }
             }
-            for (i, record) in game.effects_on(id).enumerate() {
-                let Some(layer) = layer(&record.modification) else {
-                    continue;
-                };
-                let operation = if record.modification == Modification::HasAbilitiesOfSource {
-                    Operation::Inherit
-                } else {
-                    Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
-                };
-                nodes.push(Node::resolved(
-                    AbilityOrigin::Effect(record.timestamp),
-                    p.object,
-                    id,
-                    vec![slot, usize::MAX, i],
-                    record.timestamp,
-                    (layer, operation),
-                ));
+        }
+        // Build the condition-independent generator index once after base
+        // reset, before gathering initial static nodes or running layers.
+        let mut static_sources = StaticSourceIndex::collect(game, &context.objects);
+        for id in static_sources.battlefield_ids(None) {
+            let seed = seeds[id.0].as_ref().unwrap();
+            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
+            for node in &seed.nodes {
+                push_node(
+                    &mut context.reads,
+                    &mut nodes,
+                    &mut active_layers,
+                    node.clone(),
+                );
             }
         }
-        for (_, source) in game.functioning_command_objects() {
+        for (_, source) in static_sources.command_objects(None) {
             let emblem = &game.state[source];
             for (index, ability) in emblem.statics.iter().enumerate() {
                 if !game.static_ability_functions(source, ability) {
@@ -600,7 +746,7 @@ impl<'a> Context<'a> {
                     ability: ability.clone(),
                 };
                 if let Some(node) = context.node(NodeSource::command(source), &entry) {
-                    push_node(&mut context.reads, &mut nodes, node);
+                    push_node(&mut context.reads, &mut nodes, &mut active_layers, node);
                 }
             }
         }
@@ -608,62 +754,73 @@ impl<'a> Context<'a> {
             seeds.clear();
         }
         for layer in Layer::ALL {
-            let mut applied = BTreeSet::new();
-            loop {
-                let pending: Vec<_> = nodes
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, node)| {
-                        !applied.contains(i)
-                            && node.parts.iter().any(|(part, _)| *part == layer)
-                            && context.exists(node)
-                    })
-                    .map(|(i, _)| i)
-                    .collect();
-                if pending.is_empty() {
-                    break;
-                }
-                let instructions: Vec<_> = pending
-                    .iter()
-                    .map(|&i| context.instructions(&nodes[i], layer))
-                    .collect();
-                for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
-                    let index = pending[selected];
-                    if nodes[index].targets.is_none()
-                        && nodes[index].parts.iter().any(|(part, _)| *part > layer)
-                        && !instructions[selected].is_empty()
-                    {
-                        // Instructions already resolved the affected set. Retain
-                        // it only for effects that continue into a later layer.
-                        let mut targets: Vec<_> = instructions[selected]
-                            .iter()
-                            .map(|instruction| instruction.target)
-                            .collect();
-                        targets.dedup();
-                        nodes[index].targets = Some(targets);
+            if active_layers & layer.bit() != 0 {
+                let mut applied = BTreeSet::new();
+                loop {
+                    let pending: Vec<_> = nodes
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, node)| {
+                            !applied.contains(i)
+                                && node.parts.iter().any(|(part, _)| *part == layer)
+                                && context.exists(node)
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+                    if pending.is_empty() {
+                        break;
                     }
-                    context.apply(&nodes[index], &instructions[selected]);
-                    // Only a static grant introduces layer nodes. Removing abilities
-                    // changes existence, which the pending filter checks directly.
-                    if instructions[selected].iter().any(|i| {
-                        matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
-                    }) {
-                        context.discover(&mut nodes, &mut known);
+                    let instructions: Vec<_> = pending
+                        .iter()
+                        .map(|&i| context.instructions(&nodes[i], layer))
+                        .collect();
+                    for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
+                        let index = pending[selected];
+                        if nodes[index].targets.is_none()
+                            && nodes[index].parts.iter().any(|(part, _)| *part > layer)
+                            && !instructions[selected].is_empty()
+                        {
+                            // Instructions already resolved the affected set. Retain
+                            // it only for effects that continue into a later layer.
+                            let mut targets: Vec<_> = instructions[selected]
+                                .iter()
+                                .map(|instruction| instruction.target)
+                                .collect();
+                            targets.dedup();
+                            nodes[index].targets = Some(targets);
+                        }
+                        context.apply(&nodes[index], &instructions[selected]);
+                        // Only a static grant introduces layer nodes. Removing abilities
+                        // changes existence, which the pending filter checks directly.
+                        let mut granted_static = false;
+                        for instruction in &instructions[selected] {
+                            if matches!(
+                                instruction.operation,
+                                Operation::Modify(Modification::GrantStatic(_))
+                            ) {
+                                static_sources.record_battlefield(game, instruction.target);
+                                granted_static = true;
+                            }
+                        }
+                        if granted_static {
+                            context.discover(
+                                &static_sources,
+                                &mut nodes,
+                                &mut known,
+                                &mut active_layers,
+                            );
+                        }
+                        applied.insert(index);
                     }
-                    applied.insert(index);
                 }
             }
-            if layer == Layer::ModifyPower {
-                for (&id, object) in &mut context.objects {
+            if layer == Layer::ModifyPower && !pt_counters.is_empty() {
+                for &(id, count) in &pt_counters {
                     // CR 613.4c: +1/+1 and -1/-1 counters apply together.
-                    let permanent = game.live_permanent(id);
-                    let count = permanent.counter_count(CounterKind::PlusOnePlusOne)
-                        - permanent.counter_count(CounterKind::MinusOneMinusOne);
-                    if count != 0 {
-                        let view = Arc::make_mut(&mut Arc::make_mut(object).view);
-                        view.power += count;
-                        view.toughness += count;
-                    }
+                    let object = context.objects.get_mut(&id).unwrap();
+                    let view = Arc::make_mut(&mut Arc::make_mut(object).view);
+                    view.power += count;
+                    view.toughness += count;
                 }
             }
         }
@@ -673,7 +830,7 @@ impl<'a> Context<'a> {
                 Self::finish_object(Arc::make_mut(object), record);
             }
         }
-        context
+        (context, static_sources)
     }
 
     /// The copiable object and bound static plans of one live incarnation.
@@ -781,13 +938,20 @@ impl<'a> Context<'a> {
             .map(|entry| entry.ability.clone())
             .collect();
     }
-    fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
+    fn discover(
+        &mut self,
+        static_sources: &StaticSourceIndex,
+        nodes: &mut Vec<Node>,
+        known: &mut BTreeSet<Vec<usize>>,
+        active_layers: &mut u8,
+    ) {
         // Occurrence provenance preserves duplicate grants, including statics
         // discovered during layer 6 that start applying in a later layer.
-        for (&id, object) in &self.objects {
-            if !self.game.permanent_abilities_function(id) {
+        // Iterate only the condition-independent generator index (`O(|generators|)`).
+        for id in static_sources.battlefield_ids(None) {
+            let Some(object) = self.objects.get(&id) else {
                 continue;
-            }
+            };
             let source = self.game.live_permanent(id).object;
             for entry in &object.statics {
                 if !self.game.static_ability_functions(source, &entry.ability) {
@@ -795,7 +959,7 @@ impl<'a> Context<'a> {
                 }
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(NodeSource::permanent(source, id), entry) {
-                        push_node(&mut self.reads, nodes, node);
+                        push_node(&mut self.reads, nodes, active_layers, node);
                     }
                 }
             }
@@ -1497,13 +1661,15 @@ impl<'a> Context<'a> {
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
                         view.activated_abilities.extend(
-                            definition.activated_abilities.iter().cloned().map(
-                                |mut ability| {
+                            definition
+                                .activated_abilities
+                                .iter()
+                                .cloned()
+                                .map(|mut ability| {
                                     ability.provenance =
                                         crate::state::ability::AbilityProvenance::Granted;
                                     ability
-                                },
-                            ),
+                                }),
                         );
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(

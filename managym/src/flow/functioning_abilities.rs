@@ -319,15 +319,21 @@ impl Game {
     }
 
     /// Visit every functioning static ability on the battlefield and command
-    /// zone (for `controller`, or across both seats when `controller` is `None`).
+    /// zone (for `controller`, or across both seats when `controller` is `None`),
+    /// iterating only the `LayerBoard`'s condition-independent `StaticSourceIndex`
+    /// (`O(|generators|)` instead of `O(|battlefield|)`).
     pub(crate) fn for_each_functioning_static(
         &self,
         controller: Option<PlayerId>,
         mut visit: impl FnMut(ObjectId, Option<PermanentId>, PlayerId, usize, &StaticAbility),
     ) {
-        let mut visit_permanent = |id: PermanentId, view: &crate::flow::statics::Characteristics| {
+        let board = self.layer_board();
+        for id in board.static_sources.battlefield_ids(controller) {
             let Some(permanent) = self.state.permanents[id].as_ref() else {
-                return;
+                continue;
+            };
+            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
+                continue;
             };
             let source = permanent.object;
             let owner = permanent.controller;
@@ -336,37 +342,11 @@ impl Game {
                     visit(source, Some(id), owner, index, ability);
                 }
             }
-        };
-        match controller {
-            Some(seat) => {
-                for (id, view) in self.layer_views(self.iter_battlefield_permanents(seat)) {
-                    if !view.static_abilities.is_empty() {
-                        visit_permanent(id, &view);
-                    }
-                }
-                for object in self.functioning_command_objects_for(seat) {
-                    for (index, ability) in self.state[object].statics.iter().enumerate() {
-                        if self.static_ability_functions(object, ability) {
-                            visit(object, None, seat, index, ability);
-                        }
-                    }
-                }
-            }
-            None => {
-                let ids = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|seat| self.iter_battlefield_permanents(seat));
-                for (id, view) in self.layer_views(ids) {
-                    if !view.static_abilities.is_empty() {
-                        visit_permanent(id, &view);
-                    }
-                }
-                for (seat, object) in self.functioning_command_objects() {
-                    for (index, ability) in self.state[object].statics.iter().enumerate() {
-                        if self.static_ability_functions(object, ability) {
-                            visit(object, None, seat, index, ability);
-                        }
-                    }
+        }
+        for (seat, object) in board.static_sources.command_objects(controller) {
+            for (index, ability) in self.state[object].statics.iter().enumerate() {
+                if self.static_ability_functions(object, ability) {
+                    visit(object, None, seat, index, ability);
                 }
             }
         }
@@ -379,13 +359,28 @@ impl Game {
         controller: Option<PlayerId>,
         predicate: impl Fn(&StaticAbility) -> bool,
     ) -> bool {
-        let mut found = false;
-        self.for_each_functioning_static(controller, |_, _, _, _, ability| {
-            if !found && predicate(ability) {
-                found = true;
+        let board = self.layer_board();
+        for id in board.static_sources.battlefield_ids(controller) {
+            let Some(permanent) = self.state.permanents[id].as_ref() else {
+                continue;
+            };
+            let Some(view) = board.objects.get(id.0).and_then(Option::as_ref) else {
+                continue;
+            };
+            for ability in &view.static_abilities {
+                if self.static_ability_functions(permanent.object, ability) && predicate(ability) {
+                    return true;
+                }
             }
-        });
-        found
+        }
+        for (_, object) in board.static_sources.command_objects(controller) {
+            for ability in &self.state[object].statics {
+                if self.static_ability_functions(object, ability) && predicate(ability) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Visit every functioning ambient replacement effect on the battlefield
@@ -605,7 +600,11 @@ mod tests {
 
         // Put a regular card (ObjectKind::Card) in the command zone with a static
         // buff, a trigger, and a damage-doubling replacement effect.
-        let card_in_cmd = game.state.zones.top(ZoneType::Library, PlayerId(0)).unwrap();
+        let card_in_cmd = game
+            .state
+            .zones
+            .top(ZoneType::Library, PlayerId(0))
+            .unwrap();
         game.state
             .place_object(card_in_cmd, PlayerId(0), ZoneType::Command);
         game.state[card_in_cmd].statics = vec![StaticAbility::PtBuff(StaticPtBuff {
@@ -715,7 +714,11 @@ mod tests {
 
         // 1. CDA functions in every zone (Hand, Graveyard, Exile, Library, Stack).
         let cda_static = StaticAbility::CharacteristicPt(PowerCda::CreaturesYouControl);
-        let cda_obj = game.state.zones.top(ZoneType::Library, PlayerId(0)).unwrap();
+        let cda_obj = game
+            .state
+            .zones
+            .top(ZoneType::Library, PlayerId(0))
+            .unwrap();
         game.state[cda_obj].statics = vec![cda_static.clone()];
         for zone in [
             ZoneType::Library,
@@ -732,7 +735,11 @@ mod tests {
         }
 
         // 2. Stack exception: CantBeCountered functions only on the stack.
-        let spell_card = game.state.zones.top(ZoneType::Library, PlayerId(0)).unwrap();
+        let spell_card = game
+            .state
+            .zones
+            .top(ZoneType::Library, PlayerId(0))
+            .unwrap();
         game.state[spell_card].statics = vec![StaticAbility::CantBeCountered];
         game.state
             .place_object(spell_card, PlayerId(0), ZoneType::Hand);
@@ -925,25 +932,26 @@ mod tests {
             .definition_id("Boiling Rock Rioter")
             .unwrap();
         let timestamp = game.state.id_gen_mut().next_id();
-        game.state.effects.push(crate::state::effect::ContinuousEffect {
-            timestamp,
-            source: Some(rioter_def),
-            controller: PlayerId(0),
-            affected: affected_koh,
-            modification: Modification::HasAbilitiesOfSource,
-            duration: EffectDuration::Indefinite,
-            source_object: None,
-        });
+        game.state
+            .effects
+            .push(crate::state::effect::ContinuousEffect {
+                timestamp,
+                source: Some(rioter_def),
+                controller: PlayerId(0),
+                affected: affected_koh,
+                modification: Modification::HasAbilitiesOfSource,
+                duration: EffectDuration::Indefinite,
+                source_object: None,
+            });
         let aura = game
             .scenario_force_battlefield(PlayerId(0), "Gray Ogre", false)
             .unwrap();
         let aura_obj = game.permanent_object(aura).unwrap();
-        game.state[aura_obj].statics = vec![StaticAbility::AttachedHas(
-            ActivatedAbilityDefinition {
+        game.state[aura_obj].statics =
+            vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
                 effects: vec![Effect::gain_life(1)],
                 ..Default::default()
-            },
-        )];
+            })];
         game.state.permanents[aura].as_mut().unwrap().attached_to = Some(koh_obj);
 
         let view = game.characteristics(koh);

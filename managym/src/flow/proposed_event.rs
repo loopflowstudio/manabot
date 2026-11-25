@@ -966,7 +966,11 @@ impl Game {
                 if self.state.zones.zone_of(object) != Some(ZoneType::Exile) {
                     continue;
                 }
-                if returns && self.lookup_current_permanent(linked_source.creator).is_err() {
+                if returns
+                    && self
+                        .lookup_current_permanent(linked_source.creator)
+                        .is_err()
+                {
                     followups.push(self.zone_move_proposal(
                         object,
                         ZoneType::Battlefield,
@@ -1443,9 +1447,8 @@ impl Game {
                                     || source_facts.is_some_and(|(_, creature)| creature))
                                     && recipient_by.includes(controller, affected_controller)
                                     && (*source_by == Actor::AnyPlayer
-                                        || source_controller.is_some_and(|p| {
-                                            source_by.includes(controller, p)
-                                        }))
+                                        || source_controller
+                                            .is_some_and(|p| source_by.includes(controller, p)))
                             }
                             ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
                             _ => false,

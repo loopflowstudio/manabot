@@ -1961,25 +1961,27 @@ impl Game {
                 }
             })
             .collect();
-        sources.extend(self.functioning_command_objects().map(|(controller, object)| {
-            let kinds =
-                self.state[object]
-                    .abilities
-                    .iter()
-                    .fold(EventKinds::NONE, |kinds, ability| {
-                        let Ability::Triggered { condition, .. } = ability;
-                        if self.trigger_condition_functions(object, condition) {
-                            kinds | condition_event_kinds(condition)
-                        } else {
-                            kinds
-                        }
-                    });
-            TriggerSourceEntry {
-                object,
-                kinds,
-                command_controller: Some(controller),
-            }
-        }));
+        sources.extend(
+            self.functioning_command_objects()
+                .map(|(controller, object)| {
+                    let kinds = self.state[object].abilities.iter().fold(
+                        EventKinds::NONE,
+                        |kinds, ability| {
+                            let Ability::Triggered { condition, .. } = ability;
+                            if self.trigger_condition_functions(object, condition) {
+                                kinds | condition_event_kinds(condition)
+                            } else {
+                                kinds
+                            }
+                        },
+                    );
+                    TriggerSourceEntry {
+                        object,
+                        kinds,
+                        command_controller: Some(controller),
+                    }
+                }),
+        );
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
         sources.sort_by_key(|entry| entry.object);
