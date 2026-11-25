@@ -1,3 +1,4 @@
+import type { GameNumbers } from './numbers';
 export interface CardTypes {
   is_creature: boolean;
   is_land: boolean;
@@ -95,10 +96,40 @@ export interface ContinuousEffect {
   timestamp: number;
 }
 
+export interface AbilityGrantView {
+  effect_timestamp?: number;
+  source?: string;
+  counter?: boolean;
+}
+
+export interface KeywordAbilityView {
+  source?: string;
+  effect_timestamp?: number;
+  label: string;
+  granted?: boolean;
+}
+
+export type PermanentRestriction =
+  | 'cant_be_blocked'
+  | 'cant_block'
+  | 'cant_attack_or_block'
+  | 'doesnt_untap'
+  | 'must_attack';
+
+export interface RestrictionView {
+  kind: PermanentRestriction;
+  source?: string;
+}
+
 export interface PermanentState {
   printed_loyalty?: number | null;
   loyalty_activated_this_turn?: boolean;
   attacked_permanent?: number;
+  /** Effective evergreen grants, keyed by keyword: granting permanent, effect timestamp, or counter. */
+  keyword_grants?: Record<string, AbilityGrantView>;
+  keyword_abilities?: KeywordAbilityView[];
+  attacks_despite_defender?: boolean;
+  restrictions?: RestrictionView[];
   types?: CardTypes;
   is_token?: boolean;
   temp_subtypes?: string[];
@@ -721,6 +752,8 @@ export interface GameSummary extends TraceSummary {
   game_number?: number | null;
   feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
+  /** The game's numbers once it is over and has been counted (`$lib/numbers`). */
+  numbers?: GameNumbers | null;
 }
 
 export interface TraceSummary {
@@ -916,6 +949,8 @@ export type ServerMessage = (
       resume_token?: string;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;
+      /** Present while a live analysis is shown in this game. */
+      analysis?: { policy: import('./analysis').AnalysisPolicy };
     }
   | {
       type: 'game_over';
@@ -944,6 +979,8 @@ export type ServerMessage = (
         }
     ))
   | { type: 'error'; message: string; session_ended?: boolean }
+  | import('./analysis').LiveAnalysisState
+  | import('./analysis').LiveAnalysisMessage
 ) & {
   work?: WorkStatus | null;
   mirror_retry?: import('./search').PendingSearch | null;

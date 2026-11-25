@@ -52,6 +52,12 @@ export function addressOf(frame: ExperienceFrame): CombatAddress | null {
   return frame.prompt ? { match_id: frame.match_id, revision: frame.revision, prompt_id: frame.prompt.id, frame_hash: frame.frame_hash } : null;
 }
 
+/** Add the creatures caught by a sweep, keeping earlier selections and their order. */
+export function addAttackers(draft: Draft, hits: ReadonlySet<number>): Draft {
+  const attackers = new Set([...draft.attackers, ...hits]);
+  return attackers.size === draft.attackers.length ? draft : { ...draft, attackers: [...attackers] };
+}
+
 export function toggleAttacker(draft: Draft, id: number): Draft {
   const attackers = draft.attackers.includes(id) ? draft.attackers.filter(other => other !== id) : [...draft.attackers, id];
   return withAttackers(draft, attackers);
@@ -71,11 +77,17 @@ function withAttackers(draft: Draft, attackers: number[]): Draft {
   return { attackers, blocks: draft.blocks, ...(Object.keys(defenders).length && { defenders }) };
 }
 
-/** Block `attacker` with `blocker`, or take the block back when it is already drafted. */
+/** Place or remove one blocker, leaving every other assignment intact. */
+export function setBlock(draft: Draft, blocker: number, attacker: number | null): Draft {
+  if ((draft.blocks.find(([id]) => id === blocker)?.[1] ?? null) === attacker) return draft;
+  const blocks = draft.blocks.filter(([id]) => id !== blocker);
+  if (attacker !== null) blocks.push([blocker, attacker]);
+  return { ...draft, blocks };
+}
+
 export function toggleBlock(draft: Draft, blocker: number, attacker: number): Draft {
-  const had = draft.blocks.some(([b, a]) => b === blocker && a === attacker);
-  const blocks = draft.blocks.filter(([b]) => b !== blocker);
-  return { ...draft, blocks: had ? blocks : [...blocks, [blocker, attacker]] };
+  const assigned = draft.blocks.some(([b, a]) => b === blocker && a === attacker);
+  return setBlock(draft, blocker, assigned ? null : attacker);
 }
 
 /** Draft the first `count` of a pile's identical creatures into the attack. */
@@ -157,6 +169,9 @@ function list(parts: string[]): string {
   return parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
 
+export const BLOCK_INSTRUCTION = 'Drag a blocker onto an attacker, or click each';
+export const ATTACK_INSTRUCTION = 'Drag across creatures, or click each';
+
 export interface DraftWords {
   /** The primary button: "Attack with 3", "No attack". */
   text: string;
@@ -175,7 +190,7 @@ export function draftWords(
   };
   if (kind === 'attackers') {
     const count = draft.attackers.length;
-    if (count === 0) return { text: 'No attack', plan: 'No attack · click creatures to add them' };
+    if (count === 0) return { text: 'No attack', plan: `No attack · ${ATTACK_INSTRUCTION}` };
     const out = declarable.filter(creature => !draft.attackers.includes(creature.creature.entity)).map(creature => creature.label);
     const one = `Attack with ${name(draft.attackers[0])}`;
     const text = count === 1 && one.length <= PRIMARY_CHARS ? one : `Attack with ${count}`;
@@ -189,7 +204,7 @@ export function draftWords(
     return { text, plan: `${count === 1 ? `Attack with ${name(draft.attackers[0])}` : text} · not with ${left.length > 2 ? `${out.length} others` : list(left)}` };
   }
   const count = draft.blocks.length;
-  if (count === 0) return { text: 'No blocks', plan: 'No blocks · click a blocker, then the attacker it blocks' };
+  if (count === 0) return { text: 'No blocks', plan: `No blocks · ${BLOCK_INSTRUCTION}` };
   const byAttacker = new Map<number, string[]>();
   for (const [blocker, attacker] of draft.blocks) byAttacker.set(attacker, [...(byAttacker.get(attacker) ?? []), name(blocker)]);
   const lines = [...byAttacker].map(([attacker, blockers]) => `${list(counted(blockers))} on ${name(attacker)}`);

@@ -1,6 +1,6 @@
 use super::card::{Keyword, Keywords};
 use super::effect::{CopyException, EffectDuration, Modification};
-use super::game_object::PlayerId;
+use super::game_object::{ObjectId, PermanentId, PlayerId, PublicId};
 use super::mana::{Mana, ManaCost};
 use super::payment::How;
 use super::permanent::CounterKind;
@@ -3355,10 +3355,23 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
     bound
 }
 
+/// Origin of a layer-six ability on its current recipient.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AbilityOrigin {
+    Own,
+    Effect(PublicId),
+    Counter,
+    Permanent(PermanentId),
+    Object(ObjectId),
+}
+
 /// Effective triggered ability with the provenance needed after its source leaves.
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectiveTrigger {
+    /// Battlefield inspection uses the live origin before this trigger leaves play.
+    #[serde(skip)]
+    pub origin: AbilityOrigin,
     /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<GrantClock>,

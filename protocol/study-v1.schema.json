@@ -23,6 +23,29 @@
     "landmarks"
   ],
   "$defs": {
+    "AbilityGrantView": {
+      "type": "object",
+      "properties": {
+        "counter": {
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "AnalysisBudgetIdentity": {
       "type": "object",
       "properties": {
@@ -1149,6 +1172,35 @@
         "focus"
       ]
     },
+    "KeywordAbilityView": {
+      "type": "object",
+      "properties": {
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ]
+    },
     "KnowledgeScope": {
       "oneOf": [
         {
@@ -1508,6 +1560,9 @@
           "description": "Attacking in the current combat.",
           "type": "boolean"
         },
+        "attacks_despite_defender": {
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
@@ -1631,6 +1686,21 @@
             "null"
           ]
         },
+        "keyword_abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          }
+        },
+        "keyword_grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/AbilityGrantView"
+          }
+        },
         "keywords": {
           "description": "Keywords it has after continuous effects, in keyword declaration order.",
           "type": "array",
@@ -1664,6 +1734,12 @@
             "null"
           ],
           "format": "int32"
+        },
+        "restrictions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RestrictionView"
+          }
         },
         "summoning_sick": {
           "type": "boolean"
@@ -2168,6 +2244,16 @@
         "phrase"
       ]
     },
+    "PermanentRestriction": {
+      "type": "string",
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
+      ]
+    },
     "PlayerControlView": {
       "description": "Public player-control effects in creation order. Effective distinguishes\nthe last-created active effect from another whose interval also runs now.",
       "type": "object",
@@ -2451,6 +2537,24 @@
       "format": "uint8",
       "maximum": 255,
       "minimum": 0
+    },
+    "RestrictionView": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
     },
     "SampledWorldRobustness": {
       "type": "object",

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
-import { bottomSeat, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { markText } from '$lib/analysis';
+import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, liveAnalysedMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -137,6 +138,35 @@ describe('the move list and strip read the index', () => {
     expect(targets.map(entry => entry.text)).toEqual(['Target Heuristic', 'Target yourself']);
   });
 
+  it('notes where an imported record branched, without seeds, and jumps to that choice', () => {
+    const branched = replayLog([
+      position('choice', { key: 'd1', actor: 1, label: 'Play Island', revision: 3 }),
+      position('choice', { key: 'd2', actor: 0, label: 'Pass priority', revision: 4, branched: ['determinize', 'shuffle_libraries'] }),
+    ], 0, seat => (seat === 0 ? 'Seat 1' : 'Seat 2'));
+    expect(branched.map(entry => [entry.id, entry.actor, entry.text])).toEqual([
+      ['d1', 'villain', 'Play Island'],
+      ['branch:d2', 'system', 'Branch · hidden cards re-dealt, libraries reshuffled'],
+      ['d2', 'hero', 'Pass priority'],
+    ]);
+    expect(entryPosition('branch:d2')).toBe('d2');
+    expect(entryPosition('d1')).toBe('d1');
+  });
+
+  it('marks your moves chosen with analysis shown, a multi-step move at the decision where it began', () => {
+    const steps: Position[] = [
+      position('choice', { key: 'cast', actor: 0, label: 'Cast Shock', revision: 3 }),
+      position('consequences', { key: 'after-cast', actor: 0, label: null, revision: 3 }),
+      position('choice', { key: 'target', actor: 0, label: 'Target Villain', revision: 4, analysis_shown: true }),
+      position('consequences', { key: 'after-target', actor: 0, label: 'Cast Shock, targeting Seat 2', revision: 4 }),
+      position('consequences', { key: 'reply', actor: 1, label: 'Play Forest', revision: 5 }),
+      position('choice', { key: 'land', actor: 0, label: 'Play Island', revision: 6 }),
+      position('consequences', { key: 'after-land', actor: 0, label: 'Play Island', revision: 6 }),
+    ];
+    const log = replayLog(steps, 0, seat => (seat === 0 ? 'You' : 'Heuristic'));
+    expect(log.map(entry => entry.id)).toEqual(['cast', 'reply', 'land']);
+    expect([...analysisShownMoves(log, steps)]).toEqual(['cast']);
+  });
+
   it('finds the move a consequence belongs to', () => {
     expect(moveAt(entries, positions, 1)).toBe('c1');
     expect(moveAt(entries, positions, 5)).toBe('c2');
@@ -168,5 +198,88 @@ describe('a position says what it is', () => {
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 1)).toBe('Game over · Heuristic wins');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 0)).toBe('Game over · You win');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, null)).toBe('Game over · Draw');
+  });
+});
+
+describe('an analysis read beside your choices', () => {
+  const offers = frame.offers.length;
+  // The policy prefers the last offer; you played the second.
+  const probabilities = frame.offers.map((_, i) => (i === offers - 1 ? 0.6 : 0.4 / (offers - 1)));
+  const decision = { event: 3, played: 1, annotation: { probabilities, value: 0.2 }, semantic: 'signed_outcome', after: frame.offers.map((_, i) => i / offers) };
+
+  it('rates every option with its probability and its estimate after it, naming its choice and yours', () => {
+    const evidence = analysedEvidence(frame, decision, frame.offers[1].id, 'Reader');
+    expect(evidence.heading).toBe('Analysis by Reader');
+    expect([...evidence.probability.values()]).toEqual(probabilities);
+    expect(evidence.estimate.get(frame.offers[2].id)).toBeCloseTo(2 / offers);
+    expect(evidence.first).toBe(frame.offers[offers - 1].id);
+    expect(evidence.chosen).toBe(frame.offers[1].id);
+    expect(evidence.summary).toContain("Reader's estimate here: 60");
+    // Neutral words: what the policy would do, never a verdict on yours.
+    expect(evidence.summary.join(' ')).not.toMatch(/mistake|blunder|inaccura|best|loss/i);
+  });
+
+  it('draws your analysed decisions on a 0–1 score and marks where you chose otherwise', () => {
+    const positions = [position('choice', { actor: 0, event: 3 }), position('consequences', { actor: 0, event: 3 }), position('choice', { actor: 1, event: 4, value: 0.9 })];
+    const marks = analysedMarks(stripMarks(positions, 0), positions, new Map([[3, decision]]));
+    expect(marks.map(mark => mark.value)).toEqual([0.6, null, null]);
+    expect(marks[0].differs).toBe(true);
+  });
+
+  it('marks each of your moves same or differs, with both estimates', () => {
+    const positions = [position('choice', { actor: 0, event: 3 }), position('choice', { actor: 0, event: 5 })];
+    const same = { ...decision, event: 5, played: offers - 1 };
+    const entries = positions.map(p => ({ id: p.key, actor: 'hero' as const, turn: 1, text: 'Move' }));
+    const marks = moveMarks(entries, positions, new Map([[3, decision], [5, same]]));
+    expect(marks.get(positions[0].key)).toEqual({ agreed: 0, of: 1, yours: 1 / offers, its: (offers - 1) / offers });
+    expect(marks.get(positions[1].key)).toMatchObject({ agreed: 1, of: 1 });
+  });
+
+  it("counts a cast's target choice with the cast, so marks add up to the summary", () => {
+    const positions = [
+      position('choice', { key: 'cast', actor: 0, event: 3, label: 'Cast Shock' }),
+      position('consequences', { key: 'after-cast', actor: 0, event: 3, label: null }),
+      position('choice', { key: 'target', actor: 0, event: 5, label: 'Target Villain' }),
+      position('consequences', { key: 'after-target', actor: 0, event: 5, label: 'Cast Shock, targeting Seat 2' }),
+    ];
+    const log = replayLog(positions, 0, seat => (seat === 0 ? 'You' : 'Reader'));
+    expect(log.map(entry => entry.id)).toEqual(['cast']);
+    const marks = moveMarks(log, positions, new Map([[3, decision], [5, { ...decision, event: 5, played: offers - 1 }]]));
+    const mark = marks.get('cast')!;
+    expect([mark.agreed, mark.of]).toEqual([1, 2]);
+    expect(markText(mark)).toBe('1 of 2 same');
+    expect(mark.yours).toBe(1 / offers);
+  });
+});
+
+describe('liveAnalysedMarks', () => {
+  const log = [
+    { id: 'a', actor: 'villain' as const, turn: 1, text: 'Opponent plays Island' },
+    { id: 'b', actor: 'hero' as const, turn: 1, text: 'You play Mountain' },
+    { id: 'c', actor: 'auto' as const, turn: 2, text: 'Untap' },
+    { id: 'd', actor: 'hero' as const, turn: 2, text: 'You cast Shock' },
+  ];
+
+  it('places each reading where the log stood, a pass that logs nothing included', () => {
+    const marks = liveAnalysedMarks(log, [
+      { event: 2, at: 1, score: 0.6, semantic: 'signed_outcome' },
+      { event: 3, at: 1, score: 0.55, semantic: 'signed_outcome' },
+      { event: 8, at: 4, score: 0.3, semantic: 'signed_outcome' },
+    ]);
+    expect(marks.map(mark => [mark.key, mark.value])).toEqual([['a', null], ['read-2', 0.6], ['read-3', 0.55], ['b', null], ['c', null], ['d', null], ['read-8', 0.3]]);
+    expect(marks.map(mark => mark.at)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(marks.at(-1)).toMatchObject({ side: 'you', decision: true, turn: 2, label: 'Turn 2 · after You cast Shock' });
+    expect(marks[1].label).toBe('Turn 1 · after Opponent plays Island');
+  });
+
+  it('places a decision read after the fact at its turn, named by the move you chose', () => {
+    const marks = liveAnalysedMarks(log, [
+      { event: 6, at: null, score: 0.4, semantic: 'signed_outcome', turn: 2, label: 'Cast Shock' },
+      { event: 1, at: null, score: 0.7, semantic: 'signed_outcome', turn: 1, label: 'Play Mountain' },
+      { event: 9, at: 4, score: 0.3, semantic: 'signed_outcome' },
+    ]);
+    expect(marks.map(mark => mark.key)).toEqual(['read-1', 'a', 'b', 'read-6', 'c', 'd', 'read-9']);
+    expect(marks[0].label).toBe('Turn 1 · Play Mountain');
+    expect(marks[3]).toMatchObject({ turn: 2, value: 0.4, label: 'Turn 2 · Cast Shock' });
   });
 });

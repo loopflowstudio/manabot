@@ -6,8 +6,8 @@ use crate::{
     flow::{game::Game, statics::Characteristics},
     state::{
         ability::{
-            Ability, Condition, Effect, EffectValue, EffectiveTrigger, Except, GrantClock,
-            ObjectProperty, ObjectSelector, Scope,
+            Ability, AbilityOrigin, Condition, Effect, EffectValue, EffectiveTrigger, Except,
+            GrantClock, ObjectProperty, ObjectSelector, Scope,
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -67,6 +67,7 @@ impl Layer {
 
 #[derive(Clone, Debug, PartialEq)]
 struct StaticEntry {
+    origin: AbilityOrigin,
     key: Vec<usize>,
     timestamp: PublicId,
     ability: StaticAbility,
@@ -143,6 +144,7 @@ pub(super) struct Context<'a> {
 /// first application to objects (CR 613.6). Resolved records already own targets.
 #[derive(Clone)]
 struct Node {
+    origin: AbilityOrigin,
     source: NodeSource,
     key: Vec<usize>,
     timestamp: PublicId,
@@ -384,6 +386,7 @@ impl Node {
     /// Counters and resolved records already bind one affected object; their
     /// existence and membership no longer depend on a generating static ability.
     fn resolved(
+        origin: AbilityOrigin,
         source: ObjectId,
         target: PermanentId,
         key: Vec<usize>,
@@ -391,6 +394,7 @@ impl Node {
         part: (Layer, Operation),
     ) -> Self {
         Self {
+            origin,
             source: NodeSource::permanent(source, target),
             key,
             timestamp,
@@ -549,6 +553,7 @@ impl<'a> Context<'a> {
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
                     nodes.push(Node::resolved(
+                        AbilityOrigin::Counter,
                         p.object,
                         id,
                         vec![slot, usize::MAX - 1, kind as usize],
@@ -573,6 +578,7 @@ impl<'a> Context<'a> {
                     Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
                 };
                 nodes.push(Node::resolved(
+                    AbilityOrigin::Effect(record.timestamp),
                     p.object,
                     id,
                     vec![slot, usize::MAX, i],
@@ -585,6 +591,7 @@ impl<'a> Context<'a> {
             let emblem = &game.state[source];
             for (index, ability) in emblem.statics.iter().enumerate() {
                 let entry = StaticEntry {
+                    origin: AbilityOrigin::Object(source),
                     key: vec![usize::MAX, index, source.slot()],
                     timestamp: emblem.id,
                     ability: ability.clone(),
@@ -689,6 +696,7 @@ impl<'a> Context<'a> {
                     .iter()
                     .cloned()
                     .map(|ability| EffectiveTrigger {
+                        origin: AbilityOrigin::Own,
                         clock: None,
                         ability,
                         program: false,
@@ -701,6 +709,7 @@ impl<'a> Context<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, ability)| StaticEntry {
+                    origin: AbilityOrigin::Own,
                     key: vec![id.0, i],
                     timestamp: permanent.timestamp,
                     ability: ability.clone(),
@@ -1436,6 +1445,7 @@ impl<'a> Context<'a> {
             _ => return None,
         }
         Some(Node {
+            origin: entry.origin,
             source,
             key: entry.key.clone(),
             timestamp: entry.timestamp,
@@ -1456,6 +1466,13 @@ impl<'a> Context<'a> {
         };
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
+            let origin = if Some(id) == node.source.permanent {
+                node.origin
+            } else if let Some(permanent) = node.source.permanent {
+                AbilityOrigin::Permanent(permanent)
+            } else {
+                AbilityOrigin::Object(node.source.object)
+            };
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
@@ -1478,6 +1495,7 @@ impl<'a> Context<'a> {
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
+                                    origin,
                                     clock: clock(&ability, index),
                                     ability,
                                     program: false,
@@ -1488,6 +1506,7 @@ impl<'a> Context<'a> {
                 }
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
+                        origin,
                         clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
@@ -1567,9 +1586,22 @@ impl<'a> Context<'a> {
                     Modification::SetColors(colors) => view.colors = colors.clone(),
                     Modification::AddColors(colors) => view.colors.extend(colors),
                     Modification::AddKeywords(keywords) => {
+                        if origin != AbilityOrigin::Own {
+                            view.keyword_grants.extend(
+                                keywords
+                                    .without(view.keywords)
+                                    .iter()
+                                    .map(|keyword| (keyword, origin)),
+                            );
+                        } else {
+                            view.keyword_grants
+                                .retain(|(keyword, _)| !keywords.has(*keyword));
+                        }
                         view.keywords = view.keywords.union(*keywords)
                     }
                     Modification::LoseKeywords(keywords) => {
+                        view.keyword_grants
+                            .retain(|(keyword, _)| !keywords.has(*keyword));
                         view.keywords = view.keywords.without(*keywords)
                     }
                     Modification::LoseNonManaAbilities => {
@@ -1579,6 +1611,7 @@ impl<'a> Context<'a> {
                     Modification::Firebending(n) => {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
+                            origin,
                             clock: None,
                             ability: Ability::firebending(*n),
                             program: true,
@@ -1589,6 +1622,7 @@ impl<'a> Context<'a> {
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
+                            origin,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
@@ -1598,6 +1632,7 @@ impl<'a> Context<'a> {
                         if let StaticAbility::Ward(cost) = ability.as_ref() {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
+                                origin,
                                 clock: None,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,
@@ -1606,6 +1641,7 @@ impl<'a> Context<'a> {
                         let mut key = node.key.clone();
                         key.extend([id.0, ordinal]);
                         object.statics.push(StaticEntry {
+                            origin,
                             key,
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
@@ -1645,6 +1681,7 @@ impl Game {
 fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Vec<StaticEntry>) {
     view.abilities_lost = true;
     view.keywords = Keywords::default();
+    view.keyword_grants.clear();
     view.ward = None;
     view.firebending = 0;
     view.activated_abilities

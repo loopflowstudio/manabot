@@ -11,14 +11,15 @@ mkdir managym-example
 cd managym-example
 uv venv --python 3.13
 uv pip install --python .venv/bin/python --only-binary :all: managym
-uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.world_identity())'
+uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.__version__, managym.world_identity())'
 ```
 
-The last command prints the installed world's version and card digest. The
-`managym` distribution contains the compiled engine and its Python API. It
-installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
-native observation buffers; Pydantic supports the structured decision API.
-No Rust compiler is needed when installing a wheel.
+The last command prints the engine version (`managym.__version__`) and card
+digest, both read directly from the compiled extension without requiring
+installed package metadata. The `managym` distribution contains the compiled
+engine and its Python API. It installs without Torch, Gymnasium, Etude or the
+training CLI. NumPy supports native observation buffers; Pydantic supports the
+structured decision API. No Rust compiler is needed when installing a wheel.
 
 To play in the browser instead of from Python, install the `academy` extra and
 run `uv run --no-project managym academy` ([running Academy](academy.md#running-academy)); it adds
@@ -608,7 +609,7 @@ the card content digest and definition, unique within a world; `name` is for
 reading.
 
 `reduce` re-executes each record once and feeds every reducer the same
-verified decisions. Two reducers are built in:
+verified decisions. Three reducers are built in:
 
 - `CardPerformance`: per card, games played, opening-hand and drawn copies, and
   the win rate of games with the card in hand against games where it was never
@@ -617,6 +618,11 @@ verified decisions. Two reducers are built in:
   card values.
 - `Behaviour`: per seat, how often a land was played at a decision that offered
   one, and how often at least one attacker was declared when one could be.
+- `Totals`: per seat, the game's turns, spells cast (cards put on the stack;
+  copies of a spell are never cast), cards drawn from the library after the
+  opening hand, damage dealt by the seat's sources to the other player and
+  damage dealt to the seat from any source. Damage is `None` in records
+  captured before damage was counted.
 
 A decision with one legal action is never shown to the chooser and so never
 counts as an opportunity.

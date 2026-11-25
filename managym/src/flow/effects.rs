@@ -170,6 +170,7 @@ impl Game {
     /// "It doesn't untap during its controller's untap step."
     pub fn doesnt_untap(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::DoesntUntap)
+            || self.has_restriction(permanent_id, crate::state::card::Restriction::DoesntUntap)
     }
 
     /// "Its activated abilities can't be activated this turn", mana

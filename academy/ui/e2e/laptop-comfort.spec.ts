@@ -9,6 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, FrameUpdate, RecoveryEnvelope } from '../src/lib/types';
 import { denseFrame } from './fixtures/laptop-board';
+import { showEachCreaturesChoice } from './fixtures/combat';
 import { tableSnapshot } from './fixtures/table';
 
 const VIEWPORTS = [{ width: 1280, height: 800 }, { width: 1440, height: 900 }] as const;
@@ -189,6 +190,7 @@ test('a seeded game keeps the board whole at 1280×800', async ({ page }, testIn
     await expect(page.locator('[data-testid=game][data-live=true], [data-testid=result-card]').first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => working).toBe(false);
     if (await page.getByTestId('result-card').isVisible()) break;
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     await expect(rows).toHaveCount(offers);
     // A row under the resting pointer previews its payment and lifts the lands it
