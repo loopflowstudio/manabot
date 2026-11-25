@@ -104,7 +104,7 @@ describe('curated combat-to-turn presentation fixture', () => {
       'Badgermole Cub attacks Hero.',
       'Otter-Penguin blocks Badgermole Cub.',
       'Otter-Penguin deals 2 damage to Badgermole Cub.',
-      'Badgermole Cub deals 1 damage to Otter-Penguin.',
+      'Badgermole Cub deals 2 damage to Otter-Penguin.',
       'Otter-Penguin, Badgermole Cub die.',
       "Hero's turn begins.",
     ]);

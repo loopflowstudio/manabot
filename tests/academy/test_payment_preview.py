@@ -14,28 +14,15 @@ from managym.payment import PaymentPreview, preview_payment
 from tests.academy.socket_messages import settled_message
 
 
-def _keep_opening_hands(env: managym.Env) -> None:
-    for _ in range(2):
-        env.step(0)
+def _keep_hands(env: managym.Env, obs: managym.Observation) -> managym.Observation:
+    while obs.turn.turn_number == 0:
+        obs, *_ = env.step(0)
+    return obs
 
 
 def _root(game: server.GameSession) -> ExperienceFrame:
-    assert game.env is not None
-    frame = ExperienceFrame.model_validate(game._wire_message()["frame"])
-    while keep := next((o for o in frame.offers if o.label == "Keep hand"), None):
-        assert frame.prompt is not None
-        outcome = game.hero_command(
-            {
-                "command_id": f"keep-{frame.prompt.id}",
-                "match_id": frame.match_id,
-                "expected_revision": frame.revision,
-                "prompt_id": frame.prompt.id,
-                "offer_id": keep.id,
-                "answers": [],
-            }
-        )
-        assert outcome["status"] == "accepted"
-        frame = ExperienceFrame.model_validate(outcome["update"]["frame"])
+    assert game.env is not None and game.obs is not None
+    game.obs = _keep_hands(game.env, game.obs)
     game.env.scenario_clear_hand(0)
     game.env.scenario_force_card_in_hand(0, "Ancestral Recall")
     game.env.scenario_force_battlefield(0, "Island", ready=True)
@@ -115,7 +102,6 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
             before = record.game.env.search_witness_json()
             prompt_count = record.game._next_prompt_id
             decisions = len(record.game.canonical_decisions)
-            accepted = len(record.game.accepted_commands)
             response = client.post(endpoint, json=request, headers=headers)
             assert response.status_code == 200, response.text
             preview = response.json()["preview"]
@@ -125,7 +111,7 @@ def test_payment_preview_is_authenticated_read_only_and_stale_after_tap(
             assert before == record.game.env.search_witness_json()
             assert record.game._next_prompt_id == prompt_count
             assert len(record.game.canonical_decisions) == decisions
-            assert len(record.game.accepted_commands) == accepted
+            assert not record.game.accepted_commands
             for change in (
                 {"match_id": "other"},
                 {"revision": frame.revision + 1},
@@ -196,7 +182,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
     None
 ):
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig(
                 "payer",
@@ -214,7 +200,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
             ),
         ]
     )
-    _keep_opening_hands(env)
+    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     for card in ("Wan Shi Tong, Librarian", "Firebending Lesson", "Swampsnare Trap"):
         env.scenario_force_card_in_hand(0, card)
@@ -251,13 +237,13 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
 
 def test_unaffordable_kicker_does_not_hide_the_exact_base_payment() -> None:
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig("payer", {"Mountain": 32, "Firebending Lesson": 8}),
             managym.PlayerConfig("other", {"Forest": 32, "Llanowar Elves": 8}),
         ]
     )
-    _keep_opening_hands(env)
+    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     env.scenario_force_card_in_hand(0, "Firebending Lesson")
     env.scenario_force_battlefield(0, "Mountain", ready=True)
@@ -298,13 +284,13 @@ def test_preview_preserves_followups_and_reserves_activation_source(
     expected: list[str],
 ) -> None:
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig("payer", dict.fromkeys(hand + lands, 8)),
             managym.PlayerConfig("other", {"Island": 32, "Spectral Sailor": 8}),
         ]
     )
-    _keep_opening_hands(env)
+    _keep_hands(env, obs)
     # A real response on the stack keeps forced passes from reaching untap.
     env.scenario_force_card_in_hand(1, "Spectral Sailor")
     env.scenario_force_battlefield(1, "Island", ready=True)

@@ -11,6 +11,7 @@ from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
@@ -27,6 +28,7 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
             for key in ("elemental_right", "elemental_left")
         ]
     )
+    obs = keep_opening_hands(engine, obs)
     for _ in range(20):
         if int(obs.turn.step) == 3:
             break

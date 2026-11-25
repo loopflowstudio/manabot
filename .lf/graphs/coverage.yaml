@@ -1,11 +1,23 @@
-# Narrow code fork: three domain loops before one publish/demo/deliver/verify.
-# Builtin code/pursue composition inspected 2026-11-04; generic skills stay builtin.
+# Narrow code fork for card coverage: cohort-sliced build, one unified review,
+# targeted new-card performance gate, final compress, then ship-review/deliver/verify.
 - loop:
     - loop:
-        - graph: coverage-working
-        - graph: coverage-scalable
-        - graph: engine-optimization
+        - card-batch
+        - loop:
+            - loop:
+                - cmd: sync
+                - implement            # one cohort slice; updates scratch/plan.md and decides: next slice or review
+            - card-review              # concepts, composability, simplifications and behavior; decides: fix pass or advance
+        - xor:
+            router: card-perf          # fast check: new-card bench_states scaling + base no-regression check
+            paths:
+              clean:
+                description: New cards scale linearly and branch does not regress bench_steps or bench_search
+              optimize:
+                graph: engine-optimization
+                description: Branch regressed bench_steps/bench_search or a new card's stress state scales superlinearly
+        - compress
         - pr-publish
-        - interactive: demo
+        - interactive: ship-review
     - graph: deliver
     - interactive: verify
