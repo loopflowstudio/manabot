@@ -10,7 +10,7 @@ Workflow installation grants no campaign, resource, spending or shipping authori
 | Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, unified concept/composability review, new-card performance check and integrated batch handoff |
 | Engine performance | Native engine algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-machine comparison |
 | Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code`; `experiment-performance` for training/evaluation speed | Working maintained systems and their relevant workflow checks |
-| Academy | Browser inspection, replay, human interaction and accessibility | builtin `code` | Correct viewer-safe product behavior through its real configured path |
+| Academy | Browser inspection, replay, human interaction and accessibility | `academy` | Correct viewer-safe product behavior through its real configured path |
 
 A model comparison belongs to Experiments; checkpoint serialization reliability
 belongs to Infrastructure. A new mechanic belongs to Coverage; a general state-copy
@@ -29,12 +29,12 @@ lf graph experiment-performance
 ```
 
 The workflow measures the update and plans each improvement as a slice. It
-syncs and implements slice after slice (`implement` decides whether more slices
-remain), then lets the performance review decide whether another bottleneck is
-worth a pass. Once optimization finishes, a single `compress` pass simplifies
-the settled diff before `pr-publish`, interactive `ship-review` and `deliver`.
-Its result is a software change with supported timing evidence, or a documented
-reason to stop when no useful improvement is supported.
+syncs and implements slice after slice (`experiment-implement` decides whether
+more slices remain), then lets the performance review decide whether another
+bottleneck is worth a pass. Once optimization finishes, a single `compress`
+pass simplifies the settled diff before `pr-publish`, interactive `ship-review`
+and `deliver`. Its result is a software change with supported timing evidence,
+or a documented reason to stop when no useful improvement is supported.
 
 Use `experiment-performance` when the question spans collection, policy inference,
 learner work or evaluation matches, including how these costs change with model

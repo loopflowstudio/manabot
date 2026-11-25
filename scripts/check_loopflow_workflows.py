@@ -201,10 +201,36 @@ def _performance(
     _delivery(steps, _one(steps, measure).key, review="ship-review")
 
 
+def _academy(academy: list[Step]) -> None:
+    """Check the Academy code fork: builtin plan, academy-implement loop, qa, deliver."""
+    assert [step.label for step in academy[:4]] == [
+        "kickoff",
+        "concept-review",
+        "realign",
+        "write-docs",
+    ]
+    position = _phase(
+        academy,
+        3,
+        "write-docs",
+        "concept-review",
+        worker="academy-implement",
+        decider="realign",
+    )
+    assert [step.label for step in academy[position : position + 4]] == [
+        "compress",
+        "qa",
+        "pr-publish",
+        "ship-review",
+    ]
+    _delivery(academy, academy[0].key, review="ship-review")
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     assert Path.cwd() == root, "Run from the repository root"
     graphs = _compile_graphs(root)
+    _academy(graphs["academy"])
     _coverage(graphs["coverage"])
     _performance(
         graphs["engine-performance"],
@@ -216,6 +242,7 @@ def main() -> None:
         graphs["experiment-performance"],
         "experiment-measure",
         "experiment-performance-review",
+        worker="experiment-implement",
     )
     _experiment(graphs["experiment"])
     print(

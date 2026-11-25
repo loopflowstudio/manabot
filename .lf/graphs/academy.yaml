@@ -1,0 +1,15 @@
+# Narrow code fork for Academy UI/play work: builtin plan, academy-implement
+# build loop, single compress + qa, ship-review and deliver.
+- loop:
+    - graph: plan
+    - loop:
+        - loop:
+            - cmd: sync
+            - academy-implement        # one Academy slice; updates scratch/plan.md and decides: next slice or review
+        - concept-review
+        - realign
+    - compress
+    - qa
+    - pr-publish
+    - interactive: ship-review
+- graph: deliver
