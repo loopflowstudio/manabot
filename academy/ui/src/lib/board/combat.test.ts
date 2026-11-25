@@ -79,6 +79,7 @@ describe('drafting', () => {
   it('dropping a blocker keeps its assignment or moves only that blocker', () => {
     const draft = setBlock(setBlock(EMPTY_DRAFT, 3, 1), 4, 1);
     expect(setBlock(draft, 3, 1)).toBe(draft);
+    expect(setBlock(draft, 9, null)).toBe(draft);
     expect(setBlock(draft, 3, 2).blocks).toEqual([[4, 1], [3, 2]]);
   });
 

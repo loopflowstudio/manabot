@@ -46,13 +46,13 @@ describe('a press becomes a drag', () => {
 describe('releasing a carried card', () => {
   it('over the battlefield commits its one offer and holds it where it was dropped', () => {
     const { gesture, release: result } = release(dragged(), 1);
-    expect(result).toMatchObject({ outcome: 'commit', at: { x: 80, y: 270 } });
+    expect(result).toMatchObject({ outcome: 'play', at: { x: 80, y: 270 } });
     expect(gesture).toMatchObject({ phase: 'holding', reason: 'pending', revision: 5, at: { x: 80, y: 270 } });
   });
 
   it('over the battlefield opens several offers, and choosing one makes it pending', () => {
     const { gesture, release: result } = release(dragged([cast, cycle]), 1);
-    expect(result.outcome).toBe('choose');
+    expect(result.outcome).toBe('play');
     expect(gesture).toMatchObject({ phase: 'holding', reason: 'menu' });
     expect(promote(gesture)).toMatchObject({ phase: 'holding', reason: 'pending' });
   });
@@ -65,21 +65,23 @@ describe('releasing a carried card', () => {
 });
 
 it('releases a connection on its last recipient, without holding the source', () => {
-  const target = { endpoint: { kind: 'object', id: 9 } as const, blocker: 3 };
-  const start = press({ kind: 'connect', style: 'block', from: { kind: 'object', id: 3 }, blockerId: 3, target: null }, 1, 5, { x: 0, y: 0 });
-  const over = move(start, 1, { x: 20, y: 30 }, drag => ({ ...drag, target }));
-  expect(release(over, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', target } });
-  const off = move(over, 1, { x: 20, y: 80 }, drag => ({ ...drag, target: null }));
-  expect(release(off, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', target: null } });
+  const target = { endpoint: { kind: 'object', id: 9 } as const };
+  const start = press({ kind: 'connect', style: 'block', from: { kind: 'object', id: 3 }, blocker: 3, target: null }, 1, 5, { x: 0, y: 0 });
+  const over = move(start, 1, { x: 20, y: 30 }, drag => drag.kind === 'connect' && drag.blocker !== undefined ? { ...drag, target } : drag);
+  expect(release(over, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', drag: { kind: 'connect', style: 'block', from: { kind: 'object', id: 3 }, blocker: 3, target } } });
+  const off = move(over, 1, { x: 20, y: 80 }, drag => drag.kind === 'connect' && drag.blocker !== undefined ? { ...drag, target: null } : drag);
+  expect(release(off, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', drag: { kind: 'connect', style: 'block', from: { kind: 'object', id: 3 }, blocker: 3, target: null } } });
 });
 
-it('counts even edge contact when sweeping back toward the press', () => {
+it('counts even edge contact when sweeping back toward the press, and releases as a marquee', () => {
   const box = marqueeBounds({ x: 50, y: 70 }, { x: 10, y: 20 });
   expect(box).toEqual({ left: 10, right: 50, top: 20, bottom: 70 });
   const card = { left: 50, right: 80, top: 70, bottom: 90 };
   expect(overlap(box, card)).toEqual({ left: 50, right: 50, top: 70, bottom: 70 });
   expect(overlap(box, { ...card, left: 51 })).toBeNull();
   expect(overlap(box, { ...card, top: 71 })).toBeNull();
+  const sweep = move(press({ kind: 'marquee' }, 1, 5, { x: 50, y: 70 }), 1, { x: 10, y: 20 }, drag => drag);
+  expect(release(sweep, 1)).toEqual({ gesture: IDLE, release: { outcome: 'marquee' } });
 });
 
 describe('cancelling', () => {

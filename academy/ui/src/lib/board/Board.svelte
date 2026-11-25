@@ -28,7 +28,7 @@
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, settle, Travel } from './motion';
-  import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, marqueeBounds, move as moveGesture, overlap, playable, press, promote, release, type ConnectDrag, type ConnectTarget, type Gesture } from './drag';
+  import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, marqueeBounds, move as moveGesture, overlap, playable, press, promote, release, type ConnectDrag, type Gesture, type OfferTarget } from './drag';
   import { region } from './region';
   import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
@@ -38,7 +38,7 @@
   import { addAttackers, addressOf, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
-  import { nameBook, recentView, boardLines, turnOwners, visibleNames, type Endpoint, type RecentView } from './recent';
+  import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import BoardCard from './BoardCard.svelte';
@@ -228,7 +228,7 @@
 
   const words = $derived(preview ? draftWords(preview.kind, draft, preview.declarable, names, committedOf(frame)) : null);
   const declarable = $derived(new Map((preview?.declarable ?? []).map(creature => [creature.creature.entity, creature])));
-  const draggedBlocker = $derived(connect?.blockerId);
+  const draggedBlocker = $derived(connect?.blocker);
   const placingBlocker = $derived(draggedBlocker ?? armed);
   /** Each creature's place in the draft and what pressing it does. */
   const draftMarks = $derived.by(() => {
@@ -377,7 +377,7 @@
   // Pointing at the pending payment's own row is still that payment: the
   // prompt keeps its plan and note, so nothing shifts under the pointer.
   // A card carried toward the battlefield previews its single offer for the whole drag, touch included.
-  const dragOffers = $derived(carried?.offers ?? (connect?.target && 'offers' in connect.target ? connect.target.offers : null));
+  const dragOffers = $derived(carried?.offers ?? (connect?.blocker === undefined ? connect?.target?.offers ?? null : null));
   const dragOffer = $derived(dragOffers?.length === 1 && previewable(dragOffers[0].offer) ? dragOffers[0] : null);
   const previewing = $derived(!live ? null : dragOffer
     ?? (!dragging && pointed && previewable(pointed.offer) && pointed.offer.id !== payOffer?.offer.id ? pointed : payOffer));
@@ -512,17 +512,20 @@
       return;
     }
     if (!canDrag || !(event.target instanceof Element)) return;
+    const start = { x: event.clientX, y: event.clientY };
     if (canMarquee && event.target.closest('.board .rows')) {
-      gesture = press({ kind: 'marquee' }, event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
+      gesture = press({ kind: 'marquee' }, event.pointerId, frame.revision, start);
       return;
     }
     const source = event.target.closest<HTMLElement>('[data-connect-source]');
     if (!source) return;
-    const from: Endpoint = source.dataset.stackEntry !== undefined
-      ? { kind: 'stack-entry', id: Number(source.dataset.stackEntry) } : { kind: 'object', id: Number(source.dataset.objectId) };
-    const blockerId = drafting && from.kind === 'object' ? from.id : undefined;
-    gesture = press({ kind: 'connect', from, style: frame.action_space === 'DECLARE_BLOCKER' ? 'block' : 'target', blockerId, target: null },
-      event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
+    const id = Number(source.dataset.stackEntry ?? source.dataset.objectId);
+    const drag: ConnectDrag = source.dataset.stackEntry !== undefined
+      ? { kind: 'connect', from: { kind: 'stack-entry', id }, style: 'target', target: null }
+      : drafting
+        ? { kind: 'connect', from: { kind: 'object', id }, style: 'block', blocker: id, target: null }
+        : { kind: 'connect', from: { kind: 'object', id }, style: frame.action_space === 'DECLARE_BLOCKER' ? 'block' : 'target', target: null };
+    gesture = press(drag, event.pointerId, frame.revision, start);
   }
   function onClick(event: MouseEvent): void {
     // A keyboard click (detail 0) is never the end of a drag.
@@ -816,27 +819,30 @@
       event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
   }
   /** Resolve the element under the pointer against the same offers and preview used for clicks. */
-  function connectTarget(drag: ConnectDrag, hit: Element | null): ConnectTarget | null {
-    const permanent = hit?.closest<HTMLElement>('.rows [data-testid=board-card]');
-    if (drag.blockerId !== undefined) {
-      if (!drafting || !permanent) return null;
-      const id = Number(permanent.dataset.objectId);
-      return declarable.get(drag.blockerId)?.can_block.some(attacker => attacker.entity === id)
-        ? { endpoint: { kind: 'object', id }, blocker: drag.blockerId } : null;
+  function connectTarget(drag: ConnectDrag, hit: Element | null): ConnectDrag {
+    if (drag.blocker !== undefined) {
+      const permanent = drafting ? hit?.closest<HTMLElement>('.rows [data-testid=board-card]') : null;
+      const id = permanent ? Number(permanent.dataset.objectId) : null;
+      const legal = id !== null && declarable.get(drag.blocker)?.can_block.some(attacker => attacker.entity === id);
+      return { ...drag, target: legal ? { endpoint: { kind: 'object', id } } : null };
     }
-    if (!targeting) return null;
+    return { ...drag, target: offerTarget(hit) };
+  }
+  function offerTarget(hit: Element | null): OfferTarget | null {
+    if (!targeting || !hit) return null;
+    const permanent = hit.closest<HTMLElement>('.rows [data-testid=board-card]');
     if (permanent) {
       const id = Number(permanent.dataset.objectId);
       const item = fieldById.get(id);
       return item?.offers.length ? { endpoint: { kind: 'object', id }, title: item.permanent.name ?? 'Permanent', offers: item.offers, element: permanent } : null;
     }
-    const stack = hit?.closest<HTMLElement>('[data-stack-entry]');
+    const stack = hit.closest<HTMLElement>('[data-stack-entry]');
     if (stack) {
       const id = Number(stack.dataset.stackEntry);
       const item = stackById.get(id);
       return item?.offers.length ? { endpoint: { kind: 'stack-entry', id }, title: item.entry.label, offers: item.offers, element: stack } : null;
     }
-    const plate = hit?.closest<HTMLElement>('[data-testid=player-plate]');
+    const plate = hit.closest<HTMLElement>('[data-testid=player-plate]');
     const element = plate?.querySelector<HTMLElement>('[data-testid=player-target]');
     if (!plate || !element) return null;
     const yours = plate.dataset.plateSide === 'you';
@@ -848,7 +854,7 @@
     const next = moveGesture(current, event.pointerId, { x: event.clientX, y: event.clientY }, drag => {
       if (drag.kind === 'marquee') return drag;
       const hit = document.elementFromPoint(event.clientX, event.clientY);
-      return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half') } : { ...drag, target: connectTarget(drag, hit) };
+      return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half') } : connectTarget(drag, hit);
     });
     if (next === current) return;
     if (current.phase === 'pressed') {
@@ -873,33 +879,32 @@
     if (event.pointerId !== current.pointerId) return;
     if (event.type === 'pointercancel') { endDrag(); return; }
     if (current.phase === 'dragging') onDragMove(event);
+    const hits = dropPermanents;
     const ended = release(current, event.pointerId);
     const result = ended.release;
-    if (result.outcome === 'click' || result.outcome === 'none') { gesture = ended.gesture; return; }
+    gesture = ended.gesture;
+    if (result.outcome === 'click' || result.outcome === 'none') return;
     // The click that follows this release is part of the drag.
     swallowClick = true;
-    if (result.outcome === 'cancel') { settleHome(result.drag, result.at); return; }
-    if (result.outcome === 'marquee') {
-      if (canMarquee && dropPermanents.size) {
-        draft = addAttackers(draft, dropPermanents);
-        stopNote = null;
+    switch (result.outcome) {
+      case 'cancel': settleHome(result.drag, result.at); return;
+      case 'marquee':
+        if (canMarquee && hits.size) { draft = addAttackers(draft, hits); stopNote = null; }
+        return;
+      case 'connect': {
+        const { drag } = result;
+        if (!drag.target) return;
+        if (drag.blocker !== undefined) {
+          draft = setBlock(draft, drag.blocker, drag.target.endpoint.id);
+          armed = null;
+          stopNote = null;
+        } else activate(drag.target.title, drag.target.offers, drag.target.element);
+        return;
       }
-      gesture = ended.gesture;
-      return;
+      case 'play':
+        activate(result.drag.card.name, result.drag.offers, result.drag.opener, carriedRect(result.at, result.drag.width));
+        return;
     }
-    gesture = ended.gesture;
-    if (result.outcome === 'connect') {
-      const target = result.target;
-      if (!target) return;
-      if ('blocker' in target) {
-        draft = setBlock(draft, target.blocker, target.endpoint.id);
-        armed = null;
-        stopNote = null;
-      } else activate(target.title, target.offers, target.element);
-      return;
-    }
-    if (result.outcome === 'commit') act(result.drag.offers[0]);
-    else activate(result.drag.card.name, result.drag.offers, result.drag.opener, carriedRect(result.at, result.drag.width));
   }
   /** Ends an unreleased gesture with nothing sent; a card already dropped stays held. */
   function endDrag(): void {
@@ -921,16 +926,11 @@
       gesture = IDLE;
     });
   });
-  // Refused at the same revision: the dropped card goes back to hand, and the notice says why.
+  // A held drop goes back to hand once what held it (a refused Command or its closed choices) ends at the same revision.
   $effect(() => {
-    if (current.phase === 'holding' && current.reason === 'pending' && !pending) {
-      const held = current;
-      untrack(() => settleHome(held.drag, held.at));
-    }
-  });
-  // A dropped card's choices closed without one chosen (Cancel, Escape, or another card's menu): it goes back to hand.
-  $effect(() => {
-    if (current.phase === 'holding' && current.reason === 'menu' && !openFor(current.drag.offers)) {
+    if (current.phase !== 'holding') return;
+    const stillHeld = current.reason === 'pending' ? pending : openFor(current.drag.offers);
+    if (!stillHeld) {
       const held = current;
       untrack(() => settleHome(held.drag, held.at));
     }
@@ -1080,16 +1080,16 @@
       <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>

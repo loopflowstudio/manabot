@@ -10,7 +10,7 @@ import { tableSnapshot } from './fixtures/table';
 // Dragging on the board: a drop goes where a click goes. These drive the
 // real pointer against a controlled authority and read the Commands it got.
 
-const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope, SubjectRef };
+const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 const REVISION = 20;
 const BOLT = 71;
 const SHOCK = 72;
@@ -137,8 +137,9 @@ test('a card dragged onto the battlefield is cast, with its payment shown on the
   const bolt = inHand(page, 'Lightning Bolt');
 
   // Rest on the card first, as a person reaching for it would: inspect does not open once it is carried.
+  const fieldPoint = await field(page);
   await bolt.hover({ position: { x: 12, y: 60 } });
-  await carry(page, bolt, await field(page));
+  await carry(page, bolt, fieldPoint);
   await expect(ghost(page)).toBeVisible();
   await expect(page.getByTestId('drop-zone')).toHaveAttribute('data-over', 'true');
   await expect(page.getByTestId('drop-zone')).toContainText('Cast Lightning Bolt');
@@ -152,10 +153,11 @@ test('a card dragged onto the battlefield is cast, with its payment shown on the
   expect(authority.commands).toEqual([]);
 
   // Over the hand the frame says releasing cancels.
-  await page.mouse.move((await center(bolt)).x, (await center(bolt)).y, { steps: 4 });
+  const boltPoint = await center(bolt);
+  await page.mouse.move(boltPoint.x, boltPoint.y, { steps: 4 });
   await expect(page.getByTestId('drop-zone')).toHaveAttribute('data-over', 'false');
   await expect(page.getByTestId('drop-zone')).toContainText('Release to cancel');
-  await page.mouse.move((await field(page)).x, (await field(page)).y, { steps: 4 });
+  await page.mouse.move(fieldPoint.x, fieldPoint.y, { steps: 4 });
   await page.mouse.up();
 
   await expect.poll(() => authority.commands.length).toBe(1);
@@ -170,7 +172,7 @@ test('a carried card released off the battlefield or on Escape goes back with no
   const bolt = inHand(page, 'Lightning Bolt');
 
   // Released over the hand: back in its slot, and the release is not a click on it.
-  await carry(page, bolt, { x: (await center(page.locator('.hand'))).x, y: (await center(page.locator('.hand'))).y });
+  await carry(page, bolt, await center(page.locator('.hand')));
   await page.mouse.up();
   await expect(ghost(page)).toHaveCount(0);
   await expect(bolt).toHaveAttribute('data-travel-id', `card:${BOLT}`);

@@ -45,19 +45,18 @@ export interface PlayDrag {
   overField: boolean;
 }
 
-/** A draft block places one blocker. Other connections choose the recipient's own offers. */
-export type ConnectTarget =
-  | { endpoint: { kind: 'object'; id: number }; blocker: number }
-  | { endpoint: Endpoint; title: string; offers: PlacedOffer[]; element: HTMLElement };
-
-export interface ConnectDrag {
-  kind: 'connect';
-  from: Endpoint;
-  style: 'target' | 'block';
-  /** Present only for a previewed block draft. */
-  blockerId?: number;
-  target: ConnectTarget | null;
+/** A connection target that activates its own offers on release. */
+export interface OfferTarget {
+  endpoint: Endpoint;
+  title: string;
+  offers: PlacedOffer[];
+  element: HTMLElement;
 }
+
+/** A line pulled from a card to a recipient: either placing a draft block, or choosing the recipient's offers. */
+export type ConnectDrag =
+  | { kind: 'connect'; from: { kind: 'object'; id: number }; style: 'block'; blocker: number; target: { endpoint: { kind: 'object'; id: number } } | null }
+  | { kind: 'connect'; from: Endpoint; style: 'target' | 'block'; blocker?: undefined; target: OfferTarget | null };
 
 type Drag = PlayDrag | ConnectDrag | { kind: 'marquee' };
 
@@ -87,14 +86,13 @@ export type Gesture =
 
 export const IDLE: Gesture = { phase: 'idle' };
 
-/** What a release does: nothing of its own (`click`: the browser's click follows), commit, choose, or settle back. */
+/** What a release does: nothing of its own (`click`: the browser's click follows), play, connect, marquee, or settle back. */
 export type Release =
-  | { outcome: 'marquee' }
-  | { outcome: 'connect'; target: ConnectTarget | null }
   | { outcome: 'click' }
   | { outcome: 'none' }
-  | { outcome: 'commit'; at: Point; drag: PlayDrag }
-  | { outcome: 'choose'; at: Point; drag: PlayDrag }
+  | { outcome: 'marquee' }
+  | { outcome: 'connect'; drag: ConnectDrag }
+  | { outcome: 'play'; at: Point; drag: PlayDrag }
   | { outcome: 'cancel'; at: Point; drag: PlayDrag };
 
 /** A hand card starts a drag only when it can be played or cast; discards and card choices stay clicks. */
@@ -126,11 +124,11 @@ export function release(gesture: Gesture, pointerId: number): { gesture: Gesture
   if (gesture.phase !== 'dragging' || gesture.pointerId !== pointerId) return { gesture, release: { outcome: 'none' } };
   const { drag, revision } = gesture;
   if (drag.kind === 'marquee') return { gesture: IDLE, release: { outcome: 'marquee' } };
-  if (drag.kind === 'connect') return { gesture: IDLE, release: { outcome: 'connect', target: drag.target } };
+  if (drag.kind === 'connect') return { gesture: IDLE, release: { outcome: 'connect', drag } };
   const at = carriedAt(gesture)!;
   if (!drag.overField || !drag.offers.length) return { gesture: IDLE, release: { outcome: 'cancel', at, drag } };
-  if (drag.offers.length === 1) return { gesture: { phase: 'holding', revision, at, drag, reason: 'pending' }, release: { outcome: 'commit', at, drag } };
-  return { gesture: { phase: 'holding', revision, at, drag, reason: 'menu' }, release: { outcome: 'choose', at, drag } };
+  const reason = drag.offers.length === 1 ? 'pending' : 'menu';
+  return { gesture: { phase: 'holding', revision, at, drag, reason }, release: { outcome: 'play', at, drag } };
 }
 
 /** Escape, a lost pointer, a read-out or the board going read-only: an unreleased gesture ends; a hold stays. */

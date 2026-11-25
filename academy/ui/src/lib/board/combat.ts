@@ -64,7 +64,7 @@ export function toggleAttacker(draft: Draft, id: number): Draft {
 
 /** Place or remove one blocker, leaving every other assignment intact. */
 export function setBlock(draft: Draft, blocker: number, attacker: number | null): Draft {
-  if (draft.blocks.find(([id]) => id === blocker)?.[1] === attacker) return draft;
+  if ((draft.blocks.find(([id]) => id === blocker)?.[1] ?? null) === attacker) return draft;
   const blocks = draft.blocks.filter(([id]) => id !== blocker);
   if (attacker !== null) blocks.push([blocker, attacker]);
   return { ...draft, blocks };
