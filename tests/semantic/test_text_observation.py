@@ -310,7 +310,8 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     assert "foretold" not in opponent.text
     observation = _viewer_observation(opponent)
     assert all(
-        card.characteristics.name != "Sozin's Comet" for card in observation.opponent_cards
+        card.characteristics.name != "Sozin's Comet"
+        for card in observation.opponent_cards
     )
     assert observation.opponent.zone_counts[5] == 1
     encoded = encode_observation(space, observation)
@@ -1002,7 +1003,6 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "object_id": "the permanent's exact object alias",
         "owner_id": "owner",
         "is_token": "token",
-        "card": "owner, cost, mana value, type flags, token, legendary, Ally, Lesson, ward and Rules",
         "id": "the permanent's alias",
         "registry_key": "[definition]",
         "controller_id": "controller",
@@ -1013,13 +1013,10 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "entered_this_turn": "entered this turn",
         "plus1_counters": "+1/+1 counters",
         "cant_be_blocked_this_turn": "cannot be blocked this turn",
-        "power": "power/toughness",
-        "toughness": "power/toughness",
         "is_animated": "animated",
         "has_exile_link": "holds exile link",
         "exile_if_dies_this_turn": "exile if dies this turn",
         "temp_subtypes": "temporary subtypes",
-        "keywords": "effective keywords",
         "counters": "<kind> counters",
         "effects": "effect",
         "copy": "copy of D<n>, except ...",
@@ -1050,24 +1047,11 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "characteristics": "name, P/T, types, keywords, cost, ward, kicker and Rules",
         "id": "the card's alias",
         "registry_key": "[definition]",
-        "name": "the definition line",
-        "text_box": "Rules:",
         "owner_id": "owner",
         "zone": "zone",
-        "power": "card power/toughness",
-        "toughness": "card power/toughness",
-        "mana_cost": "cost",
-        "card_types": "type flags",
-        "keywords": "keywords",
         "is_token": "token",
-        "is_legendary": "legendary",
-        "is_ally": "Ally",
-        "is_lesson": "Lesson",
-        "ward_cost": "ward mana value",
-        "kicker_cost": "kicker mana value",
         "face_down": "face down",
         "cast_permissions": "all visible play permissions",
-        "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
         "counters": "stash counters",
@@ -1099,7 +1083,6 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "kicked": "kicked",
         "from_prepared": "cast from a prepared copy",
         "flashback": "cast with flashback",
-        "card": "Spell: owner, copy, power/toughness, cost, types, keywords and Rules",
     },
     managym.PlayerTurnHistory: {
         "attacked": "This turn: attacked",
