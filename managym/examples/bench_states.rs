@@ -68,6 +68,7 @@ const STATES: &[(&str, &str)] = &[
     ("way-grants", "4 different Ways granting loyalty abilities across 6 planeswalkers; measures granted abilities x holders in activation enumeration and layer rebuild"),
     ("divided-damage", "Chandra, Flameshaper (-4) facing 8 legal targets; measures linear target and sequential division offers"),
     ("keep-one-each-type", "Liliana, Dreadhorde General (-9) facing 30 mixed and multi-type permanents (artifact creatures, lands, enchantments, planeswalkers); measures linear per-type keep choices"),
+    ("attack-planeswalkers", "N Gray Ogres facing 6 distinct opposing planeswalkers; measures per-attacker defender choices, combat preview, observation, and search across attackers x planeswalkers"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -539,6 +540,24 @@ fn recipe(name: &str, size: usize) -> Recipe {
             seats[1].add("Ajani, Caller of the Pride", 1);
             seats[1].add("Chandra, Flameshaper", 1);
         }
+        "attack-planeswalkers" => {
+            seats[0].add("Gray Ogre", size);
+            seats[0].add("Forest", 2);
+            seats[0].hand.push("Pillar Launch".into());
+            for walker in [
+                "Ajani, Caller of the Pride",
+                "Chandra, Flameshaper",
+                "Liliana, Dreadhorde General",
+                "Vivien Reid",
+                "Kaito, Cunning Infiltrator",
+                "Jace, Reality Sculptor",
+            ] {
+                seats[1].add(walker, 1);
+            }
+            seats[1].add("Gray Ogre", 2);
+            seats[1].add("Forest", 2);
+            seats[1].hand.push("Pillar Launch".into());
+        }
         _ => panic!("unknown state {name}; use --list"),
     }
     // A real response keeps the opponent's final priority pass visible.
@@ -710,7 +729,7 @@ fn build(recipe: &Recipe) -> Env {
     }
     if matches!(
         recipe.state.as_str(),
-        "way-grants" | "divided-damage" | "keep-one-each-type"
+        "way-grants" | "divided-damage" | "keep-one-each-type" | "attack-planeswalkers"
     ) {
         let game = env.fixture_game_mut();
         let state = &mut *game.state;
