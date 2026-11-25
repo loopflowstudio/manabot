@@ -17,6 +17,7 @@
 
 use crate::{
     cards::content_pack::default_content_pack,
+    experience::PresentationRule,
     flow::game::Game,
     state::{
         card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
@@ -55,6 +56,37 @@ impl Game {
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));
         let timestamp = self.state.id_gen_mut().next_id();
+        let pt_delta = if self.presentation.is_some() {
+            match modification {
+                Modification::ModifyPt { power, toughness } if power != 0 || toughness != 0 => {
+                    Some((power, toughness))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some((power, toughness)) = pt_delta {
+            let affected: Vec<Affected> = affected.into_iter().collect();
+            let objects: Vec<ObjectId> = affected
+                .iter()
+                .filter_map(|item| match item {
+                    Affected::Object(object) => Some(*object),
+                    Affected::Player(_) => None,
+                })
+                .collect();
+            self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
+                timestamp,
+                source,
+                controller,
+                affected,
+                modification: modification.clone(),
+                duration,
+                source_object,
+            }));
+            self.presentation_pt_changed(&objects, power, toughness);
+            return;
+        }
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
             source,
@@ -362,7 +394,9 @@ impl Game {
 
     /// CR 514.2: "until end of turn" effects end in the cleanup step.
     pub(crate) fn end_turn_effects(&mut self) {
-        self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn);
+        self.end_effects_with_rule(Some(PresentationRule::Cleanup), |effect| {
+            effect.duration == EffectDuration::EndOfTurn
+        });
     }
 
     /// CR 400.7: the object that left is a new object; effects on it end,
@@ -386,6 +420,14 @@ impl Game {
     }
 
     fn end_effects(&mut self, ends: impl Fn(&ContinuousEffect) -> bool) {
+        self.end_effects_with_rule(None, ends);
+    }
+
+    fn end_effects_with_rule(
+        &mut self,
+        rule: Option<PresentationRule>,
+        ends: impl Fn(&ContinuousEffect) -> bool,
+    ) {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
@@ -409,7 +451,7 @@ impl Game {
                     .as_ref()
                     .is_some_and(|permanent| permanent.controller == holder)
                 {
-                    self.change_control(id, previous);
+                    self.change_control_returned(id, previous, rule);
                 }
             }
         }

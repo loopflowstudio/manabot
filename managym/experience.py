@@ -903,6 +903,31 @@ class LifePresentation(ProtocolModel):
     total: Int32
 
 
+class ExiledPresentation(ProtocolModel):
+    kind: Literal["exiled"]
+    objects: list[ObjectRenderId]
+
+
+class TokenCreatedPresentation(ProtocolModel):
+    kind: Literal["token_created"]
+    objects: list[ObjectRenderId]
+    player: UInt8
+
+
+class PtChangedPresentation(ProtocolModel):
+    kind: Literal["pt_changed"]
+    objects: list[ObjectRenderId]
+    power: Int32
+    toughness: Int32
+
+
+class ControlChangedPresentation(ProtocolModel):
+    kind: Literal["control_changed"]
+    object: ObjectRenderId
+    controller: UInt8
+    returned: bool
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
@@ -927,7 +952,11 @@ PresentationKind: TypeAlias = Annotated[
     | LookedPresentation
     | SacrificedPresentation
     | LostPresentation
-    | LifePresentation,
+    | LifePresentation
+    | ExiledPresentation
+    | TokenCreatedPresentation
+    | PtChangedPresentation
+    | ControlChangedPresentation,
     Field(discriminator="kind"),
 ]
 

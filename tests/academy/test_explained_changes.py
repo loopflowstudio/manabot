@@ -547,3 +547,238 @@ def test_remaining_kinds_searched_looked_sacrificed_and_lost_through_session(
     assert "cause" in lost
 
 
+def test_spell_and_ability_results_exile_destroy_tokens_pump_and_control_change(
+    tmp_path: Path,
+) -> None:
+    """Real GameSession games tell exile, destroy, token creation, P/T pump,
+    control change + cleanup return, and token death labels."""
+
+    def advance_until(
+        session: GameSession, start: int, predicate: Any, prefix: str, limit: int = 24
+    ) -> None:
+        for step in range(limit):
+            if predicate(session.presentation_events[start:]):
+                return
+            prompt = session._publish_current_prompt()
+            if prompt is None:
+                return
+            descriptions = [a["description"] for a in prompt.actions]
+            pick = next(
+                (
+                    d
+                    for d in descriptions
+                    if d.startswith("Pay") or d == "Pass priority"
+                ),
+                descriptions[0],
+            )
+            _command(session, pick, f"{prefix}-{step}")
+
+    # 1. Exile (Airbending Lesson), token creation (Treetop Freedom Fighters),
+    #    token death with label (Lightning Bolt on Ally), P/T pump (Wandering Musicians).
+    hero_deck = {
+        "Plains": 15,
+        "Mountain": 15,
+        "Airbending Lesson": 6,
+        "Treetop Freedom Fighters": 6,
+        "Wandering Musicians": 6,
+        "Lightning Bolt": 6,
+        "Airbender's Reversal": 6,
+    }
+    session = GameSession(trace_dir=tmp_path)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": hero_deck,
+            "villain_deck": {"Mountain": 30, "Gray Ogre": 30},
+            "auto_pass": False,
+            "seed": 23,
+        }
+    )
+    assert session.env is not None
+    _command(session, "Keep hand", "keep-1")
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    for _ in range(5):
+        session.env.scenario_force_battlefield(0, "Plains", True)
+        session.env.scenario_force_battlefield(0, "Mountain", True)
+    session.env.scenario_force_battlefield(0, "Wandering Musicians", True)
+    session.env.scenario_force_battlefield(1, "Gray Ogre", True)
+    session.env.scenario_force_card_in_hand(0, "Airbending Lesson")
+    session.env.scenario_force_card_in_hand(0, "Treetop Freedom Fighters")
+    session.env.scenario_force_card_in_hand(0, "Lightning Bolt")
+    session.env.scenario_force_card_in_hand(0, "Airbender's Reversal")
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+
+    start = len(session.presentation_events)
+    _command(session, "Cast Airbending Lesson", "cast-airbend")
+    _command(session, "Target Gray Ogre", "target-ogre")
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "exiled" for e in evs),
+        "airbend",
+    )
+
+    _command(session, "Cast Treetop Freedom Fighters", "cast-tff")
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "token_created" for e in evs),
+        "tff",
+    )
+
+    _command(session, "Cast Lightning Bolt", "cast-bolt")
+    _command(session, "Target Ally", "target-ally")
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "died" for e in evs),
+        "bolt-ally",
+    )
+
+    # Pass to Declare Attackers, decline Treetop Freedom Fighters (has haste) if asked first,
+    # attack with Wandering Musicians -> pump trigger, then destroy it with Airbender's Reversal.
+    for step in range(8):
+        prompt = session._publish_current_prompt()
+        assert prompt is not None
+        descriptions = [a["description"] for a in prompt.actions]
+        if any("Attack with Wandering Musicians" in d for d in descriptions):
+            break
+        skip = next(
+            (d for d in descriptions if d.startswith("Do not attack") or d == "Pass priority"),
+            descriptions[0],
+        )
+        _command(session, skip, f"to-combat-{step}")
+    _command(session, "Attack with Wandering Musicians", "atk-musicians")
+    for step in range(4):
+        prompt = session._publish_current_prompt()
+        assert prompt is not None
+        descriptions = [a["description"] for a in prompt.actions]
+        decline = next((d for d in descriptions if d.startswith("Do not attack")), None)
+        if decline is None:
+            break
+        _command(session, decline, f"no-other-atk-{step}")
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "pt_changed" for e in evs),
+        "pump",
+    )
+
+    _command(session, "Cast Airbender's Reversal", "cast-reversal")
+    prompt = session._publish_current_prompt()
+    assert prompt is not None
+    destroy_mode = next(
+        a["description"] for a in prompt.actions if "Destroy" in a["description"]
+    )
+    _command(session, destroy_mode, "reversal-mode")
+    prompt = session._publish_current_prompt()
+    if prompt is not None and any(
+        a["description"] == "Target Wandering Musicians" for a in prompt.actions
+    ):
+        _command(session, "Target Wandering Musicians", "reversal-target")
+    advance_until(
+        session,
+        start,
+        lambda evs: any(e["kind"]["kind"] == "destroyed" for e in evs),
+        "destroy",
+    )
+
+    events = list(session.presentation_events[start:])
+    exiled = _first(events, "exiled")
+    assert "Gray Ogre" in exiled["labels"]["objects"].values()
+    assert "cause" in exiled
+
+    token = _first(events, "token_created")
+    assert token["kind"]["player"] == 0
+    assert "Ally" in token["labels"]["objects"].values()
+    assert "cause" in token
+
+    died = _first(events, "died")
+    assert died["rule"] == "lethal_damage"
+    assert "Ally" in died["labels"]["objects"].values()
+
+    pump = _first(events, "pt_changed")
+    assert pump["kind"]["power"] == 1 and pump["kind"]["toughness"] == 0
+    assert "Wandering Musicians" in pump["labels"]["objects"].values()
+    assert "cause" in pump
+
+    destroyed = _first(events, "destroyed")
+    assert "Wandering Musicians" in destroyed["labels"]["objects"].values()
+    assert "cause" in destroyed
+
+    # 2. Control change + Clue token + cleanup return (Jet's Brainwashing kicked).
+    ctrl = GameSession(trace_dir=tmp_path)
+    ctrl.new_game(
+        {
+            "villain_type": "passive",
+            "hero_deck": {"Mountain": 40, "Jet's Brainwashing": 20},
+            "villain_deck": {"Mountain": 30, "Gray Ogre": 30},
+            "auto_pass": False,
+            "seed": 31,
+        }
+    )
+    assert ctrl.env is not None
+    _command(ctrl, "Keep hand", "keep-ctrl")
+    ctrl.env.scenario_clear_hand(0)
+    ctrl.env.scenario_clear_hand(1)
+    for _ in range(5):
+        ctrl.env.scenario_force_battlefield(0, "Mountain", True)
+    ctrl.env.scenario_force_battlefield(1, "Gray Ogre", True)
+    ctrl.env.scenario_force_card_in_hand(0, "Jet's Brainwashing")
+    ctrl.obs = ctrl.env.scenario_refresh()
+    ctrl.published_prompt = None
+
+    cstart = len(ctrl.presentation_events)
+    _command(ctrl, "Cast Jet's Brainwashing", "cast-jet")
+    for step in range(24):
+        evs = ctrl.presentation_events[cstart:]
+        if any(
+            e["kind"]["kind"] == "control_changed" and e["kind"]["returned"] is True
+            for e in evs
+        ):
+            break
+        prompt = ctrl._publish_current_prompt()
+        assert prompt is not None
+        descriptions = [a["description"] for a in prompt.actions]
+        pick = next(
+            (
+                d
+                for d in descriptions
+                if d.startswith("Pay kicker")
+                or d == "Yes"
+                or "Pay {" in d
+                or d == "Target Gray Ogre"
+                or d.startswith("Pay")
+                or d.startswith("Do not attack")
+                or d == "Pass priority"
+            ),
+            descriptions[0],
+        )
+        _command(ctrl, pick, f"jet-{step}")
+
+    cevents = list(ctrl.presentation_events[cstart:])
+    gain = next(
+        e
+        for e in cevents
+        if e["kind"]["kind"] == "control_changed" and e["kind"]["returned"] is False
+    )
+    assert gain["kind"]["controller"] == 0
+    assert "Gray Ogre" in gain["labels"]["objects"].values()
+    assert "cause" in gain
+
+    clue = _first(cevents, "token_created")
+    assert "Clue" in clue["labels"]["objects"].values()
+
+    ret = next(
+        e
+        for e in cevents
+        if e["kind"]["kind"] == "control_changed" and e["kind"]["returned"] is True
+    )
+    assert ret["kind"]["controller"] == 1
+    assert ret["rule"] == "cleanup"
+    assert "Gray Ogre" in ret["labels"]["objects"].values()
+
+
+

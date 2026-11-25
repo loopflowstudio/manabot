@@ -993,6 +993,29 @@ pub enum PresentationKind {
         amount: i32,
         total: i32,
     },
+    /// Permanents or cards exiled face up (CR 406.1).
+    Exiled {
+        objects: Vec<ObjectRenderId>,
+    },
+    /// Tokens created on the battlefield (CR 111.1).
+    TokenCreated {
+        objects: Vec<ObjectRenderId>,
+        player: PlayerId,
+    },
+    /// One or more permanents' power and/or toughness were modified by a
+    /// resolving spell or ability (CR 613.4c).
+    PtChanged {
+        objects: Vec<ObjectRenderId>,
+        power: i32,
+        toughness: i32,
+    },
+    /// Control of a battlefield permanent changed (CR 108.4, 613.1b);
+    /// `returned` is true when an expiring control effect handed it back.
+    ControlChanged {
+        object: ObjectRenderId,
+        controller: PlayerId,
+        returned: bool,
+    },
 }
 
 /// Which library-looking keyword action `PresentationKind::Looked` tells.

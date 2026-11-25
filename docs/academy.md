@@ -1709,7 +1709,7 @@ of game facts, and none can alter or delay the committed frame.
 | Field | Meaning |
 |---|---|
 | `seq` | Position on this viewer's track. |
-| `kind` | `cast`, `targeted`, `resolved`, `activated`, `triggered`, `ability_resolved`, `countered`, `passed`, `damage`, `died`, `counters`, `searched`, `looked` (scry, surveil), `sacrificed`, `drew`, `discarded`, `revealed`, `land_played`, `attack_group`, `blocked`, `turn_started`, `lost`, `life` (gained or lost other than by damage; damage to a player is told only as `damage`). A permanent that dies is told once, as `died`. |
+| `kind` | `cast`, `targeted`, `resolved`, `activated`, `triggered`, `ability_resolved`, `countered`, `passed`, `damage`, `destroyed`, `died`, `exiled`, `token_created`, `pt_changed`, `control_changed`, `counters`, `searched`, `looked` (scry, surveil), `sacrificed`, `drew`, `discarded`, `revealed`, `land_played`, `attack_group`, `blocked`, `turn_started`, `lost`, `life` (gained or lost other than by damage; damage to a player is told only as `damage`). State-based deaths are told as `died` (with `rule`); spell/ability destruction is told as `destroyed`. |
 | `cause` | Optional; omitted when root. The `seq` of the earlier event this one follows from. A move is one of the player-choice kinds (`cast`, `activated`, `land_played`, `attack_group`, `blocked`, `passed`) with no `cause` and no `rule`. |
 | `rule` | Optional; omitted when chosen by a player. The state-based or turn-based action that did it. |
 | `labels` | Optional; omitted on older recordings or when no object or stack entry is cited. Viewer-safe `PresentationLabels` (`objects`, `stacks`) naming only the objects and stack entries this event mentions, at exact incarnation. |

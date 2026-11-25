@@ -478,3 +478,335 @@ fn a_trigger_names_its_target_and_life_changes_are_told_once() {
         "the trigger's target follows it: {lines:#?}"
     );
 }
+
+/// Slice 7: exile, destroy, token creation, P/T pump, control change + cleanup
+/// return, and token death labels from real games.
+#[test]
+fn spell_and_ability_results_exile_destroy_tokens_pump_and_control_change() {
+    use managym::{
+        agent::action::Action,
+        experience::{PresentationKind, PresentationRule},
+        state::{game_object::PlayerId, target::Target},
+    };
+
+    let cast_named = |scenario: &mut Scenario, name: &str| {
+        let index = scenario
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| {
+                matches!(a, Action::CastSpell { object, .. } if scenario.game().state[*object].name == name)
+            })
+            .unwrap_or_else(|| panic!("CastSpell {name} not offered"));
+        scenario.step_action(index);
+    };
+
+    // 1. Airbending Lesson exiles Gray Ogre (and draws); Treetop Freedom Fighters
+    //    creates an Ally token; Wandering Musicians pumps creatures on attack;
+    //    Lightning Bolt kills the Ally token with its label intact.
+    let mut scenario = five_color_setup(&[
+        "Airbending Lesson",
+        "Treetop Freedom Fighters",
+        "Wandering Musicians",
+        "Gray Ogre",
+        "Lightning Bolt",
+    ]);
+    let ogre = scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    let musicians = scenario.force_permanent_on_battlefield(0, "Wandering Musicians");
+    scenario.game_mut().state.permanents[musicians]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+    scenario.force_card_in_hand(0, "Airbending Lesson");
+    scenario.force_card_in_hand(0, "Treetop Freedom Fighters");
+    scenario.force_card_in_hand(0, "Lightning Bolt");
+    scenario.game_mut().scenario_refresh_priority().unwrap();
+    scenario.game_mut().enable_presentation();
+
+    cast_named(&mut scenario, "Airbending Lesson");
+    let target_ogre = scenario
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::ChooseTarget { target: Target::Permanent(p), .. } if *p == ogre))
+        .expect("target Gray Ogre");
+    scenario.step_action(target_ogre);
+    for _ in 0..16 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Exiled { .. }))
+        {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    cast_named(&mut scenario, "Treetop Freedom Fighters");
+    for _ in 0..20 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::TokenCreated { .. }))
+        {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    // Bolt the Ally token so we verify token death carries its label.
+    let ally = scenario.battlefield_permanents_named(0, "Ally")[0];
+    cast_named(&mut scenario, "Lightning Bolt");
+    let target_ally = scenario
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::ChooseTarget { target: Target::Permanent(p), .. } if *p == ally))
+        .expect("target Ally");
+    scenario.step_action(target_ally);
+    for _ in 0..16 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Died { .. }))
+        {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    // Attack with Wandering Musicians -> trigger pumps controlled creatures +1/+0.
+    scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
+    for _ in 0..4 {
+        let actions = scenario.action_space().actions.clone();
+        if let Some(attack_musicians) = actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == musicians))
+        {
+            scenario.step_action(attack_musicians);
+            break;
+        }
+        if let Some(decline) = actions
+            .iter()
+            .position(|a| matches!(a, Action::DeclareAttacker { attack: false, .. }))
+        {
+            scenario.step_action(decline);
+        } else {
+            break;
+        }
+    }
+    for _ in 0..24 {
+        let told = scenario.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::PtChanged { .. }))
+        {
+            break;
+        }
+        scenario.advance_default_action();
+    }
+
+    let facts = scenario.game().presentation_facts(PlayerId(0));
+    let lines: Vec<_> = facts.iter().flat_map(|f| &f.lines).collect();
+    assert!(
+        lines.iter().any(|l| matches!(
+            &l.kind,
+            PresentationKind::Exiled { objects }
+                if objects.len() == 1 && l.labels.objects.values().any(|n| n == "Gray Ogre")
+        )),
+        "expected exiled Gray Ogre in {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| matches!(
+            &l.kind,
+            PresentationKind::TokenCreated { player, objects }
+                if player.0 == 0 && objects.len() == 1 && l.labels.objects.values().any(|n| n == "Ally")
+        )),
+        "expected Ally token_created in {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| matches!(
+            &l.kind,
+            PresentationKind::Died { objects }
+                if objects.len() == 1 && l.labels.objects.values().any(|n| n == "Ally")
+        )),
+        "expected Ally token died with label in {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| matches!(
+            &l.kind,
+            PresentationKind::PtChanged {
+                objects,
+                power: 1,
+                toughness: 0,
+            } if !objects.is_empty() && l.labels.objects.values().any(|n| n == "Wandering Musicians")
+        )),
+        "expected +1/+0 pt_changed on Wandering Musicians in {lines:#?}"
+    );
+
+    // 2. Airbender's Reversal mode 0 destroys an attacking creature (`Destroyed`).
+    let mut destroy_s = five_color_setup(&["Airbender's Reversal", "Gray Ogre"]);
+    let attacker = destroy_s.force_permanent_on_battlefield(0, "Gray Ogre");
+    destroy_s.game_mut().state.permanents[attacker]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+    destroy_s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    destroy_s.force_card_in_hand(0, "Airbender's Reversal");
+    destroy_s.game_mut().enable_presentation();
+    let attack_ogre = destroy_s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker))
+        .expect("attack with Gray Ogre");
+    destroy_s.step_action(attack_ogre);
+    destroy_s.set_player_mana_pool(0, "20WWWW");
+    destroy_s.game_mut().scenario_refresh_priority().unwrap();
+    cast_named(&mut destroy_s, "Airbender's Reversal");
+    // Choose mode 0 (Destroy target attacking creature), then target Gray Ogre if prompted.
+    let mode0 = destroy_s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::ChooseMode { mode: 0, .. }))
+        .expect("mode 0");
+    destroy_s.step_action(mode0);
+    if let Some(target_atk) = destroy_s
+        .action_space()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::ChooseTarget { target: Target::Permanent(p), .. } if *p == attacker))
+    {
+        destroy_s.step_action(target_atk);
+    }
+    for _ in 0..16 {
+        let told = destroy_s.game().presentation_facts(PlayerId(0));
+        if told
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(l.kind, PresentationKind::Destroyed { .. }))
+        {
+            break;
+        }
+        destroy_s.advance_default_action();
+    }
+    let destroy_facts = destroy_s.game().presentation_facts(PlayerId(0));
+    let destroyed_fact = destroy_facts
+        .iter()
+        .find(|f| {
+            f.lines
+                .iter()
+                .any(|l| matches!(l.kind, PresentationKind::Destroyed { .. }))
+        })
+        .expect("expected destroyed fact");
+    assert!(destroyed_fact.cause.is_some());
+    assert!(destroyed_fact
+        .lines
+        .iter()
+        .any(|l| l.labels.objects.values().any(|n| n == "Gray Ogre")));
+
+    // 3. Jet's Brainwashing (kicked) steals opponent's creature, creates a Clue,
+    //    and returns control at cleanup with Rule::Cleanup.
+    let mut control_s = five_color_setup(&["Jet's Brainwashing", "Gray Ogre"]);
+    let stolen = control_s.force_permanent_on_battlefield(1, "Gray Ogre");
+    control_s.force_card_in_hand(0, "Jet's Brainwashing");
+    control_s.game_mut().scenario_refresh_priority().unwrap();
+    control_s.game_mut().enable_presentation();
+
+    cast_named(&mut control_s, "Jet's Brainwashing");
+    // Choose kicker (Yes), then target opponent's Gray Ogre.
+    for _ in 0..24 {
+        let actions = control_s.action_space().actions.clone();
+        if let Some(kick) = actions
+            .iter()
+            .position(|a| matches!(a, Action::PayCost { .. }))
+        {
+            control_s.step_action(kick);
+            continue;
+        }
+        if let Some(target) = actions
+            .iter()
+            .position(|a| matches!(a, Action::ChooseTarget { target: Target::Permanent(p), .. } if *p == stolen))
+        {
+            control_s.step_action(target);
+            continue;
+        }
+        let told = control_s.game().presentation_facts(PlayerId(0));
+        if told.iter().flat_map(|f| &f.lines).any(|l| {
+            matches!(
+                l.kind,
+                PresentationKind::ControlChanged {
+                    returned: false,
+                    ..
+                }
+            )
+        }) && told.iter().flat_map(|f| &f.lines).any(|l| {
+            matches!(
+                l.kind,
+                PresentationKind::TokenCreated { .. }
+            )
+        }) {
+            break;
+        }
+        control_s.advance_default_action();
+    }
+
+    // Advance into opponent's turn so cleanup returns control of Gray Ogre.
+    control_s.advance_to_active_step(1, StepKind::Main);
+    let control_facts = control_s.game().presentation_facts(PlayerId(0));
+    let gain = control_facts
+        .iter()
+        .find(|f| {
+            f.lines.iter().any(|l| {
+                matches!(
+                    l.kind,
+                    PresentationKind::ControlChanged {
+                        controller,
+                        returned: false,
+                        ..
+                    } if controller.0 == 0
+                )
+            })
+        })
+        .expect("expected control gain fact");
+    assert!(gain.cause.is_some());
+    assert!(gain.rule.is_none());
+    assert!(gain
+        .lines
+        .iter()
+        .any(|l| l.labels.objects.values().any(|n| n == "Gray Ogre")));
+
+    let returned = control_facts
+        .iter()
+        .find(|f| {
+            f.lines.iter().any(|l| {
+                matches!(
+                    l.kind,
+                    PresentationKind::ControlChanged {
+                        controller,
+                        returned: true,
+                        ..
+                    } if controller.0 == 1
+                )
+            })
+        })
+        .expect("expected control return fact");
+    assert_eq!(returned.rule, Some(PresentationRule::Cleanup));
+    assert!(returned.position.is_some());
+    assert!(returned
+        .lines
+        .iter()
+        .any(|l| l.labels.objects.values().any(|n| n == "Gray Ogre")));
+    assert!(
+        control_facts
+            .iter()
+            .flat_map(|f| &f.lines)
+            .any(|l| matches!(&l.kind, PresentationKind::TokenCreated { player, .. } if player.0 == 0 && l.labels.objects.values().any(|n| n == "Clue"))),
+        "expected Clue token_created in {control_facts:#?}"
+    );
+}

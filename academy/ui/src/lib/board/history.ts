@@ -133,6 +133,10 @@ const MODERN_KINDS = new Set([
   'sacrificed',
   'lost',
   'life',
+  'exiled',
+  'token_created',
+  'pt_changed',
+  'control_changed',
 ]);
 
 /** Exact definition of a player move: move kind with no cause and no rule. */
@@ -165,6 +169,7 @@ function eventSeat(event: PresentationEvent): number | null {
     case 'cast':
     case 'activated':
     case 'triggered':
+    case 'control_changed':
       return kind.controller;
     case 'attack_group':
       return kind.defender.kind === 'player' ? 1 - kind.defender.id : null;
@@ -178,6 +183,7 @@ function eventSeat(event: PresentationEvent): number | null {
     case 'sacrificed':
     case 'lost':
     case 'life':
+    case 'token_created':
       return kind.player;
     default:
       return null;

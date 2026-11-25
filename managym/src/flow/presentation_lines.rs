@@ -14,7 +14,7 @@ use crate::{
         presentation::PresentationLine,
     },
     state::{
-        game_object::{ObjectId, PlayerId, Target},
+        game_object::{ObjectId, ObjectKind, PlayerId, Target},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -169,6 +169,58 @@ impl Game {
     pub(super) fn lost_line(player: PlayerId) -> Vec<PresentationLine> {
         vec![PresentationLabels::default().line(Kind::Lost {
             player: seat(player),
+        })]
+    }
+
+    pub(super) fn destroyed_line(&self, objects: &[ObjectEventRef]) -> Vec<PresentationLine> {
+        let mut labels = PresentationLabels::default();
+        let objects: Vec<ObjectRenderId> = objects
+            .iter()
+            .map(|r| self.named_permanent(*r, &mut labels))
+            .collect();
+        if objects.is_empty() {
+            return vec![];
+        }
+        vec![labels.line(Kind::Destroyed { objects })]
+    }
+
+    pub(super) fn pt_changed_line(
+        &self,
+        objects: &[ObjectId],
+        power: i32,
+        toughness: i32,
+        viewer: PlayerId,
+    ) -> Vec<PresentationLine> {
+        let mut labels = PresentationLabels::default();
+        let objects: Vec<ObjectRenderId> = objects
+            .iter()
+            .filter_map(|object| self.named_object(*object, viewer, &mut labels))
+            .collect();
+        if objects.is_empty() {
+            return vec![];
+        }
+        vec![labels.line(Kind::PtChanged {
+            objects,
+            power,
+            toughness,
+        })]
+    }
+
+    pub(super) fn control_changed_line(
+        &self,
+        object: ObjectId,
+        controller: PlayerId,
+        returned: bool,
+        viewer: PlayerId,
+    ) -> Vec<PresentationLine> {
+        let mut labels = PresentationLabels::default();
+        let Some(object) = self.named_object(object, viewer, &mut labels) else {
+            return vec![];
+        };
+        vec![labels.line(Kind::ControlChanged {
+            object,
+            controller: seat(controller),
+            returned,
         })]
     }
 
@@ -381,32 +433,63 @@ impl Game {
             },
             CardMoved {
                 object_id,
-                from: Some(from),
-                departed: Some(departed),
+                from,
+                departed,
                 to,
                 controller,
                 face_down: false,
             } => {
-                let played = *to == ZoneType::Battlefield
-                    && self.presentation.as_ref().and_then(|sink| sink.land_play)
-                        == Some(*departed);
-                let discarded = (*from, *to) == (ZoneType::Hand, ZoneType::Graveyard);
-                if !played && !discarded {
-                    return vec![];
-                }
-                let Some(object) = self.named_object(*object_id, viewer, &mut labels) else {
-                    return vec![];
-                };
-                if played {
-                    Kind::LandPlayed {
-                        object,
-                        player: seat(*controller),
+                if from.is_none() && *to == ZoneType::Battlefield {
+                    if self.state[*object_id].kind() != ObjectKind::Token {
+                        return vec![];
                     }
-                } else {
-                    Kind::Discarded {
+                    let Some(object) = self.named_object(*object_id, viewer, &mut labels) else {
+                        return vec![];
+                    };
+                    Kind::TokenCreated {
                         objects: vec![object],
                         player: seat(*controller),
                     }
+                } else if *to == ZoneType::Exile {
+                    // Use the departed permanent's identity for face-up battlefield departures
+                    // so the board highlights the permanent that left.
+                    let subject = if *from == Some(ZoneType::Battlefield) {
+                        departed
+                            .filter(|departed| !self.observed_face_down(*departed))
+                            .unwrap_or(*object_id)
+                    } else {
+                        *object_id
+                    };
+                    let Some(object) = self.named_object(subject, viewer, &mut labels) else {
+                        return vec![];
+                    };
+                    Kind::Exiled {
+                        objects: vec![object],
+                    }
+                } else if let (Some(from), Some(departed)) = (from, departed) {
+                    let played = *to == ZoneType::Battlefield
+                        && self.presentation.as_ref().and_then(|sink| sink.land_play)
+                            == Some(*departed);
+                    let discarded = (*from, *to) == (ZoneType::Hand, ZoneType::Graveyard);
+                    if !played && !discarded {
+                        return vec![];
+                    }
+                    let Some(object) = self.named_object(*object_id, viewer, &mut labels) else {
+                        return vec![];
+                    };
+                    if played {
+                        Kind::LandPlayed {
+                            object,
+                            player: seat(*controller),
+                        }
+                    } else {
+                        Kind::Discarded {
+                            objects: vec![object],
+                            player: seat(*controller),
+                        }
+                    }
+                } else {
+                    return vec![];
                 }
             }
             CardRevealed { owner, definition } => {

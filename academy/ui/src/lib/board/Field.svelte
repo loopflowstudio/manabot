@@ -25,8 +25,8 @@
     beat?: Set<number>;
     /** Damage dealt to each permanent since your last move. */
     damage: Map<number, number>;
-    /** Damage or counter deltas at the active cursor stop. */
-    stopDeltas?: ReadonlyMap<number, readonly { kind: 'damage' | 'counters'; text: string }[]>;
+    /** Damage, counter or P/T deltas at the active cursor stop. */
+    stopDeltas?: ReadonlyMap<number, readonly { kind: 'damage' | 'counters' | 'pump'; text: string }[]>;
     /** Sources the automatic payer would tap, by permanent id. */
     planned: Map<number, PlannedSource> | null;
     /** Copies to take out of their piles: the pending payment's own plan. */
@@ -138,7 +138,7 @@
         data-death-rule={mark.rule ?? ''}
         style:width={`${Math.max(76, Math.min(116, fit.card))}px`}
         style:height={`${Math.max(44, Math.min(112, cardHeight, Math.max(44, height - 4)))}px`}
-        aria-label={`${mark.name} died${mark.rule ? `: ${mark.rule}` : ''}`}
+        aria-label={mark.rule === 'destroyed' ? `${mark.name} was destroyed` : `${mark.name} died${mark.rule ? `: ${mark.rule}` : ''}`}
       >
         <span class="death-ghost-name">{mark.name}</span>
         <span class="death-ghost-rule">{mark.rule ?? 'died'}</span>
@@ -172,8 +172,8 @@
   }
   .death-ghost-rule {
     align-self: flex-start; padding: 1px 5px; border-radius: var(--radius-sm);
-    font: 600 11px/15px var(--font-sans); color: var(--bg); background: var(--damage);
-    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font: 600 11px/14px var(--font-sans); color: var(--bg); background: var(--damage);
+    max-width: 100%; overflow-wrap: anywhere;
   }
   @media (prefers-reduced-motion: reduce) {
     .death-ghost.delayed { animation: none; }

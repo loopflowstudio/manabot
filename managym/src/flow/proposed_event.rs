@@ -843,6 +843,7 @@ impl Game {
         let mut results = Vec::with_capacity(batch.events.len());
         let mut followups = Vec::new();
         let mut died = Vec::new();
+        let mut destroyed = Vec::new();
         let mut hits = Vec::new();
         let mut totals: Vec<(ObjectId, u32)> = Vec::new();
         // Sacrifice is committed with this batch, after all replacement
@@ -895,6 +896,18 @@ impl Game {
                 ) => self.object_event_ref(*object_id),
                 _ => None,
             };
+            let destroyed_ref = match (&batch.binding, event) {
+                (
+                    EventBinding::Destroyed,
+                    ProposedEvent::ZoneMove {
+                        object_id,
+                        from: Some(ZoneType::Battlefield),
+                        to: ZoneType::Graveyard,
+                        ..
+                    },
+                ) => self.object_event_ref(*object_id),
+                _ => None,
+            };
             let known_hand_entry = match (&batch.binding, event) {
                 (
                     EventBinding::Moved { reveal: true, .. },
@@ -941,6 +954,7 @@ impl Game {
                     self.set_known_hand_count(owner, definition, count);
                 }
                 died.extend(death);
+                destroyed.extend(destroyed_ref);
                 if matches!(batch.binding, EventBinding::Combat) {
                     hits.extend(result.combat_hit);
                     if let Some((source, amount)) = result.combat_damage {
@@ -982,6 +996,9 @@ impl Game {
         }
         if !died.is_empty() {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
+        }
+        if !destroyed.is_empty() {
+            self.presentation_destroyed(&destroyed);
         }
         if !hits.is_empty() {
             self.emit(GameEvent::CombatDamageToPlayers { hits });

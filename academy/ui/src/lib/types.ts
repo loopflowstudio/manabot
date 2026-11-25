@@ -534,6 +534,10 @@ export const PRESENTATION_KIND_NAMES = [
   'sacrificed',
   'lost',
   'life',
+  'exiled',
+  'token_created',
+  'pt_changed',
+  'control_changed',
 ] as const;
 
 export const PRESENTATION_RULES = [
@@ -682,6 +686,27 @@ export type PresentationKind =
       player: number;
       amount: number;
       total: number;
+    }
+  | {
+      kind: 'exiled';
+      objects: ObjectRenderId[];
+    }
+  | {
+      kind: 'token_created';
+      objects: ObjectRenderId[];
+      player: number;
+    }
+  | {
+      kind: 'pt_changed';
+      objects: ObjectRenderId[];
+      power: number;
+      toughness: number;
+    }
+  | {
+      kind: 'control_changed';
+      object: ObjectRenderId;
+      controller: number;
+      returned: boolean;
     };
 
 export interface PresentationEvent {

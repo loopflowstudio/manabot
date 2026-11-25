@@ -101,6 +101,10 @@ UNION_VARIANTS = {
         "SacrificedPresentation",
         "LostPresentation",
         "LifePresentation",
+        "ExiledPresentation",
+        "TokenCreatedPresentation",
+        "PtChangedPresentation",
+        "ControlChangedPresentation",
     ),
 }
 

@@ -163,8 +163,10 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
 
   // Pressing a number key while looking back returns to now AND commits immediately.
   const beforeNum = sent.count;
+  const revBeforeNum = await main.getAttribute('data-frame-revision');
   await page.keyboard.press('1');
   await expect.poll(() => sent.count, { timeout: 15_000 }).toBe(beforeNum + 1);
+  await expect(main).not.toHaveAttribute('data-frame-revision', revBeforeNum!, { timeout: 15_000 });
   // Once any resulting walk finishes (or is skipped with Space), the recap is visible at now.
   if (await page.getByTestId('walk-bar').getAttribute('data-walking') === 'true') {
     await page.keyboard.press('Space');
@@ -187,7 +189,13 @@ test('clicking the earlier board returns to now; selecting a history line and ar
   const sent = await startAgainstRandom(page);
 
   const board = page.getByTestId('game-board');
-  await playUntil(page, async () => await board.getAttribute('data-board') === 'step', 160);
+  await playUntil(
+    page,
+    async () =>
+      await board.getAttribute('data-board') === 'step'
+      && (await page.locator('[data-testid=game-log] button[data-history-seq]').count()) >= 2,
+    160,
+  );
   await expect(board).toHaveAttribute('data-board', 'step');
   await page.screenshot({ path: testInfo.outputPath('step-board.png') });
 

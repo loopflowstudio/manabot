@@ -75,6 +75,11 @@ export function tellCounter(counter: string): string {
   return COUNTER_WORDS[counter] ?? counter.replace(/_/g, ' ');
 }
 
+export function tellPtDelta(power: number, toughness: number): string {
+  const signed = (n: number): string => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
+  return `${signed(power)}/${signed(toughness)}`;
+}
+
 export function tellRule(rule: PresentationRule): string {
   return RULE_WORDS[rule];
 }
@@ -314,6 +319,40 @@ export function tell(
       const who = subjectName(kind.player, players);
       const verb = kind.amount > 0 ? 'gained' : 'lost';
       return [txt(`${who} ${verb} ${Math.abs(kind.amount)} life (now ${kind.total})`)];
+    }
+    case 'exiled': {
+      const exiled = joinSegments(kind.objects.map(id => obj(id, 'a permanent')));
+      const verb = kind.objects.length === 1 ? ' was exiled' : ' were exiled';
+      return [...exiled, txt(verb), ...ruleClause(event.rule)];
+    }
+    case 'token_created': {
+      const who = subjectName(kind.player, players);
+      const names = kind.objects.map(id => eventObjectName(event, id, fallbackLabels));
+      if (names.length === 1) {
+        const name = names[0];
+        if (!name) return [txt(`${who} created a token`)];
+        const article = /^[aeiou]/i.test(name) ? 'an' : 'a';
+        return [txt(`${who} created ${article} `), cardSeg(name), txt(' token')];
+      }
+      const first = names[0];
+      if (first && names.every(name => name === first)) {
+        return [txt(`${who} created ${names.length} `), cardSeg(first), txt(' tokens')];
+      }
+      const tokens = joinSegments(names.map(name => cardOr(name, 'a token')));
+      return [txt(`${who} created `), ...tokens, txt(' tokens')];
+    }
+    case 'pt_changed': {
+      const targets = joinSegments(kind.objects.map(id => obj(id, 'a creature')));
+      return [...targets, txt(` got ${tellPtDelta(kind.power, kind.toughness)}`)];
+    }
+    case 'control_changed': {
+      const target = obj(kind.object, 'a permanent');
+      if (kind.returned) {
+        const to = midSentencePlayer(kind.controller, players, null);
+        return [target, txt(` returned to ${to}`), ...ruleClause(event.rule)];
+      }
+      const who = subjectName(kind.controller, players);
+      return [txt(`${who} gained control of `), target, ...ruleClause(event.rule)];
     }
     case 'lost': {
       const who = subjectName(kind.player, players);

@@ -3,6 +3,7 @@
 
 use crate::{
     cards::content_pack::default_content_pack,
+    experience::PresentationRule,
     flow::{
         decision::Decision,
         event::GameEvent,
@@ -1183,6 +1184,25 @@ impl Game {
     /// under their control continuously since their turn began (CR 302.6).
     /// "For as long as you control" effects of its previous controller end.
     pub(crate) fn change_control(&mut self, permanent_id: PermanentId, controller: PlayerId) {
+        self.change_control_inner(permanent_id, controller, false, None);
+    }
+
+    pub(crate) fn change_control_returned(
+        &mut self,
+        permanent_id: PermanentId,
+        controller: PlayerId,
+        rule: Option<PresentationRule>,
+    ) {
+        self.change_control_inner(permanent_id, controller, true, rule);
+    }
+
+    fn change_control_inner(
+        &mut self,
+        permanent_id: PermanentId,
+        controller: PlayerId,
+        returned: bool,
+        rule: Option<PresentationRule>,
+    ) {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
         };
@@ -1196,6 +1216,7 @@ impl Game {
         permanent.attacking = false;
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
+        self.presentation_control_changed(object_id, controller, returned, rule);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
         }

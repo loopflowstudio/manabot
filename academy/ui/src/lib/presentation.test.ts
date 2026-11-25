@@ -68,6 +68,34 @@ describe('Lightning Bolt presentation fixture', () => {
       cause: undefined,
       rule: undefined,
     });
+    events.push({
+      ...died,
+      seq: died.seq + 102,
+      kind: { kind: 'exiled', objects: [{ entity: 12, incarnation: 0 }] },
+      cause: undefined,
+      rule: undefined,
+    });
+    events.push({
+      ...died,
+      seq: died.seq + 103,
+      kind: { kind: 'token_created', player: 0, objects: [{ entity: 13, incarnation: 0 }] },
+      cause: undefined,
+      rule: undefined,
+    });
+    events.push({
+      ...died,
+      seq: died.seq + 104,
+      kind: { kind: 'pt_changed', objects: [{ entity: 13, incarnation: 0 }], power: 1, toughness: 0 },
+      cause: undefined,
+      rule: undefined,
+    });
+    events.push({
+      ...died,
+      seq: died.seq + 105,
+      kind: { kind: 'control_changed', object: { entity: 12, incarnation: 0 }, controller: 0, returned: false },
+      cause: undefined,
+      rule: undefined,
+    });
     expect(() => validatePresentationEvents(events)).not.toThrow();
 
     const forward = structuredClone(events);

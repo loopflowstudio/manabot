@@ -60,8 +60,8 @@
     beat?: boolean;
     /** Damage it was dealt since your last move, shown as it lands. */
     dealt?: number;
-    /** Damage or counter changes at the active cursor stop ("−3", "+1/+1 · 2"). */
-    stopDeltas?: readonly { kind: 'damage' | 'counters'; text: string }[];
+    /** Damage, counter or P/T changes at the active cursor stop ("−3", "+1/+1 · 2", "+1/+0"). */
+    stopDeltas?: readonly { kind: 'damage' | 'counters' | 'pump'; text: string }[];
     /** Its place in the automatic payer's plan: "would tap, for {U}". */
     planned?: PlannedSource | null;
     /** What it has committed to the pending cost: "tapped to crew". */
@@ -427,7 +427,7 @@
     animation: delta-land var(--motion-move) var(--motion-move-ease);
   }
   .stop-delta.damage { color: var(--bg); background: var(--damage); }
-  .stop-delta.counters { color: var(--bg); background: var(--gain); }
+  .stop-delta.counters, .stop-delta.pump { color: var(--bg); background: var(--gain); }
   @keyframes land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   @keyframes delta-land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {

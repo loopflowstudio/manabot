@@ -19,7 +19,7 @@ import {
   type HistoryTurn,
 } from './history';
 import { playerIndex } from './recent';
-import { tellCounter } from './tell';
+import { tellCounter, tellPtDelta } from './tell';
 
 export interface CursorView {
   stop: WalkStop | null;
@@ -81,7 +81,7 @@ export function cursorView(
 }
 
 export interface StopDelta {
-  kind: 'damage' | 'counters';
+  kind: 'damage' | 'counters' | 'pump';
   text: string;
 }
 
@@ -120,6 +120,14 @@ export function computeStopDeltas(
       const list = objects.get(id) ?? [];
       list.push({ kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
       objects.set(id, list);
+    } else if (event.kind.kind === 'pt_changed') {
+      const text = tellPtDelta(event.kind.power, event.kind.toughness);
+      const kind = event.kind.power <= 0 && event.kind.toughness <= 0 ? 'damage' : 'pump';
+      for (const obj of event.kind.objects) {
+        const list = objects.get(obj.entity) ?? [];
+        list.push({ kind, text });
+        objects.set(obj.entity, list);
+      }
     }
   }
   for (const [id, amount] of objectDamage) {

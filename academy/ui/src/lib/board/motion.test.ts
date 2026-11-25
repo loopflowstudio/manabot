@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { LONGEST_TRAVEL_MS, Travel } from './motion';
+import type { Observation, PresentationEvent, PresentationLabels } from '$lib/types';
+import { collectDeathMarks, LONGEST_TRAVEL_MS, Travel } from './motion';
 
 // A card drawn on a fake page: a layout slot, plus the offset of the travel
 // animation in progress at `clock`. Only translation is modelled, linearly;
@@ -132,5 +133,83 @@ describe('card travel', () => {
     travel.play(root, true);
     expect(cub.running()).toHaveLength(0);
     expect(cub.drawn()).toEqual({ x: 500, y: 100 });
+  });
+
+  it('collects death markers for destroyed creatures and tokens whose side comes from prior stepBoards', () => {
+    const emptyPlayer = (id: number) => ({
+      id,
+      player_index: id,
+      life: 20,
+      poison: 0,
+      hand_count: 0,
+      library_count: 40,
+      mana_pool: [0, 0, 0, 0, 0, 0],
+      hand: [],
+      graveyard: [],
+      exile: [],
+      stack: [],
+      battlefield: [],
+    });
+    const baseProjection = {
+      game_over: false,
+      won: false,
+      turn: { turn_number: 4, phase: 'Main1', step: 'Main', active_player_id: 0, agent_player_id: 0 },
+      agent: emptyPlayer(0),
+      opponent: emptyPlayer(1),
+    } as unknown as Observation;
+    const priorProjection = structuredClone(baseProjection);
+    priorProjection.agent.battlefield.push({ id: 77, name: 'Ally', power: 1, toughness: 1 } as never);
+    priorProjection.opponent.battlefield.push({ id: 88, name: 'Gray Ogre', power: 2, toughness: 2 } as never);
+
+    const events: PresentationEvent[] = [
+      {
+        seq: 10,
+        from_revision: 4,
+        to_revision: 5,
+        caused_by: null,
+        group: 10,
+        importance: 'critical',
+        suggested_ms: 650,
+        sound: 'creature.died',
+        kind: { kind: 'died', objects: [{ entity: 77, incarnation: 0 }] },
+        rule: 'lethal_damage',
+        labels: { objects: { '77:0': 'Ally' } },
+      },
+      {
+        seq: 11,
+        from_revision: 4,
+        to_revision: 5,
+        caused_by: null,
+        group: 11,
+        importance: 'critical',
+        suggested_ms: 650,
+        sound: 'creature.died',
+        kind: { kind: 'destroyed', objects: [{ entity: 88, incarnation: 0 }] },
+        labels: { objects: { '88:0': 'Gray Ogre' } },
+      },
+    ];
+    const emptyLabels: PresentationLabels = { objects: {}, players: {}, stacks: {} };
+    const rect = { left: 0, top: 0, width: 600, height: 400, right: 600, bottom: 400, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    const rootEl = { querySelector: () => ({ getBoundingClientRect: () => rect }) } as unknown as HTMLElement;
+    const boardEl = { getBoundingClientRect: () => rect } as unknown as HTMLElement;
+
+    const marks = collectDeathMarks({
+      root: rootEl,
+      boardEl,
+      travel: new Travel(),
+      projection: baseProjection,
+      stepBoards: [{ first: 1, last: 9, projection: priorProjection }],
+      events,
+      labelsAt: () => emptyLabels,
+      activeSeqs: new Set([10, 11]),
+      cursor: 10,
+      sinceRevision: null,
+      matchId: 'm1',
+      revision: 5,
+      reduced: false,
+    });
+    expect(marks).toHaveLength(2);
+    expect(marks[0]).toMatchObject({ entity: 77, name: 'Ally', side: 'you', rule: 'lethal damage' });
+    expect(marks[1]).toMatchObject({ entity: 88, name: 'Gray Ogre', side: 'opponent', rule: 'destroyed' });
   });
 });

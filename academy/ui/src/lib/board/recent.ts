@@ -219,7 +219,12 @@ export function recentMarks(
         break;
       case 'counters':
       case 'land_played':
+      case 'control_changed':
         marks.touched.add(kind.object.entity);
+        break;
+      case 'token_created':
+      case 'pt_changed':
+        kind.objects.forEach(o => marks.touched.add(o.entity));
         break;
       case 'damage':
         if (kind.target.kind === 'object') {

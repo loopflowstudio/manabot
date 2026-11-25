@@ -281,6 +281,7 @@ impl Game {
                 // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
                 self.end_until_your_next_turn_effects(active);
+                self.presentation_cut();
                 self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
@@ -465,6 +466,7 @@ impl Game {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.end_turn_modifiers();
+                self.presentation_cut();
                 None
             }
             _ => None,

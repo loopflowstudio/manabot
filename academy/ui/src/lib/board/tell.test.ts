@@ -180,4 +180,100 @@ describe('tell', () => {
     expect(segmentText(tell(event(2, { kind: 'life', player: 1, amount: 3, total: 23 }), EMPTY, PLAYERS)))
       .toBe('Heuristic gained 3 life (now 23)');
   });
+
+  it('words exiled, token_created, pt_changed and control_changed with inspectable card segments', () => {
+    const exiled = tell(
+      event(1, { kind: 'exiled', objects: [{ entity: 12, incarnation: 0 }] }, {
+        labels: { objects: { '12:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(exiled)).toBe('Gray Ogre was exiled');
+    expect(exiled.find(s => s.card === 'Gray Ogre')).toBeDefined();
+
+    const exiledTwo = tell(
+      event(2, { kind: 'exiled', objects: [{ entity: 12, incarnation: 0 }, { entity: 13, incarnation: 0 }] }, {
+        labels: { objects: { '12:0': 'Gray Ogre', '13:0': 'Hill Giant' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(exiledTwo)).toBe('Gray Ogre and Hill Giant were exiled');
+
+    const ally = tell(
+      event(3, { kind: 'token_created', player: 0, objects: [{ entity: 40, incarnation: 0 }] }, {
+        labels: { objects: { '40:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(ally)).toBe('You created an Ally token');
+    expect(ally.find(s => s.card === 'Ally')).toBeDefined();
+
+    const clue = tell(
+      event(4, { kind: 'token_created', player: 1, objects: [{ entity: 41, incarnation: 0 }] }, {
+        labels: { objects: { '41:0': 'Clue' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(clue)).toBe('Heuristic created a Clue token');
+
+    const twoAllies = tell(
+      event(5, { kind: 'token_created', player: 0, objects: [{ entity: 42, incarnation: 0 }, { entity: 43, incarnation: 0 }] }, {
+        labels: { objects: { '42:0': 'Ally', '43:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(twoAllies)).toBe('You created 2 Ally tokens');
+
+    const pump = tell(
+      event(6, { kind: 'pt_changed', objects: [{ entity: 50, incarnation: 0 }, { entity: 51, incarnation: 0 }], power: 1, toughness: 0 }, {
+        labels: { objects: { '50:0': 'Wandering Musicians', '51:0': 'Ally' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(pump)).toBe('Wandering Musicians and Ally got +1/+0');
+
+    const shrink = tell(
+      event(7, { kind: 'pt_changed', objects: [{ entity: 50, incarnation: 0 }], power: -2, toughness: -2 }, {
+        labels: { objects: { '50:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(shrink)).toBe('Gray Ogre got −2/−2');
+
+    const gain = tell(
+      event(8, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 0, returned: false }, {
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(gain)).toBe('You gained control of Gray Ogre');
+
+    const ret = tell(
+      event(9, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 1, returned: true }, {
+        rule: 'cleanup',
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(ret)).toBe('Gray Ogre returned to Heuristic · cleanup');
+
+    const retToYou = tell(
+      event(10, { kind: 'control_changed', object: { entity: 60, incarnation: 0 }, controller: 0, returned: true }, {
+        rule: 'cleanup',
+        labels: { objects: { '60:0': 'Gray Ogre' } },
+      }),
+      EMPTY,
+      PLAYERS,
+    );
+    expect(segmentText(retToYou)).toBe('Gray Ogre returned to you · cleanup');
+  });
 });

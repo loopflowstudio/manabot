@@ -2844,6 +2844,115 @@
             "amount",
             "total"
           ]
+        },
+        {
+          "description": "Permanents or cards exiled face up (CR 406.1).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "exiled"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects"
+          ]
+        },
+        {
+          "description": "Tokens created on the battlefield (CR 111.1).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "token_created"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "player"
+          ]
+        },
+        {
+          "description": "One or more permanents' power and/or toughness were modified by a\nresolving spell or ability (CR 613.4c).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pt_changed"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "power": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "toughness": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects",
+            "power",
+            "toughness"
+          ]
+        },
+        {
+          "description": "Control of a battlefield permanent changed (CR 108.4, 613.1b);\n`returned` is true when an expiring control effect handed it back.",
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "control_changed"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "returned": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "controller",
+            "returned"
+          ]
         }
       ]
     },

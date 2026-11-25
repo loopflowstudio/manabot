@@ -161,6 +161,7 @@ function validatePresentationKind(value: unknown, seq: number): void {
       return;
     case 'destroyed':
     case 'died':
+    case 'exiled':
       validateObjectRenderIds(value.objects, 'kind.objects', seq);
       return;
     case 'attack_group':
@@ -185,6 +186,7 @@ function validatePresentationKind(value: unknown, seq: number): void {
       return;
     case 'discarded':
     case 'sacrificed':
+    case 'token_created':
       validateObjectRenderIds(value.objects, 'kind.objects', seq);
       requireInteger(value.player, 'kind.player', seq);
       return;
@@ -226,6 +228,18 @@ function validatePresentationKind(value: unknown, seq: number): void {
       requireInteger(value.player, 'kind.player', seq);
       if (value.action !== 'scry' && value.action !== 'surveil') {
         throw new Error(`Presentation event ${seq} has invalid kind.action`);
+      }
+      return;
+    case 'pt_changed':
+      validateObjectRenderIds(value.objects, 'kind.objects', seq);
+      requireInteger(value.power, 'kind.power', seq);
+      requireInteger(value.toughness, 'kind.toughness', seq);
+      return;
+    case 'control_changed':
+      validateObjectRenderId(value.object, 'kind.object', seq);
+      requireInteger(value.controller, 'kind.controller', seq);
+      if (typeof value.returned !== 'boolean') {
+        throw new Error(`Presentation event ${seq} has invalid kind.returned`);
       }
       return;
     default:
@@ -347,13 +361,15 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'resolved':
     case 'countered': return [{ kind: 'stack', id: kind.stack }];
     case 'damage': return [...(kind.source ? [kind.source] : []), kind.target];
-    case 'died': case 'destroyed': return kind.objects.map(object);
+    case 'died': case 'destroyed': case 'exiled': case 'pt_changed': return kind.objects.map(object);
     case 'attack_group': return [...kind.attackers.map(object), kind.defender];
     case 'blocked': return [object(kind.attacker), ...kind.blockers.map(object)];
     case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
+    case 'control_changed': return [object(kind.object), { kind: 'player', id: kind.controller }];
     case 'drew': return [...(kind.object ? [object(kind.object)] : []), { kind: 'player', id: kind.player }];
     case 'discarded':
-    case 'sacrificed': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
+    case 'sacrificed':
+    case 'token_created': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
     case 'activated': case 'triggered': return [object(kind.source), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
     case 'ability_resolved': return [object(kind.source), { kind: 'stack', id: kind.stack }];
     case 'counters': return [object(kind.object)];

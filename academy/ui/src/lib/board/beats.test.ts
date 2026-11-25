@@ -4,6 +4,7 @@ import type { Observation, PresentationEvent } from '$lib/types';
 import {
   BEAT_MS,
   PACE_MS,
+  computeStopDeltas,
   cursorView,
   hasWalkableTurn,
   paceMs,
@@ -190,6 +191,18 @@ describe('walk stops over kept boards', () => {
     // Looking back at Turn 1 shows Turn 1's stops.
     expect(scrubberStops(stops, 2)).toMatchObject({ turn: 1 });
     expect(sharedLaterCount(turns, 2, 6)).toBe(2);
+  });
+
+  it('computes per-stop deltas for P/T pumps and shrinks', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'pt_changed', objects: [{ entity: 10, incarnation: 0 }, { entity: 11, incarnation: 0 }], power: 1, toughness: 0 }),
+      ev(2, { kind: 'pt_changed', objects: [{ entity: 12, incarnation: 0 }], power: -2, toughness: -2 }),
+    ];
+    const proj = { agent: { id: 0, player_index: 0 }, opponent: { id: 1, player_index: 1 } } as unknown as Observation;
+    const deltas = computeStopDeltas(events, new Set([1, 2]), proj);
+    expect(deltas.objects.get(10)).toEqual([{ kind: 'pump', text: '+1/+0' }]);
+    expect(deltas.objects.get(11)).toEqual([{ kind: 'pump', text: '+1/+0' }]);
+    expect(deltas.objects.get(12)).toEqual([{ kind: 'damage', text: '−2/−2' }]);
   });
 });
 describe('the turn an event happened in', () => {

@@ -213,11 +213,18 @@ export function collectDeathMarks(params: {
   const relevant: { event: PresentationEvent; index: number }[] = [];
   if (cursor !== null) {
     events.forEach((event, index) => {
-      if (event.kind.kind === 'died' && activeSeqs.has(event.seq)) relevant.push({ event, index });
+      if ((event.kind.kind === 'died' || event.kind.kind === 'destroyed') && activeSeqs.has(event.seq)) {
+        relevant.push({ event, index });
+      }
     });
   } else if (reduced && sinceRevision !== null) {
     events.forEach((event, index) => {
-      if (event.kind.kind === 'died' && event.from_revision >= sinceRevision) relevant.push({ event, index });
+      if (
+        (event.kind.kind === 'died' || event.kind.kind === 'destroyed')
+        && event.from_revision >= sinceRevision
+      ) {
+        relevant.push({ event, index });
+      }
     });
   }
   if (!relevant.length || !boardEl || !root) return [];
@@ -226,9 +233,13 @@ export function collectDeathMarks(params: {
   const boardRect = boardEl.getBoundingClientRect();
   const marks: DeathMark[] = [];
   for (const { event, index } of relevant) {
-    if (event.kind.kind !== 'died') continue;
+    if (event.kind.kind !== 'died' && event.kind.kind !== 'destroyed') continue;
     const labels = labelsAt(index);
-    const rule = event.rule ? tellRule(event.rule) : null;
+    const rule = event.rule
+      ? tellRule(event.rule)
+      : event.kind.kind === 'destroyed'
+        ? 'destroyed'
+        : null;
     for (const obj of event.kind.objects) {
       if (onBoard.has(obj.entity)) continue;
       const travelKey = `perm:${obj.entity}`;

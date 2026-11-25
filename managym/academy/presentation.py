@@ -48,6 +48,11 @@ CUES: dict[str, tuple[str, int, str | None]] = {
     "sacrificed": ("normal", 500, None),
     "lost": ("critical", 700, None),
     "life": ("normal", 450, None),
+    "exiled": ("emphasized", 550, None),
+    "destroyed": ("critical", 650, "creature.died"),
+    "token_created": ("normal", 450, None),
+    "pt_changed": ("normal", 450, None),
+    "control_changed": ("emphasized", 550, None),
     "passed": ("ambient", 0, None),
     "attack_group": ("emphasized", 500, "combat.attack"),
     "blocked": ("normal", 450, "combat.block"),
@@ -56,8 +61,10 @@ CUES: dict[str, tuple[str, int, str | None]] = {
 }
 
 
-# Simultaneous discards, sacrifices or reveals share one line when adjacent.
-COALESCED_KINDS = frozenset({"discarded", "sacrificed", "revealed"})
+# Simultaneous discards, sacrifices, reveals, exiles or token creations share one line when adjacent.
+COALESCED_KINDS = frozenset(
+    {"discarded", "sacrificed", "revealed", "exiled", "token_created"}
+)
 
 
 class PresentationProjector:
@@ -99,7 +106,7 @@ class PresentationProjector:
                     previous is not None
                     and name in COALESCED_KINDS
                     and previous["kind"]["kind"] == name
-                    and previous["kind"]["player"] == kind["player"]
+                    and previous["kind"].get("player") == kind.get("player")
                     and previous.get("cause") == cause
                     and previous.get("rule") == fact["rule"]
                     and self.position(previous["seq"]) == fact["position"]

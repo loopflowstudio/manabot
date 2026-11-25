@@ -58,6 +58,9 @@ enum Note {
         dealt: GameEvent,
         told: GameEvent,
     },
+    /// Permanents destroyed by a spell or ability (`EventBinding::Destroyed`).
+    Destroyed(Vec<ObjectEventRef>),
+    Effect,
     Stack,
     Pass,
     Lost,
@@ -349,6 +352,62 @@ impl Game {
         fact.rule = draw_step.then_some(PresentationRule::DrawStep);
     }
 
+    /// Note permanents destroyed by a spell or ability (`EventBinding::Destroyed`).
+    pub(crate) fn presentation_destroyed(&mut self, objects: &[ObjectEventRef]) {
+        if self.presentation.is_none() || objects.is_empty() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)].map(|_| self.destroyed_line(objects));
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, None, Note::Destroyed(objects.to_vec()), lines);
+    }
+
+    /// Note a spell/ability P/T modification applied to battlefield permanents.
+    pub(crate) fn presentation_pt_changed(
+        &mut self,
+        objects: &[ObjectId],
+        power: i32,
+        toughness: i32,
+    ) {
+        if self.presentation.is_none() || objects.is_empty() || (power == 0 && toughness == 0) {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)]
+            .map(|viewer| self.pt_changed_line(objects, power, toughness, viewer));
+        if lines.iter().all(Vec::is_empty) {
+            return;
+        }
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, None, Note::Effect, lines);
+    }
+
+    /// Note a battlefield permanent changing controller (or returning when a
+    /// temporary control effect expires).
+    pub(crate) fn presentation_control_changed(
+        &mut self,
+        object: ObjectId,
+        controller: PlayerId,
+        returned: bool,
+        rule: Option<PresentationRule>,
+    ) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)]
+            .map(|viewer| self.control_changed_line(object, controller, returned, viewer));
+        if lines.iter().all(Vec::is_empty) {
+            return;
+        }
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, rule, Note::Effect, lines);
+    }
+
     /// Note a player losing the game (CR 104.3, 704.5a–c).
     pub(crate) fn presentation_lost(&mut self, player: PlayerId, rule: Option<PresentationRule>) {
         let Some(sink) = self.presentation.as_deref_mut() else {
@@ -425,6 +484,8 @@ impl Game {
         let death = |fact: &&Fact| {
             matches!(&fact.note, Note::Event(GameEvent::PermanentsDied { objects })
                 if objects.iter().any(|object| Some(*object) == died))
+                || matches!(&fact.note, Note::Destroyed(objects)
+                    if objects.iter().any(|object| Some(*object) == died))
                 || matches!(&fact.note, Note::Event(GameEvent::PermanentSacrificed { object_id, .. })
                     if Some(*object_id) == departed_obj)
         };
