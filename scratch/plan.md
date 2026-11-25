@@ -163,30 +163,22 @@ layouts, pinned pilot zero-drift, and Engine Budget intact. Do not adopt inline
 ad-hoc emblems, dedicated per-keyword `Effect` state machines, or compound
 batch `DeclareAttackers`.
 
-### Slice R1 — Centralized functioning-abilities gate & CR 607 ability provenance
-
-- **Centralized `functioning_abilities.rs` gate (`managym/src/flow/functioning_abilities.rs`):**
-  Single authority for "which abilities function right now" across statics,
-  triggers, and replacements, enforcing:
-  - CR 702.26b: phased-out permanents' abilities do not function.
-  - CR 114.4: command-zone objects function only when they are emblems (or
-    explicitly opt into `ZoneType::Command`).
-  - CR 113.6: zone-of-function admission (CDAs function in all zones, stack
-    exceptions like `CantBeCountered`, opt-in graveyard/exile statics and
-    replacements, battlefield default otherwise).
-  Route `layers.rs`, `triggers.rs`, `proposed_event.rs`, and `zones::emblems()`
-  through this shared gate; delete duplicated ad-hoc phasing/zone checks.
-- **Explicit `AbilityProvenance` + `LinkedAbilitySource` (CR 607):**
-  Separate `Characteristic` vs Layer-6 `Granted` ability provenance cleanly and
-  latch `{ creator, characteristic_set }` onto linked exile/emblem records
-  (CR 607.1a/d, 607.5) so Layer-6 granted abilities fail closed instead of
-  accidentally pairing with a permanent's printed linked abilities. Keep
-  `AbilityGrant` consistent with it; retire any replaced token names in
-  `token_renames.rs` so pinned pilot stays at zero drift.
-- **Verification:** directed Rust tests covering phased-out statics/triggers/
-  replacements, command-zone non-emblem rejection vs emblem admission, off-zone
-  CDA/stack/graveyard admission, and Layer-6 granted ability failing closed on
-  linked exile/emblem pairing.
+- Slice R1 (`58e3e40618`): centralized `managym/src/flow/functioning_abilities.rs`
+  gate (CR 702.26b phasing, CR 114.4 command-zone emblem admission, CR 113.6
+  zone-of-function classifiers) routing `layers.rs`, `triggers.rs`,
+  `proposed_event.rs`, `statics.rs` (deleted obsolete `static_sources()`),
+  `zones::emblems()`, `damage.rs`, `tick.rs`, `sba.rs`, `mana.rs`, `play.rs`,
+  `resolution.rs`, and `opening.rs` (also fixed missing phasing guards on
+  damage replacements and `static_sources`, and main-merge `create_token`
+  arity in `tla.rs`); added `AbilityProvenance` (`Characteristic` vs Layer-6
+  `Granted`) + `LinkedAbilitySource { creator, characteristic_set }` latched
+  onto `ExileLink` and emblem `ObjectForm` so Layer-6 grants fail closed on
+  linked exile/emblem pairing (CR 607.1a/d, 607.5). Verified: `managym --lib`
+  419/419 (including 5 new directed Slice R1 tests, `record_vocabulary`,
+  `token_renames`, `sba::tests`), `managym-state` 18/18, `match_state_hash_tests`
+  11/11, `rules_tests` 214/214, and `managym-cards` (`tla::koh`,
+  `tla::boiling_rock`, `fdn::`, `fra::`) 248/248 green; Python extension
+  rebuild + pinned pilot check deferred to Slice R2.
 
 ### Slice R2 — Condition-independent `StaticSourceIndex` & `source_census.rs` architectural guards
 
