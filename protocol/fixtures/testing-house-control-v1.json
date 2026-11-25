@@ -40,6 +40,21 @@
       }
     },
     {
+      "type": "group_command",
+      "grant_revision": 1,
+      "command": {
+        "command_id": "group.command.example",
+        "match_id": "match.example",
+        "expected_revision": 12,
+        "prompt_id": 9,
+        "frame_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "plan": {
+          "kind": "declare_attackers",
+          "attackers": []
+        }
+      }
+    },
+    {
       "type": "action",
       "grant_revision": 1,
       "index": 0

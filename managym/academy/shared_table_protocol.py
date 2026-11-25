@@ -15,6 +15,7 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import ConfigDict, Field, TypeAdapter
 
 from managym.experience import Command, ProtocolModel, UInt64
+from managym.group import GroupPlan
 
 from .advice_identity import AdviceIdentity
 
@@ -187,6 +188,21 @@ class CommandMessage(ProtocolModel):
     command: Command
 
 
+class GroupCommand(ProtocolModel):
+    command_id: str
+    match_id: str
+    expected_revision: UInt64
+    prompt_id: UInt64
+    frame_hash: str
+    plan: GroupPlan
+
+
+class GroupCommandMessage(ProtocolModel):
+    type: Literal["group_command"]
+    grant_revision: UInt64 | None = None
+    command: GroupCommand
+
+
 class ActionMessage(ProtocolModel):
     type: Literal["action"]
     grant_revision: UInt64 | None = None
@@ -285,6 +301,7 @@ SharedTableRequest: TypeAlias = Annotated[
     | NewGameMessage
     | RematchMessage
     | CommandMessage
+    | GroupCommandMessage
     | ActionMessage
     | PassTurnMessage
     | RetryMirrorMessage
@@ -309,6 +326,7 @@ REQUEST_TYPES = (
     "new_game",
     "rematch",
     "command",
+    "group_command",
     "action",
     "pass_turn",
     "retry_mirror",

@@ -898,6 +898,150 @@
       "title": "DecisionRestoredEvent",
       "type": "object"
     },
+    "DeclareAttackersPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "attackers": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Attackers",
+          "type": "array"
+        },
+        "kind": {
+          "const": "declare_attackers",
+          "default": "declare_attackers",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "DeclareAttackersPlan",
+      "type": "object"
+    },
+    "DeclareBlockersPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/PlannedBlock"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "kind": {
+          "const": "declare_blockers",
+          "default": "declare_blockers",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "DeclareBlockersPlan",
+      "type": "object"
+    },
+    "GroupCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "frame_hash": {
+          "title": "Frame Hash",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/GroupPlan"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "match_id",
+        "expected_revision",
+        "prompt_id",
+        "frame_hash",
+        "plan"
+      ],
+      "title": "GroupCommand",
+      "type": "object"
+    },
+    "GroupCommandMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/GroupCommand"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "group_command",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "GroupCommandMessage",
+      "type": "object"
+    },
+    "GroupPlan": {
+      "discriminator": {
+        "mapping": {
+          "declare_attackers": "#/$defs/DeclareAttackersPlan",
+          "declare_blockers": "#/$defs/DeclareBlockersPlan",
+          "order_library": "#/$defs/OrderLibraryPlan",
+          "scry": "#/$defs/ScryPlan",
+          "surveil": "#/$defs/SurveilPlan"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DeclareAttackersPlan"
+        },
+        {
+          "$ref": "#/$defs/DeclareBlockersPlan"
+        },
+        {
+          "$ref": "#/$defs/ScryPlan"
+        },
+        {
+          "$ref": "#/$defs/SurveilPlan"
+        },
+        {
+          "$ref": "#/$defs/OrderLibraryPlan"
+        }
+      ]
+    },
     "JoinTableMessage": {
       "additionalProperties": false,
       "properties": {
@@ -1038,6 +1182,29 @@
       "title": "NumberChoiceAnswer",
       "type": "object"
     },
+    "ObjectRenderId": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Entity",
+          "type": "integer"
+        },
+        "incarnation": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Incarnation",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity",
+        "incarnation"
+      ],
+      "title": "ObjectRenderId",
+      "type": "object"
+    },
     "OpponentIdentity": {
       "additionalProperties": false,
       "properties": {
@@ -1120,6 +1287,27 @@
         "candidates"
       ],
       "title": "OrderChoiceAnswer",
+      "type": "object"
+    },
+    "OrderLibraryPlan": {
+      "additionalProperties": false,
+      "description": "Remaining cards in desired order, drawn-first at index 0.",
+      "properties": {
+        "kind": {
+          "const": "order_library",
+          "default": "order_library",
+          "title": "Kind",
+          "type": "string"
+        },
+        "order": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Order",
+          "type": "array"
+        }
+      },
+      "title": "OrderLibraryPlan",
       "type": "object"
     },
     "ParticipantPresence": {
@@ -1214,6 +1402,23 @@
         "kind"
       ],
       "title": "PersonalAudience",
+      "type": "object"
+    },
+    "PlannedBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "attacker": {
+          "$ref": "#/$defs/ObjectRenderId"
+        },
+        "blocker": {
+          "$ref": "#/$defs/ObjectRenderId"
+        }
+      },
+      "required": [
+        "blocker",
+        "attacker"
+      ],
+      "title": "PlannedBlock",
       "type": "object"
     },
     "PlayerAuthoredBeliefProvenance": {
@@ -1547,6 +1752,34 @@
       "title": "RoleChangedEvent",
       "type": "object"
     },
+    "ScryPlan": {
+      "additionalProperties": false,
+      "description": "`top` is drawn-first; `bottom` is top-to-bottom of the bottom group.",
+      "properties": {
+        "bottom": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Bottom",
+          "type": "array"
+        },
+        "kind": {
+          "const": "scry",
+          "default": "scry",
+          "title": "Kind",
+          "type": "string"
+        },
+        "top": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Top",
+          "type": "array"
+        }
+      },
+      "title": "ScryPlan",
+      "type": "object"
+    },
     "SetStopsMessage": {
       "additionalProperties": false,
       "properties": {
@@ -1690,6 +1923,27 @@
         "shown"
       ],
       "title": "ShowAnalysisMessage",
+      "type": "object"
+    },
+    "SurveilPlan": {
+      "additionalProperties": false,
+      "description": "Cards to put into the graveyard; all remaining looked-at cards stay on top.",
+      "properties": {
+        "graveyard": {
+          "items": {
+            "$ref": "#/$defs/ObjectRenderId"
+          },
+          "title": "Graveyard",
+          "type": "array"
+        },
+        "kind": {
+          "const": "surveil",
+          "default": "surveil",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "SurveilPlan",
       "type": "object"
     },
     "TableAudience": {
@@ -2057,6 +2311,7 @@
             "branch_preview": "#/$defs/BranchPreviewMessage",
             "branch_reveal": "#/$defs/BranchRevealMessage",
             "command": "#/$defs/CommandMessage",
+            "group_command": "#/$defs/GroupCommandMessage",
             "join_table": "#/$defs/JoinTableMessage",
             "new_game": "#/$defs/NewGameMessage",
             "pass_turn": "#/$defs/PassTurnMessage",
@@ -2089,6 +2344,9 @@
           },
           {
             "$ref": "#/$defs/CommandMessage"
+          },
+          {
+            "$ref": "#/$defs/GroupCommandMessage"
           },
           {
             "$ref": "#/$defs/ActionMessage"
