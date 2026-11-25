@@ -18,7 +18,8 @@
  * the top of the page. Pointer play is untouched: nothing is focused for it.
  */
 
-const CONTROLS = 'button:not([disabled]), a[href], summary, [tabindex]:not([data-region])';
+/** The interactive elements a region roves over; `controls` keeps the visible ones not inside a nested region. */
+export const CONTROLS = 'button:not([disabled]), a[href], summary, [tabindex]:not([data-region])';
 const ACTS = '[data-offer-id], [data-offer-count]:not([data-offer-count="0"])';
 
 /** The last input was a key, not a pointer: only then does focus follow a replaced control. */
