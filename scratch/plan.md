@@ -10,30 +10,89 @@ behavior-review defects, and Performance Slices 13–16 are built and verified.
 
 **Next: Gate / Integrated validation** (below).
 
-## Performance outcome (Slices 13–16, Apple M4 Max, contended host)
+## Performance outcome (Slices 13–16 + compress, Apple M4 Max, contended host)
 
-Uninstrumented release, `/usr/bin/time -l`, vs checkout base `6203fff202`
-(CI reference `7d3ac1eb1c`), digests identical throughout (`bench_steps`
-`10601622128491155944`; `bench_search` seeds 1–3 `13638875039089371439`,
-`5466143068363283977`, `9998925852575961750`, 0 cap hits):
+Engine performance review pass 3 at `04a8f55e6d` (post-`7c75706ef1` compress),
+uninstrumented release C/R/R/C via `/usr/bin/time -l`, vs checkout base
+`fcc96be003` (and CI reference `7d3ac1eb1c`). Earlier notes at `5600d6b8a6`
+predated `7c75706ef1` and lacked post-Slice-16 CPU profiles and `fcc96be003`
+comparison. All counts, digests, `score_digest_blake3` and `action_counts`
+match base and `managym/perf/baseline.json` identically (`bench_steps`: 512
+games, 118,559 steps, digest `10601622128491155944`; `bench_search`: seeds 1–3
+`13638875039089371439`, `5466143068363283977`, `9998925852575961750`, 0 cap
+hits; no `benchmark`-feature instrumentation keys):
 
-- `bench_steps` 45.97B instructions vs 46.754B (-1.68%). Slice 16 target was
-  ≤ 45.9B: missed by 0.15%, within run noise.
-- `bench_search` 980.95B vs 1,027.594B (-4.54%). Slice 16 target was ≤ 977B
-  (pre-Slice-15 `977.34B`): missed by +0.37%. Not pursued further; the Engine
-  Budget gate is 10% against the CI reference, which this beats by 4.5%.
-- `bench_states --sizes 4,8,16`: `entry-choices` 29.93B → 10.14B, linear
-  `priority step:activate` (states 34→68→141); `changeling-anthems`
-  80.55B → 9.39B, zero-search `damage actions` and `cast-choice step:choice`.
-  `storm-copies`, `genesis-wave`, `ventmaw-pools`, `characteristics` flat.
-- 322/322 focused debug `nextest` tests and 2/2 debug `bench_states`
-  self-tests at `082e16fb37`.
+- **Supported gains (`bench_steps` / `bench_search`):**
+  - `bench_steps`: `45.711B, 45.703B` (mean **45.707B** instructions) vs base
+    `46.735B, 46.727B` (mean **46.731B**, **-2.19%**); cycles `10.752B, 10.772B`
+    (mean **10.762B**) vs base `11.079B, 11.080B` (mean **11.080B**, **-2.87%**);
+    wall `3.09s / 2.93s` vs base `3.33s / 3.09s`. Beats Slice 16 target
+    (`≤ 45.9B`) and pre-Slice-15 (`45.868B`).
+  - `bench_search`: `972.394B, 972.902B` (mean **972.648B** instructions) vs
+    base `1,027.349B, 1,027.755B` (mean **1,027.552B**, **-5.34%**); cycles
+    `228.787B, 240.468B` (mean **234.628B**) vs base `234.971B, 245.433B`
+    (mean **240.202B**, **-2.32%**). Beats Slice 16 target (`≤ 977B`) and
+    pre-Slice-15 (`977.34B`); `7c75706ef1` compress + fresh build recovered an
+    extra -8.3B instructions over pre-compress `082e16fb37` (`980.95B`).
+  - Paired `/usr/bin/sample` (`cand-search` 10,071 vs `base-search` 9,228
+    samples) confirms layer gains (`layer_board` `39.03% → 35.13%`,
+    `layers::Context::evaluate` `32.95% → 27.86%`) with no new hot path
+    regressing curated decks.
+- **Supported gains (`bench_states`, MTG-431 shapes):**
+  - `entry-choices --sizes 4,8,16`: `29.93B` (pre-15) → `16.92B` (Slice 15) →
+    **10.091B** instructions (**3.0× faster**). Pass 2's three hotspots in
+    `entry16` (`/usr/bin/sample`, 3,206 samples) dropped sharply:
+    `useful_payment_taps` `19.10% → 8.42%`, `finalize_characteristics`
+    `10.83% → 1.56%`, `SourceClassCache`/`sources_equivalent` `9.59% → 1.47%`.
+    All single-step layers (`actions`, `step:activate`, `vector`) are linear
+    (`0.04–0.22 ms`, `priority step:activate` states `34→68→141`); `priority`
+    and `block` search are linear (`2.0–2.1×` for `2×` size).
+  - `changeling-anthems --sizes 4,8,16`: `80.55B` (pre-15) → `19.96B` (Slice
+    15) → **9.348B** instructions (**8.6× faster**). All single-step layers
+    have zero payment search and `< 0.5 ms`; `changeling16` (`/usr/bin/sample`,
+    3,436 samples) shows `PaymentModel::witness` down `58.61% → 15.54%`,
+    `mana_ability_actions` `23.64% → 7.89%`, `mana_choice_completes_payment`
+    `21.93% → 1.83%`.
+  - `storm-copies --sizes 2,4,8` (**1.662B**), `genesis-wave --sizes 4,8,16`
+    (**0.489B**), `ventmaw-pools --sizes 4,8,16` (**0.225B**): 0 payment search
+    calls, linear/flat scaling. Pre-existing shapes (`diverse-mana`,
+    `restricted-filter`, `distinct-restrictions`, `lathril-elves`,
+    `convoke-diverse`, `mixed`) match their documented residuals.
+- **Open bottlenecks & ruled-out further iteration:**
+  - `changeling-anthems` `cast-choice search` (`8.92→31.76→67.33 ms`,
+    `plans 152→302→441`, `states 998→4,455→14,233`, `3.19×` for `2×` size,
+    down 10× from Slice 15's `142,189` states): `66.5%` of `changeling16` is
+    now inherent 32-changeling × 8-anthem `layer_board` + 16×16
+    `blocker_can_block_attacker` (`29.8%`); `automatic_upfront_path`
+    (`SourcePolicy::AutomaticPrefix`) accounts for `18.8%` (`~1.7B`
+    instructions) because iterative-deepening prefix search runs before
+    `GROWTH = 16` triggers equivalence pruning. Ruled out for MTG-431: 0%
+    curated-deck impact and not worth adding more complexity to `mana.rs`.
+  - `entry-choices` `cast-choice search` (`7.54→28.09→78.13 ms`,
+    `plans 1,119→2,298→3,534`, `states 4,571→13,644→38,123`, `2.79×` for `2×`
+    size, `maxc 27→41→49`): bounded polynomial cost from `N` pairwise-distinct
+    chosen creature-type restrictions (`plans 1.54×` × `maxc 1.20×`); residual
+    `entry16` CPU (`mana_ability_actions` `39.4%`, `payment_model` `19.5%`)
+    requires cross-step payment-model/answer reuse (separate architectural
+    design, matching `mixed`/`counted-tap`).
+  - No negative curated-deck results remain; deferred to gate/CI: Ubuntu
+    `x86_64` Engine Budget (`engine-budget.yml`), full workspace debug
+    `nextest`, extension rebuild / Academy fixture refresh, and Python
+    admission + pinned-pilot checks.
+- **Debug invariants at `04a8f55e6d`:** `286/286` focused debug `nextest` tests
+  (`flow::mana::`, `flow::layers`, `flow::statics`, `fdn::`, `entry_choice`,
+  `changeling`, `retarget`, `storm`), `2/2` debug `bench_states` self-tests,
+  and debug `bench_states` runs on `entry-choices --sizes 4,8` and
+  `changeling-anthems --sizes 4,8` (exercising `fixed_sufficient`,
+  `useful_payment_taps`, `mana_ability_actions`, and layer dirty-bit debug
+  oracles) all pass.
 
-Review note for gate: Slice 16 grew `managym/src/flow/mana.rs` by ~800 net
-lines (`fixed_sufficient` constructive checks with a debug search oracle,
-`useful_payment_taps` dedup oracle, sibling pruning, `ProjectedClasses`).
-Gate's readability pass should check each fast path still earns its place
-against the measurements above, deleting any that the numbers do not support.
+Review note for gate: Slice 16 + compress (`7c75706ef1`) grew
+`managym/src/flow/mana.rs` by ~720 net lines (`fixed_sufficient` constructive
+checks with a debug search oracle, `SourceClassCache` dedup oracle, sibling
+pruning, `ProjectedClasses`). Gate's readability pass should check each fast
+path still earns its place against the measurements above, deleting any that
+the numbers do not support.
 
 Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
 at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two
