@@ -1189,7 +1189,11 @@ def open_collector(
             if snapshots
             else [],
         )
-        register = env.set_observation_layout if packed else env.set_buffers
+        register = (
+            env.set_observation_layout
+            if packed or not hasattr(env, "set_buffers")
+            else env.set_buffers
+        )
         register(
             buffers,
             action_overflow=observation_space.config.action_overflow,

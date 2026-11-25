@@ -13,7 +13,12 @@ from manabot.env import target_practice
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
 from manabot.policy.spans import ObservationSelection
@@ -316,8 +321,10 @@ def test_typed_self_play_matches_dense_actions_values_replay_and_learner_gathers
         close_collector(dense)
 
 
+@pytest.mark.parametrize("version", [9, 11])
 def test_target_practice_constructs_only_requested_games(
     monkeypatch: pytest.MonkeyPatch,
+    version: int,
 ) -> None:
     seeds: list[int] = []
     fail_seed: int | None = None
@@ -330,7 +337,7 @@ def test_target_practice_constructs_only_requested_games(
         return construct(match, space, seed, seat)
 
     monkeypatch.setattr(target_practice, "target_root", root)
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=version))
     match = Match(
         MatchConfig(
             hero_deck={"Mountain": 12, "Igneous Inspiration": 1},
@@ -349,16 +356,21 @@ def test_target_practice_constructs_only_requested_games(
         games_per_stream=1,
         numerics=TorchCollectionSession(device="cpu", seed=10),
     )
+
+    def parked_action_counts() -> list[int]:
+        if space.one_token:
+            return [
+                batch.action_counts[i] for batch, i in collector._env.observation_rows()
+            ]
+        return collector._buffers["actions_valid"].sum(axis=1).tolist()
+
     try:
         for batch_index in range(2):
             batch = collect(collector, agent, 1)
             assert batch.actions.size == 2 and batch.dones.all()
             assert seeds == list(range(10, 12 + 2 * batch_index))
             assert collector._env.current_agent_indices() == [-1, -1]
-            assert all(
-                batch.action_counts[i] == 0
-                for batch, i in collector._env.observation_rows()
-            )
+            assert parked_action_counts() == [0, 0]
         with pytest.raises(RuntimeError, match="parked"):
             collector._env.step_into_buffers([0, 0], [False, True])
         with pytest.raises(ValueError, match="configured match"):
@@ -372,10 +384,7 @@ def test_target_practice_constructs_only_requested_games(
                 [managym.SlotLoad.fresh(i) for i in (0, 1)]
             )
         assert collector._env.current_agent_indices() == [-1, -1]
-        assert all(
-            batch.action_counts[i] == 0
-            for batch, i in collector._env.observation_rows()
-        )
+        assert parked_action_counts() == [0, 0]
         collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(0)])
         assert seeds[-3:] == [14, 15, 14]
         assert collector._env.current_agent_indices() == [0, -1]

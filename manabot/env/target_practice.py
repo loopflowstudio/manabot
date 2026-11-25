@@ -115,9 +115,6 @@ class TargetPracticeVector:
             raise ValueError("target practice layout differs from its encoder")
         self.buffers = buffers
 
-    # v9/v10 register dense outputs until their retirement in 0.3.0.
-    set_buffers = set_observation_layout
-
     def observation_rows(self) -> list[tuple[managym.ObservationBatch, int]]:
         rows = [entry for entry in self.rows if entry is not None]
         if len(rows) != self.count:
