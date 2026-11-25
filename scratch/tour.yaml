@@ -1,4 +1,4 @@
-at: 8dd6f5814907c16d69be6f07b72de258e7d07b18
+at: 4a0fb4136c0e290fe2b8e8f69751dca579294ea0
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -11,7 +11,11 @@ first:
   - path: managym/state/src/permanent.rs
     why: EntryChoice stored per battlefield incarnation; Wish counters
   - path: managym/state/src/mana.rs
-    why: ManaExpiry durations and creature-subtype spend predicates
+    why: Unified ManaExpiry classes, ManaClass::from, and by-value expiry split
+  - path: managym/src/state/player.rs
+    why: Single unified mana_pool replacing separate combat_mana_pool
+  - path: managym/src/state/hash.rs
+    why: Bump MATCH_STATE_HASH_VERSION to 33 for unified mana_pool
   - path: managym/state/src/predicate.rs
     why: Chosen-value, keyword, and graveyard-arrival predicates
   - path: managym/state/src/stack_object.rs
@@ -29,31 +33,45 @@ first:
   - path: managym/src/flow/payment.rs
     why: Multi-component resolution payments for composite ward costs
   - path: managym/src/flow/decision.rs
-    why: Entry choices, pile splits, simultaneous sacrifices, and retargets
+    why: Entry choices, Modal pile splits, shared sacrifices, and retargets
   - path: managym/src/flow/resolution.rs
-    why: Target shares, LibraryTop/Unselected, GrantPlay, Repeat, and Fight
+    why: Target shares, LibraryTop/Unselected, GrantPlay, Repeat, Fight, expiry mana
   - path: managym/src/flow/layers.rs
     why: Chosen creature type, Changeling, and PredicateSource matching
   - path: managym/src/flow/statics.rs
     why: Source-relative predicates, graveyard arrivals, and Spyglass bans
   - path: managym/src/flow/mana.rs
-    why: Chosen-color/type mana output and per-step/combat/turn expiry
+    why: Chosen-color/type mana and single-pool step/combat/turn expiry clearing
   - path: managym/src/flow/turn.rs
     why: Unified graveyard arrivals and casts-before-triggering lookup
   - path: managym/src/flow/zones.rs
     why: Departed-spell copiable capture and graveyard arrival recording
   - path: managym/src/flow/knowledge.rs
     why: Public library reveals and face-up pile witnesses
+  - path: managym/src/agent/observation.rs
+    why: Unified pool observation, shared expiry serde, derived combat flag
   - path: managym/src/agent/observation_layout.rs
     why: V11 put_into_graveyard_this_turn column and entry-choice fact kinds
   - path: managym/src/agent/observation_encoder.rs
     why: Encode entry-choice facts and v11 graveyard-arrival column
   - path: managym/src/agent/effect_execution.rs
-    why: Project entry choices, pile splits, and target shares
+    why: Project entry choices, pile splits, target shares, and retarget picks
+  - path: managym/src/agent/decision_memory.rs
+    why: Skip non-leaf entry-choice group clicks; record canonical leaf row
+  - path: managym/src/decision_context.rs
+    why: Emit keep_permanents stage and pending summaries
+  - path: managym/src/experience.rs
+    why: Additive PooledManaView.expiry alongside combat compatibility flag
   - path: manabot/policy/prepare.py
     why: Route chosen_name facts into the name vocabulary
+  - path: manabot/semantic/text_observation.py
+    why: Render mana expiry, retarget pending lines, and keep_permanents stage
   - path: managym/experience_projection.py
-    why: Surface permanent entry choices to Academy
+    why: Surface permanent entry choices and non-step mana expiry to Academy
+  - path: academy/ui/src/lib/mana.ts
+    why: Display step, end-of-combat, and end-of-turn mana expiry wording
+  - path: academy/ui/src/lib/board/prompt.ts
+    why: Plain prompt lines for shares, entry choices, and pile stages
   - path: academy/ui/src/lib/board/Plate.svelte
     why: Display private known-hand counts and chosen labels
   - path: managym/cards/src/fdn.rs
@@ -71,13 +89,17 @@ first:
   - path: managym/src/flow/target_authority_tests.rs
     why: Whole-assignment target swaps vs single-slot retargeting
   - path: managym/cards/tests/cards/fdn.rs
-    why: Directed tests for Curator, Harvester, and Foundations tail
+    why: Directed tests for Curator, Harvester, keep_permanents, and FDN tail
+  - path: managym/cards/tests/cards/rna.rs
+    why: Biogenic Upgrade shares and retarget mid-assignment projection tests
+  - path: managym/cards/tests/cards/dtk.rs
+    why: Savage Ventmaw end-of-turn mana expiry, preview, and spend choices
   - path: managym/cards/tests/cards/xln.rs
     why: Spyglass private look timing, order, and simultaneous entries
   - path: managym/cards/tests/cards/neo.rs
     why: Entry-choice mana restrictions and Zhao land-type suppression
   - path: tests/semantic/test_text_observation.py
-    why: Text play and Academy replay for choices, piles, shares
+    why: Text play and Academy replay for choices, piles, shares, retarget, expiry
 hide:
   - path: managym/academy/fixtures/choice-navigation-opening-v1.json
     why: Regenerated Academy opening frames
