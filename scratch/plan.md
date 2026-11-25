@@ -739,8 +739,28 @@ What it taught:
   (read-only) and Show analysis in the played-on game cover reading what it
   would do (questions.md).
 
-Remaining: item 3 (one admission cache off the game lock) and item 4 (left
-unbuilt). Then gate.
+Remaining (realign, 2026-11-25, after items 1 and 2):
+
+- **Item 3, the next pass.** Admission (`analysing_policies`,
+  `managym/academy/analysis.py:276`) is paid in three places: Play's
+  `show_analysis` (`server.py` ~2987, cached per match but under the game
+  lock), `GET /analyses/policies` and `POST /analyses` (both through
+  `analysis_choices`, every call; `POST` also re-walks the game). One cache
+  keyed by what admission reads (the registry's descriptors, the world and
+  `config.to_rust()`'s two setups) serves all three, and Play's first Show
+  analysis computes it off the game lock (the switch answers when it is
+  ready). Delete `GameSession._analysing_policies`. Test: a second
+  `/analyses/policies` for a game with the same setups admits nothing again
+  (count `registry.admit` calls), and Show analysis does not hold the lock
+  while admitting.
+- Item 4 stays unbuilt (headless choice).
+- Shape: playing on lives on `GameSession` (`_played_from_source`,
+  `_play_recorded_prefix`) beside the play-demo prefix path it reuses;
+  nothing to remove.
+
+Then gate. Deferred to gate/CI: the policy e2e spec on a clean run, the
+configured-launch e2e, `test:e2e:release`, timing with a current-world
+checkpoint, and the pre-existing control-fixture schema test failure.
 
 ## Slices
 
