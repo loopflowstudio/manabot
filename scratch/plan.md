@@ -82,128 +82,26 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   once per node, boxed `permanent_defenders` keeps `GameEvent` at 56 bytes,
   flat `attacks_this_turn` + sparse `attacked_permanents`. Focused debug
   nextest 149/149.
-- Performance slices P5–P6 (this pass):
-  - P5: `TrackedState::mark_dealt_damage`, `TrackedState::record_life_change`
-    (discovered during measurement: `zones.rs` `emit` mutated `turn.history[player].life_lost`
-    through `DerefMut` on every unblocked player-damage hit), and fine-grained
-    `revisions.counters` / `TrackedState::change_counters` / `LayerBoard::reads_counters`
-    (with six `u32` revision counters keeping `DerivedCache` / `TrackedState`
-    within ceilings and shrinking each by 16 bytes; `ReadSet` tracks `no_counters`,
-    `with_counter`, `ObjectProperty::Counters`, `SourceCountersAtLeast`,
-    `AttachedCountersAtLeast`, `CountersOnLandsYouControl`, `CreaturesWithCounters`,
-    `Except::Matching`, `AtMostHalfStartingLife`, and `OpponentLostLifeThisTurnAtLeast`).
-  - P6: cached `source_permanent: Option<PermanentId>` directly on layer `Node`
-    at creation (`Context::node`, `Node::resolved`), removing every `permanent_of`
-    lookup from `exists`, `targets`, `instructions`, `buff`, `condition`,
-    `comparison_value`, `select_permanents`, `matches`, and `apply`.
-  - Verified: focused debug nextest 88/88 (`managym` `statics::`, `sba::`, `layer`,
-    `emblem`, `counter`, `planeswalker`, `life`) and 266/266 (`managym-cards`
-    `fdn`, `fra`, `zen`, `eoe`, `heartless_act`); `bench_states attack-planeswalkers`
-    (N=4/8/16/32, identical digest `e6751d56...`): `damage | step:damage` dropped
-    from `3 / 7 / 15 / 31` (`O(N)`) to **`1 / 1 / 1 / 1`** (`O(1)`), `block | search`
-    dropped from `185 / 462 / 1,299 / 4,620` (`35.0` boards/sim at N=32) to
-    **`137 / 248 / 366 / 714`** (constant `5.4` boards/sim at N=32; 6.47× fewer boards,
-    2.49× fewer allocs), `damage | search` dropped from `119 / 148 / 144 / 272` to
-    **`103 / 100 / 32 / 32`** (8.5× fewer at N=32); uninstrumented release
-    benchmarks (identical digests & BLAKE3): `bench_steps` `46.49B` (`46.54B`, `46.43B`,
-    **-0.65%** vs `main` `46.79B`), `bench_search --layers` `16.37B` (**-5.40%** vs
-    `main` `17.30B`), `bench_search` `1,001.24B` (**-2.59%** / `-26.67B` vs `main`
-    `1,027.91B`, `-13.10B` vs `09b0f89882`).
-- Synced main `6203fff202` (#601, Academy deck pools/trophies; Python and UI
-  only, no engine or protocol files) at `7941de98ae`. No checks run after the
-  merge; they fall to gate.
-
-## Engine measurement and performance review (at `09b0f89882` vs `main` `6203fff202`)
-
-Measured on Apple M4 Max (contended host; load-invariant `/usr/bin/time -l`
-instructions retired, cycles elapsed, and 1 ms `/usr/bin/sample` CPU profiles
-govern). Base `6203fff202` is current `main` (identical simulation behavior to
-committed `managym/perf/baseline.json` at `7d3ac1eb1c`). Both sides built as
-uninstrumented release binaries (`cargo build --release --locked --example
-bench_search --example bench_steps`, no `benchmark` feature) and run after the
-P1–P4 compress commit (`6841e0df92`).
-
-### Uninstrumented release benchmarks
-
-| Benchmark | Metric | Base `main` `6203fff202` | Pre-P1–P4 `6dd3914c73` | Candidate `09b0f89882` | vs `main` |
-|---|---|---:|---:|---:|---:|
-| `bench_steps` (512 games, 118,559 steps, 0 capped) | Digest | `10601622128491155944` | `10601622128491155944` | `10601622128491155944` | unchanged |
-| `bench_steps` (ABBA, median of 2) | Instructions retired | `46.79B` (`46.78B`, `46.81B`) | `50.92B` (`+8.8%`) | `46.57B` (`46.57B`, `46.57B`) | **-0.48%** (`-0.23B`) |
-| `bench_steps` (ABBA) | Cycles elapsed / user | `12.31B` / `6.32s` | — / `7.70s` | `11.26B` / `5.04s` | **-8.50%** cycles |
-| `bench_steps --layers` (16 games, 1,308 steps) | Digest / Instructions | `1064912348938184597` / `0.650B` | — | identical / `0.651B` | `+0.15%` (flat) |
-| `bench_search --layers` (seed 244, 8 dec., 1,344 sims) | Digest / Instructions | `17627308883250227726` / `17.30B` | — | identical / `16.97B` | **-1.88%** (`-13.39%` cycles) |
-| `bench_search` (seeds 1–3, 40 dec., 0 caps) | Digests | `13638875039089371439` / `5466143068363283977` / `9998925852575961750` | identical | identical (full BLAKE3 match) | unchanged |
-| `bench_search` | Instructions retired | `1,027.91B` | `1,206.99B` (`+17.4%`) | `1,014.34B` | **-1.32%** (`-13.58B`) |
-| `bench_search` | Cycles elapsed / user | `240.60B` / `88.29s` | `367.17B` / `156.03s` | `237.94B` / `79.32s` | **-1.10%** cycles (`-10.16%` user) |
-
-### CPU profile (`1 ms /usr/bin/sample` on uninstrumented `bench_search`, 16.5k vs 16.2k samples)
-
-- **Supported gains (P1–P4 + compress)**: `layer_board` `40.53% → 39.26%` (`-1.27pp`),
-  `Context::evaluate` `35.25% → 33.57%` (`-1.67pp`), `Context::targets`
-  `2.76% → 1.18%` (`-1.58pp`), `Context::instructions` `6.26% → 4.52%` (`-1.73pp`),
-  `indexed_sources` `35.18% → 34.57%` (`-0.61pp`), `drain_pending_events`
-  `34.09% → 33.84%`, `characteristics` `5.53% → 5.31%`, `legend_groups`
-  `1.11% → 0.97%`.
-- **Open profile bottleneck (P6)**: `Context::exists` grew `0.00% → 0.36%` inclusive
-  (`0.32%` self, plus `+0.60pp` in `Context::evaluate`'s `SpecFromIterNested<Vec<usize>>`)
-  because changing `Node.source` from `PermanentId` to `ObjectId` causes `exists()`,
-  `targets()`, `instructions()`, and `apply()` in `managym/src/flow/layers.rs` to
-  re-resolve `self.game.state.permanent_of(node.source)` on every layer pass.
-- **Ruled out (negative results)**:
-  - `indexed_sources`, `build_trigger_index`, `drain_pending_events`,
-    `commit_proposed_event`, `collect_replacements` (`0.02% → 0.07%`), and
-    `remove_invalid_defenders` (`0.00%`) show no curated-workload regression.
-  - `permanent_has_modification` (`1.56% → 2.12%`, `+0.57pp`): no new caller was
-    added on the priority hot path (`LoyaltyAtInstantSpeed` only runs for loyalty
-    abilities in `play.rs:1814`) and `Modification` kept its boxed size
-    (`Box<CardPredicate>`); this is inlining/layout movement within an overall
-    `-13.58B` instruction reduction.
-
-### Stress states (`bench_states --features benchmark`, at `09b0f89882`)
-
-- **Flagged superlinear growth — `attack-planeswalkers` (N = 4 / 8 / 16 / 32)**:
-  - **`damage | step:damage`**: `LayerBoard` rebuilds grow **`O(N)` (`N - 1`)** —
-    `3 / 7 / 15 / 31` boards (`353 / 430 / 426 / 756` allocs; `0.060 / 0.033 / 0.035 / 0.188 ms`,
-    `5.36x` ms from 16→32) vs constant `6 / 6 / 6 / 6` boards on `duplicate-creatures`.
-  - **`block | search`**: **`O(N^2)` boards and `O(N^3)` work** — `185 / 462 / 1,299 / 4,620`
-    boards (`9.2 / 12.8 / 19.1 / 35.0` boards/sim), `14,745 / 31,468 / 57,281 / 183,865`
-    allocs (`3.21x` from 16→32), `3.5 / 7.7 / 14.4 / 46.9 MB` (`3.26x`),
-    `1.50 / 2.14 / 4.39 / 23.09 ms` (`5.26x` from 16→32). Control
-    `duplicate-creatures | block | search` stays linear at `5.0 / 5.2 / 5.1 / 5.1`
-    boards/sim (`100 / 188 / 348 / 668` boards; `15,148` allocs at N=32).
-  - **Root cause**: in `managym/src/flow/damage.rs:175` (`dealt_damage_this_turn = true`
-    on non-creatures) and `managym/src/flow/proposed_event.rs:1918`
-    (`commit_counter_change` for `-amount` loyalty counters), mutating a damaged
-    planeswalker calls `self.state.permanents[permanent_id].as_mut()` through
-    `TrackedState::deref_mut()`, unconditionally bumping `revisions.characteristics`,
-    `revisions.mana_pools`, `revisions.tapped`, and `revisions.triggers` for every
-    attacker in a simultaneous combat damage batch (`commit_batch`). Each next
-    attacker's `source_keywords`/`layer_view` then rebuilds `LayerBoard` from scratch.
-- **Ruled-out stress shapes (linear/constant)**:
-  - `step:damage` (N = 4 / 8 / 16): `diverse-statics` `1 / 1 / 1` boards,
-    `herald-statics` `2 / 2 / 2`, `mixed` `1 / 1 / 1`, `duplicate-creatures` `6 / 6 / 6`,
-    `triggers` `6 / 6 / 6`, `entry-cascade` `0` boards; `fumigate-panda`
-    `step:resolve` `3 / 3 / 3` boards.
-  - `clone` at `damage`: `attack-planeswalkers` `32 / 32 / 34 / 36` allocs across
-    N = 4 / 8 / 16 / 32 (zero per-attacker heap allocs); `diverse-statics` /
-    `duplicate-creatures` restored to `38` allocs at N=8.
-  - Fixed planeswalker shapes: `way-grants` (`actions` 25 / `126` allocs,
-    `characteristics` 1 board / `187` allocs, `step:activate` 0 boards / `120` allocs),
-    `divided-damage` (`target` 10 actions / `71` allocs, `divide` 7 actions / `84` allocs),
-    `keep-one-each-type` (`keep-choice` 15 actions / `237` allocs, `step:choice` 0 boards).
-
-### Debug invariants & behavior check (at `09b0f89882`)
-
-- `cargo nextest run --manifest-path managym/Cargo.toml --lib --test rules_tests --test match_state_hash_tests --test conformance_tests --test semantic_conformance_tests --test scenario_tests`: **684/684 passed** (including `LayerBoard` and `TriggerIndex` `debug_assert_eq!` cache invariants).
-- `cargo nextest run --manifest-path managym/Cargo.toml -p managym-cards --test cards -E 'test(fdn::) | test(fra::) | test(observability::)'`: **332/332 passed**.
-- All uninstrumented `bench_steps` and `bench_search` digests match `main` `6203fff202` and `managym/perf/baseline.json` identically.
+- Performance slices P5–P6 (`7955be5849`): untracked
+  `TrackedState::mark_dealt_damage` / `record_life_change`, fine-grained
+  `revisions.counters` with `LayerBoard::reads_counters`, and cached
+  `Node::source_permanent` in `flow/layers.rs`. `attack-planeswalkers`
+  `step:damage` boards `3/7/15/31` → `1/1/1/1`; `block | search` at N=32
+  `4,620` → `714` boards (5.4/sim, linear like `duplicate-creatures`).
+  Release vs `main` `6203fff202`, identical digests: `bench_steps` −0.65%,
+  `bench_search` −2.59%, `bench_search --layers` −5.40% instructions.
+  Focused debug nextest 88/88 (`managym`) and 266/266 (`managym-cards`).
+- Synced main through #610 (`f5684725db`, merge `fcc96be003`/`0c3821e06d`):
+  Academy-side, plus one `experience.rs` field and matching protocol schema
+  additions. No checks run after the merge; they fall to gate.
 
 ## Remaining
 
 - **Gate / CI verification** on PR #607:
   full workspace debug nextest, Python extension rebuild +
-  contract/Academy/model/pinned-pilot suites (including #601's new
-  `tests/academy/test_deck_pools.py`), and clean Ubuntu runner Engine Budget
+  contract/Academy/model/pinned-pilot suites (including #601's
+  `tests/academy/test_deck_pools.py` and #610's Academy changes), protocol
+  schema byte-equality after the #610 merge, and clean Ubuntu runner Engine Budget
   via PR CI (or
   `gh workflow run ci.yml --ref jack-heart/7ff13d-implement-planeswalkers-loyalty -f measure=HEAD`).
 
