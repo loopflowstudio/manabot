@@ -618,6 +618,59 @@ fn is_mana_suffix_effect(effect: &Effect) -> bool {
     ) && effect.target_spec().is_none()
 }
 
+/// Materialize `Effect::AddOneColorManaValue` once its count is known. Shared
+/// by layer evaluation (for `EffectValue::Fixed`) and dynamic/resolution reads.
+pub fn materialize_one_color_mana(
+    amount: i32,
+    chosen_color: bool,
+    creature_purposes: &[crate::mana::CreatureManaPurpose],
+    chosen: Option<&crate::permanent::EntryChoice>,
+) -> Effect {
+    use crate::{
+        mana::{ManaRestriction, SpendPredicate},
+        permanent::EntryChoice,
+    };
+    let amount = amount.max(0) as usize;
+    if amount == 0 {
+        return Effect::add_mana(Mana::default());
+    }
+    let restriction = (!creature_purposes.is_empty()).then(|| {
+        let mut purposes = BTreeSet::new();
+        if let Some(EntryChoice::CreatureType(t)) = chosen {
+            for p in creature_purposes {
+                purposes.insert(match p {
+                    crate::mana::CreatureManaPurpose::Cast => {
+                        SpendPredicate::CastCreatureSubtype(t.clone())
+                    }
+                    crate::mana::CreatureManaPurpose::Activate => {
+                        SpendPredicate::ActivateCreatureSubtype(t.clone())
+                    }
+                });
+            }
+        }
+        ManaRestriction::only_predicates(purposes)
+    });
+    let output = |color: Color| {
+        let mut amounts = [0; 6];
+        amounts[color as usize] = amount.min(u8::MAX as usize) as u8;
+        match &restriction {
+            Some(r) => Mana::restricted_to(r.clone(), amounts),
+            None => Mana {
+                mana: amounts,
+                ..Default::default()
+            },
+        }
+    };
+    if chosen_color {
+        Effect::add_mana(match chosen {
+            Some(EntryChoice::Color(c)) => output(*c),
+            _ => Mana::default(),
+        })
+    } else {
+        Effect::mana_choice(Color::COLORS.map(output))
+    }
+}
+
 /// A single fixed immediate mana output (CR 605.1a).
 fn fixed_mana_output(effect: &Effect) -> Option<&Mana> {
     match effect {
@@ -708,6 +761,26 @@ impl ActivatedAbilityDefinition {
         suffix.iter().all(is_mana_suffix_effect)
             && is_mana_output(effect)
             && !is_static_mana_output(effect)
+    }
+
+    /// Resolve a fixed-count `AddOneColorManaValue` mana ability from the
+    /// permanent's entry choice during layer evaluation so it becomes a static
+    /// output instead of requiring per-read finalization.
+    pub fn resolve_fixed_entry_mana(&mut self, chosen: Option<&crate::permanent::EntryChoice>) {
+        let Some((effect, suffix)) = self.effects.split_first_mut() else {
+            return;
+        };
+        if let Effect::AddOneColorManaValue {
+            amount: EffectValue::Fixed(amount),
+            chosen_color,
+            creature_purposes,
+        } = effect
+        {
+            if suffix.iter().all(is_mana_suffix_effect) {
+                *effect =
+                    materialize_one_color_mana(*amount, *chosen_color, creature_purposes, chosen);
+            }
+        }
     }
 
     /// The concrete outputs of a mana ability: a leading effect adding one of

@@ -1831,4 +1831,78 @@ mod cache_tests {
         );
         assert!(!Arc::ptr_eq(&board, &game.layer_board()));
     }
+
+    #[test]
+    fn fixed_entry_choice_mana_resolves_in_layers_without_finalization_clone() {
+        use crate::state::{mana::Color, permanent::EntryChoice};
+        let deck = [
+            ("Secluded Courtyard".into(), 4),
+            ("Heraldic Banner".into(), 4),
+            ("Uncharted Haven".into(), 4),
+            ("Mountain".into(), 28),
+        ]
+        .into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck),
+                PlayerConfig::new("b", [("Mountain".into(), 40)].into()),
+            ],
+            431,
+            true,
+        );
+        game.keep_opening_hands();
+        let courtyard = game
+            .scenario_force_battlefield(PlayerId(0), "Secluded Courtyard", true)
+            .unwrap();
+        let banner = game
+            .scenario_force_battlefield(PlayerId(0), "Heraldic Banner", true)
+            .unwrap();
+        let haven = game
+            .scenario_force_battlefield(PlayerId(0), "Uncharted Haven", true)
+            .unwrap();
+        game.state.permanents[courtyard].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::CreatureType("Cat".into())));
+        game.state.permanents[banner].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::Color(Color::Green)));
+        game.state.permanents[haven].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::Color(Color::Blue)));
+
+        let board = game.layer_board();
+        assert!(!board.dynamic_activations);
+        for id in [courtyard, banner, haven] {
+            let raw = game.layer_view(id);
+            let final_view = game.characteristics(id);
+            assert!(Arc::ptr_eq(&raw, &final_view));
+            assert!(!final_view.has_dynamic_activations());
+        }
+        assert_eq!(
+            game.characteristics(banner).activated_abilities[0].mana_choices(),
+            Some(vec![Mana::parse("G")])
+        );
+        assert_eq!(
+            game.characteristics(haven).activated_abilities[0].mana_choices(),
+            Some(vec![Mana::parse("U")])
+        );
+        assert_eq!(
+            game.characteristics(courtyard).activated_abilities[0]
+                .mana_choices()
+                .unwrap()
+                .len(),
+            5
+        );
+
+        // Pool and tap revisions preserve the shared Arc view without cloning.
+        let banner_before = game.characteristics(banner);
+        *game.state.mana_pool_mut(PlayerId(0)) = Mana::parse("R").into();
+        game.state.tap(haven);
+        assert!(Arc::ptr_eq(&banner_before, &game.characteristics(banner)));
+
+        // Updating `chosen` invalidates the retained `SourceSeed` cleanly.
+        game.state.permanents[banner].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::Color(Color::White)));
+        assert_eq!(
+            game.characteristics(banner).activated_abilities[0].mana_choices(),
+            Some(vec![Mana::parse("W")])
+        );
+    }
 }

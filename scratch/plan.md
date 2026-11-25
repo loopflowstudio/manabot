@@ -1,14 +1,31 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
 All 56 of the 56 scoped Foundations rows have directed implementation evidence.
-Slices 1–15 are complete. Demonic Pact and Maze’s End already had working
+Slices 1–16 are complete. Demonic Pact and Maze’s End already had working
 definitions.
 
 Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
 `blocked_by` is cleared. Slice 11's four concept defects, Slice 12's three
-behavior-review defects, and Performance Slices 13–15 are built and verified.
+behavior-review defects, and Performance Slices 13–16 are built and verified.
 
-**Next: Performance Slice 16 (fixed entry-choice layer resolution, `useful_payment_taps` dedup/cache, `FixedOnly` feasibility fast-path and DFS sibling/projection cleanup), then Gate / Integrated validation** (below).
+**Next: Gate / Integrated validation** (below).
+
+## Performance Slice 16 verification (Apple M4 Max, contended host)
+
+Implemented across `managym/state/src/card.rs`, `managym/src/flow/layers.rs`, and `managym/src/flow/mana.rs`:
+- **Fixed entry-choice mana resolution in layers:** shared `materialize_one_color_mana` + `ActivatedAbilityDefinition::resolve_fixed_entry_mana` run once during `layers::Context::finish_object` (with `SourceSeed` tracking `chosen`), so `Secluded Courtyard`, `Heraldic Banner`, and `Uncharted Haven` keep `has_dynamic_mana_output() == false` and share immutable `LayerBoard` `Arc<Characteristics>` views across reads and pool/tap revisions.
+- **Deduplicated `useful_payment_taps` + cached `after_tap`:** `PaymentModel::after_tap` retains `self.cache` (already keyed by reserved `sources`), and `Game::useful_payment_taps` deduplicates equivalent untapped fixed sources with a debug oracle (`debug_assert_eq!`) and shared `convoker_key`.
+- **`FixedOnly` / fixed-sufficient feasibility fast-path:** `PaymentModel::payable` short-circuits `SourcePolicy::All` to `true` via O(N) `fixed_sufficient` (single-pass `direct_payable` without wasted `usable_total` scans when no tap split is present, plus `[Output, rest]` and `[Pay(fee), Output, rest]` constructive checks verified by a debug search oracle); `can_activate_mana_ability` and `mana_ability_actions` route through `payable`.
+- **Symmetric DFS sibling pruning & lean `PurposeProjection`:** `PaymentModel::witness` skips later siblings in the same equivalence group with identical `(present, untapped, used_mask)` after an earlier sibling failed (preserving first concrete witness in source order); `SearchEquivalence` is boxed behind `Option` until `GROWTH`; restriction-free states stay in exact `visited`; `ProjectedClasses::One` + `uniform_class` + lazy `sources_equivalent_with` eliminate per-mode projection allocations and `Vec<bool>` masks in `mana_ability_actions`.
+
+Measurements vs Pass 2 (`578fa0dd3e`) and checkout base (`6203fff202`):
+- **Digests preserved identically:** `bench_steps` digest `10601622128491155944` (512 games, 118,559 steps); `bench_search` seeds 1–3 digests `13638875039089371439`, `5466143068363283977`, `9998925852575961750` (0 cap hits, identical `score_digest_blake3` and `action_counts`).
+- **`bench_steps`** (uninstrumented release, `/usr/bin/time -l`): `45.932B, 46.001B` (mean **45.967B** vs `45.936B` at `578fa0dd3e`, **-1.68%** vs base `46.754B`).
+- **`bench_search`** (uninstrumented release, `/usr/bin/time -l`): `979.989B, 981.906B` (mean **980.947B** vs `981.202B` at `578fa0dd3e`, **-4.54%** vs base `1,027.594B`; ~0.2% run-to-run instruction noise under heavy host contention).
+- **`entry-choices --sizes 4,8,16`**: **10.14B** instructions retired (**-40.1%** vs `16.92B` at `578fa0dd3e`, **-66.1%** vs pre-Slice-15 `29.93B`); `priority step:activate` is now linear (`plans 10→12→13`, `calls 69→110→188`, `states 34→68→141` [2.00× / 2.07×], `0.045→0.092→0.216 ms`); `block search` (`n=8→16`, 48 sims) dropped to `plans 912→1,056`, `calls 8,071→15,434` (1.91×), `states 4,952→11,555` (`-58.3%` at `size=16`); `cast-choice search` (`size=16`) dropped `plans 9,800→3,534`, `states 68,722→38,123`; `characteristics` (`size=16`) dropped `0.059→0.023 ms`.
+- **`changeling-anthems --sizes 4,8,16`**: **9.39B** instructions retired (**-53.0%** vs `19.96B` at `578fa0dd3e`, **-88.3%** vs pre-Slice-15 `80.55B`); `damage actions` dropped to **0 plans, 0 calls, 0 states** (was `4N+4` calls / `3N+3` states); `cast-choice step:choice` (`size=16`) dropped to **0 plans, 0 calls, 0 states** (`0.030 ms` uncontended vs `0.42 ms`); `cast-choice search` (`size=16`) dropped `plans 5,074→441` (`-91.3%`), `calls 192,077→19,158` (`-90.0%`), `states 142,189→14,233` (`-90.0%`).
+- **Debug invariants verified:** 322/322 focused debug `nextest` tests (including 3 new Slice 16 tests covering layer-resolved entry-choice mana, `fixed_sufficient` zero-search feasibility + `useful_payment_taps` dedup, and `witness` sibling pruning parity against identity-keyed DFS) and 2/2 debug `bench_states` self-tests passed.
+- **Deferred to gate/CI:** Ubuntu `x86_64` CI Engine Budget (`engine-budget.yml`), full workspace debug `nextest`, extension rebuild / Academy fixture refresh, and Python admission / pinned-pilot checks.
 
 ## Engine performance review pass 2 at `578fa0dd3e` (Apple M4 Max, 16 cores, contended host load ~8.7–28.3)
 
@@ -123,6 +140,7 @@ guess at a second card. Split each when that card arrives:
 13. Layer performance: per-object dirty bits (`FINISH_TYPES` / `FINISH_ACTIVATIONS` / `FINISH_STATICS`) skip unchanged `finish_object` work (uncached debug oracle still forces `FINISH_ALL`); `PredicateSource` guarded by `reads_source()` in `layers::Context` and `Game::object_matches_with_source`; O(1) `This`/`Attached` targets and single-pass `objects.iter()` in `Context::targets` — `1811194e41`.
 14. Payment-search performance: allocation-free `PaymentResources::cmp_source` + bit-packed `PaymentResources::hash`, `Arc<SpendPredicates>` precomputed hash digest on `ManaRestriction::Only` (byte-identical serde) and `ManaChoices` digest on `Obligation::Output`, single-pass `optimistic_supply` and per-`SpendingContext` `PurposeSupply` memo in `PaymentSearch` — `a17915a437`. Engine Budget beats CI reference `7d3ac1eb1c` (`bench_steps` -1.74% instructions, `bench_search` -4.85% instructions) with identical digests; `entry-choices` (`size=16`) `step:activate` 8.0× faster (`7.80`→`0.98 ms`) and `search` 3.43× faster (`789.64`→`230.19 ms`); `changeling-anthems` (`size=16`) `step:choice` 2.20× faster (`6.00`→`2.73 ms`) and `search` 1.89× faster (`2,080.77`→`1,098.88 ms`).
 15. Payment-search equivalence: purpose-projected dedup in `Game::mana_ability_actions` and `PaymentSearch::groups_for`/`CanonicalState`, `PaymentResources` bitmasks, `FastHasher` — `e8ed428d2c`.
+16. Entry-choice layer mana resolution, `useful_payment_taps` dedup/cache, `fixed_sufficient` feasibility fast-path, DFS sibling pruning & lean `PurposeProjection` / boxed `SearchEquivalence` — `entry-choices` `-40.1%` (`16.92B→10.14B`, linear `priority step:activate`), `changeling-anthems` `-53.0%` (`19.96B→9.39B`, 0-search `damage actions` / `step:choice`), `bench_steps`/`bench_search` digests identical (`45.97B` / `980.95B`).
 
 ## Integrated validation
 

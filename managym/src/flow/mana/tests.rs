@@ -492,12 +492,7 @@ fn bounded_search(
     let path = model.witness(state.clone(), policy, &mut search);
     if compare {
         // No classes: identity keys throughout.
-        let mut identities = PaymentSearch {
-            groups: Some(Vec::new()),
-            gross_bound_only: true,
-            max_states: Some(20_000),
-            ..Default::default()
-        };
+        let mut identities = PaymentSearch::identity_only(true, 20_000);
         let original = model.witness(state, policy, &mut identities);
         assert_eq!(path, original);
     }
@@ -1362,14 +1357,10 @@ fn limited_mana_uses_preserve_grouped_witnesses() {
                 }
             }
         }
-        let mut identities = PaymentSearch {
-            groups: Some(vec![]),
-            max_states: Some(2000),
-            ..Default::default()
-        };
+        let mut identities = PaymentSearch::identity_only(false, 2000);
         let reference = model.witness(state.clone(), SourcePolicy::All, &mut identities);
         let mut grouped = PaymentSearch::new(&state.obligations);
-        grouped.groups = Some(grouped.groups(&model));
+        grouped.groups(&model);
         grouped.max_states = Some(2000);
         assert_eq!(
             model.witness(state, SourcePolicy::All, &mut grouped),
@@ -2056,8 +2047,9 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
         })
         .collect();
     assert_eq!(offered, expected);
-    // 3 equivalence classes: Cat Courtyard, the other 5 Courtyards, 4 Mascots.
-    assert!(searches >= 3);
+    // Cat Courtyard is answered directly via fixed_sufficient; the remaining 2
+    // equivalence classes (the other 5 Courtyards and 4 Mascots) search once each.
+    assert!(searches >= 2);
     game.pending_choice = None;
 
     // Convoke distinction: two creatures with identical `{T}: Add {C}`
@@ -2134,4 +2126,130 @@ fn mana_ability_actions_deduplicates_equivalent_sources_and_keeps_convoke_colors
             ability_index: 0,
         }]
     );
+}
+
+#[test]
+fn payable_fixed_sufficient_and_useful_taps_dedup_preserve_exact_semantics() {
+    use crate::agent::action::Action;
+    use crate::flow::game::{Game, PendingChoice};
+    use crate::flow::payment::{AnnouncedSpell, Operation, Payment};
+    use crate::state::{
+        game_object::PlayerId, permanent::EntryChoice, player::PlayerConfig, zone::ZoneType,
+    };
+    use std::collections::BTreeMap;
+
+    let player = PlayerId(0);
+    let deck = BTreeMap::from([
+        ("Three Tree Mascot".into(), 8),
+        ("Secluded Courtyard".into(), 8),
+        ("Forest".into(), 4),
+        ("Pillar Launch".into(), 4),
+        ("Helpful Hunter".into(), 4),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        433,
+        true,
+    );
+    game.keep_opening_hands();
+    game.scenario_clear_hand(player);
+
+    let mut mascots = Vec::new();
+    for _ in 0..8 {
+        mascots.push(
+            game.scenario_force_battlefield(player, "Three Tree Mascot", true)
+                .unwrap(),
+        );
+    }
+    for _ in 0..2 {
+        game.scenario_force_battlefield(player, "Forest", true)
+            .unwrap();
+    }
+    game.payment_cache.borrow_mut().entries.clear();
+
+    // Fixed sources (Forests) already pay `{G}` and fund Mascot's `{1}` filter
+    // even when 8 Mascots precede the Forests in source order: zero DFS calls.
+    SEARCHED.with(|s| s.set(0));
+    assert!(game.can_pay_with_mana_abilities(player, &ManaCost::parse("G"), None));
+    assert!(game.can_activate_mana_ability(player, mascots[0], 0));
+    assert_eq!(game.mana_ability_actions(player).len(), 8);
+    assert_eq!(SEARCHED.with(|s| s.get()), 0);
+
+    // Paying for Helpful Hunter ({1}{W}, Cat) with 6 Courtyards (1 Cat + 5
+    // non-Cat) and 8 Mascots: useful_payment_taps deduplicates equivalent
+    // Courtyards while offering all 6 in board order and keeping PaymentCache.
+    let mut courtyards = Vec::new();
+    for ty in ["Elf", "Goblin", "Cat", "Dragon", "Human", "Soldier"] {
+        let id = game
+            .scenario_force_battlefield(player, "Secluded Courtyard", true)
+            .unwrap();
+        game.state.permanents[id].as_mut().unwrap().chosen =
+            Some(Arc::new(EntryChoice::CreatureType(ty.into())));
+        courtyards.push(id);
+    }
+    game.scenario_force_card_in_hand(player, "Helpful Hunter")
+        .unwrap();
+    let hunter = game.state.zones.zone_objects(ZoneType::Hand, player)[0];
+    let op = Operation::Spell(AnnouncedSpell {
+        object: hunter,
+        cast: Default::default(),
+        mode: None,
+        targets: vec![],
+        target_req_indices: vec![],
+        target_shares: vec![],
+    });
+    let payment = Payment {
+        owed: game.cost_components(player, &op),
+        operation: op,
+        receipt: Default::default(),
+    };
+    game.pending_choice = Some(PendingChoice::Pay {
+        player,
+        payment: Box::new(payment),
+    });
+    let taps = game.useful_payment_taps(player);
+    // Forests (2) + Courtyards (6) are all useful fixed taps toward {1}{W}.
+    assert_eq!(taps.len(), 8);
+    for id in courtyards {
+        assert!(taps.contains(&Action::TapForMana {
+            player,
+            permanent: id,
+        }));
+    }
+}
+
+#[test]
+fn witness_sibling_pruning_matches_identity_search_on_duplicate_filters() {
+    let filter = ManaActivation {
+        tap_source: true,
+        tap_count: 0,
+        tap_candidates: Arc::new(Vec::new()),
+        limited: false,
+        sacrifice_source: false,
+        ability_index: 0,
+        cost: ManaCost::parse("1"),
+        outputs: vec![Mana::parse("W"), Mana::parse("U")].into(),
+        life_cost: 0,
+    };
+    let model = PaymentModel {
+        cache: None,
+        sources: Arc::new(vec![
+            source(0, None, vec![filter.clone()]),
+            source(1, None, vec![filter.clone()]),
+            source(2, None, vec![filter.clone()]),
+            source(3, None, vec![filter]),
+            source(4, Some("G"), Vec::new()),
+            source(5, Some("G"), Vec::new()),
+        ]),
+        life: 20,
+    };
+    // Unpayable ({W}{U}{B}) and payable ({W}{U}) both match identity-keyed DFS.
+    for cost in ["WUB", "WU"] {
+        let obligations = vec![pay(cost)];
+        let state = search_state(&model, obligations);
+        bounded_search(&model, state, SourcePolicy::All, 200, true);
+    }
 }

@@ -134,6 +134,7 @@ pub(super) struct SourceSeed {
     source: Object,
     incarnation: PublicId,
     timestamp: PublicId,
+    chosen: Option<Arc<crate::state::permanent::EntryChoice>>,
     object: Arc<LayerObject>,
     nodes: Vec<Node>,
 }
@@ -470,6 +471,11 @@ impl<'a> Context<'a> {
                 seed.source.shares_definition_with(source)
                     && seed.incarnation == p.id
                     && seed.timestamp == p.timestamp
+                    && match (&seed.chosen, &p.chosen) {
+                        (None, None) => true,
+                        (Some(a), Some(b)) => Arc::ptr_eq(a, b) || a == b,
+                        _ => false,
+                    }
             });
             if !reusable {
                 seeds[slot] = Some(Arc::new(context.seed(id, p, source)));
@@ -602,8 +608,9 @@ impl<'a> Context<'a> {
                     // `statics.rs` verifies dirty tracking on every board rebuild.
                     object.dirty = FINISH_ALL;
                 }
-                let record = &game.state[game.live_permanent(id).object];
-                Self::finish_object(object, record);
+                let permanent = game.live_permanent(id);
+                let record = &game.state[permanent.object];
+                Self::finish_object(object, record, permanent.chosen.as_deref());
             }
         }
         context
@@ -656,7 +663,7 @@ impl<'a> Context<'a> {
                 .collect(),
             dirty: FINISH_ALL,
         };
-        Self::finish_object(&mut object, source);
+        Self::finish_object(&mut object, source, permanent.chosen.as_deref());
         let nodes = object
             .statics
             .iter()
@@ -666,12 +673,17 @@ impl<'a> Context<'a> {
             source: source.clone(),
             incarnation: permanent.id,
             timestamp: permanent.timestamp,
+            chosen: permanent.chosen.clone(),
             object: Arc::new(object),
             nodes,
         }
     }
 
-    fn finish_object(object: &mut LayerObject, record: &Object) {
+    fn finish_object(
+        object: &mut LayerObject,
+        record: &Object,
+        chosen: Option<&crate::state::permanent::EntryChoice>,
+    ) {
         let dirty = object.dirty;
         if dirty == 0 {
             return;
@@ -692,9 +704,12 @@ impl<'a> Context<'a> {
         }
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
-        // earlier snapshot.
+        // earlier snapshot. Fixed entry-choice mana abilities materialize once
+        // here so `characteristics()` shares this immutable view without
+        // cloning or rebuilding restrictions.
         if dirty & (FINISH_TYPES | FINISH_ACTIVATIONS) != 0 && !view.activated_abilities.is_empty()
         {
+            let resolve_entry_mana = dirty & FINISH_ACTIVATIONS != 0;
             let shared = view
                 .activated_abilities
                 .iter()
@@ -715,6 +730,9 @@ impl<'a> Context<'a> {
                 ),
             });
             for ability in &mut view.activated_abilities {
+                if resolve_entry_mana {
+                    ability.resolve_fixed_entry_mana(chosen);
+                }
                 if ability.mana_cost.purpose != purpose {
                     ability.mana_cost.purpose = purpose.clone();
                 }
