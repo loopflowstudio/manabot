@@ -94,3 +94,11 @@
   (skipped when false) for Identity Echo, and `Effect::Fight { first, second }`
   (sharing `fight_permanents` with `FightLastTarget`, leaving existing tokens
   unchanged) for Mind Meanderer. Added `("Mouse", Creature)` to `subtype.rs`.
+
+- Coverage decomposition: the five older `DelayedEvent` variants keep their
+  spelling when delayed watchers move onto `TriggerCondition`. Converting them
+  would change TLA's stored tokens and retained state hashes; the simpler call
+  is a closed legacy set. Folding them belongs with the 0.3.0 removals.
+- Coverage decomposition: no general zone-change replacement yet. Every death
+  replacement in the batch is "would die → exile"; Overwrite's
+  battlefield-to-exile diversion is the first card needing another axis.
