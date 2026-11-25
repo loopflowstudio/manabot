@@ -1,4 +1,4 @@
-at: c4bd9389a741b9520a36d9adaeb1d0b34eaff38f
+at: bfd2cb42b58d3a94e5e8625acd933fab9598a791
 first:
   - path: managym/README.md
     why: Find the player choices and their observable outcomes.
@@ -9,7 +9,7 @@ first:
   - path: managym/state/src/ability.rs
     why: See the unified CastFrom condition.
   - path: managym/src/flow/layers.rs
-    why: Follow layer-7 counts, Static/Resolved nodes, and dirty-bit finishing.
+    why: Follow active-layer skipping, direct granted nodes, and dirty-bit finishing.
   - path: managym/src/flow/statics.rs
     why: Follow control scans, creature types, off-battlefield CDA reading, and CastFrom.
   - path: managym/src/flow/resolution.rs
@@ -19,7 +19,7 @@ first:
   - path: managym/src/flow/combat.rs
     why: Track blocked attackers directly in CombatState.
   - path: managym/src/flow/block_requirements.rs
-    why: Find legal blocks satisfying the most requirements.
+    why: Solve non-menace blocks by residual reachability; branch on menace.
   - path: managym/src/flow/proposed_event.rs
     why: Trace entry EffectValue counters, unified ModifyDamage axes, and simultaneous batches.
   - path: managym/src/flow/effects.rs
