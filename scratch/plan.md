@@ -222,80 +222,28 @@ m21, ori, emn, c17 and observability. Its 363 tests passed, including the
 phased-out blocker and Confiscate departure positions. The Python text tests need
 a rebuilt extension, so they are deferred to gate.
 
-## Decomposition at `aac244f66e`
+## Decomposition · Built (`1eec144255`, `384e717f6a`, `1eedafb796`)
 
-Most of the cohort already composes: control is one `Modification::Control` in
-layer 2 for both the Aura and the resolution; hexproof-from and protection share
-`SourceQuality` and one `targeting_source(..).matches`; every "exile/shuffle
-instead of graveyard" source (printed, flashback, finality, `ExileIfWouldDie`)
-offers the same `GraveyardInstead { what, to }` candidate; the chosen creature
-type has one path (entry choice → `ChosenCreatureType` record →
-`CardPredicate.chosen_type_of_source`). Those plan no slices.
+Control, hexproof/protection (`SourceQuality`), graveyard replacement and chosen
+creature type already had one path each. Three fused axes were unified:
 
-Three places fuse axes or evaluate one quantity twice. Each was grown or
-introduced by this cohort, and each blocks the next card of its kind from
-being a card-file edit.
+- **D1** layer-7 quantity: `LayerValue::Count(Box<LayerCount>)` via `Context::value`;
+  every P/T static is `StaticAbility::continuous` or `StaticAbility::cda` (`SetBasePt`).
+  Deleted `PtCount`, `PowerCda`, `StaticPtBuff`, `StaticAbility::{PtBuff,
+  CharacteristicPower, CharacteristicPt}`, `Operation::{Cda, Buff}`, `Game::cda_value`.
+- **D2** entry quantity: `EntersWithCounters.count: EffectValue` on a pending-entry
+  frame (`bind_chosen_type` for Banner). Deleted `EntryValue`, `Game::entry_value`.
+- **D3** damage replacement: `DamageSource { by, predicate, this }`,
+  `DamageRecipient.this`, `DamageTransform::Add(Box<EffectValue>)`. Deleted
+  `PreventCombatDamageToOrFromSelf`, `OpponentDamagePlusCounters`,
+  `ModifyDamage.{creature_source, source_by}`, `Game::damage_source_facts`.
 
-| Axis | Owners today | Cards that expose it |
-|---|---|---|
-| Layer-7 quantity | `PtCount` (`Context::buff`), `PowerCda` (`Context::cda` and `Game::cda_value`), `LayerValue` (`Context::value`) | Tempest Djinn, Blanchwood Armor, Banner of Kinship; Suki, Dragonfly Swarm, Consuming Aberration |
-| Static P/T carrier | `StaticAbility::PtBuff`, `CharacteristicPower`/`CharacteristicPt`, `StaticContinuous` | Knight of Grace (continuous) beside Tempest Djinn (PtBuff) in one file |
-| Entry quantity | `EntryValue` + `entry_value`, duplicating `EffectValue::{X, GreatestPowerYouControl, BattlefieldMatching}` + `effect_value` | Wildwood Scourge, Prime Speaker Zegana, Giada, Banner |
-| Damage replacement | `ModifyDamage { creature_source, source_by, recipient, combat, transform }`, `PreventCombatDamageToOrFromSelf`, `OpponentDamagePlusCounters`; source filter is a bool plus an `Actor` while the recipient is a struct | Crystal Barricade, usg.rs:55, tla.rs:3596, fdn.rs:2033, ons.rs:50 |
-
-### Delete — do not maintain (deepest first)
-
-1. `Context::buff`, `Context::cda`, `Operation::Buff`, `Operation::Cda` (`flow/layers.rs`)
-   and `Game::cda_value` (`flow/statics.rs`).
-2. `PtCount`, `PowerCda`, `StaticPtBuff` and its hand-written `Serialize`;
-   `StaticAbility::{PtBuff, CharacteristicPower, CharacteristicPt}`; the
-   unreleased `per_you_control` / `per_source_counter` field names.
-3. `EntryValue` and `Game::entry_value` (`flow/proposed_event.rs`).
-4. `ReplacementEffect::{PreventCombatDamageToOrFromSelf, OpponentDamagePlusCounters}`,
-   `ModifyDamage.creature_source` / `source_by`, and their arms in
-   `collect_replacements`, `apply_replacement` and the description table.
-
-Each retired serialized name gets its `token_renames.rs` entry and, where a
-pinned pilot's card changes shape, a `scripts/pinned_pilot.py record --reason`.
-
-### Slices
-
-**D1 · Built** (`1eec144255`, closing `Structure` token dispositions in `384e717f6a`):
-`LayerValue::Count(Box<LayerCount>)` with `LayerCount::{YouControl, Graveyard,
-ColorsAmong, CreatureTypes, SourceCounters, CountersOn}` evaluated by `Context::value`
-(one `ReadSet::layer_value` summary in `layers.rs`); all 26 `PtBuff` callers moved to
-`StaticAbility::continuous` and all 6 CDA callers to `StaticAbility::cda` (`SetBasePt`).
-`PrintedCharacteristics::pt_cda` returns `(Option<&LayerValue>, Option<&LayerValue>)`
-for the settled-board reader (`off_battlefield_layer_value` in `statics.rs`). Deleted
-`PtCount`, `PowerCda`, `StaticPtBuff`, `StaticAbility::{PtBuff, CharacteristicPower,
-CharacteristicPt}`, `Operation::{Cda, Buff}`, `Context::{buff, cda}` and `Game::cda_value`.
-
-**D2 · Built** (`1eedafb796`): `EntersWithCounters.count: EffectValue`, evaluated by
-`effect_value` on a pending entry `EffectFrame` carrying `x`, with
-`CardPredicate::bind_chosen_type` / `EffectValue::bind_chosen_type` binding Banner's
-pending choice before evaluation. Deleted `EntryValue` and `Game::entry_value`.
-
-**D3 · Built** (`1eedafb796`): `DamageSource { by, predicate, this }`,
-`DamageRecipient.this`, and `DamageTransform::Add(Box<EffectValue>)` evaluated via
-`effect_value` with the replacement source bound. `Fog Bank` uses two `ModifyDamage`
-entries, `Fated Firepower` uses `DamageTransform::add(...)`, and protection keeps
-synthesizing `PreventAll` through `ModifyDamage`. Deleted
-`ReplacementEffect::{PreventCombatDamageToOrFromSelf, OpponentDamagePlusCounters}`,
-`ModifyDamage.{creature_source, source_by}`, and `Game::damage_source_facts`.
-
-**Finding from D1–D3.** Newtype enum variants (`StaticAbility::PtBuff`,
-`StaticAbility::CharacteristicPower`, `StaticAbility::CharacteristicPt`,
-`PowerCda::GraveyardMatching`) emit closing `Structure` tokens (`/Enum::Variant`)
-alongside their `Variant` token; retiring both in `token_renames.rs` let both `v9`
-and `v11` pinned pilots replay with unchanged probabilities and ranks without
-re-recording.
-
-Verified on the rebuilt release extension: directed card tests (D1: 136 tests across
-dom, usg, fdn, m13, gtc, akh, tla, definitions, observability; D2+D3: 243 tests across
-psnc, fdn, m21, gtc, chk, pjou, usg, ons, eoe, mor, tla, observability), `rules_tests`
-(30 tests across `cr_613_continuous_effects` and `cr_614_replacement`), `managym` unit
-tests (`token_renames` and 3 `resolution_tests`), pinned `v9`/`v11` pilots (u1952
-skipped), and `tests/semantic/test_text_observation.py` (105 passed).
+Finding: newtype enum variants also emit closing `Structure` tokens
+(`/Enum::Variant`); retiring both in `token_renames.rs` let pinned v9/v11 pilots
+replay unchanged without re-recording. Verified on the rebuilt release extension:
+directed card tests (136 + 243), `rules_tests` (30), `managym` unit tests, pinned
+v9/v11 pilots (u1952 skipped), `test_text_observation.py` (105). A grep at
+`831cb61394` finds none of the deleted names outside `token_renames.rs`.
 
 ### Left as they are
 
