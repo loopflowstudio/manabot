@@ -106,6 +106,20 @@ impl Game {
         Some(stack)
     }
 
+    fn name_stack_source(
+        &self,
+        object: ObjectId,
+        stack: StackRenderId,
+        viewer: PlayerId,
+        labels: &mut PresentationLabels,
+    ) {
+        if self.can_name_object(object, viewer) && self.object_event_ref(object).is_some() {
+            labels
+                .stacks
+                .insert(stack.0.to_string(), self.observed_object_name(object));
+        }
+    }
+
     fn named_target(
         &self,
         target: Target,
@@ -125,14 +139,9 @@ impl Game {
             },
             Target::StackAbility(id) => {
                 let source = self.stack_ability_source(id)?;
-                if self.can_name_object(source, viewer) && self.object_event_ref(source).is_some() {
-                    labels
-                        .stacks
-                        .insert(id.0.to_string(), self.observed_object_name(source));
-                }
-                SubjectRef::Stack {
-                    id: StackRenderId(id.0.into()),
-                }
+                let stack = StackRenderId(id.0.into());
+                self.name_stack_source(source, stack, viewer, labels);
+                SubjectRef::Stack { id: stack }
             }
         })
     }
@@ -282,13 +291,8 @@ impl Game {
         viewer: PlayerId,
     ) -> Vec<PresentationLine> {
         let mut labels = PresentationLabels::default();
-        let object = stacked.source_object();
         let stack = StackRenderId(stacked.id().0.into());
-        if self.can_name_object(object, viewer) && self.object_event_ref(object).is_some() {
-            labels
-                .stacks
-                .insert(stack.0.to_string(), self.observed_object_name(object));
-        }
+        self.name_stack_source(stacked.source_object(), stack, viewer, &mut labels);
         vec![labels.line(Kind::Countered { stack })]
     }
 
@@ -531,14 +535,13 @@ impl Game {
                 labels.stacks.insert(stack.0.to_string(), name.clone());
                 let targets = self
                     .stack_index_of(Target::StackAbility(*ability))
-                    .map(|index| self.state.stack_objects[index].targets().to_vec())
-                    .unwrap_or_default();
+                    .map_or(&[][..], |index| self.state.stack_objects[index].targets());
                 let mut lines = vec![labels.line(Kind::Triggered {
                     source,
                     controller: seat(*controller),
                     stack,
                 })];
-                lines.extend(self.target_lines(&targets, stack, &name, viewer));
+                lines.extend(self.target_lines(targets, stack, &name, viewer));
                 return lines;
             }
             CountersPut {

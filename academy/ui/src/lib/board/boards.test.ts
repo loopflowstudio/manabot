@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Observation } from '$lib/types';
-import { applyPatch, boardAt, findBoard, MAX_KEPT_BOARDS, mergeBoards, stepBoards } from './boards';
+import { applyPatch, findBoard, MAX_KEPT_BOARDS, mergeBoards, stepBoards } from './boards';
 
 const board = (battlefield: { id: number; name: string; tapped: boolean }[], step = 'MAIN'): Observation =>
   ({ turn: { step }, agent: { battlefield }, opponent: { battlefield: [] } }) as unknown as Observation;
@@ -18,10 +18,10 @@ describe('step boards', () => {
     expect(boards.map(b => b.projection)).toEqual([declared, attacking]);
     // An unchanged item is the frame's own object, not a copy.
     expect(boards[1].projection.agent.battlefield[1]).toBe(frame.agent.battlefield[0]);
-    expect(boardAt(boards, 5)).toEqual(attacking);
-    expect(boardAt(boards, 3)).toEqual(declared);
+    expect(findBoard(boards, 5)?.projection).toEqual(attacking);
+    expect(findBoard(boards, 3)?.projection).toEqual(declared);
     // Events no board covers return null.
-    expect(boardAt(boards, 7)).toBeNull();
+    expect(findBoard(boards, 7)).toBeNull();
   });
 
   it('keeps boards across frames up to the 512 cap and marks capped prefixes as fallback', () => {
@@ -30,8 +30,8 @@ describe('step boards', () => {
     const third = board([{ id: 1, name: 'Plains', tapped: true }, { id: 2, name: 'Ally', tapped: false }], 'END');
 
     let kept = mergeBoards([], first, [], { first: 1, last: 2 });
-    expect(boardAt(kept, 1)).toBe(first);
-    expect(boardAt(kept, 2)).toBe(first);
+    expect(findBoard(kept, 1)?.projection).toBe(first);
+    expect(findBoard(kept, 2)?.projection).toBe(first);
 
     // Next update arrives with a patch for seq 5..5 and range 3..6:
     // seq 3..4 fell before the patch's first (per-Command cap) and fall back to seq 5's board.
@@ -41,11 +41,11 @@ describe('step boards', () => {
       [{ first: 5, last: 5, patch: { o: { turn: { o: { step: { '=': 'COMBAT' } } }, agent: { o: { battlefield: { a: [{ k: 1 }] } } } } } }],
       { first: 3, last: 6 },
     );
-    expect(boardAt(kept, 1)).toBe(first);
+    expect(findBoard(kept, 1)?.projection).toBe(first);
     expect(findBoard(kept, 3)).toMatchObject({ first: 3, last: 4, fallback: true, projection: second });
     expect(findBoard(kept, 5)).toMatchObject({ first: 5, last: 5, projection: second });
     expect(findBoard(kept, 5)?.fallback).toBeUndefined();
-    expect(boardAt(kept, 6)).toBe(third);
+    expect(findBoard(kept, 6)?.projection).toBe(third);
 
     // Enforces the 512 cap by dropping oldest boards first.
     let many = kept;
@@ -54,8 +54,8 @@ describe('step boards', () => {
       many = mergeBoards(many, board([{ id: seq, name: `Card ${seq}`, tapped: false }]), [], { first: seq, last: seq });
     }
     expect(many).toHaveLength(MAX_KEPT_BOARDS);
-    expect(boardAt(many, 1)).toBeNull();
-    expect(boardAt(many, 100 + MAX_KEPT_BOARDS + 9)).not.toBeNull();
+    expect(findBoard(many, 1)).toBeNull();
+    expect(findBoard(many, 100 + MAX_KEPT_BOARDS + 9)).not.toBeNull();
   });
 
   it('remove keys and replace values', () => {

@@ -106,6 +106,12 @@ export function computeStopDeltas(
   const players = new Map<number, number>();
   if (activeSeqs.size === 0) return { objects, players };
   const objectDamage = new Map<number, number>();
+  const addObjectDelta = (id: number, delta: StopDelta, prepend = false): void => {
+    const list = objects.get(id) ?? [];
+    if (prepend) list.unshift(delta);
+    else list.push(delta);
+    objects.set(id, list);
+  };
   for (const event of events) {
     if (!activeSeqs.has(event.seq)) continue;
     if (event.kind.kind === 'damage') {
@@ -120,25 +126,14 @@ export function computeStopDeltas(
       const idx = playerIndex(projection, event.kind.player);
       if (idx !== null) players.set(idx, (players.get(idx) ?? 0) + event.kind.amount);
     } else if (event.kind.kind === 'counters') {
-      const id = event.kind.object.entity;
-      const list = objects.get(id) ?? [];
-      list.push({ kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
-      objects.set(id, list);
+      addObjectDelta(event.kind.object.entity, { kind: 'counters', text: `${tellCounter(event.kind.counter)} · ${event.kind.total}` });
     } else if (event.kind.kind === 'pt_changed') {
       const text = tellPtDelta(event.kind.power, event.kind.toughness);
       const kind = event.kind.power <= 0 && event.kind.toughness <= 0 ? 'damage' : 'pump';
-      for (const obj of event.kind.objects) {
-        const list = objects.get(obj.entity) ?? [];
-        list.push({ kind, text });
-        objects.set(obj.entity, list);
-      }
+      for (const obj of event.kind.objects) addObjectDelta(obj.entity, { kind, text });
     }
   }
-  for (const [id, amount] of objectDamage) {
-    const list = objects.get(id) ?? [];
-    list.unshift({ kind: 'damage', text: `−${amount}` });
-    objects.set(id, list);
-  }
+  for (const [id, amount] of objectDamage) addObjectDelta(id, { kind: 'damage', text: `−${amount}` }, true);
   for (const [idx, delta] of players) {
     if (delta === 0) players.delete(idx);
   }
@@ -182,10 +177,8 @@ export function walkStops(
     const { line, turn, ownerSide, parent, cursor } = item;
     const hit = findBoard(boards, cursor);
     const boardKey = hit && !hit.fallback ? `${hit.first}:${hit.last}` : null;
-    const isOpponentMove = line.actor === 'opponent' || parent?.actor === 'opponent';
-    const isYouMove = line.actor === 'you' || parent?.actor === 'you';
     const isDrawStep = line.rule === 'draw_step';
-    const yoursOnly = isYouMove || (!isOpponentMove && ownerSide === 'you' && isDrawStep);
+    const yoursOnly = line.actor === 'you' || parent?.actor === 'you' || (ownerSide === 'you' && isDrawStep);
     const prev = stops.at(-1);
     if (prev && boardKey !== null && prev.boardKey === boardKey && prev.turn === turn) {
       for (const s of line.seqs) {

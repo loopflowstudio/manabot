@@ -216,6 +216,11 @@ function sameObjects(a: readonly { entity: number; incarnation: number }[], b: r
   return a.length === b.length && a.every((item, i) => item.entity === b[i].entity && item.incarnation === b[i].incarnation);
 }
 
+interface StackOrigin {
+  kind: 'cast' | 'activated' | 'triggered';
+  seq: number;
+}
+
 interface TrackFold {
   /** Indices of redundant `destroyed`, folded `targeted`, folded resolutions, and absorbed passes. */
   consumed: Set<number>;
@@ -225,12 +230,8 @@ interface TrackFold {
   foldedResolution: Map<number, { resolvedIndex: number; passIndices: number[] }>;
   /** Passes immediately preceding a standalone resolution, keyed by resolution index. */
   absorbedBeforeResolution: Map<number, number[]>;
-  /** Stack ids created by `triggered` events (so `ability_resolved` / `countered` read "trigger"). */
-  stackTriggers: Set<number>;
-  /** Stack ids created by `activated` events (so `countered` reads "ability"). */
-  stackAbilities: Set<number>;
-  /** Stack id -> seq of the `cast` / `activated` / `triggered` event that put it on the stack. */
-  stackSourceSeq: Map<number, number>;
+  /** Stack id -> the `cast` / `activated` / `triggered` event that put it on the stack. */
+  stackOrigin: Map<number, StackOrigin>;
 }
 
 /** Pass 1: index stack origins, fold targets and immediate resolutions, and absorb passes before resolutions. */
@@ -238,9 +239,7 @@ function foldTrackEvents(
   events: readonly PresentationEvent[],
   labelsAt: (index: number) => PresentationLabels,
 ): TrackFold {
-  const stackTriggers = new Set<number>();
-  const stackAbilities = new Set<number>();
-  const stackSourceSeq = new Map<number, number>();
+  const stackOrigin = new Map<number, StackOrigin>();
   const consumed = new Set<number>();
   const foldedTargets = new Map<number, (FoldedTarget & { seq: number })[]>();
   const foldedResolution = new Map<number, { resolvedIndex: number; passIndices: number[] }>();
@@ -249,14 +248,8 @@ function foldTrackEvents(
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     const kind = event.kind;
-    if (kind.kind === 'triggered') {
-      stackTriggers.add(kind.stack);
-      stackSourceSeq.set(kind.stack, event.seq);
-    } else if (kind.kind === 'activated') {
-      stackAbilities.add(kind.stack);
-      stackSourceSeq.set(kind.stack, event.seq);
-    } else if (kind.kind === 'cast') {
-      stackSourceSeq.set(kind.stack, event.seq);
+    if (kind.kind === 'triggered' || kind.kind === 'activated' || kind.kind === 'cast') {
+      stackOrigin.set(kind.stack, { kind: kind.kind, seq: event.seq });
     } else if (kind.kind === 'destroyed') {
       const next = events[i + 1];
       if (next?.kind.kind === 'died' && sameObjects(kind.objects, next.kind.objects)) {
@@ -339,7 +332,7 @@ function foldTrackEvents(
     }
   }
 
-  return { consumed, foldedTargets, foldedResolution, absorbedBeforeResolution, stackTriggers, stackAbilities, stackSourceSeq };
+  return { consumed, foldedTargets, foldedResolution, absorbedBeforeResolution, stackOrigin };
 }
 
 function sideForEvent(
@@ -412,9 +405,7 @@ export function buildHistory(
     foldedTargets,
     foldedResolution,
     absorbedBeforeResolution,
-    stackTriggers,
-    stackAbilities,
-    stackSourceSeq,
+    stackOrigin,
   } = foldTrackEvents(events, labelsAt);
 
   // Pass 2: assemble turns, blocks, indented consequences, pass runs, and notes.
@@ -539,13 +530,12 @@ export function buildHistory(
     ];
 
     const indented = !move && event.cause !== undefined && openBlock !== null && openBlock.seqs.has(event.cause);
-    const isTrigger =
-      (event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered')
-      && stackTriggers.has(event.kind.stack);
-    const isAbility =
-      event.kind.kind === 'countered'
-      && !isTrigger
-      && stackAbilities.has(event.kind.stack);
+    const origin =
+      event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered'
+        ? (stackOrigin.get(event.kind.stack) ?? null)
+        : null;
+    const isTrigger = (event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered') && origin?.kind === 'triggered';
+    const isAbility = event.kind.kind === 'countered' && origin?.kind === 'activated';
     const segments = tell(event, labels, players, {
       form: 'move',
       indented,
@@ -562,10 +552,7 @@ export function buildHistory(
     });
     const sentence = segmentText(sentenceSegments);
 
-    const sourceSeq =
-      (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved' || event.kind.kind === 'countered')
-        ? (stackSourceSeq.get(event.kind.stack) ?? null)
-        : null;
+    const sourceSeq = origin?.seq ?? null;
     const actor: HistoryActor = move ? actorForMove(event, players, currentOwner) : 'note';
     const line = makeLine({
       id: `seq-${event.seq}`,
@@ -668,10 +655,7 @@ export function legacyMoveHistory(
   return turns;
 }
 
-/**
- * Live decision strip marks read directly from move events on the track
- * (replaces `replay.ts:logMarks`).
- */
+/** Live decision strip marks read directly from move events on the track. */
 export function trackMarks(
   events: readonly PresentationEvent[],
   labelsAt: (index: number) => PresentationLabels,

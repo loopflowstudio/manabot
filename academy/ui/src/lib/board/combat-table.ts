@@ -75,8 +75,11 @@ export function buildCombatTable(
 
   // Locate the latest event in `activeSeqs` to anchor the active combat window.
   let maxActiveIdx = -1;
-  for (let i = 0; i < events.length; i += 1) {
-    if (activeSeqs.has(events[i].seq)) maxActiveIdx = i;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (activeSeqs.has(events[i].seq)) {
+      maxActiveIdx = i;
+      break;
+    }
   }
   if (maxActiveIdx < 0) return null;
 

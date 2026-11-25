@@ -8,7 +8,7 @@ import { markText } from '$lib/analysis';
 import { findBoard } from './boards';
 import { buildHistory, legacyMoveHistory } from './history';
 import {
-  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, liveAnalysedMarks, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks,
+  analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, historyAnalysisShown, historyKeyAt, historyMoveMarks, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks, withLiveAnalysisPoints, type StripMark,
 } from './replay';
 import { boardView } from './view';
 
@@ -370,16 +370,16 @@ describe('an analysis read beside your choices', () => {
   });
 });
 
-describe('liveAnalysedMarks', () => {
-  const log = [
-    { id: 'a', actor: 'villain' as const, turn: 1, text: 'Opponent plays Island' },
-    { id: 'b', actor: 'hero' as const, turn: 1, text: 'You play Mountain' },
-    { id: 'c', actor: 'auto' as const, turn: 2, text: 'Untap' },
-    { id: 'd', actor: 'hero' as const, turn: 2, text: 'You cast Shock' },
+describe('withLiveAnalysisPoints', () => {
+  const base: StripMark[] = [
+    { at: 0, key: 'a', turn: 1, turnStart: true, decision: true, side: 'opponent', value: null, label: 'Turn 1 · Opponent plays Island' },
+    { at: 1, key: 'b', turn: 1, turnStart: false, decision: true, side: 'you', value: null, label: 'Turn 1 · You play Mountain' },
+    { at: 2, key: 'c', turn: 2, turnStart: true, decision: false, side: null, value: null, label: 'Turn 2 · Untap' },
+    { at: 3, key: 'd', turn: 2, turnStart: false, decision: true, side: 'you', value: null, label: 'Turn 2 · You cast Shock' },
   ];
 
-  it('places each reading where the log stood, a pass that logs nothing included', () => {
-    const marks = liveAnalysedMarks(log, [
+  it('places each reading where the track stood, a pass that emits no move included', () => {
+    const marks = withLiveAnalysisPoints(base, [
       { event: 2, at: 1, score: 0.6, semantic: 'signed_outcome' },
       { event: 3, at: 1, score: 0.55, semantic: 'signed_outcome' },
       { event: 8, at: 4, score: 0.3, semantic: 'signed_outcome' },
@@ -391,7 +391,7 @@ describe('liveAnalysedMarks', () => {
   });
 
   it('places a decision read after the fact at its turn, named by the move you chose', () => {
-    const marks = liveAnalysedMarks(log, [
+    const marks = withLiveAnalysisPoints(base, [
       { event: 6, at: null, score: 0.4, semantic: 'signed_outcome', turn: 2, label: 'Cast Shock' },
       { event: 1, at: null, score: 0.7, semantic: 'signed_outcome', turn: 1, label: 'Play Mountain' },
       { event: 9, at: 4, score: 0.3, semantic: 'signed_outcome' },

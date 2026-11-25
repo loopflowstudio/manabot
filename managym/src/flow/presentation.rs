@@ -60,10 +60,6 @@ enum Note {
     },
     /// Permanents destroyed by a spell or ability (`EventBinding::Destroyed`).
     Destroyed(Vec<ObjectEventRef>),
-    Effect,
-    Stack,
-    Pass,
-    Lost,
 }
 
 #[derive(Clone, Debug)]
@@ -71,7 +67,9 @@ struct Fact {
     id: FactId,
     cause: Option<FactId>,
     rule: Option<PresentationRule>,
-    note: Note,
+    /// Retained only for facts later events in the same step match against
+    /// (combat damage merge, draw/cleanup tagging, trigger attribution, life-loss suppression).
+    note: Option<Note>,
     lines: [Vec<PresentationLine>; 2],
     /// Index of the position cut after this fact, once one is.
     position: Option<u32>,
@@ -104,39 +102,16 @@ pub struct PresentationSink {
 }
 
 impl PresentationSink {
-    /// Push a root fact with no cause (e.g., a CR 608.2b illegal-target fizzle).
-    fn push_root(
+    fn push(
         &mut self,
+        cause: Option<FactId>,
         rule: Option<PresentationRule>,
-        note: Note,
+        note: Option<Note>,
         lines: [Vec<PresentationLine>; 2],
+        cut: bool,
     ) -> FactId {
         let id = self.next_id;
         self.next_id += 1;
-        self.facts.push(Fact {
-            id,
-            cause: None,
-            rule,
-            note,
-            lines,
-            position: None,
-        });
-        self.uncut = true;
-        id
-    }
-
-    /// Push a fact whose cause, absent a trigger's or a resolution's, is
-    /// `fallback`.
-    fn push_caused(
-        &mut self,
-        fallback: Option<FactId>,
-        rule: Option<PresentationRule>,
-        note: Note,
-        lines: [Vec<PresentationLine>; 2],
-    ) -> FactId {
-        let id = self.next_id;
-        self.next_id += 1;
-        let cause = self.next_cause.take().or(self.resolution).or(fallback);
         self.facts.push(Fact {
             id,
             cause,
@@ -145,8 +120,34 @@ impl PresentationSink {
             lines,
             position: None,
         });
-        self.uncut = true;
+        if cut {
+            self.uncut = true;
+        }
         id
+    }
+
+    /// Push a root fact with no cause (e.g., a CR 608.2b illegal-target fizzle).
+    fn push_root(
+        &mut self,
+        rule: Option<PresentationRule>,
+        note: Option<Note>,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
+        self.resolution = None;
+        self.push(None, rule, note, lines, true)
+    }
+
+    /// Push a fact whose cause, absent a trigger's or a resolution's, is
+    /// `fallback`.
+    fn push_caused(
+        &mut self,
+        fallback: Option<FactId>,
+        rule: Option<PresentationRule>,
+        note: Option<Note>,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
+        let cause = self.next_cause.take().or(self.resolution).or(fallback);
+        self.push(cause, rule, note, lines, true)
     }
 
     /// A life loss that only commits the damage the previous fact told
@@ -158,7 +159,7 @@ impl PresentationSink {
         else {
             return false;
         };
-        let dealt = match self.facts.last().map(|fact| &fact.note) {
+        let dealt = match self.facts.last().and_then(|fact| fact.note.as_ref()) {
             Some(Note::Event(dealt) | Note::CombatDamage { dealt, .. }) => dealt,
             _ => return false,
         };
@@ -277,12 +278,13 @@ impl Game {
         // `CombatDamageDealt` emitted right after its `DamageDealt`.
         if let GameEvent::CombatDamageDealt { .. } = event {
             if let Some(last) = sink.facts.last_mut() {
-                if let Note::Event(dealt @ GameEvent::DamageDealt { combat: true, .. }) = &last.note
+                if let Some(Note::Event(dealt @ GameEvent::DamageDealt { combat: true, .. })) =
+                    &last.note
                 {
-                    last.note = Note::CombatDamage {
+                    last.note = Some(Note::CombatDamage {
                         dealt: dealt.clone(),
                         told: event.clone(),
-                    };
+                    });
                     last.lines = lines;
                     return;
                 }
@@ -300,14 +302,13 @@ impl Game {
             sink.land_play = None;
         }
         let id = if matches!(event, GameEvent::SpellCountered { by: None, .. }) {
-            sink.resolution = None;
             sink.push_root(
                 Some(PresentationRule::IllegalTargets),
-                Note::Event(event.clone()),
+                Some(Note::Event(event.clone())),
                 lines,
             )
         } else {
-            sink.push_caused(damage, rule, Note::Event(event.clone()), lines)
+            sink.push_caused(damage, rule, Some(Note::Event(event.clone())), lines)
         };
         if let Some(object) = damaged {
             sink.damaged.push((object, id));
@@ -329,7 +330,7 @@ impl Game {
         self.presentation
             .as_deref_mut()
             .unwrap()
-            .push_caused(None, None, Note::Stack, lines);
+            .push_caused(None, None, None, lines);
     }
 
     /// Priority passes are told on the track without cutting a board position.
@@ -338,16 +339,7 @@ impl Game {
             return;
         };
         let lines = [PlayerId(0), PlayerId(1)].map(|_| Self::pass_line(player));
-        let id = sink.next_id;
-        sink.next_id += 1;
-        sink.facts.push(Fact {
-            id,
-            cause: None,
-            rule: None,
-            note: Note::Pass,
-            lines,
-            position: None,
-        });
+        sink.push(None, None, None, lines, false);
     }
 
     pub(crate) fn presentation_resolving(&mut self, stacked: &StackObject) {
@@ -357,7 +349,7 @@ impl Game {
         let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.stack_line(stacked, viewer, true));
         let sink = self.presentation.as_deref_mut().unwrap();
         sink.resolution = None;
-        let id = sink.push_caused(None, None, Note::Stack, lines);
+        let id = sink.push_caused(None, None, None, lines);
         sink.resolution = Some(id);
     }
 
@@ -369,12 +361,10 @@ impl Game {
         }
         let lines =
             [PlayerId(0), PlayerId(1)].map(|viewer| self.ability_fizzled_line(stacked, viewer));
-        if lines.iter().all(Vec::is_empty) {
-            return;
-        }
-        let sink = self.presentation.as_deref_mut().unwrap();
-        sink.resolution = None;
-        sink.push_root(Some(PresentationRule::IllegalTargets), Note::Stack, lines);
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_root(Some(PresentationRule::IllegalTargets), None, lines);
     }
 
     /// Attach the hand appearance to the CardDrawn fact before another effect can move it.
@@ -392,7 +382,7 @@ impl Game {
             .unwrap();
         debug_assert!(matches!(
             fact.note,
-            Note::Event(GameEvent::CardDrawn { .. })
+            Some(Note::Event(GameEvent::CardDrawn { .. }))
         ));
         fact.lines = lines;
         fact.rule = draw_step.then_some(PresentationRule::DrawStep);
@@ -404,10 +394,12 @@ impl Game {
             return;
         }
         let line = self.destroyed_line(objects);
-        self.presentation
-            .as_deref_mut()
-            .unwrap()
-            .push_caused(None, None, Note::Destroyed(objects.to_vec()), [line.clone(), line]);
+        self.presentation.as_deref_mut().unwrap().push_caused(
+            None,
+            None,
+            Some(Note::Destroyed(objects.to_vec())),
+            [line.clone(), line],
+        );
     }
 
     /// Note a spell/ability P/T modification applied to battlefield permanents.
@@ -428,7 +420,7 @@ impl Game {
         self.presentation
             .as_deref_mut()
             .unwrap()
-            .push_caused(None, None, Note::Effect, lines);
+            .push_caused(None, None, None, lines);
     }
 
     /// Note a battlefield permanent changing controller (or returning when a
@@ -451,7 +443,7 @@ impl Game {
         self.presentation
             .as_deref_mut()
             .unwrap()
-            .push_caused(None, rule, Note::Effect, lines);
+            .push_caused(None, rule, None, lines);
     }
 
     /// Note a player losing the game (CR 104.3, 704.5a–c).
@@ -463,7 +455,7 @@ impl Game {
         let fallback = (rule == Some(PresentationRule::ZeroLife))
             .then(|| sink.player_damaged[player.0])
             .flatten();
-        sink.push_caused(fallback, rule, Note::Lost, lines);
+        sink.push_caused(fallback, rule, None, lines);
     }
 
     /// Tag the just-emitted hand-to-graveyard discard as a cleanup-step rule action.
@@ -474,11 +466,11 @@ impl Game {
         if let Some(fact) = sink.facts.last_mut() {
             if matches!(
                 fact.note,
-                Note::Event(GameEvent::CardMoved {
+                Some(Note::Event(GameEvent::CardMoved {
                     from: Some(ZoneType::Hand),
                     to: ZoneType::Graveyard,
                     ..
-                })
+                }))
             ) {
                 fact.rule = Some(PresentationRule::Cleanup);
             }
@@ -527,22 +519,17 @@ impl Game {
         let Some(sink) = self.presentation.as_deref_mut() else {
             return;
         };
-        let death = |fact: &&Fact| {
-            matches!(&fact.note, Note::Event(GameEvent::PermanentsDied { objects })
-                if objects.iter().any(|object| Some(*object) == died))
-                || matches!(&fact.note, Note::Destroyed(objects)
-                    if objects.iter().any(|object| Some(*object) == died))
-                || matches!(&fact.note, Note::Event(GameEvent::PermanentSacrificed { object_id, .. })
-                    if Some(*object_id) == departed_obj)
-        };
+        let found = died.and_then(|died| {
+            sink.facts.iter().rev().find(|fact| {
+                matches!(&fact.note, Some(Note::Event(GameEvent::PermanentsDied { objects })) if objects.contains(&died))
+                    || matches!(&fact.note, Some(Note::Destroyed(objects)) if objects.contains(&died))
+                    || matches!(&fact.note, Some(Note::Event(GameEvent::PermanentSacrificed { object_id, .. })) if Some(*object_id) == departed_obj)
+            })
+        });
         let same = |fact: &&Fact| match &fact.note {
-            Note::Event(told) => told == event,
-            Note::CombatDamage { dealt, told } => dealt == event || told == event,
+            Some(Note::Event(told)) => told == event,
+            Some(Note::CombatDamage { dealt, told }) => dealt == event || told == event,
             _ => false,
-        };
-        let found = match died {
-            Some(_) => sink.facts.iter().rev().find(death),
-            None => None,
         };
         let Some(fact) = found
             .or_else(|| sink.facts.iter().rev().find(same))

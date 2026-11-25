@@ -210,24 +210,15 @@ export function collectDeathMarks(params: {
   reduced: boolean;
 }): DeathMark[] {
   const { root, boardEl, travel, projection, stepBoards = [], events, labelsAt, activeSeqs, cursor, sinceRevision, matchId, revision, reduced } = params;
-  const relevant: { event: PresentationEvent; index: number }[] = [];
-  if (cursor !== null) {
-    events.forEach((event, index) => {
-      if ((event.kind.kind === 'died' || event.kind.kind === 'destroyed') && activeSeqs.has(event.seq)) {
-        relevant.push({ event, index });
-      }
-    });
-  } else if (reduced && sinceRevision !== null) {
-    events.forEach((event, index) => {
-      if (
-        (event.kind.kind === 'died' || event.kind.kind === 'destroyed')
-        && event.from_revision >= sinceRevision
-      ) {
-        relevant.push({ event, index });
-      }
-    });
-  }
-  if (!relevant.length || !boardEl || !root) return [];
+  if (!boardEl || !root) return [];
+  if (cursor === null && (!reduced || sinceRevision === null)) return [];
+  const relevant = events.flatMap((event, index) =>
+    (event.kind.kind === 'died' || event.kind.kind === 'destroyed')
+    && (cursor !== null ? activeSeqs.has(event.seq) : event.from_revision >= sinceRevision!)
+      ? [{ event, index }]
+      : [],
+  );
+  if (!relevant.length) return [];
 
   const onBoard = new Set([...projection.agent.battlefield, ...projection.opponent.battlefield].map(p => p.id));
   const boardRect = boardEl.getBoundingClientRect();

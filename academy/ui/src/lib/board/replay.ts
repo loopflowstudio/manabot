@@ -449,14 +449,12 @@ export function analysedMarks(marks: readonly StripMark[], positions: readonly P
   });
 }
 
-/**
- * Each of your analysed moves' mark, by move id: every analysed decision from
- * the position a move jumps to up to the next move counts toward it, so a
- * cast's target and payment choices are marked with the cast.
- */
-export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+function aggregateMoveMarks(
+  choices: readonly [string, Position][],
+  decisions: ReadonlyMap<number, AnalysedDecision>,
+): Map<string, DecisionMark> {
   const marks = new Map<string, DecisionMark>();
-  for (const [move, choice] of yourMoveChoices(entries, positions)) {
+  for (const [move, choice] of choices) {
     const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
     const mark = decision ? decisionMark(decision) : null;
     if (!mark) continue;
@@ -464,6 +462,15 @@ export function moveMarks(entries: readonly GameLogEntry[], positions: readonly 
     marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
   }
   return marks;
+}
+
+/**
+ * Each of your analysed moves' mark, by move id: every analysed decision from
+ * the position a move jumps to up to the next move counts toward it, so a
+ * cast's target and payment choices are marked with the cast.
+ */
+export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+  return aggregateMoveMarks(yourMoveChoices(entries, positions), decisions);
 }
 
 /**
@@ -540,15 +547,7 @@ export function historyMoveMarks(
   heroSeat: 0 | 1,
   decisions: ReadonlyMap<number, AnalysedDecision>,
 ): Map<string, DecisionMark> {
-  const marks = new Map<string, DecisionMark>();
-  for (const [move, choice] of historyYourMoveChoices(turns, positions, heroSeat)) {
-    const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
-    const mark = decision ? decisionMark(decision) : null;
-    if (!mark) continue;
-    const marked = marks.get(move);
-    marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
-  }
-  return marks;
+  return aggregateMoveMarks(historyYourMoveChoices(turns, positions, heroSeat), decisions);
 }
 
 /** Your moves chosen with a live analysis shown, keyed by top-level `HistoryLine.id`. */
@@ -565,27 +564,9 @@ export function historyAnalysisShown(
 }
 
 /**
- * A live game's moves as strip marks, from its log: the person's and the
- * opponent's decisions, automation as plain positions. Live marks carry no
- * value and no position to jump to.
- */
-export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
-  return entries.map((entry, at) => ({
-    at,
-    key: entry.id,
-    turn: entry.turn,
-    turnStart: at === 0 || entry.turn !== entries[at - 1].turn,
-    decision: entry.actor === 'hero' || entry.actor === 'villain',
-    side: entry.actor === 'hero' ? 'you' : entry.actor === 'villain' ? 'opponent' : null,
-    value: null,
-    label: `Turn ${entry.turn ?? '?'} · ${entry.text}`,
-  }));
-}
-
-/**
- * Overlay a policy's live readings onto any sequence of live strip marks
- * (`trackMarks` or `logMarks`). Each reading becomes a point of its own, so a
- * decision that emits no move still carries its score.
+ * Overlay a policy's live readings onto live strip marks (`trackMarks`). Each
+ * reading becomes a point of its own, so a decision that emits no move still
+ * carries its score.
  */
 export function withLiveAnalysisPoints(marks: readonly StripMark[], points: readonly LivePoint[]): StripMark[] {
   const moveText = (mark: StripMark): string => mark.label.replace(/^Turn [^·]+ · /, '');
@@ -608,17 +589,6 @@ export function withLiveAnalysisPoints(marks: readonly StripMark[], points: read
   });
   while (next < placed.length) out.push(point(placed[next++]));
   return out.map((mark, at) => ({ ...mark, at, turnStart: at === 0 || mark.turn !== out[at - 1].turn }));
-}
-
-/**
- * Live play's strip with the policy's line on it: each reading is a point of
- * its own, so a decision that logs nothing (a priority pass) still has one.
- * A decision read as you faced it sits where the action log stood then and is
- * named by the move before it; one read after the fact sits at the start of
- * its turn and is named by the move you chose. Logged moves carry no value.
- */
-export function liveAnalysedMarks(entries: readonly GameLogEntry[], points: readonly LivePoint[]): StripMark[] {
-  return withLiveAnalysisPoints(logMarks(entries), points);
 }
 
 /**

@@ -8,7 +8,7 @@
  * projection (`managym/academy/step_boards.py` defines the format): the newest
  * is its patch applied to the frame's board, each older one its patch applied
  * to the board after it. `stepBoards` rebuilds them once; `mergeBoards` keeps
- * them across the session up to 512; `findBoard` / `boardAt` look up any seq.
+ * them across the session up to 512; `findBoard` looks up any seq.
  */
 import type { Observation, StepBoardPatch } from '$lib/types';
 
@@ -115,9 +115,4 @@ export function findBoard(boards: readonly StepBoard[], seq: number): StepBoard 
     if (board.first <= seq && seq <= board.last) return board;
   }
   return null;
-}
-
-/** The board the event `seq` was seen on, or null when not kept. */
-export function boardAt(boards: readonly StepBoard[], seq: number): Observation | null {
-  return findBoard(boards, seq)?.projection ?? null;
 }

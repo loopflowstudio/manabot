@@ -61,8 +61,6 @@ from managym.experience import (
 )
 from managym.experience_projection import (
     decision_surface_view,
-    definition_names,
-    describe_actions,
     enum_name,
     object_records,
     observation_definition_id,

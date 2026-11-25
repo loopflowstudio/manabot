@@ -423,8 +423,6 @@
                         <span class="sr-only">{mark.of > 1 ? `${mark.agreed} of ${mark.of} choices same as the policy` : same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
                       {/if}
                       {#if shownMoves.has(entry.id)}<span class="shown type-caption" data-testid="analysis-shown"><span class="sr-only">, </span>analysis shown</span>{/if}
-                    {:else if entry.passes}
-                      <span class="what">passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}</span>
                     {:else}
                       {@render moveWhat(entry, prevWho, false)}
                     {/if}

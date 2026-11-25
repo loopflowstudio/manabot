@@ -260,12 +260,15 @@ export function recentMarks(
     }
   });
   // Only show creature damage deltas while the creature still bears damage on this board.
-  const currentDamage = new Map<number, number>();
-  for (const permanent of [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield]) {
-    currentDamage.set(permanent.id, permanent.damage ?? 0);
-  }
-  for (const id of [...marks.damage.objects.keys()]) {
-    if ((currentDamage.get(id) ?? 0) <= 0) marks.damage.objects.delete(id);
+  if (marks.damage.objects.size > 0) {
+    const damagedNow = new Set(
+      [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield]
+        .filter(permanent => (permanent.damage ?? 0) > 0)
+        .map(permanent => permanent.id),
+    );
+    for (const id of [...marks.damage.objects.keys()]) {
+      if (!damagedNow.has(id)) marks.damage.objects.delete(id);
+    }
   }
   marks.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));
   return marks;
