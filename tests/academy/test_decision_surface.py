@@ -277,6 +277,8 @@ def test_trace_record_preserves_nested_policy_evidence() -> None:
     )
     expected = asdict(trace)
     expected.pop("recording_import")
+    expected.pop("played_from")
+    expected["events"][0].pop("analysis_shown")
     expected["config"].pop("mana_payment")
     expected["config"].pop("mana_floats")
     expected["config"].pop("hero_deck_pool")

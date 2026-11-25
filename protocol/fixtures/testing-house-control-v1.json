@@ -70,6 +70,12 @@
       "auto_pass": true
     },
     {
+      "type": "show_analysis",
+      "grant_revision": 1,
+      "shown": true,
+      "policy": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
       "type": "transfer_pilot",
       "grant_revision": 1,
       "target_viewer_id": "viewer.watcher"

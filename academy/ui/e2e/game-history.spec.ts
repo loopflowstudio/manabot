@@ -164,7 +164,7 @@ test('shared history identifies both players and preserves private prefixes and 
     await visitor.getByTestId('game-log').locator('button[data-move]').first().click();
     await expect(visitor.getByTestId('replay-perspective')).toContainText('Acting view · seat 1');
     await expect(visitor.getByTestId('game-board')).toBeVisible();
-    await visitor.getByTestId('game').getByRole('link', { name: 'Games', exact: true }).focus();
+    await visitor.getByTestId('game').getByRole('link', { name: 'History', exact: true }).focus();
     await visitor.keyboard.press('Enter');
     expect(failures).toEqual([]);
     await expect(visitor).toHaveURL(filtered);

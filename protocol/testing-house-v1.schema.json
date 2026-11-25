@@ -1645,6 +1645,53 @@
       "title": "ShareBeliefMessage",
       "type": "object"
     },
+    "ShowAnalysisMessage": {
+      "additionalProperties": false,
+      "description": "Show or hide a policy's reading of the pilot's decisions in this game.\n`policy` names a registered policy; omitted, the opponent's own or the\nfirst that can read the game.",
+      "properties": {
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy"
+        },
+        "shown": {
+          "title": "Shown",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "show_analysis",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "shown"
+      ],
+      "title": "ShowAnalysisMessage",
+      "type": "object"
+    },
     "TableAudience": {
       "additionalProperties": false,
       "properties": {
@@ -2022,6 +2069,7 @@
             "return_to_live": "#/$defs/ReturnToLiveMessage",
             "set_stops": "#/$defs/SetStopsMessage",
             "share_belief": "#/$defs/ShareBeliefMessage",
+            "show_analysis": "#/$defs/ShowAnalysisMessage",
             "transfer_pilot": "#/$defs/TransferPilotMessage"
           },
           "propertyName": "type"
@@ -2053,6 +2101,9 @@
           },
           {
             "$ref": "#/$defs/SetStopsMessage"
+          },
+          {
+            "$ref": "#/$defs/ShowAnalysisMessage"
           },
           {
             "$ref": "#/$defs/TransferPilotMessage"

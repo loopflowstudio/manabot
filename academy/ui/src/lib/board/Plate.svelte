@@ -29,8 +29,11 @@
   let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
-  const zones = $derived([
-    { key: 'Hand', count: hand, cards: null },
+  // An opponent's hand cards this viewer may see (Show both hands, or a card
+  // revealed to it) open like a graveyard; your own are the hand strip.
+  const shownHand = $derived(side === 'opponent' && player.hand.length ? player.hand : null);
+  const zones = $derived<{ key: string; count: number; cards: CardState[] | null; shown?: number }[]>([
+    { key: 'Hand', count: hand, cards: shownHand, shown: shownHand?.length },
     { key: 'Library', count: player.library_count, cards: null },
     { key: 'Graveyard', count: Math.max(player.zone_counts.GRAVEYARD ?? 0, player.graveyard.length), cards: player.graveyard },
     { key: 'Exile', count: Math.max(player.zone_counts.EXILE ?? 0, player.exile.length), cards: player.exile },
@@ -73,8 +76,9 @@
       <li>
         {#if zone.cards && zone.cards.length}
           <button type="button" class="zone-open" onclick={event => onzone(zone.key, zone.cards!, event.currentTarget)}
-            aria-label={`${zone.key}: ${zone.count}. Show cards`}>
-            <span>{zone.key}</span><b>{zone.count}</b>
+            aria-label={`${zone.key}: ${zone.count}${zone.shown !== undefined && zone.shown < zone.count ? `, ${zone.shown} shown` : ''}. Show cards`}
+            data-testid={zone.key === 'Hand' ? 'shown-hand' : undefined}>
+            <span>{zone.key}</span><b>{zone.shown !== undefined && zone.shown < zone.count ? `${zone.shown} of ${zone.count}` : zone.count}</b>
           </button>
         {:else if zone.key === 'Library' && ondeck}
           <button type="button" class="zone-open" aria-pressed={deckOpen} onclick={ondeck}
