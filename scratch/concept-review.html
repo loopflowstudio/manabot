@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-439 Concept Review — Manual Mana Payment Subsystem (Post-Pass 6)</title>
+<title>MTG-487 Concept Review — Canonicalizing Indistinguishable Game Objects (Pre-Implementation)</title>
 <style>
   :root {
     --bg: #faf8f4;
@@ -19,10 +19,10 @@
     --no-fg: #9c2222;
     --warn-bg: #fdf4e3;
     --warn-fg: #87550a;
-    --base-bg: #f5ece6;
-    --base-fg: #7a3e1d;
     --exist-bg: #edf1f7;
     --exist-fg: #2b4c7e;
+    --plan-bg: #f5ece6;
+    --plan-fg: #7a3e1d;
     --prop-bg: #efe9fa;
     --prop-fg: #542d91;
     --code-bg: #f1ede5;
@@ -43,10 +43,10 @@
       --no-fg: #f28b8b;
       --warn-bg: #362912;
       --warn-fg: #f0c068;
-      --base-bg: #33221a;
-      --base-fg: #e8a57d;
       --exist-bg: #1b2838;
       --exist-fg: #8ab7eb;
+      --plan-bg: #33221a;
+      --plan-fg: #e8a57d;
       --prop-bg: #291e3b;
       --prop-fg: #c6a5f7;
       --code-bg: #26231f;
@@ -61,7 +61,7 @@
     color: var(--text);
     font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
-  main { max-width: 1100px; margin: 0 auto; }
+  main { max-width: 1120px; margin: 0 auto; }
   header {
     border-bottom: 1px solid var(--border);
     padding-bottom: 1.25rem;
@@ -79,7 +79,7 @@
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.35rem;
   }
-  h3 { margin: 1.35rem 0 0.5rem; font-size: 1.02rem; }
+  h3 { margin: 1.25rem 0 0.5rem; font-size: 1.02rem; }
   p, li { color: var(--text); }
   .subtitle { margin: 0; color: var(--muted); font-size: 0.95rem; }
   .meta {
@@ -112,18 +112,22 @@
     display: inline-block;
     padding: 0.12rem 0.5rem;
     border-radius: 999px;
-    font-size: 0.74rem;
+    font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     text-transform: uppercase;
     white-space: nowrap;
+    vertical-align: middle;
   }
   .yes { background: var(--yes-bg); color: var(--yes-fg); }
   .no { background: var(--no-bg); color: var(--no-fg); }
   .warn { background: var(--warn-bg); color: var(--warn-fg); }
-  .base { background: var(--base-bg); color: var(--base-fg); }
   .existing { background: var(--exist-bg); color: var(--exist-fg); }
+  .plan { background: var(--plan-bg); color: var(--plan-fg); }
   .proposed { background: var(--prop-bg); color: var(--prop-fg); }
+  .scope-this { border: 1px solid var(--accent); color: var(--accent); background: transparent; }
+  .scope-sep { border: 1px solid var(--muted); color: var(--muted); background: transparent; }
+  .irrev { background: var(--no-bg); color: var(--no-fg); border: 1px solid var(--no-fg); }
 
   .callout {
     background: var(--surface);
@@ -136,10 +140,11 @@
   }
   .callout.bad { border-left-color: var(--no-fg); }
   .callout.ok { border-left-color: var(--yes-fg); }
+  .callout.warn { border-left-color: var(--warn-fg); }
   .callout strong.title {
     display: block;
     margin-bottom: 0.35rem;
-    font-size: 0.96rem;
+    font-size: 0.98rem;
   }
 
   table {
@@ -163,7 +168,7 @@
     background: var(--surface-2);
     font-weight: 600;
     color: var(--muted);
-    font-size: 0.78rem;
+    font-size: 0.77rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
@@ -171,7 +176,7 @@
 
   .grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 1rem;
     margin: 1rem 0;
   }
@@ -189,7 +194,7 @@
     border-radius: 8px;
     padding: 0.75rem 0.9rem;
     margin: 0.6rem 0;
-    font-size: 0.87rem;
+    font-size: 0.86rem;
   }
   .box.bad { border-color: var(--no-fg); background: var(--no-bg); }
   .box.good { border-color: var(--yes-fg); background: var(--yes-bg); }
@@ -197,172 +202,201 @@
   .flow-row {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
     gap: 0.75rem;
-    padding: 0.3rem 0.55rem;
+    padding: 0.32rem 0.55rem;
     margin: 0.25rem 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
   }
   .tag {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     color: var(--muted);
     white-space: nowrap;
   }
+  .tag.bad { color: var(--no-fg); font-weight: 600; }
+  .tag.good { color: var(--yes-fg); font-weight: 600; }
   .questions ol { padding-left: 1.25rem; }
-  .questions > ol > li { margin-bottom: 1.1rem; }
+  .questions > ol > li { margin-bottom: 1.15rem; }
   .options { list-style: none; padding-left: 0.25rem; margin: 0.35rem 0 0; }
-  .options li { margin: 0.25rem 0; }
+  .options li { margin: 0.28rem 0; }
   .muted { color: var(--muted); }
-  .num { font-variant-numeric: tabular-nums; }
+  .small { font-size: 0.84rem; }
 </style>
 </head>
 <body>
 <main>
 
 <header>
-  <h1>MTG-439 Concept Review — Manual Mana Payment Subsystem (Post-Pass 6)</h1>
+  <h1>MTG-487 Concept Review — Canonicalizing Indistinguishable Game Objects</h1>
   <p class="subtitle">
-    Area reviewed: <strong>the complete manual mana payment subsystem and its consumers</strong> — announced &amp; resolution mana action spaces, interchangeable-source skipping, color-choice modal collapse, <code>skip_trivial</code> conformance equivalence, payment staging &amp; hot-path affordability, LLM text observation, and Academy Moves narration across <code>managym/src/flow/{mana,mana/interchangeable,payment,decision,action,tick,scenario}.rs</code>, <code>managym/state/src/{card,ability,effect,payment}.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>managym/academy/recording.py</code>, and <code>academy/ui/src/lib/board/{prompt.ts,Rail.svelte}</code> — widened from the dual-land skip diff because all of these enforce one manual-payment and decision-boundary contract.
+    Area reviewed: <strong>the complete object-equivalence, decision-publication, combat-declaration, determinization, and Academy aliasing contract</strong> — spanning <code>managym/src/flow/{interchangeable,tick,game,search,scenario,combat,combat_actions,combat_preview,decision,opening}.rs</code>, <code>managym/state/src/{game_object,permanent,payment}.rs</code>, <code>managym/src/state/hash.rs</code>, <code>managym/src/agent/{action,structured_offer,env/snapshot}.rs</code>, <code>managym/src/{decision_context,experience}.rs</code>, <code>managym/academy/server.py</code>, and <code>academy/ui/src/lib/board/{view.ts,combat.ts,payment.ts}</code> — widened from the equivalence predicate because folding alters the shared legal-action contract across every publisher and consumer.
   </p>
   <div class="meta">
-    <span>Diff reviewed: base <code>0532a9d068</code> → <code>HEAD</code> <code>c4ab6840a1</code> (Pass 6 + compress + QA)</span>
-    <span>CI evidence: run <code>45709945019</code> on <code>cc9c5281d8</code>; run <code>45716744677</code> in progress on <code>HEAD</code></span>
-    <span>Legend: <span class="badge base">Before (Pass 5 / base)</span> <span class="badge existing">Built at HEAD</span> <span class="badge proposed">Optional gate trim</span></span>
+    <span>Stage: <strong>Pre-implementation plan review</strong> at <code>HEAD</code> <code>293678605e</code> (stacked on MTG-439 <code>3c09197f28</code>)</span>
+    <span>Legend: <span class="badge existing">Existing code</span> <span class="badge plan">Plan (scratch/plan.md)</span> <span class="badge proposed">Recommended revision</span></span>
   </div>
 </header>
 
-<section class="callout ok">
-  <strong class="title">Headline verdict: Concepts line up — advance to gate. All four Pass 5 mismatches are resolved at <code>HEAD</code>.</strong>
+<section class="callout bad">
+  <strong class="title">Headline verdict: The core architecture (fail-closed reference census + shared folding + Academy aliases) is right, but the plan has four concrete conceptual bugs that must be fixed before Pass 1 begins.</strong>
   <p style="margin:0.35rem 0 0">
-    Pass 6 (<code>c43f83e3d3</code>), compress (<code>046392c616</code>), and post-Pass-6 QA (<code>c4ab6840a1</code>) resolved every structural mismatch found in the prior review:
-    (1) <code>equivalent_mana_choices</code> now collapses equivalent <code>Decision::ManaChoice</code> modes to a singleton (<code>len == 1</code>) inside <code>mana_choice_actions</code>, restoring <code>automatic_payment_action</code> to pure <code>ManaPayment::Auto</code> and passing <code>Semantic Kernel Conformance</code> with zero divergence;
-    (2) <code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly instead of running announced-payment single-unit subtraction;
-    (3) the <code>Revisions</code>-keyed cache is gone, replaced by one-shot <code>StagedAnnouncedActions</code> cleared on every action/payment/scenario boundary;
-    (4) all Rust, Python Unit, Academy UI, Protocol v1, Clean-machine Play, Semantic Kernel Conformance, and Integration suites passed on <code>45709945019</code> except the doc-comment grep in <code>test_no_runner_turns_skipping_off</code>, which <code>c4ab6840a1</code> fixed.
-    Remaining work belongs to <strong>gate</strong>: verify <code>45716744677</code> green and adopt <code>managym/perf/baseline.json</code> (with two small, non-conceptual hot-path trims available if <code>Engine Budget</code>'s diverged Seed 1 <code>worst_s</code> stays ~20 ms above the +10% cap).
+    Pass 1 (reference census + permanent folding + behavioral oracle + Engine Budget) is the right first slice. However, checking the plan's rules directly against <code>managym</code>'s types exposes four structural mismatches:
+    (1) comparing <code>Object.form</code> leaks hidden face-down manifest printings and breaks determinized root invariance;
+    (2) walking &amp; comparing <code>Permanent.spell_entry.payment</code> prevents cast permanents paid with different lands — and every land that ever paid for a live permanent — from ever folding;
+    (3) folding only inside <code>Game::tick</code> leaves <code>determinize()</code>, <code>scenario_refresh_priority()</code>, and ad-hoc dedups in <code>decision.rs</code> out of sync (and aliases can drift across <code>GameSnapshot</code>);
+    (4) sequential combat symmetry breaking requires new hashed <code>CombatState</code> fields (<code>MATCH_STATE_HASH_VERSION</code> bump), breaks compound <code>DeclareAttackers</code>/<code>DeclareBlockers</code> lowering in <code>structured_offer.rs</code>, and needs attacker-target normalization in <code>combat_preview</code>.
   </p>
 </section>
 
-<h2>1. Do the product's concepts and the code's concepts line up?</h2>
+<h2>1. Do the domain concepts and the code's concepts line up?</h2>
 
 <table>
   <thead>
     <tr>
-      <th style="width:19%">Product / engine concept</th>
-      <th style="width:31%">Code concept at <code>HEAD</code> <span class="badge existing">Built</span></th>
+      <th style="width:18%">Domain / engine concept</th>
+      <th style="width:28%">Code concept (<span class="badge existing">Existing</span> / <span class="badge plan">Plan</span>)</th>
       <th style="width:9%">Lines up?</th>
-      <th style="width:41%">Assessment &amp; edge-case notes</th>
+      <th style="width:45%">Diagnosis, scope &amp; fix</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong><code>skip_trivial</code> transport equivalence</strong><br><span class="muted"><code>skip_trivial=true</code> skips only singleton (<code>len == 1</code>) action spaces; reference and optimized stay lockstep-identical.</span></td>
-      <td><code>Game::mana_choice_actions</code> (<code>mana.rs:2885</code>) truncates equivalent manual modes to <code>[ChooseMode(first)]</code>; <code>automatic_payment_action</code> (<code>mana.rs:2233</code>) is pure <code>ManaPayment::Auto</code>.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Matches <code>mana_spend_choices</code> (<code>limit = 1</code>), <code>compute_announced_mana_actions</code>, and <code>resolution_mana_actions</code>. Proven green in <code>Semantic Kernel Conformance</code> on both <code>45709945019</code> and <code>45716744677</code> (14 cases, zero divergence).</td>
+      <td><strong>Viewer-safe object indistinguishability</strong><br><span class="muted">Two objects fold iff they are rules-equivalent and folding reveals no hidden information.</span></td>
+      <td><span class="badge plan">Plan</span> <code>Game::interchangeable(a, b)</code> compares <code>Object.form</code> and <code>Permanent</code> field-by-field; claims root space depends only on state the chooser sees (<code>plan.md:39-41,210</code>).</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span></td>
+      <td><strong>Hidden-information leak + self-sabotage.</strong>
+        <br>1. <code>ObjectForm.backing</code> (<code>state/src/game_object.rs:658</code>) holds the <em>hidden card</em> behind a face-down manifest. Comparing <code>form</code> folds two opponent manifests iff their hidden backings match, leaking hidden state to the chooser and breaking <code>determinize</code> root stability. Ignoring <code>backing</code> would instead collapse strategically distinct hidden cards. <span class="badge proposed">Fix</span> Never fold <code>object.is_face_down()</code> in any zone (matching existing <code>mana/interchangeable.rs:212</code>).
+        <br>2. <code>Permanent.spell_entry.payment</code> (<code>state/src/payment.rs:22-39</code>) stores <code>ManaOrigin { object: ObjectId }</code> for every land that paid for the spell. Comparing full <code>spell_entry</code> stops any two cast creatures paid with different lands from folding; walking it in the census marks every land that paid for a live permanent as "referenced" forever. <span class="badge proposed">Fix</span> Settled permanents compare only <code>(payment.is_some(), kicked, x)</code> and do not contribute active census references (only pending <code>CardMoved{Battlefield}</code> / stack / triggers / frames / active <code>Payment</code> do).
+        <br>3. <code>LearnTakeLesson</code> (<code>decision.rs:2214</code>) operates on <em>outside-game</em> sideboard cards (<code>zones.zone_of == None</code>; <code>state[object]</code> panics). <span class="badge proposed">Fix</span> Handle outside-game sideboard objects explicitly via <code>entry_object</code>.</td>
     </tr>
     <tr>
-      <td><strong>Simple mana tap (basics &amp; choice sources)</strong><br><span class="muted">Basic lands, duals, 5-color sources, dorks/rocks, and Great Divide Guide grants share one tap rule and wording.</span></td>
-      <td><code>ActivatedAbilityDefinition::is_simple_mana_tap()</code> (<code>state/src/card.rs:725</code>) + <code>ManaActivation.automatic</code>; <code>mana_choices_description</code> (<code>"Tap Kyoshi Village for {G}/{W}"</code>, <code>"Tap Birds of Paradise for any color"</code>); unified <code>useful_payment_taps</code>.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Single predicate. Preserves one <code>ActivateAbility</code> per source (respecting the 64-action cap and v11 layout per steer <code>69c80076</code>), while non-simple abilities (Treasure, pain, filter, tap-N) remain <code>"Activate ability: &lt;Name&gt;"</code>.</td>
+      <td><strong>Fail-closed reference census</strong><br><span class="muted">A new id-holding rules field fails to compile until accounted for.</span></td>
+      <td><span class="badge plan">Plan</span> Exhaustive destructuring walk over <code>GameState</code> + <code>PendingChoice</code>, replacing <code>mana/interchangeable.rs</code>'s enumerated scan.</td>
+      <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span></td>
+      <td>Major architectural upgrade: <code>mana/interchangeable.rs</code> already missed 7+ id-holding fields.
+        <br><strong>Required invariant:</strong> track exact <code>ObjectId</code> (slot + generation) and <code>PermanentId</code> — never bare slots — except when resolving <code>CardId</code> via <code>state.object_of(card)</code>. Explicitly separate active state (<code>pending_events</code>, <code>effects</code>, <code>stack_objects</code>, <code>Payment</code>, <code>EffectFrame</code>, <code>PendingChoice</code>, <code>CastPermissions</code>, <code>exile_links</code>, <code>object_counters</code>, <code>TurnState</code>, <code>CombatState</code>) from historical/storage fields (<code>events</code>, <code>observation_events</code>, <code>object_lki</code>, <code>spell_lki</code>, <code>zones</code>, <code>objects</code>, <code>permanents</code>, <code>library_order_pins</code>, settled <code>Permanent.spell_entry.payment</code>).</td>
     </tr>
     <tr>
-      <td><strong>Interchangeable untapped lands (incl. played this turn)</strong><br><span class="muted">Identical unreferenced plain lands do not force a stop; manlands, creatures, non-lands, and <code>power_up</code> stay distinct.</span></td>
-      <td><code>interchangeable.rs::determined_source_counts</code> checks profile optionality first, then static identity, local bindings, hoisted <code>all_unbound_board_wide</code>, then layered characteristics (<code>can_become_creature</code> / <code>power_up</code> guards). Single-unit guard preserves <code>Sol Ring</code>.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Semantics and phase ordering both line up. Minor non-conceptual trim for gate if needed: skip building/sorting the returned <code>Vec&lt;UsefulTap&gt;</code> when <code>!options.need_taps</code>.</td>
+      <td><strong>Single folding authority for every published decision</strong><br><span class="muted">Every live, determinized, and scenario decision exposes the same folded space.</span></td>
+      <td><span class="badge plan">Plan</span> "One place: <code>Game::tick</code> (<code>flow/tick.rs:103</code>)."</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span></td>
+      <td><strong>Action with no single owner — bypassed publication paths.</strong> <code>Game::refresh_sampled_decision</code> (<code>flow/search.rs:272-292</code>), <code>Game::scenario_refresh_priority</code> (<code>flow/scenario.rs:230</code>), and <code>scenario_naming_vocabulary</code> (<code>:83</code>) build spaces and call <code>publish_action_space</code> <em>without</em> calling <code>tick()</code>. Determinized opponent spaces stay unfolded (contradicting <code>plan.md:210</code>), and <code>search.rs:284</code>'s <code>unchanged</code> comparison compares folded against unfolded and spuriously bumps <code>decision_epoch</code>.
+        <br><span class="badge proposed">Fix</span> Put folding in one <code>fold_action_space</code> helper called by <code>tick()</code> (before auto-pay / <code>skip_trivial</code>) AND by <code>refresh_sampled_decision</code> / <code>scenario_refresh_priority</code>, passing the folded <code>(ActionSpace, Aliases)</code> pair into <code>publish_action_space</code>.</td>
     </tr>
     <tr>
-      <td><strong>Color modal equivalence (announced vs. resolution)</strong><br><span class="muted">A color modal appears only when colors lead to distinguishable states — both for spells and for <code>Ward</code> / <code>TurnFaceUp</code>.</span></td>
-      <td><code>equivalent_mana_choices</code> (<code>mana.rs:2910</code>) splits <code>Enclosing::Announced</code> (<code>cost_after_produced_unit</code>) from <code>Enclosing::Resolution</code> (exact completion, <code>resolution_remaining_pips</code>, or <code>same_determined_taps</code>).</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Both state models now match how mana actually commits. One theoretical hardening noted: <code>single_unit_remaining</code> (<code>mana.rs:3050</code>) checks <code>m.total() &lt;= 1</code> without checking <code>a.cost.mana_value == 0</code> (no current catalog card is a 1-output colored-cost mana filter; easy 1-line guard in gate).</td>
+      <td><strong>One equivalence rule for all candidate dedup</strong><br><span class="muted">No duplicate hand/exile dedup bypassing the census or dropping Academy aliases.</span></td>
+      <td><span class="badge existing">Existing</span> <code>resolution_cast_candidates</code> and <code>revealed_hand_objects</code> (<code>decision.rs:3538-3572</code>) dedup by bare <code>definition_id</code>; <span class="badge plan">Plan</span> excludes them (<code>plan.md:222</code>).</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span></td>
+      <td><strong>One idea under two owners.</strong> Pre-deduping by bare <code>definition_id</code> inside <code>decision.rs</code> (1) ignores <code>ObjectBinding.known_to</code>, <code>object_counters</code>, and <code>exile_links</code>, and (2) strips copies before the folder sees them, so <strong>no <code>aliases</code> reach Academy</strong> — clicking the second copy in hand during a resolution cast or revealed-hand discard does nothing.
+        <br><span class="badge proposed">Fix</span> Remove those two ad-hoc dedups in Pass 2 so the shared folder owns both census safety and aliases.</td>
     </tr>
     <tr>
-      <td><strong>Resolution payment offers (<code>TurnFaceUp</code>, <code>Ward</code>)</strong><br><span class="muted">Per-source taps for both basics and duals on real choices; skipped when forced or interchangeable.</span></td>
-      <td><code>Decision::Payment</code> (<code>decision.rs:1882</code>) delegates to <code>resolution_mana_actions</code> (<code>mana.rs:2441</code>), sharing <code>useful_payment_taps</code> and <code>TapForMana</code> labels in <code>action.rs</code>.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Unified with announced payments (ship-review choice <code>3b</code>). Verified in live QA across <code>Ward {2}</code> seeds 3, 5, 7 and <code>source_taps.rs</code>.</td>
+      <td><strong>Alias lifecycle beside <code>ActionSpace</code></strong><br><span class="muted">Aliases match the published space on step, error rollback, clone, and snapshot restore.</span></td>
+      <td><span class="badge plan">Plan</span> Sibling field on <code>Game</code> beside <code>current_action_space</code>; <code>ActionSpace</code> unchanged (<code>plan.md:144-149</code>).</td>
+      <td><span class="badge warn">Partial</span><br><span class="badge scope-this">This work</span></td>
+      <td>Keeping <code>ActionSpace</code> unchanged is the right call (preserves search <code>PartialEq</code>, serialization, digests, <code>SEMANTIC_DECISION_VERSION</code>).
+        <br><strong>Lifecycle drift risk:</strong> <code>Game::step</code> takes/restores <code>current_action_space</code> on error (<code>tick.rs:27,42</code>), and <code>GameSnapshot::snapshot</code> / <code>live_env</code> (<code>agent/env/snapshot.rs:112,199</code>) construct <code>Game</code> directly.
+        <br><span class="badge proposed">Fix</span> Update aliases strictly inside <code>publish_action_space(space, aliases)</code> (clearing on <code>game_over</code>), restore them beside <code>current_action_space</code> in <code>step</code>, and carry them in <code>GameSnapshot</code> (outside <code>SearchStateWitness</code>).</td>
     </tr>
     <tr>
-      <td><strong>Staged announced actions (cache ownership)</strong><br><span class="muted">Avoids double-computing announced mana offers between <code>advance_payment</code> and <code>payment_action_space</code> without stale state.</span></td>
-      <td><code>SharedSources::staged_announced: Option&lt;StagedAnnouncedActions&gt;</code> (<code>mana.rs:584, 2357-2396</code>), consumed once via <code>.take()</code>, cleared on <code>execute_action</code> / <code>advance_payment</code> / <code>scenario_refresh_priority</code>, and reset on <code>Game::clone</code> / snapshot restore.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Eliminates Pass 5's unsound <code>Revisions</code> key completely; debug builds assert exact equality with fresh recomputation.</td>
+      <td><strong>Sequential combat symmetry breaking</strong><br><span class="muted">Identical attackers/blockers prune redundant branches without breaking drafts or compound commands.</span></td>
+      <td><span class="badge plan">Plan</span> Refuse "attack"/"block" after an interchangeable creature declined; normalize in <code>combat_preview</code>; compare attackers by combat role (<code>plan.md:119-140</code>).</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-this">This work</span><br><span class="badge irrev">Hash bump</span></td>
+      <td><strong>Three unmodeled dependencies.</strong>
+        <br>1. <code>CombatState</code> (<code>flow/combat.rs:6-19</code>) does <strong>not</strong> record declines (<code>declare_attacker(_, false)</code> is a no-op). Needs <code>declined_attackers</code> / <code>declined_blockers</code> in <code>CombatState</code> + <code>CanonicalCombat</code> (<code>state/hash.rs:154</code>, bumping <code>MATCH_STATE_HASH_VERSION</code>) AND census vouching so declining <code>A</code> does not mark <code>A</code> as referenced.
+        <br>2. Compound <code>AtomicCommand::DeclareAttackers</code> (<code>structured_offer.rs:1519-1551</code>) and <code>structured_blocker_offers</code> (<code>:760-866,1554-1590</code>) lower plans sequentially by exact creature id; declining <code>T1</code> then attacking/blocking with identical <code>T2</code> hits <code>WrongDecision</code> (<code>skip_trivial=true</code>) or <code>Invariant</code> (<code>false</code>).
+        <br>3. <code>combat_preview</code> must normalize <strong>both</strong> blocker identity (<code>T2 → T1</code>) AND folded attacker targets (<code>A2 → A1</code>), and check <code>undeclared</code> modulo equivalence. See Section 3 &amp; Question 4.</td>
     </tr>
     <tr>
-      <td><strong>Automatic execution &amp; hover preview</strong><br><span class="muted"><code>PayCost</code> and auto-skip never over-tap surplus lands; preview matches execution.</span></td>
-      <td><code>automatic_taps</code> → <code>automatic_choice_taps</code> (<code>mana.rs:3654</code>) prunes surplus taps in reverse reluctance order honoring <code>saved_obligations</code>; <code>preview.rs</code> runs the same prefix.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Fixes base's over-tap bug (<code>Plains ×2 + Kyoshi Village</code> for <code>{1}{G}</code> leaves 1 Plains untapped). Choice activations return <code>NotApplicable</code> on hover.</td>
+      <td><strong>Decision-kind allowlist for <code>SelectCard</code></strong><br><span class="muted">Never fold library-order or ordered/positional picks.</span></td>
+      <td><span class="badge plan">Plan</span> Lists foldable <code>Action</code> variants and excluded decisions (<code>plan.md:104-113</code>).</td>
+      <td><span class="badge warn">Partial</span><br><span class="badge scope-this">This work</span></td>
+      <td><code>Action::SelectCard</code> is emitted by 14+ <code>Decision</code> variants, <code>OpeningHands</code> (<code>Stage::Bottom</code> / <code>Stage::Enter</code>), and <code>PendingChoice::Pay</code>. Gate folding on <strong>both</strong> a zone allowlist (<code>Battlefield</code>, <code>Hand</code>, <code>Graveyard</code>, face-up <code>Exile</code>, outside-game <code>Sideboard</code> — never <code>Library</code> or <code>Stack</code>) and an explicit <code>Decision</code> check (never <code>OrderLibrary</code>, <code>DistributeCounters</code>, <code>ChooseTrigger</code>, <code>ChooseMode</code>).</td>
     </tr>
     <tr>
-      <td><strong>Academy Moves log &amp; modal prompt</strong><br><span class="muted">Mana symbols render as pips; resolved color is narrated; modal reads <code>Choose the mana to add</code>.</span></td>
-      <td><code>Rail.svelte</code> wraps move text in <code>&lt;ManaText&gt;</code>; <code>recording.py::_resolved_mana_tap</code> + <code>_pool_delta_mana</code>; <code>prompt.ts</code> checks <code>stage === 'mana_color'</code>.</td>
-      <td><span class="badge yes">Yes</span></td>
-      <td>Verified in live QA and <code>test_recording_narration.py</code> (ship-review choice <code>5c</code>). Note: Auto-tap now lives in Academy's Settings switch after main's merge.</td>
+      <td><strong>Academy wire <code>aliases</code> &amp; UI direct manipulation</strong><br><span class="muted">One row in All legal choices; every copy on board or in hand clicks/drags/hovers cleanly; piles stay whole.</span></td>
+      <td><span class="badge plan">Plan</span> Optional <code>aliases</code> on <code>experience::InteractionOffer</code> (not <code>structured_offer</code>); <code>boardView</code> anchors offer on subject + aliases (<code>plan.md:153-184</code>).</td>
+      <td><span class="badge yes">Yes</span><br><span class="badge scope-this">This work</span><br><span class="badge irrev">Wire field</span></td>
+      <td>Clean separation: keeps <code>SEMANTIC_DECISION_VERSION = 8</code> and <code>decision_fingerprint</code> untouched.
+        <br><strong>Guardrail:</strong> In <code>boardView</code> (<code>view.ts:332-366</code>), keep <code>view.list</code> and <code>view.tray</code> strictly 1-per-offer and index <code>aliases</code> only into the drawn-object <code>at</code> map (<code>drawn.has(id)</code>), so graveyard/exile/sideboard aliases never duplicate tray cards. <code>view.test.ts:54</code> already asserts <code>placements &gt;= 1</code>. Note: adding <code>aliases</code> under <code>deny_unknown_fields</code>/<code>extra="forbid"</code> breaks older readers (accepted since server &amp; UI ship together).</td>
     </tr>
     <tr>
-      <td><strong>LLM text observation</strong><br><span class="muted">Choice taps read like basics (<code>Tap for mana P1 (Kyoshi Village)...</code>) with no ability index.</span></td>
-      <td><code>text_observation.py:646-653</code> rewrites <code>kind = "tap_for_mana"</code> when <code>kind == "activate_ability" and action.description.startswith("Tap ") and len(focus) == 1</code>.</td>
-      <td><span class="badge warn">Fragile (acceptable)</span></td>
-      <td>Matches basics without changing the wire <code>Action</code> schema or v11 layout (ship-review choice <code>4b</code>). Coupled to <code>action.rs:138</code>'s <code>"Tap "</code> prefix; covered by <code>test_text_observation.py</code> and <code>test_pooled_mana_classes_input.py</code>. See Question 2.</td>
+      <td><strong><code>TurnState.graveyard_from_battlefield</code> omitted from state hash</strong><br><span class="muted">Every rules-read state field enters <code>CanonicalMatchState</code>.</span></td>
+      <td><span class="badge existing">Existing</span> Read by <code>flow/statics.rs:597,745</code>; absent from <code>CanonicalTurn</code> (<code>state/hash.rs:79-151</code>).</td>
+      <td><span class="badge no">No</span><br><span class="badge scope-sep">Separate outcome</span></td>
+      <td>Pre-existing state-hash gap noted in <code>scratch/questions.md</code>. Keep as a separate outcome unless Pass 3 already bumps <code>MATCH_STATE_HASH_VERSION</code> for <code>CombatState</code>, in which case bundling it avoids two hash version bumps.</td>
     </tr>
   </tbody>
 </table>
 
-<h2>2. What Pass 6 fixed — before vs. after</h2>
+<h2>2. Biggest Mismatch #1 — Hidden <code>ObjectForm.backing</code> &amp; Historical <code>Permanent.spell_entry.payment</code></h2>
+
+<p>Walking two concrete games through the plan's predicate reveals how a literal "compare <code>form</code> + compare <code>Permanent</code> field-by-field + walk every <code>ObjectId</code> in <code>GameState</code>" rule both <strong>leaks private state</strong> and <strong>silently disables folding on real boards</strong>.</p>
 
 <div class="grid-2">
   <div class="card">
-    <h3><span class="badge base">Pass 5 (broken)</span> <code>skip_trivial</code> hook diverged on <code>ManaChoice</code></h3>
+    <h3><span class="badge plan">Plan as written</span> Trace A: Opponent's two face-down manifests</h3>
     <div class="box bad">
-      <div class="flow-row"><span>1. <code>Decision::ManaChoice</code> emitted all modes</span><span class="tag">[ChooseMode(0), ChooseMode(1)]</span></div>
-      <div class="flow-row"><span>2. <code>automatic_payment_action</code> skipped only if <code>skip_trivial</code></span><span class="tag">reference stopped; optimized skipped</span></div>
-      <div class="flow-row"><span>3. <code>ConformancePair</code></span><span class="tag">4 panics (divergence)</span></div>
+      <div class="flow-row"><span>Board: Opp has manifest <code>M1</code> (Mountain) &amp; <code>M2</code> (Bear)</span><span class="tag">both 2/2 face-down</span></div>
+      <div class="flow-row"><span>You cast Shock → <code>ChooseTarget</code> asks <code>interchangeable(M1, M2)</code></span><span class="tag">checks <code>form == form</code></span></div>
+      <div class="flow-row"><span><code>M1.form.backing != M2.form.backing</code> → 2 targets</span><span class="tag bad">leaks "different cards"</span></div>
+      <div class="flow-row"><span><code>determinize(You)</code> resamples both to Mountain → 1 target</span><span class="tag bad">root space mutates!</span></div>
     </div>
-    <p class="muted" style="margin:0.4rem 0 0">Also ran <code>Enclosing::Resolution</code> through announced-payment subtraction and keyed <code>CachedAnnouncedActions</code> on <code>Revisions</code>.</p>
+    <h3><span class="badge plan">Plan as written</span> Trace B: Cast creature + 3 Plains on Turn 2</h3>
+    <div class="box bad">
+      <div class="flow-row"><span>T1: Tap <code>Plains #1</code> to cast <code>Flyer #1</code></span><span class="tag"><code>spell_entry.payment</code> records <code>Plains #1</code></span></div>
+      <div class="flow-row"><span>T2: Tap <code>Plains #2</code> to cast <code>Flyer #2</code></span><span class="tag"><code>spell_entry.payment</code> records <code>Plains #2</code></span></div>
+      <div class="flow-row"><span>Census walks <code>Permanent.spell_entry.payment</code></span><span class="tag bad">Plains #1 &amp; #2 "referenced" forever</span></div>
+      <div class="flow-row"><span><code>Flyer #1.spell_entry == Flyer #2.spell_entry</code></span><span class="tag bad">false — Flyers never fold either!</span></div>
+    </div>
   </div>
 
   <div class="card">
-    <h3><span class="badge existing">Built at HEAD</span> Single action-space contract &amp; clean staging</h3>
+    <h3><span class="badge proposed">Recommended</span> Viewer-safe &amp; live-reference boundary</h3>
     <div class="box good">
-      <div class="flow-row"><span>1. <code>mana_choice_actions</code> collapses equivalent manual modes</span><span class="tag">[ChooseMode(first)] (len == 1)</span></div>
-      <div class="flow-row"><span>2. <code>automatic_payment_action</code></span><span class="tag">ManaPayment::Auto only</span></div>
-      <div class="flow-row"><span>3. <code>ConformancePair</code> (14 cases)</span><span class="tag">GREEN in CI (0 divergence)</span></div>
+      <div class="flow-row"><span>Guard 1: <code>if object.is_face_down() { return false; }</code></span><span class="tag good">matches mana/interchangeable.rs:212</span></div>
+      <div class="flow-row"><span>Opponent's manifests <code>M1, M2</code> always stay 2 targets</span><span class="tag good">0 privacy leak; stable root</span></div>
+      <div class="flow-row"><span>Once turned face up (public), identical manifests can fold</span><span class="tag good">viewer-safe</span></div>
     </div>
-    <p class="muted" style="margin:0.4rem 0 0"><code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly; one-shot <code>StagedAnnouncedActions</code> replaces the <code>Revisions</code> cache.</p>
+    <h3><span class="badge proposed">Recommended</span> Settled <code>Permanent.spell_entry</code> semantics</h3>
+    <div class="box good">
+      <div class="flow-row"><span>Active receipts (<code>Payment</code>, stack, triggers, frames, pending ETB)</span><span class="tag good">walked in census</span></div>
+      <div class="flow-row"><span>Settled permanent <code>spell_entry</code>: only <code>(was_cast, kicked, x)</code></span><span class="tag good">matches all 3 engine reads</span></div>
+      <div class="flow-row"><span>T2: <code>Plains #1/#2/#3</code> fold to 1 tap; <code>Flyer #1/#2</code> fold to 1</span><span class="tag good">real games actually fold</span></div>
+    </div>
+    <p class="muted small" style="margin:0.5rem 0 0">Verified against every read of <code>spell_entry</code> in the repo: <code>triggers.rs:1156</code> (only on pending <code>CardMoved{Battlefield}</code>), <code>triggers.rs:1838</code> (<code>payment.is_some()</code>), and <code>statics.rs:1231</code> (<code>kicked</code>).</p>
   </div>
 </div>
 
-<h2>3. Engine Budget performance diagnosis (CI run <code>45709945019</code>)</h2>
+<h2>3. Biggest Mismatch #2 — Sequential Combat Symmetry Breaking vs. <code>CombatState</code> &amp; Compound Lowering</h2>
 
-<p>Pass 6 + compress cut the Pass 5 overhead more than in half and made Seeds 2, 3, and Seed 1's reference-worst root strictly faster. Per-seed telemetry from the downloaded <code>engine-budget</code> artifact on <code>cc9c5281d8</code> (same Rust/Python code as <code>HEAD</code> except a 1-line doc comment fix):</p>
+<p>Unlike single-decision folding (which only removes duplicates within one published <code>ActionSpace</code>), the plan's combat rule couples <strong>across consecutive decisions</strong>. Tracing a drafted attack or block through the three combat authorities exposes what the plan left out:</p>
 
-<pre># Real CI output — Engine Budget (run 45709945019, job 139541701368, head cc9c5281d8)
-| Check                | Reference (7d3ac1eb1)      | Pass 5 (45682485004) | Pass 6 (45709945019)        |
-| -------------------- | -------------------------- | -------------------- | --------------------------- |
-| steps count          | 118,559                    | 115,941 (-2.2%)      | 115,941 (-2.2%)             |
-| bench_steps elapsed  | 4.537 s (median, 512 games)| +3.6% slower         | 4.552 s (+0.3% wall, ok)    |
-| steps throughput     | 26,130.6 /s                | -5.7% slower         | 25,468.9 /s (-2.5%, ok)     |
-| search total (3 seed)| 106.190 s (23,168 sims)    | +5.3% slower         | 111.419 s (+4.9%, ok)       |
-|   seed 1             | 33.946 s (7,680 sims; 4.42 ms/sim; worst 2.566 s @ d=2)  | — | 51.287 s (8,320 sims; 6.16 ms/sim; worst 2.843 s @ d=28) |
-|   seed 2             | 40.904 s (8,064 sims; 5.07 ms/sim; worst 2.473 s @ d=5)  | — | 32.222 s (-21.2%, 7,488 sims; 4.30 ms/sim; worst 1.750 s) |
-|   seed 3             | 31.340 s (7,424 sims; 4.22 ms/sim; worst 2.271 s @ d=2)  | — | 27.910 s (-10.9%, 7,040 sims; 3.96 ms/sim; worst 2.454 s) |
-| search worst reply   | 2.566 s                    | +13.2% over cap      | 2.843 s (+10.8%; 20 ms over 2.823 s cap) |</pre>
+<div class="grid-2">
+  <div class="card">
+    <h3><span class="badge plan">Plan as written</span> Draft <code>{Token B}</code> from identical <code>[Token A, Token B]</code></h3>
+    <div class="box bad">
+      <div class="flow-row"><span>1. <code>CombatState</code> has no <code>declined_attackers</code> field</span><span class="tag bad">cannot tell Token A declined</span></div>
+      <div class="flow-row"><span>2. Compound <code>DeclareAttackers</code> lowers <code>[A:no, B:yes]</code></span><span class="tag">steps <code>A:no</code> first</span></div>
+      <div class="flow-row"><span>3. After <code>A:no</code>, <code>tick()</code> strips <code>B:yes</code> &amp; auto-skips <code>B</code></span><span class="tag bad"><code>WrongDecision</code> / <code>Invariant</code>!</span></div>
+      <div class="flow-row"><span>4. Blocker draft <code>B1 → Attacker A2</code> (folded into <code>A1</code>)</span><span class="tag bad"><code>combat_preview::undeclared</code> refuses</span></div>
+    </div>
+  </div>
 
-<div class="callout">
-  <strong class="title">Why Seed 1 jumped while Seeds 2 &amp; 3 got 11–21% faster — and the 2.5% micro-overhead left in <code>bench_steps</code></strong>
-  <ul style="margin:0.35rem 0 0; padding-left:1.25rem">
-    <li style="margin-bottom:0.4rem"><strong>Seed 1 trajectory shift, not a search regression:</strong> At the identical root position <code>d=2</code> (<code>ac=7</code>, which is Reference's own worst reply at <code>2.566 s</code>), Candidate is <strong>14.9% faster</strong> (<code>2.183 s</code>). Because skipping trivial mana stops shifted random playout scores at <code>d=2</code>, Seed 1 chose a different move into a heavier 40-decision game line (<code>8,320</code> vs <code>7,680</code> sims), hitting <code>2.843 s</code> at <code>d=28</code> — just 20 ms over the +10% cap.</li>
-    <li><strong>Two small non-conceptual hot-path trims for gate (if needed to clear the 20 ms margin &amp; pull <code>bench_steps</code> wall time below base):</strong>
-      (a) <span class="badge proposed">Gate trim</span> Short-circuit <code>production_bonuses</code> (<code>mana.rs:3502</code>) when <code>tapped.matched.is_empty()</code> so ordinary land taps and <code>equivalent_mana_choices</code> do not run a full two-player <code>mana_triggers()</code> / <code>layer_views()</code> scan;
-      (b) <span class="badge proposed">Gate trim</span> In <code>determined_source_counts</code> (<code>interchangeable.rs:28</code>), return early without allocating/sorting the returned <code>Vec&lt;UsefulTap&gt;</code> when <code>!options.need_taps</code>.</li>
-  </ul>
+  <div class="card">
+    <h3><span class="badge proposed">Recommended</span> Complete combat contract (if Pass 3 stays in MTG-487)</h3>
+    <div class="box good">
+      <div class="flow-row"><span>1. Add <code>declined_attackers</code> / <code>declined_blockers</code> to <code>CombatState</code></span><span class="tag good">+ <code>CanonicalCombat</code> + census vouch</span></div>
+      <div class="flow-row"><span>2. Normalize in <code>structured_offer</code> (<code>DeclareAttackers</code> &amp; <code>DeclareBlockers</code>)</span><span class="tag good">re-home marks + alias targets</span></div>
+      <div class="flow-row"><span>3. Normalize in <code>combat_preview</code> for both blocker &amp; attacker aliases</span><span class="tag good">equivalence check in <code>undeclared</code></span></div>
+      <div class="flow-row"><span>4. Menace / must-attack / must-block checked after normalization</span><span class="tag good">refusals stay exact</span></div>
+    </div>
+    <p class="muted small" style="margin:0.5rem 0 0">Alternative (Question 4b): land Passes 1, 2, 4 (all single-decision folding + Academy aliases) cleanly without changing <code>CombatState</code> or bumping <code>MATCH_STATE_HASH_VERSION</code>, and spin Pass 3 into a focused combat Task.</p>
+  </div>
 </div>
 
 <h2>4. Counterexample, failure &amp; recovery audit</h2>
@@ -371,73 +405,103 @@
   <thead>
     <tr>
       <th style="width:24%">Counterexample / path</th>
-      <th style="width:36%">Risk</th>
-      <th style="width:40%">Status at <code>HEAD</code></th>
+      <th style="width:36%">Failure under plan as written</th>
+      <th style="width:40%">Required handling &amp; what survives</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong><code>ConformancePair</code> lockstep</strong><br><span class="muted"><code>skip_trivial=false</code> vs <code>true</code> on Temur / Elemental worlds.</span></td>
-      <td>Diverging on equivalent <code>Decision::ManaChoice</code> panics frozen conformance tests.</td>
-      <td><span class="badge yes">Resolved</span> — <code>mana_choice_actions</code> produces <code>len == 1</code>; <code>Semantic Kernel Conformance</code> passes green.</td>
+      <td><strong><code>determinize()</code> on opponent priority / discard</strong><br><span class="muted"><code>flow/search.rs:272-292</code></span></td>
+      <td><code>refresh_sampled_decision</code> calls <code>publish_action_space</code> directly, bypassing <code>tick()</code>: opponent spaces stay unfolded and <code>unchanged</code> spuriously bumps <code>decision_epoch</code>.</td>
+      <td>Run shared <code>fold_action_space</code> before the <code>unchanged</code> check in <code>refresh_sampled_decision</code> (and in <code>scenario_refresh_priority</code>); keep <code>decision_epoch</code> unchanged when the folded space matches.</td>
     </tr>
     <tr>
-      <td><strong>3+ mana resolution payment partial tap</strong><br><span class="muted"><code>TurnFaceUp {2}{W}</code> or <code>Ward {3}</code>: tap <code>Plains</code>, then <code>Kyoshi Village</code> beside <code>Mountain + Forest</code>.</span></td>
-      <td>Announced-payment subtraction saw pooled <code>{W}</code> paying generic <code>{1}</code> and popped a spurious modal.</td>
-      <td><span class="badge yes">Resolved</span> — <code>Enclosing::Resolution</code> compares <code>(next_pool, cost)</code> directly; covered by <code>source_taps.rs</code> and QA.</td>
+      <td><strong><code>GameSnapshot</code> restore &amp; <code>step()</code> error recovery</strong><br><span class="muted"><code>agent/env/snapshot.rs:112,199</code>, <code>tick.rs:27,42</code></span></td>
+      <td>If aliases live in a bare sibling field on <code>Game</code>, restoring a <code>GameSnapshot</code> or recovering from an illegal <code>step()</code> leaves empty or stale aliases beside a live <code>ActionSpace</code>.</td>
+      <td>Carry aliases in <code>GameSnapshot</code> (outside <code>SearchStateWitness</code>), restore beside <code>current_action_space</code> on <code>step()</code> error, and overwrite/clear them on every <code>publish_action_space</code> call.</td>
     </tr>
     <tr>
-      <td><strong>1-output mana-costed filter during resolution payment</strong><br><span class="muted">Resolution <code>{3}</code> with <code>Kyoshi Village</code> + a hypothetical <code>{G}, {T}: Add {B}</code> filter.</span></td>
-      <td><code>single_unit_remaining</code> (<code>mana.rs:3050</code>) checks <code>m.total() &lt;= 1</code> but not <code>a.cost.mana_value == 0</code>, so pooled <code>{G}</code> vs <code>{W}</code> could differ if a colored-cost 1-output filter existed.</td>
-      <td><span class="badge warn">Theoretical edge case</span> — no current catalog card has a colored-cost 1-output mana filter; trivial 1-line guard (<code>a.cost.mana_value == 0</code>) noted for gate.</td>
+      <td><strong><code>LearnTakeLesson</code> with 2 identical sideboard Lessons</strong><br><span class="muted"><code>flow/decision.rs:2214-2223</code></span></td>
+      <td>Sideboard cards have <code>zones.zone_of == None</code>; indexing <code>self.state[object]</code> panics with <code>"current object appearance"</code>.</td>
+      <td>Outside-game sideboard objects compare <code>(owner, definition_id)</code> via <code>entry_object</code>; omit board aliases for non-drawn sideboard candidates.</td>
     </tr>
     <tr>
-      <td><strong><code>Ward {2}</code> manual tap followed by <code>Decline</code></strong><br><span class="muted">Player taps <code>Kyoshi Village</code> during <code>Ward {2}</code>, then clicks <code>Decline</code>.</span></td>
-      <td>With <code>ManaFloats::Off</code>, skipping the modal picks <code>{G}</code> rather than letting the player float <code>{W}</code> after declining.</td>
-      <td><span class="badge warn">Intentional choice</span> — seats with <code>ManaFloats::Off</code> do not keep float-only color stops; <code>ManaFloats::Usable/All</code> preserves the modal via <code>offers_extra_payment_taps</code>. See Question 1.</td>
+      <td><strong><code>CastDuringResolution(Hand)</code> / <code>DiscardFromRevealedHand</code></strong><br><span class="muted"><code>flow/decision.rs:3538-3572</code></span></td>
+      <td>Ad-hoc <code>definition_id</code> dedup runs before <code>tick()</code>, bypassing <code>ObjectBinding.known_to</code> and dropping <code>aliases</code> so the second copy in hand is unclickable in Academy.</td>
+      <td>Remove ad-hoc dedup in Pass 2 and let the shared folder fold with full census safety and alias emission.</td>
     </tr>
     <tr>
-      <td><strong>Stale staged actions after mutation / clone</strong><br><span class="muted">Stack/trigger mutation, scenario refresh, or search fork between <code>advance_payment</code> and <code>payment_action_space</code>.</span></td>
-      <td>Serving stale announced mana offers.</td>
-      <td><span class="badge yes">Resolved</span> — one-shot <code>.take()</code>, cleared on <code>execute_action</code> / <code>advance_payment</code> / <code>scenario_refresh_priority</code>, reset on clone/snapshot, debug-asserted on every hit.</td>
+      <td><strong>Graveyard / exile target aliases in Academy</strong><br><span class="muted"><code>academy/ui/src/lib/board/view.ts:138,366</code></span></td>
+      <td>Graveyard cards are not in <code>drawnObjects</code>; naive multi-anchoring could duplicate tray items or "All legal choices" rows.</td>
+      <td>Keep <code>view.list</code> and <code>view.tray</code> 1-per-offer; attach alias anchors only to drawn <code>object:</code> keys (battlefield &amp; hand).</td>
     </tr>
     <tr>
-      <td><strong>Manland / creature / <code>power_up</code> / <code>Sol Ring</code> / Converge / floats</strong><br><span class="muted"><code>Soulstone Sanctuary</code>, <code>Sol Ring + Mountain ×2</code>, <code>Uncle's Musings</code>.</span></td>
-      <td>Incorrectly collapsing distinct combat, floating, or color-receipt outcomes.</td>
-      <td><span class="badge yes">Holds at HEAD</span> — covered by <code>source_taps.rs</code> and Academy tests.</td>
+      <td><strong>Two identical creatures with Menace attacking</strong><br><span class="muted"><code>flow/tick.rs:377-444</code></span></td>
+      <td>Blocker 1 sees folded <code>[Block M1, Don't block]</code> and blocks <code>M1</code>. Must Blocker 2 still be allowed to double-block <code>M1</code> OR single-block <code>M2</code>?</td>
+      <td><strong>Holds cleanly:</strong> once <code>B1</code> blocks <code>M1</code>, <code>M1</code> has 1 blocker while <code>M2</code> has 0, so their combat roles differ and Blocker 2 is offered both <code>M1</code> and <code>M2</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Global static granting a static ability to two copies</strong><br><span class="muted"><code>plan.md:76-79</code></span></td>
+      <td>Checking printed <code>object.statics</code> instead of layered <code>characteristics(p).static_abilities</code> would fold two copies whose timestamps order a granted static ability.</td>
+      <td>Check layered <code>characteristics(p).static_abilities.is_empty()</code> (plus <code>keyword_counter_timestamps.is_empty()</code>) before ignoring <code>Permanent.timestamp</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Card bounced to hand, recast next turn</strong><br><span class="muted"><code>TurnState.spells_cast</code>, <code>object_lki</code></span></td>
+      <td>A census comparing bare <code>ObjectId::slot()</code> would mistake old stack/LKI entries for references to the new hand appearance.</td>
+      <td>Record exact <code>ObjectId</code> (slot + generation) in the census; resolve <code>CardId</code> fields to <code>state.object_of(card)</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Engine Budget hot-path cost in Pass 1</strong><br><span class="muted"><code>plan.md:115-117,255-258</code></span></td>
+      <td>Running the full census when no bucket has ≥ 2 candidates (or allocating a fresh <code>HashSet</code> every tick) would regress <code>bench_steps</code>.</td>
+      <td>Bucket first by cheap key <code>(variant, def_id, owner, zone, extras)</code>; run census + <code>BoardScan</code> only when a bucket has ≥ 2 candidates, storing referenced ids in a small flat <code>SmallVec</code>/sorted <code>Vec</code> (most boards have &lt; 16 live references).</td>
     </tr>
   </tbody>
 </table>
 
-<h2>5. Choices made for review</h2>
-<div class="callout">
-  <ol style="margin:0; padding-left:1.25rem">
-    <li style="margin-bottom:0.5rem"><strong>Collapse equivalent <code>Decision::ManaChoice</code> modes to singleton <code>len == 1</code> inside <code>mana_choice_actions</code>:</strong> keeps <code>skip_trivial</code> transport equivalence intact and leaves <code>automatic_payment_action</code> purely <code>ManaPayment::Auto</code>.</li>
-    <li style="margin-bottom:0.5rem"><strong>Skip redundant color modals on optional resolution payments (<code>Ward</code>) when <code>ManaFloats::Off</code>:</strong> keeps <code>Ward {2}</code> free of float-only color modals while preserving them whenever <code>ManaFloats != Off</code>.</li>
-    <li><strong>Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and prose-prefix detection in <code>text_observation.py</code>:</strong> unifies choice-tap LLM text with basics (<code>4b</code>) without widening the wire <code>Action</code> schema or breaking v11 pilots.</li>
-  </ol>
+<h2>5. Choices &amp; irreversible boundaries</h2>
+
+<div class="callout warn">
+  <strong class="title">Irreversible or cross-version boundaries flagged before building</strong>
+  <ul style="margin:0.35rem 0 0; padding-left:1.25rem">
+    <li style="margin-bottom:0.45rem"><span class="badge irrev">Wire schema</span> <strong>Adding <code>aliases</code> to <code>experience::InteractionOffer</code>:</strong> because experience/study/replay schemas use <code>deny_unknown_fields</code> / <code>extra="forbid"</code>, pre-MTG-487 readers reject frames containing <code>aliases</code> (omitted when empty). Keeping <code>aliases</code> off <code>structured_offer::InteractionOffer</code> avoids bumping <code>SEMANTIC_DECISION_VERSION</code>.</li>
+    <li style="margin-bottom:0.45rem"><span class="badge irrev">Hash contract</span> <strong>Adding <code>declined_attackers</code> / <code>declined_blockers</code> to <code>CombatState</code> (Pass 3):</strong> changes <code>CanonicalCombat</code> and requires bumping <code>MATCH_STATE_HASH_VERSION</code> (31 → 32) and re-recording conformance digests. Single-decision folding alone (Passes 1, 2, 4) does <em>not</em> change match-state serialization — only conformance action-space hashes.</li>
+    <li><strong>Pass 1 ordering:</strong> Starting with the fail-closed census + permanents + behavioral oracle + Engine Budget is still the right first slice once Mismatches 1 &amp; 2 (face-down exclusion, settled <code>spell_entry</code>, shared folding seam) are baked in from the start.</li>
+  </ul>
 </div>
 
 <section class="questions">
   <h2>6. Open questions for review</h2>
-  <p class="muted">Reply with question number + option letter (for example, <code>1a 2a 3a</code>).</p>
+  <p class="muted">Reply with question number + option letter (for example, <code>1a 2a 3a 4a 5a</code>).</p>
   <ol>
-    <li><strong>Color modal on optional resolution payments (<code>Ward</code>) when <code>ManaFloats::Off</code>:</strong>
+    <li><strong>Face-down objects (<code>Object::is_face_down()</code>) and hidden-information safety:</strong>
       <ul class="options">
-        <li><strong>1a (built at HEAD):</strong> Skip redundant color modals on <code>Ward</code> when <code>ManaFloats::Off</code> (open the modal only when colors differ for paying <code>Ward</code>, or when <code>ManaFloats != Off</code>).</li>
-        <li><strong>1b:</strong> Always keep the color modal open on <code>can_decline()</code> resolution payments even under <code>ManaFloats::Off</code>, because clicking <code>Decline</code> afterwards leaves the produced mana in the pool.</li>
+        <li><strong>1a (recommended):</strong> Never fold any face-down object in any zone (battlefield manifests, foretold/face-down exile). Zero hidden-information leak, stable determinized root spaces, matches existing <code>mana/interchangeable.rs:212</code>.</li>
+        <li><strong>1b:</strong> Fold only when the chooser shares information with the object's controller AND backings match; keep opponent face-down objects unfolded. (More complex; still risks indirect timing leaks to an opponent observing which manifest acted.)</li>
       </ul>
     </li>
-    <li><strong>LLM text observation wording (<code>manabot/semantic/text_observation.py</code>):</strong>
+    <li><strong>Settled <code>Permanent.spell_entry.payment</code> (<code>PaymentReceipt</code>) in census and equality:</strong>
       <ul class="options">
-        <li><strong>2a (built at HEAD):</strong> Keep <code>REPRESENTATION_VERSION = "manabot-text-10"</code> and <code>action.description.startswith("Tap ")</code> detection without changing the wire <code>Action</code> schema.</li>
-        <li><strong>2b:</strong> Bump <code>REPRESENTATION_VERSION</code> to <code>manabot-text-11</code> to mark the wording change for choice-of-color mana taps.</li>
+        <li><strong>2a (recommended):</strong> On settled permanents (no pending <code>CardMoved{Battlefield}</code> event), compare only <code>(payment.is_some(), kicked, x)</code> and exclude <code>spell_entry.payment</code> from the active reference census, while continuing to walk active receipts on <code>Payment</code>, <code>StackObject</code>, <code>PendingTrigger</code>, and <code>EffectFrame</code>. Enables cast creatures and used basic lands to fold in real games.</li>
+        <li><strong>2b:</strong> Walk and compare full <code>Permanent.spell_entry</code> as written in the plan. (Simpler rule, but cast permanents paid with different lands and lands that paid for any live permanent never fold.)</li>
       </ul>
     </li>
-    <li><strong>Adopting <code>managym/perf/baseline.json</code> for the diverged Seed 1 search trajectory:</strong>
+    <li><strong>Single folding authority across <code>determinize</code>, scenarios, and <code>decision.rs</code>:</strong>
       <ul class="options">
-        <li><strong>3a (recommended):</strong> Apply the tiny <code>production_bonuses</code> empty-<code>matched</code> short-circuit if <code>45716744677</code>'s <code>search worst reply</code> is still &gt;+10% (20 ms margin on Seed 1's diverged <code>d=28</code>), confirm <code>bench_steps</code> beats or matches base and Seeds 2/3 stay faster, then record <code>managym/perf/baseline.json</code> from the green run.</li>
-        <li><strong>3b:</strong> Adopt <code>managym/perf/baseline.json</code> directly from the current run once all non-budget CI jobs are green, accepting the +10.8% diverged Seed 1 <code>d=28</code> worst reply given Seeds 2 (−21.2%) and 3 (−10.9%) and Seed 1 <code>d=2</code> (−14.9%) are faster.</li>
+        <li><strong>3a (recommended):</strong> Route <code>tick()</code>, <code>refresh_sampled_decision()</code>, and <code>scenario_refresh_priority()</code> through one <code>fold_action_space</code> + <code>publish_action_space(space, aliases)</code> boundary, carry aliases in <code>GameSnapshot</code>, and delete the ad-hoc <code>definition_id</code> dedups in <code>resolution_cast_candidates</code> / <code>revealed_hand_objects</code> in Pass 2 so Academy receives aliases everywhere.</li>
+        <li><strong>3b:</strong> Fix <code>refresh_sampled_decision()</code> / <code>scenario_refresh_priority()</code> / <code>GameSnapshot</code>, but leave <code>resolution_cast_candidates</code> and <code>revealed_hand_objects</code> untouched as in the plan (accepting missing Academy aliases for resolution casts from hand and revealed-hand discards).</li>
+      </ul>
+    </li>
+    <li><strong>Scope of Pass 3 (sequential combat symmetry breaking + <code>CombatState</code> / hash bump):</strong>
+      <ul class="options">
+        <li><strong>4a (recommended if full combat reduction is desired in MTG-487):</strong> Keep Pass 3 in MTG-487 — add <code>declined_attackers</code> / <code>declined_blockers</code> to <code>CombatState</code> &amp; <code>CanonicalCombat</code> (bumping <code>MATCH_STATE_HASH_VERSION</code> and bundling the <code>graveyard_from_battlefield</code> hash fix), normalize both blocker and attacker aliases in <code>combat_preview</code>, and normalize compound <code>DeclareAttackers</code> / <code>DeclareBlockers</code> lowering in <code>structured_offer.rs</code>.</li>
+        <li><strong>4b (smaller, lower-risk alternative):</strong> Land single-decision folding + Academy aliases (Passes 1, 2, 4, plus folding identical attackers inside <code>DeclareBlocker</code> lists) in MTG-487 without changing <code>CombatState</code> or <code>MATCH_STATE_HASH_VERSION</code>; track cross-prompt attacker/blocker decline pruning as a separate follow-up Task.</li>
+      </ul>
+    </li>
+    <li><strong>Rulings carried from <code>scratch/questions.md</code> (incarnation, timestamps, hand/graveyard order):</strong>
+      <ul class="options">
+        <li><strong>5a (recommended / current plan):</strong> Ignore hand-card <code>incarnation</code> and hand/graveyard order; never fold permanents with effective layered static abilities or keyword counters.</li>
+        <li><strong>5b:</strong> Compare <code>incarnation</code> for hand cards too (treats owner-visible zone history as strategic information; prevents bounced copies from folding with fresh draws).</li>
+        <li><strong>5c:</strong> Keep <code>5a</code> for incarnation/order, and relax the static-ability timestamp exclusion to "no other continuous effect's timestamp lies between the two permanents".</li>
       </ul>
     </li>
   </ol>
