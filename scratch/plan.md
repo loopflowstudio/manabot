@@ -88,49 +88,12 @@ uv run --extra dev pytest tests/training/test_rollout_transport.py \
   tests/env/test_named_observation_layout.py -q
 ```
 
-`tests/training/test_rollout_transport.py` (new; name checked unique) covers
-the full scenario end to end on real collected batches, once without and once
-with decision memory:
-
-1. A `spawn` child (`manabot.sim.child.ChildProcess`, never `multiprocessing`
-   spawn of the test's `__main__`) collects complete games and puts the
-   `RolloutBatch` on a queue; the parent, collecting with the same seed,
-   compares: every array field equal, `policy_rows(indexes)` prepared by the
-   model equal array for array, `next_obs` prepared equal, and with memory on
-   the unique chunk count equal (compactness).
-2. `pickle.loads(pickle.dumps(x))` and `copy.deepcopy(x)` for
-   `ObservationSpace` (verifying < 4 KB), `ObservationBatch` (including
-   `action_focus` with `max_focus_objects > 1`, `blank_decision_memory`, and
-   `gather` with repeats), `ObservationSelection` (including after `.batch` and
-   `.spans` have been read — verifying cached properties are NOT pickled and
-   pickled size stays below dense `export()` bytes), `Prefix` (including
-   `tail=None` and deep chains under `sys.setrecursionlimit(120)`),
-   `PrefixObservation`, and `RolloutBatch`.
-3. `_restore_observation_batch` rejects tampered tables (short offsets,
-   non-zero start, decreasing offsets, span exceeding layout capacity, wrong
-   value length, wrong `seat_axis`, unknown/missing key, legacy layout) with
-   `ValueError`, and `restore_prefix` rejects truncated/broken chains with
-   `ValueError`.
-4. `RolloutBatch.concatenate` of two worker batches equals, row for row, the
-   prepared inputs and behavior logs of the parts:
-   - for complete-game batches (native and dense);
-   - for explicit-trajectory batches (spans and bootstrap indexes shifted,
-     including one worker with 0 bootstrap rows / `next_obs == {}`, and
-     colliding `branch_group_id`s re-offset so `grouped_roots` succeeds);
-   - incompatible parts (empty, multi-column `[T, E]` including 1-element list,
-     mixed native/dense, mismatched `space.config` including
-     `decision_memory_include_own`, mismatched optional fields, non-terminal
-     complete-game batch) raise `ValueError`.
-5. jace's 0.2.x path verbatim: `archive_memory` + strip `recorded.memory`,
-   pickle, restore, then a dense merge through `recorded.rows[key]` with
-   `PackedActions.concatenate`; `policy_rows` on the result prepares the same
-   inputs as native concatenation.
-
-`tests/env/test_named_observation_layout.py` gains the shim attributes on v11
-and legacy v9/v10 configs: each equals the config, shape, or enum count it
-names (including `library_shape` on v9/v10), warns with `0.3.0`, works via both
-`space.encoder.<attr>` and `ObservationEncoder(config).<attr>`, and unknown /
-dunder names still raise `AttributeError`.
+`tests/training/test_rollout_transport.py` covers the spawn round trip (with
+and without decision memory), pickle/deepcopy compactness, tampered-table and
+broken-chain rejection, `RolloutBatch.concatenate` for complete-game and
+trajectory batches plus its `ValueError` cases, and jace's dense 0.2.x merge.
+`tests/env/test_named_observation_layout.py` covers the twenty shortcuts on
+v9/v10/v11 through both `space.encoder` and `ObservationEncoder(config)`.
 
 Against the consumer itself (the demo): a throwaway environment outside the
 checkout with jace at `9d212cb` and this branch's `manabot` and built
@@ -206,7 +169,9 @@ in `manabot/env/observation.py` so rollover deletes them with `encoder`.
    GRU decision memory returned 285 learner rows and 669 recorded prefixes.
    Both pools closed, both batches ended on a terminal row, and their first
    and last chosen-action log probabilities matched the gathered policy rows.
-   The remaining checks belong to gate and CI.
+
+Nothing remains to build. Deferred to gate and CI: the acceptance pytest
+command above, `cargo fmt`/clippy, the Rust debug suite and Engine Budget.
 
 ## Pass 2 checks
 
