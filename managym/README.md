@@ -264,7 +264,12 @@ Repeated specs in separate clauses may choose the same object. A resolving
 frame retains its active clause and each chosen slot's resolution-start eligibility
 across suspended decisions (CR 608.2b). Effects use those retained results; live
 presence checks separately prevent following departed objects (CR 400.7).
-Illegal slots remain positional, and zero optional targets still resolve.
+A trigger's mode and target choices, changes of target, and resolution all
+check source-relative restrictions. A power bound reads the live source's
+effective power or its last battlefield power after departure. “Another”
+excludes both graveyard arrivals of a departed melded source until each
+changes zones again. Illegal slots remain positional, and zero optional
+targets still resolve.
 `ObjectSelector::Targets` applies one verb to all eligible slots of that clause
 in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
@@ -853,6 +858,12 @@ never follow a later object. Capturing `Moved` uses its new zone. This binding
 provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
 never draw order. Prospective battlefield entrants are public during replacement
 choices and remain pinned in both samplers.
+
+At opponent priority, hidden-world sampling deals uninspectable manifested
+printings from the same pool as hidden hand and library cards. A pending spell
+keeps its battlefield target and that target’s exact appearance across deals.
+The controller can still inspect the printing in the sampled world. Restoring
+the original snapshot restores the actual printing.
 
 `Effect::Move.library_end` states top/bottom placement without a shuffle; its
 placement commits before linked returns can pause. `put_in_library` authors that

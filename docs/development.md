@@ -676,7 +676,7 @@ the harness, not here. They come in four families: many copies of one thing
 things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
 `diverse-statics`, `attachments`, `mixed`), one mechanic at size (`herbalist`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
-`names`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
+`names`, `face-down`, `graveyard-routes`, `profile-hand`, `prepared-copies` with its
 zero-link control `unprepared-copies`) and one way of paying at size
 (`convoke-duplicates`, `convoke-diverse`, `delve-graveyard`,
 `improvise-artifacts`, `float-origins`, `crew-saddle`, `bargain-forage`), each

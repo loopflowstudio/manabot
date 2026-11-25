@@ -125,6 +125,8 @@ pub struct Player {
 }
 
 impl Player {
+    pub const STARTING_LIFE: i32 = 20;
+
     pub fn new(id: PublicId, index: usize, name: impl Into<String>) -> Self {
         Self {
             id,

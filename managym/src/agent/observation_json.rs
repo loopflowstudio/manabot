@@ -346,6 +346,9 @@ impl Serialize for StackObjectJson<'_> {
         if let Some(spell) = &value.spell {
             let card = spell.legacy_card(value.x);
             map.serialize_entry("card", &CardJson(&card))?;
+            if spell.cast_from_graveyard {
+                map.serialize_entry("cast_from_graveyard", &true)?;
+            }
         }
         map.serialize_entry("chosen_mode", &value.chosen_mode)?;
         if !value.combat_damage_to_players.is_empty() {
@@ -646,10 +649,23 @@ mod tests {
             111,
             false,
         );
-        let objects: Vec<_> = game.state.zones.latest().collect();
-        game.move_object(objects[0], ZoneType::Battlefield);
-        game.move_object(objects[40], ZoneType::Battlefield);
-        game.push_spell_to_stack(objects[1], PlayerId(0), vec![], vec![], Default::default());
+        let first = PlayerId(0);
+        for player in [first, PlayerId(1)] {
+            let land = game
+                .state
+                .zone_cards(ZoneType::Library, player)
+                .map(|card| game.state.object_of(card))
+                .find(|object| game.state[*object].types.is_land())
+                .expect("a land in each deck");
+            game.move_object(land, ZoneType::Battlefield);
+        }
+        let spell = game
+            .state
+            .zone_cards(ZoneType::Library, first)
+            .map(|card| game.state.object_of(card))
+            .find(|object| game.state[*object].name == "Lightning Bolt")
+            .expect("a spell in the deck");
+        game.push_spell_to_stack(spell, first, vec![], vec![], Default::default());
         let current = Observation::for_player(&game, PlayerId(0));
         assert!(!current.historical());
         // The same observation as a capture written before card records.
@@ -782,6 +798,8 @@ pub(super) struct WireCardData {
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct WirePermanentData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub front_mana_value: Option<u8>,
     /// Effective colors when a layer changes the copiable colors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colors: Option<Vec<String>>,
@@ -855,8 +873,12 @@ pub(super) struct WirePermanentData {
     /// Aura sets its characteristics.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
+    /// Face down (CR 708.2); omitted when face up.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
     /// Activated abilities (indices in its ability list) whose limit is
-    /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
+    /// spent: once per object (exhaust CR 702.177a, power-up, "activate
+    /// only once") or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -935,6 +957,8 @@ pub(super) struct WireStackObjectData {
     pub from_prepared: bool,
     #[serde(default)]
     pub flashback: bool,
+    #[serde(default)]
+    pub cast_from_graveyard: bool,
     /// A spell's card record (zone stack, with its announced X); absent for
     /// abilities and in historical captures, whose card lists held spells.
     #[serde(default)]
@@ -982,6 +1006,7 @@ impl From<WirePermanentData> for PermanentData {
     fn from(w: WirePermanentData) -> Self {
         let card = w.card;
         Self {
+            front_mana_value: w.front_mana_value,
             colors: w.colors,
             keyword_counter_timestamps: w.keyword_counter_timestamps,
             transforms: w.transforms,
@@ -1009,6 +1034,7 @@ impl From<WirePermanentData> for PermanentData {
             is_granted_land: w.is_granted_land,
             blocking: w.blocking,
             abilities_lost: w.abilities_lost,
+            face_down: w.face_down,
             combat_damage_to_players: w.combat_damage_to_players,
             damaged_permanents: w.damaged_permanents,
             ability_resolutions: w.ability_resolutions,
@@ -1056,6 +1082,7 @@ impl PermanentData {
 impl Serialize for PermanentData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         WirePermanentData {
+            front_mana_value: self.front_mana_value,
             colors: self.colors.clone(),
             keyword_counter_timestamps: self.keyword_counter_timestamps.clone(),
             transforms: self.transforms,
@@ -1083,6 +1110,7 @@ impl Serialize for PermanentData {
             is_granted_land: self.is_granted_land,
             blocking: self.blocking,
             abilities_lost: self.abilities_lost,
+            face_down: self.face_down,
             combat_damage_to_players: self.combat_damage_to_players.clone(),
             damaged_permanents: self.damaged_permanents.clone(),
             ability_resolutions: self.ability_resolutions.clone(),
@@ -1126,7 +1154,10 @@ impl From<WireStackObjectData> for StackObjectData {
             flashback: w.flashback,
             spell: w.card.map(|mut card| {
                 card.characteristics.mana_cost.x = w.x_symbols;
-                SpellData::from_legacy_card(card)
+                SpellData {
+                    cast_from_graveyard: w.cast_from_graveyard,
+                    ..SpellData::from_legacy_card(card)
+                }
             }),
         }
     }
@@ -1141,6 +1172,7 @@ impl SpellData {
             registry_key: card.registry_key,
             is_copy: card.is_token,
             has_announced_x: card.x.is_some(),
+            cast_from_graveyard: false,
             characteristics: card.characteristics,
         }
     }

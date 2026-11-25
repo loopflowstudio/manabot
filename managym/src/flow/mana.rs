@@ -1837,10 +1837,7 @@ impl Game {
                             tap_source: ability.tap_source,
                             tap_count: ability.tap_cost.as_ref().map_or(0, |cost| cost.count),
                             tap_candidates: self.tap_cost_candidates(player, ability).into(),
-                            // A counter cost is planned as one activation.
-                            limited: ability.once_each_turn
-                                || ability.exhaust
-                                || ability.remove_counters.is_some(),
+                            limited: ability.is_use_limited() || ability.remove_counters.is_some(),
                             sacrifice_source: ability.sacrifice_source,
                             ability_index: index,
                             cost: ability.mana_cost.clone(),
@@ -2527,7 +2524,8 @@ impl Game {
             return Err(AgentError("illegal mana activation".into()));
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
-        self.record_activation(permanent, ability_index, &ability);
+        self.state
+            .record_activation(permanent, ability_index, &ability);
         let (frame, resume) = match self.state.suspended_decision_mut().take() {
             Some(caller) => (caller.frame, Some(Box::new(caller.decision))),
             None => (EffectFrame::new(player, Vec::new()), None),
@@ -2913,19 +2911,6 @@ impl Game {
         resume
     }
 
-    pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
-        if let Some(cached) = &self.state.mana_cache[player.0] {
-            return cached.clone();
-        }
-        let mana = self.producible_mana(player);
-        self.state.mana_cache_mut()[player.0] = Some(mana.clone());
-        mana
-    }
-
-    pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.state.mana_cache_mut()[player.0] = None;
-    }
-
     /// The same witness used by automatic production determines PayCost offers.
     pub(crate) fn can_pay_automatic_mana(&self, player: PlayerId, cost: &ManaCost) -> bool {
         let model = self.payment_model(player, None);
@@ -2947,7 +2932,9 @@ impl Game {
     pub(crate) fn mana_origin(&self, object: ObjectId) -> ManaOrigin {
         ManaOrigin {
             object,
-            definition: self.state.source_base(object).0,
+            definition: self
+                .observed_source_definition(object)
+                .unwrap_or(crate::state::card::CardDefId::ANONYMOUS),
         }
     }
 
@@ -3019,7 +3006,7 @@ impl Game {
                 let ability = &view.activated_abilities[activation.ability_index];
                 ability.tap_source && !ability.mana_activation_has_side_effects()
                     && ability.mana_cost.mana_value == 0 && ability.mana_cost.x == 0
-                    && !ability.exhaust && !ability.once_each_turn
+                    && !ability.is_use_limited()
                     && self.check_activation_terms(player, ability).is_ok()
                     // A bonus with its own output choice needs the ordinary
                     // activation flow. Here each witness index is a printed mode.
@@ -3196,10 +3183,8 @@ impl Game {
                 if probe.followups.len() == autotapper::FOLLOWUPS {
                     return probe;
                 }
-                let single_use = ability.tap_source
-                    || ability.sacrifice_source
-                    || ability.once_each_turn
-                    || ability.exhaust;
+                let single_use =
+                    ability.tap_source || ability.sacrifice_source || ability.is_use_limited();
                 if ability.zone != ActivationZone::Battlefield
                     || ability.mana_cost.mana_value == 0
                     || ability.mana_choices().is_some()
@@ -3387,7 +3372,9 @@ impl Game {
         }
     }
 
-    pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
+    /// The mana `player` could produce now by tapping each untapped
+    /// permanent's mana abilities once, read from the layered board.
+    pub fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         let triggers = self.mana_triggers();
         for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
