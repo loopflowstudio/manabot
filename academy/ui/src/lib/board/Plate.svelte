@@ -86,6 +86,12 @@
             aria-label={`${zone.key}: ${zone.count}. Toggle deck tracker`}>
             <span>{zone.key}</span><b>{zone.count}</b>
           </button>
+        {:else if zone.key === 'Library' && ondeck}
+          <button type="button" class="zone-open" aria-pressed={deckOpen} onclick={ondeck}
+            data-testid={`plate-deck-toggle-${side}`}
+            aria-label={`${zone.key}: ${zone.count}. Toggle deck tracker`}>
+            <span>{zone.key}</span><b>{zone.count}</b>
+          </button>
         {:else}
           <span>{zone.key}</span><b>{zone.count}</b>
         {/if}

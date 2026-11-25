@@ -157,8 +157,19 @@ def test_checkpoint_routes_by_serialized_agent_capability(
     assert isinstance(player, AgentMatchupPlayer)
 
 
+COMPACT_DECK = {"Mountain": 6, "Raging Goblin": 6}
+
+
 def test_play_games_seat_balances_and_records():
-    result = play_games(SEARCH_4, RANDOM, num_games=4, seed=0, backend=TORCH_BACKEND)
+    result = play_games(
+        SEARCH_4,
+        RANDOM,
+        num_games=4,
+        seed=0,
+        hero_deck=COMPACT_DECK,
+        villain_deck=COMPACT_DECK,
+        backend=TORCH_BACKEND,
+    )
     assert len(result.records) == 4
     assert [r.hero_seat for r in result.records] == [0, 1, 0, 1]
     assert result.hero_search is not None
@@ -171,7 +182,14 @@ def test_play_games_seat_balances_and_records():
 
 def test_play_games_game_offset_continues_seat_alternation():
     result = play_games(
-        SEARCH_4, RANDOM, num_games=2, seed=0, game_offset=1, backend=TORCH_BACKEND
+        SEARCH_4,
+        RANDOM,
+        num_games=2,
+        seed=0,
+        game_offset=1,
+        hero_deck=COMPACT_DECK,
+        villain_deck=COMPACT_DECK,
+        backend=TORCH_BACKEND,
     )
     assert [r.hero_seat for r in result.records] == [1, 0]
 

@@ -12,7 +12,8 @@ No test runs for five minutes. When one reaches the limit, the run prints
 every thread's stack and exits with status 1. Collection has the same limit.
 Under pytest-xdist (``-n``) each worker keeps that clock for its own tests: the
 worker that reaches the limit prints its stacks and exits, its test is reported
-as a crash, and the run finishes with status 1.
+as a crash, and the run finishes with status 1. A worker's clock stops between
+tests, so a worker waiting for more work is never ended.
 """
 
 import faulthandler
@@ -71,6 +72,10 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_unconfigure(config: pytest.Config) -> None:
     faulthandler.cancel_dump_traceback_later()
     os.close(config.stash[_limit_output])
+
+
+def pytest_runtest_logfinish() -> None:
+    faulthandler.cancel_dump_traceback_later()
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
