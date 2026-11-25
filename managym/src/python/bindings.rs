@@ -182,7 +182,7 @@ fn encoded_to_dict<'py>(
         &encoded.opponent_player,
         &[1, config.player_dim()],
     )?;
-    let cards = [config.max_cards_per_player, enc::CARD_DIM];
+    let cards = [config.max_cards_per_player, config.card_dim()];
     put("agent_cards", &encoded.agent_cards, &cards)?;
     put("opponent_cards", &encoded.opponent_cards, &cards)?;
     let permanents = [config.max_permanents_per_player, config.permanent_dim()];
@@ -1747,6 +1747,10 @@ impl PyObservationCharacteristics {
         self.data.power
     }
     #[getter]
+    fn printed_loyalty(&self) -> Option<i32> {
+        self.data.printed_loyalty
+    }
+    #[getter]
     fn toughness(&self) -> i32 {
         self.data.toughness
     }
@@ -2340,6 +2344,10 @@ impl PyPermanent {
     #[setter]
     fn set_exhausted_abilities(&mut self, value: i32) {
         self.data.exhausted_abilities = value;
+    }
+    #[getter]
+    fn loyalty_activated_this_turn(&self) -> bool {
+        self.data.loyalty_activated_this_turn
     }
     #[getter]
     fn once_each_turn_used(&self) -> i32 {

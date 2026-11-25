@@ -972,6 +972,8 @@ class _Renderer:
             optional = _type_flags(characteristics.card_types)
             if keywords := _keywords(characteristics.keywords):
                 optional += f"; keywords {keywords}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
             if card.face_down:
                 optional += (
                     "; foretold, face down (hidden from other players)"
@@ -1053,6 +1055,10 @@ class _Renderer:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
                 optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
+            if characteristics.printed_loyalty is not None:
+                optional += f"; printed loyalty {characteristics.printed_loyalty}"
+            if permanent.loyalty_activated_this_turn:
+                optional += "; activated a loyalty ability this turn"
             if permanent.once_each_turn_used:
                 optional += (
                     "; once-each-turn abilities used this turn "
@@ -1186,6 +1192,8 @@ class _Renderer:
                 optional += f"; power {definition.power}"
             elif definition.toughness is not None:
                 optional += f"; toughness {definition.toughness}"
+            if definition.printed_loyalty is not None:
+                optional += f"; printed loyalty {definition.printed_loyalty}"
             if definition.subtypes:
                 optional += f"; subtypes {', '.join(definition.subtypes)}"
             if keywords := _keywords(definition.keywords):
@@ -1332,6 +1340,8 @@ class _Renderer:
             spell = ""
             if (card := item.characteristics) is not None:
                 keywords = _keywords(card.keywords)
+                if card.printed_loyalty is not None:
+                    details.append(f"printed loyalty {card.printed_loyalty}")
                 spell = (
                     f" Spell: owner {self.name(item.owner_id)}; copy {_yes(item.is_copy)}; "
                     f"power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; "

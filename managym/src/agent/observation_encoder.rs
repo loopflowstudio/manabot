@@ -289,7 +289,11 @@ impl ObservationEncoderConfig {
     }
 
     pub fn cards_len(&self) -> usize {
-        self.max_cards_per_player * CARD_DIM
+        self.max_cards_per_player * self.card_dim()
+    }
+
+    pub fn card_dim(&self) -> usize {
+        self.layout.card_columns().len()
     }
 
     pub fn player_dim(&self) -> usize {
@@ -1043,7 +1047,7 @@ pub fn encode_rows(
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
             encode_card_features(card, mine, &context, &mut row);
-            out.write(card_table, 0, slot, &row)?;
+            out.write(card_table, 0, slot, &row[..config.card_dim()])?;
             out.write(
                 Table::SemanticCards,
                 seat,
@@ -1066,7 +1070,7 @@ pub fn encode_rows(
                 for column in [card::IS_MINE, card::OUTSIDE, card::VALID] {
                     row[column] = Integer(1);
                 }
-                out.write(card_table, 0, slot, &row)?;
+                out.write(card_table, 0, slot, &row[..config.card_dim()])?;
                 out.write(
                     Table::SemanticCards,
                     seat,
@@ -1559,6 +1563,7 @@ fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, o
         out[card::HAS_X] = Integer(1);
         out[card::X] = Scalar(x as f32 / 10.0);
     }
+    out[card::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
     out[card::VALID] = Integer(1);
 }
 
@@ -1610,6 +1615,9 @@ fn encode_permanent_features(
     // Input v11: the characteristics only a card row held in v9/v10.
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
+        out[permanent::PRINTED_LOYALTY] =
+            Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
+        out[permanent::LOYALTY_ACTIVATED_THIS_TURN] = flag(permanent.loyalty_activated_this_turn);
         out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
         out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
         out[permanent::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
@@ -1670,6 +1678,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
     out[stack::PAID_AMOUNT] = Scalar(object.paid_amount.unwrap_or_default() as f32 / 10.0);
     out[stack::ABILITY_RESOLUTIONS] = Integer(i64::from(object.ability_resolutions));
     if let Some(card) = &object.spell {
+        out[stack::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
         out[stack::IS_COPY] = flag(card.is_copy);
         out[stack::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
         out[stack::POWER] = Scalar(card.power as f32 / 10.0);
@@ -2360,7 +2369,7 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, permanent, EncodedObservationMut,
+        action, card, encode, encode_into, fact, permanent, EncodedObservationMut,
         ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
         FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
     };
@@ -2815,8 +2824,8 @@ mod tests {
 
         // Validity flags for populated card/permanent slots: the battlefield
         // object is its permanent row only.
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
+        assert_eq!(encoded.agent_cards[card::VALID], 1.0);
+        assert_eq!(encoded.agent_cards[CARD_DIM + card::VALID], 0.0);
         assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
         assert_eq!(
             encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
@@ -3031,7 +3040,7 @@ mod tests {
         let row = (obs.agent_cards.len() + last) * CARD_DIM;
         assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
         assert_eq!(encoded.agent_cards[row + 37], 1.0);
-        assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[row + card::VALID], 1.0);
         for undersized in [
             ObservationEncoderConfig {
                 max_actions: 32,

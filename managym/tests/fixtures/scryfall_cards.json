@@ -10661,6 +10661,19 @@
       "U"
     ]
   },
+  "The Theorist, Jace Beleren": {
+    "name": "The Theorist, Jace Beleren",
+    "mana_cost": "{2}{U}{U}",
+    "type_line": "Legendary Planeswalker — Jace",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of each opponent's draw step, you draw a card.\n+1: Create a 1/1 blue Illusion creature token.\n−2: For each opponent, return up to one target artifact or creature that player controls to its owner's hand.\n−6: Draw three cards. Then put X +1/+1 counters on each creature you control, where X is the number of cards in your hand.",
+    "colors": [
+      "U"
+    ],
+    "loyalty": "3"
+  },
   "The Unagi of Kyoshi Island": {
     "name": "The Unagi of Kyoshi Island",
     "mana_cost": "{3}{U}{U}",

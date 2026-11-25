@@ -16,6 +16,7 @@ export interface CardPreview {
 }
 
 export interface CardState {
+  printed_loyalty?: number | null;
   text_box?: string;
   id: number;
   registry_key: number;
@@ -95,6 +96,8 @@ export interface ContinuousEffect {
 }
 
 export interface PermanentState {
+  printed_loyalty?: number | null;
+  loyalty_activated_this_turn?: boolean;
   types?: CardTypes;
   is_token?: boolean;
   temp_subtypes?: string[];

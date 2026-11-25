@@ -137,7 +137,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
     let Permanent {
         transforms: _,
         id: _,
@@ -158,6 +158,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
+        loyalty_activated_this_turn: _,
         keyword_counter_timestamps: _,
     } = permanent;
     [
@@ -201,6 +202,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),
+        (
+            "loyalty_activated_this_turn",
+            Seen::Permanent(permanent::LOYALTY_ACTIVATED_THIS_TURN),
+        ),
         ("activated_this_turn", Seen::Fact(FactKind::UsedAbility)),
     ]
 }
@@ -397,6 +402,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
                 "its shared-effect row on the permanent's kept row; the action tensor omits it",
             ),
         ),
+        Modification::LoyaltyAtInstantSpeed(_) => ("Modification::LoyaltyAtInstantSpeed", Seen::Via("player effect program and legal loyalty activations")),
         Modification::AdditionalLandPlay => (
             "Modification::AdditionalLandPlay",
             Seen::Via("shared player effect and an additional legal land play"),
@@ -469,6 +475,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
         (true, Modification::AdditionalLandPlay),
+        (true, Modification::LoyaltyAtInstantSpeed(Box::default())),
         (true, Modification::NextCreatureCastFlash),
         (true, Modification::SkipsCombatPhasesNextTurn),
         (true, Modification::LifeTotalCantChange),
@@ -2816,6 +2823,7 @@ fn each_permanent_status_moves_its_named_column() {
     let (_, base) = observe(&base_game, 0);
     let fields = permanent_fields(base_game.state.permanents[ogre].as_ref().unwrap());
     let mutate = |field: &str, permanent: &mut Permanent| match field {
+        "loyalty_activated_this_turn" => permanent.loyalty_activated_this_turn = true,
         "tapped" => permanent.tapped = !permanent.tapped,
         "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
         "damage" => permanent.damage = 1,
@@ -3522,6 +3530,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         name => [Definition],
         text_box => [Definition],
         power => [column(Card, card::POWER), column(Permanent, permanent::POWER), column(Stack, stack::POWER)],
+        printed_loyalty => [column(Card, card::PRINTED_LOYALTY), column(Permanent, permanent::PRINTED_LOYALTY), column(Stack, stack::PRINTED_LOYALTY)],
         toughness => [column(Card, card::TOUGHNESS), column(Permanent, permanent::TOUGHNESS), column(Stack, stack::TOUGHNESS)],
         is_legendary => [
             column(Card, card::IS_LEGENDARY),
@@ -3668,6 +3677,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         first_strike_participant => [column(Permanent, permanent::FIRST_STRIKE_PARTICIPANT)],
         attacking => [column(Permanent, permanent::ATTACKING)],
         exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],
+        loyalty_activated_this_turn => [column(Permanent, permanent::LOYALTY_ACTIVATED_THIS_TURN)],
         once_each_turn_used => [column(Permanent, permanent::ONCE_EACH_TURN_USED)],
         granted_firebending => [column(Permanent, permanent::GRANTED_FIREBENDING)],
         temp_subtypes => [
@@ -3977,6 +3987,7 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
         text_box => Printed("the printed text names the definition; lost abilities are \
             PermanentData.abilities_lost"),
         power => Layered,
+        printed_loyalty => Printed("starting loyalty on the copiable face"),
         toughness => Layered,
         is_legendary => Layered,
         is_ally => Layered,

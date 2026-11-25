@@ -325,7 +325,9 @@ impl Game {
             if self.state.permanents[permanent_id]
                 .as_ref()
                 .is_some_and(|permanent| {
-                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                    permanent.loyalty_activated_this_turn
+                        || !permanent.activated_this_turn.is_empty()
+                        || permanent.dealt_damage_this_turn
                 })
             {
                 self.state.clear_permanent_turn_history(permanent_id);

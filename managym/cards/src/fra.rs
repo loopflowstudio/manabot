@@ -75,7 +75,65 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         transformative_commons(),
         vigorbloom_annex(),
         void_extrapolator(),
+        the_theorist(),
     ]
+}
+
+fn the_theorist() -> CardDefinition {
+    use managym_state::{ability::EffectValue, card::LoyaltyCost};
+    let text_box = "At the beginning of each opponent's draw step, you draw a card.\n+1: Create a 1/1 blue Illusion creature token.\n−2: For each opponent, return up to one target artifact or creature that player controls to its owner's hand.\n−6: Draw three cards. Then put X +1/+1 counters on each creature you control, where X is the number of cards in your hand.";
+    let bounce = TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate {
+            card_types_any: vec![CardType::Artifact, CardType::Creature],
+            ..Default::default()
+        },
+    };
+    let loyalty = |cost, effects| ActivatedAbilityDefinition {
+        loyalty: Some(LoyaltyCost::Fixed(cost)),
+        effects,
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "fra.the_theorist_jace_beleren",
+        scryfall_id: "20bb8c55-4b0b-425f-8201-b54fa2fdde86",
+        printed: PrintedCharacteristics {
+            name: "The Theorist, Jace Beleren".into(),
+            types: CardTypes::new([CardType::Planeswalker]),
+            subtypes: vec!["Jace".into()],
+            supertypes: vec!["Legendary".into()],
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            loyalty: Some(3),
+            text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::Draw, Actor::Opponent),
+                intervening_if: None,
+                effects: vec![Effect::DrawCards { count: 1.into() }],
+            }],
+            activated_abilities: vec![
+                loyalty(1, vec![Effect::create_tokens("token.illusion_1_1_u", 1)]),
+                loyalty(
+                    -2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, bounce.clone()),
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(bounce))],
+                    }],
+                ),
+                loyalty(
+                    -6,
+                    vec![
+                        Effect::DrawCards { count: 3.into() },
+                        Effect::PutCounters {
+                            on: ObjectSelector::each_you_control(CardPredicate::creature()),
+                            kind: CounterKind::PlusOnePlusOne,
+                            amount: EffectValue::CardsInHand,
+                        },
+                    ],
+                ),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn infinite_coursework() -> CardDefinition {

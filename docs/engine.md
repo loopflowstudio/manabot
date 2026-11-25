@@ -1020,6 +1020,28 @@ Moving the permanent to the graveyard restores Monica Rambeau.
   printed characteristic, so copy effects copy `printed` and never token
   status; a token copy of a card is a token because it was created as one.
 
+### Loyalty abilities
+
+The Theorist, Jace Beleren enters with three loyalty counters. Doubling Season
+changes that to six. Activating his [+1] adds one loyalty counter immediately.
+The Illusion appears when the ability resolves. Once a player activates a
+loyalty ability, every loyalty ability of that permanent is spent for the
+turn, even if control changes. The normal activation window is its
+controller’s main phase with an empty stack.
+An effect can grant instant timing for matching permanents. The turn limit
+still applies.
+
+| Rule | State on the permanent | What the player does |
+| --- | --- | --- |
+| Loyalty (CR 306, 606) | Loyalty counters | Pay the signed cost and put an ability on the stack |
+| Class (CR 717) | Class level | Pay mana to activate the next level ability at sorcery timing |
+| Room (CR 709) | Which doors are unlocked | Pay a door’s mana cost as a special action |
+
+Input v11 exposes the face’s starting value in `printed_loyalty`, the current
+loyalty among its counter facts, and the per-turn limit in
+`loyalty_activated_this_turn`. Each available loyalty activation names its
+cost and effect in the shared offer.
+
 ## Objects and zones
 
 The engine's runtime types and their names come from the Comprehensive Rules.

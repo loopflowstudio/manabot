@@ -99,7 +99,7 @@ NAME_DIM = width("name_candidates")
 PLAYER_RESTRICTED_INDEX = column("agent_player", "restricted_lesson_white")
 PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = column("agent_player", "no_maximum_hand_size")
 PLAYER_DIM = width("agent_player")
-# Cast-permission terms follow the printed characteristics; validity is last.
+# Cast-permission terms follow the original printed characteristics.
 CARD_PERMISSION_INDEX = column("agent_cards", "permission")
 CARD_DIM = width("agent_cards")
 

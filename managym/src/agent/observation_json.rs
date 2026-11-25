@@ -223,6 +223,9 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("name", &value.name)?;
         map.serialize_entry("owner_id", &value.owner_id)?;
         map.serialize_entry("power", &value.power)?;
+        if let Some(loyalty) = value.printed_loyalty {
+            map.serialize_entry("printed_loyalty", &loyalty)?;
+        }
         map.serialize_entry("registry_key", &value.registry_key)?;
         map.serialize_entry("text_box", &value.text_box)?;
         map.serialize_entry("toughness", &value.toughness)?;
@@ -738,6 +741,8 @@ pub(super) struct WireCardData {
     pub text_box: String,
     pub power: i32,
     pub toughness: i32,
+    #[serde(default)]
+    pub printed_loyalty: Option<i32>,
     /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
     pub is_legendary: bool,
@@ -824,6 +829,8 @@ pub(super) struct WirePermanentData {
     /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn, summed over grants.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: i32,
@@ -963,6 +970,7 @@ impl From<WireCardData> for CardData {
                 text_box: w.text_box,
                 power: w.power,
                 toughness: w.toughness,
+                printed_loyalty: w.printed_loyalty,
                 is_legendary: w.is_legendary,
                 is_ally: w.is_ally,
                 is_lesson: w.is_lesson,
@@ -1000,6 +1008,7 @@ impl From<WirePermanentData> for PermanentData {
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
             once_each_turn_used: w.once_each_turn_used,
+            loyalty_activated_this_turn: w.loyalty_activated_this_turn,
             granted_firebending: w.granted_firebending,
             temp_subtypes: w.temp_subtypes,
             counters: w.counters,
@@ -1074,6 +1083,7 @@ impl Serialize for PermanentData {
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,
             once_each_turn_used: self.once_each_turn_used,
+            loyalty_activated_this_turn: self.loyalty_activated_this_turn,
             granted_firebending: self.granted_firebending,
             temp_subtypes: self.temp_subtypes.clone(),
             counters: self.counters.clone(),

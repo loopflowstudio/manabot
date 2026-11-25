@@ -320,6 +320,7 @@ impl CardTypeData {
 /// mana cost describe the definition; this is not the engine's full layered view.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CharacteristicsData {
+    pub printed_loyalty: Option<i32>,
     pub name: String,
     /// Printed rules text, not a rendering of effective abilities.
     pub text_box: String,
@@ -648,7 +649,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 40] = [
+pub const MODIFICATION_NAMES: [&str; 41] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -686,6 +687,7 @@ pub const MODIFICATION_NAMES: [&str; 40] = [
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
+    "LoyaltyAtInstantSpeed",
     "AdditionalLandPlay",
     "SetName",
     "PreventCombatDamage",
@@ -724,7 +726,8 @@ impl ContinuousEffectData {
                 data.subtypes = subtypes.clone();
                 "SetCreatureTypes"
             }
-            Modification::SetName(_)
+            Modification::LoyaltyAtInstantSpeed(_)
+            | Modification::SetName(_)
             | Modification::AddTypes(_)
             | Modification::SetTypes { .. }
             | Modification::SetColors(_)
@@ -741,6 +744,7 @@ impl ContinuousEffectData {
                     crate::cards::tokens::rules_tokens(modification, default_content_pack())
                         .expect("registered rules payload");
                 match modification {
+                    Modification::LoyaltyAtInstantSpeed(_) => "LoyaltyAtInstantSpeed",
                     Modification::SetName(_) => "SetName",
                     Modification::AddTypes(_) => "AddTypes",
                     Modification::SetTypes { .. } => "SetTypes",
@@ -869,6 +873,7 @@ pub struct PermanentData {
     /// abilities, once-each-turn triggers that fired and "do this only once
     /// each turn" options taken.
     pub once_each_turn_used: i32,
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn, summed over grants.
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
@@ -1685,6 +1690,7 @@ impl Observation {
                 .is_some_and(|combat| combat.first_strikers.contains(&perm_id)),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
+            loyalty_activated_this_turn: permanent.loyalty_activated_this_turn,
             once_each_turn_used: (permanent.activated_this_turn.len()
                 + game.state.turn.used_trigger_grants.count(object)
                 + game
@@ -1793,6 +1799,7 @@ impl Observation {
                     text_box: object.text_box.clone(),
                     power: characteristics.power,
                     toughness: characteristics.toughness,
+                    printed_loyalty: object.loyalty,
                     is_legendary: characteristics.is_legendary,
                     is_ally: characteristics.has_subtype("Ally"),
                     is_lesson: characteristics.has_subtype("Lesson"),
@@ -1889,6 +1896,7 @@ impl Observation {
             text_box: object.text_box.clone(),
             power: object.power.unwrap_or(0),
             toughness: object.toughness.unwrap_or(0),
+            printed_loyalty: object.loyalty,
             is_legendary: object.is_legendary(),
             is_ally: object.has_subtype("Ally"),
             is_lesson: object.has_subtype("Lesson"),

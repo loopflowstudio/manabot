@@ -221,3 +221,148 @@ fn commons_and_annex_lands_check_their_controllers_planeswalkers_and_pay_either_
         }
     }
 }
+
+#[test]
+fn theorist_loyalty_is_paid_before_resolution_and_shared_across_abilities() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup},
+        inspect::counters_of,
+        play::{activate, offers_ability, settle},
+    };
+    use managym::{
+        agent::{
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::permanent,
+        },
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, permanent::CounterKind},
+    };
+    let name = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&["Doubling Season", name]);
+    enter_battlefield(&mut s, "Doubling Season");
+    let jace = enter_battlefield(&mut s, name);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 6);
+    activate(&mut s, jace, 0);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 7);
+    assert!(s.battlefield_permanents_named(0, "Illusion").is_empty());
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Illusion").len(), 2);
+    assert!(!(0..3).any(|index| offers_ability(&mut s, jace, index)));
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let row = obs
+        .agent_permanents
+        .iter()
+        .position(|p| p.characteristics.name == name)
+        .unwrap();
+    let input = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    let offset = row * permanent::WIDTH;
+    assert_eq!(
+        input.agent_permanents[offset + permanent::PRINTED_LOYALTY],
+        3.0
+    );
+    assert_eq!(
+        input.agent_permanents[offset + permanent::LOYALTY_ACTIVATED_THIS_TURN],
+        1.0
+    );
+    let restored: Observation = serde_json::from_str(&obs.to_json()).unwrap();
+    assert_eq!(restored.to_json(), obs.to_json());
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    assert!(!offers_ability(&mut s, jace, 0));
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(offers_ability(&mut s, jace, 2));
+}
+
+#[test]
+fn theorist_loyalty_timing_permission_preserves_quota_and_targets() {
+    use crate::support::{
+        game::{
+            enter_battlefield, five_color_setup, player_effect, put_onto_battlefield, set_counters,
+        },
+        inspect::{counters_of, hand},
+        play::{activate, offers_ability, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{
+            effect::{EffectDuration, Modification},
+            game_object::Target,
+            permanent::CounterKind,
+            predicate::CardPredicate,
+        },
+    };
+    let name = "The Theorist, Jace Beleren";
+    let mut s = five_color_setup(&[name, "Gray Ogre"]);
+    let jace = enter_battlefield(&mut s, name);
+    let ogre = put_onto_battlefield(&mut s, 1, "Gray Ogre");
+    assert!(!offers_ability(&mut s, jace, 2));
+    let hand_size = hand(&s, 0).len();
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(hand(&s, 0).len(), hand_size + 1);
+    s.pass_priority();
+    assert!(!offers_ability(&mut s, jace, 1));
+    for (subtype, allowed) in [("Chandra", false), ("Jace", true)] {
+        player_effect(
+            &mut s,
+            0,
+            Modification::LoyaltyAtInstantSpeed(Box::new(CardPredicate {
+                subtype: Some(subtype.into()),
+                ..Default::default()
+            })),
+            EffectDuration::EndOfTurn,
+        );
+        assert_eq!(offers_ability(&mut s, jace, 1), allowed);
+    }
+    activate(&mut s, jace, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 1);
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none());
+    assert!(!offers_ability(&mut s, jace, 0));
+    s.advance_to_active_step(0, StepKind::Main);
+    let mine = enter_battlefield(&mut s, "Gray Ogre");
+    set_counters(&mut s, jace, CounterKind::Loyalty, 6);
+    activate(&mut s, jace, 2);
+    assert!(s.game().state.permanents[jace].is_none());
+    settle(&mut s);
+    let cards = hand(&s, 0).len();
+    assert_eq!(
+        counters_of(&s, mine, CounterKind::PlusOnePlusOne),
+        cards as i32
+    );
+}
+
+/// A loyalty symbol makes even a mana-producing activation use the stack.
+#[test]
+fn theorist_loyalty_with_zero_cost_and_mana_output_uses_the_stack() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_unfunded_setup},
+        inspect::{card_of, counters_of},
+        play::{activate, offers_ability, settle},
+    };
+    use managym::state::{
+        ability::Effect,
+        card::{ActivatedAbilityDefinition, LoyaltyCost},
+        mana::Mana,
+        permanent::CounterKind,
+    };
+    let name = "The Theorist, Jace Beleren";
+    let mut s = five_color_unfunded_setup(&[name]);
+    let jace = enter_battlefield(&mut s, name);
+    let object = card_of(&s, jace);
+    s.game_mut().state[object]
+        .activated_abilities
+        .push(ActivatedAbilityDefinition {
+            loyalty: Some(LoyaltyCost::Fixed(0)),
+            effects: vec![Effect::add_mana(Mana::parse("RR"))],
+            ..Default::default()
+        });
+    activate(&mut s, jace, 3);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 3);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 2);
+    assert!(!offers_ability(&mut s, jace, 0));
+}

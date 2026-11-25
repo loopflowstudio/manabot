@@ -1067,6 +1067,7 @@ class ObservationCharacteristics:
     text_box: str
     power: int
     toughness: int
+    printed_loyalty: int | None
     is_legendary: bool
     is_ally: bool
     is_lesson: bool
@@ -1191,6 +1192,7 @@ class Permanent:
     attacking: bool
     first_strike_participant: bool
     exhausted_abilities: int
+    loyalty_activated_this_turn: bool
     once_each_turn_used: int
     granted_firebending: int
     temp_subtypes: List[str]

@@ -120,6 +120,8 @@ pub enum Modification<N = i32> {
     NoMaximumHandSize,
     /// One more land play for the affected player (CR 305.2).
     AdditionalLandPlay,
+    /// CR 606.3 timing permission on the affected player.
+    LoyaltyAtInstantSpeed(Box<super::predicate::CardPredicate>),
     /// Rules effect on a player: the next creature card they cast may be
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
@@ -216,6 +218,7 @@ impl<N> Modification<N> {
             Self::PreventCombatDamage => Modification::PreventCombatDamage,
             Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
+            Self::LoyaltyAtInstantSpeed(p) => Modification::LoyaltyAtInstantSpeed(p.clone()),
             Self::AdditionalLandPlay => Modification::AdditionalLandPlay,
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
@@ -285,6 +288,7 @@ impl Modification {
             | Self::PreventCombatDamage
             | Self::ExileIfWouldLeave
             | Self::KeepUnspentMana(_)
+            | Self::LoyaltyAtInstantSpeed(_)
             | Self::AdditionalLandPlay
             | Self::NoMaximumHandSize
             | Self::NextCreatureCastFlash

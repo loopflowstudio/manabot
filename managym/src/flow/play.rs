@@ -30,6 +30,7 @@ use crate::{
             ActivatedAbilityDefinition, ActivationZone, AdditionalCost, PrintedCharacteristics,
             SpellProfile, StaticAbility,
         },
+        effect::Modification,
         game_object::{AbilitySource, CardId, Object, ObjectId, PermanentId, PlayerId, Target},
         mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         payment::PaymentReceipt,
@@ -1579,7 +1580,7 @@ impl Game {
         if ability.mana_choices().is_some() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
-        self.check_activation_terms(player, &ability)?;
+        self.check_permanent_activation_terms(player, permanent_id, &ability)?;
         if !permanent.can_pay_counters(&ability) {
             return Err(AgentError("cannot pay counter cost".into()));
         }
@@ -1715,6 +1716,30 @@ impl Game {
         )
     }
 
+    pub(crate) fn check_permanent_activation_terms(
+        &self,
+        player: PlayerId,
+        source: PermanentId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Result<(), AgentError> {
+        if ability.loyalty.is_some() && !self.can_cast_sorceries(player) {
+            let instant_timing =
+                self.player_effects(player)
+                    .any(|record| match &record.modification {
+                        Modification::LoyaltyAtInstantSpeed(predicate) => {
+                            self.permanent_matches_predicate(source, predicate)
+                        }
+                        _ => false,
+                    });
+            if !instant_timing {
+                return Err(AgentError(
+                    "loyalty activation requires sorcery timing".into(),
+                ));
+            }
+        }
+        self.check_activation_terms(player, ability)
+    }
+
     /// The turn, life and condition terms every activation shares, whatever
     /// its source, mana abilities included: the one authority for "activate
     /// only ..." restrictions (CR 602.5).
@@ -1789,7 +1814,11 @@ impl Game {
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) {
-        if !ability.exhaust && !ability.power_up && !ability.once_each_turn {
+        if ability.loyalty.is_none()
+            && !ability.exhaust
+            && !ability.power_up
+            && !ability.once_each_turn
+        {
             return;
         }
         self.state

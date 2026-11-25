@@ -1087,6 +1087,13 @@
           "type": "integer",
           "format": "int32"
         },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
         "registry_key": {
           "type": "integer",
           "format": "uint32",
@@ -1458,6 +1465,9 @@
             "type": "string"
           }
         },
+        "loyalty_activated_this_turn": {
+          "type": "boolean"
+        },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
         },
@@ -1474,6 +1484,13 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
         },
         "summoning_sick": {
           "type": "boolean"

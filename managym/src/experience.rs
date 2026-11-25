@@ -299,6 +299,8 @@ pub struct LegacyCardTypesView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCardView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text_box: String,
     pub id: u32,
@@ -418,6 +420,8 @@ pub struct ContinuousEffectView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub printed_loyalty: Option<i32>,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -432,6 +436,8 @@ pub struct LegacyPermanentView {
     /// "Once each turn" abilities this object has used this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: u32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
     /// Firebending granted until end of turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_firebending: u32,

@@ -656,6 +656,9 @@ impl ActivatedAbilityDefinition {
     /// may still depend on the game ([`Self::has_dynamic_mana_output`]); a
     /// mana ability never uses the stack.
     pub fn is_mana_ability(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -666,6 +669,9 @@ impl ActivatedAbilityDefinition {
     /// control", a conditional branch, X mana of one color). Characteristics
     /// finalize it to concrete [`Self::mana_choices`] when they are read.
     pub fn has_dynamic_mana_output(&self) -> bool {
+        if self.loyalty.is_some() {
+            return false;
+        }
         let Some((effect, suffix)) = self.effects.split_first() else {
             return false;
         };
@@ -679,6 +685,9 @@ impl ActivatedAbilityDefinition {
     /// ability whose output has not been finalized against the game
     /// (`Game::characteristics` finalizes every dynamic output it returns).
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
+        if self.loyalty.is_some() {
+            return None;
+        }
         let (effect, suffix) = self.effects.split_first()?;
         if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
@@ -857,8 +866,26 @@ impl serde::Serialize for TapCost {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LoyaltyCost {
+    Fixed(i16),
+}
+
+impl std::fmt::Display for LoyaltyCost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::Fixed(0) => write!(f, "[0]"),
+            Self::Fixed(n) if n < 0 => write!(f, "[−{}]", n.unsigned_abs()),
+            Self::Fixed(n) => write!(f, "[+{n}]"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// A loyalty symbol in the activation cost (CR 606.2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loyalty: Option<LoyaltyCost>,
     /// Omitted for battlefield abilities so existing definition digests hold.
     #[serde(skip_serializing_if = "is_battlefield")]
     pub zone: ActivationZone,
@@ -1327,6 +1354,8 @@ impl InsetSpell {
 /// objects, so a copy effect copies these values and nothing else.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PrintedCharacteristics {
+    /// Printed starting loyalty (CR 306.5b), including zero.
+    pub loyalty: Option<i32>,
     /// The other catalog face can be cast in its own right (CR 712.11).
     pub modal_back: bool,
     pub inset: Option<InsetSpell>,
@@ -1476,6 +1505,8 @@ struct DefinitionWire<'a> {
     power: &'a Option<i32>,
     toughness: &'a Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    loyalty: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     back_face: Option<&'a str>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     modal_back: bool,
@@ -1525,6 +1556,7 @@ impl PrintedCharacteristics {
             text_box: &self.text_box,
             power: &self.power,
             toughness: &self.toughness,
+            loyalty: self.loyalty,
             back_face,
             modal_back: self.modal_back,
         }

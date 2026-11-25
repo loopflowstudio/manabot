@@ -227,6 +227,8 @@ pub struct Permanent {
     /// cleared at cleanup.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub activated_this_turn: Vec<usize>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loyalty_activated_this_turn: bool,
 }
 
 impl Permanent {
@@ -235,20 +237,31 @@ impl Permanent {
     }
 
     pub fn can_pay_counters(&self, ability: &ActivatedAbilityDefinition) -> bool {
-        ability
-            .remove_counters
-            .is_none_or(|(kind, count)| self.counter_count(kind) >= i32::from(count))
+        let mut loyalty_removed = 0;
+        if let Some((kind, count)) = ability.remove_counters {
+            if kind == CounterKind::Loyalty {
+                loyalty_removed = i32::from(count);
+            } else if self.counter_count(kind) < i32::from(count) {
+                return false;
+            }
+        }
+        if let Some(crate::card::LoyaltyCost::Fixed(cost)) = ability.loyalty {
+            loyalty_removed -= i32::from(cost).min(0);
+        }
+        loyalty_removed == 0 || self.counter_count(CounterKind::Loyalty) >= loyalty_removed
     }
 
     /// Whether this object has used up the ability: exhaust once ever
     /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
     pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
-        ((ability.exhaust || ability.power_up) && self.exhausted.contains(&index))
+        (self.loyalty_activated_this_turn && ability.loyalty.is_some())
+            || ((ability.exhaust || ability.power_up) && self.exhausted.contains(&index))
             || (ability.once_each_turn && self.activated_this_turn.contains(&index))
     }
 
     /// Record an activation against the ability's use limits.
     pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        self.loyalty_activated_this_turn |= ability.loyalty.is_some();
         if ability.exhaust || ability.power_up {
             self.exhausted.push(index);
         }
@@ -282,6 +295,7 @@ impl Permanent {
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),
+            loyalty_activated_this_turn: false,
         }
     }
 
@@ -334,5 +348,6 @@ impl Permanent {
     pub fn clear_turn_history(&mut self) {
         self.dealt_damage_this_turn = false;
         self.activated_this_turn.clear();
+        self.loyalty_activated_this_turn = false;
     }
 }

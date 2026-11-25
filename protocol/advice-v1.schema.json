@@ -2353,6 +2353,13 @@
           "title": "Power",
           "type": "integer"
         },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
         "registry_key": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2826,6 +2833,9 @@
           "default": null,
           "title": "Is Token"
         },
+        "loyalty_activated_this_turn": {
+          "type": "boolean"
+        },
         "name": {
           "anyOf": [
             {
@@ -2862,6 +2872,13 @@
             }
           ],
           "title": "Power"
+        },
+        "printed_loyalty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
         },
         "summoning_sick": {
           "title": "Summoning Sick",

@@ -18,6 +18,12 @@ use super::{
 };
 
 impl InputLayout {
+    pub fn card_columns(self) -> &'static [Column] {
+        match self {
+            Self::Legacy => &card::COLUMNS[..card::PRINTED_LOYALTY],
+            Self::OneToken => card::COLUMNS,
+        }
+    }
     pub fn player_columns(self) -> &'static [Column] {
         match self {
             Self::OneToken => player::COLUMNS,
@@ -373,6 +379,7 @@ columns! { card {
     53: HAS_X => ("has_x", ValueLayout::FLAG),
     54: X => ("x", ValueLayout::COUNT_TENTHS),
     55: VALID => ("valid", ValueLayout::FLAG),
+    56: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { permanent {
@@ -432,6 +439,8 @@ columns! { permanent {
     53: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
+    56: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    57: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -484,6 +493,7 @@ columns! { stack {
     43: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     44: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
     45: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
+    46: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -1014,7 +1024,7 @@ pub fn observation_layout(
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
             ("player", "player", Some(1), layout_kind.player_columns()),
-            ("cards", "card", None, card::COLUMNS),
+            ("cards", "card", None, layout_kind.card_columns()),
             ("permanents", "permanent", None, &permanent_columns[..]),
         ] {
             layout.insert(
@@ -1248,11 +1258,15 @@ mod tests {
                     config.player_dim(),
                     if one_token { 75 } else { 74 },
                 ),
-                ("agent_cards", card::WIDTH, 56),
+                (
+                    "agent_cards",
+                    config.card_dim(),
+                    if one_token { 57 } else { 56 },
+                ),
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 56 } else { 38 },
+                    if one_token { 58 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1282,7 +1296,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 46);
+                assert_eq!(stack::WIDTH, 47);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }

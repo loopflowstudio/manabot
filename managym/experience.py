@@ -360,6 +360,9 @@ class PlayerTurnHistoryView(ProtocolModel):
 
 
 class LegacyCardView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     registry_key: UInt32
@@ -414,6 +417,9 @@ class CopyView(ProtocolModel):
 
 
 class LegacyPermanentView(ProtocolModel):
+    printed_loyalty: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -426,6 +432,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    loyalty_activated_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)

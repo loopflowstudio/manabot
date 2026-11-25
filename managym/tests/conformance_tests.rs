@@ -55,6 +55,7 @@ struct FixtureCard {
     type_line: String,
     power: Option<String>,
     toughness: Option<String>,
+    loyalty: Option<String>,
     keywords: Vec<String>,
     oracle_text: Option<String>,
     colors: Vec<String>,
@@ -277,6 +278,14 @@ fn every_registered_real_card_matches_scryfall() {
             failures.push(format!(
                 "{name}: toughness {toughness:?} != Scryfall {:?}",
                 fx.toughness
+            ));
+        }
+
+        let loyalty = def.loyalty.map(|n| n.to_string());
+        if loyalty != fx.loyalty {
+            failures.push(format!(
+                "{name}: loyalty {loyalty:?} != Scryfall {:?}",
+                fx.loyalty
             ));
         }
 

@@ -149,6 +149,8 @@ def main() -> int:
             print(f"  {name}: NOT FOUND on Scryfall")
             continue
         cards[name] = {field: card.get(field) for field in FIELDS}
+        if "loyalty" in card:
+            cards[name]["loyalty"] = card["loyalty"]
 
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE.write_text(

@@ -148,6 +148,8 @@ def _serialize_object(card: managym.Card | managym.StackObject) -> dict[str, Any
             details["cast_permissions"] = permissions
         if card.counters:
             details["counters"] = {kind: int(n) for kind, n in card.counters.items()}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
     if announced_x is not None:
         details["x"] = int(announced_x)
     return {
@@ -175,6 +177,10 @@ def _serialize_permanent(
     if include_details:
         types = _serialize_types(characteristics.card_types)
         details = {"types": types, "is_token": bool(permanent.is_token)}
+    if characteristics.printed_loyalty is not None:
+        details["printed_loyalty"] = characteristics.printed_loyalty
+    if permanent.loyalty_activated_this_turn:
+        details["loyalty_activated_this_turn"] = True
     return {
         **details,
         "id": int(permanent.id),

@@ -1689,6 +1689,14 @@ fn continuous_description_in(
             "{subject} don't lose unspent {} mana as steps and phases end{until}",
             format!("{color:?}").to_lowercase()
         ),
+        Modification::LoyaltyAtInstantSpeed(predicate) => {
+            let permanents = predicate_description(predicate, "permanents");
+            match affected {
+                ObjectSelector::You => format!("You may activate loyalty abilities of {permanents} you control any time you could cast an instant{until}"),
+                ObjectSelector::This => format!("The affected player may activate loyalty abilities of {permanents} they control any time they could cast an instant{until}"),
+                _ => format!("{subject} may activate loyalty abilities of {permanents} they control any time they could cast an instant{until}"),
+            }
+        }
         Modification::AdditionalLandPlay => format!("{subject} may play an additional land{until}"),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
         Modification::NextCreatureCastFlash => {

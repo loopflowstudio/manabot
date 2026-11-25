@@ -18,10 +18,11 @@ pub enum SubtypeCategory {
     Creature,
     Enchantment,
     Land,
+    Planeswalker,
     Spell,
 }
 
-use SubtypeCategory::{Artifact, Creature, Enchantment, Land, Spell};
+use SubtypeCategory::{Artifact, Creature, Enchantment, Land, Planeswalker, Spell};
 
 /// Sorted by name for binary search; `subtype_table_is_sorted` checks it.
 const SUBTYPES: &[(&str, SubtypeCategory)] = &[
@@ -114,11 +115,13 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Horse", Creature),
     ("Human", Creature),
     ("Hyena", Creature),
+    ("Illusion", Creature),
     ("Incubator", Artifact),
     ("Infinity", Artifact),
     ("Inkling", Creature),
     ("Insect", Creature),
     ("Island", Land),
+    ("Jace", Planeswalker),
     ("Jellyfish", Creature),
     ("Juggernaut", Creature),
     ("Junk", Artifact),

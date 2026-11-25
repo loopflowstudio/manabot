@@ -76,6 +76,7 @@ class Definition(CaptureModel):
     keywords: Keywords
     power: int | None
     toughness: int | None
+    printed_loyalty: int | None = Field(default=None, exclude_if=lambda value: value is None)
     kicker: ManaCost | None
     ward: ManaCost | None
     # The life a ward costs ("Ward—Pay 7 life."); absent for any other ward.

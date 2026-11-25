@@ -1296,6 +1296,30 @@ impl Game {
                         ))
                     })
                     .collect();
+                // CR 306.5b is intrinsic to the face that will enter, including
+                // a face chosen by an earlier enter-as-a-copy replacement.
+                let object = self.state.entry_object(*object_id);
+                let back = entry
+                    .transformed
+                    .then(|| {
+                        crate::cards::content_pack::default_content_pack()
+                            .back_face(object.definition_id)
+                    })
+                    .flatten();
+                let face = back.as_ref().map_or(&**object, |(_, face)| face.as_ref());
+                if let Some(count) = face
+                    .loyalty
+                    .filter(|&n| n > 0 && face.types.is_planeswalker())
+                {
+                    entries.push(ReplacementCandidate::printed(
+                        source,
+                        object.replacement_effects.len(),
+                        ReplacementEffect::EntersWithCounters {
+                            kind: CounterKind::Loyalty,
+                            count,
+                        },
+                    ));
+                }
                 // Keep own replacements before battlefield grants. Borrow the
                 // shared characteristics; discovering one entry rule must not
                 // clone every static ability's program on each recheck.

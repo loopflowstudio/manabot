@@ -665,6 +665,19 @@ impl Game {
                     ..Default::default()
                 };
                 owed.push(CostComponent::Mana { cost, help });
+                if let Some(crate::state::card::LoyaltyCost::Fixed(delta)) = ability.loyalty {
+                    if delta < 0 {
+                        owed.push(CostComponent::RemoveSourceCounters(
+                            CounterKind::Loyalty,
+                            delta.unsigned_abs(),
+                        ));
+                    } else if delta > 0 {
+                        owed.push(CostComponent::AddCounters(
+                            CounterKind::Loyalty,
+                            delta as u16,
+                        ));
+                    }
+                }
                 if let Some((kind, count)) = ability.remove_counters {
                     owed.push(CostComponent::RemoveSourceCounters(kind, count));
                 }

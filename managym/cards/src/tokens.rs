@@ -67,6 +67,16 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         inkling(),
         red_white_spirit(),
         rat(),
+        token(
+            "token.illusion_1_1_u",
+            "7bda0b63-fd0f-495d-9eb0-20057571c0ee",
+            creature(
+                face("Illusion", [CardType::Creature], &["Illusion"], ""),
+                1,
+                1,
+                [Color::Blue],
+            ),
+        ),
     ]
 }
 

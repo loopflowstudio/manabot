@@ -29,6 +29,7 @@
   const keywords = $derived(permanent ? keywordsOf(permanent, face) : (face?.keywords ?? []).map(keyword => ({ keyword, source: null })));
   const statuses = $derived(permanent ? statusesOf(permanent) : []);
   const pt = $derived(permanent ? ptProvenance(permanent, face) : null);
+  const printedLoyalty = $derived(permanent?.printed_loyalty ?? card?.printed_loyalty);
   const plain = $derived(!permanent && card?.types.is_creature ? `${card.power}/${card.toughness}` : face?.power != null && !permanent ? `${face.power}/${face.toughness}` : null);
   const facts = $derived(permanent ? [
     permanent.tapped ? 'Tapped' : 'Untapped',
@@ -39,6 +40,7 @@
     ...(permanent.combat_damage_to_players ?? []).map(seat => `dealt combat damage to seat ${seat} this turn`),
     permanent.damage ? `${permanent.damage} damage marked` : '',
     ...counterTerms(permanent.counters),
+    permanent.loyalty_activated_this_turn ? 'loyalty ability activated this turn' : '',
     permanent.abilities_lost ? 'has lost all abilities' : '',
     permanent.is_token ? 'token' : '',
   ].filter(Boolean).join(' · ') : null);
@@ -64,6 +66,7 @@
     </p>
   {/if}
   {#if text}<p class="text" data-testid="card-rules-text">{text}</p>{/if}
+  {#if printedLoyalty != null}<p class="state">Starting loyalty {printedLoyalty}</p>{/if}
   {#if !permanent}{#each counterTerms(card?.counters) as term (term)}<p class="state">{term}</p>{/each}{/if}
   {#each castTerms as term}<p class="state">{term}</p>{/each}
   {#if pt}

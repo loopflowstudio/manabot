@@ -200,6 +200,16 @@ describe('where decisions land', () => {
     expect(unpilePlanned([pile], new Map())).toEqual([pile]);
   });
 
+  it('keeps permanents with different loyalty activation histories separately inspectable', () => {
+    const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
+    const agent = frame.projection.agent;
+    const token = { ...agent.battlefield[0], id: 9001, name: 'Jace', printed_loyalty: 0, counters: { loyalty: 2 } };
+    agent.battlefield = [token, { ...token, id: 9002, loyalty_activated_this_turn: true }];
+    frame.offers = [];
+    const side = boardView(frame, PLAYERS).you;
+    expect([...side.support, ...side.creatures].map(pile => pile.items.length)).toEqual([1, 1]);
+  });
+
   it('fans identical lands into one pile, keeping each copy', () => {
     const view = boardView(navigation.CHOOSE_TARGET.frame, PLAYERS);
     const piles = [...view.you.support, ...view.you.creatures];

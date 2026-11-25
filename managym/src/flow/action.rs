@@ -132,6 +132,13 @@ impl Game {
             } => {
                 let view = self.characteristics(*permanent);
                 let ability = view.activated_abilities.get(*ability_index)?;
+                if let Some(cost) = ability.loyalty {
+                    return Some(format!(
+                        "{} {cost}: {}",
+                        view.name,
+                        effects_description(&ability.effects)
+                    ));
+                }
                 if !ability.has_grantor_cost() {
                     return None;
                 }
@@ -594,7 +601,9 @@ impl Game {
                 {
                     continue;
                 }
-                if self.check_activation_terms(player, ability).is_err()
+                if self
+                    .check_permanent_activation_terms(player, permanent_id, ability)
+                    .is_err()
                     || !permanent.can_pay_counters(ability)
                     || permanent.activation_used(ability_index, ability)
                     || (ability.discard_card
