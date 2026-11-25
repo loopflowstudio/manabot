@@ -8,10 +8,22 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 
+/**
+ * Start a game against the random opponent on a fixed deal: ordinary play
+ * draws a new seed, and some deals end before the opponent's moves reach the
+ * recap at one of your decisions.
+ */
 async function startAgainstRandom(page: Page, sent: { count: number }): Promise<void> {
-  page.on('websocket', socket => socket.on('framesent', frame => {
-    if (String(frame.payload).includes('"type":"command"')) sent.count += 1;
-  }));
+  await page.routeWebSocket('**/ws/play', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      if (typeof message !== 'string') { server.send(message); return; }
+      const payload = JSON.parse(message);
+      if (payload.type === 'new_game') payload.config.seed = 0;
+      if (payload.type === 'command') sent.count += 1;
+      server.send(JSON.stringify(payload));
+    });
+  });
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
   await page.getByTestId('opponent-select').selectOption('random');

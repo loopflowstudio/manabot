@@ -90,6 +90,11 @@ from manabot.policy.readings import (
 )
 from manabot.policy.spans import ObservationSpans, full_word
 
+__all__ = [
+    "Prepared",
+    "reference_distribution",
+]
+
 Array = np.ndarray
 
 

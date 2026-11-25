@@ -41,6 +41,7 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
+    CompactObservation,
     MemoryStore,
     Prefix,
     PrefixIdentity,
@@ -109,6 +110,15 @@ from manabot.training.state.game_errors import (
 )
 from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig, SlotLoad
 from managym.recording import DecisionAnnotation
+
+__all__ = [
+    "open_collector",
+    "collect",
+    "close_collector",
+    "Collector",
+    "RolloutBatch",
+    "RecordedObservations",
+]
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -311,6 +321,76 @@ class RecordedObservations:
     memory: tuple[Prefix, ...] = ()
     memory_capacities: tuple[int, int, int, int] | None = None
 
+    @classmethod
+    def concatenate(cls, parts: Sequence[RecordedObservations]) -> RecordedObservations:
+        """Append recording stores and translate learner indexes into the joined store."""
+        if not parts:
+            raise ValueError("cannot concatenate empty recorded observations")
+        capacities = parts[0].memory_capacities
+        counts = [observation_row_count(part.rows) for part in parts]
+        for part, count in zip(parts, counts, strict=True):
+            if capacities != part.memory_capacities:
+                raise ValueError("recorded memory capacities differ")
+            if len(part.memory) != (count if capacities is not None else 0):
+                raise ValueError("recorded memory count differs from observation rows")
+            if isinstance(part.rows, ObservationSelection):
+                retained = part.rows.memory
+                native_capacities = (
+                    retained.memory_capacities if retained is not None else None
+                )
+                if native_capacities != capacities:
+                    raise ValueError(
+                        "recorded memory capacities differ from native observations"
+                    )
+                if retained is not None and (
+                    len(retained.prefixes) != count
+                    or any(
+                        not same_prefix(a, b)
+                        for a, b in zip(retained.prefixes, part.memory, strict=True)
+                    )
+                ):
+                    raise ValueError(
+                        "recorded memory differs from native observation memory"
+                    )
+            index = part.index
+            if (
+                index.ndim != 1
+                or index.dtype.kind not in "iu"
+                or (index < 0).any()
+                or (index >= count).any()
+            ):
+                raise ValueError("recorded index must select rows within its own store")
+            if part.needs is not None and part.needs.shape != (count, len(AXES)):
+                raise ValueError(
+                    "recorded bucket needs must match observation rows and axes"
+                )
+        if len(parts) == 1:
+            return parts[0]
+        rows = concatenate_observation_rows([part.rows for part in parts])
+        offsets = np.cumsum([0, *counts[:-1]], dtype=np.int64)
+        indexes = np.concatenate(
+            [
+                part.index.astype(np.int64, copy=False) + offset
+                for part, offset in zip(parts, offsets, strict=True)
+            ]
+        )
+        memory = (
+            rows.memory.prefixes
+            if isinstance(rows, ObservationSelection) and rows.memory is not None
+            else tuple(prefix for part in parts for prefix in part.memory)
+        )
+        needs = None
+        if any(part.needs is not None for part in parts):
+            needs = np.concatenate(
+                [
+                    part.needs
+                    if part.needs is not None
+                    else np.full((count, len(AXES)), -1, np.int64)
+                    for part, count in zip(parts, counts, strict=True)
+                ]
+            )
+        return cls(rows, indexes, needs, memory, capacities)
+
     def gather(self, indexes: np.ndarray) -> ObservationBuffers:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
         recorded = self.index[indexes]
@@ -337,6 +417,71 @@ class RecordedObservations:
             for key, array in rows.items()
             if key not in ACTION_FIELDS
         }
+
+
+def same_prefix(a: Prefix, b: Prefix) -> bool:
+    # Independently restored archives can own equal histories. The tail key binds
+    # every chunk and predecessor, without walking the chain or comparing arrays.
+    return a is b or (
+        a.identity == b.identity
+        and (a.tail.key if a.tail else None) == (b.tail.key if b.tail else None)
+    )
+
+
+def observation_row_count(rows: ObservationBuffers) -> int:
+    if isinstance(rows, ObservationSelection):
+        return len(rows.coordinates)
+    if not rows or any(value.ndim == 0 for value in rows.values()):
+        raise ValueError(
+            "dense observations require at least one field with a row axis"
+        )
+    count = len(next(iter(rows.values())))
+    if any(len(value) != count for value in rows.values()):
+        raise ValueError("dense observation row counts differ across fields")
+    return count
+
+
+def concatenate_observation_rows(
+    parts: Sequence[ObservationBuffers],
+) -> ObservationBuffers:
+    """Join retained coordinates or compatible dense observation fields along the row axis."""
+    selections = [part for part in parts if isinstance(part, ObservationSelection)]
+    if selections:
+        if len(selections) != len(parts):
+            raise ValueError("cannot mix native and dense observations")
+        return ObservationSelection.concatenate(selections)
+
+    # Dense observation transport is removed in 0.3.0.
+    first = parts[0]
+    for part in parts[1:]:
+        if part.keys() != first.keys():
+            raise ValueError("dense observation fields differ")
+        for key, array in part.items():
+            if (
+                array.shape[1:] != first[key].shape[1:]
+                or array.dtype != first[key].dtype
+            ):
+                raise ValueError(f"dense observation shape or dtype differs for {key}")
+    retained = [part for part in parts if isinstance(part, PrefixObservation)]
+    if retained and (
+        len(retained) != len(parts)
+        or any(
+            part.memory_capacities != retained[0].memory_capacities for part in retained
+        )
+    ):
+        raise ValueError("dense observation memory capacities differ")
+    if len(parts) == 1:
+        return first
+    rows = {key: np.concatenate([part[key] for part in parts]) for key in first}
+    if not retained:
+        return rows
+    prefixes = tuple(prefix for part in retained for prefix in part.prefixes)
+    capacities = retained[0].memory_capacities
+    if isinstance(first, CompactObservation):
+        return CompactObservation(
+            rows, prefixes, capacities, memory={key: rows[key] for key in MEMORY_FIELDS}
+        )
+    return PrefixObservation(rows, prefixes, capacities)
 
 
 @dataclass(frozen=True)
@@ -385,6 +530,123 @@ class RolloutBatch:
 
     def __post_init__(self) -> None:
         validate_rollout_metadata(self)
+
+    @classmethod
+    def concatenate(cls, batches: Sequence[RolloutBatch]) -> RolloutBatch:
+        """Merge packed worker batches in order, preserving each trajectory's bootstrap."""
+        if not batches:
+            raise ValueError("cannot concatenate empty rollout batches")
+        explicit = batches[0].trajectories is not None
+        for batch in batches:
+            shape = batch.actions.shape
+            if (
+                len(shape) != 2
+                or shape[1] != 1
+                or not shape[0]
+                or batch.dones.shape != shape
+            ):
+                raise ValueError(
+                    "rollout concatenation requires packed [rows, 1] actions and dones"
+                )
+            if (batch.trajectories is not None) != explicit:
+                raise ValueError("cannot mix complete-game and explicit trajectories")
+            if (
+                batch.recorded.index.shape != (shape[0],)
+                or len(batch.action_data.offsets) != shape[0] + 1
+            ):
+                raise ValueError(
+                    "recorded indexes and packed actions must cover the learner rows"
+                )
+            if any(
+                value.shape != shape
+                for value in (batch.logprobs, batch.rewards, batch.values)
+            ):
+                raise ValueError(
+                    "behavior logs, rewards and values must match packed actions"
+                )
+            validate_rollout_metadata(batch)
+            if not explicit and (
+                not batch.dones[-1, 0]
+                or batch.next_done.shape != (1,)
+                or not batch.next_done.all()
+            ):
+                raise ValueError(
+                    "complete-game batches must end on a terminal row with next_done true"
+                )
+
+        recorded = RecordedObservations.concatenate(
+            [batch.recorded for batch in batches]
+        )
+        if len(batches) == 1:
+            return batches[0]
+        optional: dict[str, np.ndarray | None] = {}
+        for name in (
+            "outcome_probabilities",
+            "assignments",
+            "target_residuals",
+            "episode_source",
+            "snapshot_id",
+            "branch_group_id",
+            "is_root_decision",
+            "sample_weight",
+        ):
+            values = [getattr(batch, name) for batch in batches]
+            present = [value for value in values if value is not None]
+            if present and len(present) != len(values):
+                raise ValueError(f"workers differ on the presence of {name}")
+            optional[name] = np.concatenate(present) if present else None
+
+        groups = optional["branch_group_id"]
+        if groups is not None:
+            offset_worker_groups(groups, batches)
+
+        if explicit:
+            spans: list[TrajectorySpan] = []
+            bootstraps: list[ObservationBuffers] = []
+            row_offset = bootstrap_offset = 0
+            for batch in batches:
+                assert batch.trajectories is not None
+                for span in batch.trajectories:
+                    spans.append(
+                        replace(
+                            span,
+                            start=span.start + row_offset,
+                            stop=span.stop + row_offset,
+                            bootstrap_index=None
+                            if span.bootstrap_index is None
+                            else span.bootstrap_index + bootstrap_offset,
+                        )
+                    )
+                if len(batch.next_done):
+                    bootstraps.append(batch.next_obs)
+                row_offset += len(batch.actions)
+                bootstrap_offset += len(batch.next_done)
+            trajectories: tuple[TrajectorySpan, ...] | None = tuple(spans)
+            next_obs = (
+                concatenate_observation_rows(bootstraps)
+                if bootstraps
+                else batches[0].next_obs
+            )
+            next_done = np.concatenate([batch.next_done for batch in batches])
+        else:
+            trajectories = None
+            next_obs = batches[-1].next_obs
+            next_done = batches[-1].next_done
+        return cls(
+            recorded=recorded,
+            actions=np.concatenate([batch.actions for batch in batches]),
+            logprobs=np.concatenate([batch.logprobs for batch in batches]),
+            rewards=np.concatenate([batch.rewards for batch in batches]),
+            dones=np.concatenate([batch.dones for batch in batches]),
+            values=np.concatenate([batch.values for batch in batches]),
+            action_data=PackedActions.concatenate(
+                [batch.action_data for batch in batches]
+            ),
+            next_obs=next_obs,
+            next_done=next_done,
+            trajectories=trajectories,
+            **optional,
+        )
 
     def bootstrap_indexes(self) -> np.ndarray | None:
         """Frozen observation index at each explicit cut, -1 on every other row."""
@@ -475,6 +737,20 @@ class RolloutBatch:
     def ordered_obs(self) -> ObservationBuffers:
         """Ordinary non-action fields in [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
+
+
+def offset_worker_groups(groups: np.ndarray, batches: Sequence[RolloutBatch]) -> None:
+    """Shift worker-local group ids in the joined array in place, preserving absent ids."""
+    offset = next_group = 0
+    for batch in batches:
+        local = groups[offset : offset + len(batch.actions)]
+        offset += len(local)
+        largest = int(local.max())
+        if largest >= 0:
+            if next_group + largest > np.iinfo(np.int64).max:
+                raise ValueError("merged branch_group_id exceeds int64")
+            local[local >= 0] += next_group
+            next_group += largest + 1
 
 
 def validate_rollout_metadata(batch: RolloutBatch) -> None:

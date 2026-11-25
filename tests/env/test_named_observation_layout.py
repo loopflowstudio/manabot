@@ -459,3 +459,50 @@ def test_effect_detail_kinds_publish_the_catalog_token_the_encoder_writes() -> N
     }
     assert tokens[names["program_integer"]] == 4
     assert tokens[names["program_boolean"]] == 5
+
+
+@pytest.mark.parametrize("input_version", [9, 10, 11])
+def test_deprecated_encoder_shortcuts(input_version: Literal[9, 10, 11]) -> None:
+    config = ObservationConfig(
+        policy_input_version=input_version,
+        max_actions=19,
+        max_events=5,
+        max_cards_per_player=41,
+        max_permanents_per_player=17,
+        max_focus_objects=3,
+        max_stack_objects=13,
+    )
+    with pytest.warns(DeprecationWarning, match="encoder.*0.3.0"):
+        via_property = ObservationSpace(config).encoder
+    with pytest.warns(DeprecationWarning, match="ObservationEncoder.*0.3.0"):
+        via_alias = observation.ObservationEncoder(config)
+    shapes = via_property.shapes
+    expected = {
+        "max_actions": 19,
+        "max_events": 5,
+        "cards_per_player": 41,
+        "perms_per_player": 17,
+        "max_focus_objects": 3,
+        "max_stack_objects": 13 if input_version == 11 else 0,
+        "action_dim": shapes["actions"][-1],
+        "event_dim": shapes["events"][-1],
+        "player_dim": shapes["agent_player"][-1],
+        "card_dim": shapes["agent_cards"][-1],
+        "permanent_dim": shapes["agent_permanents"][-1],
+        "relation_dim": shapes["relations"][-1],
+        "name_dim": shapes["name_candidates"][-1],
+        "library_shape": tuple(managym.observation_layout()["known_library"]["shape"]),
+        "num_phases": len(observation.PhaseEnum.__members__),
+        "num_steps": len(observation.StepEnum.__members__),
+        "num_zones": len(observation.ZoneEnum.__members__),
+        "num_actions": len(observation.ActionEnum.__members__),
+        "num_event_types": len(observation.EventTypeEnum.__members__),
+        "num_event_entity_kinds": len(observation.EventEntityKindEnum.__members__),
+    }
+    for space in (via_property, via_alias):
+        for name, value in expected.items():
+            with pytest.warns(DeprecationWarning, match=rf"{name}.*0\.3\.0"):
+                assert getattr(space, name) == value
+        for missing in ("no_such_capacity", "__no_such_capacity__"):
+            assert not hasattr(space, missing)
+    assert not hasattr(ObservationSpace.__new__(ObservationSpace), "max_actions")
