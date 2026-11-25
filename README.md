@@ -391,12 +391,18 @@ Torch, Node or Rust:
 ```bash
 uv venv --python 3.13
 uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
-uv run --no-project managym academy                            # opens http://127.0.0.1:8000; Ctrl-C stops it
+uv run --no-project managym academy                                  # opens http://127.0.0.1:8000; Ctrl-C stops it
+uv run --no-project managym play --opponent ./my_bot.py:choose       # play against any Python policy or callable
+uv run --no-project managym play --opponent ./checkpoint.policy.json # play against a saved PolicySpec JSON
+uv run --no-project managym watch --bot1 ./my_bot.py:choose --bot2 heuristic
 ```
 
 From this checkout, `./scripts/play` runs it with hot reload and your trained
 checkpoints in the Opponent menu. [Running Academy](docs/academy.md#running-academy)
-covers both, with replays, trained bots and troubleshooting.
+covers launching, replays, and troubleshooting, and
+[independent Python policies](docs/academy.md#independent-python-policies)
+documents the framework-free `managym.policy.Policy` and `managym.bots`
+entry-point contracts for plugging external models into Academy.
 
 For an engine-only project, start with [installing managym](docs/engine-python.md).
 For training, see [installation and dependency choices](docs/development.md#install).
