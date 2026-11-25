@@ -54,23 +54,18 @@ also checks sparse facts, padding restoration, shared effects, selected input
 capacities and gradients after inference. The complete debug native suite and
 Engine Budget run in CI; a passing local subset does not replace them.
 
-`uv run --extra dev python scripts/bench_local_update.py --reference 841b1c50c`
-runs the bounded 1/4/16-world fixture with separate latency and profiler regions.
-Use an ordinary release extension for latency. This creates a new comparison
-under the installed world/runtime, not a reproduction of a historical binary.
-Retained native comparisons additionally require the original receipt directory
-described in the complete record. Games and evaluations for this work run on
-the Mac mini or CI.
+For the November 9 historical comparison, use the benchmark checkout
+`cb75f2166b` with `--reference 841b1c50c`. The historical teacher imports
+the belief sampler from that checkout. Retained native comparisons also need
+the original receipts listed in the complete measurement record. Games and
+evaluations for this work run on the Mac mini or CI.
 
-The same script compares full evidence and per-branch encoding against
-the defaults, compact evidence with native frontier encoding:
+The current benchmark compares compact and full evidence on the same packed
+frontiers. Use an ordinary release extension for latency.
 
 ```sh
-uv run --extra dev python scripts/bench_local_update.py --worlds 16 \
-  --rollout-evidence full compact --native-encoder off on --inference-threads 1
+uv run --extra dev python scripts/bench_local_update.py --worlds 16 --inference-threads 1
 ```
-
-An arm flag that is omitted holds that setting at its default.
 
 Each arm runs the same roots and seeds. The script checks that the arms choose
 identical Commands, write identical tensors and produce values within the

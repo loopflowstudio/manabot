@@ -1,10 +1,10 @@
 """Bounded fixed-position local-search timing and pre-change receipt comparison.
 
-Run `uv run python scripts/bench_local_update.py --reference 841b1c50c`.
+Run `uv run python scripts/bench_local_update.py` to compare compact and full evidence.
 No games are played: both teachers search the same two seeded opening positions
 at depth 20, on one CPU thread. By default the policy is initialized (64 x 2),
 not trained; --checkpoint selects an admitted observation-only checkpoint.
-The reference is loaded from git, never installed as another production path.
+An explicit --reference uses code from git and requires compatible local imports.
 Timings are unprofiled; a separate search profiles the largest allocation.
 For native attribution, build the extension with --features python,benchmark;
 ordinary wheels omit those timers. Instrumented builds also include existing
@@ -54,11 +54,10 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.policy.spans import PolicyObservation
 from manabot.sim.search.local_update import LocalUpdateTeacher
 from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,
@@ -70,6 +69,13 @@ from managym.decision import Observation
 RolloutEvidence = Literal["full", "compact"]
 # Search defaults: compact evidence with native frontier encoding.
 _DEFAULT_NAME: RolloutEvidence = "compact"
+
+
+def reference_commit(revision: str) -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}"],
+        text=True,
+    ).strip()
 
 
 def reference_module(revision: str, relative_path: str) -> types.ModuleType:
@@ -366,7 +372,9 @@ def _checked_native_frontiers(teacher: LocalUpdateTeacher) -> Iterator[list[int]
     checked: list[int] = []
     encode_frontier = teacher._encode
 
-    def encode(engines: Sequence[managym.Env]) -> tuple[PolicyObservation, list[int]]:
+    def encode(
+        engines: Sequence[managym.Env],
+    ) -> tuple[managym.ObservationBatch | ObservationBuffers, list[int]]:
         actual, counts = encode_frontier(engines)
         if not isinstance(actual, managym.ObservationBatch):
             actual = {key: value.copy() for key, value in actual.items()}
@@ -490,7 +498,10 @@ def compare_arms(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", default="841b1c50c")
+    comparison = parser.add_mutually_exclusive_group()
+    comparison.add_argument(
+        "--reference", help="Compare with a source-compatible git revision"
+    )
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--worlds", type=int, nargs="+", default=[1, 4, 16])
     parser.add_argument("--position-seeds", type=int, nargs="+", default=[42, 43])
@@ -505,7 +516,7 @@ def main() -> None:
         type=Path,
         help="Compare against previously retained original-runtime receipts",
     )
-    parser.add_argument(
+    comparison.add_argument(
         "--rollout-evidence",
         nargs="+",
         choices=("full", "compact"),
@@ -528,15 +539,25 @@ def main() -> None:
         "inter_op": torch.get_num_interop_threads(),
     }
     torch.manual_seed(15)
-    if args.rollout_evidence:
+    if args.rollout_evidence and (args.retain_reference or args.native_reference):
+        parser.error("reference receipts require a git reference comparison")
+    if args.native_reference and args.reference is None:
+        first = (
+            args.native_reference / f"{args.position_seeds[0]}-{args.worlds[0]}.json"
+        )
+        args.reference = json.loads(first.read_bytes())["reference"]
+    if args.retain_reference and args.reference is None:
+        args.reference = "HEAD"
+    if args.reference is None:
         compare_arms(
             args.checkpoint,
             args.worlds,
             args.position_seeds,
-            evidence=args.rollout_evidence,
+            evidence=args.rollout_evidence or ["compact", "full"],
             threads=threads,
         )
         return
+    args.reference = reference_commit(args.reference)
     # Retain the changed execution owners. Current imported encoders would
     # otherwise silently give the baseline today's optimizations.
     reference_search = reference_module(
@@ -580,7 +601,9 @@ def main() -> None:
         with patch(
             "manabot.backends.torch.checkpoint.ActorCritic", reference_model.ActorCritic
         ):
-            before = reference(checkpoint, digest, _reference_config(config))
+            before = reference(
+                checkpoint, digest, _reference_config(config), backend=resolve("torch")
+            )
         teachers = {
             "before": before,
             "after": LocalUpdateTeacher(
@@ -647,7 +670,7 @@ def main() -> None:
                     if original_runtime_sha256 is not None:
                         assert original.runtime_sha256 == original_runtime_sha256
                     original_runtime_sha256 = original.runtime_sha256
-                    assert retained["reference"] == args.reference
+                    assert reference_commit(retained["reference"]) == args.reference
                     original_timings.append(
                         replace(
                             results[-1],
