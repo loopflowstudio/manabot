@@ -104,6 +104,13 @@ from .curated_pack import (
     curated_pack_for_matchup,
 )
 from .deck_import import DeckImportInput
+from .deck_pools import (
+    deck_file_payload,
+    deck_pool_catalog,
+    deck_to_source,
+    is_pool_key,
+    resolve_deck_pool,
+)
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -671,6 +678,80 @@ def _select_opponent(sha256: Any) -> Opponent:
     return opponent
 
 
+def _bundled_deck_file(name: str, seat: str) -> dict[str, str]:
+    deck, resolved_name = _normalize_deck(
+        name, DEFAULT_HERO_DECK_NAME if seat == "hero" else DEFAULT_VILLAIN_DECK_NAME
+    )
+    pack = next(
+        (
+            candidate
+            for candidate in CURATED_PACK_CATALOG
+            if resolved_name in candidate.deck_ids
+        ),
+        None,
+    )
+    sideboard = (
+        {} if pack is None else dict(pack.player_config(resolved_name, seat).sideboard)
+    )
+    return {
+        "source": deck_to_source(managym.Deck(deck, sideboard)),
+        "filename": f"{resolved_name}.txt",
+        "name": DECK_DISPLAY_NAMES.get(resolved_name, resolved_name),
+    }
+
+
+def resolve_pool_decks(data: dict[str, Any], *, seed: int | None) -> dict[str, Any]:
+    """Expand any ``pool:<id>`` seat selection into concrete admitted ``deck_import`` payloads."""
+    if data.get("deck_import") is not None:
+        return data
+    raw_hero = data.get("hero_deck", DEFAULT_HERO_DECK_NAME)
+    raw_villain = data.get("villain_deck", DEFAULT_VILLAIN_DECK_NAME)
+    hero_pool = resolve_deck_pool(raw_hero) if is_pool_key(raw_hero) else None
+    villain_pool = resolve_deck_pool(raw_villain) if is_pool_key(raw_villain) else None
+    if is_pool_key(raw_hero) and hero_pool is None:
+        raise ValueError(f"Unknown deck pool {raw_hero!r}.")
+    if is_pool_key(raw_villain) and villain_pool is None:
+        raise ValueError(f"Unknown deck pool {raw_villain!r}.")
+    if hero_pool is None and villain_pool is None:
+        return data
+
+    import random as _random
+
+    rng: _random.Random = (
+        _random.Random(seed ^ 0x517CC1B727220A95)
+        if seed is not None
+        else _random.SystemRandom()
+    )
+    if (
+        hero_pool is not None
+        and villain_pool is not None
+        and hero_pool.id == villain_pool.id
+    ):
+        hero_named, villain_named = hero_pool.sample_pair(rng)
+        hero_payload = deck_file_payload(hero_named.deck, name=hero_named.name)
+        villain_payload = deck_file_payload(villain_named.deck, name=villain_named.name)
+    else:
+        if hero_pool is not None:
+            hero_named = hero_pool.sample(rng)
+            hero_payload = deck_file_payload(hero_named.deck, name=hero_named.name)
+        else:
+            hero_payload = _bundled_deck_file(str(raw_hero), "hero")
+        if villain_pool is not None:
+            villain_named = villain_pool.sample(rng)
+            villain_payload = deck_file_payload(
+                villain_named.deck, name=villain_named.name
+            )
+        else:
+            villain_payload = _bundled_deck_file(str(raw_villain), "villain")
+
+    return {
+        **data,
+        "deck_import": {"hero": hero_payload, "villain": villain_payload},
+        "hero_deck_pool": hero_pool.key if hero_pool is not None else None,
+        "villain_deck_pool": villain_pool.key if villain_pool is not None else None,
+    }
+
+
 def _parse_game_config(config: Any) -> GameConfig:
     data = config or {}
     if not isinstance(data, dict):
@@ -728,6 +809,13 @@ def _parse_game_config(config: Any) -> GameConfig:
             )
 
     # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
+    data = resolve_pool_decks(data, seed=seed)
+    hero_deck_pool = data.get("hero_deck_pool")
+    villain_deck_pool = data.get("villain_deck_pool")
+    if hero_deck_pool is not None and not isinstance(hero_deck_pool, str):
+        raise ValueError("hero_deck_pool must be a string or null.")
+    if villain_deck_pool is not None and not isinstance(villain_deck_pool, str):
+        raise ValueError("villain_deck_pool must be a string or null.")
     provenance: dict[str, Any] = {}
     if data.get("deck_import") is not None:
         deck_import = DeckImportInput.model_validate(data["deck_import"])
@@ -737,7 +825,8 @@ def _parse_game_config(config: Any) -> GameConfig:
             "villain_source": villain_import.decklist.to_dict(),
         }
         hero_deck, villain_deck = hero_import.deck.main, villain_import.deck.main
-        hero_deck_name = villain_deck_name = "imported"
+        hero_deck_name = deck_import.hero.display_name()
+        villain_deck_name = deck_import.villain.display_name()
         selected_pack = None
         sideboards = {
             "hero": hero_import.deck.sideboard,
@@ -810,6 +899,8 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sideboard=sideboards["villain"],
         hero_deck_name=hero_deck_name,
         villain_deck_name=villain_deck_name,
+        hero_deck_pool=hero_deck_pool,
+        villain_deck_pool=villain_deck_pool,
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
         human_seat=data.get("human_seat", 0),
@@ -852,11 +943,12 @@ def observe_policies(
     """Show each registered policy its own seat's view of the current state."""
     for policy in policies:
         if isinstance(policy, PolicyRunner):
-            policy.observe(
-                obs
-                if int(obs.agent.player_index) == policy.seat
-                else env.observation_for_player(policy.seat)
-            )
+            if int(obs.agent.player_index) == policy.seat:
+                view_obs = obs
+            else:
+                view_obs = env.observation_for_player(policy.seat)
+                view_obs.recent_events = list(obs.recent_events)
+            policy.observe(view_obs)
 
 
 def close_policies(policies: Iterable[BotPolicy | None]) -> None:
@@ -1055,7 +1147,10 @@ class GameSession:
         except ValueError:
             raise
         except Exception as exc:
-            raise ValueError("Failed to load the selected opponent.") from exc
+            logging.getLogger(__name__).exception("Failed to load opponent policy")
+            raise ValueError(
+                f"Failed to load the selected opponent ({type(exc).__name__}); see the server log."
+            ) from exc
 
         with ExitStack() as prepared:
             if isinstance(policy, PolicyRunner):
@@ -1067,15 +1162,26 @@ class GameSession:
                 # engine only captures when asked.
                 env = managym.Env(seed=seed, decision_memory=True)
                 obs, _ = env.reset(config.to_rust())
-                observe_policies((policy,), env, obs)
             except BaseException as exc:
                 # PyO3's PanicException derives directly from BaseException and has
                 # no importable Python class. A failed disposable replacement must
                 # not close the existing authority; process interrupts still escape.
                 if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
                     raise
+                logging.getLogger(__name__).exception(
+                    "Failed to prepare game environment"
+                )
                 raise ValueError(
                     "Could not prepare the requested game. The current game is unchanged."
+                ) from exc
+            try:
+                observe_policies((policy,), env, obs)
+            except Exception as exc:
+                logging.getLogger(__name__).exception(
+                    "Bot observation failed during game setup"
+                )
+                raise ValueError(
+                    f"Bot observation failed ({type(exc).__name__}); see the server log."
                 ) from exc
             manifest = env.content_pack_manifest()
             selected_pack = curated_pack_for_matchup(
@@ -1132,8 +1238,18 @@ class GameSession:
             self.asset_manifest_hash = ASSET_MANIFEST_HASH
 
         self.deck_names = {
-            "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
-            "villain": DECK_DISPLAY_NAMES.get(config.villain_deck_name, "Custom"),
+            "hero": DECK_DISPLAY_NAMES.get(
+                config.hero_deck_name,
+                "Custom"
+                if config.hero_deck_name == "custom"
+                else config.hero_deck_name,
+            ),
+            "villain": DECK_DISPLAY_NAMES.get(
+                config.villain_deck_name,
+                "Custom"
+                if config.villain_deck_name == "custom"
+                else config.villain_deck_name,
+            ),
         }
         self.asset_pack = (
             dict(config.asset_pack)
@@ -3788,6 +3904,20 @@ def card_image(kind: Literal["art", "full"], slug: str) -> Response:
 @app.get("/api/opponents")
 async def get_opponents() -> dict[str, Any]:
     return await asyncio.to_thread(opponent_catalog)
+
+
+@app.get("/api/deck-pools")
+def get_deck_pools() -> dict[str, Any]:
+    return {"pools": deck_pool_catalog()}
+
+
+@app.get("/api/launch/{launch_id}")
+def get_launch_setup(launch_id: str) -> dict[str, Any]:
+    """Return a pre-configured launch setup without exposing server internals."""
+    config = LAUNCH_CONFIGS.get(launch_id)
+    if config is None:
+        raise HTTPException(404, "launch_not_found")
+    return deepcopy(config)
 
 
 @app.post("/api/policies/check")

@@ -1401,10 +1401,16 @@ explicit `sources=` are additional discovery calls. Multiple providers coexist.
 Academy does not import a training framework or know their artifact layouts.
 
 A session implements `observe(view)`, `choose(view)` and `close()`. The shared
-runner sends each seat its viewer-safe native observations after setup and
-transitions, preserving live decision focus. `PolicyView` carries the observation,
-seat, complete ordered `choices`, one-use `binding` and optional native text
-capture. It contains no live environment. Return
+runner calls `observe(view)` once after every committed state transition (after
+setup, after each committed Command by either seat, and on terminal `game_over`),
+with `view.choices` populated only when this seat is acting and
+`view.observation.recent_events` carrying the last step's public events.
+`choose(view)` proposes an action for the already-observed pending decision and
+may be retried without another `observe()` call if a proposal fails or times out;
+recurrent policies should update state in `observe()` only (native decision
+memory is also populated on `view.observation.decision_memory_json()`).
+`PolicyView` carries the observation, seat, complete ordered `choices`, one-use
+`binding` and optional native text capture. It contains no live environment. Return
 `PolicyDecision(choice=view.choices[index], binding=view.binding)`.
 Optional probabilities must cover that entire ordered set and sum to one;
 optional `ValueEstimate` declares units and viewer seat. Action-only choices
