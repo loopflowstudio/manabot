@@ -56,11 +56,17 @@ export function toggleAttacker(draft: Draft, id: number): Draft {
   return { ...draft, attackers };
 }
 
-/** Block `attacker` with `blocker`, or take the block back when it is already drafted. */
+/** Place or remove one blocker, leaving every other assignment intact. */
+export function setBlock(draft: Draft, blocker: number, attacker: number | null): Draft {
+  if (draft.blocks.find(([id]) => id === blocker)?.[1] === attacker) return draft;
+  const blocks = draft.blocks.filter(([id]) => id !== blocker);
+  if (attacker !== null) blocks.push([blocker, attacker]);
+  return { ...draft, blocks };
+}
+
 export function toggleBlock(draft: Draft, blocker: number, attacker: number): Draft {
-  const had = draft.blocks.some(([b, a]) => b === blocker && a === attacker);
-  const blocks = draft.blocks.filter(([b]) => b !== blocker);
-  return { ...draft, blocks: had ? blocks : [...blocks, [blocker, attacker]] };
+  const assigned = draft.blocks.some(([b, a]) => b === blocker && a === attacker);
+  return setBlock(draft, blocker, assigned ? null : attacker);
 }
 
 /** Draft the first `count` of a pile's identical creatures into the attack. */

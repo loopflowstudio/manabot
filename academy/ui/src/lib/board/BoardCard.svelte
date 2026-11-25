@@ -46,6 +46,8 @@
     offers?: PlacedOffer[];
     /** Offers may be committed now. */
     live?: boolean;
+    connectSource?: boolean;
+    drop?: boolean;
     asked?: boolean;
     /** The side of the centre line this card sits on; attacks lean toward it. */
     toward?: 'up' | 'down' | null;
@@ -88,7 +90,7 @@
   }
 
   let {
-    name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
+    connectSource = false, drop = false, name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
     toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null,
     count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, travel = true, onactivate, onpreview,
   }: Props = $props();
@@ -220,6 +222,7 @@
     class:planned={planned !== null}
     class:sliced={slice !== null}
     class:paid={paid !== null}
+    data-connect-source={connectSource || undefined} data-drop={drop || undefined}
     data-testid="board-card"
     data-travel-id={!travel ? undefined : permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={travel ? name : undefined}

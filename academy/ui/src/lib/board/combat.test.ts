@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
 import {
-  committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setPileCount, stepOffer, toggleAttacker, toggleBlock,
+  committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock,
   type CombatPreview, type DeclarableCreature, type DeclarationStep,
 } from './combat';
 
@@ -68,6 +68,12 @@ describe('drafting', () => {
     const one = toggleBlock(EMPTY_DRAFT, 3, 1);
     expect(toggleBlock(one, 3, 2).blocks).toEqual([[3, 2]]);
     expect(toggleBlock(one, 3, 1).blocks).toEqual([]);
+  });
+
+  it('dropping a blocker keeps its assignment or moves only that blocker', () => {
+    const draft = setBlock(setBlock(EMPTY_DRAFT, 3, 1), 4, 1);
+    expect(setBlock(draft, 3, 1)).toBe(draft);
+    expect(setBlock(draft, 3, 2).blocks).toEqual([[4, 1], [3, 2]]);
   });
 
   it('counts a pile of identical creatures into the attack', () => {

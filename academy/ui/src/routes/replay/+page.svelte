@@ -506,7 +506,7 @@
 {#if index && frame}
   <Board
     {frame}
-    live={studying && canRetry}
+    interaction={studying && canRetry ? 'study' : 'read-only'}
     status={replayStore.busy || atLiveEdge || studying ? status : ''}
     you={{ name: nameOf(viewerSeat), deck: deckOf(viewerSeat) }}
     opponent={{ name: nameOf(1 - viewerSeat), deck: deckOf(1 - viewerSeat), description: identity(1 - viewerSeat).description }}

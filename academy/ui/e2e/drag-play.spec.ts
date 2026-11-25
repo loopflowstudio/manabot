@@ -1,13 +1,15 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
-import type { CardState, Command, ExperienceFrame, InteractionOffer, Observation, RecoveryEnvelope } from '../src/lib/types';
+import type { CardState, Command, DecisionObjectView, ExperienceFrame, InteractionOffer, Observation, RecoveryEnvelope, SubjectRef } from '../src/lib/types';
+import type { RestoredReplayDecision } from '../src/lib/replay-index';
+import type { CombatPlan } from '../src/lib/board/combat';
 import { tableSnapshot } from './fixtures/table';
 
 // Dragging on the board: a drop goes where a click goes. These drive the
 // real pointer against a controlled authority and read the Commands it got.
 
-const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
+const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope, SubjectRef };
 const REVISION = 20;
 const BOLT = 71;
 const SHOCK = 72;
@@ -57,9 +59,11 @@ function mainPhase(revision: number, hand: number[] = [BOLT, SHOCK, ISLAND, 74])
 interface Authority { commands: Command[]; previews: number[] }
 
 /** Accepts every Command but `refuse`'s offers, which it rejects at the same revision. */
-async function installAuthority(page: Page, refuse: number[] = []): Promise<Authority> {
+async function installAuthority(page: Page, {
+  refuse = [], initial = mainPhase(REVISION), after, study,
+}: { refuse?: number[]; initial?: ExperienceFrame; study?: RestoredReplayDecision; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
-  let current = mainPhase(REVISION);
+  let current = initial;
   await page.route('**/api/sessions/*/payment-preview', async route => {
     const request = route.request().postDataJSON() as { offer_id: number } & Record<string, unknown>;
     authority.previews.push(request.offer_id);
@@ -76,6 +80,7 @@ async function installAuthority(page: Page, refuse: number[] = []): Promise<Auth
       if (message.type === 'new_game' || message.type === 'resume') {
         socket.send(JSON.stringify({ type: 'observation', table: tableSnapshot(), data: current.projection, actions: [],
           session_id: 'drag-session', resume_token: 'drag-resume-token', recovery: recovery(current) }));
+        if (study) socket.send(JSON.stringify({ type: 'decision_restored', address: study.address, restored: study }));
         return;
       }
       if (message.type !== 'command' || !message.command) return;
@@ -88,7 +93,7 @@ async function installAuthority(page: Page, refuse: number[] = []): Promise<Auth
         return;
       }
       const played = current.offers.find(candidate => candidate.id === command.offer_id)?.focus[0];
-      const next = mainPhase(current.revision + 1, current.projection.agent.hand.map(held => held.id).filter(id => id !== played));
+      const next = after?.(command) ?? mainPhase(current.revision + 1, current.projection.agent.hand.map(held => held.id).filter(id => id !== played));
       socket.send(JSON.stringify({ type: 'command_outcome', status: 'accepted', update: {
         base_revision: command.expected_revision, frame: next, presentation: [],
         receipt: { command_id: command.command_id, actor: 0, accepted_at: command.expected_revision, resulting_revision: next.revision, resulting_frame_hash: next.frame_hash },
@@ -211,7 +216,7 @@ test('a card with several plays opens its choices where it was dropped', async (
 });
 
 test('a refused drop returns the card to hand', async ({ page }) => {
-  const authority = await installAuthority(page, [1]);
+  const authority = await installAuthority(page, { refuse: [1] });
   const bolt = inHand(page, 'Lightning Bolt');
   await carry(page, bolt, await field(page));
   await page.mouse.up();
@@ -219,4 +224,178 @@ test('a refused drop returns the card to hand', async ({ page }) => {
   await expect(ghost(page)).toHaveCount(0);
   await expect(bolt).toHaveAttribute('data-travel-id', `card:${BOLT}`);
   await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'true');
+});
+
+const renderId = (entity: number) => ({ entity, incarnation: 0 });
+function subject(id: number, label: string, ref: SubjectRef = { kind: 'object', id: renderId(id) }): DecisionObjectView {
+  return { entity_id: id, display_id: id, subject: ref, label };
+}
+const otter = subject(83, 'Otter-Penguin');
+const cub = subject(84, 'Badgermole Cub');
+const tiger = subject(85, 'Tiger-Seal');
+const ally = subject(86, 'Ally');
+const ability = subject(90, 'Triggered ability', { kind: 'stack', id: 90 });
+const opponent = subject(1, 'Opponent', { kind: 'player', id: 1 });
+function creature(object: DecisionObjectView, controller: number, attacking = false): Observation['agent']['battlefield'][number] {
+  return { id: object.display_id, name: object.label, controller_id: controller, tapped: false, damage: 0, summoning_sick: false,
+    power: 2, toughness: 2, base_power: 2, base_toughness: 2, plus1_counters: 0, attacking };
+}
+const permanent = (page: Page, id: number) => page.locator(`.rows [data-object-id="${id}"]`);
+const stackEntry = (page: Page, id: number) => page.locator(`[data-stack-entry="${id}"]`);
+
+function targets(source: 'spell' | 'trigger'): ExperienceFrame {
+  const frame = mainPhase(REVISION);
+  frame.action_space = 'CHOOSE_TARGET';
+  frame.prompt = { ...frame.prompt!, kind: 'choose_target', title: 'Choose a target', instruction: 'Choose a target' };
+  frame.projection.agent.battlefield.push(creature(otter, 0));
+  frame.projection.opponent.battlefield = [creature(cub, 1)];
+  frame.projection.stack_objects = [{ id: ability.display_id, kind: 'triggered_ability', controller: 1, label: ability.label }];
+  frame.projection.decision_context = {
+    recent_facts: [], actor: 0, stage: source === 'spell' ? 'spell_targets' : 'trigger_targets', instruction: 'Choose a target',
+    source: source === 'spell' ? subject(BOLT, 'Lightning Bolt') : otter, targets: [], reserved_sacrifice: null,
+    mana_cost: null, chosen_mode: null, ...(source === 'spell' ? { announcing: 'spell' } : {}),
+  };
+  frame.offers = [cub, opponent, ability].map((object, i) => ({
+    ...offer(10 + i, 'choose', `Target ${object.label}`, 'CHOOSE_TARGET', [object.display_id]), subjects: [{ role: 'target', object }],
+  }));
+  return frame;
+}
+
+for (const [source, target, id] of [
+  ['spell', 'creature', 10], ['spell', 'plate', 11], ['spell', 'stack ability', 12], ['trigger', 'creature', 10],
+] as const) {
+  test(`drag a ${source} to a ${target} to choose its offer`, async ({ page }) => {
+    const authority = await installAuthority(page, { initial: targets(source) });
+    const from = source === 'spell' ? page.locator('[data-announcing=spell]') : permanent(page, otter.display_id);
+    const plate = page.locator('[data-plate-side=opponent]');
+    const to = target === 'plate' ? plate.getByTestId('player-target') : target === 'creature' ? permanent(page, cub.display_id) : stackEntry(page, ability.display_id);
+    // The whole plate accepts the drop, including the mana pool outside its button.
+    await carry(page, from, await center(target === 'plate' ? plate.getByTestId('mana-pool') : to));
+    await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'target');
+    await expect(to).toHaveAttribute('data-drop', 'true');
+    await expect(planned(page)).toHaveCount(1);
+    expect(authority.previews).toContain(id);
+    expect(authority.commands).toEqual([]);
+    await page.mouse.up();
+    await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, id]]);
+    await expect(page.getByTestId('draft-line')).toHaveCount(0);
+  });
+}
+
+function blocks(blocker = otter, revision = REVISION): ExperienceFrame {
+  const frame = mainPhase(revision, []);
+  frame.action_space = 'DECLARE_BLOCKER';
+  frame.prompt = { ...frame.prompt!, kind: 'declare_blocker', title: 'Choose a block', instruction: 'Choose a block' };
+  frame.projection.turn = { ...frame.projection.turn, active_player_id: 1, phase: 'COMBAT', step: 'DECLARE_BLOCKERS_STEP' };
+  frame.projection.agent.battlefield = [creature(otter, 0), creature(tiger, 0)];
+  frame.projection.opponent.battlefield = [creature(cub, 1, true), creature(ally, 1, true)];
+  frame.offers = [cub, ally].map((object, i) => ({
+    ...offer(20 + i, 'declare_blockers', `Block ${object.label} with ${blocker.label}`, 'DECLARE_BLOCKER', [blocker.display_id, object.display_id]),
+    subjects: [{ role: 'choice', object: blocker }, { role: 'target', object }],
+  }));
+  frame.offers.push({ ...offer(22, 'declare_blockers', 'Do not block', 'NO_BLOCK', [blocker.display_id]), subjects: [{ role: 'choice', object: blocker }] });
+  return frame;
+}
+
+test('drag the required blocker to an attacker in a one-at-a-time prompt', async ({ page }) => {
+  const initial = blocks();
+  initial.offers.pop(); // A required block has no decline button to identify the blocker.
+  await page.route('**/combat-preview', route => route.fulfill({ status: 503 }));
+  const authority = await installAuthority(page, { initial });
+  const from = permanent(page, otter.display_id);
+  await carry(page, from, await center(permanent(page, tiger.display_id)));
+  await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
+  await expect(page.locator('[data-drop]')).toHaveCount(0);
+  await page.mouse.up();
+  expect(authority.commands).toEqual([]);
+  await carry(page, from, await center(permanent(page, cub.display_id)));
+  await expect(permanent(page, cub.display_id)).toHaveAttribute('data-drop', 'true');
+  await page.mouse.up();
+  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 20]]);
+});
+
+test('dragging a drafted block reassigns it and Escape restores the click-selected blocker', async ({ page }) => {
+  await page.route('**/combat-preview', route => {
+    const request = route.request().postDataJSON() as { plan: CombatPlan };
+    const blockers = [otter, tiger];
+    const steps = blockers.map((object, i) => {
+      const assigned = request.plan.blocks.find(b => b.blocker.entity === object.display_id)?.attacker;
+      return { revision: REVISION + i, fingerprint: `block-${i}`, creature: renderId(object.display_id),
+        action_index: assigned ? (assigned.entity === cub.display_id ? 20 : 21) : 22, attack: false, blocks: assigned ?? null };
+    });
+    return route.fulfill({ json: { ...request, viewer: 0, preview: { kind: 'blockers', steps, refused: null, declared_attackers: [],
+      declared_blocks: request.plan.blocks, declarable: blockers.map(object => ({ creature: renderId(object.display_id), label: object.label,
+        can_block: [renderId(cub.display_id), renderId(ally.display_id)], must_block: false, must_attack: false })) } } });
+  });
+  const authority = await installAuthority(page, { initial: blocks(), after: command => command.expected_revision === REVISION
+    ? blocks(tiger, REVISION + 1) : mainPhase(REVISION + 2, []) });
+  await expect(page.getByTestId('combat-draft')).toHaveAttribute('data-kind', 'blockers');
+  const from = permanent(page, otter.display_id);
+  const other = permanent(page, tiger.display_id);
+  const first = permanent(page, cub.display_id);
+  const second = permanent(page, ally.display_id);
+  await carry(page, from, await center(first));
+  await expect(first).toHaveAttribute('data-drop', 'true');
+  await page.mouse.up();
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
+  await other.click();
+  await expect(other).toHaveAttribute('data-draft', 'armed');
+
+  await carry(page, from, await center(second));
+  await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
+  await expect(page.locator('[data-line-kind=block]')).toHaveCount(1);
+  await expect(second).toHaveAttribute('data-drop', 'true');
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect(page.getByTestId('draft-line')).toHaveCount(0);
+  await expect(page.locator('[data-line-kind=block]')).toHaveCount(1);
+  await expect(other).toHaveAttribute('data-draft', 'armed');
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
+
+  await carry(page, from, await center(second));
+  await page.mouse.up();
+  await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Ally');
+  await expect(page.getByTestId('primary-action')).toHaveAttribute('data-draft-ready', 'true');
+  expect(authority.commands).toEqual([]);
+  await page.getByTestId('primary-action').click();
+  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 21], [REVISION + 1, 22]]);
+});
+
+test('a restored Study decision keeps clickable choices without a targeting drag', async ({ page }) => {
+  const frame = targets('spell');
+  const first = frame.offers[0];
+  frame.offers.push({ ...first, id: 18, label: 'Choose the second offer' });
+  const study: RestoredReplayDecision = {
+    address: 'drag-study', frame, revision: frame.revision, ordinal: 0, viewer: 0, presentation_cursor: 0, continuation: [], offer: first,
+    command: { command_id: 'recorded', match_id: frame.match_id, expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: first.id, answers: [] },
+  };
+  const authority = await installAuthority(page, { initial: frame, study });
+  await expect(page.getByText(/Study position\. Choosing an offer/)).toBeVisible();
+  const recipient = permanent(page, cub.display_id);
+  await carry(page, page.locator('[data-announcing=spell]'), await center(recipient));
+  await expect(page.getByTestId('draft-line')).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.getByTestId('card-menu')).toHaveCount(0);
+  await recipient.click();
+  await expect(page.getByTestId('card-menu').getByRole('menuitem', { name: /Choose the second offer/ })).toBeVisible();
+  expect(authority.commands).toEqual([]);
+});
+
+test('a targeted creature with two offers opens its choices from an asked stack ability', async ({ page }) => {
+  const frame = targets('trigger');
+  frame.projection.decision_context!.source = ability;
+  frame.projection.stack_objects![0].controller = 0;
+  frame.offers.push({ ...frame.offers[0], id: 18, label: 'Choose the second offer' });
+  const authority = await installAuthority(page, { initial: frame });
+  const source = stackEntry(page, ability.display_id);
+  const to = permanent(page, cub.display_id);
+  await carry(page, source, await center(to));
+  await expect(to).toHaveAttribute('data-drop', 'true');
+  await expect(planned(page)).toHaveCount(0);
+  await page.mouse.up();
+  const menu = page.getByTestId('card-menu');
+  await expect(menu).toBeVisible();
+  expect(authority.commands).toEqual([]);
+  await menu.getByRole('menuitem', { name: /Choose the second offer/ }).click();
+  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 18]]);
 });

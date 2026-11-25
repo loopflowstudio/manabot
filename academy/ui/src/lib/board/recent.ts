@@ -36,6 +36,7 @@ import { inspectableCards } from './view';
 export type Endpoint =
   | { kind: 'object'; id: number }
   | { kind: 'player'; index: number }
+  | { kind: 'stack-entry'; id: number }
   /** A spell on (or just off) the stack, by its card id. */
   | { kind: 'stack'; id: number };
 

@@ -433,7 +433,7 @@
   {#if inGame && boardFrame}
     <Board
       frame={boardFrame}
-      live={participantStudying ? canStudyRetry : canSubmitLive}
+      interaction={canSubmitLive ? 'play' : canStudyRetry ? 'study' : 'read-only'}
       status={gameStore.decisionStatus}
       you={{ name: 'You', deck: gameStore.deckNames?.hero ?? null }}
       opponent={{ name: opponentName, deck: gameStore.deckNames?.villain ?? null, description: opponentIdentity.description }}

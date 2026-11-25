@@ -368,15 +368,18 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   };
 }
 
+/** All rendered permanents on a side, including attachments behind their hosts. */
+export function fieldItems(side: SideView): PermanentItem[] {
+  return [...side.creatures, ...side.support].flatMap(pile => pile.items.flatMap(item => [item, ...item.attached]));
+}
+
 /** Every place an offer is drawn, for the invariant that each appears somewhere. */
 export function offerPlacements(view: BoardView): Map<number, number> {
   const counts = new Map<number, number>();
   const count = (placed: PlacedOffer): void => { counts.set(placed.offer.id, (counts.get(placed.offer.id) ?? 0) + 1); };
-  const permanents = (pile: Pile[]): PermanentItem[] =>
-    pile.flatMap(p => p.items).flatMap(item => [item, ...item.attached]);
   for (const s of [view.you, view.opponent]) {
     s.offers.forEach(count);
-    permanents([...s.creatures, ...s.support]).forEach(item => item.offers.forEach(count));
+    fieldItems(s).forEach(item => item.offers.forEach(count));
   }
   view.hand.forEach(item => item.offers.forEach(count));
   view.stack.forEach(item => item.offers.forEach(count));

@@ -20,11 +20,12 @@
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
     side: 'you' | 'opponent';
+    drop?: boolean;
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
   }
 
-  let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
+  let { drop = false, player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   const zones = $derived([
@@ -56,6 +57,7 @@
     aria-disabled={!offers.length}
     data-offer-count={offers.length}
     aria-label={label}
+    data-drop={drop || undefined}
     data-testid="player-target"
     onclick={event => onactivate(event.currentTarget)}
   >

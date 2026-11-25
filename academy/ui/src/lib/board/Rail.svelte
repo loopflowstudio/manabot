@@ -41,6 +41,8 @@
     opponentName: string;
     onact: (placed: PlacedOffer) => void;
     onpassturn: () => void;
+    stackSources?: Set<number>;
+    drop?: number;
     onstack: (item: StackItem, element: HTMLElement) => void;
     onpreviewname: (name: string | null, element: HTMLElement | null) => void;
     /** A row under the pointer or focus, whose payment the board may preview. */
@@ -73,7 +75,7 @@
 
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
-    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
+    stackSources, drop, onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
@@ -155,6 +157,7 @@
           {@const provenance = stackProvenance(item.entry)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
+              data-stack-entry={item.entry.id} data-connect-source={stackSources?.has(item.entry.id) || undefined} data-drop={drop === item.entry.id || undefined}
               data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : undefined} data-travel-side={mine(item.entry.controller) ? 'you' : 'opponent'} data-travel-name={item.card?.name}

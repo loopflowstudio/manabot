@@ -37,11 +37,13 @@
     targeted?: Set<number>;
     /** A combat draft's place for each creature it concerns, and what pressing it does. */
     draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
+    fieldSources?: Set<number>;
+    drop?: number;
     onactivate: (item: PermanentItem, element: HTMLElement) => void;
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
+  let { fieldSources, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -103,6 +105,7 @@
               {live}
               draft={draft?.places.get(item.permanent.id) ?? null}
               note={draft?.notes.get(item.permanent.id) ?? null}
+              connectSource={fieldSources?.has(item.permanent.id)} drop={drop === item.permanent.id}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}
