@@ -187,6 +187,22 @@ def record_of(attempt: RetainedAttempt) -> GameRecord:
     )
 
 
+def step_matches(
+    observation: managym.Observation, event: dict[str, Any], human_seat: int
+) -> bool:
+    """Whether a re-executed position is the stored step's: the same seat acts
+    and the stored action has the stored description. A cheap check for walks
+    that read no boards (analysis, numbers); `ReplayedViews` checks boards."""
+    actor = human_seat if event["actor"] == "hero" else 1 - human_seat
+    if observation.game_over or int(observation.agent.player_index) != actor:
+        return False
+    actions = academy_actions(observation, human_seat)
+    return (
+        0 <= event["action"] < len(actions)
+        and actions[event["action"]]["description"] == event["action_description"]
+    )
+
+
 def recorded_build(world_json: str) -> str:
     """The build that recorded a game, in words: its world label where an older
     row has one, else its rules binary."""

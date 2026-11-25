@@ -126,7 +126,10 @@ class AttemptStore:
                     record_version INTEGER NOT NULL DEFAULT 2,
                     visibility TEXT NOT NULL DEFAULT 'shared',
                     origin TEXT NOT NULL DEFAULT 'unknown',
-                    num_events INTEGER NOT NULL DEFAULT 0
+                    num_events INTEGER NOT NULL DEFAULT 0,
+                    -- The game's numbers (`summary.GameSummary`), saved once it
+                    -- is no longer being played; NULL until first computed.
+                    summary_json TEXT
                 );
                 CREATE TABLE IF NOT EXISTS players (
                     id TEXT PRIMARY KEY, credential_hash TEXT UNIQUE NOT NULL,
@@ -223,6 +226,10 @@ class AttemptStore:
                 )
             for column in ("bot_sha256", "hero_deck", "villain_deck"):
                 db.execute(f"ALTER TABLE attempts DROP COLUMN {column}")
+        if "summary_json" not in {
+            row[1] for row in db.execute("PRAGMA table_info(attempts)")
+        }:
+            db.execute("ALTER TABLE attempts ADD COLUMN summary_json TEXT")
         feedback_columns = {row[1] for row in db.execute("PRAGMA table_info(feedback)")}
         for column in ("author_id", "decision_address"):
             if column not in feedback_columns:
@@ -782,7 +789,7 @@ class AttemptStore:
             args.extend(position)
         with self.connect() as db:
             rows = db.execute(
-                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility,g.session_id,g.game_number, {mine} AS mine FROM attempts a LEFT JOIN session_games g ON g.attempt_id=a.id WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
+                f"SELECT a.id,a.started_at,a.ended_at,a.winner,a.status,a.ending_reason,a.num_events,a.revision,a.record_version,a.origin,a.visibility,a.summary_json,g.session_id,g.game_number, {mine} AS mine FROM attempts a LEFT JOIN session_games g ON g.attempt_id=a.id WHERE {' AND '.join(clauses)} ORDER BY started_at DESC,id DESC LIMIT ?",
                 [*mine_args, *args, limit],
             ).fetchall()
             players_by_attempt = self._players_for(db, [row["id"] for row in rows])
@@ -817,6 +824,9 @@ class AttemptStore:
                         "status": row["status"],
                         "end_reason": row["ending_reason"] or "active",
                         "num_events": row["num_events"],
+                        "summary": json.loads(row["summary_json"])
+                        if row["summary_json"]
+                        else None,
                         "revision": row["revision"],
                         "players": seats,
                         "play_session_id": row["session_id"] if row["mine"] else None,
@@ -834,6 +844,48 @@ class AttemptStore:
                     }
                 )
         return summaries
+
+    # ———————————————— Summaries and record
+
+    def summary(self, attempt: str) -> tuple[str, str | None] | None:
+        """The game's status and saved summary JSON, or None for no such game."""
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT status, summary_json FROM attempts WHERE id=?", (attempt,)
+            ).fetchone()
+        return None if row is None else (row["status"], row["summary_json"])
+
+    def save_summary(self, attempt: str, summary_json: str) -> None:
+        """Save a game's summary once, after it is no longer being played."""
+        with self.connect() as db:
+            db.execute(
+                "UPDATE attempts SET summary_json=? WHERE id=? AND status<>'active' AND summary_json IS NULL",
+                (summary_json, attempt),
+            )
+
+    def record(
+        self, owners: set[str], token: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Your completed games against bots, counted by opponent identity and
+        your deck and theirs, across sessions. Counts, never a rating."""
+        mine, args = self._mine(owners, token)
+        with self.connect() as db:
+            rows = db.execute(
+                f"""SELECT b.player_id AS opponent_id, b.name AS opponent_name,
+                    h.deck AS human_deck, b.deck AS opponent_deck,
+                    count(*) AS games,
+                    sum(a.winner=h.seat) AS wins,
+                    sum(a.winner IS NULL) AS draws,
+                    sum(a.winner IS NOT NULL AND a.winner<>h.seat) AS losses
+                FROM attempts a
+                JOIN attempt_players h ON h.attempt_id=a.id AND h.kind='human'
+                JOIN attempt_players b ON b.attempt_id=a.id AND b.kind='bot'
+                WHERE a.status='completed' AND {mine}
+                GROUP BY b.player_id,b.name,h.deck,b.deck
+                ORDER BY games DESC,b.name,h.deck,b.deck""",
+                args,
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     # ———————————————— Analyses
 

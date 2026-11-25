@@ -34,8 +34,8 @@ from pydantic import BaseModel, ConfigDict
 import managym
 from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import Opponent
-from managym.academy.recording import record_of, recorded_build
-from managym.academy.trace import GameConfig, academy_actions
+from managym.academy.recording import record_of, recorded_build, step_matches
+from managym.academy.trace import GameConfig
 from managym.policy import PolicyRegistry, PolicyRunner
 from managym.recording import DecisionAnnotation
 from managym.replay import walk
@@ -103,14 +103,7 @@ def analyse_game(
     for index, event in enumerate(events):
         observation = walker.observation
         env = walker.env
-        actor = human if event["actor"] == "hero" else 1 - human
-        if observation.game_over or int(observation.agent.player_index) != actor:
-            raise AnalysisStop(f"Step {index + 1} re-executed differently.")
-        actions = academy_actions(observation, human)
-        if (
-            not 0 <= event["action"] < len(actions)
-            or actions[event["action"]]["description"] != event["action_description"]
-        ):
+        if not step_matches(observation, event, human):
             raise AnalysisStop(f"Step {index + 1} re-executed differently.")
         if index in wanted:
             try:
@@ -130,7 +123,7 @@ def analyse_game(
                 semantic=decision.value_semantic,
                 after=offer_estimates(
                     env,
-                    len(actions),
+                    len(observation.action_space.actions),
                     seat,
                     runner,
                     decision.value_semantic,

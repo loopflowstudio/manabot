@@ -170,6 +170,7 @@ from .shared_table_protocol import (
     ViewerRole,
 )
 from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
+from .summary import game_summary, wilson_interval
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -2435,15 +2436,16 @@ class GameSession:
         )
         if finished:
             self.trace = retained
+        world = {
+            **self.env.content_pack_manifest(),
+            "rules_binary_sha256": RULES_BINARY_SHA256,
+            "experience_source_sha256": PLAY_SOURCE_SHA256,
+        }
         self.attempt_store.save(
             self.match_id,
             self.attempt_owner,
             self.revision,
-            {
-                **self.env.content_pack_manifest(),
-                "rules_binary_sha256": RULES_BINARY_SHA256,
-                "experience_source_sha256": PLAY_SOURCE_SHA256,
-            },
+            world,
             retained.to_record(),
             trace_json=retained.to_json(
                 self._encoded_events, self._canonical_replay_json(canonical)
@@ -2464,6 +2466,12 @@ class GameSession:
         if finished:
             self._study_provider = study_provider
             self._trace_saved = True
+            if not self.watch_mode:
+                save_game_summary(
+                    self.attempt_store,
+                    self.match_id,
+                    RetainedAttempt(retained.to_record(), json.dumps(world)),
+                )
 
     def canonical_replay(self) -> CanonicalReplayV1:
         """Project the canonical decisions committed so far.
@@ -3819,7 +3827,8 @@ async def authorize_record(
         # Feedback and every mutation remain participant-only.
         public_read = request.method == "GET" and (
             len(parts) == 4
-            or parts[4] in {"decisions", "recording", "positions", "analyses"}
+            or parts[4]
+            in {"decisions", "recording", "positions", "analyses", "summary"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -4031,6 +4040,64 @@ async def list_traces(
         response.headers["X-Etude-Next-Cursor"] = page_cursor(page[-1])
     response.headers["Cache-Control"] = "private, no-store"
     return page
+
+
+@app.get("/api/traces/record")
+def get_record(
+    response: Response,
+    x_etude_participant_tokens: str | None = Header(default=None),
+    x_etude_player_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """My games' record: wins, losses and draws over completed games against
+    each opponent identity with each pair of decks, with a 95% Wilson interval
+    on the win rate (draws count as games)."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    rows = store.record(
+        _record_owners(x_etude_participant_tokens), x_etude_player_token
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return {
+        "rows": [
+            {**row, "interval": wilson_interval(row["wins"], row["games"])}
+            for row in rows
+        ]
+    }
+
+
+def save_game_summary(
+    store: AttemptStore, trace_id: str, attempt: RetainedAttempt
+) -> dict[str, Any] | None:
+    """Compute and save a finished game's numbers; None where it does not
+    re-execute here. A failure never reaches the game that just ended."""
+    try:
+        summary = game_summary(attempt)
+    except Exception:  # noqa: BLE001 - numbers are derived; the game is saved
+        logging.getLogger(__name__).exception("Summary of %s failed", trace_id)
+        return None
+    if summary is None:
+        return None
+    store.save_summary(trace_id, summary.model_dump_json())
+    return summary.model_dump(mode="json")
+
+
+@app.get("/api/traces/{trace_id}/summary")
+def get_game_summary(trace_id: str) -> dict[str, Any]:
+    """A played game's numbers, computed on first read for a game saved
+    before summaries were (null where it does not re-execute here)."""
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    saved = store.summary(trace_id)
+    if saved is None:
+        raise HTTPException(404, "recording_not_found")
+    status, summary_json = saved
+    if summary_json is not None:
+        return {"summary": json.loads(summary_json)}
+    if status == "active":
+        return {"summary": None}
+    attempt = store.load_attempt(trace_id)
+    assert attempt is not None
+    if attempt.trace["config"].get("watch_players") is not None:
+        return {"summary": None}
+    return {"summary": save_game_summary(store, trace_id, attempt)}
 
 
 def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
