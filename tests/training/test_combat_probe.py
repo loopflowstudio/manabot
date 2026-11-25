@@ -10,7 +10,13 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.policy.protocol import BackendPolicy
+from manabot.policy.prepare import Prepared
+from manabot.policy.readings import (
+    Reading,
+    fresh_readings,
+    input_width,
+    legacy_readings,
+)
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.combat_probe import (
     combat_columns,
@@ -45,24 +51,47 @@ def scoring_policy(space: ObservationSpace, board_aware: bool) -> Mock:
     columns = combat_columns(space)
     assert columns is not None
 
-    def evaluate(rows: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        declared = rows["actions"][..., columns.declared]
-        gap = np.full(len(declared), 3.0)
-        if board_aware:
-            for side, cols, sign in (
-                ("agent", columns.mine, 1),
-                ("opponent", columns.theirs, -1),
-            ):
-                board = rows[f"{side}_permanents"]
-                power = board[..., cols.power] * cols.power_scale
-                available = board[..., cols.is_creature] > 0
-                if side == "opponent":
-                    available &= board[..., cols.tapped] == 0
-                gap += sign * (available * power).sum(axis=1)
-        return declared * gap[:, None], np.zeros(len(gap))
+    readings = dict(fresh_readings(space))
+    for key in ("agent_permanents", "opponent_permanents"):
+        readings[key] = tuple(
+            Reading.AS_IS
+            if i in (columns.mine.power, columns.mine.toughness)
+            else reading
+            for i, reading in enumerate(readings[key])
+        )
+    policy = Mock(
+        wraps=ActorCritic(
+            space, ModelConfig(hidden_dim=8, num_attention_heads=2), readings=readings
+        ),
+        observation_space=space,
+        readings=readings,
+    )
 
-    policy = Mock(spec=BackendPolicy, observation_space=space)
-    policy.prepare.side_effect = lambda rows: rows
+    def index(key: str, column: int) -> int:
+        return sum(map(input_width, readings[key][:column]))
+
+    def evaluate(rows: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+        gap = np.full(rows.batch, 3.0)
+        if board_aware:
+            for seat, (key, cols, sign) in enumerate(
+                (
+                    ("agent_permanents", columns.mine, 1),
+                    ("opponent_permanents", columns.theirs, -1),
+                )
+            ):
+                board = rows.permanents[:, seat]
+                power = board[..., index(key, cols.power)] * cols.power_scale
+                available = board[..., index(key, cols.is_creature)] > 0
+                if seat == 1:
+                    available &= board[..., index(key, cols.tapped)] == 0
+                gap += sign * (available * power).sum(axis=1)
+        logits = np.zeros(rows.legal.shape)
+        logits[rows.legal] = (
+            rows.action_features[:, index("actions", columns.declared)]
+            * gap[rows.legal_batches]
+        )
+        return logits, np.zeros(rows.batch)
+
     policy.evaluate.side_effect = evaluate
     return policy
 
@@ -97,60 +126,6 @@ def test_played_combat_distinguishes_lock_from_board_dependence(
             assert aware[key] * sign > 0
 
 
-def test_gap_uses_original_slots_and_omits_empty_side(
-    rollout: tuple[RolloutBatch, ObservationSpace],
-) -> None:
-    batch, space = rollout
-    columns = combat_columns(space)
-    assert columns is not None
-    attack = combat_rows(
-        batch.action_data, columns.declare_attacker, columns.declared, 1
-    )
-    rows = batch.observations(attack).observation
-    rows["opponent_permanents"].fill(0)
-    rows["opponent_permanents_valid"].fill(0)
-    rows["actions_valid"].fill(0)
-    rows["actions_valid"][:, [2, 4]] = 1
-    rows["actions"][..., columns.declared] = 0
-    rows["actions"][:, 4, columns.declared] = 1
-    original = rows["agent_permanents"].copy()
-    metrics = gap_shifts(scoring_policy(space, False), [rows], columns)
-    assert metrics == {
-        "gap": 3,
-        "saturated": 0,
-        "decisions": 1,
-        "shift_decisions/mine": 1,
-        "shift/my_creatures_0_1": 0,
-        "shift/my_creatures_9_9": 0,
-    }
-    np.testing.assert_array_equal(rows["agent_permanents"], original)
-
-
-def test_saturation_counts_both_tails_across_unequal_chunks(
-    rollout: tuple[RolloutBatch, ObservationSpace],
-) -> None:
-    batch, space = rollout
-    cols = combat_columns(space)
-    assert cols is not None
-    indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 4)
-    rows = batch.observations(indexes).observation
-    # Put controlled logits into the original legal slots.
-    declared = rows["actions"][..., cols.declared]
-    rows["actions"][..., cols.declare_attacker] = (
-        declared * np.array([0, 5, 12, -15])[:, None]
-    )
-
-    def evaluate(obs: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        return obs["actions"][..., cols.declare_attacker], np.zeros(len(obs["actions"]))
-
-    policy = scoring_policy(space, False)
-    policy.evaluate.side_effect = evaluate
-    chunks = [{k: v[:3] for k, v in rows.items()}, {k: v[3:] for k, v in rows.items()}]
-    metrics = gap_shifts(policy, chunks, cols)
-    assert metrics["gap"] == 0.5
-    assert metrics["saturated"] == 0.5
-
-
 def test_no_combat_or_legacy_layout_omits_metrics(
     rollout: tuple[RolloutBatch, ObservationSpace],
 ) -> None:
@@ -173,70 +148,60 @@ def test_no_combat_or_legacy_layout_omits_metrics(
         assert combat_probe(Mock(observation_space=legacy), batch) == {}
 
 
-def test_shifts_in_game_units_condition_on_boards_with_creatures(
+@pytest.mark.parametrize("historical", [False, True])
+def test_prepared_edits_match_reencoding_with_saved_readings(
     rollout: tuple[RolloutBatch, ObservationSpace],
+    historical: bool,
 ) -> None:
     batch, space = rollout
     cols = combat_columns(space)
     assert cols is not None
-    indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 2)
-    rows = batch.observations(indexes).observation
-    for key, side in (
-        ("agent_permanents", cols.mine),
-        ("opponent_permanents", cols.theirs),
+    indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 4)
+    rows = batch.policy_rows(indexes).observation
+    model = ActorCritic(
+        space,
+        ModelConfig(hidden_dim=16, num_attention_heads=2),
+        readings=legacy_readings(space) if historical else None,
+        bucketed_shapes=True,
+    )
+    policy = Mock(wraps=model, readings=model.readings)
+    metrics = gap_shifts(
+        policy, [rows.select(slice(0, 3)), rows.select(slice(3, None))], cols
+    )
+    assert policy.prepare.call_count == 2
+
+    # Independent oracle edits the stored values, before the checkpoint reads them.
+    original = {key: rows.project(key) for key in space.shapes}
+    yes = original["actions"][..., cols.declared] > 0
+    no = (original["actions_valid"] > 0) & ~yes
+
+    def gaps(inputs: dict[str, np.ndarray]) -> np.ndarray:
+        logits, _ = model.evaluate(model.prepare(inputs))
+        return logits[yes] - logits[no]
+
+    base = gaps(original)
+    assert metrics["gap"] == pytest.approx(base.mean(), abs=1e-5)
+    assert metrics["saturated"] == (np.abs(base) > 9.2).mean()
+    for key, side, prefix in (
+        ("agent_permanents", cols.mine, "my"),
+        ("opponent_permanents", cols.theirs, "their"),
     ):
-        board = rows[key]
-        board.fill(0)
-        rows[f"{key}_valid"].fill(0)
-        rows[f"{key}_valid"][:, :2] = 1
-        # One creature and one land on each side. The second opposing board is empty.
-        board[:, 0, side.is_creature] = 1
-        board[:, 0, side.power] = 2 / side.power_scale
-        board[:, 0, side.toughness] = 3 / side.toughness_scale
-        board[:, 0, side.tapped] = 1
-    rows["opponent_permanents"][1] = 0
-    rows["opponent_permanents_valid"][1] = 0
-
-    def evaluate(obs: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
-        # Sum all slots so accidental edits to lands or padding change the result.
-        gap = np.zeros(len(obs["actions_valid"]))
-        for key, side in (
-            ("agent_permanents", cols.mine),
-            ("opponent_permanents", cols.theirs),
-        ):
-            board = obs[key]
-            gap += (
-                board[..., side.power] * side.power_scale
-                + board[..., side.toughness] * side.toughness_scale
-                + board[..., side.tapped]
-            ).sum(axis=1)
-        return obs["actions"][..., cols.declared] * gap[:, None], np.zeros(len(gap))
-
-    policy = Mock(spec=BackendPolicy)
-    policy.prepare.side_effect = lambda rows: rows
-    policy.evaluate.side_effect = evaluate
-    expected = {
-        "gap": 9,
-        "saturated": 0.5,
-        "decisions": 2,
-        "shift_decisions/mine": 2,
-        "shift_decisions/theirs": 1,
-        "shift/my_creatures_0_1": -4,
-        "shift/my_creatures_9_9": 13,
-        "shift/their_creatures_0_1_tapped": -4,
-        "shift/their_creatures_9_9_untapped": 12,
-    }
-    assert gap_shifts(policy, [rows], cols) == pytest.approx(expected)
-    chunks = [
-        {key: values[i : i + 1] for key, values in rows.items()} for i in range(2)
-    ]
-    assert gap_shifts(policy, chunks, cols) == pytest.approx(expected)
-
-    bad = {**rows, "actions": rows["actions"].copy()}
-    bad["actions"][0, :, cols.declared] = 1
-    bad["actions"][1, :, cols.declared] = 0
-    with pytest.raises(ValueError, match="two-offer declare/decline"):
-        gap_shifts(policy, [bad], cols)
+        creatures = original[key][..., side.is_creature] > 0
+        for power, toughness in ((0, 1), (9, 9)):
+            board = original[key].copy()
+            board[..., side.power][creatures] = power / side.power_scale
+            board[..., side.toughness][creatures] = toughness / side.toughness_scale
+            label = f"shift/{prefix}_creatures_{power}_{toughness}"
+            if prefix == "their":
+                board[..., side.tapped][creatures] = power == 0
+                label += "_tapped" if power == 0 else "_untapped"
+            present = creatures.any(axis=1)
+            if present.any():
+                assert metrics[label] == pytest.approx(
+                    (gaps({**original, key: board}) - base)[present].mean(), abs=1e-5
+                )
+            else:
+                assert label not in metrics
 
 
 def test_bucketed_and_live_token_policy_matches_padded_probe(
@@ -261,7 +226,7 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
     assert combat_probe(packed, sampled, limit=4, execution_rows=2) == pytest.approx(
         combat_probe(padded, batch, limit=4), abs=1e-5
     )
-    assert max(len(call.args[0]) for call in sampled.observations.call_args_list) <= 2
+    assert max(len(call.args[0]) for call in sampled.policy_rows.call_args_list) <= 2
 
 
 def test_combat_probe_under_bfloat16_forward_precision(

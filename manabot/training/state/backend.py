@@ -19,7 +19,6 @@ from manabot.training.updates.backend import Learner, LearnerFile, Policy, Updat
 
 if TYPE_CHECKING:
     from manabot.infra.config import ModelConfig
-    from manabot.policy.readings import Readings
     from manabot.training.learning import Precision
     from manabot.training.rollout.collection import Collector, RolloutBatch
     from manabot.training.rollout.numerics import CollectionSession
@@ -99,9 +98,6 @@ class SelfPlayPolicy(BackendPolicy, Policy, Protocol):
     def memory_gates(self) -> dict[str, float]:
         """Effective decision-memory gates at an update boundary."""
         ...
-
-    @property
-    def readings(self) -> Readings: ...
 
 
 class SelfPlayLearner(Learner, Protocol):

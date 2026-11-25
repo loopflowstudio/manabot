@@ -494,3 +494,24 @@ def read_numeric(
 ) -> Array:
     """Read [..., columns] in saved projection order. Fact payloads use each row's kind."""
     return reading_plan(tuple(readings)).read(values, fact_kinds)
+
+
+def write_numeric_column(
+    features: Array,
+    selected: Array,
+    readings: tuple[ColumnReading, ...],
+    column: int,
+    stored: float,
+) -> None:
+    """Set a stored column's numeric readings in place on selected prepared rows.
+
+    Columns outside the saved prefix or read solely through a lookup contribute
+    no numeric features. Sized readings may contribute several adjacent features.
+    """
+    if column >= len(readings):
+        return
+    start = sum(map(input_width, readings[:column]))
+    values = read_numeric(
+        np.array([stored], dtype=np.float32), readings[column : column + 1]
+    )
+    features[..., start : start + len(values)][selected] = values

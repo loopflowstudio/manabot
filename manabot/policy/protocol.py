@@ -22,6 +22,7 @@ from manabot.env.observation import (
 )
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
+from manabot.policy.readings import Readings
 
 if TYPE_CHECKING:
     from manabot.infra.config import ModelConfig
@@ -86,6 +87,9 @@ class BackendPolicy(Protocol):
     observation_space: ObservationSpace
     belief_count_buckets: int
     value_semantic: Literal["signed_outcome", "win_logit"] | None
+
+    @property
+    def readings(self) -> Readings: ...
 
     @property
     def config(self) -> "ModelConfig": ...
