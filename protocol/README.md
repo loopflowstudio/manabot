@@ -81,7 +81,11 @@ personal-until-shared GAM-6 scenario references, and participant-local Study
 events. It never embeds match legality or strategy evidence; both participants
 remain bound server-side to the same recorded human-seat rules projection.
 Historical Play records default to native seat 0; new Play setup may choose
-seat 1. Watch continues to use its recorded acting viewers.
+seat 1. A pilot may also swap seats mid-game via `swap_sides`
+(`CONFIGURE_MATCH`), bound to `match_id`, `expected_revision`, and an
+idempotent `request_id`; the server flips `human_seat` in place at a new
+revision and updates the shared rules viewer. Watch continues to use its
+recorded acting viewers.
 
 Regenerate the checked schema after changing the Pydantic authority:
 

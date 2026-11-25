@@ -13,6 +13,7 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 - [Running Academy](#running-academy): install, launch, chosen games and replays, Python, training games, card art, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Playing on the board](#playing-on-the-board)
+- [Swapping sides mid-game](#swapping-sides-mid-game)
 - [Previewing payments](#previewing-payments)
 - [Pending input, waits and recovery](#pending-input-waits-and-recovery)
 - [Choosing priority stops](#choosing-priority-stops)
@@ -196,7 +197,7 @@ Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
 not deal again. To continue the series, use
-[Rematch or Swap sides](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
+[Rematch or Swap play/draw](#playing-a-series-against-a-model). **New game** opens a separate session setup with the launched decks, opponent
 and decklist mode selected.
 For imported matchups, setup shows
 both selected source files and their editable lists. Uncheck **Use imported
@@ -442,7 +443,7 @@ to use the [two-seat setup](#one-game-from-setup-to-its-recorded-decisions):
 choose controllers, decks and bot players, then select **Start game** to start
 a separate session. Replacing an active game requires confirmation that it
 will be stopped. To keep games together, use
-[Rematch, Swap sides or Change opponent](#playing-a-series-against-a-model).
+[Rematch, Swap play/draw or Change opponent](#playing-a-series-against-a-model).
 
 To use your own decks, open **New game**, expand **Import decklist files**
 and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
@@ -473,7 +474,7 @@ sits over the board, which stays visible around it (**Look at the board**
 folds the card to a corner). It says who won and how ("Heuristic · scripted
 went to −2 life on turn 9"), the final life totals, and one line from the move
 list: turns, and each player's spells cast and attacks. Select **Rematch** to
-play again with that setup. After the next game, select **Swap sides**: you
+play again with that setup. After the next game, select **Swap play/draw**: you
 keep your deck and move from playing first to drawing first, or the reverse.
 **Change opponent** opens only the opponent settings, and **Review this game**
 opens the game in Replay from its first position. Both games and the next one belong to the same
@@ -492,8 +493,10 @@ server; see [Play and watch a trained checkpoint](#play-and-watch-a-trained-chec
 The provider checks that it can play the selected decks and configuration.
 Built-in opponents need no registration.
 
-The session strip in the top bar's **Menu** shows the game number, matchup, your play/draw
-seat and deal mode. Open its configuration details with a pointer or Tab and
+In **Settings → Game**, **Next game** holds the session strip (separate from
+**This game**, which holds [Swap sides](#swapping-sides-mid-game)): the game
+number, matchup, your play/draw seat and deal mode. Open its configuration
+details with a pointer or Tab and
 Enter to check the full Policy ID, model artifacts, runner and available search
 configuration. A familiar model name alone does not identify the execution.
 Each game's recording keeps the exact configuration used to start it, including
@@ -502,7 +505,7 @@ its admitted decks, disclosure, actual seed and native seats.
 | Next action | What carries forward |
 |---|---|
 | **Rematch** | Both decks and imported source lists, exact opponent configuration, disclosure, stops and your seat |
-| **Swap sides** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
+| **Swap play/draw** | The rematch setup, with your native play/draw seat reversed; your deck stays yours |
 | **Change opponent** | Your decks, disclosure, stops and seat/deal plan; only the explicitly edited opponent settings change |
 | **Start game** | Starts a separate session from setup |
 
@@ -531,7 +534,7 @@ keeps an explicitly supplied seed, including one supplied with CLI `--seed` or
 Python `seed=`. Enter a seed as a decimal unsigned 64-bit integer, from `0` to
 `18446744073709551615`. The selected mode is visible before starting.
 
-Rematching or swapping sides preserves this mode. Repeating a seed does not
+Rematching or swapping play/draw preserves this mode. Repeating a seed does not
 repeat policy decisions, and swapping native seats changes which player gets
 each seat's deal. These controls do not establish a paired evaluation.
 
@@ -757,6 +760,50 @@ surface shows the acting seat's permitted view and the complete legal choices
 for that decision. Recorded policy outputs appear only when available; missing
 outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 
+### Swapping sides mid-game
+
+You are on turn 4 playing UR Lessons against Reader piloting GW Allies, and you
+want to play the position from the Allies side. Open **Settings** in the top
+bar, go to **Game → This game**, and press **Swap sides**.
+
+The board turns to the other seat in the same game: GW Allies' hand sits along
+the bottom, **GW Allies** appears under **You**, and the same life totals,
+battlefield, stack and turn stay in place. The live move list keeps earlier
+moves and adds a **Swapped sides** divider. Reader takes over UR Lessons and
+acts at once if that seat was to move. One press swaps without a confirmation
+dialog; press **Swap sides** again at any time to swap back.
+
+| What | After you swap sides |
+|---|---|
+| **Your hand, board and deck** | Flips to the other seat in the same game; the bot pilots the seat you left. |
+| **Auto-tap and priority stops** | Stay with you; an active **Pass turn** (F6) yield clears for the new seat. |
+| **Native mana payment and floats** | Stay with each seat as the game started. |
+| **Show analysis** | If on, stays on and follows you to your new seat without holding play; earlier choices keep their **analysis shown** mark. |
+| **Next game** (`Rematch`, `Swap play/draw`, `Edit next game`) | Unchanged, and the session's game number stays the same. **Swap play/draw** is separate: it starts the next game keeping your deck and reversing play/draw. |
+
+**Swap sides** is unavailable once the game is over, in **Watch**, while a
+**Study** branch is active, while a bot retry (**Retry bot decision** / **Retry
+search**) is pending, or when you are watching a shared table rather than
+piloting it. If the bot cannot be admitted or loaded for the seat you are
+leaving (for example, a policy bound to specific decks), Academy shows the
+reason under the button and leaves the live game untouched so you can keep
+playing.
+
+The game remains one game through the end:
+
+- **Games and My record**: it appears once in **Games** with each player in
+  their final seat and deck, and counts once in **My record** by how it ends (a
+  win if the seat you finished in won). A game started via **Play on from here**
+  stays out of **My record** even if you swap sides during it.
+- **Review and Analysis**: **Review** defaults **Perspective** to **Follow the
+  chooser** so the bottom seat follows you across each swap (fixed Seat 1 and
+  Seat 2 perspectives remain selectable), marks each swap in the move list as
+  **Swapped sides · Turn T** with a notice, and shows every decision you made
+  before and after each swap. Post-game **Analysis** reads all of your
+  deliberate decisions across both seats, **See its line** works from any
+  analysed decision before or after a swap, and **Play on from here** places you
+  in the seat you piloted at that decision.
+
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
@@ -800,7 +847,7 @@ while pointing at the spell are where you see those taps beforehand.
 Under **Mana floats**, **Off** is the default. Choose **Only when the mana could be used** to float when a legal action can spend mana or tapping the source
 can trigger an ability. Usable also offers an activation that pays life,
 sacrifices a permanent or has another effect. **All** offers every legal
-mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you swap sides.
+mana activation at priority. With **Manual** payment you can select these abilities and choose a land’s output while paying. A deliberate float at priority also lets you choose its output. The setting follows you when you use **Swap play/draw** for the next game; swapping sides mid-game keeps each seat's native mana settings as started while browser **Auto-tap** stays with you.
 Your priority stops still determine which windows pause for a decision.
 
 **When there is no plan to draw.** The primary button then shows only the
@@ -1100,9 +1147,10 @@ permissions; copying an address does not copy a participant credential.
 #### Perspective
 
 The **Perspective** control in the top bar chooses who sits at the bottom:
-**Follow the chooser** (the default for bot games: each choice is drawn from
-its chooser's seat, hand included, and the board stays turned through that
-choice's consequences), or a fixed seat (the default for a game you played).
+**Follow the chooser** (the default for bot games, and for played games where
+you swapped sides mid-game: each choice is drawn from its chooser's seat, hand
+included, and the board stays turned through that choice's consequences), or a
+fixed seat (the default for an unswapped game you played).
 Turning the board never reveals a hand or changes the recorded policy inputs.
 
 At bot choices, the acting view shows what that bot was allowed to see.
@@ -1126,7 +1174,9 @@ retries that decision; browsing saved positions never retries it.
 
 An analysis reads a game you played against a policy: at each of your
 decisions with more than one legal action, what that policy would have done
-in your seat. Academy replays the game with the policy in your seat; it sees
+in your seat. If you [swapped sides mid-game](#swapping-sides-mid-game), it
+reads all of your deliberate decisions across both seats, and **See its line**
+and **Play on from here** act from the seat you piloted at that decision. Academy replays the game with the policy in your seat; it sees
 only what your seat saw, and the game follows the moves you made. Opening
 Review of your own game starts an analysis when the game has none yet: by your
 opponent's policy when it is a registered trained policy, otherwise by
@@ -1228,7 +1278,9 @@ Each choice you commit after its reading reached you is saved as made with
 analysis shown. Review marks that move **analysis shown**, **This game**
 counts them, and Games shows them on the game's row and in **My record**.
 Turning **Show analysis** off stops the marking from your next decision; it
-never unmarks a choice. A game you play without it saves exactly as before.
+never unmarks a choice. If you [swap sides mid-game](#swapping-sides-mid-game)
+while it is on, analysis follows you to your new seat and earlier choices keep
+their marks. A game you play without it saves exactly as before.
 
 | You see | Why | What to do |
 |---|---|---|
@@ -1240,7 +1292,9 @@ never unmarks a choice. A game you play without it saves exactly as before.
 The result card of a game you played ends with one line of its numbers, such as
 **9 turns · you cast 6 spells and attacked 4 times; Reader cast 3 and attacked
 2 times**. In Review, **This game** in **Menu** gives turns, whether you were on
-the play or the draw and how long the game took, and a table of both seats:
+the play or the draw and how long the game took, and a table of both seats (in a
+game where you swapped sides mid-game, each column counts that native seat
+across the whole game, labelled by who finished in it):
 
 | Count | What it counts |
 |---|---|

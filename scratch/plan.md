@@ -328,6 +328,26 @@ the bot, live move list keeps earlier moves with a "Swapped sides" note, and
 the next Command is accepted; plus existing `play-session.spec.ts` updated for
 **Swap play/draw**.
 
+## Docs written first
+
+Shipping docs updated for this direction:
+- `docs/academy.md` (`### Swapping sides mid-game`, Settings → Game **This game** / **Next game** split, **Swap play/draw** rename, Previewing payments, Perspective, Analysis, Analysis while you play, The game in numbers)
+- `managym/academy/README.md` (`### Swapping sides mid-game` and `analysis.py` summary)
+- `protocol/README.md` (`swap_sides` under Shared-table control v1)
+
+### Product question exposed while writing docs
+
+- **Estimate discontinuity across a mid-game swap (`Decisions` strip, `keyMoments`, `estimateArc`)**:
+  Post-game **Analysis** and **Show analysis** plot the policy's 0–100 estimate
+  from whichever seat the human piloted at each decision. Across a swap the
+  estimate flips sides (e.g. 28 → 72 even though the board did not change).
+  Should `keyMoments` skip "estimate moved by your next decision" across a seat
+  swap (so the swap itself is never flagged as a huge swing) and should the
+  **Decisions** strip break the line / mark the swap boundary, or draw one
+  continuous line? (Suggested default for Pass 2 if unanswered: skip
+  cross-swap pairs in `keyMoments` and break the estimate polyline at each swap
+  so the chart stays honest.)
+
 ## Passes
 
 1. **In-place server swap, record & readers** — the slice that proves the whole

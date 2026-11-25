@@ -56,10 +56,10 @@ pending choice with the same legal offers and permitted information.
 - **`recording.py`**: positions over retained recordings; `record_of(attempt)`
   builds the engine's `GameRecord` from a played game's stored seed, setups
   and actions, so a played game is re-executed like any other record.
-- **`analysis.py`**: a policy's reading of one seat of a played game
-  (`analyse_game`), saved per decision in the `analyses` and
-  `analysed_decisions` tables beside the game, never in its trace; and the
-  same reading during play (`LiveAnalysis`).
+- **`analysis.py`**: a policy's reading of a played game's deliberate human
+  decisions across whichever seats the person piloted (`analyse_game`), saved
+  per decision in the `analyses` and `analysed_decisions` tables beside the
+  game, never in its trace; and the same reading during play (`LiveAnalysis`).
 - **`numbers.py`**: a played game's numbers (`game_numbers`), reduced with
   `managym.statistics` over one re-execution and saved in
   `attempts.numbers_json`; `wilson_interval` for the My games record.
@@ -398,6 +398,34 @@ game against a fresh opponent policy. `Trace.played_from` names the source and
 step (written only when set); `GameNumbers.played_from` copies the step so
 `/api/traces/record` leaves the game out, and the recording index returns it
 with the turn it starts on.
+
+### Swapping sides mid-game
+
+The pilot's `swap_sides` request (`SwapSidesMessage`, `CONFIGURE_MATCH`, bound
+to `match_id`, `expected_revision` and an idempotent `request_id`) flips seats
+in place on the live `GameSession` without restarting the engine or mutating
+`GameConfig` or `play_sessions.draft_json`. Before mutating session state,
+`GameSession.swap_sides` builds and admits a replacement villain policy for the
+human's old seat; stateless policies observe the live `Env` directly (decision
+memory is already captured for both native seats), while `recurrent=True`
+policies warm up over `managym.replay.walk` of the game so far. Any admission
+or load failure closes the disposable policy and leaves the live game untouched
+at the same revision.
+
+On commit, the session flips `human_seat` and `deck_names`, appends
+`len(trace.events)` to `Trace.seat_swaps` (omitted from JSON when empty),
+refreshes presentation state from the new seat's canonical track, bumps the
+protocol revision so in-flight Commands for the old seat are rejected as stale,
+updates active `attempt_players` and `session_games.matchup_json` atomically in
+`AttemptStore.save`, advances if the bot is now to act, and restarts
+`LiveAnalysis` for the new seat if live analysis was on. Every reader
+(`ReplayedViews`, `Recording`, `prepare_trace_payload`, `game_numbers`,
+`analyse_game`, `agent_line`, `LiveAnalysis`, and `_play_recorded_prefix`)
+resolves the human seat at step `i` through `human_seat_at(trace, i)` in
+`trace.py`. `Recording` includes all `DecisionSource.CLIENT` decisions across
+both seats and exposes `seat_swaps` and `starting_human_seat` on
+`/api/traces/{id}/recording`. Native mana payment and float modes remain on
+their starting seats.
 
 ### Analysis while you play
 
