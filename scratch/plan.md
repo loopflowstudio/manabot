@@ -154,9 +154,68 @@ compress (`ba30625410`).
   (the only branch change there is a single enum arm `ObjectKind::Emblem => false`).
   No further MTG-430 optimization pass is warranted; advance to gate/CI.
 
-## Remaining
+## Remaining (Architectural Redo — 2026-11-25)
 
-- **PR publish verification** on PR #607:
+Requested after comparing against `phase-rs/phase` before shipping PR #607.
+Keep all shipped planeswalker cards, catalog-keyed `EmblemDefinition`, composed
+`Effect::empower_jace`, sequential combat/division offers, append-only v11
+layouts, pinned pilot zero-drift, and Engine Budget intact. Do not adopt inline
+ad-hoc emblems, dedicated per-keyword `Effect` state machines, or compound
+batch `DeclareAttackers`.
+
+### Slice R1 — Centralized functioning-abilities gate & CR 607 ability provenance
+
+- **Centralized `functioning_abilities.rs` gate (`managym/src/flow/functioning_abilities.rs`):**
+  Single authority for "which abilities function right now" across statics,
+  triggers, and replacements, enforcing:
+  - CR 702.26b: phased-out permanents' abilities do not function.
+  - CR 114.4: command-zone objects function only when they are emblems (or
+    explicitly opt into `ZoneType::Command`).
+  - CR 113.6: zone-of-function admission (CDAs function in all zones, stack
+    exceptions like `CantBeCountered`, opt-in graveyard/exile statics and
+    replacements, battlefield default otherwise).
+  Route `layers.rs`, `triggers.rs`, `proposed_event.rs`, and `zones::emblems()`
+  through this shared gate; delete duplicated ad-hoc phasing/zone checks.
+- **Explicit `AbilityProvenance` + `LinkedAbilitySource` (CR 607):**
+  Separate `Characteristic` vs Layer-6 `Granted` ability provenance cleanly and
+  latch `{ creator, characteristic_set }` onto linked exile/emblem records
+  (CR 607.1a/d, 607.5) so Layer-6 granted abilities fail closed instead of
+  accidentally pairing with a permanent's printed linked abilities. Keep
+  `AbilityGrant` consistent with it; retire any replaced token names in
+  `token_renames.rs` so pinned pilot stays at zero drift.
+- **Verification:** directed Rust tests covering phased-out statics/triggers/
+  replacements, command-zone non-emblem rejection vs emblem admission, off-zone
+  CDA/stack/graveyard admission, and Layer-6 granted ability failing closed on
+  linked exile/emblem pairing.
+
+### Slice R2 — Condition-independent `StaticSourceIndex` & `source_census.rs` architectural guards
+
+- **Condition-independent `StaticSourceIndex` (`managym/src/flow/layers.rs` / `statics.rs`):**
+  Complement `StateReads` + revision skipping (which skip rebuilds) with a
+  condition-independent generator pre-filter for *when* a layer rebuild runs:
+  collect `battlefield` + `command_zone` objects whose base definitions carry
+  continuous statics (over-including, never under-including, rebuilt at top of
+  rebuild after base reset / before repeated per-layer gathers) so layer passes
+  scale with `O(|generators|)` instead of `O(|battlefield|)` on wide token/anthem
+  boards. Verify byte-identical output and no regression on `bench_steps`,
+  `bench_search`, and `bench_states`.
+- **Comment-aware `source_census.rs` architectural guard tests (`managym/src/source_census.rs`, `#[cfg(test)]`):**
+  Shared comment-stripping helper (excluding leading `/* ... */` and trailing
+  `//` outside string literals so prose edits never cause false positives and
+  deleted call sites cannot be masked by comments) plus source-census guard
+  tests pinning exact counts of sensitive single-authority sites across
+  `managym/src/` (e.g., `collect_replacements()`, `structured_offer.rs` attack
+  defender binding, `ZoneEntry` battlefield entry, emblem/token creation, and
+  direct static/trigger/replacement gather sites bypassing
+  `functioning_abilities.rs`).
+- **Verification:** focused `managym` unit/rules/card tests, `source_census`
+  guard tests, `bench_states` scaling check, pinned pilot zero-drift check, and
+  refresh `scratch/tour.yaml` before advancing to `card-review` → `card-perf` →
+  `compress` → `pr-publish` → `ship-review`.
+
+## Prior PR publish verification (baseline before redo)
+
+- **PR publish verification** on PR #607 (`a9b5039ab8`):
   removed redundant unread v11 `action::ATTACK_TARGET` column (`action_focus[1]`
   already carries the planeswalker defender, matching `DeclareBlocker`;
   `actions` width 31 with `DIVISION` at column 30), updated
