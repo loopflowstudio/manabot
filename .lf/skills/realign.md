@@ -4,8 +4,12 @@ extends: builtin
 ## In this repository
 
 **The next slice comes from the plan.** Name the plan's next unbuilt slice,
-whole; don't shrink it to one card. Iterate while the plan has unbuilt slices
-and advance when none remain.
+whole; don't shrink it to one card. When reconciling `card-review` /
+`scratch/concept-review.html` findings into `scratch/plan.md`, batch all
+in-scope concept fixes, composability refactors, deletions and failing checks
+into one ~30–50 minute fix pass rather than splitting them into tiny
+follow-ups. Iterate while the plan has unbuilt slices or fixes and advance
+when none remain.
 
 **Keep the plan short.** Every later step reads all of `scratch/plan.md`.
 Collapse a finished slice to one line with its commit; its detail is in git.
