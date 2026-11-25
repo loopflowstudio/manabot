@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields
-from functools import partial
 from hashlib import sha256
 import sys
 from typing import TYPE_CHECKING
@@ -359,7 +358,7 @@ class PrefixObservation(dict[str, np.ndarray]):
     def __reduce__(
         self,
     ) -> tuple[
-        Callable[..., PrefixObservation],
+        type[PrefixObservation],
         tuple[dict[str, np.ndarray], tuple[Prefix, ...], MemoryCapacities],
     ]:
         return PrefixObservation, (dict(self), self.prefixes, self.memory_capacities)
@@ -376,7 +375,6 @@ class CompactObservation(PrefixObservation):
         rows: Mapping[str, np.ndarray],
         prefixes: Sequence[Prefix],
         capacities: MemoryCapacities,
-        *,
         memory: Mapping[str, np.ndarray] | None = None,
     ) -> None:
         super().__init__(rows, prefixes, capacities)
@@ -385,16 +383,22 @@ class CompactObservation(PrefixObservation):
     def __reduce__(
         self,
     ) -> tuple[
-        Callable[..., CompactObservation],
-        tuple[dict[str, np.ndarray], tuple[Prefix, ...], MemoryCapacities],
+        type[CompactObservation],
+        tuple[
+            dict[str, np.ndarray],
+            tuple[Prefix, ...],
+            MemoryCapacities,
+            dict[str, np.ndarray],
+        ],
     ]:
         # An explicit dense export may have been edited since its prefixes were captured.
         ordinary = {key: rows for key, rows in self.items() if key not in MEMORY_FIELDS}
         memory = {key: self[key] for key in MEMORY_FIELDS if key in self}
-        return partial(CompactObservation, memory=memory), (
+        return CompactObservation, (
             ordinary,
             self.prefixes,
             self.memory_capacities,
+            memory,
         )
 
 

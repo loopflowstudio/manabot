@@ -136,11 +136,15 @@ pub struct ObservationLayout {
 impl ObservationLayout {
     pub fn from_config(config: ObservationEncoderConfig) -> PyResult<Self> {
         let arrays = native_layout::configured_arrays(&config).map_err(PyValueError::new_err)?;
-        let packed = arrays
-            .iter()
-            .filter(|(key, _)| !key.ends_with("_valid"))
-            .map(|(key, array)| Ok((key.clone(), PackedTableLayout::new(key, array)?)))
-            .collect::<PyResult<_>>()?;
+        let packed = if config.layout == InputLayout::OneToken {
+            arrays
+                .iter()
+                .filter(|(key, _)| !key.ends_with("_valid"))
+                .map(|(key, array)| Ok((key.clone(), PackedTableLayout::new(key, array)?)))
+                .collect::<PyResult<_>>()?
+        } else {
+            BTreeMap::new()
+        };
         Ok(Self {
             config,
             arrays,
@@ -196,9 +200,10 @@ impl ObservationLayout {
         })
     }
 
-    // Spaces travel with policies through deepcopy, pickle and spawned workers.
-    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(PyObject, PyObject)> {
-        let c = self.config;
+    // Spaces travel with policies through deepcopy, pickle (all protocols) and spawned workers.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let c = slf.borrow().config;
         let kwargs = PyDict::new_bound(py);
         kwargs.set_item(
             "policy_input_version",
@@ -225,15 +230,8 @@ impl ObservationLayout {
             c.max_decision_reference_details,
         )?;
         kwargs.set_item("max_decision_members", c.max_decision_members)?;
-        Ok((PyTuple::empty_bound(py).into(), kwargs.into()))
-    }
-
-    // Protocols 0 and 1 do not consult __getnewargs_ex__ themselves.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<PyObject> {
-        let py = slf.py();
-        let (args, kwargs) = slf.borrow().__getnewargs_ex__(py)?;
         let new = py.import_bound("copyreg")?.getattr("__newobj_ex__")?;
-        Ok((new, (slf.get_type(), args, kwargs)).into_py(py))
+        Ok((new, (slf.get_type(), PyTuple::empty_bound(py), kwargs)).into_py(py))
     }
 
     /// Buffers on each variable axis and their row dimensions before batching.

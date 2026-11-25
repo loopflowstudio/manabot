@@ -16,7 +16,7 @@ from managym.disclosure import DecklistSampling
 
 from . import _managym
 from ._managym import *  # noqa: F403 — expose the native API described by the stub.
-from ._managym import _restore_observation_batch as _restore_observation_batch, format
+from ._managym import format
 
 # PyO3 submodules are attributes, not importable modules; registering the
 # native ``format`` lets ``import managym.format`` and ``from managym.format

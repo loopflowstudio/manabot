@@ -319,8 +319,6 @@ class RecordedObservations:
             raise ValueError("cannot concatenate empty recorded observations")
         capacities = parts[0].memory_capacities
         counts = [observation_row_count(part.rows) for part in parts]
-        indexes: list[np.ndarray] = []
-        offset = 0
         for part, count in zip(parts, counts, strict=True):
             if capacities != part.memory_capacities:
                 raise ValueError("recorded memory capacities differ")
@@ -357,11 +355,16 @@ class RecordedObservations:
                 raise ValueError(
                     "recorded bucket needs must match observation rows and axes"
                 )
-            indexes.append(index.astype(np.int64, copy=False) + offset)
-            offset += count
         if len(parts) == 1:
             return parts[0]
         rows = concatenate_observation_rows([part.rows for part in parts])
+        offsets = np.cumsum([0, *counts[:-1]], dtype=np.int64)
+        indexes = np.concatenate(
+            [
+                part.index.astype(np.int64, copy=False) + offset
+                for part, offset in zip(parts, offsets, strict=True)
+            ]
+        )
         memory = (
             rows.memory.prefixes
             if isinstance(rows, ObservationSelection) and rows.memory is not None
@@ -377,7 +380,7 @@ class RecordedObservations:
                     for part, count in zip(parts, counts, strict=True)
                 ]
             )
-        return cls(rows, np.concatenate(indexes), needs, memory, capacities)
+        return cls(rows, indexes, needs, memory, capacities)
 
     def gather(self, indexes: np.ndarray) -> ObservationBuffers:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
@@ -525,9 +528,6 @@ class RolloutBatch:
         if not batches:
             raise ValueError("cannot concatenate empty rollout batches")
         explicit = batches[0].trajectories is not None
-        spans: list[TrajectorySpan] = []
-        row_offset = bootstrap_offset = 0
-        bootstraps: list[ObservationBuffers] = []
         for batch in batches:
             shape = batch.actions.shape
             if (
@@ -556,31 +556,14 @@ class RolloutBatch:
                     "behavior logs, rewards and values must match packed actions"
                 )
             validate_rollout_metadata(batch)
-            if batch.trajectories is None:
-                if (
-                    not batch.dones[-1, 0]
-                    or batch.next_done.shape != (1,)
-                    or not batch.next_done.all()
-                ):
-                    raise ValueError(
-                        "complete-game batches must end on a terminal row with next_done true"
-                    )
-            else:
-                for span in batch.trajectories:
-                    spans.append(
-                        replace(
-                            span,
-                            start=span.start + row_offset,
-                            stop=span.stop + row_offset,
-                            bootstrap_index=None
-                            if span.bootstrap_index is None
-                            else span.bootstrap_index + bootstrap_offset,
-                        )
-                    )
-                if len(batch.next_done):
-                    bootstraps.append(batch.next_obs)
-                bootstrap_offset += len(batch.next_done)
-            row_offset += shape[0]
+            if not explicit and (
+                not batch.dones[-1, 0]
+                or batch.next_done.shape != (1,)
+                or not batch.next_done.all()
+            ):
+                raise ValueError(
+                    "complete-game batches must end on a terminal row with next_done true"
+                )
 
         recorded = RecordedObservations.concatenate(
             [batch.recorded for batch in batches]
@@ -608,15 +591,38 @@ class RolloutBatch:
         if groups is not None:
             offset_worker_groups(groups, batches)
 
-        next_obs = batches[-1].next_obs
-        next_done = batches[-1].next_done
         if explicit:
+            spans: list[TrajectorySpan] = []
+            bootstraps: list[ObservationBuffers] = []
+            row_offset = bootstrap_offset = 0
+            for batch in batches:
+                assert batch.trajectories is not None
+                for span in batch.trajectories:
+                    spans.append(
+                        replace(
+                            span,
+                            start=span.start + row_offset,
+                            stop=span.stop + row_offset,
+                            bootstrap_index=None
+                            if span.bootstrap_index is None
+                            else span.bootstrap_index + bootstrap_offset,
+                        )
+                    )
+                if len(batch.next_done):
+                    bootstraps.append(batch.next_obs)
+                row_offset += len(batch.actions)
+                bootstrap_offset += len(batch.next_done)
+            trajectories: tuple[TrajectorySpan, ...] | None = tuple(spans)
             next_obs = (
                 concatenate_observation_rows(bootstraps)
                 if bootstraps
                 else batches[0].next_obs
             )
             next_done = np.concatenate([batch.next_done for batch in batches])
+        else:
+            trajectories = None
+            next_obs = batches[-1].next_obs
+            next_done = batches[-1].next_done
         return cls(
             recorded=recorded,
             actions=np.concatenate([batch.actions for batch in batches]),
@@ -629,7 +635,7 @@ class RolloutBatch:
             ),
             next_obs=next_obs,
             next_done=next_done,
-            trajectories=tuple(spans) if explicit else None,
+            trajectories=trajectories,
             **optional,
         )
 

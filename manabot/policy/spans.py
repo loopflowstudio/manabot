@@ -184,7 +184,6 @@ class ObservationSelection(Mapping[str, np.ndarray]):
         capacities = (
             first.memory.memory_capacities if first.memory is not None else None
         )
-        prefixes = []
         for part in parts:
             if (
                 part.space is not first.space
@@ -194,18 +193,25 @@ class ObservationSelection(Mapping[str, np.ndarray]):
             memory = part.memory
             if (memory.memory_capacities if memory is not None else None) != capacities:
                 raise ValueError("native observation memory capacities differ")
-            if memory is not None:
-                if len(memory.prefixes) != len(part.coordinates):
-                    raise ValueError(
-                        "native observation memory count differs from coordinates"
-                    )
-                prefixes.extend(memory.prefixes)
+            if memory is not None and len(memory.prefixes) != len(part.coordinates):
+                raise ValueError(
+                    "native observation memory count differs from coordinates"
+                )
         if len(parts) == 1:
             return first
         return cls(
             first.space,
             tuple(coord for part in parts for coord in part.coordinates),
-            PrefixObservation({}, prefixes, capacities)
+            PrefixObservation(
+                {},
+                [
+                    prefix
+                    for part in parts
+                    if part.memory is not None
+                    for prefix in part.memory.prefixes
+                ],
+                capacities,
+            )
             if capacities is not None
             else None,
         )

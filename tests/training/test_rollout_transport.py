@@ -187,7 +187,9 @@ def test_worker_queue_preserves_learner_rows(memory: bool) -> None:
     boundary = original.actions.size
     crossing = joined.policy_rows(np.array([boundary - 1, boundary]))
     expected = original.policy_rows(np.array([boundary - 1, 0]))
-    np.testing.assert_array_equal(crossing.log_probabilities, expected.log_probabilities)
+    np.testing.assert_array_equal(
+        crossing.log_probabilities, expected.log_probabilities
+    )
     assert_same_inputs(agent, crossing.observation, expected.observation)
 
 
@@ -432,7 +434,7 @@ def test_archive_and_dense_worker_merge(
         packed = PackedActions.pack(
             support.observation, support.log_probabilities, validator=torch_rollout
         )
-        fields = {
+        obs_fields = {
             key: batch.recorded.rows[key]
             for key in batch.recorded.rows
             if key not in ACTION_FIELDS
@@ -440,7 +442,7 @@ def test_archive_and_dense_worker_merge(
         dense_parts.append(
             replace(
                 batch,
-                recorded=replace(batch.recorded, rows=fields),
+                recorded=replace(batch.recorded, rows=obs_fields),
                 action_data=packed,
                 next_obs=batch.next_obs.export(),
             )

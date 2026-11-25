@@ -217,27 +217,29 @@ pub(super) fn freeze(
     rows: PackedRows,
     batch_size: usize,
 ) -> ObservationBatch {
-    let tables = rows
-        .tables
-        .into_iter()
-        .map(|(key, table)| {
-            let stride = layout.borrow(py).packed[&key].stride;
-            let offsets: Vec<_> = table
-                .offsets
-                .into_iter()
-                .flat_map(i32::to_ne_bytes)
-                .collect();
-            (
-                key,
-                FrozenTable {
-                    stride,
-                    seat_axis: table.seat_axis,
-                    offsets: PyBytes::new_bound(py, &offsets).unbind(),
-                    values: PyBytes::new_bound(py, &table.values).unbind(),
-                },
-            )
-        })
-        .collect();
+    let tables = {
+        let schema = layout.borrow(py);
+        rows.tables
+            .into_iter()
+            .map(|(key, table)| {
+                let stride = schema.packed[&key].stride;
+                let offsets: Vec<_> = table
+                    .offsets
+                    .into_iter()
+                    .flat_map(i32::to_ne_bytes)
+                    .collect();
+                (
+                    key,
+                    FrozenTable {
+                        stride,
+                        seat_axis: table.seat_axis,
+                        offsets: PyBytes::new_bound(py, &offsets).unbind(),
+                        values: PyBytes::new_bound(py, &table.values).unbind(),
+                    },
+                )
+            })
+            .collect()
+    };
     ObservationBatch {
         layout,
         tables,
@@ -264,8 +266,11 @@ impl FrozenTable {
         }
         let mut ends = offsets
             .as_bytes()
-            .chunks_exact(4)
-            .map(|bytes| i32::from_ne_bytes(bytes.try_into().unwrap()));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .copied()
+            .map(i32::from_ne_bytes);
         if ends.next() != Some(0) {
             return Err(invalid());
         }
