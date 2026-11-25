@@ -1593,3 +1593,418 @@ fn kiora_and_gideon_read_loyalty_activations() {
         "one for the activation, one for the Illusion"
     );
 }
+
+#[test]
+fn ajani_unrelenting_loyalty_abilities() {
+    use crate::support::{
+        game::{enter_battlefield, five_color_setup, move_to_hand},
+        inspect::{counters_of, keywords},
+        play::{activate, settle},
+    };
+    use managym::{
+        flow::turn::StepKind,
+        state::{card::Keyword, game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+
+    // +1 triggers Cadet creation, then pumps team +1/+0 and haste until end of turn.
+    let mut s = five_color_setup(&["Ajani Unrelenting", "Gray Ogre", "Plains"]);
+    let ajani = enter_battlefield(&mut s, "Ajani Unrelenting");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert_eq!(counters_of(&s, ajani, CounterKind::Loyalty), 5);
+    activate(&mut s, ajani, 0);
+    settle(&mut s);
+    // Trigger resolves BEFORE +1 (stack LIFO), so the newly created Cadet also gets +1/+0 and haste!
+    let cadets = s.battlefield_permanents_named(0, "Cadet");
+    assert_eq!(cadets.len(), 1);
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 2));
+    assert!(keywords(&s, ogre).has(Keyword::Haste));
+    assert_eq!(s.game().characteristics(cadets[0]).pt(), (3, 2));
+    assert!(keywords(&s, cadets[0]).has(Keyword::Haste));
+
+    // -2 discards your hand, then draws a card for each creature you control (including the new Cadet!).
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    move_to_hand(&mut s, "Plains");
+    move_to_hand(&mut s, "Plains");
+    let creatures_before = s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Battlefield, PlayerId(0))
+        .iter()
+        .filter_map(|&obj| s.game().state.permanent_of(obj))
+        .filter(|&id| s.game().characteristics(id).is_creature())
+        .count();
+    activate(&mut s, ajani, 1);
+    settle(&mut s);
+    // Cadet trigger resolved before -2, so creatures_before + 1 creatures are in play.
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        creatures_before + 1
+    );
+
+    // -3 deals 4 damage to each creature EXCEPT tokens you control:
+    // own nontoken creature dies, opponent's token and nontoken die, own Cadet tokens survive!
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let opp_nontoken = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let opp_token = s
+        .game_mut()
+        .create_token("token.cadet", PlayerId(1), false)
+        .unwrap();
+    let own_cadets_before = s.battlefield_permanents_named(0, "Cadet").len();
+    activate(&mut s, ajani, 2);
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none(), "own nontoken takes 4");
+    assert!(
+        s.game().state.permanents[opp_nontoken].is_none(),
+        "opponent nontoken takes 4"
+    );
+    assert!(s.game().state.permanents[opp_token].is_none(), "opponent token takes 4");
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Cadet").len(),
+        own_cadets_before + 1,
+        "own tokens are exempt from -3"
+    );
+}
+
+#[test]
+fn garruk_curse_breaker_loyalty_abilities() {
+    use crate::support::{
+        game::{clear_summoning_sickness, enter_battlefield, five_color_setup, set_counters},
+        inspect::{keywords, tapped},
+        play::{activate, attack_with, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::{combat::AttackTarget, turn::StepKind},
+        state::{
+            card::Keyword,
+            game_object::PlayerId,
+            permanent::CounterKind,
+            target::Target,
+            zone::ZoneType,
+        },
+    };
+
+    // Trigger: power >= 4 creature entering draws a card; power < 4 does not.
+    // -3 creates a 4/4 green Beast with trample, which triggers Garruk's draw!
+    let mut s = five_color_setup(&[
+        "Garruk, Curse Breaker",
+        "Gray Ogre",
+        "Plains",
+        "Ajani, Caller of the Pride",
+    ]);
+    let garruk = enter_battlefield(&mut s, "Garruk, Curse Breaker");
+    let hand0 = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+    let ogre = enter_battlefield(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand0,
+        "2/2 does not trigger power >= 4 draw"
+    );
+    activate(&mut s, garruk, 1); // -3 Beast
+    settle(&mut s);
+    let beasts = s.battlefield_permanents_named(0, "Beast");
+    assert_eq!(beasts.len(), 1);
+    assert!(keywords(&s, beasts[0]).has(Keyword::Trample));
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand0 + 1,
+        "4/4 Beast triggers Garruk draw"
+    );
+
+    // +2 untaps up to two target lands.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let land1 = s.force_permanent_on_battlefield(0, "Plains");
+    let land2 = s.force_permanent_on_battlefield(0, "Plains");
+    s.game_mut().state.permanents[land1].as_mut().unwrap().tapped = true;
+    s.game_mut().state.permanents[land2].as_mut().unwrap().tapped = true;
+    activate(&mut s, garruk, 0);
+    assert!(s.choose_target(Target::Permanent(land1)));
+    assert!(s.choose_target(Target::Permanent(land2)));
+    settle(&mut s);
+    assert!(!tapped(&s, land1) && !tapped(&s, land2));
+
+    // -4: until your next turn, whenever one or more creatures attack an opponent,
+    // ONLY those attacking the opponent (not an opponent's planeswalker) get +2/+2 and trample until EOT.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, garruk, CounterKind::Loyalty, 6);
+    let opp_pw = s.force_permanent_on_battlefield(1, "Ajani, Caller of the Pride");
+    set_counters(&mut s, opp_pw, CounterKind::Loyalty, 4);
+    let opp_pw_obj = s.game().permanent_object(opp_pw).unwrap();
+    let other_ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, ogre);
+    clear_summoning_sickness(&mut s, other_ogre);
+    activate(&mut s, garruk, 2); // -4
+    settle(&mut s);
+    s.advance_to_step(StepKind::DeclareAttackers);
+    // Attack opponent with ogre, attack opponent's planeswalker with other_ogre, decline any other creatures.
+    while s.action_space().kind == managym::agent::action::ActionSpaceKind::DeclareAttacker {
+        let offered = match s.action_space().actions[0] {
+            Action::DeclareAttacker { permanent, .. } => permanent,
+            _ => unreachable!(),
+        };
+        if offered == ogre {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == ogre && *p == PlayerId(1))
+            });
+        } else if offered == other_ogre {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == other_ogre && *obj == opp_pw_obj)
+            });
+        } else {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { attack: None, .. })
+            });
+        }
+    }
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4), "attacker at opponent gets +2/+2");
+    assert!(keywords(&s, ogre).has(Keyword::Trample));
+    assert_eq!(
+        s.game().characteristics(other_ogre).pt(),
+        (2, 2),
+        "attacker at opponent's planeswalker does not trigger -4"
+    );
+    assert!(!keywords(&s, other_ogre).has(Keyword::Trample));
+
+    // On your next turn, the delayed trigger has expired.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2), "-4 expired at your next turn");
+}
+
+#[test]
+fn garruk_veiled_butcher_loyalty_abilities() {
+    use crate::support::{
+        game::{clear_hand, enter_battlefield, five_color_setup, force_new_card_in_hand, set_counters},
+        inspect::{card_of, now, zone_of},
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        flow::turn::StepKind,
+        state::{game_object::PlayerId, permanent::CounterKind, target::Target, zone::ZoneType},
+    };
+
+    // Static replacement: if an opponent's creature would die, exile it instead.
+    // +2: up to one target creature gets -4/-1 until your next turn.
+    let mut s = five_color_setup(&["Garruk, Veiled Butcher", "Hill Giant", "Gray Ogre", "Plains"]);
+    let garruk = enter_battlefield(&mut s, "Garruk, Veiled Butcher");
+    let opp_giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    activate(&mut s, garruk, 0); // +2
+    assert!(s.choose_target(Target::Permanent(opp_giant)));
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(opp_giant).pt(), (-1, 2));
+    // Still shrunk during opponent's turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().characteristics(opp_giant).pt(), (-1, 2));
+    // Wears off when your next turn begins.
+    s.advance_to_active_step(0, StepKind::Main);
+    assert_eq!(s.game().characteristics(opp_giant).pt(), (3, 3));
+
+    // -2: each player sacrifices a creature; Beast only if YOU sacrificed one.
+    // First, with NO creature on seat 0: opponent sacrifices opp_giant (exiled by Garruk's static!), seat 0 gets NO Beast.
+    let opp_giant_obj = card_of(&s, opp_giant);
+    activate(&mut s, garruk, 1); // -2
+    settle(&mut s);
+    assert!(s.game().state.permanents[opp_giant].is_none());
+    assert_eq!(
+        zone_of(&s, now(&s, opp_giant_obj)),
+        Some(ZoneType::Exile),
+        "Garruk's static exiles opponent's dying creature"
+    );
+    assert!(
+        s.battlefield_permanents_named(0, "Beast").is_empty(),
+        "no Beast when you didn't sacrifice a creature"
+    );
+
+    // Next turn, seat 0 DOES have a creature to sacrifice -> creates 4/4 Beast (and own creature goes to graveyard, not exile).
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let own_ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let own_ogre_obj = card_of(&s, own_ogre);
+    activate(&mut s, garruk, 1);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, now(&s, own_ogre_obj)),
+        Some(ZoneType::Graveyard),
+        "Garruk's static only exiles opponents' creatures"
+    );
+    assert_eq!(s.battlefield_permanents_named(0, "Beast").len(), 1);
+
+    // -3: each opponent discards 2 cards; draw a card unless they discarded 2 nonland cards.
+    // Case A: opponent discards 2 nonlands -> 0 draws.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, garruk, CounterKind::Loyalty, 6);
+    clear_hand(&mut s, 1);
+    force_new_card_in_hand(&mut s, 1, "Gray Ogre");
+    force_new_card_in_hand(&mut s, 1, "Hill Giant");
+    let hand_before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+    activate(&mut s, garruk, 2);
+    while s.action_space().kind == ActionSpaceKind::Priority {
+        choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    }
+    while matches!(
+        s.action_space().kind,
+        ActionSpaceKind::Discard | ActionSpaceKind::LookAndSelect
+    ) {
+        choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand_before,
+        "2 nonlands discarded -> no draw"
+    );
+
+    // Case B: opponent discards 1 land + 1 nonland -> 1 draw!
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, garruk, CounterKind::Loyalty, 6);
+    clear_hand(&mut s, 1);
+    force_new_card_in_hand(&mut s, 1, "Plains");
+    force_new_card_in_hand(&mut s, 1, "Gray Ogre");
+    let hand_before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
+    activate(&mut s, garruk, 2);
+    while s.action_space().kind == ActionSpaceKind::Priority {
+        choose(&mut s, |a| matches!(a, Action::PassPriority { .. }));
+    }
+    while matches!(
+        s.action_space().kind,
+        ActionSpaceKind::Discard | ActionSpaceKind::LookAndSelect
+    ) {
+        choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        hand_before + 1,
+        "1 land + 1 nonland discarded -> draw 1"
+    );
+}
+
+#[test]
+fn jace_reality_sculptor_loyalty_abilities() {
+    use crate::support::{
+        game::{clear_summoning_sickness, enter_battlefield, five_color_setup, set_counters},
+        inspect::{counters_of, has_action},
+        play::{activate, choose, settle},
+    };
+    use managym::{
+        agent::action::Action,
+        flow::{combat::AttackTarget, turn::StepKind},
+        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+    };
+
+    // +1: Empower Jace X where X = Islands you control.
+    let mut s = five_color_setup(&["Jace, Reality Sculptor", "Island", "Hill Giant"]);
+    let jace = enter_battlefield(&mut s, "Jace, Reality Sculptor");
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(0, "Island");
+    }
+    activate(&mut s, jace, 0); // +1
+    settle(&mut s);
+    let jace_tokens = s.battlefield_permanents_named(0, "Jace");
+    assert_eq!(jace_tokens.len(), 1);
+    assert_eq!(
+        counters_of(&s, jace_tokens[0], CounterKind::Loyalty),
+        3,
+        "empowered by 3 Islands"
+    );
+    assert_eq!(counters_of(&s, jace, CounterKind::Loyalty), 6);
+
+    // -3: until your next turn, whenever a creature attacks you or a planeswalker you control, -5/-0 until EOT.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let opp_a = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let opp_b = s.force_permanent_on_battlefield(1, "Hill Giant");
+    clear_summoning_sickness(&mut s, opp_a);
+    clear_summoning_sickness(&mut s, opp_b);
+    let jace_obj = s.game().permanent_object(jace).unwrap();
+    activate(&mut s, jace, 1); // -3
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    // Attack seat 0 with opp_a and Jace with opp_b.
+    while s.action_space().kind == managym::agent::action::ActionSpaceKind::DeclareAttacker {
+        let offered = match s.action_space().actions[0] {
+            Action::DeclareAttacker { permanent, .. } => permanent,
+            _ => unreachable!(),
+        };
+        if offered == opp_a {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Player(p)), .. } if *permanent == opp_a && *p == PlayerId(0))
+            });
+        } else if offered == opp_b {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { permanent, attack: Some(AttackTarget::Permanent(obj)), .. } if *permanent == opp_b && *obj == jace_obj)
+            });
+        } else {
+            choose(&mut s, |a| {
+                matches!(a, Action::DeclareAttacker { attack: None, .. })
+            });
+        }
+    }
+    settle(&mut s);
+    assert_eq!(s.game().characteristics(opp_a).pt(), (-2, 3), "attacking you gets -5/-0");
+    assert_eq!(
+        s.game().characteristics(opp_b).pt(),
+        (-2, 3),
+        "attacking your planeswalker gets -5/-0"
+    );
+
+    // 0: gated on >= 25 loyalty across Jaces you control; exiles all but bottom card of opponent's library.
+    s.advance_to_active_step(0, StepKind::Main);
+    set_counters(&mut s, jace, CounterKind::Loyalty, 12);
+    set_counters(&mut s, jace_tokens[0], CounterKind::Loyalty, 12);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)),
+        "24 total Jace loyalty is not enough for 0 ability"
+    );
+    set_counters(&mut s, jace_tokens[0], CounterKind::Loyalty, 13);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        has_action(&s, |a| matches!(a, Action::ActivateAbility { permanent, ability_index: 2, .. } if *permanent == jace)),
+        "25 total Jace loyalty unlocks 0 ability"
+    );
+    let opp_lib_before = s.game().state.zones.size(ZoneType::Library, PlayerId(1));
+    assert!(opp_lib_before > 1);
+    let bottom_card = *s
+        .game()
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, PlayerId(1))
+        .iter()
+        .next()
+        .unwrap();
+    activate(&mut s, jace, 2); // 0
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Library, PlayerId(1)),
+        1,
+        "only the bottom card remains"
+    );
+    assert_eq!(
+        *s.game()
+            .state
+            .zones
+            .zone_objects(ZoneType::Library, PlayerId(1))
+            .iter()
+            .next()
+            .unwrap(),
+        bottom_card,
+        "exact bottom card was preserved"
+    );
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Exile, PlayerId(1)),
+        opp_lib_before - 1
+    );
+}

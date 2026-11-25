@@ -2,10 +2,10 @@
 use super::enters_prepared;
 use managym_state::{
     ability::{
-        Ability, Actor, CompareOp, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
-        Effect, EffectValue, KeywordAction, LibraryEnd, ObjectSelector, PaymentCost, Per,
-        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
-        TurnStep,
+        Ability, Actor, Aggregate, AttackedSubject, CompareOp, Condition, DelayedEvent,
+        DelayedExpiry, DelayedFrequency, Effect, EffectValue, Except, KeywordAction, LibraryEnd,
+        ObjectProperty, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
@@ -13,7 +13,7 @@ use managym_state::{
         Restriction, StateBasedAction, StaticAbility, StaticContinuous, StaticRestriction,
         StaticScope,
     },
-    effect::Modification,
+    effect::{EffectDuration, Modification},
     mana::{Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -115,6 +115,10 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         kiora_of_salt_and_sand(),
         sanctum_lurker(),
         gideon_the_oathless(),
+        ajani_unrelenting(),
+        garruk_curse_breaker(),
+        garruk_veiled_butcher(),
+        jace_reality_sculptor(),
     ]
 }
 
@@ -2011,6 +2015,271 @@ fn ajani_resolute() -> CardDefinition {
                     }],
                 ),
             ],
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn ajani_unrelenting() -> CardDefinition {
+    let text_box = "Whenever you activate a loyalty ability, create a 2/2 colorless Wizard Soldier creature token named Cadet.\n+1: Creatures you control get +1/+0 and gain haste until end of turn.\n−2: Discard your hand, then draw a card for each creature you control.\n−3: Ajani deals 4 damage to each creature except for tokens you control.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "fra.ajani_unrelenting",
+        scryfall_id: "bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5",
+        printed: PrintedCharacteristics {
+            name: "Ajani Unrelenting".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{R}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Ajani".into()],
+            loyalty: Some(5),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActivatesLoyaltyAbility {
+                    who: Actor::You,
+                    min_counters_removed: 0,
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.cadet", 1)],
+            }],
+            activated_abilities: vec![
+                loyalty(
+                    1,
+                    Effect::pump_and_grant_until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        1,
+                        0,
+                        Keyword::Haste,
+                    ),
+                ),
+                loyalty(
+                    -2,
+                    vec![
+                        Effect::move_to(ObjectSelector::Zone(ZoneType::Hand), ZoneType::Graveyard),
+                        Effect::DrawCards {
+                            count: ObjectSelector::each_you_control(CardPredicate::creature())
+                                .count(),
+                        },
+                    ],
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::deal_damage(
+                        4,
+                        ObjectSelector::Each {
+                            of: Scope::Battlefield,
+                            predicate: CardPredicate::creature(),
+                            except: Some(Except::Matching {
+                                controlled_by: Actor::You,
+                                predicate: Box::new(CardPredicate {
+                                    token: Some(true),
+                                    ..Default::default()
+                                }),
+                            }),
+                            max_mana_value: None,
+                            exact_mana_value: None,
+                        },
+                    )],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn garruk_curse_breaker() -> CardDefinition {
+    let text_box = "Whenever a creature you control with power 4 or greater enters, draw a card.\n+2: Untap up to two target lands.\n−3: Create a 4/4 green Beast creature token with trample.\n−4: Until your next turn, whenever one or more creatures attack one of your opponents, those creatures get +2/+2 and gain trample until end of turn.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    let land_target = TargetSpec::Permanent {
+        predicate: CardPredicate::card_type(CardType::Land),
+    };
+    CardDefinition {
+        key: "fra.garruk_curse_breaker",
+        scryfall_id: "90ca5812-ceb5-46bd-b049-aed7ff10e6af",
+        printed: PrintedCharacteristics {
+            name: "Garruk, Curse Breaker".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Garruk".into()],
+            loyalty: Some(5),
+            abilities: vec![Ability::when_enters(
+                TriggerSubject::you_control(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    min_power: Some(4),
+                    ..Default::default()
+                }),
+                vec![Effect::DrawCards { count: 1.into() }],
+            )],
+            activated_abilities: vec![
+                loyalty(
+                    2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(2, land_target.clone()),
+                        effects: vec![Effect::untap(ObjectSelector::Targets(land_target))],
+                    }],
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::create_tokens("token.beast_4_4_g_trample", 1)],
+                ),
+                loyalty(
+                    -4,
+                    vec![Effect::CreateDelayedTrigger {
+                        event: DelayedEvent::Attacks {
+                            subject: TriggerSubject::any(CardPredicate::creature()),
+                            per: Per::Batch,
+                            attacked: AttackedSubject::Player(Actor::Opponent),
+                        },
+                        frequency: DelayedFrequency::EachMatch,
+                        expiry: DelayedExpiry::UntilYourNextTurn,
+                        remember: None,
+                        effects: Effect::pump_and_grant_until_end_of_turn(
+                            ObjectSelector::Remembered,
+                            2,
+                            2,
+                            Keyword::Trample,
+                        ),
+                    }],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn garruk_veiled_butcher() -> CardDefinition {
+    let text_box = "If a creature an opponent controls would die, exile it instead.\n+2: Up to one target creature gets -4/-1 until your next turn.\n−2: Each player sacrifices a creature of their choice. If you sacrificed a creature this way, create a 4/4 green Beast creature token with trample.\n−3: Each opponent discards two cards. For each opponent who didn't discard two nonland cards this way, you draw a card.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "fra.garruk_veiled_butcher",
+        scryfall_id: "d48bfb8a-d135-45f3-be99-4694b4b9ab93",
+        printed: PrintedCharacteristics {
+            name: "Garruk, Veiled Butcher".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{B}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Garruk".into()],
+            loyalty: Some(5),
+            replacement_effects: vec![ReplacementEffect::ExileIfWouldDie {
+                controlled_by: Actor::Opponent,
+                predicate: CardPredicate::creature(),
+            }],
+            activated_abilities: vec![
+                loyalty(
+                    2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                        effects: vec![Effect::ApplyContinuous {
+                            affected: ObjectSelector::Target(TargetSpec::Creature),
+                            modification: Modification::pump(-4, -1),
+                            duration: EffectDuration::UntilYourNextTurn,
+                        }],
+                    }],
+                ),
+                loyalty(
+                    -2,
+                    vec![
+                        Effect::EachPlayerSacrificesCreatures { count: 1 },
+                        Effect::if_you_do(vec![Effect::create_tokens(
+                            "token.beast_4_4_g_trample",
+                            1,
+                        )]),
+                    ],
+                ),
+                loyalty(
+                    -3,
+                    vec![
+                        Effect::ForPlayer {
+                            player: PlayerSelector::EachOpponent,
+                            effects: vec![Effect::Discard {
+                                what: ObjectSelector::You,
+                                count: 2,
+                            }],
+                        },
+                        Effect::If {
+                            condition: Condition::compare(
+                                EffectValue::Objects {
+                                    of: Box::new(ObjectSelector::CardsThisWay),
+                                    predicate: Some(CardPredicate::nonland()),
+                                    in_zone: None,
+                                },
+                                CompareOp::Lt,
+                                2,
+                            ),
+                            then: vec![Effect::DrawCards { count: 1.into() }],
+                            otherwise: Vec::new(),
+                        },
+                    ],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn jace_reality_sculptor() -> CardDefinition {
+    let text_box = "+1: Empower Jace X, where X is the number of Islands you control.\n−3: Until your next turn, whenever a creature attacks you or a planeswalker you control, it gets -5/-0 until end of turn.\n0: Exile all but the bottom card of each opponent's library. Activate only if there are twenty-five or more loyalty counters among Jaces you control.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "fra.jace_reality_sculptor",
+        scryfall_id: "74087795-0b38-4fd2-9841-147583baca41",
+        printed: PrintedCharacteristics {
+            name: "Jace, Reality Sculptor".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Jace".into()],
+            loyalty: Some(5),
+            activated_abilities: vec![
+                loyalty(
+                    1,
+                    Effect::empower_jace(
+                        ObjectSelector::each_you_control(CardPredicate::subtype("Island")).count(),
+                    ),
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::CreateDelayedTrigger {
+                        event: DelayedEvent::Attacks {
+                            subject: TriggerSubject::any(CardPredicate::creature()),
+                            per: Per::Object,
+                            attacked: AttackedSubject::YouOrYourPlaneswalker,
+                        },
+                        frequency: DelayedFrequency::EachMatch,
+                        expiry: DelayedExpiry::UntilYourNextTurn,
+                        remember: None,
+                        effects: vec![Effect::until_end_of_turn(
+                            ObjectSelector::Triggering,
+                            Modification::pump(-5, 0),
+                        )],
+                    }],
+                ),
+                ActivatedAbilityDefinition {
+                    condition: Some(Condition::compare(
+                        ObjectSelector::each_you_control(CardPredicate::subtype("Jace")).property(
+                            ObjectProperty::Counters(CounterKind::Loyalty),
+                            Aggregate::Sum,
+                        ),
+                        CompareOp::Ge,
+                        25,
+                    )),
+                    ..loyalty(
+                        0,
+                        vec![Effect::ForPlayer {
+                            player: PlayerSelector::EachOpponent,
+                            effects: vec![Effect::exile(ObjectSelector::LibraryExceptBottom)],
+                        }],
+                    )
+                },
+            ],
+            text_box: text_box.into(),
             ..Default::default()
         },
         ..Default::default()

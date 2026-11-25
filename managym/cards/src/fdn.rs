@@ -20,6 +20,7 @@ use managym_state::zone::ZoneType;
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         kaito_cunning_infiltrator(),
+        chandra_flameshaper(),
         fishing_pole(),
         ravenous_amulet(),
         hare_apparent(),
@@ -549,6 +550,72 @@ fn drake_hatcher() -> CardDefinition {
                 effects: vec![Effect::create_tokens("token.drake", 1)],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn chandra_flameshaper() -> CardDefinition {
+    let text_box = "+2: Add {R}{R}{R}. Exile the top three cards of your library. Choose one. You may play that card this turn.\n+1: Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\n−4: Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    let creature_or_pw = TargetSpec::Permanent {
+        predicate: CardPredicate::creature_or_planeswalker(),
+    };
+    CardDefinition {
+        key: "fdn.chandra_flameshaper",
+        scryfall_id: "a22d21ec-0fb3-4574-a803-6442ec13167e",
+        printed: PrintedCharacteristics {
+            name: "Chandra, Flameshaper".into(),
+            mana_cost: Some(ManaCost::parse("{5}{R}{R}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Chandra".into()],
+            loyalty: Some(6),
+            activated_abilities: vec![
+                loyalty(
+                    2,
+                    vec![
+                        Effect::add_mana(Mana::parse("RRR")),
+                        Effect::exile_top_choose_to_play(3, 1, PlayWindow::ThisTurn),
+                    ],
+                ),
+                loyalty(
+                    1,
+                    vec![Effect::CreateTokenCopy {
+                        count: 1.into(),
+                        of: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        exceptions: vec![
+                            CopyException::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                            CopyException::GrantTriggered(Box::new(Ability::Triggered {
+                                condition: TriggerCondition::beginning_of(
+                                    TurnStep::End,
+                                    Actor::AnyPlayer,
+                                ),
+                                intervening_if: None,
+                                effects: vec![Effect::sacrifice_this()],
+                            })),
+                        ],
+                    }],
+                ),
+                loyalty(
+                    -4,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            division: Some(EffectValue::Fixed(8)),
+                            ..TargetRequirement::up_to(
+                                TargetRequirement::ANY_NUMBER,
+                                creature_or_pw.clone(),
+                            )
+                        },
+                        effects: vec![Effect::deal_damage(
+                            8,
+                            ObjectSelector::Targets(creature_or_pw),
+                        )],
+                    }],
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

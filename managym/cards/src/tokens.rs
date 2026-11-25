@@ -23,6 +23,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         bat(),
         bear(),
         cat(),
+        cat_2_2_w(),
         lifelink_cat(),
         clue(),
         dragon(),
@@ -198,6 +199,19 @@ fn cat() -> TokenDefinition {
             face("Cat", [CardType::Creature], &["Cat"], ""),
             1,
             1,
+            [Color::White],
+        ),
+    )
+}
+
+fn cat_2_2_w() -> TokenDefinition {
+    token(
+        "token.cat_2_2_w",
+        "5252ab51-43e8-4b24-9830-de0ad9b9d3dc",
+        creature(
+            face("Cat", [CardType::Creature], &["Cat"], ""),
+            2,
+            2,
             [Color::White],
         ),
     )

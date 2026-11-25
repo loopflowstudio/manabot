@@ -12397,19 +12397,6 @@
       "B"
     ]
   },
-  "Fiendish Panda": {
-    "name": "Fiendish Panda",
-    "mana_cost": "{2}{W}{B}",
-    "type_line": "Creature — Bear Demon",
-    "power": "3",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "Whenever you gain life, put a +1/+1 counter on this creature.\nWhen this creature dies, return another target non-Bear creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.",
-    "colors": [
-      "B",
-      "W"
-    ]
-  },
   "Valkyrie's Call": {
     "name": "Valkyrie's Call",
     "mana_cost": "{3}{W}{W}",
@@ -12682,18 +12669,6 @@
       "G"
     ]
   },
-  "Homunculus Horde": {
-    "name": "Homunculus Horde",
-    "mana_cost": "{3}{U}",
-    "type_line": "Creature — Homunculus",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [],
-    "oracle_text": "Whenever you draw your second card each turn, create a token that's a copy of this creature.",
-    "colors": [
-      "U"
-    ]
-  },
   "Cecil, Dark Knight": {
     "name": "Cecil, Dark Knight",
     "mana_cost": "{B}",
@@ -12844,20 +12819,6 @@
     "oracle_text": "Enchant creature\nWhenever enchanted creature attacks, put a +1/+1 counter on it. Then if it has three or more +1/+1 counters on it, sacrifice this Aura.\nWhen you sacrifice this Aura, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
     "colors": [
       "G"
-    ]
-  },
-  "Heartfire Immolator": {
-    "name": "Heartfire Immolator",
-    "mana_cost": "{1}{R}",
-    "type_line": "Creature — Human Wizard",
-    "power": "2",
-    "toughness": "2",
-    "keywords": [
-      "Prowess"
-    ],
-    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\n{R}, Sacrifice this creature: It deals damage equal to its power to target creature or planeswalker.",
-    "colors": [
-      "R"
     ]
   },
   "Soulstone Sanctuary": {
@@ -13472,6 +13433,99 @@
     "oracle_text": "When Way of the Wildspeaker enters, empower Jace 7. (Put seven loyalty counters on a Jace token you control. If you don't control one, first create a blue Jace planeswalker token with \"[−1]: Surveil 1\" and \"[−3]: Draw a card.\")\nPlaneswalkers you control have \"[−4]: Create a 4/4 green Beast creature token with trample.\"",
     "colors": [
       "G"
+    ]
+  },
+  "Ajani, Caller of the Pride": {
+    "name": "Ajani, Caller of the Pride",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "loyalty": "4",
+    "keywords": [],
+    "oracle_text": "+1: Put a +1/+1 counter on up to one target creature.\n−3: Target creature gains flying and double strike until end of turn.\n−8: Create X 2/2 white Cat creature tokens, where X is your life total.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Chandra, Flameshaper": {
+    "name": "Chandra, Flameshaper",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Legendary Planeswalker — Chandra",
+    "power": null,
+    "toughness": null,
+    "loyalty": "6",
+    "keywords": [],
+    "oracle_text": "+2: Add {R}{R}{R}. Exile the top three cards of your library. Choose one. You may play that card this turn.\n+1: Create a token that's a copy of target creature you control, except it has haste and \"At the beginning of the end step, sacrifice this token.\"\n−4: Chandra deals 8 damage divided as you choose among any number of target creatures and/or planeswalkers.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Liliana, Dreadhorde General": {
+    "name": "Liliana, Dreadhorde General",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Legendary Planeswalker — Liliana",
+    "power": null,
+    "toughness": null,
+    "loyalty": "6",
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control dies, draw a card.\n+1: Create a 2/2 black Zombie creature token.\n−4: Each player sacrifices two creatures of their choice.\n−9: Each opponent chooses a permanent they control of each permanent type and sacrifices the rest.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Ajani Unrelenting": {
+    "name": "Ajani Unrelenting",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Legendary Planeswalker — Ajani",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "Whenever you activate a loyalty ability, create a 2/2 colorless Wizard Soldier creature token named Cadet.\n+1: Creatures you control get +1/+0 and gain haste until end of turn.\n−2: Discard your hand, then draw a card for each creature you control.\n−3: Ajani deals 4 damage to each creature except for tokens you control.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Garruk, Curse Breaker": {
+    "name": "Garruk, Curse Breaker",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Planeswalker — Garruk",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control with power 4 or greater enters, draw a card.\n+2: Untap up to two target lands.\n−3: Create a 4/4 green Beast creature token with trample.\n−4: Until your next turn, whenever one or more creatures attack one of your opponents, those creatures get +2/+2 and gain trample until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Garruk, Veiled Butcher": {
+    "name": "Garruk, Veiled Butcher",
+    "mana_cost": "{3}{B}{B}",
+    "type_line": "Legendary Planeswalker — Garruk",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [],
+    "oracle_text": "If a creature an opponent controls would die, exile it instead.\n+2: Up to one target creature gets -4/-1 until your next turn.\n−2: Each player sacrifices a creature of their choice. If you sacrificed a creature this way, create a 4/4 green Beast creature token with trample.\n−3: Each opponent discards two cards. For each opponent who didn't discard two nonland cards this way, you draw a card.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Jace, Reality Sculptor": {
+    "name": "Jace, Reality Sculptor",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Legendary Planeswalker — Jace",
+    "power": null,
+    "toughness": null,
+    "loyalty": "5",
+    "keywords": [
+      "Empower Jace"
+    ],
+    "oracle_text": "+1: Empower Jace X, where X is the number of Islands you control.\n−3: Until your next turn, whenever a creature attacks you or a planeswalker you control, it gets -5/-0 until end of turn.\n0: Exile all but the bottom card of each opponent's library. Activate only if there are twenty-five or more loyalty counters among Jaces you control.",
+    "colors": [
+      "U"
     ]
   }
 }

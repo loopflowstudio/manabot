@@ -65,6 +65,9 @@ const STATES: &[(&str, &str)] = &[
     ("profile-hand", "N hand cards cycling Omen and Adventure creatures, N + 6 lands cycling basics and two restricted sources, N opposing Gray Ogres; every card offers two profiles, each inset spell targets every Ogre. Offers stay linear; search grows about N cubed only through the restricted sources' payment search (with basics alone it makes no payment calls), the residual of restricted-filter"),
     ("prepared-copies", "N Emergency Phytomedics entered prepared, each holding its own Seed Suture copy in exile, N Plains and N Gray Ogres per side; one cast offer per copy, each targeting every creature. Size 64 exceeds the harness's 4096 fact rows (5376); 32 is the largest"),
     ("unprepared-copies", "prepared-copies' board with the Phytomedics forced onto the battlefield unprepared; the zero-link control"),
+    ("way-grants", "4 different Ways granting loyalty abilities across 6 planeswalkers; measures granted abilities x holders in activation enumeration and layer rebuild"),
+    ("divided-damage", "Chandra, Flameshaper (-4) facing 8 legal targets; measures linear target and sequential division offers"),
+    ("keep-one-each-type", "Liliana, Dreadhorde General (-9) facing 30 mixed and multi-type permanents (artifact creatures, lands, enchantments, planeswalkers); measures linear per-type keep choices"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -498,6 +501,44 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 seats[0].hand.push("Azula Always Lies".into());
             }
         }
+        "way-grants" => {
+            let seat = &mut seats[0];
+            for way in [
+                "Way of the Mentor",
+                "Way of the Necromancer",
+                "Way of the Pyromancer",
+                "Way of the Healer",
+            ] {
+                seat.add(way, 1);
+            }
+            for walker in [
+                "Ajani, Caller of the Pride",
+                "Chandra, Flameshaper",
+                "Liliana, Dreadhorde General",
+                "Vivien Reid",
+                "Kaito, Cunning Infiltrator",
+                "Jace, Reality Sculptor",
+            ] {
+                seat.add(walker, 1);
+            }
+            seats[1].add("Gray Ogre", 2);
+        }
+        "divided-damage" => {
+            seats[0].add("Chandra, Flameshaper", 1);
+            seats[1].add("Gray Ogre", 8);
+        }
+        "keep-one-each-type" => {
+            seats[0].add("Liliana, Dreadhorde General", 1);
+            // 30 mixed and multi-type permanents on seat 1.
+            seats[1].cycle(&["token.ballistic_boulder"], 10);
+            seats[1].add("Gray Ogre", 6);
+            seats[1].add("Prophetic Prism", 5);
+            seats[1].add("Plains", 5);
+            seats[1].add("Way of the Mentor", 1);
+            seats[1].add("Way of the Warlord", 1);
+            seats[1].add("Ajani, Caller of the Pride", 1);
+            seats[1].add("Chandra, Flameshaper", 1);
+        }
         _ => panic!("unknown state {name}; use --list"),
     }
     // A real response keeps the opponent's final priority pass visible.
@@ -666,6 +707,35 @@ fn build(recipe: &Recipe) -> Env {
     }
     if recipe.state == "herald-statics" {
         env.fixture_game_mut().state.players[0].life = 0;
+    }
+    if matches!(
+        recipe.state.as_str(),
+        "way-grants" | "divided-damage" | "keep-one-each-type"
+    ) {
+        let game = env.fixture_game_mut();
+        let state = &mut *game.state;
+        let loyalties: Vec<_> = state
+            .permanents
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, slot)| {
+                let perm = slot.as_ref()?;
+                let loyalty = state[perm.object].loyalty?;
+                let target = if recipe.state == "keep-one-each-type" {
+                    9
+                } else {
+                    loyalty.max(6)
+                };
+                Some((idx, target))
+            })
+            .collect();
+        for (idx, target) in loyalties {
+            if let Some(perm) =
+                state.permanents[managym::state::game_object::PermanentId(idx)].as_mut()
+            {
+                perm.change_counters(CounterKind::Loyalty, target);
+            }
+        }
     }
     env.scenario_refresh().unwrap();
     env
@@ -910,9 +980,9 @@ fn reach(root: &Env, label: &str) -> Env {
 /// Stop at the real response to a single stack object. In the Connoisseur
 /// position its first resolution must already have recorded the ordinal.
 fn before_resolution(mut env: Env, after_first: bool) -> Env {
-    let turn = env.benchmark_game_mut().state.turn.turn_number;
+    let turn = env.fixture_game_mut().state.turn.turn_number;
     for _ in 0..32 {
-        let game = env.benchmark_game_mut();
+        let game = env.fixture_game_mut();
         assert_eq!(game.state.turn.turn_number, turn, "missed resolution");
         let ready = game.state.stack_objects.len() == 1
             && game.state.priority.consecutive_passes == 1
@@ -942,7 +1012,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
                 "venom-team" => {
                     let mut env = root.fork().unwrap();
                     for _ in 0..2 {
-                        env.benchmark_game_mut()
+                        env.fixture_game_mut()
                             .create_token("token.ally", PlayerId(0), false)
                             .unwrap();
                     }
@@ -1019,6 +1089,65 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
         let index = first_action(&mut activated, "activate").unwrap();
         activated.step(index as i64).unwrap();
         result.push(("object".into(), reach(&activated, "object")));
+    }
+    if recipe.state == "divided-damage" {
+        // Activate Chandra's -4 (ability index 2), pick 2 targets, then inspect division offer.
+        let mut env = root.fork().unwrap();
+        let idx = actions(&mut env)
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::ActivateAbility {
+                        ability_index: 2,
+                        ..
+                    }
+                )
+            })
+            .expect("Chandra -4 offered");
+        env.step(idx as i64).unwrap();
+        result.push(("target".into(), env.fork().unwrap()));
+        // Pick two distinct targets, then decline to enter division.
+        for _ in 0..2 {
+            let pick = actions(&mut env)
+                .iter()
+                .position(|a| matches!(a, Action::ChooseTarget { .. }))
+                .expect("target offered");
+            env.step(pick as i64).unwrap();
+        }
+        let decline = actions(&mut env)
+            .iter()
+            .position(|a| matches!(a, Action::Decline { .. }))
+            .expect("decline offered");
+        env.step(decline as i64).unwrap();
+        result.push(("divide".into(), env));
+    }
+    if recipe.state == "keep-one-each-type" {
+        // Activate Liliana's -9 (ability index 2) and resolve to opponent's first type pick.
+        let mut env = root.fork().unwrap();
+        let idx = actions(&mut env)
+            .iter()
+            .position(|a| {
+                matches!(
+                    a,
+                    Action::ActivateAbility {
+                        ability_index: 2,
+                        ..
+                    }
+                )
+            })
+            .expect("Liliana -9 offered");
+        env.step(idx as i64).unwrap();
+        while env.action_space_kind() == Some(ActionSpaceKind::Priority) {
+            let pass = first_action(&mut env, "resolve").unwrap();
+            env.step(pass as i64).unwrap();
+        }
+        assert_eq!(
+            env.action_space_kind(),
+            Some(ActionSpaceKind::LookAndSelect),
+            "keep-one-each-type reaches Liliana's type-keep choice"
+        );
+        result.push(("keep-choice".into(), env));
     }
     if recipe.state == "zones" {
         let mut stack = root.fork().unwrap();

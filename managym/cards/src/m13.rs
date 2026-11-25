@@ -1,16 +1,75 @@
 //! Magic 2013.
 use managym_state::{
-    ability::{Effect, ObjectSelector},
-    card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PowerCda,
-        PrintedCharacteristics, StaticAbility,
+    ability::{
+        Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
     },
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PowerCda, PrintedCharacteristics, StaticAbility,
+    },
+    effect::Modification,
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![crusader_of_odric(), krenko_mob_boss(), omniscience()]
+    vec![
+        ajani_caller_of_the_pride(),
+        crusader_of_odric(),
+        krenko_mob_boss(),
+        omniscience(),
+    ]
+}
+
+fn ajani_caller_of_the_pride() -> CardDefinition {
+    let text_box = "+1: Put a +1/+1 counter on up to one target creature.\n−3: Target creature gains flying and double strike until end of turn.\n−8: Create X 2/2 white Cat creature tokens, where X is your life total.";
+    let loyalty = ActivatedAbilityDefinition::loyalty;
+    CardDefinition {
+        key: "m13.ajani_caller_of_the_pride",
+        scryfall_id: "5e7f410a-7934-48ae-a90b-ffd096aed43d",
+        printed: PrintedCharacteristics {
+            name: "Ajani, Caller of the Pride".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            types: CardTypes::new([CardType::Planeswalker]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Ajani".into()],
+            loyalty: Some(4),
+            activated_abilities: vec![
+                loyalty(
+                    1,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
+                    }],
+                ),
+                loyalty(
+                    -3,
+                    vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        Modification::AddKeywords(Keywords::of(&[
+                            Keyword::Flying,
+                            Keyword::DoubleStrike,
+                        ])),
+                    )],
+                ),
+                loyalty(
+                    -8,
+                    vec![Effect::create_tokens(
+                        "token.cat_2_2_w",
+                        EffectValue::LifeTotal(PlayerSelector::You),
+                    )],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn crusader_of_odric() -> CardDefinition {
