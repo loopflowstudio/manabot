@@ -634,11 +634,22 @@ fn condition_text_in(triggering: TriggerText, condition: &Condition) -> String {
             .map(|condition| condition_text_in(triggering, condition))
             .collect::<Vec<_>>()
             .join(" or "),
-        Condition::EntryCastFrom(zone) => zone.map_or_else(
-            || "you cast it".into(),
-            |zone| format!("you cast it from {zone:?}"),
-        ),
-        Condition::CastFromGraveyard => "this spell was cast from a graveyard".into(),
+        Condition::CastFrom { zone, owner } => match (zone, owner) {
+            (None, None) => "you cast it".into(),
+            (None, Some(Actor::You)) => "you cast it from a zone you own".into(),
+            (None, Some(Actor::Opponent)) => "you cast it from an opponent's zone".into(),
+            (None, Some(Actor::AnyPlayer)) => "it was cast".into(),
+            (Some(zone), None | Some(Actor::AnyPlayer)) => {
+                format!("this spell was cast from a {}", format!("{zone:?}").to_lowercase())
+            }
+            (Some(zone), Some(Actor::You)) => {
+                format!("you cast it from your {}", format!("{zone:?}").to_lowercase())
+            }
+            (Some(zone), Some(Actor::Opponent)) => format!(
+                "you cast it from an opponent's {}",
+                format!("{zone:?}").to_lowercase()
+            ),
+        },
         Condition::Not(condition) => match condition.as_ref() {
             Condition::YourTurn => "it's an opponent's turn".into(),
             condition => format!("not ({})", condition_text_in(triggering, condition)),

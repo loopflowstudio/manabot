@@ -480,7 +480,9 @@ def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
     decision = capture_text_decision(env)
     assert "granted keywords" not in decision.text
     payload = json.loads(decision.capture_json)
-    keywords = {name: name == "lifelink" for name in _KEYWORDS}
+    keywords = {
+        name: name == "lifelink" for name in _KEYWORDS if name != "changeling"
+    }
     payload["observation"]["viewer_state"]["stack_objects"][0]["granted_keywords"] = (
         keywords
     )
@@ -1007,7 +1009,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "controller_id": "controller",
         "hexproof_from": "hexproof from the observed source quality",
         "protection_from": "protection from the observed source quality",
-        "control_differs_from_entry": "entered under the other player's control",
+        "entry_controller_id": "entered under the entry controller's control",
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
@@ -1420,9 +1422,9 @@ def test_protection_and_hexproof_reach_both_viewer_presentations() -> None:
     assert "Has hexproof." in decision.text
     board = serialize_observation(_viewer_observation(decision))["agent"]
     assert board["hexproof"]
-    assert any(p.get("hexproof_from") == ["Color::Black"] for p in board["battlefield"])
+    assert any(p.get("hexproof_from") == ["black"] for p in board["battlefield"])
     assert any(
-        p.get("protection_from") == ["SourceQuality::Everything"] for p in board["battlefield"]
+        p.get("protection_from") == ["everything"] for p in board["battlefield"]
     )
     _choose(env, "Cast ")
     choices = [action.description for action in capture_text_decision(env).actions]
@@ -1444,16 +1446,21 @@ def test_changeling_reaches_the_elf_anthem_and_viewer_text() -> None:
 
 
 def test_permanent_control_and_blocked_status_are_visible() -> None:
-    env = priority_root((), ("Mountain", "Gray Ogre"))
+    env = priority_root((), ("Mountain", "Gray Ogre"), opponent=("Gray Ogre",))
     payload = json.loads(capture_text_decision(env).capture_json)
-    _, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
-    ogre.update(control_differs_from_entry=True, attacking=True, blocked=True)
-    line = next(
-        line
-        for line in render_decision(_redigest(payload)).text.splitlines()
-        if "entered under the other player’s control" in line
+    state = payload["observation"]["viewer_state"]
+    agent_id = state["agent"]["id"]
+    opponent_id = state["opponent"]["id"]
+    _, my_ogre = state["agent_permanents"]
+    my_ogre.update(entry_controller_id=opponent_id, attacking=True, blocked=True)
+    opp_ogre = state["opponent_permanents"][0]
+    opp_ogre.update(entry_controller_id=agent_id)
+    lines = render_decision(_redigest(payload)).text.splitlines()
+    my_line = next(
+        line for line in lines if "entered under Opponent's control" in line
     )
-    assert "; blocked;" in line and "; attacking;" in line
+    assert "; blocked;" in my_line and "; attacking;" in my_line
+    assert any("entered under your control" in line for line in lines)
 
 
 @pytest.mark.parametrize("historical", (False, True))

@@ -3839,7 +3839,10 @@ fn nine_lives_familiar() -> CardDefinition {
                 on: EntryScope::This,
                 kind: CounterKind::Revival,
                 count: 8.into(),
-                condition: Some(Condition::EntryCastFrom(None)),
+                condition: Some(Condition::CastFrom {
+                    zone: None,
+                    owner: None,
+                }),
             }],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::Dies {

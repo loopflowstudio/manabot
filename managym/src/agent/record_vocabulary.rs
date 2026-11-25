@@ -30,7 +30,7 @@ use crate::{
         tokens::{name_value, TokenKind},
     },
     state::{
-        card::{Keyword, StaticAbility},
+        card::{Keyword, SourceQuality},
         mana::Color,
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -126,6 +126,9 @@ pub fn record_names() -> Vec<RecordName> {
     out.push(record(Token, POOLED_MANA, None));
     out.push(variant("StaticAbility::HexproofFrom"));
     out.push(variant("StaticAbility::Protection"));
+    for quality in SourceQuality::ALL {
+        out.push(variant(&quality.token_name()));
+    }
     out.push(record(Token, WARD, None));
     out.push(record(Token, PLAY_GRANT, None));
     out.push(record(Token, PLAY_GRANT_SOURCE, None));
@@ -133,13 +136,6 @@ pub fn record_names() -> Vec<RecordName> {
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
-        for ability in &definition.statics {
-            if let StaticAbility::HexproofFrom(quality) | StaticAbility::Protection(quality) =
-                ability
-            {
-                out.push(variant(&quality.token_name()));
-            }
-        }
         let json = serde_json::to_value(definition).expect("serializable definition");
         for name in set_names(&json) {
             out.push(record(Name, &name, None));

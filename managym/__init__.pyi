@@ -1194,7 +1194,7 @@ class Permanent:
     exile_if_dies_this_turn: bool
     attacking: bool
     blocked: bool
-    control_differs_from_entry: bool
+    entry_controller_id: int | None
     first_strike_participant: bool
     exhausted_abilities: int
     once_each_turn_used: int

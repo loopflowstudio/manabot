@@ -129,7 +129,8 @@ export interface PermanentState {
   /** Attacking in the current combat. */
   attacking?: boolean;
   blocked?: boolean;
-  control_differs_from_entry?: boolean;
+  /** Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged. */
+  entry_controller_id?: number;
   first_strike_participant?: boolean;
   attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */

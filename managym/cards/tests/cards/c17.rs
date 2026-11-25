@@ -145,6 +145,80 @@ fn teferis_protection_locks_the_casters_life_total_until_their_next_turn() {
     assert_eq!(s.life(0), 20);
 }
 
+/// CR 506.4, 509.1h, 702.26b: phasing out a declared blocker removes it from
+/// combat (`blocking == None`) while its attacker remains `blocked`. An
+/// attacker without trample deals no unblocked damage; one with trample assigns
+/// its full combat damage to the defending player.
+#[test]
+fn phased_out_blocker_leaves_combat_while_attacker_stays_blocked() {
+    use managym::state::card::{Keyword, Keywords};
+
+    for with_trample in [false, true] {
+        let mut s = five_color_setup(&["Hill Giant", "Gray Ogre"]);
+        let attacker = s.force_permanent_on_battlefield(0, "Hill Giant");
+        clear_summoning_sickness(&mut s, attacker);
+        if with_trample {
+            let target = s.game().affected_permanent(attacker).unwrap();
+            s.game_mut().apply_continuous(
+                None,
+                PlayerId(0),
+                [target],
+                Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                EffectDuration::EndOfTurn,
+            );
+        }
+        let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, attacker);
+        pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+        let block_index = s
+            .action_space()
+            .actions
+            .iter()
+            .position(|a| matches!(
+                a,
+                Action::DeclareBlocker {
+                    blocker: b,
+                    attacker: Some(at),
+                    ..
+                } if *b == blocker && *at == attacker
+            ))
+            .expect("block offer");
+        s.step_action(block_index);
+        pass_until(&mut s, ActionSpaceKind::Priority);
+
+        let blocker_affected = s.game().affected_permanent(blocker).unwrap();
+        s.game_mut().apply_continuous(
+            None,
+            PlayerId(1),
+            [blocker_affected],
+            Modification::PhasedOut,
+            EffectDuration::UntilYourNextTurn,
+        );
+
+        let view = Observation::for_player(s.game(), PlayerId(0));
+        let attacker_row = view
+            .agent_permanents
+            .iter()
+            .find(|p| p.id == s.game().state.permanents[attacker].as_ref().unwrap().id.0 as i32)
+            .expect("attacker row");
+        let blocker_row = view
+            .opponent_permanents
+            .iter()
+            .find(|p| p.id == s.game().state.permanents[blocker].as_ref().unwrap().id.0 as i32)
+            .expect("blocker row");
+        assert!(attacker_row.blocked, "attacker remains blocked");
+        assert_eq!(blocker_row.blocking, None, "phased-out blocker leaves combat");
+
+        s.advance_to_active_step(0, StepKind::End);
+        assert_eq!(
+            s.life(1),
+            if with_trample { 17 } else { 20 },
+            "with_trample={with_trample}"
+        );
+    }
+}
+
 /// Ramos counts the colors of each spell its controller casts, reading a
 /// countered spell as it last existed on the stack, which both seats see on
 /// the pending trigger. Removing five counters adds two mana of each color,

@@ -788,9 +788,11 @@ Confiscate changes control for as long as it enchants the permanent. Harmless
 Offering targets both the opponent and the permanent being given away. Control
 effects apply in layer 2. When one ends, the remaining effects determine who
 controls the permanent. A change removes it from combat and preserves its tapped
-state. On a v11 permanent row, `control_differs_from_entry` identifies a permanent
-that entered under the other player's control. A blocked attacker keeps its
-`blocked` flag even if its last blocker changes control and leaves combat.
+state. Observations and wire projections carry `entry_controller_id` when a
+permanent's current controller differs from its CR 110.2 entry controller, and
+the v11 permanent row derives its `control_differs_from_entry` flag from it. A
+blocked attacker keeps its `blocked` flag even if its last blocker changes
+control or phases out and leaves combat.
 
 `Game::object_pt` reads contextual power and toughness in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's

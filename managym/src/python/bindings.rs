@@ -2338,8 +2338,8 @@ impl PyPermanent {
         self.data.blocked
     }
     #[getter]
-    fn control_differs_from_entry(&self) -> bool {
-        self.data.control_differs_from_entry
+    fn entry_controller_id(&self) -> Option<i32> {
+        self.data.entry_controller_id
     }
     #[getter]
     fn first_strike_participant(&self) -> bool {

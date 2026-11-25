@@ -55,6 +55,22 @@ impl Game {
         modification: Modification,
         duration: EffectDuration,
     ) {
+        let affected: Vec<Affected> = affected.into_iter().collect();
+        if modification == Modification::PhasedOut {
+            // CR 506.4, 702.26b: a phased-out permanent leaves combat.
+            for item in &affected {
+                if let Affected::Object(object) = item {
+                    if let Ok(id) = self.lookup_current_permanent(*object) {
+                        if let Some(permanent) = self.state.permanents[id].as_mut() {
+                            permanent.attacking = false;
+                        }
+                        if let Some(combat) = self.state.combat.as_mut() {
+                            combat.remove_from_combat(id);
+                        }
+                    }
+                }
+            }
+        }
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source = source.and_then(|object| self.observed_source_definition(object));

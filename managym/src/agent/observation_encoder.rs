@@ -64,8 +64,9 @@ pub enum FactKind {
     /// A rules program in learning tokens (detail: token value, values:
     /// token kind and ordinal): a copy exception's payload under its
     /// `Modification` id, a player's pooled mana with a spend effect or combat expiry
-    /// under `POOLED_MANA`, or a permanent's ward price that is not a mana
-    /// value under `WARD`.
+    /// under `POOLED_MANA`, a permanent's ward price that is not a mana
+    /// value under `WARD`, or a permanent's `StaticAbility::HexproofFrom` /
+    /// `StaticAbility::Protection` source quality.
     EffectProgram = 11,
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
@@ -1632,7 +1633,11 @@ fn encode_permanent_features(
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
         out[permanent::BLOCKED] = flag(permanent.blocked);
-        out[permanent::CONTROL_DIFFERS_FROM_ENTRY] = flag(permanent.control_differs_from_entry);
+        out[permanent::CONTROL_DIFFERS_FROM_ENTRY] = flag(
+            permanent
+                .entry_controller_id
+                .is_some_and(|id| id != permanent.controller_id),
+        );
         out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
         out[permanent::FACE_DOWN] = flag(permanent.face_down);
     } else {
@@ -1951,11 +1956,14 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
                 ("StaticAbility::Protection", &permanent.protection_from),
             ] {
                 for (ordinal, quality) in qualities.iter().enumerate() {
+                    let token = crate::state::card::SourceQuality::from_wire_name(quality)
+                        .map(crate::state::card::SourceQuality::token_name);
+                    let detail = token.as_deref().unwrap_or(quality.as_str());
                     out.push(Fact {
                         object: permanent.id,
                         kind: FactKind::EffectProgram,
                         id: name_value(ability),
-                        detail: name_value(quality),
+                        detail: name_value(detail),
                         values: [
                             crate::cards::tokens::TokenKind::Variant as i64,
                             ordinal as i64,

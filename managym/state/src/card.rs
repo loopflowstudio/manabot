@@ -1140,6 +1140,71 @@ pub enum SourceQuality {
 }
 
 impl SourceQuality {
+    /// Every standard source quality named by protection or hexproof-from.
+    pub const ALL: &'static [Self] = &[
+        Self::Everything,
+        Self::Color(Color::White),
+        Self::Color(Color::Blue),
+        Self::Color(Color::Black),
+        Self::Color(Color::Red),
+        Self::Color(Color::Green),
+        Self::CardType(CardType::Artifact),
+        Self::CardType(CardType::Battle),
+        Self::CardType(CardType::Creature),
+        Self::CardType(CardType::Enchantment),
+        Self::CardType(CardType::Instant),
+        Self::CardType(CardType::Kindred),
+        Self::CardType(CardType::Land),
+        Self::CardType(CardType::Planeswalker),
+        Self::CardType(CardType::Sorcery),
+    ];
+
+    /// Plain domain name exposed on wire, Python, and Academy surfaces.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::Everything => "everything",
+            Self::Color(Color::White) => "white",
+            Self::Color(Color::Blue) => "blue",
+            Self::Color(Color::Black) => "black",
+            Self::Color(Color::Red) => "red",
+            Self::Color(Color::Green) => "green",
+            Self::Color(Color::Colorless) => "colorless",
+            Self::Color(Color::Generic) => "generic",
+            Self::CardType(CardType::Artifact) => "artifact",
+            Self::CardType(CardType::Battle) => "battle",
+            Self::CardType(CardType::Creature) => "creature",
+            Self::CardType(CardType::Enchantment) => "enchantment",
+            Self::CardType(CardType::Instant) => "instant",
+            Self::CardType(CardType::Kindred) => "kindred",
+            Self::CardType(CardType::Land) => "land",
+            Self::CardType(CardType::Planeswalker) => "planeswalker",
+            Self::CardType(CardType::Sorcery) => "sorcery",
+        }
+    }
+
+    pub fn from_wire_name(name: &str) -> Option<Self> {
+        match name {
+            "everything" => Some(Self::Everything),
+            "white" => Some(Self::Color(Color::White)),
+            "blue" => Some(Self::Color(Color::Blue)),
+            "black" => Some(Self::Color(Color::Black)),
+            "red" => Some(Self::Color(Color::Red)),
+            "green" => Some(Self::Color(Color::Green)),
+            "colorless" => Some(Self::Color(Color::Colorless)),
+            "generic" => Some(Self::Color(Color::Generic)),
+            "artifact" => Some(Self::CardType(CardType::Artifact)),
+            "battle" => Some(Self::CardType(CardType::Battle)),
+            "creature" => Some(Self::CardType(CardType::Creature)),
+            "enchantment" => Some(Self::CardType(CardType::Enchantment)),
+            "instant" => Some(Self::CardType(CardType::Instant)),
+            "kindred" => Some(Self::CardType(CardType::Kindred)),
+            "land" => Some(Self::CardType(CardType::Land)),
+            "planeswalker" => Some(Self::CardType(CardType::Planeswalker)),
+            "sorcery" => Some(Self::CardType(CardType::Sorcery)),
+            _ => None,
+        }
+    }
+
     /// The leaf variant in this quality's learning-token representation.
     pub fn token_name(self) -> String {
         match self {

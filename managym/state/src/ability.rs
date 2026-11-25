@@ -467,10 +467,12 @@ pub enum Condition {
     CreatureDiedThisTurn,
     /// The spell or the spell that became this permanent was kicked (CR 702.33).
     Kicked,
-    /// The entering card was cast, optionally from a particular zone.
-    EntryCastFrom(Option<ZoneType>),
-    /// The resolving spell was cast from a graveyard. A spell copy was never cast.
-    CastFromGraveyard,
+    /// The entering or resolving spell was cast (not a copy), optionally from
+    /// a particular zone and/or a zone owned by `owner`.
+    CastFrom {
+        zone: Option<ZoneType>,
+        owner: Option<Actor>,
+    },
     /// Resolution only: the frame's primary target is still a permanent and
     /// matches [predicate] ("if that creature is an Ally").
     TargetMatches(CardPredicate),
@@ -669,8 +671,7 @@ impl Condition {
             Condition::Compare { left, right, .. } => {
                 left.is_resolution_only() || right.is_resolution_only()
             }
-            Condition::EntryCastFrom(_)
-            | Condition::CastFromGraveyard
+            Condition::CastFrom { .. }
             | Condition::TargetMatches(_)
             | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn

@@ -96,6 +96,9 @@ impl Game {
                     .entry(attacker_id)
                     .or_default()
                     .push(blocker);
+                if !combat.blocked.contains(&attacker_id) {
+                    combat.blocked.push(attacker_id);
+                }
                 if let Some(exposure) = self.exposure_mut() {
                     exposure.combat.blocks.push((blocker, attacker_id));
                 }

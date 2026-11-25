@@ -1359,9 +1359,6 @@
             "minimum": 0
           }
         },
-        "control_differs_from_entry": {
-          "type": "boolean"
-        },
         "controller_id": {
           "type": "integer",
           "format": "uint32",
@@ -1423,6 +1420,15 @@
         "entered_this_turn": {
           "description": "It entered the battlefield during this turn.",
           "type": "boolean"
+        },
+        "entry_controller_id": {
+          "description": "Public player ID of the controller this permanent entered under (CR 110.2), omitted while unchanged.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",

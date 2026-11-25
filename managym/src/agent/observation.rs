@@ -883,7 +883,9 @@ pub struct PermanentData {
     /// observations retained before this field stay canonical.
     pub attacking: bool,
     pub blocked: bool,
-    pub control_differs_from_entry: bool,
+    /// Public player ID of the controller this permanent entered under
+    /// (CR 110.2), present only when it differs from `controller_id`.
+    pub entry_controller_id: Option<i32>,
     pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
@@ -1732,7 +1734,9 @@ impl Observation {
                 .combat
                 .as_ref()
                 .is_some_and(|combat| combat.is_blocked(perm_id)),
-            control_differs_from_entry: permanent.control_differs_from_entry,
+            entry_controller_id: permanent
+                .control_differs_from_entry
+                .then(|| game.state.players[permanent.entry_controller().0].id.0 as i32),
             first_strike_participant: game
                 .state
                 .combat
@@ -1801,7 +1805,7 @@ impl Observation {
                 .iter()
                 .filter_map(|ability| match ability {
                     crate::state::card::StaticAbility::HexproofFrom(quality) => {
-                        Some(quality.token_name())
+                        Some(quality.wire_name().to_owned())
                     }
                     _ => None,
                 })
@@ -1811,7 +1815,7 @@ impl Observation {
                 .iter()
                 .filter_map(|ability| match ability {
                     crate::state::card::StaticAbility::Protection(quality) => {
-                        Some(quality.token_name())
+                        Some(quality.wire_name().to_owned())
                     }
                     _ => None,
                 })

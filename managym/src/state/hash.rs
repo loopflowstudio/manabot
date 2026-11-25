@@ -159,7 +159,7 @@ struct CanonicalCombat {
     attackers: Vec<PermanentId>,
     attacker_to_blockers: Vec<(PermanentId, Vec<PermanentId>)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    blocked_without_blockers: Vec<PermanentId>,
+    blocked: Vec<PermanentId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     already_attacking: Option<usize>,
     attackers_to_declare: Vec<PermanentId>,
@@ -172,7 +172,7 @@ impl From<&CombatState> for CanonicalCombat {
             first_strikers: combat.first_strikers.clone(),
             regular_damage_step: combat.regular_damage_step,
             attackers: combat.attackers.clone(),
-            blocked_without_blockers: combat.blocked_without_blockers.clone(),
+            blocked: combat.blocked.clone(),
             attacker_to_blockers: combat
                 .attacker_to_blockers
                 .iter()

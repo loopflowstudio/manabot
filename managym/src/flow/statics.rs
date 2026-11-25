@@ -1273,16 +1273,19 @@ impl Game {
             Condition::Not(condition) => {
                 !self.condition_holds(condition, controller, frame, source, triggering)
             }
-            Condition::EntryCastFrom(zone) => source
+            Condition::CastFrom { zone, owner } => source
                 .and_then(|object| self.spell_on_stack(object))
                 .is_some_and(|spell| {
                     self.state[spell.object].is_card()
                         && spell.controller == controller
-                        && self.cast_from_matches(spell.object, controller, spell.cast_from, *zone)
+                        && self.cast_from_matches(
+                            spell.object,
+                            controller,
+                            spell.cast_from,
+                            *zone,
+                            *owner,
+                        )
                 }),
-            Condition::CastFromGraveyard => source
-                .and_then(|object| self.spell_on_stack(object))
-                .is_some_and(|spell| self.was_cast_from_graveyard(spell)),
             Condition::Kicked => frame.map_or_else(
                 || {
                     source
@@ -1404,11 +1407,12 @@ impl Game {
         controller: PlayerId,
         from: ZoneType,
         required: Option<ZoneType>,
+        owner: Option<crate::state::ability::Actor>,
     ) -> bool {
-        required.is_none_or(|zone| {
-            zone == from
-                && (zone != ZoneType::Hand || self.state.entry_object(object).owner == controller)
-        })
+        required.is_none_or(|zone| zone == from)
+            && owner.is_none_or(|who| {
+                who.includes(controller, self.state.entry_object(object).owner)
+            })
     }
 
     pub(super) fn chosen_type_for(

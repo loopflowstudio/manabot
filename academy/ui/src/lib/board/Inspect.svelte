@@ -19,15 +19,20 @@
     castTerms?: string[];
     /** The name of the attacker this permanent blocks. */
     blocks?: string | null;
+    /** Possessive name of the player this permanent entered under when control changed (e.g. "your", "Opponent's"). */
+    enteredUnder?: string | null;
     /** Art height in px; the docked pane uses a shorter strip. */
     art?: number;
   }
 
-  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, art = 128 }: Props = $props();
+  let { name, text, permanent = null, card = null, castTerms = [], blocks = null, enteredUnder = null, art = 128 }: Props = $props();
 
+  const SOURCE_CARD_TYPES = new Set([
+    'artifact', 'battle', 'creature', 'enchantment',
+    'instant', 'kindred', 'land', 'planeswalker', 'sorcery',
+  ]);
   function sourceQuality(quality: string): string {
-    const label = quality.split('::').at(-1)!.toLowerCase();
-    return quality.startsWith('CardType::') ? `${label} sources` : label;
+    return SOURCE_CARD_TYPES.has(quality) ? `${quality} sources` : quality;
   }
 
   const face = $derived(cardFace(permanent?.copy_of?.name ?? name));
@@ -41,7 +46,9 @@
     ...(permanent.hexproof_from ?? []).map(quality => `hexproof from ${sourceQuality(quality)}`),
     ...(permanent.protection_from ?? []).map(quality => `protection from ${sourceQuality(quality)}`),
     permanent.blocked ? 'blocked' : '',
-    permanent.control_differs_from_entry ? 'entered under the other player’s control' : '',
+    permanent.entry_controller_id !== undefined && permanent.entry_controller_id !== permanent.controller_id
+      ? `entered under ${enteredUnder ?? `player #${permanent.entry_controller_id}'s`} control`
+      : '',
     permanent.first_strike_participant ? 'first-strike participant' : '',
     permanent.attacking ? 'attacking' : '',
     permanent.blocking !== undefined ? `blocking ${blocks ?? 'an attacker'}` : '',

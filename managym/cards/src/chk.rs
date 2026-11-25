@@ -74,7 +74,10 @@ fn myojin_of_nights_reach() -> CardDefinition {
                 on: EntryScope::This,
                 kind: CounterKind::Divinity,
                 count: 1.into(),
-                condition: Some(Condition::EntryCastFrom(Some(ZoneType::Hand))),
+                condition: Some(Condition::CastFrom {
+                    zone: Some(ZoneType::Hand),
+                    owner: Some(Actor::You),
+                }),
             }],
             statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
                 scope: StaticScope::This,

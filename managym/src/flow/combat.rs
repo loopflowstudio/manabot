@@ -14,19 +14,16 @@ pub struct CombatState {
     pub attacker_to_blockers: BTreeMap<PermanentId, Vec<PermanentId>>,
     /// Prefix already in combat before declaration (CR 508.4).
     pub already_attacking: usize,
-    /// A blocked attacker remains blocked after its last blocker changes control.
+    /// Attackers that became blocked in this combat (CR 509.1h).
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub blocked_without_blockers: Vec<PermanentId>,
+    pub blocked: Vec<PermanentId>,
     pub attackers_to_declare: Vec<PermanentId>,
     pub blockers_to_declare: Vec<PermanentId>,
 }
 
 impl CombatState {
     pub fn is_blocked(&self, attacker: PermanentId) -> bool {
-        self.attacker_to_blockers
-            .get(&attacker)
-            .is_some_and(|blockers| !blockers.is_empty())
-            || self.blocked_without_blockers.contains(&attacker)
+        self.blocked.contains(&attacker)
     }
 
     pub fn remove_from_combat(&mut self, id: PermanentId) {
@@ -37,14 +34,9 @@ impl CombatState {
         self.attackers_to_declare.retain(|&p| p != id);
         self.blockers_to_declare.retain(|&p| p != id);
         self.attacker_to_blockers.remove(&id);
-        self.blocked_without_blockers.retain(|&p| p != id);
-        for (&attacker, blockers) in &mut self.attacker_to_blockers {
-            if blockers.contains(&id) {
-                blockers.retain(|&p| p != id);
-                if blockers.is_empty() && !self.blocked_without_blockers.contains(&attacker) {
-                    self.blocked_without_blockers.push(attacker);
-                }
-            }
+        self.blocked.retain(|&p| p != id);
+        for blockers in self.attacker_to_blockers.values_mut() {
+            blockers.retain(|&p| p != id);
         }
     }
 

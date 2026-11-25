@@ -146,11 +146,7 @@ fn knights_restrict_opposing_sources_and_count_either_battlefield() {
             s.game(),
             managym::state::game_object::PlayerId(0),
         );
-        let quality = if spell == "Stab" {
-            "Color::Black"
-        } else {
-            "Color::White"
-        };
+        let quality = if spell == "Stab" { "black" } else { "white" };
         assert_eq!(view.opponent_permanents[0].hexproof_from, [quality]);
     }
 }

@@ -1054,8 +1054,16 @@ class _Renderer:
             optional = ""
             if permanent.blocked:
                 optional += "; blocked"
-            if permanent.control_differs_from_entry:
-                optional += "; entered under the other player’s control"
+            if (
+                permanent.entry_controller_id is not None
+                and permanent.entry_controller_id != permanent.controller_id
+            ):
+                entered_under = (
+                    "your"
+                    if permanent.entry_controller_id == state.agent.id
+                    else f"{self.name(permanent.entry_controller_id)}'s"
+                )
+                optional += f"; entered under {entered_under} control"
             if permanent.first_strike_participant:
                 optional += "; participated in the first-strike damage step"
             if permanent.attacking:
@@ -1119,9 +1127,22 @@ class _Renderer:
             ("protection", permanent.protection_from),
         ):
             for quality in qualities:
-                label = quality.rsplit("::", 1)[-1].lower()
-                if quality.startswith("CardType::"):
-                    label += " sources"
+                label = (
+                    f"{quality} sources"
+                    if quality
+                    in {
+                        "artifact",
+                        "battle",
+                        "creature",
+                        "enchantment",
+                        "instant",
+                        "kindred",
+                        "land",
+                        "planeswalker",
+                        "sorcery",
+                    }
+                    else quality
+                )
                 parts.append(f"{ability} from {label}")
         if permanent.abilities_lost:
             parts.append("has lost all abilities")

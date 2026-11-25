@@ -1428,8 +1428,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::Compare { .. } => "Condition::Compare",
         Condition::CreatureDiedThisTurn => "Condition::CreatureDiedThisTurn",
         Condition::AnyOf(_) => "Condition::AnyOf",
-        Condition::EntryCastFrom(_) => "Condition::EntryCastFrom",
-        Condition::CastFromGraveyard => "Condition::CastFromGraveyard",
+        Condition::CastFrom { .. } => "Condition::CastFrom",
         Condition::Not(_) => "Condition::Not",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
@@ -1502,8 +1501,10 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::CreatureDiedThisTurn,
         Condition::AnyOf(vec![Condition::YourTurn]),
-        Condition::EntryCastFrom(Some(ZoneType::Hand)),
-        Condition::CastFromGraveyard,
+        Condition::CastFrom {
+            zone: Some(ZoneType::Hand),
+            owner: Some(Actor::You),
+        },
         Condition::not(Condition::YourTurn),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
@@ -3738,7 +3739,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
         blocked => [column(Permanent, permanent::BLOCKED)],
-        control_differs_from_entry => [column(Permanent, permanent::CONTROL_DIFFERS_FROM_ENTRY)],
+        entry_controller_id => [column(Permanent, permanent::CONTROL_DIFFERS_FROM_ENTRY)],
         first_strike_participant => [column(Permanent, permanent::FIRST_STRIKE_PARTICIPANT)],
         attacking => [column(Permanent, permanent::ATTACKING)],
         exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],
@@ -5045,6 +5046,7 @@ fn declare(
             .map(|(attacker, blocker)| (attacker, vec![blocker]))
             .into_iter()
             .collect(),
+        blocked: blocks.map(|(attacker, _)| attacker).into_iter().collect(),
         ..Default::default()
     }));
 }
@@ -5069,7 +5071,16 @@ fn blocking_one_attacker_differs_from_blocking_another() {
         permanent_value(&on_first, 0, blocker, permanent::BLOCKING),
         (object_index(&on_first, 0, first) + 1) as f32
     );
-    assert_column_alone_sees(&on_first, &on_second, 0, blocker, permanent::BLOCKING);
+    assert_eq!(
+        permanent_value(&on_first, 0, first, permanent::BLOCKED),
+        1.0
+    );
+    assert_eq!(
+        permanent_value(&on_first, 0, second, permanent::BLOCKED),
+        0.0
+    );
+    // Switching the block moves `blocker.blocking` plus each attacker's `blocked` bit.
+    assert_column_sees(&on_first, &on_second, 0, blocker, permanent::BLOCKING, 3);
 }
 
 #[test]
@@ -6813,7 +6824,7 @@ fn foundations_replacement_programs_identify_their_subject_and_amount() {
         ),
         (
             "Myojin of Night's Reach",
-            &["Condition::EntryCastFrom", "Effect::DiscardHand"][..],
+            &["Condition::CastFrom", "Effect::DiscardHand"][..],
         ),
         (
             "Giada, Font of Hope",

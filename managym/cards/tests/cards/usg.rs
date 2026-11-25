@@ -90,7 +90,10 @@ fn confiscate_competes_with_later_control_and_releases_its_permanent() {
             .iter()
             .position(|p| p.id == permanent(s, ogre).id.0 as i32)
             .unwrap();
-        assert!(view.opponent_permanents[row].control_differs_from_entry);
+        assert_eq!(
+            view.opponent_permanents[row].entry_controller_id,
+            Some(view.agent.id)
+        );
         let encoded = encode(&view, &ObservationEncoderConfig::default()).unwrap();
         assert_eq!(
             encoded.opponent_permanents[row * columns::WIDTH + columns::CONTROL_DIFFERS_FROM_ENTRY],

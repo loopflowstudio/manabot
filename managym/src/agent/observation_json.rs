@@ -833,8 +833,8 @@ pub(super) struct WirePermanentData {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub control_differs_from_entry: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_controller_id: Option<i32>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub blocked: bool,
     /// Exhaust abilities this object has activated; each can never be
@@ -1030,7 +1030,7 @@ impl From<WirePermanentData> for PermanentData {
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
             blocked: w.blocked,
-            control_differs_from_entry: w.control_differs_from_entry,
+            entry_controller_id: w.entry_controller_id,
             first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
@@ -1110,7 +1110,7 @@ impl Serialize for PermanentData {
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
             blocked: self.blocked,
-            control_differs_from_entry: self.control_differs_from_entry,
+            entry_controller_id: self.entry_controller_id,
             first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,

@@ -5,6 +5,7 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "Condition::CastFromGraveyard", None),
     (Variant, "ReplacementEffect::EntersWithXCounters", None),
     (Structure, "/ReplacementEffect::EntersWithXCounters", None),
     (
