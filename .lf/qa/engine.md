@@ -48,7 +48,7 @@ Read when the change touches the rules engine (`managym/src`, `managym/state`, `
 - Policy vocabulary/admission changes (`record_vocabulary.rs`, token kinds,
   `manabot/policy/admission.py`): the consumer is training's catalog policy.
   Script a directed `managym.Env` game that reaches the runtime program,
-  `encode_observation(space, obs)` each decision at `ObservationConfig(policy_input_version=10)`
+  `encode_policy_batch(space, [obs])` each decision
   and pass it through `manabot.verify.record_coverage._embed` with a tiny
   catalog `ActorCritic`, as `coverage_sweep` does. Find decisions carrying a
   token by scanning encoded buffers for its u32 as adjacent 16-bit halves

@@ -197,19 +197,16 @@ checkpoints or experiment evidence.
   not add a forward that reads an observation dictionary or a second
   preparation for one framework.
 
-For dense observation dicts, `historical_mean` includes masked object slots
-(preserve supplied numeric features when skipping zero padding) and relation
-features use the relation validity column. Read-only NumPy dicts get full
-admission because their origin and writable aliases are unknown. V11
-`ObservationBatch` offsets certify live rows and native joins; keep model
-layout and vocabulary admission on that path, read packed fields from
-`layout.csr_fields` and fact units from `layout.csr_fact_divisors`, and use
-full int32 words for lookups with saved logical columns for readings. The
-dense observation transport and dict admission graph (`VectorEnv.set_buffers`,
-`RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
-`ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
-`EncodedObservation`, dense `ObservationRows`, dense admission/bucketing)
-is scheduled for removal in 0.3.0.
+A policy reads observations only as native `ObservationBatch` rows (or an
+`ObservationSelection` over them); there is no dense observation dictionary
+transport or dict admission. V11 `ObservationBatch` offsets certify live rows
+and native joins; keep model layout and vocabulary admission on that path,
+read packed fields from `layout.csr_fields` and fact units from
+`layout.csr_fact_divisors`, and use full int32 words for lookups with saved
+logical columns for readings. Tests read padded fields through
+`ObservationSelection.project` (`tests/fixtures/observation_rows.py`); Rust
+tests read one observation's rows through
+`managym::agent::observation_rows::InputRows`.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic
@@ -545,8 +542,8 @@ admission. Admission-rejection fixtures must mark the config as submitted
   full vector diagnostic payloads in evidence.
 - An observation that does not fit its buffers raises
   `managym.ObservationCapacity` (a `ValueError`, message
-  `observation capacity exceeded: …`) from `encode_observation_into` and
-  `encode_observations_into`. Collectors that count capacity failures catch
+  `observation capacity exceeded: …`) from `encode_observation_batch` and
+  the vector and rollout-pool batch writers. Collectors that count capacity failures catch
   that type, never a message prefix, and propagate other failures. Vector
   steps keep raising `AgentError` for an unrecovered one (retained evidence
   names `PyAgentError`) and record `ObservationCapacity` when they recover.

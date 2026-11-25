@@ -1199,7 +1199,6 @@ _VECTOR_READS = frozenset(
         "snapshot_slots",
         "slot_metadata",
         "observation_rows",
-        "observations_for_players",
         "current_matchup_indices",
         "current_player_configs",
         "get_last_info",
@@ -1346,40 +1345,18 @@ class RecordedVectorEnv(_Capture):
             "evidence stays aligned with the games"
         )
 
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> list[managym.ObservationRead]:
-        """Write viewer-safe NumPy rows; discard every output row after an error.
+    def observations_for_players(
+        self, players: Sequence[int | None]
+    ) -> tuple[list[managym.ObservationRead], managym.ObservationBatch]:
+        """Read viewer-safe rows of native seats under the registered layout.
 
-        Execution and capture buffers stay unchanged. Seats are native indices.
+        Games, chooser state and execution rows stay unchanged.
         """
-        return self.native.write_observations_for_players(
-            players, buffers, action_overflow=action_overflow, layout=layout
-        )
+        return self.native.observations_for_players(list(players))
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
         return self.native.hand_snapshots(players)
-
-    def set_buffers(
-        self,
-        buffers: dict[str, Any],
-        action_overflow: str = "error",
-        *,
-        layout: managym.ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
-        self.native.set_buffers(buffers, action_overflow, layout=layout)
-        self._register_outcomes(buffers, action_overflow, buffers["actions"].shape[1])
-        self.identities["input_buffers"] = {
-            key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
-            for key, value in buffers.items()
-        }
 
     def set_observation_layout(
         self,
@@ -2085,26 +2062,6 @@ class CapturedSearch(_Capture):
         self.search.operations.append(list(actions))
         with self._guard(self._snapshot):
             return self.native.step_active_batch(actions)
-
-    def set_buffers(
-        self,
-        buffers: dict[str, Any],
-        capacity: int,
-        *,
-        layout: managym.ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
-        self.native.set_buffers(buffers, capacity, layout=layout)
-        self.search.buffers = {
-            key: BufferSpec(shape=list(value.shape), dtype=str(value.dtype))
-            for key, value in buffers.items()
-        }
-        self.search.capacity = capacity
-
-    def step_active(self, actions: list[int]) -> list[int]:
-        self.search.operations.append(list(actions))
-        with self._guard(self._snapshot):
-            return self.native.step_active(actions)
 
     def finish_random(self) -> None:
         self.search.operations.append("finish_random")

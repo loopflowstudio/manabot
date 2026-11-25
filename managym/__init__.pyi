@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from enum import IntEnum
 import os
 from typing import (
@@ -91,22 +91,7 @@ class ObservationLayout:
     @property
     def axis_buffers(self) -> dict[str, list[tuple[str, int]]]: ...
     @property
-    def object_references(self) -> dict[str, list[tuple[int | None, int]]]:
-        """Deprecated; removed with dense observation admission in 0.3.0."""
-        ...
-    @property
     def dtypes(self) -> dict[str, str]: ...
-    def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]: ...
-    def axis_extents(
-        self, obs: Mapping[str, np.ndarray], *, omit_decision_memory: bool = False
-    ) -> dict[str, np.ndarray] | None:
-        """Deprecated; use `ObservationBatch` offsets for v11 observations. Removed in 0.3.0.
-
-        Per-item occupied and referenced row extents, or None on a layout mismatch.
-
-        Keep the buffers stable until return. With omit_decision_memory, memory
-        arrays may be absent. Present arrays must have their declared shapes.
-        """
 
 def observation_layout(
     *,
@@ -418,19 +403,6 @@ class Env:
     def decision_memory_counts(self) -> list[list[int]]:
         """Record/detail/reference/member counts for each viewer, transport only."""
         ...
-    def encode_observation(
-        self,
-        obs: Observation,
-        max_facts: int | None = None,
-    ) -> Dict[str, np.ndarray]:
-        """Deprecated: arrays at native default capacities; removal in 0.3.0."""
-    def encode_observation_into(
-        self,
-        obs: Observation,
-        out: Dict[str, np.ndarray],
-        action_overflow: str = "error",
-    ) -> None:
-        """Deprecated alias of `managym.encode_observation_into`; removal in 0.3.0."""
 
 class StructuredOfferSet:
     def projection_json(self) -> str: ...
@@ -499,17 +471,6 @@ class RolloutPool:
     def step_active_batch(
         self, actions: Sequence[int]
     ) -> tuple[list[int], ObservationBatch]: ...
-    def set_buffers(
-        self,
-        buffers: dict[str, np.ndarray],
-        capacity: int,
-        *,
-        layout: ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` with `encode_active_batch`/`step_active_batch`. Removed in 0.3.0."""
-        ...
-    def encode_active(self) -> list[int]: ...
-    def step_active(self, actions: Sequence[int]) -> list[int]: ...
     def finish_random(self) -> int: ...
     def scores(self) -> tuple[list[float], int, int]: ...
 
@@ -606,15 +567,6 @@ class VectorEnv:
     def observations_for_players(
         self, players: Sequence[int | None]
     ) -> tuple[list[ObservationRead], ObservationBatch]: ...
-    def set_buffers(
-        self,
-        buffers: Dict[str, np.ndarray],
-        action_overflow: str = "error",
-        *,
-        layout: ObservationLayout | None = None,
-    ) -> None:
-        """Deprecated; use `set_observation_layout` for v11 observations. Removed in 0.3.0."""
-        ...
     def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(
         self, player_configs: GameSetup | list[PlayerConfig]
@@ -662,15 +614,6 @@ class VectorEnv:
         ...
     def current_game_generations(self) -> list[int]:
         """Opaque process-local game identities; every reset or replacement changes them."""
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: ObservationLayout,
-    ) -> list[ObservationRead]:
-        """Write selected fixed-seat views in slot order; discard all output rows after an error."""
     def hand_snapshots(self, players: list[int]) -> list[HandSnapshot]:
         """Read one native seat per slot, including hands in parked terminal games."""
     def current_action_summaries(self) -> list[tuple[int, str]]: ...
@@ -1435,49 +1378,11 @@ def policy_action_count(
     """
     ...
 
-def encode_observation_into(
-    obs: Observation,
-    layout: ObservationLayout,
-    out: Dict[str, np.ndarray],
-    action_overflow: str = "error",
-) -> None:
-    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
-
-    Write any observation (live, restored or a viewer projection) into out.
-
-    The supplied layout determines every buffer key, shape and dtype. The whole buffer
-    contract is checked before encoding: a missing array, wrong shape or
-    non-contiguous or read-only array raises `ValueError` and a wrong dtype or
-    non-NumPy value `TypeError`, whatever the observation holds, and nothing
-    is written. Only then does an observation that does not fit raise
-    `ObservationCapacity`. More legal actions than slots is an overflow unless
-    `action_overflow="first-legal"`.
-    """
-    ...
-
 def encode_observation_batch(
     envs: Sequence[Env | Observation],
     layout: ObservationLayout,
     action_overflow: str = "error",
 ) -> ObservationBatch: ...
-def encode_observations_into(
-    envs: Sequence[Env],
-    layout: ObservationLayout,
-    buffers: Dict[str, np.ndarray],
-    capacity: int,
-) -> list[int]:
-    """Deprecated; use `encode_observation_batch` for v11 observations. Removed in 0.3.0.
-
-    Write each env's acting-player view into rows 0..len(envs) of buffers.
-
-    Buffers come from `ObservationSpace.allocate(capacity)`; later rows are
-    untouched. Returns each row's legal-action count. Shape, dtype and
-    writability failures raise before any write; an observation exceeding a
-    capacity (every legal action must fit) raises `ObservationCapacity`,
-    leaving earlier rows written.
-    """
-    ...
-
 def unrepresentable_state(obs: Observation) -> str | None:
     """State in `obs` that no policy input version can represent, if any."""
     ...

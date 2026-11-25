@@ -19,8 +19,6 @@ import subprocess
 import sys
 from typing import Literal, Never, Protocol
 
-import numpy as np
-
 import managym
 from managym.card_capture import CapturedCards, captured_cards
 from managym.decision import Command, DecisionFrame, SemanticContractError
@@ -638,29 +636,16 @@ def _replay_game_inputs(
             agreement.at_retained_failure = retained_index == index
             pool = getattr(env, search.method)(*search.arguments)
             if search.method == "rollout_pool" and search.buffers:
-                layout = _search_layout(search.buffers)
-                if layout.csr_fields:
-                    pool.set_observation_layout(layout)
-                    pool.encode_active_batch()
-                    for index, operation in enumerate(search.operations):
-                        agreement.at_retained_failure = retained_index == index
-                        if operation == "finish_random":
-                            pool.finish_random()
-                        else:
-                            pool.step_active_batch(operation)
-                else:
-                    buffers = {
-                        key: np.zeros(spec.shape, dtype=spec.dtype)
-                        for key, spec in search.buffers.items()
-                    }
-                    pool.set_buffers(buffers, search.capacity, layout=layout)
-                    pool.encode_active()
-                    for index, operation in enumerate(search.operations):
-                        agreement.at_retained_failure = retained_index == index
-                        if operation == "finish_random":
-                            pool.finish_random()
-                        else:
-                            pool.step_active(operation)
+                # Receipts of v9/v10 pools fail here, naming the last release
+                # that supports them.
+                pool.set_observation_layout(_search_layout(search.buffers))
+                pool.encode_active_batch()
+                for index, operation in enumerate(search.operations):
+                    agreement.at_retained_failure = retained_index == index
+                    if operation == "finish_random":
+                        pool.finish_random()
+                    else:
+                        pool.step_active_batch(operation)
     except _FrameMismatch as error:
         result: dict[str, object] = {
             "status": "binding_mismatch",

@@ -49,9 +49,8 @@ Read when the change touches training (`manabot/training`, recipes, models, back
   `{"updates": 2, "streams": 4, "backend": "mlx", "device": "mps"}` about 27 s.
   Cross-read every `out/policies/*.safetensors` of a Torch and an MLX run on
   both `resolve("torch")` and `resolve("mlx", precision="float32")`: encode a
-  scalar `managym.Env` observation with `encode_observation(space, raw)` and add
-  the batch axis yourself (`{k: v[None]}`), or admission refuses
-  `known_library`. Agreement was below 1e-7 on 153 decisions. Seat an MLX-written
+  scalar `managym.Env` observation with `encode_policy_batch(space, [raw])`
+  and prepare that batch. Agreement was below 1e-7 on 153 decisions. Seat an MLX-written
   Elemental policy in Academy with `--policy`, `--deck elemental_ur
   --opponent-deck elemental_gw`. For Ctrl-C on a pty, poll the master with
   `select` (the run prints nothing between "local" and its end, so a blocking

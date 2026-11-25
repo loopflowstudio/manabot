@@ -154,14 +154,11 @@ class SnapshotVector(Protocol):
 
     def install_slots(self, installs: Sequence[SlotInstall]) -> list[InstalledSlot]: ...
 
-    def write_observations_for_players(
-        self,
-        players: Sequence[int | None],
-        buffers: dict[str, np.ndarray],
-        action_overflow: Literal["error", "first-legal"] = "error",
-        *,
-        layout: managym.ObservationLayout,
-    ) -> Sequence["ObservationRead | managym.ObservationRead"]: ...
+    def observations_for_players(
+        self, players: Sequence[int | None]
+    ) -> tuple[
+        Sequence["ObservationRead | managym.ObservationRead"], managym.ObservationBatch
+    ]: ...
 
 
 SnapshotVectorFactory = Callable[[ObservationSpace, Match, int, int], SnapshotVector]
