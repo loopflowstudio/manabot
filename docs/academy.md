@@ -617,10 +617,10 @@ target.
 When a spell or ability asks for a target, click a legal target or pull a line
 from the source — the casting spell or ability on the stack, or the asked
 permanent on the battlefield — onto any legal permanent, player plate or stack
-entry (including non-spell abilities). The line snaps to the legal target under
-the pointer and previews any planned land taps for that target; release to
-choose it just as a click does, or release elsewhere or press Escape to send
-nothing.
+entry (including non-spell abilities). A dashed outline marks each legal
+permanent while you drag. The outline turns solid when the line snaps to it.
+When the line snaps to a target, the board previews any lands it would tap.
+Release to choose that target, or release elsewhere or press Escape to cancel.
 
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of

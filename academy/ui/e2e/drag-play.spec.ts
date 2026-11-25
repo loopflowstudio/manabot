@@ -280,6 +280,8 @@ for (const [source, target, id] of [
     // The whole plate accepts the drop, including the mana pool outside its button.
     await carry(page, from, await center(target === 'plate' ? plate.getByTestId('mana-pool') : to));
     await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'target');
+    await expect(page.locator('[data-connect-target]')).toHaveCount(1);
+    await expect(permanent(page, cub.display_id)).toHaveAttribute('data-connect-target', 'true');
     await expect(to).toHaveAttribute('data-drop', 'true');
     await expect(planned(page)).toHaveCount(1);
     expect(authority.previews).toContain(id);
@@ -297,7 +299,7 @@ function blocks(blocker = otter, revision = REVISION): ExperienceFrame {
   frame.prompt = { ...frame.prompt!, kind: 'declare_blocker', title: 'Choose a block', instruction: 'Choose a block' };
   frame.projection.turn = { ...frame.projection.turn, active_player_id: 1, phase: 'COMBAT', step: 'DECLARE_BLOCKERS_STEP' };
   frame.projection.agent.battlefield = [creature(otter, 0), creature(tiger, 0)];
-  frame.projection.opponent.battlefield = [creature(cub, 1, true), creature(ally, 1, true)];
+  frame.projection.opponent.battlefield = [creature(cub, 1, true), creature(ally, 1, true), creature(subject(87, 'Flyer'), 1, true)];
   frame.offers = [cub, ally].map((object, i) => ({
     ...offer(20 + i, 'declare_blockers', `Block ${object.label} with ${blocker.label}`, 'DECLARE_BLOCKER', [blocker.display_id, object.display_id]),
     subjects: [{ role: 'choice', object: blocker }, { role: 'target', object }],
@@ -315,6 +317,9 @@ test('drag the required blocker to an attacker in a one-at-a-time prompt', async
   await carry(page, from, await center(permanent(page, tiger.display_id)));
   await expect(page.getByTestId('draft-line')).toHaveAttribute('data-line-kind', 'block');
   await expect(page.locator('[data-drop]')).toHaveCount(0);
+  await expect(page.locator('[data-connect-target]')).toHaveCount(2);
+  await expect(permanent(page, cub.display_id)).toHaveCSS('outline-style', 'dashed');
+  await expect(permanent(page, ally.display_id)).toHaveCSS('outline-style', 'dashed');
   await page.mouse.up();
   expect(authority.commands).toEqual([]);
   await carry(page, from, await center(permanent(page, cub.display_id)));
@@ -345,7 +350,12 @@ test('dragging a drafted block reassigns it and Escape restores the click-select
   const first = permanent(page, cub.display_id);
   const second = permanent(page, ally.display_id);
   await carry(page, from, await center(first));
+  await expect(page.locator('[data-connect-target]')).toHaveCount(2);
+  await expect(first).toHaveAttribute('data-connect-target', 'true');
+  await expect(second).toHaveAttribute('data-connect-target', 'true');
   await expect(first).toHaveAttribute('data-drop', 'true');
+  await expect(first).toHaveCSS('outline-style', 'solid');
+  await expect(second).toHaveCSS('outline-style', 'dashed');
   await page.mouse.up();
   await expect(page.getByTestId('decision-prompt')).toHaveText('Otter-Penguin on Badgermole Cub');
   await other.click();

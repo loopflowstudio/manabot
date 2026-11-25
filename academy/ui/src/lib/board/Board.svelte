@@ -381,6 +381,15 @@
     return ids;
   });
   const fieldById = $derived(new Map([...fieldItems(view.you), ...fieldItems(view.opponent)].map(item => [item.permanent.id, item])));
+  // Keep the recipient list steady as the pointer moves between them.
+  const connecting = $derived(connect !== null);
+  const connectTargets = $derived.by(() => {
+    if (!connecting) return undefined;
+    if (draggedBlocker !== undefined) return new Set(declarable.get(draggedBlocker)?.can_block.map(attacker => attacker.entity));
+    const targets = new Set<number>();
+    for (const [id, item] of fieldById) if (item.offers.length) targets.add(id);
+    return targets;
+  });
   const stackById = $derived(new Map(view.stack.map(item => [item.entry.id, item])));
 
   // ———————————————— Payment preview
@@ -1099,16 +1108,16 @@
       <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" class:selectable={canMarquee} bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} {asked} draft={draftMarks} sources={fieldSources} {connectTargets} drop={dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -1351,6 +1360,7 @@
   /* A playable card is dragged, never panned; while a card is carried, its neighbours stay still. */
   .rows.selectable, .hand-card.draggable { touch-action: none; }
   .game :global([data-connect-source]) { touch-action: none; }
+  .game :global(button[data-connect-target]:not([data-drop])) { outline: 2px dashed var(--accent); outline-offset: 2px; }
   .game :global(button[data-drop]) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .dragging { user-select: none; }
   .dragging .hand-card:hover, .dragging .hand-card:focus-within { transform: none; }

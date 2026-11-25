@@ -47,6 +47,7 @@
     /** Offers may be committed now. */
     live?: boolean;
     connectSource?: boolean;
+    connectTarget?: boolean;
     drop?: boolean;
     asked?: boolean;
     /** The side of the centre line this card sits on; attacks lean toward it. */
@@ -90,7 +91,7 @@
   }
 
   let {
-    connectSource = false, drop = false, name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
+    connectSource = false, connectTarget = false, drop = false, name, width, shape = 'portrait', permanent = null, card = null, offers = [], live = false, asked = false,
     toward = null, blocks = null, side = 'you', touched = false, beat = false, dealt = 0, planned = null, paid = null,
     count = null, piled = false, slice = null, dim = null, targeted = false, draft = null, note = null, travel = true, onactivate, onpreview,
   }: Props = $props();
@@ -222,7 +223,7 @@
     class:planned={planned !== null}
     class:sliced={slice !== null}
     class:paid={paid !== null}
-    data-connect-source={connectSource || undefined} data-drop={drop || undefined}
+    data-connect-source={connectSource || undefined} data-connect-target={connectTarget || undefined} data-drop={drop || undefined}
     data-testid="board-card"
     data-travel-id={!travel ? undefined : permanent ? `perm:${permanent.id}` : card ? `card:${card.id}` : undefined}
     data-travel-name={travel ? name : undefined}
@@ -359,6 +360,11 @@
   .chip.damage { font-weight: 600; color: var(--damage); }
   .chip.granted { box-shadow: 0 0 0 1px var(--gain); }
 
+  /* An attacker tilts a few degrees past its rest: a tapped one lies just past the quarter, a vigilant one stays upright. */
+  .tcard.attacking { --tilt: -2deg; box-shadow: var(--lift-attacking); }
+  .tcard.attacking.turned { --tilt: -6deg; }
+  .tcard.attacking.downward { --tilt: 2deg; }
+  .tcard.attacking.turned.downward { --tilt: 6deg; }
   /* Lift: what a legal offer acts on is raised; the selected card higher, with an ink edge. */
   .tcard.legal { --rise: -6px; box-shadow: var(--lift); }
   .tcard.legal:hover { --rise: -8px; }
@@ -366,11 +372,6 @@
   /* Quiet: what cannot act steps back by a filter, never opacity, so a pile stays solid. */
   .tcard.dim-hand { filter: var(--dim-hand); }
   .tcard.dim-idle { filter: var(--dim-idle); }
-  /* An attacker tilts a few degrees past its rest: a tapped one lies just past the quarter, a vigilant one stays upright. */
-  .tcard.attacking { --tilt: -2deg; box-shadow: var(--lift-attacking); }
-  .tcard.attacking.turned { --tilt: -6deg; }
-  .tcard.attacking.downward { --tilt: 2deg; }
-  .tcard.attacking.turned.downward { --tilt: 6deg; }
   .tcard.targeted { outline: 2px dashed var(--damage); outline-offset: 2px; }
   .tcard.touched { box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 40%, transparent); }
   /* A recorded choice's legal space, read-only: offered cards are outlined thinly, the played one solidly. */

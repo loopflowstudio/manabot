@@ -38,12 +38,13 @@
     /** A combat draft's place for each creature it concerns, and what pressing it does. */
     draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
     sources?: ReadonlySet<number>;
+    connectTargets?: ReadonlySet<number>;
     drop?: ReadonlySet<number>;
     onactivate: (item: PermanentItem, element: HTMLElement) => void;
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { sources, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
+  let { sources, connectTargets, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -105,7 +106,7 @@
               {live}
               draft={draft?.places.get(item.permanent.id) ?? null}
               note={draft?.notes.get(item.permanent.id) ?? null}
-              connectSource={sources?.has(item.permanent.id)} drop={drop?.has(item.permanent.id)}
+              connectSource={sources?.has(item.permanent.id)} connectTarget={connectTargets?.has(item.permanent.id)} drop={drop?.has(item.permanent.id)}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}
