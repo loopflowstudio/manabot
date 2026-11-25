@@ -201,22 +201,27 @@ Drafted in place before implementation (recheck wording against final implementa
 ## Passes
 
 1. Done — `72a12fa277` (see Built).
-2. **Next — interchangeable sources and determined-completion modal skip.**
-   - The original optional-class unit check fails for Gray Ogre with Sol Ring
-     and two Mountains. Sol Ring must tap, and the Mountains are the only
-     optional class. PayCost taps the Ring and one Mountain. Tapping both
-     Mountains first uses one of the Ring's two units and floats the other.
-     `required_sol_ring_can_leave_a_mountain_or_floating_mana` exercises
-     both orders from the same cast. Use the revised unit check above.
-   - Count taps by equivalence class in each residual completion. Anthem of
-     Champions ({G}{W}) with Village, Forest and Plains provides the
-     counterexample to a total tap count. After the Village taps for green
-     the Plains must tap; after white the Forest must tap. The native test
-     forks both colors and checks the remaining untapped land.
-   - Sound permanent-equivalence predicate (all `Permanent` fields + stack/trigger/effect/grant/attachment references) and class determinism rule.
-   - `Decision::ManaChoice` determined-completion skip (`Kyoshi Village` tapped on `Village + 3 Plains` for `{1}{W}`).
-   - Proves: `Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`, `Plains + Plains + Kyoshi Village` for `{1}{G}` (leaves 1 Plains untapped!), `3 Guildgates` for `{1}{R}`; targeted land on stack restores prompt; enchanted/animated Plains restores prompt; `Village + 3 Plains` for `{1}{W}` still stops with 4 source offers + `PayCost`.
-   - Update `managym/tests/source_taps.rs::per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes` (tapping Forest with 3 identical Mountains left now completes immediately; add a `Mountain × 2, Forest × 2` multi-step test if needed).
+2. **Next — interchangeable sources and determined-completion modal skip**
+   (rule above). Files: `managym/src/flow/mana.rs`, `payment.rs`,
+   `decision.rs`, `managym/tests/source_taps.rs`.
+   - Guards already in `source_taps.rs` that must stay green:
+     `required_sol_ring_can_leave_a_mountain_or_floating_mana` (Gray Ogre,
+     Sol Ring + 2 Mountains: Ring is mandatory, Mountains are the one optional
+     class, yet tapping both Mountains first floats `{C}` — why rule 3 requires
+     one unit per useful tap from *every* participating source) and
+     `two_forced_completions_tapping_different_lands_keep_the_color_modal`
+     (Anthem of Champions `{G}{W}`, Village + Forest + Plains: green forces
+     Plains, white forces Forest — why modal completions compare tap counts
+     per class, not in total).
+   - New proofs: `Mountain × 4` for `{2}{R}`, `Plains × 3` for `{W}{W}`,
+     `3 Guildgates` for `{1}{R}` skip; `Plains + Plains + Kyoshi Village` for
+     `{1}{G}` skips and leaves 1 Plains untapped; a land targeted on the stack
+     or an enchanted/animated Plains restores the prompt; `Village + 3 Plains`
+     for `{1}{W}` stops with 4 source offers + `PayCost`, and tapping the
+     Village there skips its color modal.
+   - Update `per_source_taps_choose_what_stays_untapped_and_pay_cost_finishes`
+     (Forest tapped with 3 identical Mountains left now completes; move the
+     multi-step coverage to `Mountain × 2, Forest × 2` if needed).
 3. **Records & Academy tests.**
    - `tests/academy/test_dual_land_payment.py` (exact-cost two-drop with Village + Plains skips; Village + 3 Plains shows `"Tap Kyoshi Village for {G}/{W}"`, three `"Tap Plains for {W}"`, `"Pay the cost"`, zero `"Activate ability"`).
    - `managym/README.md` "Manual mana sources" section.
