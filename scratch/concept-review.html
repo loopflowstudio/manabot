@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-439 Concept Review (Post-Build) — Manual Mana Payment &amp; Source Taps</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-2: #f3efe7;
+    --border: #dfd8cb;
+    --text: #1f1c18;
+    --muted: #61584c;
+    --accent: #7a4b20;
+    --yes-bg: #e7f4ea;
+    --yes-fg: #1d6435;
+    --no-bg: #fbeaea;
+    --no-fg: #9c2222;
+    --part-bg: #fdf3dc;
+    --part-fg: #855208;
+    --exist-bg: #edf1f7;
+    --exist-fg: #2b4c7e;
+    --prop-bg: #efe9fa;
+    --prop-fg: #542d91;
+    --code-bg: #f1ede5;
+    --shadow: 0 1px 3px rgba(31, 28, 24, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151412;
+      --surface: #1e1c19;
+      --surface-2: #272420;
+      --border: #3a352e;
+      --text: #ede8df;
+      --muted: #a99f91;
+      --accent: #d89b5a;
+      --yes-bg: #163020;
+      --yes-fg: #7dd89b;
+      --no-bg: #3b1919;
+      --no-fg: #f28b8b;
+      --part-bg: #3a2c12;
+      --part-fg: #f0c065;
+      --exist-bg: #1b2838;
+      --exist-fg: #8ab7eb;
+      --prop-bg: #291e3b;
+      --prop-fg: #c6a5f7;
+      --code-bg: #26231f;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    margin: 0 0 0.4rem;
+    font-size: 1.75rem;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+  h2 {
+    margin: 2.25rem 0 0.75rem;
+    font-size: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.35rem;
+  }
+  h3 { margin: 1.35rem 0 0.5rem; font-size: 1.02rem; }
+  p, li { color: var(--text); }
+  .subtitle { margin: 0; color: var(--muted); font-size: 0.96rem; }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.85rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.86em;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 0.12em 0.36em;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    line-height: 1.48;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .yes { background: var(--yes-bg); color: var(--yes-fg); }
+  .no { background: var(--no-bg); color: var(--no-fg); }
+  .partial { background: var(--part-bg); color: var(--part-fg); }
+  .existing { background: var(--exist-bg); color: var(--exist-fg); }
+  .proposed { background: var(--prop-bg); color: var(--prop-fg); }
+
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.15rem;
+    margin: 1.25rem 0;
+    box-shadow: var(--shadow);
+  }
+  .callout.danger { border-left-color: var(--no-fg); }
+  .callout strong.title {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.96rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  th {
+    background: var(--surface-2);
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .card h3 { margin-top: 0; }
+  .ui-mock {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem 0.95rem;
+    margin: 0.65rem 0;
+    font-size: 0.88rem;
+  }
+  .ui-mock .prompt-hdr {
+    font-weight: 600;
+    margin-bottom: 0.45rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .offer-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .offer-list li {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .offer-list li.primary { border-color: var(--accent); font-weight: 600; }
+  .offer-list li.bug { border-color: var(--no-fg); background: var(--no-bg); }
+  .offer-list .tag {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .flow-step {
+    display: flex;
+    gap: 0.75rem;
+    margin: 0.55rem 0;
+    align-items: baseline;
+  }
+  .step-num {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .questions ol { padding-left: 1.25rem; }
+  .questions > ol > li { margin-bottom: 1.15rem; }
+  .options { list-style: none; padding-left: 0.25rem; margin: 0.4rem 0 0; }
+  .options li { margin: 0.25rem 0; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>MTG-439 Concept Review (Post-Build): Manual Mana Payment &amp; Source Taps</h1>
+  <p class="subtitle">
+    Area reviewed: <strong>the entire manual mana payment surface</strong> — simple mana-source tapping, interchangeable-source skipping, color-choice modals, surplus-pruned automatic execution, resolution payments (<code>TurnFaceUp</code>, <code>Ward</code>), payment preview, and Academy's prompt/piling surface across <code>managym/src/flow/{mana,mana/interchangeable,mana/preview,payment,decision,action}.rs</code>, <code>managym/state/src/card.rs</code>, and <code>academy/ui/src/lib/board/{prompt,view}.ts</code> — widened from the dual-land skip diff because all of these share one manual-payment contract.
+  </p>
+  <div class="meta">
+    <span>Diff reviewed: <code>3be5a0cfb2</code> → <code>5b896fb725</code> (post-build, post-QA)</span>
+    <span>Governing steers: <code>69c80076</code>, <code>5d5904ae</code>, <code>1952c51e</code></span>
+    <span>Legend: <span class="badge existing">Built at HEAD</span> <span class="badge proposed">Proposed Pass 4</span></span>
+  </div>
+</header>
+
+<section class="callout danger">
+  <strong class="title">Headline verdict: Passes 1–3 got exact payments, labels, and surplus pruning right — but post-build review + live QA exposed two model mismatches that break the promised experience in real games.</strong>
+  <p style="margin:0.35rem 0 0">
+    <strong>(1) Biggest mismatch — land-for-turn defeats Pass 2 on nearly every real turn:</strong> <code>interchangeable.rs</code> compares raw <code>summoning_sick</code> and <code>entered_this_turn</code> on every permanent, including plain lands. Because every played land enters with <code>summoning_sick = true</code> and <code>entry_turn = turn</code>, playing a land and casting a spell (the most common sequence in Magic) splits the new land into its own class — so <code>Mountain ×4</code> for <code>{2}{R}</code>, <code>Plains ×2 + Kyoshi Village</code> for <code>{1}{G}</code>, and the <code>Kyoshi Village + 3 Plains</code> color modal all <em>still stop in real play</em>, while Academy stacks the 3 Plains into one visually identical pile! Synthetic <code>scenario_force_battlefield</code> tests hid this completely.<br>
+    <strong>(2) Resolution payments still treat duals and basics asymmetrically:</strong> <code>resolution_mana_abilities</code> filters <code>useful_payment_taps</code> to <code>ActivateAbility</code> only, so <code>TurnFaceUp</code> and <code>Ward</code> offer manual dual taps beside <code>PayCost</code> while never offering manual basic taps (and never skipping the resulting color modal).<br>
+    Both fixes have been written into <code>scratch/plan.md</code> as Pass 4, and this Graph run iterates back to <code>implement</code>.
+  </p>
+</section>
+
+<h2>1. Do the product's concepts and the code's concepts line up?</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:17%">Product concept</th>
+      <th style="width:28%">Code concept at <code>HEAD</code> <span class="badge existing">Built</span></th>
+      <th style="width:11%">Lines up?</th>
+      <th style="width:44%">What is wrong &amp; what changes <span class="badge proposed">Proposed</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Simple mana tap</strong><br><span class="muted">Basic land, dual land, 5-color source, mana dork/rock, or Great Divide Guide grant.</span></td>
+      <td><code>ActivatedAbilityDefinition::is_simple_mana_tap()</code> + <code>ManaActivation.automatic</code> (checks <code>tap_bonuses.is_empty()</code>); unified wording via <code>mana_choices_description</code> (<code>"Tap Kyoshi Village for {G}/{W}"</code>, <code>"Tap Birds of Paradise for any color"</code>); shared <code>announced_mana_actions</code> + <code>useful_payment_taps</code>.</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Wire actions stay <code>TapForMana</code> / <code>ActivateAbility</code> (preserving 64-action policy capacity and v11 layout), while labels, unit counting (once per permanent), affordability, and non-simple exclusions share one predicate.</td>
+    </tr>
+    <tr>
+      <td><strong>Interchangeable untapped lands</strong><br><span class="muted">Two plain Plains on your board — even when one was just played for turn — do not force a manual stop or color modal.</span></td>
+      <td><code>interchangeable.rs::same_mana_permanent</code> checks raw <code>left.summoning_sick == right.summoning_sick &amp;&amp; left.entered_this_turn(turn) == right.entered_this_turn(turn)</code> on every permanent unconditionally.</td>
+      <td><span class="badge no">No</span></td>
+      <td><strong>Code concept the player never sees (and Academy hides).</strong> Every played land has <code>summoning_sick = true</code> and <code>entered_this_turn = true</code> (<code>Permanent::new</code>, <code>zones.rs:1049</code>), while <code>observation.rs:1709</code> masks sickness on non-creatures and <code>view.ts:197</code> piles all Plains together. In real play, playing a land for turn breaks Pass 2 on every spare-land cast.<br>
+      <span class="badge proposed">Proposed</span> Gate <code>summoning_sick</code> equality on permanents where sickness can matter (<code>view.is_creature() || !view.is_land() || can_become_creature(view)</code> — preserving manlands like <code>Soulstone Sanctuary</code> and <code>Treetop Village</code>, Vehicles, artifacts, and creatures; Earthbend grants haste, CR 702.182a), and gate <code>entered_this_turn</code> equality on <code>view.activated_abilities.iter().any(|a| a.power_up)</code> (the sole rules reader, <code>statics.rs:486</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Resolution payments</strong><br><span class="muted"><code>TurnFaceUp</code>, <code>Ward</code>, <code>Mana Leak</code> treat duals and basics the same way.</span></td>
+      <td><code>decision.rs:1874</code> calls <code>resolution_mana_abilities</code>, which runs <code>useful_payment_taps</code> and keeps <code>.filter(|a| matches!(a, Action::ActivateAbility { .. }))</code> — exposing dual taps while omitting basic taps.</td>
+      <td><span class="badge no">No</span></td>
+      <td><strong>One idea under two rules.</strong> <code>Decision::Payment</code> has never offered individual <code>TapForMana</code> actions for basics (<code>TurnFaceUp</code> with <code>Plains ×2 + Forest</code> skips; <code>Ward {2}</code> with <code>Plains + Sol Ring</code> offers only <code>[PayCost, Decline]</code>). Filtering <code>useful_payment_taps</code> to <code>ActivateAbility</code> makes <code>TurnFaceUp</code> with <code>Kyoshi Village + Plains + Forest</code> stop on a dual-only offer (with no basics and an unskipped color modal) and makes <code>Ward {2}</code> treat <code>Kyoshi Village + Sol Ring</code> differently from <code>Plains + Sol Ring</code>.<br>
+      <span class="badge proposed">Proposed</span> Delete <code>resolution_mana_abilities</code>. When <code>can_pay &amp;&amp; help.waterbend == 0 &amp;&amp; !offers_extra_payment_taps</code>, call <code>mana_ability_actions(player, false)</code> so simple choice taps match fixed taps (both paid by <code>PayCost</code>; non-simple activations like Treasure stay offered; <code>!can_pay</code> or floats keep all activations).</td>
+    </tr>
+    <tr>
+      <td><strong>Color modal after manual tap</strong><br><span class="muted"><code>Choose the mana to add</code> appears only when colors lead to distinguishable states.</span></td>
+      <td><code>equivalent_mana_choices</code> checks <code>commit_produced_mana</code> remainders and Pass 2 completions; Academy <code>prompt.ts:67</code> reads <code>stage === 'mana_color'</code> as <code>"Choose the mana to add"</code>.</td>
+      <td><span class="badge partial">Partial</span></td>
+      <td>Works cleanly once <code>interchangeable.rs</code> stops splitting played-this-turn basics. Minor structural wart (not blocking): <code>Decision::ManaChoice</code> does not store whether it came from a simple tap, so <code>equivalent_mana_choices</code> re-derives it by matching <code>ability.mana_choices() == Some(choices)</code> (fail-closed).</td>
+    </tr>
+    <tr>
+      <td><strong>Automatic payment execution &amp; preview</strong><br><span class="muted"><code>PayCost</code> and auto-skip tap only needed sources, preferring basics; hover preview matches.</span></td>
+      <td><code>automatic_choice_taps</code> prunes surplus taps in reverse reluctance order, passes <code>saved_obligations</code>, and shares the prefix with <code>preview.rs</code>.</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Surplus over-tap bug fixed cleanly. Full hand-followup scoring across choice sources remains a separate future enhancement.</td>
+    </tr>
+    <tr>
+      <td><strong>Special mana activations</strong><br><span class="muted">Treasure, pain lands, filter lands, tap-N, once-per-turn, mana doublers.</span></td>
+      <td><code>!ability.automatic</code> stays unconditional in <code>mana_ability_actions(player, false)</code> with <code>"Activate ability: &lt;Name&gt;"</code>.</td>
+      <td><span class="badge yes">Yes</span></td>
+      <td>Clean separation from free simple mana taps; extra costs and side effects never auto-skip or hide.</td>
+    </tr>
+    <tr>
+      <td><strong>Moves log wording in Academy</strong><br><span class="muted">Readable history of mana actions.</span></td>
+      <td>Moves log prints raw offer label (<code>Tap Kyoshi Village for {G}/{W}</code> with literal braces, without recording the color added).</td>
+      <td><span class="badge partial">Partial</span></td>
+      <td>Pre-existing across all mana offers (basics already print <code>Tap Plains for {W}</code> with literal braces). Separate UI polish outside MTG-439.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>2. Biggest mismatches — before (<code>HEAD</code>) vs. after (Pass 4)</h2>
+
+<h3>Mismatch 1 — Playing a land for turn breaks Pass 2 in real play (QA-verified)</h3>
+<div class="grid-2">
+  <div class="card">
+    <h3><span class="badge existing">Built at HEAD</span> Turn 4: Play 3rd Plains beside Kyoshi Village + 2 Plains, cast <code>{1}{W}</code></h3>
+    <div class="flow-step"><span class="step-num">1</span><span>Academy stacks all 3 Plains into one visually identical pile <code>Plains ×3</code>.</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span>Cast <code>Youthful Knight</code> → stop offers <code>Tap Kyoshi Village for {G}/{W}</code>, three <code>Tap Plains for {W}</code>, <code>Pay the cost</code>.</span></div>
+    <div class="flow-step"><span class="step-num">3</span><span>Click <code>Tap Kyoshi Village for {G}/{W}</code>:</span></div>
+    <div class="ui-mock" style="border-color:var(--no-fg); background:var(--no-bg)">
+      <div class="prompt-hdr"><span>Choose the mana to add</span><span class="muted">Unexpected modal!</span></div>
+      <ul class="offer-list">
+        <li class="bug"><span>Add {G}</span><span class="tag">ChooseMode(0)</span></li>
+        <li class="bug"><span>Add {W}</span><span class="tag">ChooseMode(1)</span></li>
+      </ul>
+      <p style="margin:0.5rem 0 0">Click <code>Add {G}</code> → <strong>another</strong> prompt: <code>Pay {W}</code> with 3 <code>Tap Plains for {W}</code>! Same break on Turn 2 (play 2nd Plains, cast <code>{W}</code>) and Turn 4 (play 4th Mountain, cast <code>{2}{R}</code>).</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3><span class="badge proposed">After Pass 4</span> Turn 4: Play 3rd Plains beside Kyoshi Village + 2 Plains, cast <code>{1}{W}</code></h3>
+    <div class="flow-step"><span class="step-num">1</span><span><code>same_mana_permanent</code> ignores <code>summoning_sick</code> on plain non-creature lands that cannot animate themselves, and ignores <code>entered_this_turn</code> when no <code>power_up</code> ability exists.</span></div>
+    <div class="flow-step"><span class="step-num">2</span><span>Cast <code>Youthful Knight</code> → real stop stays (Village vs Plains still matters).</span></div>
+    <div class="flow-step"><span class="step-num">3</span><span>Click <code>Tap Kyoshi Village for {G}/{W}</code>:</span></div>
+    <div class="ui-mock" style="border-color:var(--yes-fg); background:var(--yes-bg)">
+      <div class="prompt-hdr"><span>No modal, no second stop</span><span class="badge yes">Auto-finished</span></div>
+      <p style="margin:0.2rem 0 0">Both <code>{G}</code> and <code>{W}</code> deterministically tap 1 of the 3 interchangeable Plains and leave 2 untapped with an empty pool. Spell goes straight onto the stack — matching <code>docs/academy.md</code>.</p>
+    </div>
+  </div>
+</div>
+
+<h3>Mismatch 2 — Resolution payments (<code>TurnFaceUp</code> / <code>Ward</code>) still treat duals differently from basics</h3>
+<div class="grid-2">
+  <div class="card">
+    <h3><span class="badge existing">Built at HEAD</span> <code>TurnFaceUp {1}{W}</code> with Kyoshi Village + Plains + Forest</h3>
+    <div class="ui-mock" style="border-color:var(--no-fg); background:var(--no-bg)">
+      <div class="prompt-hdr"><span>Pay {1}{W}</span><span class="muted">Asymmetric with basics</span></div>
+      <ul class="offer-list">
+        <li class="bug"><span>Tap Kyoshi Village for {G}/{W}</span><span class="tag">ActivateAbility</span></li>
+        <li class="primary"><span>Pay the cost</span><span class="tag">PayCost</span></li>
+      </ul>
+      <p style="margin:0.5rem 0 0">Plains and Forest aren't offered; clicking Village pops up an unskipped color modal (<code>equivalent_mana_choices</code> requires <code>resume: None</code>). Meanwhile <code>Plains ×2 + Forest</code> skips with zero prompts!</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3><span class="badge proposed">After Pass 4</span> <code>TurnFaceUp {1}{W}</code> &amp; <code>Ward {2}</code></h3>
+    <div class="ui-mock" style="border-color:var(--yes-fg); background:var(--yes-bg)">
+      <div class="prompt-hdr"><span>Same rule as basics</span><span class="badge yes">Unified</span></div>
+      <p style="margin:0.2rem 0 0"><code>TurnFaceUp</code> with <code>Kyoshi Village + Plains + Forest</code> offers <code>[PayCost]</code> and turns face up immediately — identical to <code>Plains ×2 + Forest</code>. <code>Ward {2}</code> with <code>Kyoshi Village + Sol Ring</code> offers <code>[PayCost, Decline]</code> — identical to <code>Plains + Sol Ring</code>. Non-simple activations (Treasure) and <code>!can_pay</code> / floats still stop.</p>
+    </div>
+  </div>
+</div>
+
+<h2>3. Counterexample audit for Pass 4</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:24%">Counterexample</th>
+      <th style="width:38%">Risk if mishandled</th>
+      <th style="width:38%">How Pass 4 handles it <span class="badge proposed">Proposed</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Manland played this turn</strong><br><span class="muted"><code>Soulstone Sanctuary</code> (FDN) or <code>Treetop Village</code> (ULG): one old, one played this turn, casting <code>{1}</code>.</span></td>
+      <td>If Pass 4 ignored <code>summoning_sick</code> on <em>all</em> non-creature lands, it would merge both manlands and could tap the non-sick one that could animate and attack this turn.</td>
+      <td>Check <code>can_become_creature(view)</code> (any ability with <code>Modification::BecomeCreature</code>). Both manlands have a self-animating ability, so they still compare <code>summoning_sick</code> and keep the prompt.</td>
+    </tr>
+    <tr>
+      <td><strong>Land animated by Earthbend</strong><br><span class="muted">TLA earthbending a Plains played this turn.</span></td>
+      <td>Could earthbending tell old vs new Plains apart?</td>
+      <td>No — CR 702.182a (<code>effects.rs:69</code>) grants <strong>haste</strong> when earthbending. Catalog audit confirmed zero cards in <code>managym/cards/src/</code> animate another land without haste.</td>
+    </tr>
+    <tr>
+      <td><strong>Mana dork or artifact played this turn</strong><br><span class="muted"><code>Llanowar Elves</code> (with haste) or two <code>Sol Ring</code>s / animated artifact tokens.</span></td>
+      <td>Creature could lose haste; artifact token can be animated without haste (<code>tla.rs:9655</code>).</td>
+      <td>Only non-creature, non-animating <em>lands</em> relax <code>summoning_sick</code> (<code>view.is_creature() || !view.is_land() || can_become_creature(view)</code>). Creatures and artifacts always compare <code>summoning_sick</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Permanent with <code>power_up</code></strong><br><span class="muted"><code>Quicksilver, Brash Blur</code> (MSH), sole rules reader of <code>entered_this_turn</code>.</span></td>
+      <td>Could lose the turn-of-entry cost reduction distinction.</td>
+      <td>Explicitly compare <code>entered_this_turn(turn)</code> whenever <code>view.activated_abilities.iter().any(|a| a.power_up)</code> (and it is already a creature).</td>
+    </tr>
+    <tr>
+      <td><strong><code>Ward {2}</code> funded only by Treasure / pain land</strong><br><span class="muted"><code>Plains + Treasure</code> facing <code>Ward {2}</code>.</span></td>
+      <td>Deleting <code>resolution_mana_abilities</code> must not hide Treasure when automatic payment cannot pay or when Treasure is an alternative.</td>
+      <td><code>mana_ability_actions(player, false)</code> always retains non-simple activations (Treasure, pain lands, filter lands); <code>!can_pay</code> passes <code>true</code> so every mana ability stays offered.</td>
+    </tr>
+    <tr>
+      <td><strong><code>entered_this_turn</code> observation bit on Plains</strong><br><span class="muted">Column 51 in v11 observation tensor.</span></td>
+      <td>Tapping old Plains vs new Plains changes which row has <code>tapped=1, entered_this_turn=0</code> vs <code>tapped=0, entered_this_turn=1</code>.</td>
+      <td>Same trade-off Pass 2 already makes for permanent row order / <code>PublicId</code>: <code>automatic_taps</code> picks deterministically (oldest first) and no rules choice is hidden. Note: if a future Standard card targets "a land that entered this turn" or animates another land without haste, <code>interchangeable.rs</code> must re-enable that check.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. Failure, recovery &amp; operational check</h2>
+<ul>
+  <li><strong>Performance &amp; cache ownership:</strong> <code>interchangeable.rs</code> only runs on a manual payment that would otherwise stop (never under <code>Auto</code>, never on exact-cost skips). Computing <code>characteristics</code> once per permanent and checking <code>can_become_creature</code> adds negligible work; deleting <code>resolution_mana_abilities</code> removes an extra <code>useful_payment_taps</code> pass on every resolution payment with a dual land.</li>
+  <li><strong>Test gap closed:</strong> Pass 4 adds real-gameplay tests that play a land via <code>PlayLand</code> before casting (covering <code>Kyoshi Village + 3 Plains</code> modal skip, <code>Mountain ×4</code>, and <code>Kyoshi Village + 2 Plains</code>) plus a <code>Soulstone Sanctuary</code> old-vs-new guard test.</li>
+  <li><strong>Fixture &amp; benchmark impact:</strong> Real-game skipping of played-this-turn basics may simplify prefixes in Academy fixtures (re-verified in Pass 4) and further reduce redundant manual payment steps in <code>bench_steps</code> (baseline adopted from CI artifact at gate).</li>
+  <li><strong>Outside this work:</strong> Academy Moves log formatting of raw <code>{G}/{W}</code> braces and recording the chosen color after a modal; extending <code>autotapper.rs</code>'s full hand-followup scoring to choice sources; storing <code>from_simple_tap</code> directly on <code>Decision::ManaChoice</code>.</li>
+</ul>
+
+<h2>5. Choices made for review</h2>
+<div class="callout">
+  <ol style="margin:0; padding-left:1.25rem">
+    <li style="margin-bottom:0.5rem"><strong>Relax <code>summoning_sick</code> and <code>entered_this_turn</code> in <code>interchangeable.rs</code> for plain non-creature, non-animating lands:</strong> makes Pass 2 actually work on the normal "play a land, then cast a spell" turn while guarding creatures, non-lands, manlands (<code>Soulstone Sanctuary</code>, <code>Treetop Village</code>), and <code>power_up</code> permanents. Passed over: keeping raw <code>summoning_sick</code>/<code>entered_this_turn</code> equality, which left Pass 2 dead on almost every main-phase cast and contradicted <code>docs/academy.md</code>.</li>
+    <li><strong>Delete <code>resolution_mana_abilities</code> so <code>Decision::Payment</code> omits simple choice taps whenever <code>can_pay</code>, no waterbend, and floats off:</strong> aligns dual lands 100% with basics on <code>TurnFaceUp</code> and <code>Ward</code> (including <code>Ward {2}</code> with <code>Kyoshi Village + Sol Ring</code> matching <code>Plains + Sol Ring</code>) and shrinks the code. Passed over: offering dual-only manual taps on <code>Decision::Payment</code> without basics.</li>
+  </ol>
+</div>
+
+<section class="questions">
+  <h2>6. Open questions for review</h2>
+  <p class="muted">Reply with question number + option letter (for example, <code>1a</code> or <code>2b</code>).</p>
+  <ol>
+    <li><strong>Interchangeability of a plain land played this turn vs. earlier turns:</strong>
+      <ul class="options">
+        <li><strong>1a (chosen for Pass 4):</strong> Treat plain non-creature, non-animating lands (no <code>BecomeCreature</code>, no <code>power_up</code>) as interchangeable across turns so "play a land, then cast" skips redundant stops and color modals (manlands, creatures, artifacts, and <code>power_up</code> stay distinct).</li>
+        <li><strong>1b:</strong> Keep raw <code>summoning_sick</code> and <code>entered_this_turn</code> equality on all permanents, and narrow <code>docs/academy.md</code> / <code>scratch/plan.md</code> to state that a land played this turn always stops manual payments.</li>
+      </ul>
+    </li>
+    <li><strong>Resolution payments (<code>TurnFaceUp</code>, <code>Ward</code>) with spare dual lands (e.g. <code>Kyoshi Village + Sol Ring</code> for <code>Ward {2}</code>):</strong>
+      <ul class="options">
+        <li><strong>2a (chosen for Pass 4):</strong> Match basics — omit simple choice taps when <code>can_pay</code> is true, waterbend is 0, and floats are off (<code>[PayCost, Decline]</code>, deleting <code>resolution_mana_abilities</code>).</li>
+        <li><strong>2b:</strong> Extend <code>Decision::Payment</code> to offer full per-source manual taps for <em>both</em> basics and duals (including <code>TapForMana</code> and modal-skip support on <code>Decision::Payment</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Long restriction wording on simple mana taps</strong> (<code>Jasmine Dragon Tea Shop</code>):
+      <ul class="options">
+        <li><strong>3a (built):</strong> Reuse <code>ManaRestriction::describe()</code> verbatim.</li>
+        <li><strong>3b:</strong> Shorten to <code>(Ally only)</code> when concise.</li>
+      </ul>
+    </li>
+    <li><strong>LLM text observation wording</strong> (<code>manabot/semantic/text_observation.py:658</code>):
+      <ul class="options">
+        <li><strong>4a (built):</strong> Leave frozen prompt wording <code>"Activate ability of &lt;Name&gt;"</code> unchanged.</li>
+        <li><strong>4b:</strong> Follow native <code>action.description</code> (<code>"Tap Kyoshi Village for {G}/{W}"</code>).</li>
+      </ul>
+    </li>
+  </ol>
+</section>
+
+</main>
+</body>
+</html>
