@@ -453,13 +453,12 @@ pub enum StepEnum {
     CombatBegin = 4,
     CombatDeclareAttackers = 5,
     CombatDeclareBlockers = 6,
-    CombatDamage = 7,
-    CombatEnd = 8,
-    PostcombatMainStep = 9,
-    EndingEnd = 10,
-    EndingCleanup = 11,
-    // Appended as 12 to preserve Observation JSON discriminants; reorder before CombatDamage in 0.3.0.
-    CombatFirstStrikeDamage = 12,
+    CombatFirstStrikeDamage = 7,
+    CombatDamage = 8,
+    CombatEnd = 9,
+    PostcombatMainStep = 10,
+    EndingEnd = 11,
+    EndingCleanup = 12,
 }
 
 #[cfg(feature = "python")]

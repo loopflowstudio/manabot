@@ -134,11 +134,11 @@ Consumers read the encoded arrays by name; see
 
 #### Turn steps and Observation JSON
 
-Turn steps sort in rules order in both Rust (`StepKind`) and Python
-(`managym.StepEnum`): `COMBAT_FIRST_STRIKE_DAMAGE` is `7`, followed by
-`COMBAT_DAMAGE` (`8`) through `ENDING_CLEANUP` (`12`). `Observation.toJSON()`
-writes `turn.phase` and `turn.step` as their public enum names instead of
-integer discriminants:
+Rust `StepKind` and the integer values of Python's `managym.StepEnum` follow
+rules order. First-strike damage (`COMBAT_FIRST_STRIKE_DAMAGE`, `7`) precedes
+regular damage (`COMBAT_DAMAGE`, `8`). Cleanup (`ENDING_CLEANUP`, `12`)
+is the last step. `Observation.toJSON()` writes `turn.phase` and `turn.step`
+as their public enum names.
 
 ```python
 import json
@@ -167,15 +167,16 @@ restored = managym.Observation.from_json(json.dumps(wire))
 assert restored.toJSON() == obs.toJSON()
 ```
 
-`Observation.from_json` and `validate_observation_json` accept both canonical
-enum names (such as `"COMBAT"` and `"COMBAT_FIRST_STRIKE_DAMAGE"`) and 0.2.x
-integer codes (`0`–`4` for phases; `0`–`11` plus `12` for
-`COMBAT_FIRST_STRIKE_DAMAGE`). Unknown names (including Rust variant names
-like `"FirstStrikeCombatDamage"`), integers outside `0`–`12`, and non-integer
-types raise an error. Because `viewer_state_hash` hashes canonical observation
-JSON, live hashes reflect the string names; policy and decision-memory encoders
-keep their `0..=11` step encoding (folding `FirstStrikeCombatDamage` onto `7`
-and `Cleanup` onto `11`).
+`Observation.from_json` reads standalone observations. `validate_observation_json`
+checks the same turn fields inside a semantic observation's `viewer_state`.
+Both accept public enum names and 0.2.x integer codes. Legacy phase codes
+range from `0` to `4`. Legacy step codes range from `0` to `12`, with `12`
+meaning `COMBAT_FIRST_STRIKE_DAMAGE`. Unknown names, out-of-range integers,
+floats, booleans and nulls raise an error.
+
+Live `viewer_state_hash` values reflect the names in canonical observation
+JSON. Policy inputs and decision memory keep the stored step indices `0..=11`.
+Both damage steps use index `7`, and cleanup uses `11`.
 
 ### Executing an action
 

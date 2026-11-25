@@ -667,7 +667,7 @@ fn walk_block_declaration(
     s.advance_until(
         |s| {
             s.action_space().kind == ActionSpaceKind::DeclareBlocker
-                || s.current_step() as i32 > managym::flow::turn::StepKind::DeclareBlockers as i32
+                || s.current_step() > managym::flow::turn::StepKind::DeclareBlockers
         },
         "blockers".into(),
     );

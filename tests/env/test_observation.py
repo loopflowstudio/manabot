@@ -6,6 +6,7 @@ Capacity refusal for cards, permanents and focus is in
 `tests/verify/test_native_buffer_capacities.py`.
 """
 
+import json
 from typing import Tuple
 
 import numpy as np
@@ -187,6 +188,48 @@ class TestEnumParity:
     )
     def test_event_entity_kind_enum(self, py_enum, cpp_enum):
         assert int(cpp_enum) == py_enum
+
+
+def test_retained_turn_codes_decode_to_rules_order(
+    env: managym.Env,
+    observation: managym.Observation,
+) -> None:
+    wire = json.loads(observation.toJSON())
+    semantic = json.loads(env.semantic_observation_json(env.current_agent_index()))
+    # Each tuple is in rules order. Its entries are the old wire codes.
+    for field, enum, codes in (
+        ("phase", PhaseEnum, (0, 1, 2, 3, 4)),
+        ("step", StepEnum, (0, 1, 2, 3, 4, 5, 6, 12, 7, 8, 9, 10, 11)),
+    ):
+        for current, legacy in enumerate(codes):
+            wire["turn"][field] = legacy
+            semantic["viewer_state"]["turn"][field] = legacy
+            managym.validate_observation_json(json.dumps(semantic))
+            restored = managym.Observation.from_json(json.dumps(wire))
+            assert int(getattr(restored.turn, field)) == current
+            named = restored.toJSON()
+            assert json.loads(named)["turn"][field] == enum(current).name
+            assert managym.Observation.from_json(named).toJSON() == named
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("phase", 5),
+        ("phase", False),
+        ("step", 13),
+        ("step", 1.0),
+        ("step", None),
+        ("step", "FirstStrikeCombatDamage"),
+    ],
+)
+def test_invalid_turn_fields_are_rejected(
+    observation: managym.Observation, field: str, value: object
+) -> None:
+    wire = json.loads(observation.toJSON())
+    wire["turn"][field] = value
+    with pytest.raises(ValueError):
+        managym.Observation.from_json(json.dumps(wire))
 
 
 class TestObservationSpace:

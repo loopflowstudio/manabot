@@ -7,6 +7,7 @@ use managym::{
         observation::Observation,
         observation_encoder::{encode, encode_into, EncodedObservation, ObservationEncoderConfig},
     },
+    flow::turn::PhaseKind,
     state::player::PlayerConfig,
 };
 use sha2::{Digest, Sha256};
@@ -34,7 +35,7 @@ fn root(large: bool) -> (Env, Observation) {
             ),
         ])
         .unwrap();
-    while obs.turn.phase as i32 != 1 {
+    while obs.turn.phase != PhaseKind::PrecombatMain {
         let pass = obs
             .action_space
             .actions
