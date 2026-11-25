@@ -210,6 +210,7 @@ No earlier drag attempt exists in the tree.
    (`.title:visible` count 0) on the base commit too: pre-existing, unrelated.
 2. **Block and target drags — built in `4dcf306764`.** All 12 drag browser cases and 21 focused drag/combat unit cases passed. Svelte reported zero errors or warnings. The drag spec covers assignment, reassignment, Escape restoring the armed blocker, previewless blocking, spell and ability sources, all three recipient types, payment preview, multi-offer choice and Study click parity.
 3. **Next: attack marquee, wording and visual checks.** Add live hit selection and `addAttackers`, update the draft caption, "No blocks" wording and shortcut sheet, check light/dark at 1280×800, and exercise motion preferences. The full release run belongs to gate.
+   Review note from pass 2: `Endpoint` now has both `stack` (a spell's card id) and `stack-entry` (a stack object id, abilities included) in `board/recent.ts`; fold them into one stack endpoint if the line measurement allows, otherwise say why both exist beside the type. Docs (`docs/academy.md`) already describe the marquee; adjust only if the build differs.
 
 ## Done when
 
