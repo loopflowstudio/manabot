@@ -287,7 +287,7 @@ print(len(probs), round(sum(probs), 6), round(value_est, 4))
 Package `__init__.py` files stay empty so inference and replay children do not
 pull in Torch or training modules; import each symbol from its defining module.
 Each published module declares `__all__`, and no internal `manabot` module
-defines `__all__` (aside from deprecated `0.3.0` shims), so `__all__` inside an
+defines `__all__`, so `__all__` inside an
 installed wheel names the same boundary as this table:
 
 | Module | Published surface |

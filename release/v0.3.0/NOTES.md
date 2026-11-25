@@ -24,3 +24,21 @@ and `step_active`, and `ObservationLayout.allocate`, `axis_extents` and
 these batches, and offline captures store them with
 `ObservationBatch.to_bytes()`. Search receipts recorded with v9 or v10 pools
 replay at v0.2.6.
+
+Deprecated `managym` and Academy compatibility surfaces have been removed:
+`StepKind` / `StepEnum` now follow rules order (`FirstStrikeCombatDamage = 7`,
+`CombatDamage = 8`, …, `Cleanup = 12`); viewer `Observation` JSON uses named
+`phase`/`step` strings; flat `Card` and `Permanent` characteristic getters,
+`Permanent.card`, `StackObject.card`, `Card.cast_permission`, `PlayerConfig.disclosure`,
+`Env.enable_behavior_tracking`, `VectorEnv.opponent_policy`, `WORLD_VERSION`,
+`learning_catalog`, `learning_record_names`, `learning_token_value`,
+`LearningCatalog`, `managym.recording.CapturedVector`, `RecordedGame.game_trace_sha256`,
+and the top-level `academy` package shim are removed (use `managym.academy` and
+`card.characteristics` / `permanent.characteristics` / `spell`).
+
+Deprecated `manabot` shims, aliases, and legacy training/sampler loaders have
+been removed: `manabot.sim.search.flat`, `manabot.env.replay`,
+`manabot.sim.table_bots.CheckpointVillain`, `manabot.training.export`, and
+legacy `.pt` tracked-training saves (`learner.pt`/`optimizer.pt`/`ema.pt`) and
+`.pt` belief samplers (use portable `.safetensors` saves and samplers; published
+policy `.pt` checkpoint loading remains supported).

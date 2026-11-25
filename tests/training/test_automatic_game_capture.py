@@ -17,7 +17,7 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -30,7 +30,7 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.selection_data import SelectionGameSpec
 import managym
 from managym.decision import Command
-from managym.recording import RecordedVectorEnv, ScalarCapture, read_record
+from managym.recording import ScalarCapture, read_record
 
 
 def _model() -> ActorCritic:

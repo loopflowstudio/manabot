@@ -142,20 +142,16 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert pack.definition_count == managym.CARD_DEFINITION_COUNT
     assert pack.schema.raw["schema_version"] == 10
     pack.pad_catalog()
-    tensors = {
-        key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
-    }
-    policy, value = agent(device_input(agent, tensors))
-    legal = tensors["actions_valid"].bool()
-    assert torch.isfinite(policy[legal]).all()
+    policy, value = agent(device_input(agent, observation))
+    action_count = len(observation.action_space.actions)
+    assert torch.isfinite(policy[:, :action_count]).all()
     assert torch.isfinite(value).all()
-    loss = value.sum() - policy[legal].mean()
+    loss = value.sum() - policy[:, :action_count].mean()
     loss.backward()
     assert any(
         p.grad is not None and bool((p.grad != 0).any()) for p in agent.parameters()
     )
-    actions = np.flatnonzero(observation["actions_valid"])
-    _, _, _, truncated, info = env.step(int(actions[0]))
+    _, _, _, truncated, info = env.step(0)
     assert not truncated
     assert not info["action_space_truncated"]
     path = tmp_path / "elemental.pt"
@@ -164,7 +160,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert summary.compatible
     assert len(summary.setups) == 10
     restored, _ = load_checkpoint(str(path))
-    restored_policy, restored_value = restored(device_input(restored, tensors))
+    restored_policy, restored_value = restored(device_input(restored, observation))
     torch.testing.assert_close(restored_policy, policy)
     torch.testing.assert_close(restored_value, value)
 
@@ -287,17 +283,22 @@ def test_academy_records_a_real_elemental_command_with_the_exact_pack(
 def test_elemental_complete_games_use_the_ordinary_training_encoder(
     left: str, right: str
 ) -> None:
+    space = ObservationSpace()
     env = Env(
         Match(MatchConfig.authored(PACK, "elemental_" + left, "elemental_" + right)),
-        ObservationSpace(),
+        space,
         Reward(RewardConfig()),
         seed=164,
     )
     observation, _ = env.reset(seed=164)
     rng = np.random.default_rng(164)
     for _ in range(5000):
-        actions = np.flatnonzero(observation["actions_valid"])
-        observation, _, terminal, truncated, info = env.step(int(rng.choice(actions)))
+        batch = managym.encode_observation_batch([observation], space.layout)
+        action_count = int(batch.action_counts[0])
+        assert action_count == len(observation.action_space.actions)
+        observation, _, terminal, truncated, info = env.step(
+            int(rng.integers(action_count))
+        )
         assert not truncated
         assert not info["action_space_truncated"]
         assert not info["card_space_truncated"]

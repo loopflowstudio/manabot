@@ -41,6 +41,44 @@
         "BREAKING managym.observation_layout: parameter turn_state removed"
       ],
       "reason": "MTG-433: 0.3.0 removal of policy inputs v9/v10 and the dense observation transport; hold for the 0.3.0 cut"
+    },
+    {
+      "changes": [
+        "BREAKING managym.Card.card_types: removed",
+        "BREAKING managym.Card.cast_permission: removed",
+        "BREAKING managym.Card.is_ally: removed",
+        "BREAKING managym.Card.is_legendary: removed",
+        "BREAKING managym.Card.is_lesson: removed",
+        "BREAKING managym.Card.keywords: removed",
+        "BREAKING managym.Card.kicker_cost: removed",
+        "BREAKING managym.Card.mana_cost: removed",
+        "BREAKING managym.Card.name: removed",
+        "BREAKING managym.Card.power: removed",
+        "BREAKING managym.Card.text_box: removed",
+        "BREAKING managym.Card.toughness: removed",
+        "BREAKING managym.Card.ward_cost: removed",
+        "BREAKING managym.Env.__init__: parameter enable_behavior_tracking removed",
+        "DEPRECATED_REMOVED managym.LearningCatalog: removed",
+        "DEPRECATED_REMOVED managym.Permanent.card: removed",
+        "BREAKING managym.Permanent.keywords: removed",
+        "BREAKING managym.Permanent.power: removed",
+        "BREAKING managym.Permanent.toughness: removed",
+        "BREAKING managym.PlayerConfig.__init__: parameter disclosure removed",
+        "DEPRECATED_REMOVED managym.PlayerConfig.disclosure: removed",
+        "DEPRECATED_REMOVED managym.StackObject.card: removed",
+        "BREAKING managym.StepEnum.COMBAT_DAMAGE: enum value 7 changed to 8",
+        "BREAKING managym.StepEnum.COMBAT_END: enum value 8 changed to 9",
+        "BREAKING managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE: enum value 12 changed to 7",
+        "BREAKING managym.StepEnum.ENDING_CLEANUP: enum value 11 changed to 12",
+        "BREAKING managym.StepEnum.ENDING_END: enum value 10 changed to 11",
+        "BREAKING managym.StepEnum.POSTCOMBAT_MAIN_STEP: enum value 9 changed to 10",
+        "BREAKING managym.VectorEnv.__init__: parameter opponent_policy removed",
+        "DEPRECATED_REMOVED managym.WORLD_VERSION: removed",
+        "DEPRECATED_REMOVED managym.learning_catalog: removed",
+        "DEPRECATED_REMOVED managym.learning_record_names: removed",
+        "DEPRECATED_REMOVED managym.learning_token_value: removed"
+      ],
+      "reason": "Remove 0.3.0-deprecated managym, manabot, and v9/v10 dense observation transport APIs"
     }
   ],
   "line": "0.2",
@@ -1411,12 +1449,6 @@
       "Card": {
         "kind": "class",
         "members": {
-          "card_types": {
-            "kind": "attribute"
-          },
-          "cast_permission": {
-            "kind": "attribute"
-          },
           "cast_permissions": {
             "kind": "attribute"
           },
@@ -1435,46 +1467,13 @@
           "id": {
             "kind": "attribute"
           },
-          "is_ally": {
-            "kind": "attribute"
-          },
-          "is_legendary": {
-            "kind": "attribute"
-          },
-          "is_lesson": {
-            "kind": "attribute"
-          },
           "is_token": {
-            "kind": "attribute"
-          },
-          "keywords": {
-            "kind": "attribute"
-          },
-          "kicker_cost": {
-            "kind": "attribute"
-          },
-          "mana_cost": {
-            "kind": "attribute"
-          },
-          "name": {
             "kind": "attribute"
           },
           "owner_id": {
             "kind": "attribute"
           },
-          "power": {
-            "kind": "attribute"
-          },
           "registry_key": {
-            "kind": "attribute"
-          },
-          "text_box": {
-            "kind": "attribute"
-          },
-          "toughness": {
-            "kind": "attribute"
-          },
-          "ward_cost": {
             "kind": "attribute"
           },
           "x": {
@@ -2034,7 +2033,7 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, seed=..., skip_trivial=..., enable_profiler=..., enable_behavior_tracking=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
+            "signature": "(self, seed=..., skip_trivial=..., enable_profiler=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
           },
           "action_count": {
             "kind": "method",
@@ -2553,10 +2552,6 @@
           }
         }
       },
-      "LearningCatalog": {
-        "deprecated": true,
-        "kind": "type_alias"
-      },
       "MAX_DECISION_CODE": {
         "kind": "value"
       },
@@ -2940,10 +2935,6 @@
           "cant_be_blocked_this_turn": {
             "kind": "attribute"
           },
-          "card": {
-            "deprecated": true,
-            "kind": "property"
-          },
           "characteristics": {
             "kind": "attribute"
           },
@@ -3016,9 +3007,6 @@
           "keyword_counter_timestamps": {
             "kind": "attribute"
           },
-          "keywords": {
-            "kind": "attribute"
-          },
           "mana_value": {
             "kind": "property"
           },
@@ -3037,9 +3025,6 @@
           "plus1_counters": {
             "kind": "attribute"
           },
-          "power": {
-            "kind": "attribute"
-          },
           "registry_key": {
             "kind": "attribute"
           },
@@ -3050,9 +3035,6 @@
             "kind": "attribute"
           },
           "timestamp": {
-            "kind": "attribute"
-          },
-          "toughness": {
             "kind": "attribute"
           },
           "transforms": {
@@ -3182,17 +3164,13 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, name, decklist, sideboard=..., world=..., disclosure=...)"
+            "signature": "(self, name, decklist, sideboard=..., world=...)"
           },
           "deck": {
             "kind": "property"
           },
           "decklist": {
             "kind": "property"
-          },
-          "disclosure": {
-            "deprecated": true,
-            "kind": "attribute"
           },
           "name": {
             "kind": "attribute"
@@ -3586,10 +3564,6 @@
           "announced_x": {
             "kind": "attribute"
           },
-          "card": {
-            "deprecated": true,
-            "kind": "property"
-          },
           "cast_from_graveyard": {
             "kind": "property"
           },
@@ -3740,7 +3714,7 @@
           },
           "COMBAT_DAMAGE": {
             "kind": "enum_member",
-            "value": 7
+            "value": 8
           },
           "COMBAT_DECLARE_ATTACKERS": {
             "kind": "enum_member",
@@ -3752,23 +3726,23 @@
           },
           "COMBAT_END": {
             "kind": "enum_member",
-            "value": 8
+            "value": 9
           },
           "COMBAT_FIRST_STRIKE_DAMAGE": {
             "kind": "enum_member",
-            "value": 12
+            "value": 7
           },
           "ENDING_CLEANUP": {
             "kind": "enum_member",
-            "value": 11
+            "value": 12
           },
           "ENDING_END": {
             "kind": "enum_member",
-            "value": 10
+            "value": 11
           },
           "POSTCOMBAT_MAIN_STEP": {
             "kind": "enum_member",
-            "value": 9
+            "value": 10
           },
           "PRECOMBAT_MAIN_STEP": {
             "kind": "enum_member",
@@ -3813,7 +3787,7 @@
         "members": {
           "__init__": {
             "kind": "method",
-            "signature": "(self, num_envs, seed=..., skip_trivial=..., opponent_policy=..., seed_stride=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
+            "signature": "(self, num_envs, seed=..., skip_trivial=..., seed_stride=..., *, decision_memory_include_own=..., decision_memory=..., player_policies=...)"
           },
           "buffered_call_timings": {
             "kind": "method",
@@ -3998,10 +3972,6 @@
       "WORLD_SETUP": {
         "kind": "value"
       },
-      "WORLD_VERSION": {
-        "deprecated": true,
-        "kind": "value"
-      },
       "WorldIdentity": {
         "kind": "typed_dict",
         "members": {
@@ -4086,21 +4056,6 @@
       },
       "format": {
         "kind": "reexport"
-      },
-      "learning_catalog": {
-        "deprecated": true,
-        "kind": "function",
-        "signature": "()"
-      },
-      "learning_record_names": {
-        "deprecated": true,
-        "kind": "function",
-        "signature": "()"
-      },
-      "learning_token_value": {
-        "deprecated": true,
-        "kind": "function",
-        "signature": "(name)"
       },
       "naming_catalog": {
         "kind": "function",

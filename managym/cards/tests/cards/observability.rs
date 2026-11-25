@@ -6164,15 +6164,18 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 this_turn: expiry == DelayedExpiry::ThisTurn,
                 ..Default::default()
             };
-            let mut rows = vec![0.0; 64 * RELATION_DIM];
-            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
-                .unwrap();
-            assert_eq!(rows[28], 6.0, "event code stays on header");
-            assert_eq!(rows[RELATION_DIM], 9.0);
-            assert_eq!(rows[RELATION_DIM + 28], f32::from(code));
+            let rows = managym::agent::continuation::encode_rows(
+                &[frame],
+                0,
+                &Default::default(),
+            )
+            .unwrap();
+            assert_eq!(rows[0][28], 6, "event code stays on header");
+            assert_eq!(rows[1][0], 9);
+            assert_eq!(rows[1][28], i64::from(code));
             assert_eq!(
-                rows[RELATION_DIM + relation::THIS_TURN],
-                f32::from(expiry == DelayedExpiry::ThisTurn)
+                rows[1][relation::THIS_TURN],
+                i64::from(expiry == DelayedExpiry::ThisTurn)
             );
         }
     }

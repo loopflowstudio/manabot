@@ -1179,6 +1179,19 @@ pub fn decision_code(decision: &Decision) -> u8 {
     }
 }
 
+pub fn encode_rows(
+    frames: &[ContinuationFrame],
+    viewer: usize,
+    objects: &std::collections::HashMap<i32, i32>,
+) -> Result<Vec<[i64; RELATION_DIM]>, ObservationEncodeError> {
+    let mut rows = Vec::new();
+    relation_rows(frames, viewer, objects, |row| {
+        rows.push(*row);
+        Ok(())
+    })?;
+    Ok(rows)
+}
+
 pub(super) fn write_rows(
     frames: &[ContinuationFrame],
     viewer: usize,

@@ -16,10 +16,12 @@ from scripts.public_api import (
     ROOT,
     Contract,
     Symbol,
+    deprecated_stub_lines,
     main,
     native_exports,
     python_class,
     resolve,
+    stub_class,
     update,
 )
 
@@ -57,12 +59,32 @@ def test_published_symbols_come_from_their_defining_module() -> None:
 
 
 def test_stub_comments_mark_only_the_deprecated_declaration() -> None:
-    """The marked declarations are scheduled for removal in 0.3.0."""
-    exports = native_exports()
-    assert exports["LearningCatalog"].deprecated
-    assert exports["PlayerConfig"].members["disclosure"].deprecated
-    assert not exports["PlayerConfig"].members["deck"].deprecated
-    assert not exports["Observation"].members["validate"].deprecated
+    """Marker comments flag only the declaration they annotate."""
+    sample = (
+        "# Deprecated: removed in next minor.\n"
+        "class OldType:\n"
+        "    pass\n"
+        "class KeepType:\n"
+        "    keep: int\n"
+        "    old: int  # Deprecated: use keep.\n"
+        "    def active(self) -> None: ...\n"
+    )
+    marked = deprecated_stub_lines(sample)
+    tree = ast.parse(sample)
+    exports: dict[str, Symbol] = {}
+    for node in tree.body:
+        assert isinstance(node, ast.ClassDef)
+        exports[node.name] = stub_class(node, exports, marked)
+    assert exports["OldType"].deprecated
+    assert not exports["KeepType"].deprecated
+    assert exports["KeepType"].members["old"].deprecated
+    assert not exports["KeepType"].members["keep"].deprecated
+    assert not exports["KeepType"].members["active"].deprecated
+
+    live = native_exports()
+    assert not any(symbol.deprecated for symbol in live.values())
+    assert not live["PlayerConfig"].members["deck"].deprecated
+    assert not live["Observation"].members["validate"].deprecated
 
 
 def test_readme_lists_the_published_exports() -> None:
@@ -85,7 +107,6 @@ def test_readme_lists_the_published_exports() -> None:
 
 def test_only_published_modules_declare_exports() -> None:
     paths = {Path(*mod.split(".")).with_suffix(".py") for mod in PUBLIC_MODULES}
-    paths.add(Path("manabot/sim/search/flat.py"))  # Warning shim removed in 0.3.0.
     found = {
         p.relative_to(ROOT)
         for p in (ROOT / "manabot").rglob("*.py")

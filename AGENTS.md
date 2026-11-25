@@ -54,8 +54,7 @@ Published library API and patch-clean `main`: `manabot`'s published surface is
 the fifteen modules in `PUBLIC_MODULES` (`scripts/public_api.py`, mirrored in
 `manabot/README.md#library-api`), each defining `__all__` while package
 `__init__.py` files stay empty; no unpublished `manabot` module defines
-`__all__` (except explicitly exempted `0.3.0`-deprecated shims such as
-`manabot/sim/search/flat.py`). `managym`'s top-level surface is
+`__all__`. `managym`'s top-level surface is
 `managym/__init__.pyi`. `Prepared`, `Collector`, `Prefix`, and `MemoryArchive`
 are opaque handles (class identity promised, internal fields free to evolve);
 everything else in `manabot` is internal. `tests/public_api.json` snapshots the

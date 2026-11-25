@@ -123,8 +123,8 @@ def test_env_reset_seed_reaches_engine_rng():
 
     def deal(seed: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
         obs, _ = env.reset(seed=seed)
-        return tuple(card.name for card in obs.agent_cards), tuple(
-            card.name for card in obs.opponent_cards
+        return tuple(card.characteristics.name for card in obs.agent_cards), tuple(
+            card.characteristics.name for card in obs.opponent_cards
         )
 
     original = deal(123)

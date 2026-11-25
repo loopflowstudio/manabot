@@ -126,7 +126,9 @@ fn observation_contract_enum_values_stable() {
     assert_eq!(PhaseKind::Ending as i32, 4);
 
     assert_eq!(StepKind::Untap as i32, 0);
-    assert_eq!(StepKind::Cleanup as i32, 11);
+    assert_eq!(StepKind::FirstStrikeCombatDamage as i32, 7);
+    assert_eq!(StepKind::CombatDamage as i32, 8);
+    assert_eq!(StepKind::Cleanup as i32, 12);
 }
 
 #[test]

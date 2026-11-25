@@ -11,6 +11,7 @@ from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
@@ -28,6 +29,7 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
             for key in ("elemental_right", "elemental_left")
         ]
     )
+    obs = keep_opening_hands(engine, obs)
     for _ in range(20):
         if int(obs.turn.step) == 3:
             break
@@ -94,11 +96,8 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
         history_space,
         ModelConfig(hidden_dim=16, world=PACK, recent_events=True),
     )
-    tensors = {
-        key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
-    }
-    policy, value = agent(device_input(agent, tensors))
-    assert torch.isfinite(policy[tensors["actions_valid"].bool()]).all()
+    policy, value = agent(device_input(agent, obs))
+    assert torch.isfinite(policy[:, : len(obs.action_space.actions)]).all()
     assert torch.isfinite(value).all()
     assert agent.recent_events is not None
     gradients = torch.autograd.grad(
