@@ -1931,7 +1931,7 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
 }
 
 #[test]
-fn payment_resources_bitmasks_and_overflow_preserve_order_and_hash() {
+fn payment_resources_bitmasks_preserve_order_and_hash() {
     use std::hash::{Hash, Hasher};
 
     let hash_of = |res: &super::PaymentResources| -> u64 {
@@ -1944,11 +1944,9 @@ fn payment_resources_bitmasks_and_overflow_preserve_order_and_hash() {
         present: vec![true, true],
         untapped: vec![true, true],
         used_masks: Vec::new(),
-        used_overflow: None,
     };
     assert!(!a.is_used(0, 0));
     assert!(!a.is_used(0, 63));
-    assert!(!a.is_used(0, 64));
     assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Equal);
 
     a.use_ability(0, 0);
@@ -1964,18 +1962,8 @@ fn payment_resources_bitmasks_and_overflow_preserve_order_and_hash() {
     assert_eq!(a, b);
     assert_eq!(hash_of(&a), hash_of(&b));
 
-    // Overflow fallback for ability positions >= 64.
-    a.use_ability(1, 64);
-    a.use_ability(0, 64);
-    a.use_ability(0, 70);
-    assert!(a.is_used(1, 64));
-    assert!(a.is_used(0, 64));
-    assert!(a.is_used(0, 70));
-    assert!(!a.is_used(1, 70));
     a.use_ability(1, 0);
     a.use_ability(1, 63);
-    assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Greater);
-    a.use_ability(1, 70);
     assert_eq!(a.cmp_source(0, 1), std::cmp::Ordering::Equal);
 }
 

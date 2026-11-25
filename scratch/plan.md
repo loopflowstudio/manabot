@@ -27,12 +27,12 @@ behavior-review defects, and Performance Slices 13–15 are built and verified.
 - Debug oracles pass: `flow::mana::` 58/58, `bench_states` self-tests 2/2,
   `fdn::` cards 192/192; the deduplicated sources are checked against the
   full feasibility check by `debug_assert_eq!` in `Game::mana_ability_actions`.
-- Shape note for gate review: Slice 15 added ~980 lines to
-  `managym/src/flow/mana.rs` (`PurposeProjection`, `ProjectedChoices`
-  interning, `PurposeMask`, `FastHasher`, `used_masks`/`used_overflow`).
-  Check whether the mana-ability dedup and `groups_for` share one projection
-  rather than two, and whether `used_overflow` (≥64 abilities on one source)
-  is needed or can be a debug-asserted bound.
+- Post-Slice-15 compress: unified `Choices<T>`, `Obligation<C>` and
+  `SearchState<M, C>`, dropped `PaymentResources::used_overflow` (asserting
+  `< 64` mana abilities per permanent), shared `tap_candidate_sets` and
+  `PurposeProjection` helpers between `mana_ability_actions` and
+  `PaymentSearch`, and kept restriction-free searches in `VisitedStates::Exact`
+  with zero-copy `canonicalize_resources` when sorted.
 
 Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
 at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two

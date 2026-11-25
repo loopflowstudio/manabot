@@ -171,45 +171,68 @@ struct ProjectedClass {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 struct ProjectedMana {
     mana: [u8; 6],
-    #[allow(clippy::box_collection)] // thin pointer; ordinary pools stay inline
-    classes: Option<Box<Vec<(ProjectedClass, [u8; 6])>>>,
+    classes: Option<Box<[(ProjectedClass, [u8; 6])]>>,
 }
 
-#[derive(Clone, Debug)]
-struct ProjectedChoices(Arc<ProjectedChoicesInner>);
+/// Immutable choice list with a precomputed hash digest so search states,
+/// obligations and projected outputs compare and hash in O(1).
+#[derive(Debug)]
+struct Choices<T>(Arc<ChoicesInner<T>>);
 
 #[derive(Debug)]
-struct ProjectedChoicesInner {
-    modes: Vec<ProjectedMana>,
+struct ChoicesInner<T> {
+    modes: Vec<T>,
     digest: u64,
 }
 
-impl From<Vec<ProjectedMana>> for ProjectedChoices {
-    fn from(modes: Vec<ProjectedMana>) -> Self {
+impl<T> Clone for Choices<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: std::hash::Hash> From<Vec<T>> for Choices<T> {
+    fn from(modes: Vec<T>) -> Self {
         use std::hash::{Hash, Hasher};
         let mut hasher = FastHasher::default();
         modes.hash(&mut hasher);
-        Self(Arc::new(ProjectedChoicesInner {
+        Self(Arc::new(ChoicesInner {
             modes,
             digest: hasher.finish(),
         }))
     }
 }
 
-impl PartialEq for ProjectedChoices {
+impl<T> Choices<T> {
+    fn as_slice(&self) -> &[T] {
+        &self.0.modes
+    }
+}
+
+impl<T> std::ops::Deref for Choices<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.0.modes
+    }
+}
+
+impl<T: PartialEq> PartialEq for Choices<T> {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
             || (self.0.digest == other.0.digest && self.0.modes == other.0.modes)
     }
 }
 
-impl Eq for ProjectedChoices {}
+impl<T: Eq> Eq for Choices<T> {}
 
-impl std::hash::Hash for ProjectedChoices {
+impl<T> std::hash::Hash for Choices<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write_u64(self.0.digest);
     }
 }
+
+type ManaChoices = Choices<Mana>;
+type ProjectedChoices = Choices<ProjectedMana>;
 
 /// Projects `ManaRestriction`s onto the finite set of `SpendingContext`s
 /// reachable in a payment query (pending obligations plus nonzero-cost mana
@@ -269,7 +292,7 @@ impl PurposeProjection {
     }
 
     fn project_mana(&mut self, mana: &Mana) -> ProjectedMana {
-        if mana.classes.is_none() {
+        if mana.classes().is_empty() {
             return ProjectedMana {
                 mana: mana.mana,
                 classes: None,
@@ -293,12 +316,8 @@ impl PurposeProjection {
         }
         ProjectedMana {
             mana: mana.mana,
-            classes: (!classes.is_empty()).then(|| Box::new(classes)),
+            classes: Some(classes.into_boxed_slice()),
         }
-    }
-
-    fn project_opt_mana(&mut self, mana: &Option<Mana>) -> Option<ProjectedMana> {
-        mana.as_ref().map(|m| self.project_mana(m))
     }
 
     fn project_choices(&mut self, raw: &ManaChoices) -> ProjectedChoices {
@@ -336,10 +355,11 @@ impl PurposeProjection {
             return false;
         }
         if a.fixed != b.fixed {
-            let Some(proj) = projection.as_deref_mut() else {
+            let (Some(proj), Some(af), Some(bf)) = (projection.as_deref_mut(), &a.fixed, &b.fixed)
+            else {
                 return false;
             };
-            if proj.project_opt_mana(&a.fixed) != proj.project_opt_mana(&b.fixed) {
+            if proj.project_mana(af) != proj.project_mana(bf) {
                 return false;
             }
         }
@@ -365,12 +385,12 @@ fn mana_has_restriction(mana: &Mana) -> bool {
         .any(|(class, _)| class.restriction.is_some())
 }
 
+fn obligation_has_restriction(obligation: &Obligation) -> bool {
+    matches!(obligation, Obligation::Output { choices, .. } if choices.iter().any(mana_has_restriction))
+}
+
 fn state_has_restriction(state: &PaymentSearchState) -> bool {
-    mana_has_restriction(&state.pool)
-        || state.obligations.iter().any(|obligation| match obligation {
-            Obligation::Output { choices, .. } => choices.iter().any(mana_has_restriction),
-            _ => false,
-        })
+    mana_has_restriction(&state.pool) || state.obligations.iter().any(obligation_has_restriction)
 }
 
 fn model_has_restriction(model: &PaymentModel) -> bool {
@@ -383,62 +403,11 @@ fn model_has_restriction(model: &PaymentModel) -> bool {
     })
 }
 
-/// Immutable output alternatives with a precomputed hash digest so
-/// `Obligation::Output` hashes in O(1) inside payment search.
-#[derive(Clone, Debug)]
-struct ManaChoices(Arc<ManaChoicesInner>);
-
-#[derive(Debug)]
-struct ManaChoicesInner {
-    modes: Vec<Mana>,
-    digest: u64,
-}
-
-impl From<Vec<Mana>> for ManaChoices {
-    fn from(modes: Vec<Mana>) -> Self {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        modes.hash(&mut hasher);
-        Self(Arc::new(ManaChoicesInner {
-            modes,
-            digest: hasher.finish(),
-        }))
-    }
-}
-
-impl ManaChoices {
-    fn as_slice(&self) -> &[Mana] {
-        &self.0.modes
-    }
-}
-
-impl std::ops::Deref for ManaChoices {
-    type Target = [Mana];
-    fn deref(&self) -> &Self::Target {
-        &self.0.modes
-    }
-}
-
-impl PartialEq for ManaChoices {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-            || (self.0.digest == other.0.digest && self.0.modes == other.0.modes)
-    }
-}
-
-impl Eq for ManaChoices {}
-
-impl std::hash::Hash for ManaChoices {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.0.digest);
-    }
-}
-
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Witnesses retain identities and concrete typed pool remainders.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum Obligation {
+enum Obligation<C = ManaChoices> {
     Pay {
         cost: ManaCost,
         taps: Taps,
@@ -446,7 +415,7 @@ enum Obligation {
     Output {
         // Alternatives and candidate sets are immutable query payloads. Branches
         // and memo keys share them while keeping their own progress and pool.
-        choices: ManaChoices,
+        choices: C,
         life_cost: u32,
     },
     Tap {
@@ -461,6 +430,35 @@ impl Obligation {
         Obligation::Pay {
             cost,
             taps: Taps::None,
+        }
+    }
+}
+
+impl<C> Obligation<C> {
+    fn tap_candidates(&self) -> Option<&Arc<Vec<PermanentId>>> {
+        match self {
+            Self::Tap { candidates, .. } => Some(candidates),
+            _ => None,
+        }
+    }
+
+    fn map_choices<D>(&self, f: impl FnOnce(&C) -> D) -> Obligation<D> {
+        match self {
+            Self::Pay { cost, taps } => Obligation::Pay {
+                cost: cost.clone(),
+                taps: *taps,
+            },
+            Self::Output { choices, life_cost } => Obligation::Output {
+                choices: f(choices),
+                life_cost: *life_cost,
+            },
+            Self::Tap {
+                candidates,
+                remaining,
+            } => Obligation::Tap {
+                candidates: candidates.clone(),
+                remaining: *remaining,
+            },
         }
     }
 }
@@ -657,13 +655,9 @@ impl PaymentStep {
 struct PaymentResources {
     present: Vec<bool>,
     untapped: Vec<bool>,
-    /// Per-source bitmasks for limited abilities at position `< 64`. Empty
-    /// until the first limited use, so ordinary transitions allocate nothing.
+    /// Per-source bitmasks for limited abilities (`ability < 64`). Empty until
+    /// the first limited use, so ordinary transitions allocate nothing.
     used_masks: Vec<u64>,
-    /// Sorted `(source index, ability position)` fallback for limited
-    /// abilities at position `>= 64`. `None` on ordinary boards.
-    #[allow(clippy::box_collection)] // thin pointer; almost always None
-    used_overflow: Option<Box<Vec<(usize, usize)>>>,
 }
 
 impl std::hash::Hash for PaymentResources {
@@ -684,76 +678,40 @@ impl std::hash::Hash for PaymentResources {
         for &mask in &self.used_masks {
             state.write_u64(mask);
         }
-        if let Some(overflow) = &self.used_overflow {
-            state.write_u8(1);
-            overflow.hash(state);
-        } else {
-            state.write_u8(0);
-        }
     }
 }
 
 impl PaymentResources {
     #[inline]
-    fn is_used(&self, source: usize, ability: usize) -> bool {
-        if ability < 64 {
-            self.used_masks
-                .get(source)
-                .is_some_and(|&mask| mask & (1_u64 << ability) != 0)
-        } else {
-            self.used_overflow
-                .as_deref()
-                .is_some_and(|overflow| overflow.binary_search(&(source, ability)).is_ok())
-        }
+    fn used_mask(&self, source: usize) -> u64 {
+        self.used_masks.get(source).copied().unwrap_or(0)
     }
 
-    /// Contiguous slice of sorted overflow `(source, ability)` uses for `index`.
-    fn overflow_slice(&self, index: usize) -> &[(usize, usize)] {
-        let Some(overflow) = self.used_overflow.as_deref() else {
-            return &[];
-        };
-        let start = overflow.partition_point(|&(source, _)| source < index);
-        let rest = &overflow[start..];
-        let len = rest.partition_point(|&(source, _)| source == index);
-        &rest[..len]
+    #[inline]
+    fn is_used(&self, source: usize, ability: usize) -> bool {
+        self.used_masks.get(source).is_some_and(|&mask| {
+            assert!(ability < 64, "source has >= 64 activated mana abilities");
+            mask & (1_u64 << ability) != 0
+        })
     }
 
     /// Allocation-free O(1) total order over one source's resource state for
     /// canonicalizing interchangeable sources.
     #[inline]
     fn cmp_source(&self, a: usize, b: usize) -> std::cmp::Ordering {
-        (self.present[a], self.untapped[a])
-            .cmp(&(self.present[b], self.untapped[b]))
-            .then_with(|| {
-                if !self.used_masks.is_empty() {
-                    let ord = self.used_masks[a].cmp(&self.used_masks[b]);
-                    if ord != std::cmp::Ordering::Equal {
-                        return ord;
-                    }
-                }
-                if self.used_overflow.is_none() {
-                    return std::cmp::Ordering::Equal;
-                }
-                self.overflow_slice(a)
-                    .iter()
-                    .map(|&(_, ability)| ability)
-                    .cmp(self.overflow_slice(b).iter().map(|&(_, ability)| ability))
-            })
+        (self.present[a], self.untapped[a], self.used_mask(a)).cmp(&(
+            self.present[b],
+            self.untapped[b],
+            self.used_mask(b),
+        ))
     }
 
     fn use_ability(&mut self, source: usize, ability: usize) {
-        if ability < 64 {
-            if self.used_masks.is_empty() {
-                self.used_masks.resize(self.present.len(), 0);
-            }
-            self.used_masks[source] |= 1_u64 << ability;
-        } else {
-            let overflow = self.used_overflow.get_or_insert_with(Default::default);
-            let entry = (source, ability);
-            if let Err(index) = overflow.binary_search(&entry) {
-                overflow.insert(index, entry);
-            }
+        assert!(ability < 64, "source has >= 64 activated mana abilities");
+        if self.used_masks.is_empty() {
+            self.used_masks.resize(self.present.len(), 0);
         }
+        self.used_masks[source] |= 1_u64 << ability;
     }
 }
 
@@ -850,43 +808,21 @@ impl PurposeSupply {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct PaymentSearchState {
+struct SearchState<M = Mana, C = ManaChoices> {
     resources: PaymentResources,
-    pool: Mana,
+    pool: M,
     life: u32,
-    obligations: Vec<Obligation>,
+    obligations: Vec<Obligation<C>>,
     /// Fixed-source budget until the first Spend; later obligations are unrestricted.
     prefix: Option<usize>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-enum CanonicalObligation {
-    Pay {
-        cost: ManaCost,
-        taps: Taps,
-    },
-    Output {
-        choices: ProjectedChoices,
-        life_cost: u32,
-    },
-    Tap {
-        candidates: Arc<Vec<PermanentId>>,
-        remaining: usize,
-    },
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct CanonicalState {
-    resources: PaymentResources,
-    pool: ProjectedMana,
-    life: u32,
-    obligations: Vec<CanonicalObligation>,
-    prefix: Option<usize>,
-}
+type PaymentSearchState = SearchState;
+type ProjectedSearchState = SearchState<ProjectedMana, ProjectedChoices>;
 
 enum VisitedStates {
     Exact(FastHashSet<Arc<PaymentSearchState>>),
-    Canonical(FastHashSet<CanonicalState>),
+    Projected(FastHashSet<ProjectedSearchState>),
 }
 
 impl Default for VisitedStates {
@@ -899,28 +835,28 @@ impl VisitedStates {
     fn is_empty(&self) -> bool {
         match self {
             Self::Exact(set) => set.is_empty(),
-            Self::Canonical(set) => set.is_empty(),
+            Self::Projected(set) => set.is_empty(),
         }
     }
 
     fn len(&self) -> usize {
         match self {
             Self::Exact(set) => set.len(),
-            Self::Canonical(set) => set.len(),
+            Self::Projected(set) => set.len(),
         }
     }
 
     fn clear(&mut self) {
         match self {
             Self::Exact(set) => set.clear(),
-            Self::Canonical(set) => set.clear(),
+            Self::Projected(set) => set.clear(),
         }
     }
 }
 
-/// Live branch state held during `witness`: shared in `Arc` only when stored
-/// directly in `VisitedStates::Exact` (avoiding cloning its `Vec`s), and kept
-/// unboxed on the stack once the search switches to `VisitedStates::Canonical`.
+/// Live branch state held during `witness`: shared in `Arc` when inserted
+/// unmodified into `VisitedStates::Exact`, and kept unboxed on the stack when
+/// resources are permuted or projected into `VisitedStates::Projected`.
 enum LiveState {
     Owned(PaymentSearchState),
     Shared(Arc<PaymentSearchState>),
@@ -989,10 +925,8 @@ impl PaymentSearch {
         Self {
             root_taps: obligations
                 .iter()
-                .filter_map(|obligation| match obligation {
-                    Obligation::Tap { candidates, .. } => Some(candidates.clone()),
-                    _ => None,
-                })
+                .filter_map(Obligation::tap_candidates)
+                .cloned()
                 .collect(),
             ..Default::default()
         }
@@ -1009,23 +943,30 @@ impl PaymentSearch {
         self.groups_for(model, &[])
     }
 
+    #[cfg(test)]
     fn groups_for(&mut self, model: &PaymentModel, obligations: &[Obligation]) -> Vec<Vec<usize>> {
+        let project =
+            model_has_restriction(model) || obligations.iter().any(obligation_has_restriction);
+        self.classify_sources(model, obligations, project)
+    }
+
+    fn classify_sources(
+        &mut self,
+        model: &PaymentModel,
+        obligations: &[Obligation],
+        project: bool,
+    ) -> Vec<Vec<usize>> {
         // Membership in every possible counted-tap set is part of identity:
         // equal mana producers need not be equal candidates for a saved cost.
-        let candidates = model
-            .sources
-            .iter()
-            .flat_map(|source| &source.abilities)
-            .filter(|ability| ability.tap_count > 0)
-            .map(|ability| &ability.tap_candidates)
-            .chain(&self.root_taps)
-            .collect::<Vec<_>>();
-        let extra: Vec<SpendingContext> = self
-            .purposes
-            .iter()
-            .map(|entry| entry.purpose.clone())
-            .collect();
-        let mut projection = PurposeProjection::for_model(model, obligations, &extra);
+        let candidates = model.tap_candidate_sets(&self.root_taps);
+        let mut projection = project.then(|| {
+            let extra: Vec<SpendingContext> = self
+                .purposes
+                .iter()
+                .map(|entry| entry.purpose.clone())
+                .collect();
+            PurposeProjection::for_model(model, obligations, &extra)
+        });
         // Most boards have few duplicates. Do not allocate a member vector
         // for every singleton just to discard it after classification.
         let mut representatives: Vec<(usize, Option<usize>)> = Vec::new();
@@ -1034,7 +975,7 @@ impl PaymentSearch {
             let equivalent = representatives.iter_mut().find(|(representative, _)| {
                 let other = &model.sources[*representative];
                 PurposeProjection::sources_equivalent(
-                    Some(&mut projection),
+                    projection.as_mut(),
                     source,
                     other,
                     &candidates,
@@ -1050,82 +991,61 @@ impl PaymentSearch {
                 representatives.push((index, None));
             }
         }
-        self.projection = Some(projection);
+        self.projection = projection;
         groups
     }
 
-    /// The state with each class's resources in sorted order and pool/output
-    /// restrictions projected onto the reachable `SpendingContext`s.
-    fn canonicalize(
+    /// Sort interchangeable source groups in `resources`. Returns `None` when
+    /// every group is already in non-decreasing order so the caller avoids
+    /// cloning the state.
+    fn canonicalize_resources(
         groups: &[Vec<usize>],
-        projection: &mut PurposeProjection,
         order_buf: &mut Vec<usize>,
-        state: &PaymentSearchState,
-    ) -> CanonicalState {
-        let mut resources = state.resources.clone();
+        resources: &PaymentResources,
+    ) -> Option<PaymentResources> {
+        let mut permuted: Option<PaymentResources> = None;
         let has_masks = !resources.used_masks.is_empty();
-        let has_overflow = resources.used_overflow.is_some();
-        let mut overflow_changed = false;
         for group in groups {
             // Source-order success usually consumes an already sorted prefix.
             // Permute only for branches that need one.
-            if group.windows(2).all(|pair| {
-                state.resources.cmp_source(pair[0], pair[1]) != std::cmp::Ordering::Greater
-            }) {
+            if group
+                .windows(2)
+                .all(|pair| resources.cmp_source(pair[0], pair[1]) != std::cmp::Ordering::Greater)
+            {
                 continue;
             }
             order_buf.clear();
             order_buf.extend_from_slice(group);
-            order_buf.sort_unstable_by(|&a, &b| state.resources.cmp_source(a, b));
-            if has_overflow {
-                overflow_changed = true;
-                if let Some(overflow) = &mut resources.used_overflow {
-                    overflow.retain(|(source, _)| !group.contains(source));
-                }
-            }
+            order_buf.sort_unstable_by(|&a, &b| resources.cmp_source(a, b));
+            let dst = permuted.get_or_insert_with(|| resources.clone());
             for (&to, &from) in group.iter().zip(order_buf.iter()) {
-                resources.present[to] = state.resources.present[from];
-                resources.untapped[to] = state.resources.untapped[from];
+                dst.present[to] = resources.present[from];
+                dst.untapped[to] = resources.untapped[from];
                 if has_masks {
-                    resources.used_masks[to] = state.resources.used_masks[from];
-                }
-                if has_overflow {
-                    resources.used_overflow.as_mut().unwrap().extend(
-                        state
-                            .resources
-                            .overflow_slice(from)
-                            .iter()
-                            .map(|&(_, ability)| (to, ability)),
-                    );
+                    dst.used_masks[to] = resources.used_masks[from];
                 }
             }
         }
-        if overflow_changed {
-            resources.used_overflow.as_mut().unwrap().sort_unstable();
-        }
+        permuted
+    }
+
+    /// The state with each class's resources in sorted order and pool/output
+    /// restrictions projected onto the reachable `SpendingContext`s.
+    fn canonicalize_projected(
+        groups: &[Vec<usize>],
+        projection: &mut PurposeProjection,
+        order_buf: &mut Vec<usize>,
+        state: &PaymentSearchState,
+    ) -> ProjectedSearchState {
+        let resources = Self::canonicalize_resources(groups, order_buf, &state.resources)
+            .unwrap_or_else(|| state.resources.clone());
         let pool = projection.project_mana(&state.pool);
         let obligations = state
             .obligations
             .iter()
-            .map(|obligation| match obligation {
-                Obligation::Pay { cost, taps } => CanonicalObligation::Pay {
-                    cost: cost.clone(),
-                    taps: *taps,
-                },
-                Obligation::Output { choices, life_cost } => CanonicalObligation::Output {
-                    choices: projection.project_choices(choices),
-                    life_cost: *life_cost,
-                },
-                Obligation::Tap {
-                    candidates,
-                    remaining,
-                } => CanonicalObligation::Tap {
-                    candidates: candidates.clone(),
-                    remaining: *remaining,
-                },
-            })
+            .map(|obligation| obligation.map_choices(|c| projection.project_choices(c)))
             .collect();
-        CanonicalState {
+        ProjectedSearchState {
             resources,
             pool,
             life: state.life,
@@ -1197,26 +1117,49 @@ impl PaymentSearch {
         total
     }
 
-    fn promote_to_canonical(&mut self, model: &PaymentModel, state: &PaymentSearchState) {
+    fn rekey_visited(&mut self) {
         let groups = self.groups.as_deref().unwrap_or(&[]);
-        let extra: Vec<SpendingContext> = self
-            .purposes
-            .iter()
-            .map(|entry| entry.purpose.clone())
-            .collect();
-        let projection = self
-            .projection
-            .get_or_insert_with(|| PurposeProjection::for_model(model, &state.obligations, &extra));
-        let order_buf = &mut self.order_buf;
-        let old = std::mem::take(&mut self.visited);
-        let mut canonical = FastHashSet::default();
-        if let VisitedStates::Exact(exact) = old {
-            canonical.reserve(exact.len() + 1);
-            for key in &exact {
-                canonical.insert(Self::canonicalize(groups, projection, order_buf, key));
+        let Some(projection) = self.projection.as_mut() else {
+            if groups.is_empty() {
+                return;
             }
+            let VisitedStates::Exact(exact) = std::mem::take(&mut self.visited) else {
+                return;
+            };
+            let mut rekeyed = FastHashSet::default();
+            rekeyed.reserve(exact.len() + 1);
+            for key in exact {
+                if let Some(resources) =
+                    Self::canonicalize_resources(groups, &mut self.order_buf, &key.resources)
+                {
+                    rekeyed.insert(Arc::new(PaymentSearchState {
+                        resources,
+                        pool: key.pool.clone(),
+                        life: key.life,
+                        obligations: key.obligations.clone(),
+                        prefix: key.prefix,
+                    }));
+                } else {
+                    rekeyed.insert(key);
+                }
+            }
+            self.visited = VisitedStates::Exact(rekeyed);
+            return;
+        };
+        let VisitedStates::Exact(exact) = std::mem::take(&mut self.visited) else {
+            return;
+        };
+        let mut projected = FastHashSet::default();
+        projected.reserve(exact.len() + 1);
+        for key in &exact {
+            projected.insert(Self::canonicalize_projected(
+                groups,
+                projection,
+                &mut self.order_buf,
+                key,
+            ));
         }
-        self.visited = VisitedStates::Canonical(canonical);
+        self.visited = VisitedStates::Projected(projected);
     }
 
     fn insert(&mut self, model: &PaymentModel, state: PaymentSearchState) -> Option<LiveState> {
@@ -1224,35 +1167,48 @@ impl PaymentSearch {
             // A visited identity state failed or is being expanded, and so is
             // every state interchangeable with it: its canonical key is one
             // the grouped search would hold too.
-            let groups = self.groups_for(model, &state.obligations);
-            let needs_canonical = !groups.is_empty()
-                || model_has_restriction(model)
+            let has_restrictions = model_has_restriction(model)
                 || state_has_restriction(&state)
                 || matches!(&self.visited, VisitedStates::Exact(exact) if exact.iter().any(|s| state_has_restriction(s)));
+            let groups = self.classify_sources(model, &state.obligations, has_restrictions);
             self.groups = Some(groups);
-            if needs_canonical {
-                self.promote_to_canonical(model, &state);
-            }
-        } else if matches!(self.visited, VisitedStates::Exact(_))
-            && (self.groups.as_ref().is_some_and(|g| !g.is_empty()) || self.projection.is_some())
-        {
-            self.promote_to_canonical(model, &state);
+            self.rekey_visited();
+        } else if self.projection.is_some() && matches!(self.visited, VisitedStates::Exact(_)) {
+            self.rekey_visited();
         }
         let live = match &mut self.visited {
             VisitedStates::Exact(set) => {
-                let shared = Arc::new(state);
-                if !set.insert(shared.clone()) {
-                    return None;
+                let groups = self.groups.as_deref().unwrap_or(&[]);
+                if let Some(resources) =
+                    Self::canonicalize_resources(groups, &mut self.order_buf, &state.resources)
+                {
+                    let key = Arc::new(PaymentSearchState {
+                        resources,
+                        pool: state.pool.clone(),
+                        life: state.life,
+                        obligations: state.obligations.clone(),
+                        prefix: state.prefix,
+                    });
+                    if !set.insert(key) {
+                        return None;
+                    }
+                    LiveState::Owned(state)
+                } else {
+                    let shared = Arc::new(state);
+                    if !set.insert(shared.clone()) {
+                        return None;
+                    }
+                    LiveState::Shared(shared)
                 }
-                LiveState::Shared(shared)
             }
-            VisitedStates::Canonical(set) => {
+            VisitedStates::Projected(set) => {
                 let groups = self.groups.as_deref().unwrap_or(&[]);
                 let projection = self
                     .projection
                     .as_mut()
-                    .expect("canonical mode has projection");
-                let key = Self::canonicalize(groups, projection, &mut self.order_buf, &state);
+                    .expect("projected mode has projection");
+                let key =
+                    Self::canonicalize_projected(groups, projection, &mut self.order_buf, &state);
                 if !set.insert(key) {
                     return None;
                 }
@@ -1451,8 +1407,22 @@ impl PaymentModel<'_> {
             present: vec![true; self.sources.len()],
             untapped: self.sources.iter().map(|source| source.untapped).collect(),
             used_masks: Vec::new(),
-            used_overflow: None,
         }
+    }
+
+    /// Counted-tap candidate sets from every ability and any extra tap
+    /// obligations; membership in these sets is part of source identity.
+    fn tap_candidate_sets<'a>(
+        &'a self,
+        extra: impl IntoIterator<Item = &'a Arc<Vec<PermanentId>>>,
+    ) -> Vec<&'a Arc<Vec<PermanentId>>> {
+        self.sources
+            .iter()
+            .flat_map(|source| &source.abilities)
+            .filter(|ability| ability.tap_count > 0)
+            .map(|ability| &ability.tap_candidates)
+            .chain(extra)
+            .collect()
     }
 
     /// An optimistic count, ignoring competition between different abilities.
@@ -2956,6 +2926,14 @@ impl Game {
         Some(path)
     }
 
+    fn paying_convoke(&self, player: PlayerId) -> bool {
+        matches!(
+            self.paying(),
+            Some((payer, payment, CostComponent::Mana { .. }))
+                if payer == player && payment.help().convoke
+        )
+    }
+
     fn activation_witness(
         &self,
         player: PlayerId,
@@ -2971,11 +2949,7 @@ impl Game {
             .abilities
             .iter()
             .position(|ability| ability.ability_index == ability_index)?;
-        let convoke = matches!(
-            self.paying(),
-            Some((payer, payment, CostComponent::Mana { .. }))
-                if payer == player && payment.help().convoke
-        );
+        let convoke = self.paying_convoke(player);
         let pending_obligations = if convoke {
             Vec::new()
         } else {
@@ -3009,96 +2983,73 @@ impl Game {
     /// every deduplicated source against an independent witness query.
     pub(crate) fn mana_ability_actions(&self, player: PlayerId) -> Vec<Action> {
         let base = self.payment_model(player, None);
-        let mut active_sources = 0_usize;
-        let mut single_source = 0_usize;
-        for (index, source) in base.sources.iter().enumerate() {
-            if !source.abilities.is_empty() {
-                active_sources += 1;
-                single_source = index;
-            }
-        }
-        if active_sources == 0 {
+        let mut active_sources = base.sources.iter().filter(|s| !s.abilities.is_empty());
+        if active_sources.next().is_none() {
             return Vec::new();
         }
-        let convoke = matches!(
-            self.paying(),
-            Some((payer, payment, CostComponent::Mana { .. }))
-                if payer == player && payment.help().convoke
-        );
-        let pending_obligations = self.payment_obligations(player);
+        let dedup = active_sources.next().is_some();
+        let convoke = self.paying_convoke(player);
+        let pending_obligations = if convoke && !dedup {
+            Vec::new()
+        } else {
+            self.payment_obligations(player)
+        };
         let pool = self.pooled_mana(player);
-        if active_sources == 1 {
-            let source = &base.sources[single_source];
-            return source
-                .abilities
-                .iter()
-                .enumerate()
-                .filter_map(|(pos, ability)| {
-                    self.activation_witness_from(
-                        player,
-                        &base,
-                        single_source,
-                        pos,
-                        &pool,
-                        convoke,
-                        &pending_obligations,
-                    )
-                    .map(|_| Action::ActivateAbility {
-                        player,
-                        permanent: source.permanent,
-                        ability_index: ability.ability_index,
-                    })
-                })
-                .collect();
-        }
-        let has_taps = pending_obligations
-            .iter()
-            .any(|o| matches!(o, Obligation::Tap { .. }))
-            || base
-                .sources
-                .iter()
-                .any(|s| s.abilities.iter().any(|a| a.tap_count > 0));
-        let candidates: Vec<&Arc<Vec<PermanentId>>> = if has_taps {
-            base.sources
-                .iter()
-                .flat_map(|source| &source.abilities)
-                .filter(|ability| ability.tap_count > 0)
-                .map(|ability| &ability.tap_candidates)
-                .chain(
-                    pending_obligations
-                        .iter()
-                        .filter_map(|obligation| match obligation {
-                            Obligation::Tap { candidates, .. } => Some(candidates),
-                            _ => None,
-                        }),
-                )
-                .collect()
+        let check_ability = |source_index, pos| {
+            self.activation_witness_from(
+                player,
+                &base,
+                source_index,
+                pos,
+                &pool,
+                convoke,
+                &pending_obligations,
+            )
+            .is_some()
+        };
+        let candidates = if dedup {
+            base.tap_candidate_sets(
+                pending_obligations
+                    .iter()
+                    .filter_map(Obligation::tap_candidates),
+            )
         } else {
             Vec::new()
         };
-        let mut projection = model_has_restriction(&base)
+        let mut projection = (dedup && model_has_restriction(&base))
             .then(|| PurposeProjection::for_model(&base, &pending_obligations, &[]));
         // Under convoke, colored creatures can pay colored pips of their colors
         // in `while_paying`, so convoker colors are part of source identity.
-        let convoker_key = |source: &ManaSource| -> (bool, u8) {
+        // Bit 7 distinguishes a convoking creature (even colorless) from non-convokers.
+        let convoker_key = |source: &ManaSource| -> u8 {
             if !convoke || !source.keyword {
-                return (false, 0);
+                return 0;
             }
             let view = self.characteristics(source.permanent);
             if !view.is_creature() {
-                return (false, 0);
+                return 0;
             }
-            let mut mask = 0_u8;
-            for &color in &view.colors {
-                mask |= 1_u8 << (color as u8);
-            }
-            (true, mask)
+            view.colors
+                .iter()
+                .fold(0x80_u8, |mask, &color| mask | (1_u8 << (color as u8)))
         };
-        let mut classes: Vec<(usize, (bool, u8), Vec<bool>)> = Vec::new();
+        let mut classes: Vec<(usize, u8, Vec<bool>)> = Vec::new();
         let mut actions = Vec::new();
         for (source_index, source) in base.sources.iter().enumerate() {
             if source.abilities.is_empty() {
                 continue;
+            }
+            if !dedup {
+                for (pos, ability) in source.abilities.iter().enumerate() {
+                    if check_ability(source_index, pos) {
+                        actions.push(Action::ActivateAbility {
+                            player,
+                            permanent: source.permanent,
+                            ability_index: ability.ability_index,
+                        });
+                    }
+                }
+                break;
             }
             let ck = convoker_key(source);
             let existing = classes.iter().position(|(rep_index, rep_ck, _)| {
@@ -3126,18 +3077,7 @@ impl Game {
                 cached
             } else {
                 let results: Vec<bool> = (0..source.abilities.len())
-                    .map(|pos| {
-                        self.activation_witness_from(
-                            player,
-                            &base,
-                            source_index,
-                            pos,
-                            &pool,
-                            convoke,
-                            &pending_obligations,
-                        )
-                        .is_some()
-                    })
+                    .map(|pos| check_ability(source_index, pos))
                     .collect();
                 classes.push((source_index, ck, results));
                 &classes.last().unwrap().2
