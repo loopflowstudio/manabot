@@ -39,7 +39,8 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   }));
   await page.goto('/?setup=1');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-  await expect(page.getByTestId('opponent-select')).toHaveValue('search-64');
+  // A bare install registers no policy, so the default opponent is the built-in Random.
+  await expect(page.getByTestId('opponent-select')).toHaveValue('random');
   await page.getByRole('button', { name: 'Start game', exact: true }).first().click();
   const action = page.getByTestId('action-option').first();
   await expect(action).toBeEnabled();
@@ -60,14 +61,14 @@ test('installed Academy plays and opens its recorded decisions', async ({ page }
   await expect(counter).toHaveText(new RegExp(`Position ${initialPosition + 1} / \\d+`));
   await page.getByRole('link', { name: 'Academy · Games', exact: true }).click();
   await page.getByRole('banner').getByRole('link', { name: 'New game', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Seat 1 controller', exact: true }).selectOption('bot');
-  await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Watch Bot vs Bot', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^(Start watching|Deal & Watch)$/ })).toBeEnabled();
   for (const seat of ['Seat 1', 'Seat 2']) {
-    await expect(page.getByRole('combobox', { name: `${seat} bot`, exact: true }).locator('option')).toHaveText([
-      'Search 16 · search', 'Search 64 · search', 'Search 256 · search', 'Random', 'Passive · scripted', 'Registered policy',
-    ]);
+    const options = page.getByRole('combobox', { name: `${seat} bot`, exact: true }).locator('option');
+    await expect(options.filter({ hasText: 'Registered policy' })).toHaveCount(1);
+    await expect(options.filter({ hasText: 'Random' })).toHaveCount(1);
   }
-  await expect(page.getByText('No policies registered on this server. Supply a Python policy factory or a saved specification.').first()).toBeVisible();
+  await expect(page.getByText('No policies registered on this server. Supply a Python policy or install manabot for hosted policies.').first()).toBeVisible();
   await expect(page.getByLabel('Open a game file')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

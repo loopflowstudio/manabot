@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { CardState, ExperienceFrame, PermanentState, PresentationEvent, PresentationLabels } from '$lib/types';
-import { nameBook, recentView, boardLines, turnOwners } from './recent';
+import { nameBook, recentView, boardLines, targetNames, turnOwners } from './recent';
 
 const bolt = JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/bolt-target.json', import.meta.url), 'utf8')) as {
   recovery: { frame: ExperienceFrame; presentation_tail: PresentationEvent[] };
@@ -136,6 +136,20 @@ describe('boardLines', () => {
   it('keeps the line of a spell that just resolved while it is shown beside the stack', () => {
     const resolved = [{ id: 4001, name: 'Lightning Bolt', by: 'you' as const, targets: [] }];
     expect(boardLines(bolt.recovery.frame, bolt.recovery.presentation_tail, resolved)).toHaveLength(1);
+  });
+
+  it('draws a triggered ability on the stack to its targets, and names them', () => {
+    const trigger = { id: 7, kind: 'triggered_ability', controller: 1, label: 'Glider Staff',
+      targets: [{ kind: 'object' as const, id: { entity: 60, incarnation: 1 } }, { kind: 'player' as const, id: 0 }] };
+    const frame = withBoard(bolt.recovery.frame, projection => {
+      projection.agent.battlefield = [permanent(60, 'Hermitic Herbalist', { controller_id: 0 })];
+      projection.stack_objects = [trigger];
+    });
+    expect(boardLines(frame, [])).toEqual([
+      { from: { kind: 'entry', id: 7 }, to: { kind: 'object', id: 60 }, kind: 'target' },
+      { from: { kind: 'entry', id: 7 }, to: { kind: 'player', index: frame.projection.agent.player_index }, kind: 'target' },
+    ]);
+    expect(targetNames(trigger, frame, names)).toEqual(['Hermitic Herbalist', 'you']);
   });
 
   it('joins each blocker to the attacker it blocks', () => {

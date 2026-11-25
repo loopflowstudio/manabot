@@ -34,6 +34,7 @@
   import { cardEvidence, EVIDENCE, formatProbability, type OfferEvidence } from './replay';
   import type { PlannedSource } from './payment';
   import Pips from './Pips.svelte';
+  import { offerText } from './prompt';
   import { footprint, type PlacedOffer } from './view';
 
   interface Props {
@@ -184,8 +185,8 @@
     `${name}${creature && power !== null ? ` ${power}/${toughness}` : ''}`,
     facts,
     note ?? '',
-    offers.length === 1 ? `${offers[0].offer.label} (${offers[0].number})`
-      : offers.length > 1 ? `${offers.length} choices: ${offers.map(placed => placed.offer.label).join('; ')}` : '',
+    offers.length === 1 ? `${offerText(offers[0].offer)} (${offers[0].number})`
+      : offers.length > 1 ? `${offers.length} choices: ${offers.map(placed => offerText(placed.offer)).join('; ')}` : '',
   ].filter(Boolean).join(' — '));
 </script>
 
