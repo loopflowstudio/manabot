@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MTG-443 QA — battlefield badges after Pass 3</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:980px;margin:2rem auto;padding:0 1rem;color:#222}
+img{max-width:100%;border:1px solid #ccc;margin:.5rem 0}
+h2{margin-top:2rem}code{background:#f3f3f3;padding:0 .2em}
+.bad{color:#a00}.ok{color:#060}
+</style>
+<h1>MTG-443 QA: battlefield badges in real Academy games (Pass 3, HEAD 6a5becfebb)</h1>
+<p>Rust had changed after the installed extension was built, so I rebuilt the release wheel and swapped in its cp313 <code>.so</code>.
+I also built the static SPA. Then I launched four <code>managym academy play</code> servers with imported decks against the Passive opponent
+(seeds 7, 11, 5 and 3). A Playwright script played each game to the end at 1280×800, two in light and two in dark. On every turn it recorded
+each battlefield card's size, chips, chip titles and accessible name, and whether any chip clipped or overlapped the name, the P/T plate or the policy pill.
+It hovered named cards to read Inspect, and afterwards it opened "Review this game". I also ran <code>e2e/card-badges.spec.ts</code>: 5 of 5 passed.</p>
+
+<h2>Scenarios</h2>
+<ol>
+<li><b>Fire Nation Cadets on an 82 px upright card.</b> With a Lesson in the graveyard, the board shows <code>Firebend 2</code>.
+The accessible name and title show <code>Firebending 2</code>. On a turned 112-wide card the board shows the full <code>Firebending 2</code>.
+Without a Lesson (the game 3 graveyard was empty), there is no chip. <span class="ok">Works</span>; before this pass the card showed bare <code>+1</code>.
+<br><img src="qa-shots/p3-cadets-defender-light.png"></li>
+<li><b>Platypus-Bear.</b> It shows plain <code>Defender</code> without a Lesson. With one, the chip is struck through (<code>overridden</code>)
+and its title reads <code>Defender · can attack anyway</code>. It attacked. <span class="ok">Works.</span></li>
+<li><b>Turned Ty Lee.</b> Its own ETB freeze shows <code>Doesn't untap</code> and <code>Prowess</code> as whole chips, never <code>+2</code>.
+Watery Grasp later enchanted it, and the restriction title then named both sources: <code>Doesn't untap · Watery Grasp · Ty Lee, Chi Blocker, while its source is controlled</code>.
+There is no Flash chip, and Inspect still lists Flash. <span class="ok">Works.</span><br><img src="qa-shots/p3-tylee-watery-grasp.png"></li>
+<li><b>The Unagi of Kyoshi Island.</b> On the 82 px card and on the 115 px card the board shows <code>Ward</code>, never <code>+1</code>.
+The accessible name keeps <code>Ward—Waterbend {4}</code>. On the roomier end-of-game board the full label appeared. <span class="ok">Works.</span></li>
+<li><b>Sokka's Allies.</b> Ty Lee beside Sokka shows a green-edged <code>Menace</code> chip. Inspect reads <code>Menace · Sokka, Tenacious Tactician</code> and
+<code>Prowess · Sokka, Tenacious Tactician</code>, never "Another ability". Its own printed Prowess stays plain. <span class="ok">Works</span>; this was still wrong in the previous QA.</li>
+<li><b>Path to Redemption on Fire Nation Cadets.</b> The board shows <code>No combat</code> (the compact label on a 115 px card that also carries <code>Doesn't untap</code>).
+The title and accessible name read <code>Can't attack or block · Path to Redemption</code>. <span class="ok">Works.</span></li>
+<li><b>Tiger-Dillo, an own conditional restriction.</b> It shows <code>No combat</code>, and Inspect reads <code>Can't attack or block</code> with no "Static ability" noise.
+Once Ty Lee had 4 power, the chip went away and Tiger-Dillo attacked. <span class="ok">Works.</span></li>
+<li><b>Mai and its double strike counter.</b> On a 115 px card it shows <code>Double strike</code> + <code>Prowess</code>, and after first-strike damage <code>Struck first</code>.
+On an 82 px card it shows <code>Prowess</code> + <code>+1</code>, and the <code>+1</code> title reads <code>Double strike · 1 double strike counter</code>. See "Still wrong".
+<br><img src="qa-shots/p3-mai-narrow-dark.png"></li>
+<li><b>Summoning sickness.</b> It appears as the 16×16 spiral in both live play and replay. <span class="ok">Works.</span></li>
+<li><b>Replay.</b> "Review this game" showed the same chips as live play in all four games (Ty Lee's <code>Doesn't untap</code>, Unagi's <code>Ward</code>, Mai's <code>Double strike</code>, the spirals). <span class="ok">Works.</span></li>
+<li><b>Clipping and overlap.</b> No chip had <code>scrollWidth &gt; clientWidth</code> in any per-turn dump. My bounding-box check flagged five chips at game end. All five were on
+attacking cards, which are rotated, so their axis-aligned boxes overlap the P/T plate. The screenshot shows Cadets' <code>Firebending 2</code> sitting clear of <code>5/2</code>.
+These are false positives. There were no page errors.</li>
+<li><b>Watch policy pill.</b> Watch with two random seats renders no policy pill, so the live path could not test it. The e2e test
+"recorded Watch badges leave the policy percentage visible" passed.</li>
+</ol>
+
+<h2>What works now</h2>
+<p>Every case in the plan's "Done when" behaves correctly in real live Play and Replay games, in light and dark: Platypus-Bear, Fire Nation Cadets (<code>Firebend 2</code>),
+turned Ty Lee, Unagi (<code>Ward</code>), Sokka-granted abilities named in Inspect, and Aura-locked creatures naming the Aura. Nothing needed fixing in this pass.</p>
+
+<h2>Couldn't reach</h2>
+<ul>
+<li>Avatar Kyoshi (a Saga back face that needs three turns of chapters) in a live game. The e2e fixture covers the self-scoped grant.</li>
+<li>A live Watch policy pill, because it needs a trained policy. The e2e covers it.</li>
+<li>Opponent-side badges live, because the Passive opponent casts nothing.</li>
+</ul>
+
+<h2>Still wrong, worst first</h2>
+<ol>
+<li><b>Mai's <code>Double strike</code> hides behind <code>+1</code> on 82 px cards.</b> At 12 px the label needs about 88 px, the inner width is 76 px, and no whole-word short form exists.
+The fitter shows the shorter <code>Prowess</code> and counts Double strike in <code>+1</code>, whose tooltip and the accessible name carry it. This follows the spec, but double strike
+arguably matters more than Prowess at a glance. Fixing it is a design choice (an abbreviation, or a wider card), so I left it.</li>
+<li><b>Ty Lee's freeze source reads <code>Ty Lee, Chi Blocker, while its source is controlled</code>.</b> This is accurate but stilted duration wording. The previous QA accepted it, and I left it unchanged.</li>
+</ol>

@@ -273,3 +273,12 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   `UV_PROJECT_ENVIRONMENT` and `--only-group play-runtime`, managym is not
   installed, so uncached card art returns 500 (`PackageNotFoundError` in
   `card_art.py`). Use a cached card, or install the wheel, when art matters.
+  Start several launch servers from Python `subprocess.Popen(...,
+  start_new_session=True)`; macOS has no `setsid`. Attacking cards are
+  rotated, so `getBoundingClientRect` overlap checks between chips and `.pt`
+  report false overlaps on them; confirm those in a screenshot. Watch with
+  `--player random` twice shows no `.policy` pill; the pill case is covered by
+  `e2e/card-badges.spec.ts` ("recorded Watch badges") or a trained policy.
+  Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
+  themselves as a restriction source), Tiger-Dillo (own conditional
+  restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).
