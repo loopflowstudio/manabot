@@ -660,9 +660,9 @@ def test_watch_publishes_the_determinized_offers(
         for position in recording.positions
         if position.kind == "choice"
     ]
-    assert [choice["branched"] for choice in choices] == [None] * (
-        len(choices) - 1
-    ) + [["determinize"]]
+    assert [choice["branched"] for choice in choices] == [None] * (len(choices) - 1) + [
+        ["determinize"]
+    ]
     assert "35" not in json.dumps(choices[-1]["branched"])
 
 

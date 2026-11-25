@@ -103,7 +103,9 @@ def main() -> None:
                 {
                     "refused": refused_url,
                     "play": academy.new_game(opponent="independent", seed=7).url,
-                    "study": short_game(academy.new_game(opponent="reader", seed=5).url),
+                    "study": short_game(
+                        academy.new_game(opponent="reader", seed=5).url
+                    ),
                     "watch": academy.watch(players=("independent", "baseline")).url,
                     "ids": {
                         name: policy_registry().descriptor(name).id

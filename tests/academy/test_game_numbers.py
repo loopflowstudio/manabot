@@ -61,9 +61,7 @@ def test_a_finished_game_saves_its_numbers(tmp_path: Path) -> None:
         "numbers": numbers
     }
     # Review reads how long the game took from its recording index.
-    index = client.get(
-        f"/api/traces/{game.match_id}/recording", headers=HEADERS
-    ).json()
+    index = client.get(f"/api/traces/{game.match_id}/recording", headers=HEADERS).json()
     assert index["started_at"] == row["timestamp"]
     assert index["ended_at"] == row["ended_at"] is not None
 
@@ -75,9 +73,10 @@ def test_an_older_game_gets_its_numbers_on_first_read(tmp_path: Path) -> None:
         (saved,) = db.execute("SELECT numbers_json FROM attempts").fetchone()
         db.execute("UPDATE attempts SET numbers_json=NULL")
     client = TestClient(server.app)
-    assert client.get("/api/traces?scope=mine", headers=HEADERS).json()[0][
-        "numbers"
-    ] is None
+    assert (
+        client.get("/api/traces?scope=mine", headers=HEADERS).json()[0]["numbers"]
+        is None
+    )
     read = client.get(f"/api/traces/{game.match_id}/numbers").json()["numbers"]
     assert read is not None
     assert store.numbers(game.match_id) == ("completed", saved)
@@ -113,7 +112,9 @@ def test_my_record_counts_completed_games_by_opponent_and_decks(
         db.execute("UPDATE attempts SET participant_id=?", (participant_id(TOKEN),))
     client = TestClient(server.app)
     (row,) = client.get("/api/traces/record", headers=HEADERS).json()["rows"]
-    wins = sum(game.attempt_store.load(game.match_id)["winner"] == 0 for game in winners)
+    wins = sum(
+        game.attempt_store.load(game.match_id)["winner"] == 0 for game in winners
+    )
     assert row["games"] == 3 and row["wins"] == wins
     assert row["wins"] + row["losses"] + row["draws"] == 3
     assert row["opponent_name"] == "Random"

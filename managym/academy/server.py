@@ -1440,7 +1440,9 @@ class GameSession:
             player_token if isinstance(player_token, str) else None,
         )
         if access is None or not access["mine"]:
-            raise ValueError("played_from_unavailable: Only your own games can be played on.")
+            raise ValueError(
+                "played_from_unavailable: Only your own games can be played on."
+            )
         source = self.attempt_store.load(trace_id)
         assert source is not None
         if source["end_reason"] == "active":
@@ -1451,7 +1453,9 @@ class GameSession:
             or events[event]["actor"] != "hero"
             or events[event].get("auto")
         ):
-            raise ValueError("played_from_decision: That step is not one of your decisions.")
+            raise ValueError(
+                "played_from_decision: That step is not one of your decisions."
+            )
         return PlayedFrom(trace_id, event), source
 
     def _play_recorded_prefix(self, events: list[dict[str, Any]], upto: int) -> None:
@@ -1479,8 +1483,7 @@ class GameSession:
                 event is None
                 or event["actor"] != actor
                 or len(offers) != 1
-                or context.actions[action]["description"]
-                != event["action_description"]
+                or context.actions[action]["description"] != event["action_description"]
             ):
                 raise ValueError(
                     f"played_from_diverged: Step {index + 1} no longer plays as recorded."
@@ -1512,7 +1515,9 @@ class GameSession:
                     }
                 )
                 if result["status"] != "accepted":
-                    raise ValueError("played_from_diverged: A recorded move was refused.")
+                    raise ValueError(
+                        "played_from_diverged: A recorded move was refused."
+                    )
         finally:
             self._villain_offer_policy, self.auto_pass = saved
         # The prompt published during the prefix carries its stops; publish it

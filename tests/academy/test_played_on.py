@@ -8,7 +8,7 @@ import pytest
 
 from managym.academy import server
 from managym.academy.recording import ReplayedViews
-from tests.academy.test_played_replay import BOLT, played, play
+from tests.academy.test_played_replay import BOLT, play, played
 
 
 def decision(events: list[dict], nth: int) -> int:
