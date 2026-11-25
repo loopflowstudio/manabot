@@ -48,9 +48,15 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   pilot zero drift, Python Academy/model/world/contract suites, release
   `bench_steps` digest `10601622128491155944` unchanged.
 
+- Behavior review at `cba01358b6` (after compress `f47bb9b457`): debug
+  workspace nextest 2,184/2,184 and Academy board vitest 494/494 green; FDN's
+  five planeswalkers and 99 FRA rows `implemented`, seven FRA rows pending on
+  named authorities. No defects found.
+
 ## Remaining
 
-No implementation slices remain. Deferred to gate/CI: same-runner Engine
+No implementation slices remain. Compress changed Rust after Pass 4's cp313
+rebuild, so gate rebuilds the extension before the Python suites. Deferred to gate/CI: same-runner Engine
 Budget comparison and the full CI matrix (incl. Python 3.12).
 
 ## Target model (updated by concept review)
