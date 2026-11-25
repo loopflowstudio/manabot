@@ -67,33 +67,13 @@ def test_the_opponent_s_reveals_are_told_and_named_in_the_log(
             "auto_pass": False,
         }
     )
-    for index in range(120):
-        if any(e["kind"]["kind"] == "revealed" for e in game.presentation_events):
-            break
-        frame = game.current_message()["frame"]
-        if frame["status"] == "game_over":
-            break
-        offer = next(
-            (
-                o
-                for o in frame["offers"]
-                if o["action_type"] == "PRIORITY_PASS_PRIORITY"
-            ),
-            frame["offers"][0],
-        )
-        assert (
-            game.hero_command(
-                {
-                    "command_id": f"reveal.{index}",
-                    "match_id": frame["match_id"],
-                    "expected_revision": frame["revision"],
-                    "prompt_id": frame["prompt"]["id"],
-                    "offer_id": offer["id"],
-                    "answers": [],
-                }
-            )["status"]
-            == "accepted"
-        )
+    play_passing(
+        game,
+        120,
+        stop_when=lambda: any(
+            e["kind"]["kind"] == "revealed" for e in game.presentation_events
+        ),
+    )
     logged.extend(game._pending_action_log)
     human = game.current_message()["frame"]["projection"]["agent"]["player_index"]
 

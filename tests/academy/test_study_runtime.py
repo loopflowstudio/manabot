@@ -14,7 +14,10 @@ from managym.academy import server, trace as trace_store
 from managym.academy.replay_index import CanonicalReplayV1
 from managym.academy.server import GameSession, SessionRecord, app
 from managym.academy.study_protocol import StudyArtifact
-from managym.academy.study_runtime import HistoricalStudyEvidenceRequest
+from managym.academy.study_runtime import (
+    HistoricalStudyEvidenceRequest,
+    UnavailableHistoricalStudyEvidenceProvider,
+)
 from managym.experience import ExperienceFrame, InteractionOffer
 
 
@@ -157,16 +160,11 @@ def _source_offer(frame: ExperienceFrame) -> InteractionOffer:
 
 def _completed_session(
     trace_dir: Path,
-    *,
-    evidence_provider: ExactFixtureEvidenceProvider | None = None,
-    allow_fixture: bool = False,
 ) -> tuple[GameSession, CanonicalReplayV1]:
     session = GameSession(
         trace_dir,
         id_factory=lambda kind: f"study-runtime-{kind}",
         clock=lambda: "2026-07-17T00:00:00+00:00",
-        historical_evidence_provider=evidence_provider,
-        allow_fixture_study_evidence=allow_fixture,
     )
     session.attempt_owner = server.participant_id("study-resume")
     # Seeded early creatures and configured priority automation keep complete
@@ -223,8 +221,6 @@ def _install_live_session(
     evidence_provider: ExactFixtureEvidenceProvider | None = None,
     allow_fixture: bool = False,
 ) -> None:
-    from managym.academy.study_runtime import UnavailableHistoricalStudyEvidenceProvider
-
     monkeypatch.setattr(trace_store, "TRACES_DIR", trace_dir)
     monkeypatch.setattr(
         session,

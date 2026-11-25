@@ -51,11 +51,11 @@ class _TransportFacts:
     the foretold slot.
     """
 
-    hand_exits: list[str]
-    foretold_exits: list[str]
-    known_returns: list[str]
-    hidden_draws: int
-    hidden_foretells: int
+    hand_exits: list[str] = field(default_factory=list)
+    foretold_exits: list[str] = field(default_factory=list)
+    known_returns: list[str] = field(default_factory=list)
+    hidden_draws: int = 0
+    hidden_foretells: int = 0
 
     @property
     def known_exits(self) -> list[str]:
@@ -225,18 +225,13 @@ class BeliefTracker:
             and next_space.hand_size < before_space.hand_size
             and transport_commitment is None
         )
-        if mulligan:
-            facts = _TransportFacts(
-                hand_exits=[],
-                foretold_exits=[],
-                known_returns=[],
-                hidden_draws=0,
-                hidden_foretells=0,
-            )
-        else:
-            facts = self._public_transport_facts(
+        facts = (
+            _TransportFacts()
+            if mulligan
+            else self._public_transport_facts(
                 before_space, next_space, transport_commitment
             )
+        )
         known_exits = facts.known_exits
         if known_exits:
             pending_commitment = None
@@ -261,10 +256,11 @@ class BeliefTracker:
             action_updates = 1
             likelihood_seconds = likelihood.seconds
 
-        if mulligan:
-            posterior = BeliefState.compatible_prior(next_space)
-        else:
-            posterior = posterior.transport(
+        prior = BeliefState.compatible_prior(next_space)
+        posterior = (
+            prior
+            if mulligan
+            else posterior.transport(
                 next_space,
                 known_exits=facts.hand_exits,
                 known_returns=facts.known_returns,
@@ -272,7 +268,7 @@ class BeliefTracker:
                 foretold_exits=facts.foretold_exits,
                 hidden_foretells=facts.hidden_foretells,
             )
-        prior = BeliefState.compatible_prior(next_space)
+        )
         elapsed = time.perf_counter() - started
         stats = replace(
             self.stats,

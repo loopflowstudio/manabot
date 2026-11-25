@@ -181,7 +181,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
     None
 ):
     env = managym.Env(seed=165)
-    env.reset(
+    obs, _ = env.reset(
         [
             managym.PlayerConfig(
                 "payer",
@@ -199,7 +199,7 @@ def test_native_preview_names_unannounced_costs_and_refreshes_for_exact_target()
             ),
         ]
     )
-    _keep_hands(env, env.observation_for_player(env.current_agent_index()))
+    _keep_hands(env, obs)
     env.scenario_clear_hand(0)
     for card in ("Wan Shi Tong, Librarian", "Firebending Lesson", "Swampsnare Trap"):
         env.scenario_force_card_in_hand(0, card)

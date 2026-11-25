@@ -19,6 +19,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.search.flat_mc import play_games
+from manabot.verify.text_observation import keep_opening_index
 from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from tests.belief.fresh_env import fresh_env
 
@@ -198,8 +199,6 @@ def test_player_archives_canonical_history_at_game_boundary() -> None:
 
 
 def test_player_tracks_opponent_pass_from_semantic_receipt() -> None:
-    from manabot.verify.text_observation import keep_opening_index
-
     env = fresh_env(97)
     while env.last_raw_obs.turn.turn_number == 0:
         env.step(keep_opening_index(env.last_raw_obs))

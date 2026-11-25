@@ -87,6 +87,9 @@ def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> No
             )
             == runtime_identities()["engine_extension_sha256"]
         )
+
+
+def test_replay_runtime_ignores_historical_world_label() -> None:
     # Historical records may carry a world label; current readers ignore it.
     with_world = {**runtime_identities(), "world": "changed"}
     assert (

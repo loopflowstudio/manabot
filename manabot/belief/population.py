@@ -409,7 +409,6 @@ def _pack_inputs(
     name_columns = {name: index for index, name in enumerate(names)}
     count_blocks: list[np.ndarray] = []
     log_p0_blocks: list[np.ndarray] = []
-    world_batch_blocks: list[np.ndarray] = []
     space_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     offsets = [0]
     history_actor_roles: list[int] = []
@@ -437,7 +436,6 @@ def _pack_inputs(
         counts, log_weights = cached
         count_blocks.append(counts)
         log_p0_blocks.append(log_weights)
-        world_batch_blocks.append(np.full(len(counts), decision_index, dtype=np.int64))
         offsets.append(offsets[-1] + len(counts))
         encoded_events: list[tuple[int, int, int]] = []
         for event in history.semantic_events:
@@ -478,7 +476,9 @@ def _pack_inputs(
     return PackedBeliefBatch(
         world_counts=torch.from_numpy(np.concatenate(count_blocks, axis=0)),
         log_p0=torch.from_numpy(np.concatenate(log_p0_blocks, axis=0)),
-        world_batch=torch.from_numpy(np.concatenate(world_batch_blocks, axis=0)),
+        world_batch=torch.from_numpy(
+            np.repeat(np.arange(len(inputs), dtype=np.int64), np.diff(offsets))
+        ),
         offsets=torch.tensor(offsets, dtype=torch.int64),
         target_world=torch.tensor(target_values, dtype=torch.int64),
         history_actor_role_ids=torch.tensor(history_actor_roles, dtype=torch.int64),

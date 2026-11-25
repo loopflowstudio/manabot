@@ -11,6 +11,7 @@ import pytest
 
 from manabot.semantic.learning import FROZEN_VOCABULARY_LABELS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
+from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
@@ -113,8 +114,6 @@ def test_set_filter_narrows_the_world_pool_by_key_prefix() -> None:
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
     None
 ):
-    from manabot.verify.text_observation import keep_opening_hands
-
     env = managym.Env(seed=28, skip_trivial=False)
     obs, _ = env.reset(
         [

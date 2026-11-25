@@ -321,8 +321,8 @@ def encode_belief(
     # an otherwise normalized marginal outside the fail-closed tolerance.
     probabilities64 = np.zeros((row_count, schema.count_buckets), dtype=np.float64)
     belief_probabilities = belief.probabilities
+    total_probability = float(belief_probabilities.sum())
     hand_counts: dict[str, NDArray[np.int64]] = {}
-    absent_distribution: NDArray[np.float64] | None = None
     for row_index, row in enumerate(schema.rows):
         if row.owner_role_id != OPPONENT_OWNER_ROLE_ID:
             raise BeliefError(
@@ -333,13 +333,7 @@ def encode_belief(
                 "the canonical world space only projects hidden hand and library rows"
             )
         if row.card_name not in pool_names:
-            if absent_distribution is None:
-                absent_distribution = np.bincount(
-                    np.zeros(belief.space.support_size, dtype=np.int64),
-                    weights=belief_probabilities,
-                    minlength=schema.count_buckets,
-                )
-            probabilities64[row_index] = absent_distribution
+            probabilities64[row_index, 0] = total_probability
             continue
         if row.card_name not in hand_counts:
             hand_counts[row.card_name] = np.fromiter(

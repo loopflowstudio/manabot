@@ -189,14 +189,11 @@ def test_workflow_test_files_exist() -> None:
     assert not missing, "\n".join(missing)
 
 
-def _pytest_covered_files(workflow_text: str) -> set[str]:
+def pytest_covered_files(workflow_text: str, all_tests: set[str]) -> set[str]:
     """Return every `tests/**/test_*.py` file selected by a workflow's pytest runs."""
     # Collapse YAML shell continuations so multi-line pytest commands parse together.
     normalized = re.sub(r"\\\n[ \t]*", " ", workflow_text)
     covered: set[str] = set()
-    all_tests = [
-        p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/**/test_*.py")
-    ]
     for line in normalized.splitlines():
         if "pytest" not in line or line.lstrip().startswith("#"):
             continue
@@ -204,7 +201,7 @@ def _pytest_covered_files(workflow_text: str) -> set[str]:
         dirs: set[str] = set()
         ignored: set[str] = set()
         for match in re.finditer(
-            r"(?<![/\w.-])(--ignore=)?(tests/(?:[\w.-]+/)*[\w.-]+\.py|tests/(?:[\w.-]+/)+)",
+            r"(?<![/\w.-])(--ignore=)?(tests/(?:[\w.-]+/)*[\w.-]+\.py|tests/(?:[\w.-]+/)*(?=\s|$))",
             line,
         ):
             prefix, path = match.group(1), match.group(2)
@@ -212,12 +209,19 @@ def _pytest_covered_files(workflow_text: str) -> set[str]:
                 ignored.add(path)
             elif path.endswith(".py"):
                 files.add(path)
-            elif path.endswith("/"):
+            else:
                 dirs.add(path)
         covered |= files
-        for test_path in all_tests:
-            if any(test_path.startswith(d) for d in dirs) and test_path not in ignored:
-                covered.add(test_path)
+        if dirs:
+            dir_prefixes = tuple(dirs)
+            ignored_dirs = tuple(p for p in ignored if p.endswith("/"))
+            covered |= {
+                test_path
+                for test_path in all_tests
+                if test_path.startswith(dir_prefixes)
+                and test_path not in ignored
+                and not test_path.startswith(ignored_dirs)
+            }
     return covered
 
 
@@ -237,11 +241,11 @@ def test_all_test_files_are_covered_by_ci_workflows() -> None:
     }
     pr_covered: set[str] = set()
     for name in pr_workflows:
-        pr_covered |= _pytest_covered_files(
-            (ROOT / ".github/workflows" / name).read_text()
+        pr_covered |= pytest_covered_files(
+            (ROOT / ".github/workflows" / name).read_text(), all_tests
         )
-    nightly_covered = _pytest_covered_files(
-        (ROOT / ".github/workflows/baseline.yml").read_text()
+    nightly_covered = pytest_covered_files(
+        (ROOT / ".github/workflows/baseline.yml").read_text(), all_tests
     )
     assert nightly_only <= nightly_covered, sorted(nightly_only - nightly_covered)
     uncovered = sorted(all_tests - pr_covered - nightly_only)

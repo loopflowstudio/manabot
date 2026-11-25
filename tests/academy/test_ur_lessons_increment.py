@@ -92,13 +92,11 @@ def test_play_offers_and_registered_rules_text_cover_all_three_cards():
 @pytest.mark.parametrize("legend", [False, True])
 def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
     env = managym.Env(seed=0, skip_trivial=False)
+    match = candidate_match()
     if legend:
         # A custom setup supplies the second copy, without changing authored decks.
-        match = candidate_match()
         match.hero_deck["Gran-Gran"] = 2
-        obs, _ = env.reset(match.to_rust())
-    else:
-        obs, _ = env.reset(candidate_match().to_rust())
+    obs, _ = env.reset(match.to_rust())
     while obs.turn.turn_number == 0:
         obs, *_ = env.step(0)
     if legend:
