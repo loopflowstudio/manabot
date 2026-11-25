@@ -53,41 +53,14 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   five planeswalkers and 99 FRA rows `implemented`, seven FRA rows pending on
   named authorities. No defects found.
 
-- Coverage decomposition slices 1–3 landed (`9b19a44635`, `92aac08cde`,
-  `7b5536b37c`):
-  - Slice 1 (`9b19a44635`): replaced `DelayedEvent::Attacks` /
-    `DelayedTriggerEvent::Attacks` with `Whenever(Box<TriggerCondition>)`
-    matched by the shared `match_trigger_wrappers` / `collect_occurrences` /
-    `event_trigger_context` pipeline; shared `TriggerMember::AttackBatch`
-    binds `ObjectSelector::Remembered` when `reads_remembered()` holds; folded
-    `AttackedSubject` into two axes (`attacked: Actor`, `attacked_kind:
-    AttackedKind`, defaults skipped so existing `Attacks` tokens stay
-    unchanged); cut over Garruk, Curse Breaker −4 and Jace, Reality Sculptor
-    −3.
-  - Slice 2 (`92aac08cde`): parameterized `ObjectSelector::LibraryTop(usize)`,
-    propagated `library_top_departure` through `Effect::Move`, cut Chandra,
-    Flameshaper +2 over to `exile(LibraryTop(3))` + `SelectCards { from:
-    Moved, min: 1, max: 1, effects: [GrantPlay { Selected, ThisTurn }] }`
-    (giving `GrantPlay` its first card consumer), and deleted
-    `ExileTopCardsToPlay.choose` and `Effect::exile_top_choose_to_play`.
-  - Slice 3 (`7b5536b37c`): added `StateBasedAction::LegendRule` and
-    `StateBasedActions` bitset on `Characteristics.exempt_sbas`; cut Sakashima
-    of a Thousand Faces (and its `CopyException::GrantStatic`) over to
-    `StateBasedActionDoesntApply { LegendRule, YouControl(any) }`; deleted
-    `StaticAbility::LegendRuleDoesntApply`, `exempt_from_zero_loyalty`, and
-    the `names.clear()` scan in `legend_groups`; retired
-    `StaticAbility::LegendRuleDoesntApply` in `cards/token_renames.rs`.
-  - Verified: focused debug nextest (`flow::sba::tests`, `token_renames`,
-    `ability_description`, `record_vocabulary`, `cr_603_triggers`,
-    `attack_targets`, `garruk_curse_breaker`, `jace_reality_sculptor`,
-    `sanctum_lurker`, `chandra_flameshaper`, `kld`, `cmr`, `hob`,
-    `observability`), `cargo fmt --all`, cp313 extension rebuild,
-    `tests/model/test_pinned_pilot.py` (zero drift, v9 & v11),
-    `tests/academy/test_loyalty.py` (5/5), Academy opening fixtures refreshed
-    and `tests/academy/test_choice_navigation.py` (8/8), planeswalker
-    conformance & authored-match parity receipts refreshed
-    (`semantic_conformance_tests` 20/20, `RUL5_PARITY_OK` 174 commands / 1050
-    viewers).
+- Coverage decomposition (`9b19a44635`, `92aac08cde`, `7b5536b37c`):
+  delayed attack watchers on `Whenever(TriggerCondition)` with two-axis
+  defender matching; impulse exile as `LibraryTop(n)` + `SelectCards` +
+  `GrantPlay`; legend-rule and zero-loyalty exemptions unified as
+  `StateBasedActionDoesntApply` over `Characteristics.exempt_sbas`
+  (`LegendRuleDoesntApply` retired in `token_renames.rs`). Focused debug
+  nextest, pinned pilot (zero drift), Academy loyalty/choice tests and
+  conformance/parity receipts green (`4e4be788f7`).
 
 ## Remaining
 
