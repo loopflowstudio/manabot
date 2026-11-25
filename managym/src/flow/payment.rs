@@ -1267,17 +1267,23 @@ impl Game {
                             payment
                                 .receipt
                                 .contribute(source_object, how, Toward::Printed);
-                            let to = match how {
+                            let event = match how {
                                 How::Tapped | How::Sacrificed => continue,
-                                How::Discarded => ZoneType::Graveyard,
-                                How::Exiled => ZoneType::Exile,
-                                How::Returned => ZoneType::Hand,
+                                How::Discarded => {
+                                    self.discard_proposal(source_object, DiscardCause::Cost(player))
+                                }
+                                How::Exiled => self.zone_move_proposal(
+                                    source_object,
+                                    ZoneType::Exile,
+                                    Default::default(),
+                                ),
+                                How::Returned => self.zone_move_proposal(
+                                    source_object,
+                                    ZoneType::Hand,
+                                    Default::default(),
+                                ),
                             };
-                            source_costs.push(self.zone_move_proposal(
-                                source_object,
-                                to,
-                                Default::default(),
-                            ));
+                            source_costs.push(event);
                         }
                         CostComponent::ExileGrantor(object) => {
                             payment

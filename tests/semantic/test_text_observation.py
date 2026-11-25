@@ -2823,3 +2823,20 @@ def test_banner_replays_the_type_group_and_leaf_before_entry() -> None:
                     )
                 return
     pytest.fail("Elf was absent from the creature-type choices")
+
+
+def test_tinybones_stashes_a_card_discarded_to_activate_landcycling() -> None:
+    env = priority_root(
+        ("Giant Koi",), ("Island", "Island"), opponent=("Tinybones, Bauble Burglar",)
+    )
+    _choose(env, "Giant Koi")
+    for _ in range(8):
+        cards = env.observation_for_player(0).agent_cards
+        if any(
+            card.characteristics.name == "Giant Koi"
+            and card.zone == managym.ZoneEnum.EXILE
+            for card in cards
+        ):
+            return
+        _choose(env, "Pass priority")
+    pytest.fail("Tinybones did not exile the discarded landcycler")

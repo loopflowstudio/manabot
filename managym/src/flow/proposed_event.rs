@@ -719,6 +719,17 @@ pub(crate) enum BatchProgress {
 }
 
 impl Game {
+    pub(super) fn discard_proposal(&self, object: ObjectId, cause: DiscardCause) -> ProposedEvent {
+        self.zone_move_proposal(
+            object,
+            ZoneType::Graveyard,
+            ZoneEntry {
+                discard: Some(cause),
+                ..Default::default()
+            },
+        )
+    }
+
     pub(crate) fn discard_batch(
         &self,
         binding: EventBinding,
@@ -727,16 +738,9 @@ impl Game {
     ) -> EventBatch {
         self.event_batch(
             binding,
-            objects.into_iter().map(|object| {
-                self.zone_move_proposal(
-                    object,
-                    ZoneType::Graveyard,
-                    ZoneEntry {
-                        discard: Some(cause),
-                        ..Default::default()
-                    },
-                )
-            }),
+            objects
+                .into_iter()
+                .map(|object| self.discard_proposal(object, cause)),
         )
     }
 
