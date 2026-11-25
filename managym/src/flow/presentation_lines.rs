@@ -14,7 +14,7 @@ use crate::{
         presentation::PresentationLine,
     },
     state::{
-        game_object::{ObjectId, ObjectKind, PlayerId, Target},
+        game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -120,6 +120,15 @@ impl Game {
         }
     }
 
+    fn permanent_or_lki_object(&self, permanent: PermanentId) -> Option<ObjectId> {
+        self.permanent_object(permanent).or_else(|| {
+            self.state
+                .object_lki
+                .for_permanent(permanent)
+                .map(|lki| lki.object)
+        })
+    }
+
     fn named_target(
         &self,
         target: Target,
@@ -129,7 +138,7 @@ impl Game {
         Some(match target {
             Target::Player(player) => SubjectRef::Player { id: seat(player) },
             Target::Permanent(p) => SubjectRef::Object {
-                id: self.named_object(self.permanent_object(p)?, viewer, labels)?,
+                id: self.named_object(self.permanent_or_lki_object(p)?, viewer, labels)?,
             },
             Target::GraveyardCard(card) => SubjectRef::Object {
                 id: self.named_object(card, viewer, labels)?,
@@ -552,7 +561,7 @@ impl Game {
                 ..
             } => {
                 let Some(object) = self
-                    .permanent_object(*permanent)
+                    .permanent_or_lki_object(*permanent)
                     .and_then(|o| self.named_object(o, viewer, &mut labels))
                 else {
                     return vec![];
