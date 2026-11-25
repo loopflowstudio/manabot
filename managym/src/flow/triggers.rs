@@ -1240,6 +1240,10 @@ impl Game {
                 if !size.matches(attackers.len()) {
                     return;
                 }
+                let permanent_defenders = permanent_defenders
+                    .as_deref()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
                 let matches = |id: PermanentId| {
                     self.attacker_matches(
                         subject,
@@ -2174,7 +2178,10 @@ impl Game {
                             source_object,
                             source_controller,
                             *player,
-                            permanent_defenders,
+                            permanent_defenders
+                                .as_deref()
+                                .map(Vec::as_slice)
+                                .unwrap_or_default(),
                             id,
                         )
                     })

@@ -172,16 +172,18 @@ pub enum GameEvent {
     AttackersDeclared {
         player: PlayerId,
         attackers: Vec<PermanentId>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        permanent_defenders: Vec<(PermanentId, super::combat::AttackTarget)>,
+        #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        permanent_defenders: Option<Box<Vec<(PermanentId, super::combat::AttackTarget)>>>,
     },
     /// Viewer-safe attacker identities captured at declaration completion.
     CombatAttackersDeclared {
         player: PlayerId,
         defender: PlayerId,
         attackers: Vec<ObjectEventRef>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        permanent_defenders: Vec<(ObjectEventRef, ObjectEventRef)>,
+        #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every event
+        #[serde(skip_serializing_if = "Option::is_none")]
+        permanent_defenders: Option<Box<Vec<(ObjectEventRef, ObjectEventRef)>>>,
     },
     /// Final legal assignments after the complete blocker declaration loop.
     BlockersDeclared {
@@ -254,6 +256,8 @@ pub enum GameEvent {
         step: StepKind,
     },
 }
+
+const _: () = assert!(std::mem::size_of::<GameEvent>() <= 56);
 
 /// The variant of a `GameEvent`, which trigger conditions are indexed by
 /// (`flow/triggers.rs`).

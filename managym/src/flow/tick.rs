@@ -352,7 +352,7 @@ impl Game {
                                 self.state.turn.record_attack(object, target);
                             }
                         }
-                        let visible_defenders = permanent_defenders
+                        let visible_defenders: Vec<_> = permanent_defenders
                             .iter()
                             .filter_map(|&(attacker, target)| {
                                 let super::combat::AttackTarget::Permanent(object) = target else {
@@ -365,7 +365,8 @@ impl Game {
                             })
                             .collect();
                         self.emit(GameEvent::AttackersDeclared {
-                            permanent_defenders,
+                            permanent_defenders: (!permanent_defenders.is_empty())
+                                .then(|| Box::new(permanent_defenders)),
                             player: active,
                             attackers: attackers.clone(),
                         });
@@ -377,7 +378,8 @@ impl Game {
                             self.emit_observation_event(GameEvent::CombatAttackersDeclared {
                                 player: active,
                                 defender: self.non_active_player(),
-                                permanent_defenders: visible_defenders,
+                                permanent_defenders: (!visible_defenders.is_empty())
+                                    .then(|| Box::new(visible_defenders)),
                                 attackers,
                             });
                         }

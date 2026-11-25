@@ -6171,7 +6171,7 @@ fn preparation_resolution_triggered_sources_create_their_printed_spells() {
                     }
                 }
                 game.emit(GameEvent::AttackersDeclared {
-                    permanent_defenders: vec![],
+                    permanent_defenders: None,
                     player,
                     attackers: vec![permanent],
                 });

@@ -568,7 +568,9 @@ impl Game {
                         .map(|event| PlannedAttack {
                             creature: (*event).into(),
                             defender: permanent_defenders
-                                .iter()
+                                .as_deref()
+                                .into_iter()
+                                .flatten()
                                 .find(|(a, _)| a == event)
                                 .map(|(_, d)| (*d).into()),
                         })

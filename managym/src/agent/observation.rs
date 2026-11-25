@@ -2298,7 +2298,9 @@ impl Observation {
                         Some(Object(*attacker)),
                         Some(
                             permanent_defenders
-                                .iter()
+                                .as_deref()
+                                .into_iter()
+                                .flatten()
                                 .find(|(a, _)| a == attacker)
                                 .map_or(Player(*defender), |(_, object)| Object(*object)),
                         ),
