@@ -78,6 +78,7 @@ def test_interrupted_record_import_is_closed_and_readable(
     capture.reset(env, players)
     capture.step(env, 0, annotation={"value": 0.31})
     capture.close()
+    live_sessions = set(server.SESSION_REGISTRY)
     selected = read_games(path)[0]
     imported = import_game(selected._record)
     assert imported["stop"] == "interrupted"
@@ -93,7 +94,7 @@ def test_interrupted_record_import_is_closed_and_readable(
     assert shown["source_kind"] == "training"
     assert shown["outputs"]["value"] == 0.31
     assert shown["winner"] is None
-    assert not server.SESSION_REGISTRY
+    assert set(server.SESSION_REGISTRY) == live_sessions
     # The launcher opens the recording in a browser that holds no credential.
     from fastapi.testclient import TestClient
 
