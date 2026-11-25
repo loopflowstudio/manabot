@@ -1,0 +1,37 @@
+at: b50344eceaace9ab0ca62f9e3718e2e9b47ae102
+first:
+  - path: managym/README.md
+    why: What players can choose for each copy
+  - path: managym/cards/src/grn.rs
+    why: Thousand-Year Storm expresses its count and copy instruction
+  - path: managym/cards/src/stx.rs
+    why: Teach by Example watches the next qualifying cast
+  - path: managym/cards/src/war.rs
+    why: Bolt Bend's single target and conditional discount
+  - path: managym/state/src/ability.rs
+    why: Counted instructions and the shared delayed copy trigger
+  - path: managym/state/src/stack_object.rs
+    why: The choices preserved when a spell leaves
+  - path: managym/src/flow/zones.rs
+    why: Capture the referenced spell before its face changes
+  - path: managym/src/flow/resolution.rs
+    why: Count earlier casts and resume each remaining copy
+  - path: managym/src/flow/retarget.rs
+    why: Create copies and announce their final targets
+  - path: managym/cards/tests/cards/grn.rs
+    why: Earlier casts, countered originals and eight independent choices
+  - path: managym/cards/tests/cards/stx.rs
+    why: Ward and interactions between Teach and Storm
+  - path: managym/cards/tests/cards/war.rs
+    why: Legal spells and mana actually spent on Bolt Bend
+hide:
+  - path: managym/academy/fixtures/choice-navigation-opening-v1.json
+    why: Five navigation frames regenerated from recorded Commands
+  - path: managym/academy/fixtures/convoke-demo-opening-v1.json
+    why: Replayed demo digests
+  - path: managym/academy/fixtures/learn-demo-opening-v1.json
+    why: Replayed demo digests
+  - path: managym/academy/fixtures/precision-demo-opening-v1.json
+    why: Replayed demo digests
+  - path: managym/academy/fixtures/precision-mana-demo-opening-v1.json
+    why: Replayed demo digests
