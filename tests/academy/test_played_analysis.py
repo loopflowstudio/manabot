@@ -402,7 +402,8 @@ def commit_first(game: server.GameSession, index: int) -> dict[str, Any]:
 def test_shown_analysis_reads_each_decision_live_and_marks_it(
     registry: PolicyRegistry, tmp_path: Path
 ) -> None:
-    key = registry.register(ReadingFactory())
+    reader = ReadingFactory()
+    key = registry.register(reader)
     game = server.GameSession(tmp_path)
     game.new_game(
         {
@@ -446,7 +447,7 @@ def test_shown_analysis_reads_each_decision_live_and_marks_it(
     after = {
         decision.event: decision
         for decision in analyse_game(
-            attempt, 0, runner_for(registry, ReadingFactory(), attempt), seed=11
+            attempt, 0, runner_for(registry, reader, attempt), seed=11
         )
     }
     for reading in readings:
