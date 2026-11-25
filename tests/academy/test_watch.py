@@ -1,6 +1,7 @@
 """Watch records choices once, preserves actor privacy, and forks either seat."""
 
 from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -267,8 +268,9 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.interface import world_fields
-    from manabot.sim.table_bots import CheckpointVillain
+    from manabot.sim.policy_provider import provider
     from managym.bots import choose_bot
+    from managym.policy import PolicyRegistry, PolicySpec
 
     config = server._parse_game_config(
         {
@@ -297,29 +299,26 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         },
         checkpoint,
     )
-    if compound:
-        with pytest.raises(ValueError, match="no longer executable"):
-            CheckpointVillain(str(checkpoint), player_configs=config.to_rust())
-        return
-    from manabot.sim.policy_provider import provider
-    from managym.policy import PolicyRegistry, PolicySpec
-
     registry = PolicyRegistry(providers={"manabot": provider})
     key = registry.register(
         PolicySpec("manabot", str(checkpoint), {"deterministic": True})
     )
-    policy = registry.load(key, config.to_rust(), seat=0, seed=42)
-    engine = server.managym.Env(seed=42)
-    observation, _ = engine.reset(config.to_rust())
-    digest = engine.state_digest()
-    decision = choose_bot(policy, engine, observation)
-    assert decision.value is not None
-    assert engine.state_digest() == digest
-    assert len(decision.probabilities) == len(observation.action_space.actions)
-    assert sum(decision.probabilities) == pytest.approx(1)
-    # Softmax can round distinct logits to tied probabilities. The selected
-    # logit maximum need not be the first displayed probability maximum.
-    assert decision.probabilities[decision.action] == max(decision.probabilities)
+    if compound:
+        with pytest.raises(ValueError, match="no longer executable"):
+            registry.admit(key, config.to_rust())
+        return
+    with closing(registry.load(key, config.to_rust(), seat=0, seed=42)) as policy:
+        engine = server.managym.Env(seed=42)
+        observation, _ = engine.reset(config.to_rust())
+        digest = engine.state_digest()
+        decision = choose_bot(policy, engine, observation)
+        assert decision.value is not None
+        assert engine.state_digest() == digest
+        assert len(decision.probabilities) == len(observation.action_space.actions)
+        assert sum(decision.probabilities) == pytest.approx(1)
+        # Softmax can round distinct logits to tied probabilities. The selected
+        # logit maximum need not be the first displayed probability maximum.
+        assert decision.probabilities[decision.action] == max(decision.probabilities)
 
 
 @pytest.mark.parametrize("kind", ["greedy", "heuristic"])

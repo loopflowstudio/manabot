@@ -391,15 +391,3 @@ def test_setup_preview_names_bound_decks_without_loading(runs: Path) -> None:
             "compatible": True,
             "reason": None,
         }
-
-
-def test_retained_checkpoint_loader_accepts_omitted_setup(runs: Path) -> None:
-    from manabot.sim.table_bots import CheckpointVillain
-
-    with pytest.warns(DeprecationWarning, match="removed in 0.3.0"):
-        policy = CheckpointVillain(str(runs / "self-play" / "step_0.pt"))
-    try:
-        assert policy.agent is not None
-        assert policy.obs_space is not None
-    finally:
-        policy.close()

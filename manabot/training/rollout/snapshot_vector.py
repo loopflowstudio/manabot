@@ -9,7 +9,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 import json
 from typing import TYPE_CHECKING, Annotated, Literal, Protocol, runtime_checkable
-import warnings
 
 import numpy as np
 from pydantic import Field
@@ -241,33 +240,3 @@ def bind_cold_start(
         if existing is not recipe and existing != recipe:
             raise ValueError(f"snapshot {request.snapshot_id} has conflicting recipes")
     return replace(request, hot_handle=source)
-
-
-class InMemorySnapshotVector:
-    """Deprecated native one-worker factory, removed in 0.3.0."""
-
-    @staticmethod
-    def factory(
-        observation_space: ObservationSpace, match: Match, num_envs: int, seed: int
-    ) -> "BufferedStreams":
-        return InMemorySnapshotVector(observation_space, num_envs, seed)
-
-    def __new__(
-        cls, observation_space: ObservationSpace, num_envs: int, seed: int
-    ) -> "BufferedStreams":
-        from manabot.training.rollout.producers import open_native_streams
-
-        warnings.warn(
-            "InMemorySnapshotVector is deprecated and will be removed in 0.3.0; "
-            "use open_collector(..., snapshots=True)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        memory = observation_space.config
-        return open_native_streams(
-            num_envs,
-            seed,
-            workers=1,
-            decision_memory=memory.max_decision_records > 0,
-            decision_memory_include_own=memory.decision_memory_include_own,
-        )

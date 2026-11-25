@@ -33,10 +33,8 @@ from manabot.training.rollout.collection import (
     collect_pair,
     open_collector,
 )
-from manabot.training.updates.damped_policy import (
-    compute_targets,
-    update_damped_iteration,
-)
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.targets import compute_batch_targets
 from managym import SlotLoad
 from tests.fixtures.dense_collector import dense_collector
 
@@ -244,7 +242,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
     assert batch.actions.size == len(expected_ids)  # no trajectory padding
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning()
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
     )
     torch.testing.assert_close(
@@ -254,8 +252,10 @@ def test_complete_game_targets_and_actual_loss_gradients(
         [OUTCOMES[i] if kind == "categorical_wdl" else RETURNS[i] for i in ids],
         dtype=torch.float32,
     )
-    torch.testing.assert_close(targets.values[:, 0], expected)
-    assert not targets.advantages.requires_grad and not targets.values.requires_grad
+    torch.testing.assert_close(targets.value_targets[:, 0], expected)
+    assert (
+        not targets.advantages.requires_grad and not targets.value_targets.requires_grad
+    )
     np.testing.assert_allclose(
         batch.values.ravel(),
         [DISTRIBUTIONS[i][2] - DISTRIBUTIONS[i][0] for i in ids],
@@ -323,7 +323,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     np.testing.assert_array_equal(batch.next_obs["agent_player"][:, 0, 0], [3, 13])
     assert not any(collector._pending) and not any(collector._streams)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
@@ -337,7 +337,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
         if kind == "categorical_wdl"
         else [[0.28, 0.86], [0.4, 1.0]]
     )
-    torch.testing.assert_close(targets.values, torch.tensor(expected))
+    torch.testing.assert_close(targets.value_targets, torch.tensor(expected))
     with torch.no_grad():
         agent.offers[:, :2] = torch.tensor([0.8, 0.2]).log()
         agent.predictions[3] = (
@@ -357,7 +357,7 @@ def test_draw_reset_has_no_previous_game_credit(seats: Seats) -> None:
     collector = collector_for(agent, seats, games=2)
     batch = collect(collector, agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
@@ -365,7 +365,9 @@ def test_draw_reset_has_no_previous_game_credit(seats: Seats) -> None:
     )
     for row, marker in enumerate(markers(batch)):
         outcome = 0 if marker >= 20 else -1 if marker in (0, 1, 3, 11) else 1
-        torch.testing.assert_close(targets.values[row, 0], torch.eye(3)[outcome + 1])
+        torch.testing.assert_close(
+            targets.value_targets[row, 0], torch.eye(3)[outcome + 1]
+        )
         assert targets.advantages[row, 0] == pytest.approx(
             outcome - batch.values[row, 0]
         )
@@ -396,7 +398,7 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
     # Second model predicts the opposite signed values: .4,-.6,.6.
     # Its B win gives A4=1.6 and A2=-.6-.4+.5*1.6=-.2;
     # its stream-1 A loss gives A11=-1.6.
-    target = compute_targets(
+    target = compute_batch_targets(
         torch_backend,
         trainers[1],
         AdmittedRollout(trainers[1].agent, b),
@@ -409,7 +411,7 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
         else [0.68, 1, -1]
     )
     torch.testing.assert_close(
-        target.values[:, 0], torch.tensor(expected, dtype=torch.float32)
+        target.value_targets[:, 0], torch.tensor(expected, dtype=torch.float32)
     )
     before_second = second.predictions.detach().clone()
     update_damped_iteration(torch_backend, trainers[0], a, learning(), 1)
@@ -430,7 +432,7 @@ def test_filter_retains_negative_credit_and_critic_coverage(
     batch = collect(collector, agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning(min_advantage=0.6, filter_scope=scope)
-    targets = compute_targets(
+    targets = compute_batch_targets(
         torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
     )
     # Magnitude selection includes the losing player's -1.4, not just winners.

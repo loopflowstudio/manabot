@@ -15,52 +15,14 @@ for the operations they support; the gradient step and EMA live in
 
 from collections.abc import Mapping
 import math
-import sys
 from typing import Literal
 
 import numpy as np
 import torch
 from torch import Tensor
-from typing_extensions import deprecated
 
 from manabot.backends.torch.arrays import from_numpy, to_numpy
 import manabot.policy.returns as returns
-
-
-@deprecated(
-    "Use manabot.training.updates.objective.damped_policy_loss(rl, ...). "
-    "The backend-bound function will be removed in 0.3.0."
-)
-def damped_policy_loss(
-    logits: Tensor,
-    actions: Tensor,
-    advantages: Tensor,
-    behavior_logs: Tensor,
-    reference: Tensor,
-    valid: Tensor,
-    *,
-    clip: float,
-    collection_kl: float,
-    tau: float,
-    reference_forward_kl: float = 0.0,
-) -> Tensor:
-    # Policy readers also use this module and can run with training unavailable.
-    from manabot.training.updates.objective import damped_policy_loss as objective
-
-    return objective(
-        sys.modules[__name__],
-        logits,
-        actions,
-        advantages,
-        behavior_logs,
-        reference,
-        valid,
-        clip=clip,
-        collection_kl=collection_kl,
-        tau=tau,
-        reference_forward_kl=reference_forward_kl,
-    )
-
 
 # -- Numerical refusals --------------------------------------------------------
 # Named numerical refusals, and the host boundary for float64 arithmetic.

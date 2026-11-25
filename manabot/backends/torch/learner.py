@@ -16,7 +16,6 @@ keeps the averaged model that evaluation and exports read. `forward_precision` a
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
-import warnings
 
 import numpy as np
 import torch
@@ -27,7 +26,6 @@ from manabot.infra.profiler import Profiler
 from manabot.training.updates.health import (
     CRITIC_READOUT_PREFIXES,
     UNRECORDED_STEP,
-    StepRecorder as _StepRecorder,
     parameter_movement,
 )
 
@@ -37,7 +35,7 @@ if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.learning import Precision
-    from manabot.training.updates.health import StepSample
+    from manabot.training.updates.health import StepRecorder, StepSample
 
 # -- Update step ---------------------------------------------------------------
 
@@ -55,7 +53,7 @@ def gradient_step(
     optimizer: torch.optim.Optimizer,
     max_grad_norm: float,
     *,
-    recorder: _StepRecorder | None = None,
+    recorder: "StepRecorder | None" = None,
     accumulated: bool = False,
 ) -> Tensor:
     """Zero, backward, clip the global norm to `max_grad_norm`, step; return the pre-clip norm.
@@ -247,7 +245,7 @@ class Learner:
         loss: Tensor,
         max_grad_norm: float,
         *,
-        recorder: _StepRecorder | None = None,
+        recorder: "StepRecorder | None" = None,
         accumulated: bool = False,
     ) -> Tensor:
         """`gradient_step` on this learner's policy and optimizer: the
@@ -366,14 +364,3 @@ def parameter_health(
         .sqrt()
     )
     return parameter_movement(float(delta), float(scale))
-
-
-def __getattr__(name: str) -> type[_StepRecorder]:
-    if name == "StepRecorder":
-        warnings.warn(
-            "StepRecorder moved to manabot.training.updates.health; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return _StepRecorder
-    raise AttributeError(name)
