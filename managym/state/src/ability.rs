@@ -1104,6 +1104,9 @@ pub enum EffectValue {
     ManaSpentToCast,
     /// Converge: the number of colors of that mana.
     ColorsSpentToCast,
+    /// Each active target's announced divided share (CR 601.2d, 602.2b),
+    /// paired with `TargetRequirement.division` in the enclosing `TargetClause`.
+    TargetDivision,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -2361,21 +2364,31 @@ impl TargetRequirement {
     }
 
     /// The fewest targets this requirement allows with X announced as `x`.
-    pub fn min_for(&self, x: u8) -> usize {
+    pub fn min_for_x(&self, x: i32) -> usize {
         if self.exact_x() {
-            usize::from(x)
+            usize::try_from(x).unwrap_or(0)
         } else {
             self.min
         }
     }
 
+    /// The fewest targets this requirement allows with X announced as `x`.
+    pub fn min_for(&self, x: u8) -> usize {
+        self.min_for_x(i32::from(x))
+    }
+
     /// The most targets this requirement allows with X announced as `x`.
-    pub fn max_for(&self, x: u8) -> usize {
+    pub fn max_for_x(&self, x: i32) -> usize {
         if self.max_x {
-            usize::from(x)
+            usize::try_from(x).unwrap_or(0)
         } else {
             self.max
         }
+    }
+
+    /// The most targets this requirement allows with X announced as `x`.
+    pub fn max_for(&self, x: u8) -> usize {
+        self.max_for_x(i32::from(x))
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {

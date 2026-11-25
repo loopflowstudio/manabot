@@ -21,6 +21,7 @@ use crate::{
         event::GameEvent,
         game::{
             ActivatedTargeting, ActivationSource, CastChoices, DivisionParent, Game, PendingChoice,
+            SpellTargeting,
         },
         payment::{bargain_cost, Help, Operation, Payment},
         proposed_event::{EntryFace, EventBinding, ZoneEntry},
@@ -47,14 +48,6 @@ use crate::{
 /// is monotone in X, so the scan stops at the first unpayable value.
 fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
     (least..=u8::MAX).take_while(|&x| can_pay(x)).collect()
-}
-
-#[derive(Default)]
-struct TargetSelection {
-    requirement_index: usize,
-    chosen: Vec<Target>,
-    chosen_req_indices: Vec<usize>,
-    target_divisions: Vec<i32>,
 }
 
 impl CastChoices {
@@ -1102,7 +1095,7 @@ impl Game {
             });
             return Ok(());
         }
-        self.advance_target_selection(player, object, cast, None, TargetSelection::default())
+        self.advance_target_selection(SpellTargeting::new(player, object, cast, None))
     }
 
     pub(crate) fn spell_mode_action(
@@ -1121,7 +1114,7 @@ impl Game {
         if chooser != player || !self.legal_spell_modes(player, object, cast).contains(&mode) {
             return Err(AgentError("illegal spell mode".into()));
         }
-        self.advance_target_selection(player, object, cast, Some(mode), TargetSelection::default())
+        self.advance_target_selection(SpellTargeting::new(player, object, cast, Some(mode)))
     }
 
     /// Evaluate a clause's division total at announcement time (CR 601.2d, 602.2b).
@@ -1149,7 +1142,7 @@ impl Game {
         source: Option<ObjectId>,
         x: i32,
     ) -> usize {
-        let base = clause.max_for(x.clamp(0, i32::from(u8::MAX)) as u8);
+        let base = clause.max_for_x(x);
         match &clause.division {
             Some(value) => {
                 let total = self
@@ -1163,60 +1156,30 @@ impl Game {
 
     /// Finish target selection for one spell clause, entering sequential division
     /// when `requirement.division` is set and multiple targets need shares.
-    fn finish_spell_clause(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-        mode: Option<usize>,
-        requirement_index: usize,
-        chosen: Vec<Target>,
-        chosen_req_indices: Vec<usize>,
-        target_divisions: Vec<i32>,
-    ) -> Result<(), AgentError> {
-        let requirements = cast
-            .spell(&self.state[object])
-            .target_requirements_for_mode(mode);
+    fn finish_spell_clause(&mut self, mut targeting: SpellTargeting) -> Result<(), AgentError> {
+        let requirements = targeting
+            .cast
+            .spell(&self.state[targeting.object])
+            .target_requirements_for_mode(targeting.mode);
         let division = requirements
-            .get(requirement_index)
+            .get(targeting.requirement_index)
             .and_then(|req| req.division.as_ref())
             .cloned();
         if let Some(value) = division {
             let total = self
-                .announcement_division_total(&value, player, Some(object), i32::from(cast.x))
+                .announcement_division_total(
+                    &value,
+                    targeting.player,
+                    Some(targeting.object),
+                    i32::from(targeting.cast.x),
+                )
                 .max(0);
-            let slots: Vec<usize> = chosen_req_indices
-                .iter()
-                .enumerate()
-                .filter_map(|(slot, &req)| (req == requirement_index).then_some(slot))
-                .collect();
-            return self.begin_division(
-                player,
-                slots,
-                total,
-                DivisionParent::Spell {
-                    object,
-                    cast,
-                    mode,
-                    requirement_index,
-                    chosen,
-                    chosen_req_indices,
-                    target_divisions,
-                },
-            );
+            let slots = targeting.clause_slots(targeting.requirement_index);
+            let player = targeting.player;
+            return self.begin_division(player, slots, total, DivisionParent::Spell(targeting));
         }
-        self.advance_target_selection(
-            player,
-            object,
-            cast,
-            mode,
-            TargetSelection {
-                requirement_index: requirement_index + 1,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
-            },
-        )
+        targeting.requirement_index += 1;
+        self.advance_target_selection(targeting)
     }
 
     /// Begin sequential amount assignment for `slots` summing to `total`,
@@ -1307,102 +1270,68 @@ impl Game {
 
     fn finish_division_parent(
         &mut self,
-        player: PlayerId,
+        _player: PlayerId,
         parent: DivisionParent,
     ) -> Result<(), AgentError> {
         match parent {
-            DivisionParent::Spell {
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
-            } => self.advance_target_selection(
-                player,
-                object,
-                cast,
-                mode,
-                TargetSelection {
-                    requirement_index: requirement_index + 1,
-                    chosen,
-                    chosen_req_indices,
-                    target_divisions,
-                },
-            ),
+            DivisionParent::Spell(mut targeting) => {
+                targeting.requirement_index += 1;
+                self.advance_target_selection(targeting)
+            }
             DivisionParent::Activation(targeting) => self.next_activation_clause(targeting),
         }
     }
 
-    /// Move the casting pipeline to `requirement_index`, skipping
+    /// Move the casting pipeline to `targeting.requirement_index`, skipping
     /// requirements with no legal targets when they're optional, and
     /// finishing the cast once all requirements are satisfied.
     fn advance_target_selection(
         &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-        mode: Option<usize>,
-        selection: TargetSelection,
+        mut targeting: SpellTargeting,
     ) -> Result<(), AgentError> {
-        let TargetSelection {
-            mut requirement_index,
-            chosen,
-            chosen_req_indices,
-            target_divisions,
-        } = selection;
-        let requirements = cast
-            .spell(&self.state[object])
-            .target_requirements_for_mode(mode);
+        let requirements = targeting
+            .cast
+            .spell(&self.state[targeting.object])
+            .target_requirements_for_mode(targeting.mode);
         loop {
-            let Some(requirement) = requirements.get(requirement_index) else {
-                return self.finish_casting(
-                    player,
-                    object,
-                    cast,
-                    mode,
-                    chosen,
-                    chosen_req_indices,
-                    target_divisions,
-                );
+            let Some(requirement) = requirements.get(targeting.requirement_index) else {
+                return self.finish_casting(targeting);
             };
-            let max =
-                self.effective_clause_max(requirement, player, Some(object), i32::from(cast.x));
+            let max = self.effective_clause_max(
+                requirement,
+                targeting.player,
+                Some(targeting.object),
+                i32::from(targeting.cast.x),
+            );
+            let clause_chosen = targeting.clause_targets(targeting.requirement_index);
             let legal = self
                 .remaining_legal_targets(
-                    player,
-                    object,
+                    targeting.player,
+                    targeting.object,
                     requirement,
-                    &chosen
-                        .iter()
-                        .zip(&chosen_req_indices)
-                        .filter(|(_, index)| **index == requirement_index)
-                        .map(|(target, _)| *target)
-                        .collect::<Vec<_>>(),
-                    cast.x,
+                    &clause_chosen,
+                    targeting.cast.x,
                 )
                 .into_iter()
                 .filter(|target| {
-                    self.target_leaves_cost_payable(player, object, cast, &chosen, *target)
+                    self.target_leaves_cost_payable(
+                        targeting.player,
+                        targeting.object,
+                        targeting.cast,
+                        &targeting.chosen,
+                        *target,
+                    )
                 })
                 .collect::<Vec<_>>();
             if legal.is_empty() || max == 0 {
-                if requirement.min_for(cast.x) == 0 {
-                    requirement_index += 1;
+                if requirement.min_for(targeting.cast.x) == 0 {
+                    targeting.requirement_index += 1;
                     continue;
                 }
                 return Err(AgentError("no legal targets".to_string()));
             }
             self.pending_choice = Some(PendingChoice::ChooseTargets {
-                player,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
+                targeting,
                 legal_targets: legal,
             });
             return Ok(());
@@ -1458,111 +1387,59 @@ impl Game {
         target: Target,
     ) -> Result<(), AgentError> {
         let Some(PendingChoice::ChooseTargets {
-            player: chooser,
-            object,
-            cast,
-            mode,
-            requirement_index,
-            chosen,
-            chosen_req_indices,
-            target_divisions,
+            mut targeting,
             legal_targets,
         }) = self.pending_choice.take()
         else {
             return Err(AgentError("no target choice is pending".to_string()));
         };
 
-        if chooser != player {
+        if targeting.player != player {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
-                player: chooser,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
+                targeting,
                 legal_targets,
             });
             return Err(AgentError("wrong player for target choice".to_string()));
         }
         if !legal_targets.contains(&target) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
-                player: chooser,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
+                targeting,
                 legal_targets,
             });
             return Err(AgentError("target is not legal".to_string()));
         }
 
-        let mut chosen = chosen;
-        let mut chosen_req_indices = chosen_req_indices;
-        chosen.push(target);
-        chosen_req_indices.push(requirement_index);
+        targeting.choose(target);
 
-        let requirements = cast
-            .spell(&self.state[object])
-            .target_requirements_for_mode(mode);
-        let requirement = &requirements[requirement_index];
-        let chosen_in_req = chosen_req_indices
-            .iter()
-            .filter(|i| **i == requirement_index)
-            .count();
-        let effective_max =
-            self.effective_clause_max(requirement, player, Some(object), i32::from(cast.x));
+        let requirements = targeting
+            .cast
+            .spell(&self.state[targeting.object])
+            .target_requirements_for_mode(targeting.mode);
+        let requirement = &requirements[targeting.requirement_index];
+        let clause_chosen = targeting.clause_targets(targeting.requirement_index);
+        let effective_max = self.effective_clause_max(
+            requirement,
+            targeting.player,
+            Some(targeting.object),
+            i32::from(targeting.cast.x),
+        );
 
-        if chosen_in_req >= effective_max {
-            return self.finish_spell_clause(
-                player,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
-            );
+        if clause_chosen.len() >= effective_max {
+            return self.finish_spell_clause(targeting);
         }
 
         let legal = self.remaining_legal_targets(
-            player,
-            object,
+            targeting.player,
+            targeting.object,
             requirement,
-            &chosen
-                .iter()
-                .zip(&chosen_req_indices)
-                .filter(|(_, index)| **index == requirement_index)
-                .map(|(target, _)| *target)
-                .collect::<Vec<_>>(),
-            cast.x,
+            &clause_chosen,
+            targeting.cast.x,
         );
         if legal.is_empty() {
-            return self.finish_spell_clause(
-                player,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
-            );
+            return self.finish_spell_clause(targeting);
         }
         self.pending_choice = Some(PendingChoice::ChooseTargets {
-            player,
-            object,
-            cast,
-            mode,
-            requirement_index,
-            chosen,
-            chosen_req_indices,
-            target_divisions,
+            targeting,
             legal_targets: legal,
         });
         Ok(())
@@ -1572,89 +1449,48 @@ impl Game {
     /// been met) and advance to the next requirement.
     pub(crate) fn finish_targets_action(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let Some(PendingChoice::ChooseTargets {
-            player: chooser,
-            object,
-            cast,
-            mode,
-            requirement_index,
-            chosen,
-            chosen_req_indices,
-            target_divisions,
+            targeting,
             legal_targets,
         }) = self.pending_choice.take()
         else {
             return Err(AgentError("no target choice is pending".to_string()));
         };
-        if chooser != player {
+        if targeting.player != player {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
-                player: chooser,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
+                targeting,
                 legal_targets,
             });
             return Err(AgentError("wrong player for target choice".to_string()));
         }
 
-        let requirements = cast
-            .spell(&self.state[object])
-            .target_requirements_for_mode(mode);
-        let requirement = &requirements[requirement_index];
-        let chosen_in_req = chosen_req_indices
-            .iter()
-            .filter(|i| **i == requirement_index)
-            .count();
-        if chosen_in_req < requirement.min_for(cast.x) {
+        let requirements = targeting
+            .cast
+            .spell(&self.state[targeting.object])
+            .target_requirements_for_mode(targeting.mode);
+        let requirement = &requirements[targeting.requirement_index];
+        let chosen_in_req = targeting.clause_slots(targeting.requirement_index).len();
+        if chosen_in_req < requirement.min_for(targeting.cast.x) {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
-                player: chooser,
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
+                targeting,
                 legal_targets,
             });
             return Err(AgentError(
                 "minimum number of targets not chosen".to_string(),
             ));
         }
-        self.finish_spell_clause(
-            player,
-            object,
-            cast,
-            mode,
-            requirement_index,
-            chosen,
-            chosen_req_indices,
-            target_divisions,
-        )
+        self.finish_spell_clause(targeting)
     }
 
-    fn finish_casting(
-        &mut self,
-        player: PlayerId,
-        object: ObjectId,
-        cast: CastChoices,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-        target_divisions: Vec<i32>,
-    ) -> Result<(), AgentError> {
+    fn finish_casting(&mut self, targeting: SpellTargeting) -> Result<(), AgentError> {
         self.begin_payment(
-            player,
+            targeting.player,
             Operation::Spell {
-                object,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-                target_divisions,
+                object: targeting.object,
+                cast: targeting.cast,
+                mode: targeting.mode,
+                targets: targeting.chosen,
+                target_req_indices: targeting.chosen_req_indices,
+                target_divisions: targeting.target_divisions,
             },
         )
     }
@@ -1855,14 +1691,15 @@ impl Game {
         )
     }
 
-    /// Loyalty X is bounded by counters remaining after other costs. Only a
-    /// mana X needs the mana planner, whose supported amounts are bytes.
+    /// Legal X values for `permanent`'s `ability_index`: payable with the
+    /// remaining loyalty and mana resources, and with legal targets available
+    /// for every required clause at that X (CR 602.2b, 601.2b-c).
     pub(crate) fn legal_activation_x_values(
         &self,
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
-    ) -> std::ops::RangeInclusive<i32> {
+    ) -> Vec<i32> {
         let view = self.characteristics(permanent);
         let ability = &view.activated_abilities[ability_index];
         let least = i32::from(ability.x_min);
@@ -1882,8 +1719,23 @@ impl Game {
                 })
                 .last()
                 .unwrap_or(least - 1);
+        } else if (ability.mana_cost.mana_value > 0 || ability.waterbend)
+            && !self.activation_x_payable(player, permanent, ability_index, 0)
+        {
+            return Vec::new();
         }
-        least..=most
+        if most < least {
+            return Vec::new();
+        }
+        let source = ActivationSource::Permanent(permanent);
+        if ability.target_requirements().is_empty() {
+            return (least..=most).collect();
+        }
+        (least..=most)
+            .filter(|&x| {
+                self.activation_targets_available(player, source, ability_index, ability, x)
+            })
+            .collect()
     }
 
     pub(crate) fn choose_activation_x_action(
@@ -1907,6 +1759,7 @@ impl Game {
         {
             return Err(AgentError("illegal value of X".into()));
         }
+        self.pending_choice = None;
         self.begin_activation_targets(
             player,
             ActivationSource::Permanent(permanent),
@@ -2080,7 +1933,7 @@ impl Game {
             let first = &ability.target_requirements()[0];
             let source_object = self.activation_ability_source(source).map(|s| s.object());
             let first_max = self.effective_clause_max(first, player, source_object, x);
-            if first.min == 0
+            if first.min_for_x(x) == 0
                 && (first_max == 0 || self.activated_ability_targets(&targeting).is_empty())
             {
                 return self.next_activation_clause(targeting);
@@ -2107,9 +1960,9 @@ impl Game {
             .iter()
             .enumerate()
             .all(|(index, requirement)| {
-                requirement.min == 0
-                    || (self.effective_clause_max(requirement, player, source_object, x)
-                        >= requirement.min
+                let min = requirement.min_for_x(x);
+                min == 0
+                    || (self.effective_clause_max(requirement, player, source_object, x) >= min
                         && self
                             .activated_ability_targets(&ActivatedTargeting {
                                 player,
@@ -2122,7 +1975,7 @@ impl Game {
                                 target_divisions: Vec::new(),
                             })
                             .len()
-                            >= requirement.min)
+                            >= min)
             })
     }
 
@@ -2257,7 +2110,7 @@ impl Game {
             .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
         let count = targeting.clause_targets(requirement).len();
-        if chooser != actor || count < clause.min {
+        if chooser != actor || count < clause.min_for_x(targeting.x) {
             return Err(AgentError("target required".into()));
         }
         self.finish_activation_clause(targeting)
@@ -2341,7 +2194,8 @@ impl Game {
         ) {
             let max =
                 self.effective_clause_max(&clause, targeting.player, source_object, targeting.x);
-            if clause.min > 0 || (max > 0 && !self.activated_ability_targets(&targeting).is_empty())
+            if clause.min_for_x(targeting.x) > 0
+                || (max > 0 && !self.activated_ability_targets(&targeting).is_empty())
             {
                 self.pending_choice = Some(PendingChoice::ActivatedTarget(targeting));
                 return Ok(());

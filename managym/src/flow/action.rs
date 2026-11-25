@@ -28,16 +28,14 @@ use crate::{
 };
 
 impl Game {
-    /// Whether a ChooseMode index at this decision is a quantity (X, a
-    /// replicate count, or assigned damage).
+    /// Whether a ChooseMode index at this decision is an announced X quantity
+    /// (X for a spell or activation, a replicate count, a payment's X, or
+    /// assigned combat damage). Target division uses its own `division_amount`
+    /// field rather than aliasing X.
     pub(crate) fn announces_x(&self) -> bool {
         matches!(
             self.pending_choice,
-            Some(
-                PendingChoice::AnnounceX { .. }
-                    | PendingChoice::ActivationX { .. }
-                    | PendingChoice::DivideAmount { .. }
-            )
+            Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
         ) || self.state.suspended_decision.as_ref().is_some_and(|s| {
             matches!(
                 s.decision,
@@ -702,13 +700,14 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
-                    || !self.activation_targets_available(
-                        player,
-                        source,
-                        ability_index,
-                        ability,
-                        i32::from(ability.x_min),
-                    )
+                    || (!ability.announces_x()
+                        && !self.activation_targets_available(
+                            player,
+                            source,
+                            ability_index,
+                            ability,
+                            i32::from(ability.x_min),
+                        ))
                 {
                     continue;
                 }
@@ -787,7 +786,15 @@ impl Game {
                         receipt: Default::default(),
                     };
                     self.tap_activation_payment_possible(player, &payment, None)
-                } else if ability.waterbend || ability.mana_cost.x > 0 {
+                        && (!ability.announces_x()
+                            || !self
+                                .legal_activation_x_values(player, permanent_id, ability_index)
+                                .is_empty())
+                } else if ability.announces_x() {
+                    !self
+                        .legal_activation_x_values(player, permanent_id, ability_index)
+                        .is_empty()
+                } else if ability.waterbend {
                     self.activation_x_payable(player, permanent_id, ability_index, ability.x_min)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &operation, None)
@@ -1009,7 +1016,7 @@ impl Game {
                 let clause =
                     self.activation_target_requirement(*source, *ability_index, *requirement)?;
                 let in_clause = targeting.clause_targets(*requirement).len();
-                if in_clause >= clause.min {
+                if in_clause >= clause.min_for_x(targeting.x) {
                     actions.push(Action::Decline { player: chooser });
                 }
                 Some(ActionSpace {
@@ -1100,42 +1107,38 @@ impl Game {
                 })
             }
             PendingChoice::ChooseTargets {
-                player,
-                object,
-                cast,
-                requirement_index,
-                mode,
-                chosen_req_indices,
+                targeting,
                 legal_targets,
-                ..
             } => {
                 let mut actions: Vec<Action> = legal_targets
                     .iter()
                     .copied()
                     .map(|target| Action::ChooseTarget {
-                        player: *player,
+                        player: targeting.player,
                         target,
                     })
                     .collect();
-                let requirements = cast
-                    .spell(&self.state[object])
-                    .target_requirements_for_mode(*mode);
-                let chosen_in_req = chosen_req_indices
-                    .iter()
-                    .filter(|i| **i == *requirement_index)
-                    .count();
-                let min_met = requirements.get(*requirement_index).is_some_and(|req| {
-                    chosen_in_req >= req.min_for(cast.x)
-                        && req.max_for(cast.x) > req.min_for(cast.x)
-                });
+                let requirements = targeting
+                    .cast
+                    .spell(&self.state[targeting.object])
+                    .target_requirements_for_mode(targeting.mode);
+                let chosen_in_req = targeting.clause_slots(targeting.requirement_index).len();
+                let min_met = requirements
+                    .get(targeting.requirement_index)
+                    .is_some_and(|req| {
+                        let min = req.min_for(targeting.cast.x);
+                        chosen_in_req >= min && req.max_for(targeting.cast.x) > min
+                    });
                 if min_met {
-                    actions.push(Action::Decline { player: *player });
+                    actions.push(Action::Decline {
+                        player: targeting.player,
+                    });
                 }
                 Some(ActionSpace {
-                    player: Some(*player),
+                    player: Some(targeting.player),
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
-                    focus: vec![self.state[object].id],
+                    focus: vec![self.state[targeting.object].id],
                 })
             }
         }

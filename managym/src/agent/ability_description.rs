@@ -1316,6 +1316,7 @@ fn value_description(triggering: TriggerText, value: &EffectValue) -> String {
             "the number of permanents you have sacrificed this turn".into()
         }
         EffectValue::SpellsCastThisTurn => "the number of spells you've cast this turn".into(),
+        EffectValue::TargetDivision => "the divided amount".into(),
     }
 }
 
@@ -1482,7 +1483,27 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         MillCards { count, target: Some(target), .. } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
         MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
-        TargetClause { requirement, effects } => format!("Choose {}–{} {}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },effects_description_in(triggering, effects)),
+        TargetClause { requirement, effects } => format!(
+            "Choose {}–{} {}{}{} for this clause: {}",
+            requirement.min,
+            if requirement.max_x {
+                "X".to_string()
+            } else {
+                requirement.max.to_string()
+            },
+            target_description(&requirement.spec),
+            if requirement.same_graveyard {
+                " from a single graveyard"
+            } else {
+                ""
+            },
+            requirement
+                .division
+                .as_ref()
+                .map(|total| format!(" dividing {}", value_description(triggering, total)))
+                .unwrap_or_default(),
+            effects_description_in(triggering, effects)
+        ),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(triggering, what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(triggering, what)),
@@ -1639,7 +1660,9 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         If { condition: Condition::Always, then, .. } => effects_description_in(triggering, then),
         If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text_in(triggering, condition),effects_description_in(triggering, then)),
         If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text_in(triggering, condition),effects_description_in(triggering, then),effects_description_in(triggering, otherwise)),
+        DealDamage { amount: EffectValue::TargetDivision, what, by: Some(by) } => format!("{} deals divided damage to {}",selector_description(triggering, by),selector_description(triggering, what)),
         DealDamage { amount, what, by: Some(by) } => format!("{} deals X damage to {}, where X is {}",selector_description(triggering, by),selector_description(triggering, what),value_description(triggering, amount)),
+        DealDamage { amount: EffectValue::TargetDivision, what, by: None } => format!("Deal divided damage to {}",selector_description(triggering, what)),
         DealDamage { amount: EffectValue::Fixed(amount), what, by: None } => format!("Deal {amount} damage to {}",selector_description(triggering, what)),
         DealDamage { amount, what, by: None } => format!("Deal X damage to {}, where X is {}",selector_description(triggering, what),value_description(triggering, amount)),
         CounterSpell { what, exile } => format!("Counter {}{}", selector_description(triggering, what), if *exile { ". If it is countered this way, exile it instead of putting it into its owner's graveyard" } else { "" }),

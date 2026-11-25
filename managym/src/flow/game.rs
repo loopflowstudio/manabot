@@ -417,37 +417,79 @@ pub struct ActivatedTargeting {
     pub x: i32,
 }
 
+/// A spell between mode/X announcement and payment while its targets and any
+/// divided amounts are chosen (CR 601.2c-d).
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct SpellTargeting {
+    pub player: PlayerId,
+    #[serde(rename = "card")]
+    pub object: ObjectId,
+    #[serde(flatten)]
+    pub cast: CastChoices,
+    pub mode: Option<usize>,
+    pub requirement_index: usize,
+    pub chosen: Vec<Target>,
+    pub chosen_req_indices: Vec<usize>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_divisions: Vec<i32>,
+}
+
+impl SpellTargeting {
+    pub fn new(player: PlayerId, object: ObjectId, cast: CastChoices, mode: Option<usize>) -> Self {
+        Self {
+            player,
+            object,
+            cast,
+            mode,
+            requirement_index: 0,
+            chosen: Vec::new(),
+            chosen_req_indices: Vec::new(),
+            target_divisions: Vec::new(),
+        }
+    }
+
+    /// Add `target` to the clause now being chosen.
+    pub fn choose(&mut self, target: Target) {
+        self.chosen.push(target);
+        self.chosen_req_indices.push(self.requirement_index);
+    }
+
+    /// Indices into `chosen` belonging to clause `requirement`.
+    pub fn clause_slots(&self, requirement: usize) -> Vec<usize> {
+        self.chosen_req_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, &req)| (req == requirement).then_some(slot))
+            .collect()
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    pub fn clause_targets(&self, requirement: usize) -> Vec<Target> {
+        self.clause_slots(requirement)
+            .into_iter()
+            .map(|slot| self.chosen[slot])
+            .collect()
+    }
+}
+
 /// The spell or activation awaiting sequential target-division assignment (CR 601.2d, 602.2b).
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum DivisionParent {
-    Spell {
-        #[serde(rename = "card")]
-        object: ObjectId,
-        #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        requirement_index: usize,
-        chosen: Vec<Target>,
-        chosen_req_indices: Vec<usize>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        target_divisions: Vec<i32>,
-    },
+    Spell(SpellTargeting),
     Activation(ActivatedTargeting),
 }
 
 impl DivisionParent {
     pub(crate) fn chosen(&self) -> &[Target] {
         match self {
-            Self::Spell { chosen, .. } => chosen,
+            Self::Spell(targeting) => &targeting.chosen,
             Self::Activation(targeting) => &targeting.chosen,
         }
     }
 
     pub(crate) fn divisions_mut(&mut self) -> &mut Vec<i32> {
         match self {
-            Self::Spell {
-                target_divisions, ..
-            } => target_divisions,
+            Self::Spell(targeting) => &mut targeting.target_divisions,
             Self::Activation(targeting) => &mut targeting.target_divisions,
         }
     }
@@ -523,20 +565,11 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
-    /// Choosing targets for requirement `requirement_index` of the card's
-    /// `target_requirements()` (CR 601.2c).
+    /// Choosing targets for requirement `targeting.requirement_index` of the
+    /// card's `target_requirements()` (CR 601.2c).
     ChooseTargets {
-        player: PlayerId,
-        #[serde(rename = "card")]
-        object: ObjectId,
         #[serde(flatten)]
-        cast: CastChoices,
-        mode: Option<usize>,
-        requirement_index: usize,
-        chosen: Vec<Target>,
-        chosen_req_indices: Vec<usize>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        target_divisions: Vec<i32>,
+        targeting: SpellTargeting,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },

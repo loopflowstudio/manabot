@@ -225,36 +225,29 @@ impl Game {
                 self.effective_spell_cost(player, *object, cast, None)
             }
             Action::ChooseTarget { target, .. } => match &self.pending_choice {
-                Some(PendingChoice::ChooseTargets {
-                    object,
-                    cast,
-                    mode,
-                    requirement_index,
-                    chosen,
-                    chosen_req_indices,
-                    ..
-                }) => {
-                    let card = cast.spell(&self.state[*object]);
-                    let owed = self.spell_owed(player, *object, *cast);
+                Some(PendingChoice::ChooseTargets { targeting, .. }) => {
+                    let card = targeting.cast.spell(&self.state[targeting.object]);
+                    let owed = self.spell_owed(player, targeting.object, targeting.cast);
                     if will_owe_a_choice(&owed) {
                         return Ok(PaymentPreview::needs_additional_cost());
                     }
                     helped = keyword_help(&owed);
-                    let requirements = card.target_requirements_for_mode(*mode);
-                    let completes = *requirement_index + 1 == requirements.len()
-                        && chosen_req_indices
-                            .iter()
-                            .filter(|index| **index == *requirement_index)
-                            .count()
-                            + 1
-                            >= requirements[*requirement_index].max_for(cast.x);
+                    let requirements = card.target_requirements_for_mode(targeting.mode);
+                    let completes = targeting.requirement_index + 1 == requirements.len()
+                        && targeting.clause_slots(targeting.requirement_index).len() + 1
+                            >= requirements[targeting.requirement_index].max_for(targeting.cast.x);
                     if card.cost_reduction_if_targets().is_some() && !completes {
                         return Ok(PaymentPreview::message(PaymentPreviewState::NeedsChoice,
                             "Choose the remaining targets before previewing this target-dependent cost."));
                     }
-                    let mut targets = chosen.clone();
+                    let mut targets = targeting.chosen.clone();
                     targets.push(*target);
-                    self.effective_spell_cost(player, *object, *cast, Some(&targets))
+                    self.effective_spell_cost(
+                        player,
+                        targeting.object,
+                        targeting.cast,
+                        Some(&targets),
+                    )
                 }
                 _ => None,
             },

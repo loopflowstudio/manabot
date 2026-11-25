@@ -1034,6 +1034,10 @@ pub struct ActionOption {
     /// rather than an option index.
     #[serde(default)]
     pub announces_x: bool,
+    /// Announced share assigned to the current target during `DivideAmount`
+    /// (CR 601.2d, 602.2b); `None` outside target division.
+    #[serde(default)]
+    pub division_amount: Option<i32>,
     /// The printed spell this offer casts, as [`spell_profile_code`].
     #[serde(default)]
     pub spell_profile: u8,
@@ -1221,6 +1225,13 @@ impl Observation {
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
                                 announces_x: mode_index.is_some() && game.announces_x(),
+                                division_amount: match (mode_index, &game.pending_choice) {
+                                    (
+                                        Some(amount),
+                                        Some(crate::flow::game::PendingChoice::DivideAmount { .. }),
+                                    ) => i32::try_from(amount).ok(),
+                                    _ => None,
+                                },
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
                                     .map(|id| id.0 as i32)
@@ -2588,7 +2599,10 @@ impl Observation {
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets {
-                            object: object_id,
+                            targeting:
+                                crate::flow::game::SpellTargeting {
+                                    object: object_id, ..
+                                },
                             ..
                         }) => Some(*object_id),
                         Some(crate::flow::game::PendingChoice::DivideAmount {
@@ -2975,6 +2989,7 @@ mod characteristics_tests {
             continuation_index: None,
             pays_directly: false,
             announces_x: false,
+            division_amount: None,
             spell_profile: 0,
             route_mana_value: None,
             quota_type: None,

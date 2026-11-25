@@ -3941,6 +3941,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         triggering_amount => [Fact(FactKind::TriggeringAmount)],
         resolutions_this_turn => [column(Relation, relation::RESOLUTIONS_THIS_TURN)],
         x => [column(Relation, relation::X)],
+        division_remaining => [column(Relation, relation::DIVISION)],
         granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
         this_turn => [column(Relation, relation::THIS_TURN)],
         until_next_turn => [column(Relation, relation::UNTIL_NEXT_TURN)],
@@ -3984,6 +3985,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         quota_type => [column(Action, action::QUOTA_TYPE)],
         play_route => [column(Action, action::PLAY_ROUTE)],
         announces_x => [column(Action, action::HAS_X)],
+        division_amount => [column(Action, action::DIVISION)],
     }));
     fields.extend(encoding!(EventData {
         event_type => [Rows("events")],

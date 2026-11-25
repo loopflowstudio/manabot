@@ -169,6 +169,10 @@ pub struct ContinuationFrame {
     /// casts, activates or resolves; zero when it has none.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub x: i32,
+    /// Remaining division budget to distribute across the active clause's
+    /// unassigned targets (CR 601.2d, 602.2b); zero outside `DivideAmount`.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub division_remaining: i32,
     /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
     /// in `KeywordData` field order.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -845,24 +849,19 @@ impl Game {
                     self, payment, viewer, &mut frame, false,
                 );
             }
-            PendingChoice::ChooseTargets {
-                object,
-                cast,
-                mode,
-                requirement_index,
-                chosen,
-                chosen_req_indices,
-                target_divisions,
-                ..
-            } => {
-                frame.source = self.object_reference(*object, viewer);
-                frame.kicked = cast.kicked;
-                frame.spell_profile = spell_profile_code(cast.profile);
-                frame.x = i32::from(cast.x);
-                frame.mode = *mode;
-                frame.active_clause = Some(*requirement_index);
-                frame.targets =
-                    self.clause_targets(chosen, chosen_req_indices, target_divisions, viewer);
+            PendingChoice::ChooseTargets { targeting, .. } => {
+                frame.source = self.object_reference(targeting.object, viewer);
+                frame.kicked = targeting.cast.kicked;
+                frame.spell_profile = spell_profile_code(targeting.cast.profile);
+                frame.x = i32::from(targeting.cast.x);
+                frame.mode = targeting.mode;
+                frame.active_clause = Some(targeting.requirement_index);
+                frame.targets = self.clause_targets(
+                    &targeting.chosen,
+                    &targeting.chosen_req_indices,
+                    &targeting.target_divisions,
+                    viewer,
+                );
             }
             PendingChoice::DivideAmount {
                 slots,
@@ -871,35 +870,29 @@ impl Game {
                 parent,
                 ..
             } => {
-                frame.x = *remaining;
+                frame.division_remaining = *remaining;
                 frame.context = parent
                     .chosen()
                     .get(slots[*next])
                     .map(|t| self.target_reference(*t, viewer));
                 match parent.as_ref() {
-                    crate::flow::game::DivisionParent::Spell {
-                        object,
-                        cast,
-                        mode,
-                        requirement_index,
-                        chosen,
-                        chosen_req_indices,
-                        target_divisions,
-                    } => {
-                        frame.source = self.object_reference(*object, viewer);
-                        frame.kicked = cast.kicked;
-                        frame.spell_profile = spell_profile_code(cast.profile);
-                        frame.mode = *mode;
-                        frame.active_clause = Some(*requirement_index);
+                    crate::flow::game::DivisionParent::Spell(targeting) => {
+                        frame.source = self.object_reference(targeting.object, viewer);
+                        frame.kicked = targeting.cast.kicked;
+                        frame.spell_profile = spell_profile_code(targeting.cast.profile);
+                        frame.x = i32::from(targeting.cast.x);
+                        frame.mode = targeting.mode;
+                        frame.active_clause = Some(targeting.requirement_index);
                         frame.targets = self.clause_targets(
-                            chosen,
-                            chosen_req_indices,
-                            target_divisions,
+                            &targeting.chosen,
+                            &targeting.chosen_req_indices,
+                            &targeting.target_divisions,
                             viewer,
                         );
                     }
                     crate::flow::game::DivisionParent::Activation(targeting) => {
                         frame.source = self.activation_reference(targeting.source, viewer);
+                        frame.x = targeting.x;
                         frame.ability = Some(targeting.ability_index);
                         frame.active_clause = Some(targeting.requirement);
                         frame.targets = self.clause_targets(
@@ -1360,6 +1353,7 @@ fn relation_rows(
         header[relation::THIS_TURN] = i64::from(frame.this_turn);
         header[relation::SPELL_PROFILE] = i64::from(frame.spell_profile);
         header[relation::UNTIL_NEXT_TURN] = i64::from(frame.until_next_turn);
+        header[relation::DIVISION] = i64::from(frame.division_remaining);
         emit(&header)?;
         let mut reference_row = |kind: i64,
                                  reference: VisibleReference,

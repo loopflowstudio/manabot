@@ -535,6 +535,7 @@ columns! { action {
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
     30: ATTACK_TARGET => ("attack_target", ValueLayout::OBJECT_REFERENCE),
+    31: DIVISION => ("division", ValueLayout::COUNT),
 } }
 
 pub fn action_columns(layout: InputLayout) -> &'static [Column] {
@@ -1127,8 +1128,8 @@ pub fn observation_layout(
         },
     );
     relations.row_kinds = BTreeMap::from([
-        (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
-        (2, "Target: clause, ordinal, reference_definition/reference/reference_player and legal_at_resolution_start"),
+        (1, "Frame header; frame_kind describes the unfinished work; division is remaining division budget during DivideAmount; other rows repeat this header"),
+        (2, "Target: clause, ordinal, reference_definition/reference/reference_player, legal_at_resolution_start and division (assigned share)"),
         (3, "Event context: reference_definition/reference/reference_player"),
         (4, "Sacrifice: reference_definition/reference/reference_player"),
         (5, "Hybrid payment: hybrid_first/hybrid_second are alternative colors"),

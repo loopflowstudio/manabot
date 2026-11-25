@@ -1329,3 +1329,379 @@ fn exude_toxin_target_threshold_uses_the_announced_x() {
         assert_eq!(game.target_is_legal(target, &spec, PlayerId(1)), x == 1);
     }
 }
+
+#[test]
+fn minus_x_divided_ability_filters_uncompletable_x_and_separates_division_from_x() {
+    use crate::{
+        agent::{
+            action::{Action, ActionSpaceKind},
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+            observation_layout::{action, relation},
+        },
+        flow::turn::StepKind,
+        state::{
+            card::{ActivatedAbilityDefinition, LoyaltyCost},
+            permanent::CounterKind,
+        },
+    };
+
+    let deck = BTreeMap::from([
+        ("Chandra, Flameshaper".to_string(), 4),
+        ("Mountain".to_string(), 36),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        430_001,
+        false,
+    );
+    game.keep_opening_hands();
+    let step_action = |game: &mut Game, target: &Action| {
+        let index = game
+            .current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| a == target)
+            .unwrap_or_else(|| panic!("action {target:?} not offered"));
+        game.step(index).unwrap();
+    };
+    while !(game.active_player() == PlayerId(0)
+        && game.state.turn.current_step_kind() == StepKind::Main)
+    {
+        let pass_index = game
+            .current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        game.step(pass_index).unwrap();
+    }
+
+    let chandra = game
+        .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
+        .unwrap();
+    // `scenario_force_battlefield` bypasses ETB replacement, so seed 5 loyalty directly.
+    game.state.permanents[chandra]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::Loyalty, 5);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .unwrap();
+    let b3 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .unwrap();
+
+    // Grant −X: deal X damage divided among at least 1 target creature.
+    let ability = ActivatedAbilityDefinition {
+        loyalty: Some(LoyaltyCost::MinusX),
+        effects: vec![Effect::TargetClause {
+            requirement: TargetRequirement {
+                min: 1,
+                max: TargetRequirement::ANY_NUMBER,
+                division: Some(EffectValue::X),
+                ..TargetRequirement::one(TargetSpec::Creature)
+            },
+            effects: vec![Effect::deal_damage(
+                EffectValue::TargetDivision,
+                ObjectSelector::Targets(TargetSpec::Creature),
+            )],
+        }],
+        ..Default::default()
+    };
+    let affected = game.affected_permanent(chandra).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::GrantActivated(Box::new(ability)),
+        EffectDuration::Indefinite,
+    );
+    game.current_action_space = None;
+    game.finish_action_step();
+
+    // Priority must offer ability 3 even though x_min = 0 has no legal target budget.
+    let activate = Action::ActivateAbility {
+        player: PlayerId(0),
+        permanent: chandra,
+        ability_index: 3,
+    };
+    assert!(
+        game.current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .contains(&activate),
+        "−X ability with min=1 and division=X must be offered at priority"
+    );
+
+    // Activate: X = 0 must be omitted; only 1..=5 are offered.
+    step_action(&mut game, &activate);
+    let x_obs = Observation::for_player(&game, PlayerId(0));
+    let x_modes: Vec<usize> = x_obs
+        .action_space
+        .actions
+        .iter()
+        .map(|a| a.mode_index.unwrap())
+        .collect();
+    assert_eq!(x_modes, vec![1, 2, 3, 4, 5], "X = 0 must be filtered out");
+    assert!(x_obs
+        .action_space
+        .actions
+        .iter()
+        .all(|a| a.announces_x && a.division_amount.is_none()));
+    assert!(game
+        .execute_action(&Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 0,
+        })
+        .is_err());
+
+    // Encoder raises a typed Capacity error when X offers exceed max_actions.
+    let tight = ObservationEncoderConfig {
+        max_actions: 4,
+        ..ObservationEncoderConfig::default()
+    };
+    assert_eq!(
+        encode(&x_obs, &tight),
+        Err(ObservationEncodeError::Capacity {
+            field: "actions",
+            capacity: 4,
+            actual: 5,
+        })
+    );
+
+    // Announce X = 5 and target all three Beasts -> enters DivideAmount (remaining = 5).
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 5,
+        },
+    );
+    for target in [b1, b2, b3] {
+        step_action(
+            &mut game,
+            &Action::ChooseTarget {
+                player: PlayerId(0),
+                target: Target::Permanent(target),
+            },
+        );
+    }
+
+    // First division decision: remaining = 5 across 3 targets -> offers 1..=3.
+    let div1 = Observation::for_player(&game, PlayerId(0));
+    assert_eq!(div1.action_space.action_space_type, ActionSpaceKind::Modal);
+    let ann1 = div1.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(ann1.x, 5, "DivideAmount preserves real announced X");
+    assert_eq!(ann1.division_remaining, 5);
+    assert_eq!(div1.action_space.actions.len(), 3);
+    let enc1 = encode(&div1, &ObservationEncoderConfig::default()).unwrap();
+    let header1 = &enc1.relations[..relation::WIDTH];
+    assert_eq!(header1[relation::X], 5.0);
+    assert_eq!(header1[relation::DIVISION], 5.0);
+    for (idx, offer) in div1.action_space.actions.iter().enumerate() {
+        let amt = (idx + 1) as i32;
+        assert!(
+            !offer.announces_x,
+            "division action must not alias announces_x"
+        );
+        assert_eq!(offer.division_amount, Some(amt));
+        let row = &enc1.actions[idx * action::WIDTH..(idx + 1) * action::WIDTH];
+        assert_eq!(row[action::HAS_X], 0.0);
+        assert_eq!(row[action::X], 0.0);
+        assert_eq!(row[action::DIVISION], amt as f32);
+    }
+
+    // Assign 2 to b1 -> second division decision has remaining = 3 while frame.x stays 5!
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 2,
+        },
+    );
+    let div2 = Observation::for_player(&game, PlayerId(0));
+    let ann2 = div2.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(ann2.x, 5, "frame.x stays 5 after remaining drops to 3");
+    assert_eq!(ann2.division_remaining, 3);
+    assert_eq!(ann2.targets[0].division, 2);
+    let enc2 = encode(&div2, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(enc2.relations[relation::X], 5.0);
+    assert_eq!(enc2.relations[relation::DIVISION], 3.0);
+
+    // Assign 1 to b2 -> b3 automatically receives 2; resolve stack.
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 1,
+        },
+    );
+    while !game.state.stack_objects.is_empty() {
+        let player = game.state.priority.holder;
+        step_action(&mut game, &Action::PassPriority { player });
+    }
+    assert_eq!(game.state.permanents[b1].as_ref().unwrap().damage, 2);
+    assert_eq!(game.state.permanents[b2].as_ref().unwrap().damage, 1);
+    assert_eq!(game.state.permanents[b3].as_ref().unwrap().damage, 2);
+}
+
+#[test]
+fn fixed_deal_damage_in_divided_clause_does_not_redeal_divided_shares() {
+    use crate::{
+        agent::action::Action,
+        flow::turn::StepKind,
+        state::{
+            card::{ActivatedAbilityDefinition, LoyaltyCost},
+            permanent::CounterKind,
+        },
+    };
+
+    let deck = BTreeMap::from([
+        ("Chandra, Flameshaper".to_string(), 4),
+        ("Mountain".to_string(), 36),
+    ]);
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("p0", deck.clone()),
+            PlayerConfig::new("p1", deck),
+        ],
+        430_002,
+        false,
+    );
+    game.keep_opening_hands();
+    let step_action = |game: &mut Game, target: &Action| {
+        let index = game
+            .current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| a == target)
+            .unwrap_or_else(|| panic!("action {target:?} not offered"));
+        game.step(index).unwrap();
+    };
+    while !(game.active_player() == PlayerId(0)
+        && game.state.turn.current_step_kind() == StepKind::Main)
+    {
+        let pass_index = game
+            .current_action_space
+            .as_ref()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap_or(0);
+        game.step(pass_index).unwrap();
+    }
+
+    let chandra = game
+        .scenario_force_battlefield(PlayerId(0), "Chandra, Flameshaper", false)
+        .unwrap();
+    game.state.permanents[chandra]
+        .as_mut()
+        .unwrap()
+        .change_counters(CounterKind::Loyalty, 6);
+    let b1 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .unwrap();
+    let b2 = game
+        .create_token("token.beast_4_4_g_trample", PlayerId(1), false)
+        .unwrap();
+    // Give both Beasts +0/+3 so they survive 4+ damage and exact damage can be asserted.
+    for id in [b1, b2] {
+        let affected = game.affected_permanent(id).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(1),
+            [affected],
+            Modification::pump(0, 3),
+            EffectDuration::EndOfTurn,
+        );
+    }
+
+    // Clause divides 4 among up to 2 targets, then ALSO deals 1 fixed damage to those targets.
+    let ability = ActivatedAbilityDefinition {
+        loyalty: Some(LoyaltyCost::Fixed(-2)),
+        effects: vec![Effect::TargetClause {
+            requirement: TargetRequirement {
+                division: Some(EffectValue::Fixed(4)),
+                ..TargetRequirement::up_to(2, TargetSpec::Creature)
+            },
+            effects: vec![
+                Effect::deal_damage(
+                    EffectValue::TargetDivision,
+                    ObjectSelector::Targets(TargetSpec::Creature),
+                ),
+                Effect::deal_damage(1, ObjectSelector::Targets(TargetSpec::Creature)),
+            ],
+        }],
+        ..Default::default()
+    };
+    let affected = game.affected_permanent(chandra).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::GrantActivated(Box::new(ability)),
+        EffectDuration::Indefinite,
+    );
+    game.current_action_space = None;
+    game.finish_action_step();
+
+    step_action(
+        &mut game,
+        &Action::ActivateAbility {
+            player: PlayerId(0),
+            permanent: chandra,
+            ability_index: 3,
+        },
+    );
+    step_action(
+        &mut game,
+        &Action::ChooseTarget {
+            player: PlayerId(0),
+            target: Target::Permanent(b1),
+        },
+    );
+    step_action(
+        &mut game,
+        &Action::ChooseTarget {
+            player: PlayerId(0),
+            target: Target::Permanent(b2),
+        },
+    );
+    // Assign 3 to b1 (auto-assigns 1 to b2).
+    step_action(
+        &mut game,
+        &Action::ChooseMode {
+            player: PlayerId(0),
+            mode: 3,
+        },
+    );
+    while !game.state.stack_objects.is_empty() {
+        let player = game.state.priority.holder;
+        step_action(&mut game, &Action::PassPriority { player });
+    }
+    assert_eq!(
+        game.state.permanents[b1].as_ref().unwrap().damage,
+        4,
+        "b1 takes divided 3 + fixed 1 = 4, not 3 + 3"
+    );
+    assert_eq!(
+        game.state.permanents[b2].as_ref().unwrap().damage,
+        2,
+        "b2 takes divided 1 + fixed 1 = 2"
+    );
+}

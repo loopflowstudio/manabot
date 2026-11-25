@@ -2610,6 +2610,9 @@ pub struct PyAction {
     /// `mode_index` is an announced number (X, a replicate count).
     #[pyo3(get)]
     pub announces_x: bool,
+    /// Announced divided share assigned to the current target during `DivideAmount`.
+    #[pyo3(get)]
+    pub division_amount: Option<i32>,
     /// The printed spell cast: 0 front face, 1 Adventure, 2 Omen.
     #[pyo3(get)]
     pub spell_profile: u8,
@@ -2735,6 +2738,7 @@ impl From<ActionOption> for PyAction {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,
@@ -2759,6 +2763,7 @@ impl From<PyAction> for ActionOption {
             continuation_index: value.continuation_index,
             pays_directly: value.pays_directly,
             announces_x: value.announces_x,
+            division_amount: value.division_amount,
             spell_profile: value.spell_profile,
             route_mana_value: value.route_mana_value,
             quota_type: value.quota_type,

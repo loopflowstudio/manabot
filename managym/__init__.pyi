@@ -1264,6 +1264,7 @@ class Action:
     # The permission a play uses (play_route_code); None for an ordinary hand play.
     play_route: int | None
     announces_x: bool
+    division_amount: int | None
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
@@ -1415,6 +1416,7 @@ class ContinuationFrame:
     triggering_amount: int
     resolutions_this_turn: int
     x: int
+    division_remaining: int
     granted_keywords: list[bool]
     delayed_frequency: int | None
     this_turn: bool

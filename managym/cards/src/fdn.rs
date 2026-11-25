@@ -610,7 +610,7 @@ fn chandra_flameshaper() -> CardDefinition {
                             )
                         },
                         effects: vec![Effect::deal_damage(
-                            8,
+                            EffectValue::TargetDivision,
                             ObjectSelector::Targets(creature_or_pw),
                         )],
                     }],

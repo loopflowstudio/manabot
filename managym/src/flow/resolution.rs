@@ -306,6 +306,10 @@ impl Game {
                 .sum(),
             EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
             EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
+            EffectValue::TargetDivision => frame
+                .active_targets()
+                .next()
+                .map_or(0, |slot| slot.division),
             EffectValue::SourcePower => frame
                 .source_ref()
                 .and_then(|source| self.permanent_power_or_lki(source))
@@ -1874,8 +1878,8 @@ impl Game {
                     Some(by) => self.damage_source(by, frame),
                     None => frame.source_ref(),
                 };
-                let events: Vec<ProposedEvent> = if matches!(what, ObjectSelector::Targets(_))
-                    && frame.active_targets().any(|slot| slot.division > 0)
+                let events: Vec<ProposedEvent> = if matches!(amount, EffectValue::TargetDivision)
+                    && matches!(what, ObjectSelector::Targets(_))
                 {
                     frame
                         .active_targets()

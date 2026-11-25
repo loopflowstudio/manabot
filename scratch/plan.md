@@ -19,6 +19,20 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   damage assignment). Open defect: no replacement diverts a
   battlefield-to-exile move, so Overwrite's diverted case is untested.
 
+- Pass 1 (separation of target division from `X` and `−X` target authority):
+  removed `PendingChoice::DivideAmount` from `Game::announces_x()`, added
+  `ContinuationFrame.division_remaining` (encoded on header `relation::DIVISION`)
+  while preserving `frame.x`, added `ActionOption.division_amount` /
+  `action::DIVISION` (v11 column 31), added `EffectValue::TargetDivision` and
+  switched Chandra, Flameshaper's `−4` to it so `DealDamage` only divides when
+  authored with `TargetDivision`, factored `SpellTargeting` (mirroring
+  `ActivatedTargeting`) to eliminate the 7-field copy and `TargetSelection`,
+  and filtered `legal_activation_x_values` by `activation_targets_available`
+  (using `min_for_x`/`max_for_x`) with priority checking non-empty legal X
+  values. Verified with directed witness tests (including `ObservationEncodeError::Capacity`
+  when X offers exceed `max_actions`), Chandra `−4`, encoder, continuation, and
+  observability field-coverage tests.
+
 ## Target model (updated by concept review)
 
 The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
@@ -27,50 +41,8 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; repair them before gate in three focused passes, starting with the
-slice that validates the announcement/observation contract soonest.
-
-Behavior review at `196a17675e` confirmed every Pass 1–3 defect is still
-in code: `announces_x` lists `DivideAmount` (`flow/action.rs:39`),
-`continuation.rs:874` writes `frame.x = *remaining`,
-`legal_activation_x_values` (`flow/play.rs:1860`) returns a range without a
-target-availability filter, `FactKind::EmblemAbility` (`observation_encoder.rs:76`),
-`loyalty_exemptions: Vec` (`sba.rs:166`) and `attackers_without_defender`
-(`flow/combat.rs:36`). No pass has been built yet; build Pass 1 next.
-
-### Pass 1 — Separate target division from `X` and unify `−X` target authority (build first)
-
-- **Continuation & action separation:** Stop returning `true` from
-  `Game::announces_x()` for `PendingChoice::DivideAmount` (`flow/action.rs`)
-  and stop overwriting `frame.x = *remaining` in `agent/continuation.rs`.
-  Preserve the parent's real announced `X` (`cast.x` or `targeting.x`) on
-  `frame.x` and carry the remaining division budget in its own continuation
-  column (e.g. `frame.division_remaining` / header `relation::DIVISION`,
-  distinct from `relation::X`) and action representation so a policy never
-  aliases dividing a total with announcing `X`.
-- **Single source of truth for divided amounts in `Effect`:** Add
-  `EffectValue::TargetDivision` so `Effect::DealDamage` explicitly reads each
-  target's announced `slot.division` when authored with
-  `EffectValue::TargetDivision`, instead of silently overriding any
-  `Effect::DealDamage.amount` inside a clause whose targets have `division > 0`.
-  Update Chandra, Flameshaper's `−4` (`fdn.rs`) to pass
-  `EffectValue::TargetDivision` (declaring `8` once on
-  `TargetRequirement.division`). Factor `SpellTargeting` (mirroring
-  `ActivatedTargeting`) so `PendingChoice::ChooseTargets` and
-  `DivisionParent::Spell` stop duplicating seven fields.
-- **`LoyaltyCost::MinusX` offer/completion authority:** Filter
-  `legal_activation_x_values` (`flow/play.rs`) by
-  `activation_targets_available(..., x)` so uncompletable `X` values (e.g.
-  `X = 0` for `min >= 1` with `division: X` or `total_mana_value_x`) are never
-  offered; have priority (`flow/action.rs`) check
-  `!self.legal_activation_x_values(...).is_empty()` for `announces_x()`
-  abilities instead of probing only `x_min`. Ensure the encoder raises a typed
-  capacity error rather than silently dropping `X` offers past `max_actions`.
-- **Witnesses:** Directed tests proving (1) a `−X` ability with `min = 1` and
-  `division: Some(EffectValue::X)` is offered at priority, omits `X = 0`, keeps
-  `frame.x == announced_x` during `DivideAmount`, and resolves exact shares;
-  (2) a second fixed `DealDamage(1)` in the same divided `TargetClause` still
-  deals 1 rather than re-dealing divided shares.
+code; repair them before gate in three focused passes. Pass 1 is done; build
+Pass 2 next.
 
 ### Pass 2 — Remove derived `FactKind::EmblemAbility` and move zero-loyalty SBA exemption into `layers.rs`
 

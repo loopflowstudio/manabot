@@ -2321,6 +2321,11 @@ fn encode_actions(
         ) {
             *column = Integer(i64::from(*index) + 1);
         }
+        if let (Some(amount), Some(column)) =
+            (action.division_amount, row.get_mut(action::DIVISION))
+        {
+            *column = Integer(i64::from(amount));
+        }
         out.write(Table::Actions, 0, action_index, row)?;
         out.write(Table::NameCandidates, 0, action_index, &name_row)?;
         focus.fill(Integer(-1));
@@ -2548,6 +2553,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2566,6 +2572,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2584,6 +2591,7 @@ mod tests {
                         continuation_index: None,
                         pays_directly: false,
                         announces_x: false,
+                        division_amount: None,
                         spell_profile: 0,
                         route_mana_value: None,
                         quota_type: None,
@@ -2735,6 +2743,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,
@@ -3059,6 +3068,7 @@ mod tests {
                 continuation_index: None,
                 pays_directly: false,
                 announces_x: false,
+                division_amount: None,
                 spell_profile: 0,
                 route_mana_value: None,
                 quota_type: None,

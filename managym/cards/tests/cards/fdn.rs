@@ -8869,6 +8869,16 @@ fn chandra_flameshaper_loyalty_abilities() {
     // Sequential division: 1..=7 offered for g1 (linear: 7 choices), g2 gets remainder automatically.
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
     assert_eq!(s.action_space().actions.len(), 7);
+    let div_obs = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    let div_frame = div_obs.continuation.iter().find(|f| f.kind == 4).unwrap();
+    assert_eq!(div_frame.x, 0);
+    assert_eq!(div_frame.division_remaining, 8);
+    assert!(div_obs
+        .action_space
+        .actions
+        .iter()
+        .enumerate()
+        .all(|(i, a)| !a.announces_x && a.division_amount == Some((i + 1) as i32)));
     choose_mode(&mut s, 6); // 6 to g1, 2 to g2.
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     // Before Chandra -4 resolves, destroy g1 with Lightning Bolt so g1 becomes illegal.

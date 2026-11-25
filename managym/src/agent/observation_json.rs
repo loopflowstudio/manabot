@@ -161,6 +161,9 @@ impl Serialize for ActionJson<'_> {
         if value.announces_x {
             map.serialize_entry("announces_x", &true)?;
         }
+        if let Some(amount) = value.division_amount {
+            map.serialize_entry("division_amount", &amount)?;
+        }
         if value.pays_directly {
             map.serialize_entry("pays_directly", &true)?;
         }

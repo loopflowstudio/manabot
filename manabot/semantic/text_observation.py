@@ -841,6 +841,9 @@ class _Renderer:
             )
         if relation.triggering_amount and not relation.trigger_damage:
             details.append(f"triggering amount {relation.triggering_amount}")
+        division_remaining = getattr(relation, "division_remaining", 0)
+        if division_remaining:
+            details.append(f"remaining division {division_remaining}")
         if relation.resolutions_this_turn:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
