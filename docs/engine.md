@@ -318,10 +318,10 @@ Only the remaining exchangeable slots permute in place.
 Training and evaluation step many games in lockstep: one array of actions in,
 one batch of observations out, so a single forward pass serves every active
 game. `VectorEnv` ([`managym/src/agent/vector_env.rs`](../managym/src/agent/vector_env.rs))
-owns the games and their reset seeds; the Python wrapper is
-[`manabot/env/vector_env.py`](../manabot/env/vector_env.py). A finished slot
-reports its terminal outcome once and parks until the caller loads a new game
-or resets the vector; the Torch wrapper reloads finished slots automatically.
+owns the games and their reset seeds. Training uses `RecordedVectorEnv` to retain
+replay evidence. A finished slot reports its terminal outcome once and parks
+until the caller loads a new game or resets the vector. The deprecated Torch
+wrapper refills slots automatically through 0.2.x.
 By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
@@ -1720,7 +1720,7 @@ saved training corpora or change their split assignments.
 | Decisions and forced play | `Game::tick`, `publish_action_space` in [`flow/tick.rs`](../managym/src/flow/tick.rs) |
 | Observations | `Observation::for_player` in [`agent/observation.rs`](../managym/src/agent/observation.rs) |
 | Env, fork, determinize | [`agent/env.rs`](../managym/src/agent/env.rs), [`flow/search.rs`](../managym/src/flow/search.rs) |
-| Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/vector_env.py`](../manabot/env/vector_env.py) |
+| Batched games | [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs), [`manabot/env/failures.py`](../manabot/env/failures.py) |
 | Replay verification and records | [`manabot/sim/replay.py`](../manabot/sim/replay.py), [`canonical_replay.rs`](../managym/src/canonical_replay.rs) (record shape) |
 | Possible worlds | [`possible_worlds.rs`](../managym/src/possible_worlds.rs) |
 | Cards and rules types | [`managym/cards/src/`](../managym/cards/src/), [`managym/state/`](../managym/state/) |

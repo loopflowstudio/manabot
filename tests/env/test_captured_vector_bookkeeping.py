@@ -208,15 +208,16 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
     policy: str,
 ) -> None:
     match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
-    vector = TorchVectorEnv(
-        2,
-        match,
-        ObservationSpace(),
-        Reward(RewardConfig()),
-        "cpu",
-        seed=42,
-        player_policies=("agent", policy),
-    )
+    with pytest.warns(DeprecationWarning, match=r"vector_env.VectorEnv.*0\.3\.0"):
+        vector = TorchVectorEnv(
+            2,
+            match,
+            ObservationSpace(),
+            Reward(RewardConfig()),
+            "cpu",
+            seed=42,
+            player_policies=("agent", policy),
+        )
     try:
         first, _ = vector.reset(seed=42)
         first = {key: value.clone() for key, value in first.items()}

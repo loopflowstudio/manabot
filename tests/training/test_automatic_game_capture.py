@@ -1,5 +1,6 @@
 """Strict paths retain replay inputs without opting into tolerance or recovery."""
 
+from contextlib import closing
 import json
 from pathlib import Path
 import subprocess
@@ -16,11 +17,15 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import CaptureScope, capture_scope, runtime_identities
+from manabot.env.failures import (
+    CaptureScope,
+    RecordedVectorEnv,
+    capture_scope,
+    runtime_identities,
+)
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.env.replay import require_replay_runtime
-from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
 from manabot.training.rollout import selection_data
@@ -135,12 +140,13 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     scope = CaptureScope(tmp_path / "original")
     with capture_scope(scope):
         if mode == "vector":
-            vector = VectorEnv(
-                1, Match(), ObservationSpace(), Reward(RewardConfig()), "cpu", seed=24
-            )
-            vector.reset()
-            with pytest.raises(managym.AgentError):
-                vector.step(torch.tensor([-1]))
+            with closing(RecordedVectorEnv(num_envs=1, seed=24)) as vector:
+                vector.set_observation_layout(
+                    step_buffers(1), layout=ObservationSpace().layout
+                )
+                vector.reset_all_into_buffers(Match().to_rust())
+                with pytest.raises(managym.AgentError):
+                    vector.step_into_buffers([-1])
         else:
             env = _env()
             env.reset()
@@ -183,33 +189,33 @@ def test_bounded_replay_separates_binding_and_error_agreement(
 
 
 @pytest.mark.parametrize("policy", ["agent", "random"])
-def test_ordinary_vector_replays_current_game_after_autoreset(
+def test_ordinary_vector_replays_current_game_after_refill(
     tmp_path: Path,
     policy: str,
 ) -> None:
     scope = CaptureScope(tmp_path)
-    with capture_scope(scope):
-        env = VectorEnv(
-            2,
-            Match(),
-            ObservationSpace(),
-            Reward(RewardConfig()),
-            "cpu",
-            seed=24,
-            player_policies=("agent", policy),
-        )
-        env.reset()
+    with (
+        capture_scope(scope),
+        closing(
+            RecordedVectorEnv(num_envs=2, seed=24, player_policies=("agent", policy))
+        ) as env,
+    ):
+        outcomes = step_buffers(2)
+        env.set_observation_layout(outcomes, layout=ObservationSpace().layout)
+        env.reset_all_into_buffers(Match().to_rust())
         for _ in range(2000):
-            _, _, done, truncated, _ = env.step(torch.zeros(2, dtype=torch.int64))
-            if bool((done | truncated).any()):
+            env.step_into_buffers([0, 0])
+            done = np.flatnonzero(outcomes["terminated"] | outcomes["truncated"])
+            if done.size:
+                env.load_slots_into_buffers(
+                    [managym.SlotLoad.fresh(int(slot)) for slot in done]
+                )
                 break
         else:
-            pytest.fail(
-                "fixture failed to reach a terminal before the wrapper refilled it"
-            )
-        seeds = env._rust_env.current_game_seeds()
+            pytest.fail("fixture failed to finish a game")
+        seeds = env.current_game_seeds()
         with pytest.raises(managym.AgentError):
-            env.step(torch.tensor([-1, 0]))
+            env.step_into_buffers([-1, 0])
     evidence = read_record(scope.paths[0])
     assert [game.seed for game in evidence.games] == seeds
     assert evidence.seed_stride == 2

@@ -831,9 +831,9 @@ Engine-only projects should depend on `managym` and use `import managym`.
 Projects using `from manabot import managym` or `manabot.managym` can keep those
 imports when `manabot` is installed: they reach the same engine classes and
 submodules, without a second extension or game state. Installing `managym`
-alone does not provide the `manabot` namespace. Python training wrappers such
-as `manabot.env.vector_env.VectorEnv` still require `manabot`; the native
-batch class is `managym.VectorEnv`.
+alone does not provide the `manabot` namespace. The native batch class is `managym.VectorEnv`. Training uses
+`manabot.env.failures.RecordedVectorEnv`. The legacy Torch tensor wrapper
+`manabot.env.vector_env.VectorEnv` is deprecated for removal in 0.3.0.
 
 The two packages release together at the same version. Package upgrades do
 not change frozen observation layouts. Retain the package versions, configuration

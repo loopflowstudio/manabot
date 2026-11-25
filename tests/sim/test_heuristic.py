@@ -8,21 +8,21 @@ pre-port receipt remains separate; new source payments explicitly use PayCost.
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
-import torch
 
 from manabot import managym
 from manabot.env.env import Env
-from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.env.vector_env import VectorEnv
+from manabot.env.failures import RecordedVectorEnv
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.eval.admission import register_anchor
-from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim import anchors
 from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
@@ -159,22 +159,17 @@ def test_registered_heuristic_rejects_invalid_capacity(capacity: object) -> None
         build_code_player(registration, seed=213)
 
 
-def test_python_vector_wrapper_accepts_native_heuristic() -> None:
+def test_recorded_vector_accepts_native_heuristic() -> None:
     deck = {"Forest": 20, "Llanowar Elves": 20}
-    env = VectorEnv(
-        2,
-        Match(MatchConfig(hero_deck=deck, villain_deck=deck)),
-        ObservationSpace(),
-        Reward(RewardConfig()),
-        device="cpu",
-        player_policies=("agent", "heuristic"),
-    )
-    try:
-        obs, _ = env.reset()
-        assert obs["actions_valid"].shape[0] == 2
-        env.step(torch.zeros(2, dtype=torch.long))
-    finally:
-        env.close()
+    match = Match(MatchConfig(hero_deck=deck, villain_deck=deck))
+    with closing(
+        RecordedVectorEnv(num_envs=2, player_policies=("agent", "heuristic"))
+    ) as env:
+        env.set_observation_layout(step_buffers(2), layout=ObservationSpace().layout)
+        env.reset_all_into_buffers(match.to_rust())
+        env.step_into_buffers([0, 0])
+        rows = env.observation_rows()
+        assert len(rows) == 2 and all(batch.action_counts[i] for batch, i in rows)
 
 
 def test_closed_decklists_stay_closed_for_native_selector() -> None:

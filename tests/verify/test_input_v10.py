@@ -5,6 +5,7 @@ native encoder. A v9 encoder refuses an observation that needs them, naming
 v10 and the state, before writing any buffer.
 """
 
+from contextlib import closing
 from typing import Iterator
 
 import numpy as np
@@ -12,16 +13,17 @@ import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match, Reward
+from manabot.env.failures import RecordedVectorEnv
+from manabot.env.match import Match
 from manabot.env.observation import (
     TURN_STATE_LIFE_LOST_INDEX,
     TURN_STATE_NONARTIFACT_MANA_INDEX,
     TURN_STATE_SPELLS_CAST_INDEX,
     ObservationSpace,
+    allocate_vector_buffers,
     encode_observation,
 )
-from manabot.env.vector_env import VectorEnv
-from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.verify.text_observation import priority_root
 import managym
 from tests.model.prepared_routes import device_input
@@ -91,27 +93,21 @@ def test_v10_turn_state_rows_hold_life_lost_spells_cast_and_left_battlefield() -
 
 @pytest.fixture
 def v10_observation() -> Iterator[
-    tuple[ObservationSpace, ObservationConfig, dict[str, torch.Tensor]]
+    tuple[ObservationSpace, ObservationConfig, dict[str, np.ndarray]]
 ]:
     config = _config(10)
     space = ObservationSpace(config)
-    env = VectorEnv(
-        num_envs=2,
-        match=Match(),
-        observation_space=space,
-        reward=Reward(RewardConfig(trivial=True)),
-        device="cpu",
-        player_policies=("agent", "random"),
-    )
-    obs, _ = env.reset()
-    yield space, config, obs
-    env.close()
+    buffers = allocate_vector_buffers(space, 2)
+    with closing(
+        RecordedVectorEnv(num_envs=2, player_policies=("agent", "random"))
+    ) as vector:
+        vector.set_buffers(buffers, layout=space.layout)
+        vector.reset_all_into_buffers(Match().to_rust())
+        yield space, config, {key: buffers[key] for key in space.shapes}
 
 
 def test_v10_vector_buffers_reach_the_model(
-    v10_observation: tuple[
-        ObservationSpace, ObservationConfig, dict[str, torch.Tensor]
-    ],
+    v10_observation: tuple[ObservationSpace, ObservationConfig, dict[str, np.ndarray]],
 ) -> None:
     space, config, obs = v10_observation
     assert obs["player_turn_state"].shape == (2, 2, 8)

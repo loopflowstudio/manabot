@@ -1,5 +1,6 @@
 """The explicit policy prefix survives collection and evaluation encodings."""
 
+from contextlib import closing
 import json
 from pathlib import Path
 
@@ -12,10 +13,9 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, encode_observation
-from manabot.env.vector_env import VectorEnv
+from manabot.env.observation import ObservationSpace, encode_observation, step_buffers
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -30,6 +30,7 @@ from manabot.training.rollout.collection import (
 )
 import managym
 from managym.decision import Command, DecisionFrame
+from tests.fixtures.rollout_arrays import trajectory_rows
 
 
 def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
@@ -127,7 +128,7 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             batch = collect(collector, agent, 2)
         finally:
             close_collector(collector)
-    rows = batch.observations()
+    rows = trajectory_rows(batch)
     valid = rows.observation["actions_valid"].astype(bool)
     assert rows.log_probabilities.shape == valid.shape
     assert np.all(np.isneginf(rows.log_probabilities[~valid]))
@@ -189,19 +190,20 @@ def test_vector_reseed_retains_consumed_decision_counts(tmp_path: Path) -> None:
     match = Match(
         MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
     )
-    with capture_scope(CaptureScope(tmp_path)):
-        env = VectorEnv(1, match, space, Reward(RewardConfig()), "cpu", seed=213)
-        try:
-            for seed in (213, 214):
-                env.reset(seed=seed)
-                env.step(torch.tensor([0]))
-        finally:
-            env.close()
+    with (
+        capture_scope(CaptureScope(tmp_path)),
+        closing(RecordedVectorEnv(num_envs=1)) as env,
+    ):
+        env.set_observation_layout(
+            step_buffers(1), space.config.action_overflow, layout=space.layout
+        )
+        for seed in (213, 214):
+            env.reset_each_into_buffers([match.to_rust()], seeds=[seed])
+            env.step_into_buffers([0])
     reports = [
         json.loads(path.read_bytes()) for path in tmp_path.glob("action-cutoff-*.json")
     ]
-    assert len(reports) == 2
-    for report in reports:
-        assert report["counts_by_kind"] == {
-            "Modal": {"decisions": 1, "overflows": 0, "dropped_actions": 0}
-        }
+    (report,) = reports
+    assert report["counts_by_kind"] == {
+        "Modal": {"decisions": 2, "overflows": 0, "dropped_actions": 0}
+    }

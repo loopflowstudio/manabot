@@ -4,6 +4,7 @@ Vectorized environment wrapper backed by managym.VectorEnv.
 """
 
 from typing import Any, Dict, Literal, Optional, Tuple
+import warnings
 
 import numpy as np
 import torch
@@ -31,6 +32,12 @@ class VectorEnv:
         *,
         player_policies: tuple[str, str] | None = None,
     ) -> None:
+        warnings.warn(
+            "manabot.env.vector_env.VectorEnv is deprecated and will be removed in 0.3.0; "
+            "use manabot.env.failures.RecordedVectorEnv",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._skip_trivial = True
         self._player_policies = resolve_player_policies(
             opponent_policy, player_policies
