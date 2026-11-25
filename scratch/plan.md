@@ -18,7 +18,49 @@ LLM-text field failures are fixed; after the compress commits,
 as "Choose a target for …" and `KeepPermanents` as "Choose from the revealed
 cards".
 
+## Coverage decomposition at `47e21050c2`: no further slices
+
+Review criterion: the representative cards compose from small orthogonal
+primitives, with no card-specific engine logic, multi-axis special variant or
+duplicate state. The batch meets it, so no refactoring slice is planned.
+
+- Stack copies: Thousand-Year Storm is `Repeat { count:
+  SpellsCastBeforeTriggering, effect: CopyTriggeringObject }`; Teach by Example
+  is a delayed trigger over the same copy verb; Bolt Bend is the existing
+  `ChangeTarget`. One copy owner (`CopiableSpell`), one retarget owner
+  (`flow/retarget.rs`).
+- Targets: `TargetRelation` on the clause, `ObjectSelector::ClauseTarget(n)`,
+  `Simultaneously` and `Fight { first, second }` carry Drakuseth, Fiery
+  Annihilation, Run Away Together, Indrik and Primal Might.
+- Library and selection: `LibraryTop`, `Unselected`, `SelectCards.max_mana_value`
+  and `GrantPlay { what, until }` carry Genesis Wave, Plunderer and Raider and
+  replaced `ExileTopCardsToPlay` and `GrantGraveyardCastThisTurn`.
+- Entry choices: one `Permanent.chosen: EntryChoice` read by predicates, mana
+  output and the type layer. A second chosen-type land (cast-only) is
+  `creature_purposes: [Cast]` with no engine change.
+- Costs and values: `PaymentCost::All`, `ManaExpiry`, `CardPredicate.keyword`,
+  `EachPlayerSacrifices { predicate }`.
+- The engine diff names no card (checked by grep over added lines).
+
+Single-consumer variants left as they are, because splitting them now would
+guess at a second card. Split each when that card arrives:
+
+- `Effect::SeparatePiles { look }` (Curator). The shape then is `SelectCards`
+  over `LibraryTop` with `Selected`/`Unselected` as the piles and a `ForPlayer`
+  pile choice.
+- `TargetRequirement.up_to_if_kicked` (Divine Resilience).
+- `ReplacementEffect::AsEntersChoose.look_at_opponent_hand` (Spyglass).
+- `PrintedCharacteristics.division` (Biogenic Upgrade); it moves onto the
+  divided clause when a spell divides among one clause of several.
+
 ## Follow-ups outside MTG-431 (separate Tasks)
+
+- Retire `Effect::TargetCreaturesDealPowerDamageToLastTarget` (Felling Blow,
+  Bite Down, Rocky Rebuke, Allies at Last) onto
+  `DealDamage { by }` over `ClauseTarget`. Not done here: Allies at Last needs
+  a per-source amount read, two TLA definitions change their learning tokens
+  (pinned-pilot rollover), and `agent/heuristic/knowledge.rs` matches the
+  variant by name.
 
 - Semantic candidate-token encoding for `Decision::ChooseEntryValue` (Color and
   367 creature types): generalize `NameCandidateEncoder` to
