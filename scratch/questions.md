@@ -35,3 +35,13 @@
   and maximum. Its zero-target cast is legal on an empty battlefield when the
   kicker is payable. Deadly Brew applies `Except::Moved` in the public-zone
   selector so the ordinary graveyard selection keeps its existing behavior.
+- Target relations look ahead one clause while choosing: a first target is
+  offered only if each later required clause naming it keeps a candidate.
+  Every authored relation names one earlier clause, so this is exact for
+  them; a chain of three related clauses would need a deeper search.
+- `Decision::Retarget` records its progress for the policy as the slot
+  index only (`retarget` field), not the earlier slots' new targets. The
+  stack object keeps its original targets until every slot is decided.
+- At resolution `DifferentControllerFrom` makes every target of the named
+  clause illegal along with the relating one. Run Away Together's named
+  clause has one target; a multi-target host would need per-pair marking.

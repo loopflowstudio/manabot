@@ -1,26 +1,17 @@
 # MTG-431 — Foundations stack copies, choices, costs and procedure tail
 
-Eighteen of the 56 scoped Foundations rows have directed implementation
-evidence. Slices 1, 2, 3, 5, and 7 are complete. Slice 4 delivered Divine
-Resilience, Charming Prince, and Affectionate Indrik. Demonic Pact and
-Maze’s End already had working definitions.
+Twenty-one of the 56 scoped Foundations rows have directed implementation
+evidence. Slices 1, 2, 3, 4, 5 and 7 are complete. Demonic Pact and Maze’s
+End already had working definitions.
 
-**Next pass: finish Slice 4.** Choose new targets as a complete assignment.
-Valid swaps on a copy disprove the proposed per-slot restriction filter.
-The correction and its response cases are recorded in Slice 4 below.
+**Next pass: Slices 6 + 8** — library-top selection, kicked entries,
+composite ward, mana expiry, Changeling and the keyword predicate (11
+cards).
 
-The five new cards passed directed native play. Existing fight and Edict
-tests, effect/selector observability, and Scryfall conformance passed.
-Four Academy demos replayed 192 Commands against the rebuilt CPython 3.13
-extension. All five retained navigation positions reached their recorded
-decision kinds.
+Remaining passes (21 implemented, 35 pending):
 
-Remaining passes (18 implemented, 38 pending):
-
-1. Finish Slice 4 — Drakuseth, Fiery Annihilation and Run Away Together.
-2. Slices 6 + 8 — library-top selection, kicked entries, composite ward,
-   mana expiry, Changeling, keyword predicate (11 cards).
-3. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
+1. Slices 6 + 8 (11 cards).
+2. Slices 9 + 10 — the 23 compose-only cards and Abyssal Harvester, then the
    integrated validation below.
 
 Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73d9778f`):
@@ -122,65 +113,38 @@ Scryfall conformance, card-program observability and the two bundled pilot
 replays passed. The optional u1952 checkpoint was unconfigured. Four Academy
 demos replayed 192 Commands and five navigation positions refreshed.
 
-### Slice 4 — Target relations and targeting cardinality (3 of 6 complete)
+### Slice 4 — Target relations and targeting cardinality (complete)
 
-Cards: Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience,
-Charming Prince, Affectionate Indrik (with Primal Might in Slice 9 using the
-same fight).
+Drakuseth, Fiery Annihilation, Run Away Together, Divine Resilience,
+Charming Prince and Affectionate Indrik have directed play tests and
+ledger evidence. Primal Might (Slice 9) uses the same `Fight`.
 
-**Correction to the target-changing design.** CR 115.7d–e evaluates the
-completed set of new targets. A Drakuseth copy dealing four to A and three
-to B can instead deal four to B and three to A. Checking each edited slot
-against the old values of the remaining slots excludes that play.
-`flow/retarget.rs` reads the other slots from the live stack object and
-`flow/decision.rs` writes the replacement before offering the next slot.
-The new relations cannot simply filter that loop.
+- `TargetRequirement.relation: Option<TargetRelation>` names one earlier
+  clause: `DistinctFromEarlier`, `AttachedToEarlier(clause)`,
+  `DifferentControllerFrom(clause)`. Spells, triggers and activations check
+  it while choosing (`Game::relations_admit`), with one-clause lookahead so
+  a first target is offered only if a later required clause keeps a
+  partner; castability uses the same check. Resolution
+  (`require_target_relations`) reads last known controllers, makes both
+  sides illegal on a shared controller, and drops attached Equipment once
+  its creature target is illegal.
+- `Decision::Retarget { chosen, .. }` judges new targets as one assignment
+  (CR 115.7e). A slot offers a change, or keeping, only if some completion
+  of the later slots is legal; unchanged targets that were already illegal
+  may stay. The stack object changes once, when every slot is decided, and
+  `publish_targets` emits the targeting events. "Change the target"
+  (`may_keep` false) keeps the other slots and validates against them.
+- `Effect::Simultaneously` merges its instructions' event batches into one
+  (Drakuseth's damage, Run Away Together's returns). `ClauseTarget(n)`
+  names every legal target of clause n, players included.
+- Fiery Annihilation's Oracle text exiles the Equipment; the earlier
+  “destroyed” wording here was wrong.
 
-Retain the original slots and pending choices in the copy's decision. Offer
-prefixes that admit a legal completion. Include swaps, unchanged targets
-that were already illegal and coupled changes (Fiery Annihilation can switch
-creature and Equipment together). Publish the final assignment and targeting
-events together. Single-target changes still validate against every unchanged
-slot. Keep offers per slot and check the 16-creature position before extending
-the relations to new cards. Drakuseth must deal damage to all recipients in
-one event. When Run Away Together sees the same controller on both targets
-at resolution, both slots become illegal. Fiery Annihilation leaves Equipment
-in play if its creature target becomes illegal, even if it remains attached.
-[Comprehensive Rules, 115.7](https://magic.wizards.com/en/rules) ·
-[Foundations release notes](https://magic.wizards.com/en/news/feature/foundations-release-notes).
-
-- `TargetRequirement.relation: Option<TargetRelation>`, where
-  `TargetRelation = DistinctFromEarlier | AttachedToEarlier(clause) | DifferentControllerFrom(clause)`.
-  - Enforce it when spells, triggers and activations choose targets
-    (`play.rs:1155` and its equivalents), and again at resolution.
-  - `DifferentControllerFrom` uses the last known controller of a target that
-    has left.
-  - `TargetClause` currently allows the same object in different clauses
-    (`ability.rs:1472`); the relation is how a card says otherwise.
-Divine Resilience uses `up_to_if_kicked` to change both bounds. An empty
-battlefield admits the zero-target cast only if the kicker is payable.
-Charming Prince’s blink uses `PermanentYouOwn` with the existing “another”
-constraint and remembers the exiled card until the next end step.
-`Fight { first, second }` reads two exact creatures and deals both directions
-of damage in the same batch. Bushwhack and the two TLA fight spells use
-their original target clauses.
-
-Checks:
-
-- `cargo test -p managym-cards --test cards -- target_relation fight`.
-- Drakuseth: N targets, with the primary never offered among the secondary
-  ones. Retargeting a copy of the trigger keeps them distinct.
-- Fiery Annihilation: the Equipment is offered only if it is attached to the
-  creature. Moving the Equipment in response makes that target illegal while
-  the damage still resolves.
-- Run Away Together: a control change in response leaves both creatures
-  under one controller, so both targets become illegal.
-- Divine Resilience: unkicked offers one target, kicked offers any number.
-- Indrik: declining the fight deals no damage. Indrik being gone leaves no
-  fight.
-- Stress: a Drakuseth trigger with 16 creatures per side plus both players.
-  Target enumeration must stay a per-clause sequence.
-- `Effect::FightLastTarget` is deleted (`Fight { first, second }`, commit 30fd60f499).
+Evidence: `copy_targets_change_as_one_assignment` (swap, forced change,
+single-target change), the three card tests, and the existing fight,
+Biogenic Upgrade, Bolt Bend, Teach by Example and Storm copy tests. The
+16-creature-a-side Drakuseth trigger offered 36 then 35 targets; its choices
+took 4.8 ms in a debug build.
 
 ### Slice 5 — Stack copies and retargeting (complete)
 
@@ -311,7 +275,7 @@ from the surveys:
 | Koma, World-Eater | Koma, Cosmos Serpent shapes (`khm.rs:29`) with `token.komas_coil` |
 | Strongbox Raider, Genesis Wave, Gutless Plunderer | Slice 6 |
 | Tribute to Hunger, Deadly Brew | Slice 7 |
-| Charming Prince, Affectionate Indrik | Slice 4 |
+| Charming Prince, Affectionate Indrik, Drakuseth, Fiery Annihilation, Run Away Together | Slice 4 |
 | Gnarlid Colony, Gatekeeper, Ovika, Ventmaw, Mascot, Teachings, Wishclaw, Ballyrush | Slice 8 |
 
 The remaining 23 compose-only cards land as one pass with one directed test
@@ -362,4 +326,4 @@ real user of a static or cost row.
 
 ## Ledger status
 
-38 scoped rows remain pending, including Abyssal Harvester.
+35 scoped rows remain pending, including Abyssal Harvester.
