@@ -40,27 +40,18 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   `match_state_hash_tests`, `managym-cards --test cards` (gtc/fdn/kld/fin/fra)
   green; Academy `npm run check`/`vitest` not run (no `node_modules`).
 
-- Pass 4 (gate & contract fixes): fixed legacy `CARD_DIM` slicing in
-  `observability.rs:2304`, emblem `registry_name()` in `env.rs:2174` and
-  `python/bindings.rs::catalog_tokens`, v11 ABI width assertions in
-  `observation_layout.rs` (permanents 60, actions 32, relations 52),
-  `test_input_scales.py` (`player_turn_state` reading width 24),
-  `tla::farm_animals_can_decline_target_and_still_pay_sacrifice` (added
-  real Food target to decline plus no-target activation case), and
-  `test_loyalty.py` (`len(bindings) == len(ask.declarable)`). Recorded
-  `tests/public_api.json` (`Action.division_amount`,
-  `ContinuationFrame.division_remaining`), refreshed Academy opening
-  fixtures, and wrote `-planeswalkers` semantic-conformance,
-  authored-match authority (174 commands), and parity (175 checkpoints,
-  1,050 viewer checks, 0 divergences) receipts while keeping main's
-  MTG-420 `-battlefield-history` receipts untouched. Verified:
-  `academy/ui` (`svelte-check` 0 errors/warnings, `vitest` 40/40 files,
-  653 tests), Rust debug workspace nextest (2,184 tests green), cp313
-  extension rebuild & atomic install, `tests/model/test_pinned_pilot.py`
-  green with zero drift (v9 & v11 unchanged), Academy/model/world/contract
-  Python suites green (105 + 5 + 286 + 177 passed), and release
-  `bench_steps` digest match (`10601622128491155944`, 118,559 steps,
-  512 games). Same-runner Engine Budget comparison deferred to gate/CI.
+- Pass 4 (`d2d0d8ae2e`): CI contract fixes (legacy `CARD_DIM` slice, emblem
+  `registry_name()`, v11 width assertions, test widths, Farm Animals decline
+  case), `tests/public_api.json` recorded, Academy fixtures refreshed,
+  `-planeswalkers` conformance/authority/parity receipts. Verified: academy/ui
+  svelte-check + vitest (653), debug nextest (2,184), cp313 rebuild, pinned
+  pilot zero drift, Python Academy/model/world/contract suites, release
+  `bench_steps` digest `10601622128491155944` unchanged.
+
+## Remaining
+
+No implementation slices remain. Deferred to gate/CI: same-runner Engine
+Budget comparison and the full CI matrix (incl. Python 3.12).
 
 ## Target model (updated by concept review)
 
