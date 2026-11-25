@@ -124,7 +124,7 @@ async function carry(page: Page, from: Locator, to: { x: number; y: number }): P
 }
 const field = (page: Page): Promise<{ x: number; y: number }> => center(page.locator('.half.you .rows'));
 
-test('a card dragged onto the battlefield is cast, with its payment shown on the way', async ({ page }) => {
+test('a card dragged onto the battlefield is cast, with its payment shown on the way', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const authority = await installAuthority(page);
@@ -142,6 +142,7 @@ test('a card dragged onto the battlefield is cast, with its payment shown on the
   await expect(page.getByTestId('card-preview')).toHaveCount(0);
   // The card in hand stays in its slot as the place it returns to.
   await expect(bolt).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('drag-over-field.png') });
   expect(authority.commands).toEqual([]);
 
   // Over the hand the frame says releasing cancels.
