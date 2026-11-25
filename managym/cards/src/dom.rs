@@ -4,8 +4,8 @@ use managym_state::{
         Ability, Condition, Effect, ObjectSelector, TargetRequirement, TargetSpec, TriggerSubject,
     },
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics, PtCount,
-        SourceQuality, StaticAbility, StaticPtBuff, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
+        PrintedCharacteristics, SourceQuality, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::{Color, ManaCost},
@@ -266,16 +266,17 @@ fn tempest_djinn() -> CardDefinition {
             power: Some(0),
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Flying]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per: Some(PtCount::YouControl(CardPredicate {
-                    subtype: Some("Island".into()),
-                    ..CardPredicate::basic_land()
-                })),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::YouControl(CardPredicate {
+                        subtype: Some("Island".into()),
+                        ..CardPredicate::basic_land()
+                    })),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

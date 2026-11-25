@@ -8,9 +8,9 @@ use managym_state::ability::{
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction, CardDefinition,
     CardType, CardTypes, DamageRecipient, DamageTransform, EntryChoice, EntryScope, EntryValue,
-    Keyword, Keywords, ManaAbility, PrintedCharacteristics, PtCount, ReplacementEffect,
-    Restriction, SacrificeCost, SourceQuality, SpellCostReduction, StaticAbility,
-    StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
+    Keyword, Keywords, LayerCount, LayerValue, ManaAbility, PrintedCharacteristics,
+    ReplacementEffect, Restriction, SacrificeCost, SourceQuality, SpellCostReduction,
+    StaticAbility, StaticKeywordGrant, StaticRestriction, StaticScope, TargetCostReduction,
 };
 use managym_state::effect::{CopyException, Modification};
 use managym_state::mana::{Color, Mana, ManaCost};
@@ -959,7 +959,7 @@ fn high_society_hunter() -> CardDefinition {
 }
 
 fn leyline_axe() -> CardDefinition {
-    use managym_state::card::{StaticKeywordGrant, StaticPtBuff, StaticScope};
+    use managym_state::card::{StaticKeywordGrant, StaticScope};
     CardDefinition {
         key: "fdn.leyline_axe",
         scryfall_id: "b9c03336-a321-4c06-94d1-809f328fabd8",
@@ -969,14 +969,13 @@ fn leyline_axe() -> CardDefinition {
             types: CardTypes::new([CardType::Artifact]),
             subtypes: vec!["Equipment".into()],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
-            statics: vec![StaticAbility::BeginOnBattlefield,
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per: None,
-                }),
+            statics: vec![
+                StaticAbility::BeginOnBattlefield,
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -3652,13 +3651,11 @@ fn celestial_armor() -> CardDefinition {
                 ..Default::default()
             }],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 2,
-                    toughness: 0,
-                    per: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(2, 0)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -3687,13 +3684,11 @@ fn dropkick_bomber() -> CardDefinition {
             subtypes: vec!["Goblin".into(), "Warrior".into()],
             power: Some(2),
             toughness: Some(3),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Goblin")),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::subtype("Goblin")),
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{R}"),
                 effects: vec![Effect::TargetClause {
@@ -4255,13 +4250,16 @@ fn banner_of_kinship() -> CardDefinition {
                     condition: None,
                 },
             ],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(chosen),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: Some(PtCount::SourceCounters(CounterKind::Fellowship)),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(chosen),
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::SourceCounters(CounterKind::Fellowship)),
+                    toughness: LayerValue::count(LayerCount::SourceCounters(
+                        CounterKind::Fellowship,
+                    )),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

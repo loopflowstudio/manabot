@@ -11,7 +11,7 @@ use crate::{
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
-            LayerValue, PowerCda, PtCount, StaticAbility, StaticPtBuff, StaticScope,
+            LayerCount, LayerValue, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{
@@ -225,6 +225,22 @@ impl ReadSet {
         }
     }
 
+    fn layer_value(&mut self, value: &LayerValue) {
+        if let LayerValue::Count(count) = value {
+            match count.as_ref() {
+                LayerCount::CreatureTypes { .. } => self.fields |= SUBTYPES,
+                LayerCount::ColorsAmong(p) => {
+                    self.fields |= COLORS;
+                    self.predicate(p);
+                }
+                LayerCount::Graveyard { predicate, .. }
+                | LayerCount::YouControl(predicate)
+                | LayerCount::CountersOn { predicate, .. } => self.predicate(predicate),
+                LayerCount::SourceCounters(_) => {}
+            }
+        }
+    }
+
     fn condition(&mut self, condition: &Condition) {
         match condition {
             Condition::Compare { left, right, .. } => {
@@ -285,27 +301,20 @@ impl SourcePlan {
             reads.condition(condition);
         }
         for (_, operation) in &self.parts {
-            match operation {
-                Operation::Modify(Modification::Control) => reads.fields |= CONTROL,
-                Operation::Buff(buff) => match &buff.per {
-                    Some(PtCount::CreatureTypes { .. }) => reads.fields |= SUBTYPES,
-                    Some(PtCount::ColorsAmong(p)) => {
-                        reads.fields |= COLORS;
-                        reads.predicate(p);
+            if let Operation::Modify(modification) = operation {
+                match modification {
+                    Modification::Control => reads.fields |= CONTROL,
+                    Modification::SetBasePt { power, toughness } => {
+                        for value in power.iter().chain(toughness.iter()) {
+                            reads.layer_value(value);
+                        }
                     }
-                    Some(PtCount::GraveyardMatching(p) | PtCount::YouControl(p)) => {
-                        reads.predicate(p)
+                    Modification::ModifyPt { power, toughness } => {
+                        reads.layer_value(power);
+                        reads.layer_value(toughness);
                     }
-                    Some(PtCount::SourceCounters(_)) | None => {}
-                },
-                Operation::Cda { cda, .. } => match cda.as_ref() {
-                    PowerCda::CountersOnLandsYouControl | PowerCda::CreaturesYouControl => {
-                        reads.fields |= CARD_TYPES;
-                    }
-                    PowerCda::GraveyardMatching(predicate)
-                    | PowerCda::GraveyardMatchingBy { predicate, .. } => reads.predicate(predicate),
-                },
-                _ => {}
+                    _ => {}
+                }
             }
         }
         self.reads = reads;
@@ -337,15 +346,6 @@ enum Operation {
     Control(PlayerId),
     Modify(Modification<LayerValue>),
     LandType(String),
-    // Expressions resolve before becoming per-target instructions. Indirection
-    // keeps their large predicates out of every small resolved modification.
-    /// A characteristic-defining count; `sets_toughness` sets toughness to
-    /// the same value ("power and toughness are each equal to").
-    Cda {
-        cda: Box<PowerCda>,
-        sets_toughness: bool,
-    },
-    Buff(Box<StaticPtBuff>),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
 }
@@ -367,7 +367,6 @@ impl Operation {
         match self {
             Self::Control(_) => CONTROL,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
-            Self::Cda { .. } | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetName(_) => NAME,
@@ -884,20 +883,8 @@ impl<'a> Context<'a> {
                                 Operation::Control(self.controller(node.source))
                             }
                             Operation::Modify(m) => Operation::Modify(
-                                m.map_amount(|n| LayerValue::Fixed(self.value(n, id))),
+                                m.map_amount(|n| LayerValue::Fixed(self.value(n, node.source, id))),
                             ),
-                            Operation::Cda {
-                                cda,
-                                sets_toughness,
-                            } => {
-                                let value =
-                                    LayerValue::Fixed(self.cda(cda, self.controller(node.source)));
-                                Operation::Modify(Modification::SetBasePt {
-                                    power: Some(value.clone()),
-                                    toughness: sets_toughness.then_some(value),
-                                })
-                            }
-                            Operation::Buff(buff) => self.buff(buff, node.source, id),
                             op => op.clone(),
                         };
                         Instruction {
@@ -907,38 +894,6 @@ impl<'a> Context<'a> {
                     })
             })
             .collect()
-    }
-    fn buff(&self, buff: &StaticPtBuff, source: PermanentId, id: PermanentId) -> Operation {
-        let controller = self.controller(source);
-        let times = match &buff.per {
-            None => 1,
-            Some(PtCount::CreatureTypes { max }) => {
-                let view = &self.objects[&id].view;
-                if view.has_all_creature_types() {
-                    *max
-                } else {
-                    (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(*max)
-                }
-            }
-            Some(PtCount::ColorsAmong(p)) => self
-                .controlled(controller)
-                .filter(|(id, _)| self.matches(*id, p, Some(source)))
-                .flat_map(|(_, o)| o.view.colors.iter().copied())
-                .collect::<BTreeSet<_>>()
-                .len() as i32,
-            Some(PtCount::GraveyardMatching(p)) => self.graveyard_count(controller, p),
-            Some(PtCount::YouControl(p)) => self
-                .controlled(controller)
-                .filter(|(id, _)| self.matches(*id, p, Some(source)))
-                .count() as i32,
-            Some(PtCount::SourceCounters(kind)) => {
-                self.game.live_permanent(source).counter_count(*kind)
-            }
-        };
-        Operation::Modify(Modification::ModifyPt {
-            power: LayerValue::Fixed(buff.power * times),
-            toughness: LayerValue::Fixed(buff.toughness * times),
-        })
     }
     fn controlled(&self, controller: PlayerId) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
         self.objects
@@ -951,27 +906,75 @@ impl<'a> Context<'a> {
     fn controller(&self, id: PermanentId) -> PlayerId {
         self.objects[&id].controller
     }
-    fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
+    fn value(&self, value: &LayerValue, source: PermanentId, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
             LayerValue::ManaValue => i32::from(
                 self.game
                     .object_mana_value(self.game.live_permanent(id).object),
             ),
-            LayerValue::GraveyardCardTypes { offset } => {
-                [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
-                    .flat_map(|card| {
-                        self.game.state[self.game.state.object_of(card)]
-                            .types
-                            .types
-                            .iter()
-                    })
-                    .collect::<BTreeSet<_>>()
-                    .len() as i32
-                    + offset
+            LayerValue::GraveyardCardTypes { offset } => self.graveyard_card_types(*offset),
+            LayerValue::Count(count) => {
+                self.count(count, self.controller(source), Some(source), Some(id))
             }
+        }
+    }
+    fn graveyard_card_types(&self, offset: i32) -> i32 {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
+            .flat_map(|card| {
+                self.game.state[self.game.state.object_of(card)]
+                    .types
+                    .types
+                    .iter()
+            })
+            .collect::<BTreeSet<_>>()
+            .len() as i32
+            + offset
+    }
+    fn count(
+        &self,
+        count: &LayerCount,
+        controller: PlayerId,
+        source: Option<PermanentId>,
+        affected: Option<PermanentId>,
+    ) -> i32 {
+        match count {
+            LayerCount::CreatureTypes { max } => {
+                let Some(id) = affected else {
+                    return 0;
+                };
+                let view = &self.objects[&id].view;
+                if view.has_all_creature_types() {
+                    *max
+                } else {
+                    (view.subtypes.iter().filter(|s| is_creature_type(s)).count() as i32).min(*max)
+                }
+            }
+            LayerCount::ColorsAmong(p) => self
+                .controlled(controller)
+                .filter(|(id, _)| self.matches(*id, p, source))
+                .flat_map(|(_, o)| o.view.colors.iter().copied())
+                .collect::<BTreeSet<_>>()
+                .len() as i32,
+            LayerCount::Graveyard { who, predicate } => (0..self.game.state.players.len())
+                .map(PlayerId)
+                .filter(|player| who.includes(controller, *player))
+                .map(|player| self.graveyard_count(player, predicate))
+                .sum(),
+            LayerCount::YouControl(p) => self
+                .controlled(controller)
+                .filter(|(id, _)| self.matches(*id, p, source))
+                .count() as i32,
+            LayerCount::SourceCounters(kind) => source.map_or(0, |source| {
+                self.game.live_permanent(source).counter_count(*kind)
+            }),
+            LayerCount::CountersOn { kind, predicate } => self
+                .controlled(controller)
+                .filter(|(id, _)| self.matches(*id, predicate, source))
+                .map(|(id, _)| self.game.live_permanent(id).counter_count(*kind))
+                .sum(),
         }
     }
     fn creature_count(&self, controller: PlayerId) -> usize {
@@ -979,27 +982,6 @@ impl<'a> Context<'a> {
             .iter()
             .filter(|(id, object)| self.controller(**id) == controller && object.view.is_creature())
             .count()
-    }
-    fn cda(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
-        match cda {
-            PowerCda::CountersOnLandsYouControl => self
-                .objects
-                .iter()
-                .filter(|(id, o)| self.controller(**id) == controller && o.view.is_land())
-                .map(|(id, _)| {
-                    self.game
-                        .live_permanent(*id)
-                        .counter_count(CounterKind::PlusOnePlusOne)
-                })
-                .sum(),
-            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
-            PowerCda::GraveyardMatching(p) => self.graveyard_count(controller, p),
-            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.game.state.players.len())
-                .map(PlayerId)
-                .filter(|player| who.includes(controller, *player))
-                .map(|player| self.graveyard_count(player, predicate))
-                .sum(),
-        }
     }
     fn graveyard_count(&self, owner: PlayerId, predicate: &CardPredicate) -> i32 {
         self.game
@@ -1009,9 +991,16 @@ impl<'a> Context<'a> {
                 let object = self.game.state.object_of(*card);
                 self.game.off_battlefield_matches(object, predicate, || {
                     let card = &self.game.state[object];
-                    card.pt_cda().map_or_else(
+                    card.pt_cda().and_then(|(power, _)| power).map_or_else(
                         || card.power.unwrap_or(0),
-                        |(cda, _)| self.cda(cda, card.owner),
+                        |value| match value {
+                            LayerValue::Fixed(n) => *n,
+                            LayerValue::ManaValue => i32::from(self.game.object_mana_value(object)),
+                            LayerValue::GraveyardCardTypes { offset } => {
+                                self.graveyard_card_types(*offset)
+                            }
+                            LayerValue::Count(count) => self.count(count, card.owner, None, None),
+                        },
                     )
                 })
             })
@@ -1256,22 +1245,6 @@ impl<'a> Context<'a> {
                 plan.scope = g.scope.clone();
                 plan.condition = g.condition.clone();
                 add(Layer::Ability, Modification::AddKeywords(g.keywords));
-            }
-            StaticAbility::PtBuff(b) => {
-                plan.scope = b.scope.clone();
-                plan.condition = b.condition.clone();
-                plan.parts
-                    .push((Layer::ModifyPower, Operation::Buff(Box::new(b.clone()))));
-            }
-            StaticAbility::CharacteristicPower(cda) | StaticAbility::CharacteristicPt(cda) => {
-                plan.cda = true;
-                plan.parts.push((
-                    Layer::CharacteristicPower,
-                    Operation::Cda {
-                        cda: Box::new(cda.clone()),
-                        sets_toughness: matches!(entry.ability, StaticAbility::CharacteristicPt(_)),
-                    },
-                ));
             }
             StaticAbility::SetsLandType(set) => {
                 plan.scope = StaticScope::All(set.predicate.clone());

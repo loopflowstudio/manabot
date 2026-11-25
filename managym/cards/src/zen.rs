@@ -8,7 +8,7 @@ use managym_state::{
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, ManaAbility, PrintedCharacteristics, ReplacementEffect, StaticAbility,
-        StaticPtBuff, StaticScope,
+        StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost},
@@ -90,16 +90,14 @@ fn beastmaster_ascension() -> CardDefinition {
                     if_declined: vec![],
                 }],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate::creature()),
-                condition: Some(Condition::SourceCountersAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate::creature()),
+                Some(Condition::SourceCountersAtLeast {
                     kind: CounterKind::Quest,
                     count: 7,
                 }),
-                power: 5,
-                toughness: 5,
-                per: None,
-            })],
+                vec![Modification::pump(5, 5)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

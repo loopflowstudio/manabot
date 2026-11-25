@@ -5,6 +5,19 @@
 use super::tokens::TokenKind::{self, Field, Structure, Text, Variant};
 
 pub const TOKENS: &[(TokenKind, &str, Option<&str>)] = &[
+    (Variant, "StaticAbility::PtBuff", None),
+    (Structure, "StaticPtBuff", None),
+    (Structure, "/StaticPtBuff", None),
+    (Field, "per_creature_type_max", None),
+    (Field, "per_color_among", None),
+    (Field, "per_graveyard_matching", None),
+    (Variant, "StaticAbility::CharacteristicPower", None),
+    (Variant, "StaticAbility::CharacteristicPt", None),
+    (Variant, "PowerCda::CountersOnLandsYouControl", None),
+    (Variant, "PowerCda::CreaturesYouControl", None),
+    (Variant, "PowerCda::GraveyardMatching", None),
+    (Variant, "PowerCda::GraveyardMatchingBy", None),
+    (Structure, "/PowerCda::GraveyardMatchingBy", None),
     (Variant, "Condition::CastFromGraveyard", None),
     (Variant, "ReplacementEffect::EntersWithXCounters", None),
     (Structure, "/ReplacementEffect::EntersWithXCounters", None),

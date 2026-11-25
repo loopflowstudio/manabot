@@ -11,9 +11,9 @@ use managym_state::{
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
         CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords,
-        ManaAbility, PowerCda, PrintedCharacteristics, PtCount, ReplacementEffect, Restriction,
-        SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility, StaticKeywordGrant,
-        StaticLandType, StaticPtBuff, StaticRestriction, StaticScope, StaticTriggeredGrant,
+        LayerCount, LayerValue, ManaAbility, PrintedCharacteristics, ReplacementEffect,
+        Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
+        StaticKeywordGrant, StaticLandType, StaticRestriction, StaticScope, StaticTriggeredGrant,
         StaticTypeGrant, TapCost, TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
     },
     effect::{CopyException, EffectDuration, Modification},
@@ -772,17 +772,15 @@ fn air_nomad_legacy() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens("token.clue", 1)],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate {
                     flying: true,
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: None,
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -1207,13 +1205,20 @@ fn avatar_destiny() -> CardDefinition {
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per: Some(PtCount::GraveyardMatching(CardPredicate::creature())),
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::ModifyPt {
+                        power: LayerValue::count(LayerCount::Graveyard {
+                            who: Actor::You,
+                            predicate: CardPredicate::creature(),
+                        }),
+                        toughness: LayerValue::count(LayerCount::Graveyard {
+                            who: Actor::You,
+                            predicate: CardPredicate::creature(),
+                        }),
+                    }],
+                ),
                 StaticAbility::TypeGrant(StaticTypeGrant {
                     scope: StaticScope::Attached,
                     types: Vec::new(),
@@ -2855,17 +2860,18 @@ fn diligent_zookeeper() -> CardDefinition {
             subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
             power: Some(4),
             toughness: Some(4),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::YouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::YouControl(CardPredicate {
                     not_subtypes: vec!["Human".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: Some(PtCount::CreatureTypes { max: 10 }),
-            })],
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::CreatureTypes { max: 10 }),
+                    toughness: LayerValue::count(LayerCount::CreatureTypes { max: 10 }),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -2903,12 +2909,16 @@ fn dragonfly_swarm() -> CardDefinition {
             }],
             statics: vec![
                 StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
-                StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(Box::new(
-                    CardPredicate {
-                        not_card_types: vec![CardType::Creature, CardType::Land],
-                        ..Default::default()
-                    },
-                ))),
+                StaticAbility::cda(vec![Modification::SetBasePt {
+                    power: Some(LayerValue::count(LayerCount::Graveyard {
+                        who: Actor::You,
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Creature, CardType::Land],
+                            ..Default::default()
+                        },
+                    })),
+                    toughness: None,
+                }]),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -3199,13 +3209,11 @@ fn earth_rumble_wrestlers() -> CardDefinition {
             toughness: Some(4),
             keywords: Keywords::of(&[Keyword::Reach]),
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::This,
-                    condition: condition(),
-                    power: 1,
-                    toughness: 0,
-                    per: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::This,
+                    condition(),
+                    vec![Modification::pump(1, 0)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::This,
                     condition: condition(),
@@ -3366,16 +3374,17 @@ fn earthen_ally() -> CardDefinition {
                 }],
                 ..Default::default()
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per: Some(PtCount::ColorsAmong(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                })),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::ColorsAmong(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    })),
+                    toughness: LayerValue::Fixed(0),
+                }],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -4126,19 +4135,17 @@ fn first_time_flyer() -> CardDefinition {
             power: Some(1),
             toughness: Some(2),
             keywords: Keywords::of(&[Keyword::Flying]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(Condition::GraveyardAtLeast {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::GraveyardAtLeast {
                     count: 1,
                     predicate: CardPredicate {
                         subtype: Some("Lesson".into()),
                         ..Default::default()
                     },
                 }),
-                power: 1,
-                toughness: 1,
-                per: None,
-            })],
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -4577,13 +4584,11 @@ fn glider_staff() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
             statics: vec![
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: 1,
-                    toughness: 1,
-                    per: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(1, 1)],
+                ),
                 StaticAbility::KeywordGrant(StaticKeywordGrant {
                     scope: StaticScope::Attached,
                     condition: None,
@@ -5949,13 +5954,11 @@ fn kyoshi_battle_fan() -> CardDefinition {
                 ],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6494,13 +6497,11 @@ fn messenger_hawk() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens("token.clue", 1)],
             }],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-                power: 2,
-                toughness: 0,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::This,
+                Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                vec![Modification::pump(2, 0)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -6531,13 +6532,11 @@ fn meteor_sword() -> CardDefinition {
                 ))],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{3}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 3,
-                toughness: 3,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(3, 3)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -8782,13 +8781,11 @@ fn suki_courageous_rescuer() -> CardDefinition {
             subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
             power: Some(2),
             toughness: Some(4),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-                condition: None,
-                power: 1,
-                toughness: 0,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate::creature()),
+                None,
+                vec![Modification::pump(1, 0)],
+            )],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::OnceEachTurn {
                     condition: Box::new(TriggerCondition::ActiveIf {
@@ -8831,9 +8828,12 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                     tapped: false,
                 }],
             }],
-            statics: vec![StaticAbility::CharacteristicPower(
-                PowerCda::CreaturesYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::YouControl(
+                    CardPredicate::creature(),
+                ))),
+                toughness: None,
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -8932,13 +8932,11 @@ fn swampsnare_trap() -> CardDefinition {
                     },
                     generic: 1,
                 }),
-                StaticAbility::PtBuff(StaticPtBuff {
-                    scope: StaticScope::Attached,
-                    condition: None,
-                    power: -5,
-                    toughness: -3,
-                    per: None,
-                }),
+                StaticAbility::continuous(
+                    StaticScope::Attached,
+                    None,
+                    vec![Modification::pump(-5, -3)],
+                ),
             ],
             text_box: text_box.into(),
             ..Default::default()
@@ -10061,9 +10059,16 @@ fn toph_the_blind_bandit() -> CardDefinition {
                     what: ObjectSelector::Target(TargetSpec::LandYouControl),
                 }],
             }],
-            statics: vec![StaticAbility::CharacteristicPower(
-                PowerCda::CountersOnLandsYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::CountersOn {
+                    kind: CounterKind::PlusOnePlusOne,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                })),
+                toughness: None,
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -10334,13 +10339,11 @@ fn twin_blades() -> CardDefinition {
                 ],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition::equip(ManaCost::parse("{2}"))],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: None,
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },
@@ -11098,16 +11101,14 @@ fn white_lotus_reinforcements() -> CardDefinition {
             power: Some(2),
             toughness: Some(3),
             keywords: Keywords::of(&[Keyword::Vigilance]),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate {
+            statics: vec![StaticAbility::continuous(
+                StaticScope::OtherYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: None,
-            })],
+                None,
+                vec![Modification::pump(1, 1)],
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

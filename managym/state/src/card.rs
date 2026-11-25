@@ -334,27 +334,7 @@ impl serde::Serialize for Keywords {
     }
 }
 
-/// Characteristic-defining power (CR 604.3): recomputed on every read.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum PowerCda {
-    CountersOnLandsYouControl,
-    /// "This creature's power is equal to the number of creatures you
-    /// control." (Suki, Kyoshi Warrior.)
-    CreaturesYouControl,
-    /// "This creature's power is equal to the number of [predicate] cards
-    /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
-    GraveyardMatching(Box<CardPredicate>),
-    /// The number of [predicate] cards in the graveyards of every player
-    /// `who` names ("cards in your opponents' graveyards", Consuming
-    /// Aberration). `who` is relative to the object's controller, or its
-    /// owner off the battlefield and stack (CR 109.5).
-    GraveyardMatchingBy {
-        who: crate::ability::Actor,
-        predicate: Box<CardPredicate>,
-    },
-}
-
-/// Which battlefield permanents a static P/T buff applies to.
+/// Which battlefield permanents a static ability applies to.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticScope {
     /// Every matching permanent, regardless of controller.
@@ -377,56 +357,6 @@ pub enum StaticScope {
     /// "[predicate] spells you control" (Lo and Li's Lesson spells): stack
     /// spells only, read by `Game::spell_keywords`; no permanent matches.
     SpellsYouControl(CardPredicate),
-}
-
-/// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
-/// +P/+T [as long as condition]". Applies only while the source is on the
-/// battlefield.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StaticPtBuff {
-    pub scope: StaticScope,
-    pub condition: Option<Condition>,
-    pub power: i32,
-    pub toughness: i32,
-    pub per: Option<PtCount>,
-}
-
-/// The quantity multiplying a static power/toughness bonus in layer 7c.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PtCount {
-    CreatureTypes { max: i32 },
-    ColorsAmong(CardPredicate),
-    GraveyardMatching(CardPredicate),
-    YouControl(CardPredicate),
-    SourceCounters(CounterKind),
-}
-
-// Keep published card programs and their checkpoint learning tokens stable.
-impl serde::Serialize for StaticPtBuff {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        let mut state =
-            serializer.serialize_struct("StaticPtBuff", 4 + usize::from(self.per.is_some()))?;
-        state.serialize_field("scope", &self.scope)?;
-        state.serialize_field("condition", &self.condition)?;
-        state.serialize_field("power", &self.power)?;
-        state.serialize_field("toughness", &self.toughness)?;
-        match &self.per {
-            Some(PtCount::CreatureTypes { max }) => {
-                state.serialize_field("per_creature_type_max", &Some(max))?
-            }
-            Some(PtCount::ColorsAmong(p)) => state.serialize_field("per_color_among", &Some(p))?,
-            Some(PtCount::GraveyardMatching(p)) => {
-                state.serialize_field("per_graveyard_matching", &Some(p))?
-            }
-            Some(PtCount::YouControl(p)) => state.serialize_field("per_you_control", p)?,
-            Some(PtCount::SourceCounters(kind)) => {
-                state.serialize_field("per_source_counter", kind)?
-            }
-            None => {}
-        }
-        state.end()
-    }
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
@@ -1103,6 +1033,26 @@ fn fixed_as_number<S: serde::Serializer>(
     }
 }
 
+/// A counted quantity read in layer 7 (characteristic-defining or static P/T).
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LayerCount {
+    YouControl(CardPredicate),
+    Graveyard {
+        who: crate::ability::Actor,
+        predicate: CardPredicate,
+    },
+    ColorsAmong(CardPredicate),
+    CreatureTypes {
+        max: i32,
+    },
+    SourceCounters(CounterKind),
+    CountersOn {
+        kind: CounterKind,
+        predicate: CardPredicate,
+    },
+}
+
 /// A P/T amount read from the current layer context for an affected object.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LayerValue {
@@ -1113,6 +1063,14 @@ pub enum LayerValue {
     GraveyardCardTypes {
         offset: i32,
     },
+    /// A battlefield, graveyard or counter count read in the current layer context.
+    Count(Box<LayerCount>),
+}
+
+impl LayerValue {
+    pub fn count(count: LayerCount) -> Self {
+        Self::Count(Box::new(count))
+    }
 }
 
 impl From<i32> for LayerValue {
@@ -1306,15 +1264,6 @@ pub enum StaticAbility {
         predicate: CardPredicate,
         generic: u8,
     },
-    /// A continuous P/T effect (layer 7c).
-    PtBuff(StaticPtBuff),
-    /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
-    /// ignored.
-    CharacteristicPower(PowerCda),
-    /// Characteristic-defining power and toughness, each equal to the same
-    /// count ("power and toughness are each equal to", CR 604.3, layer 7a);
-    /// printed `power` and `toughness` are ignored in every zone.
-    CharacteristicPt(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
     /// target" trigger, "counter it unless that player pays [cost]".
     Ward(PaymentCost),
@@ -1395,6 +1344,16 @@ impl StaticAbility {
             scope,
             condition,
             characteristic_defining: false,
+            modifications,
+        })
+    }
+
+    /// A characteristic-defining ability (CR 604.3, layer 7a) on this object.
+    pub fn cda(modifications: Vec<crate::effect::Modification<LayerValue>>) -> Self {
+        Self::Continuous(StaticContinuous {
+            scope: StaticScope::This,
+            condition: None,
+            characteristic_defining: true,
             modifications,
         })
     }
@@ -2034,12 +1993,17 @@ impl PrintedCharacteristics {
         })
     }
 
-    /// The characteristic-defining P/T ability, and whether it also defines
-    /// toughness (`CharacteristicPt`) rather than power alone.
-    pub fn pt_cda(&self) -> Option<(&PowerCda, bool)> {
+    /// Characteristic-defining base power and/or toughness (CR 604.3).
+    pub fn pt_cda(&self) -> Option<(Option<&LayerValue>, Option<&LayerValue>)> {
         self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CharacteristicPower(cda) => Some((cda, false)),
-            StaticAbility::CharacteristicPt(cda) => Some((cda, true)),
+            StaticAbility::Continuous(effect) if effect.characteristic_defining => {
+                effect.modifications.iter().find_map(|m| match m {
+                    crate::effect::Modification::SetBasePt { power, toughness } => {
+                        Some((power.as_ref(), toughness.as_ref()))
+                    }
+                    _ => None,
+                })
+            }
             _ => None,
         })
     }

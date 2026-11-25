@@ -2,8 +2,8 @@
 use managym_state::{
     ability::{Effect, TargetRequirement, TargetSpec},
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics, PtCount,
-        ReplacementEffect, StaticAbility, StaticPtBuff, StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
+        PrintedCharacteristics, ReplacementEffect, StaticAbility, StaticScope,
     },
     effect::Modification,
     mana::ManaCost,
@@ -93,13 +93,18 @@ fn blanchwood_armor() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{G}")),
             types: CardTypes::new([CardType::Enchantment]),
             subtypes: vec!["Aura".into()],
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per: Some(PtCount::YouControl(CardPredicate::subtype("Forest"))),
-            })],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::ModifyPt {
+                    power: LayerValue::count(LayerCount::YouControl(CardPredicate::subtype(
+                        "Forest",
+                    ))),
+                    toughness: LayerValue::count(LayerCount::YouControl(CardPredicate::subtype(
+                        "Forest",
+                    ))),
+                }],
+            )],
             spell_effects: vec![Effect::enchant(TargetSpec::Creature)],
             targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
             text_box: text_box.into(),

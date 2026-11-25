@@ -5,8 +5,8 @@ use managym_state::ability::{
     TargetSpec, TriggerCondition, TriggerSubject,
 };
 use managym_state::card::{
-    CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords, PowerCda,
-    PrintedCharacteristics, ReplacementEffect, StaticAbility,
+    CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords, LayerCount,
+    LayerValue, PrintedCharacteristics, ReplacementEffect, StaticAbility,
 };
 use managym_state::effect::Modification;
 use managym_state::mana::ManaCost;
@@ -120,12 +120,16 @@ fn consuming_aberration() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{3}{U}{B}")),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Horror".into()],
-            statics: vec![StaticAbility::CharacteristicPt(
-                PowerCda::GraveyardMatchingBy {
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::Graveyard {
                     who: Actor::Opponent,
-                    predicate: Box::default(),
-                },
-            )],
+                    predicate: CardPredicate::default(),
+                })),
+                toughness: Some(LayerValue::count(LayerCount::Graveyard {
+                    who: Actor::Opponent,
+                    predicate: CardPredicate::default(),
+                })),
+            }])],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
                 intervening_if: None,

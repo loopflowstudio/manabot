@@ -2,9 +2,10 @@
 use managym_state::{
     ability::{Effect, ObjectSelector},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PowerCda,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, LayerCount, LayerValue,
         PrintedCharacteristics, StaticAbility,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -23,9 +24,14 @@ fn crusader_of_odric() -> CardDefinition {
             mana_cost: Some(ManaCost::parse("{2}{W}")),
             types: CardTypes::new([CardType::Creature]),
             subtypes: vec!["Human".into(), "Soldier".into()],
-            statics: vec![StaticAbility::CharacteristicPt(
-                PowerCda::CreaturesYouControl,
-            )],
+            statics: vec![StaticAbility::cda(vec![Modification::SetBasePt {
+                power: Some(LayerValue::count(LayerCount::YouControl(
+                    CardPredicate::creature(),
+                ))),
+                toughness: Some(LayerValue::count(LayerCount::YouControl(
+                    CardPredicate::creature(),
+                ))),
+            }])],
             text_box: text_box.into(),
             ..Default::default()
         },

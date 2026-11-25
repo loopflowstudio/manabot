@@ -73,9 +73,9 @@ use managym::{
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardType, Keyword,
-            Keywords, ObjectDefinition, PowerCda, PrintedCharacteristics, Restriction,
-            SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
-            StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction, StaticScope,
+            Keywords, LayerCount, LayerValue, ObjectDefinition, PrintedCharacteristics,
+            Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
+            StaticKeywordGrant, StaticLandType, StaticRestriction, StaticScope,
             StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
             TriggeredManaOutput,
         },
@@ -1756,27 +1756,6 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "mkm",
             "proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types",
         ),
-        StaticAbility::PtBuff(_) => witnessed(
-            "StaticAbility::PtBuff",
-            Seen::Permanent(permanent::POWER),
-            "First-Time Flyer",
-            "tla",
-            "first_time_flyer_conditional_static_recomputes_on_read",
-        ),
-        StaticAbility::CharacteristicPower(_) => witnessed(
-            "StaticAbility::CharacteristicPower",
-            Seen::Permanent(permanent::POWER),
-            "Suki, Kyoshi Warrior",
-            "tla",
-            "suki_power_tracks_creature_count_and_attack_makes_a_token",
-        ),
-        StaticAbility::CharacteristicPt(_) => witnessed(
-            "StaticAbility::CharacteristicPt",
-            Seen::Permanent(permanent::TOUGHNESS),
-            "Crusader of Odric",
-            "m13",
-            "crusader_of_odric_counts_creatures_on_and_off_the_battlefield",
-        ),
         StaticAbility::Ward(_) => witnessed(
             "StaticAbility::Ward",
             Seen::Card(card::WARD_COST),
@@ -2095,18 +2074,6 @@ fn static_witnesses() -> Vec<StaticAbility> {
             generic: 2,
         },
         StaticAbility::OpponentsCastOnlyFromHand,
-        StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: None,
-            power: 2,
-            toughness: 0,
-            per: None,
-        }),
-        StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
-        StaticAbility::CharacteristicPt(PowerCda::GraveyardMatchingBy {
-            who: Actor::Opponent,
-            predicate: Box::default(),
-        }),
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
         StaticAbility::PlayGraveyardByPermanentType,
@@ -3223,9 +3190,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 
 /// Every variant whose row names a tensor column moves that column when the
 /// ogre gains it: ward, kicker, optional waterbend and pay-life-or-mana set card
-/// columns; a P/T buff and
-/// characteristic power move the permanent's power column, characteristic
-/// power and toughness its toughness column.
+/// columns; a continuous P/T effect moves the permanent's power column.
 #[test]
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let (base_game, ogre) = ogre_game();
@@ -3264,7 +3229,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         assert!(moved, "{} did not move its column", row.token);
         checked += 1;
     }
-    assert_eq!(checked, 8);
+    assert_eq!(checked, 5);
 }
 
 /// With no maximum hand size, the hand-count column keeps its size through
@@ -6149,10 +6114,7 @@ fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
     let row = listed_card_row(&observation, suki.id).unwrap();
     assert_eq!(row[8], 0.2);
     let tokens = tokens_of(&card_definition("Suki, Kyoshi Warrior"));
-    assert!(tokens.contains(&(
-        TokenKind::Variant,
-        name_value("PowerCda::CreaturesYouControl")
-    )));
+    assert!(tokens.contains(&(TokenKind::Variant, name_value("LayerCount::YouControl"))));
 }
 
 #[test]
@@ -6762,20 +6724,20 @@ fn changeling_is_a_keyword_fact_for_both_viewers() {
 
 #[test]
 fn counted_bonuses_read_counters_on_the_source() {
-    use managym::state::card::PtCount;
     let mut s = five_color_setup(&["Gray Ogre"]);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let recipient = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = card_of(&s, source);
     s.game_mut().state[card]
         .statics
-        .push(StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-            condition: None,
-            power: 1,
-            toughness: 1,
-            per: Some(PtCount::SourceCounters(CounterKind::Charge)),
-        }));
+        .push(StaticAbility::continuous(
+            StaticScope::OtherYouControl(CardPredicate::creature()),
+            None,
+            vec![Modification::ModifyPt {
+                power: LayerValue::count(LayerCount::SourceCounters(CounterKind::Charge)),
+                toughness: LayerValue::count(LayerCount::SourceCounters(CounterKind::Charge)),
+            }],
+        ));
     crate::support::game::set_counters(&mut s, recipient, CounterKind::Charge, 5);
     assert_eq!(s.game().characteristics(recipient).pt(), (2, 2));
     crate::support::game::set_counters(&mut s, source, CounterKind::Charge, 2);

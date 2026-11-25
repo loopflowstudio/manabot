@@ -13,8 +13,8 @@ use crate::{
     state::{
         ability::{Condition, EffectValue, PaymentCost},
         card::{
-            ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
-            SpellProfile, StaticAbility, StaticScope,
+            ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, LayerCount, LayerValue,
+            PrintedCharacteristics, Restriction, SpellProfile, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId, Target},
@@ -24,7 +24,10 @@ use crate::{
         zone::ZoneType,
     },
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 /// Stop as soon as the threshold is met. Ordinary counts never read a name.
 pub(super) fn controlled_threshold<T, N: AsRef<str> + Ord>(
     matching: impl Iterator<Item = T>,
@@ -612,15 +615,21 @@ impl Game {
             .object(object_id)
             .unwrap_or_else(|_| self.state.entry_object(object_id));
         let printed = (object.power.unwrap_or(0), object.toughness.unwrap_or(0));
-        let Some((cda, sets_toughness)) = object.pt_cda() else {
+        let Some((power, toughness)) = object.pt_cda() else {
             return printed;
         };
         let controller = self
             .spell_on_stack(object_id)
             .map(|spell| spell.controller)
             .unwrap_or(object.owner);
-        let value = self.cda_value(cda, controller);
-        (value, if sets_toughness { value } else { printed.1 })
+        (
+            power.map_or(printed.0, |v| {
+                self.off_battlefield_layer_value(v, object, controller)
+            }),
+            toughness.map_or(printed.1, |v| {
+                self.off_battlefield_layer_value(v, object, controller)
+            }),
+        )
     }
 
     /// Contextual predicates must read CDA power rather than a printed star's
@@ -842,34 +851,63 @@ impl Game {
 
     /// Power as printed, with a characteristic-defining ability evaluated
     /// for `you` (CR 604.3) instead of the printed star's placeholder.
-    fn printed_power(
-        &self,
-        printing: &crate::state::card::PrintedCharacteristics,
-        you: PlayerId,
-    ) -> i32 {
-        printing.pt_cda().map_or_else(
-            || printing.power.unwrap_or(0),
-            |(cda, _)| self.cda_value(cda, you),
-        )
+    fn printed_power(&self, printing: &PrintedCharacteristics, you: PlayerId) -> i32 {
+        printing
+            .pt_cda()
+            .and_then(|(power, _)| power)
+            .map_or_else(
+                || printing.power.unwrap_or(0),
+                |value| self.off_battlefield_layer_value(value, printing, you),
+            )
     }
 
-    fn cda_value(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
-        match cda {
-            PowerCda::CountersOnLandsYouControl => self
-                .layer_views(self.iter_battlefield_permanents(controller))
-                .filter(|(_, view)| view.is_land())
-                .filter_map(|(id, _)| self.state.permanents[id].as_ref())
-                .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
-                .sum(),
-            PowerCda::CreaturesYouControl => self.creature_count(controller) as i32,
-            PowerCda::GraveyardMatching(predicate) => {
-                self.count_graveyard_matching(controller, predicate) as i32
-            }
-            PowerCda::GraveyardMatchingBy { who, predicate } => (0..self.state.players.len())
-                .map(PlayerId)
-                .filter(|player| who.includes(controller, *player))
-                .map(|player| self.count_graveyard_matching(player, predicate) as i32)
-                .sum(),
+    fn off_battlefield_layer_value(
+        &self,
+        value: &LayerValue,
+        printing: &PrintedCharacteristics,
+        controller: PlayerId,
+    ) -> i32 {
+        match value {
+            LayerValue::Fixed(n) => *n,
+            LayerValue::ManaValue => i32::from(
+                printing
+                    .mana_cost
+                    .as_ref()
+                    .map_or(0, |cost| cost.mana_value),
+            ),
+            LayerValue::GraveyardCardTypes { offset } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
+                .flat_map(|card| self.state[self.state.object_of(card)].types.types.iter())
+                .collect::<BTreeSet<_>>()
+                .len() as i32
+                + offset,
+            LayerValue::Count(count) => match count.as_ref() {
+                LayerCount::YouControl(predicate) => self
+                    .layer_views(self.iter_battlefield_permanents(controller))
+                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
+                    .count() as i32,
+                LayerCount::Graveyard { who, predicate } => (0..self.state.players.len())
+                    .map(PlayerId)
+                    .filter(|player| who.includes(controller, *player))
+                    .map(|player| self.count_graveyard_matching(player, predicate) as i32)
+                    .sum(),
+                LayerCount::ColorsAmong(predicate) => self
+                    .layer_views(self.iter_battlefield_permanents(controller))
+                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
+                    .fold(BTreeSet::new(), |mut colors, (_, view)| {
+                        colors.extend(view.colors.iter().copied());
+                        colors
+                    })
+                    .len() as i32,
+                LayerCount::CountersOn { kind, predicate } => self
+                    .layer_views(self.iter_battlefield_permanents(controller))
+                    .filter(|(id, view)| matches_view(self, *id, predicate, view, None, None))
+                    .filter_map(|(id, _)| self.state.permanents[id].as_ref())
+                    .map(|p| p.counter_count(*kind))
+                    .sum(),
+                LayerCount::CreatureTypes { .. } | LayerCount::SourceCounters(_) => 0,
+            },
         }
     }
 
