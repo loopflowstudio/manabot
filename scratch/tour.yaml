@@ -1,4 +1,4 @@
-at: cd0414463823df108df0cac5a2547863f677ea6f
+at: 5244ab5b3a789eee31eb44d1034bbabb98034ae5
 first:
   - path: managym/README.md
     why: Player choices for fights, sacrifices, and kicked spells
@@ -8,14 +8,18 @@ first:
     why: Tribute reads toughness from the sacrificed creature
   - path: managym/cards/src/stx.rs
     why: Brew binds its caster’s sacrifices for the optional return
+  - path: managym/cards/src/m20.rs
+    why: Drakuseth's other targets take damage at once
   - path: managym/cards/src/eld.rs
-    why: Prince blinks a creature its controller owns
+    why: Prince's blink; Run Away Together's controller relation
   - path: managym/cards/src/fdn.rs
-    why: Resilience sets target bounds when kicker is chosen
+    why: Resilience's kicked bounds; Annihilation's attached Equipment
   - path: managym/state/src/ability.rs
-    why: Target clauses, fight participants, sacrifice predicates and exclusions
+    why: Target relations, fights, sacrifices and simultaneous instructions
+  - path: managym/src/flow/retarget.rs
+    why: Choose new targets as one legal assignment
   - path: managym/src/flow/play.rs
-    why: Determine legal casts before offering the kicker choice
+    why: Relations and kicker decide which casts are legal
   - path: managym/src/flow/decision.rs
     why: Commit simultaneous sacrifices and retain departures and arrivals
   - path: managym/src/flow/resolution.rs
@@ -24,6 +28,10 @@ first:
     why: Check simultaneous choice timing and the excluded graveyard card
   - path: managym/cards/tests/cards/grn.rs
     why: Accept, decline or remove the fighter in response
+  - path: managym/src/flow/target_authority_tests.rs
+    why: A copy swaps targets; a single change cannot
+  - path: managym/cards/tests/cards/m20.rs
+    why: Drakuseth with 16 creatures a side
   - path: docs/engine.md
     why: What each viewer sees during a split and what a divided spell retains
   - path: managym/cards/src/rna.rs
@@ -72,8 +80,6 @@ first:
     why: Bolt Bend's single target and conditional discount
   - path: managym/state/src/stack_object.rs
     why: The choices preserved when a spell leaves
-  - path: managym/src/flow/retarget.rs
-    why: Create copies and announce their final targets
   - path: managym/cards/tests/cards/war.rs
     why: Legal spells and mana actually spent on Bolt Bend
 hide:
