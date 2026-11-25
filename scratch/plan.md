@@ -195,66 +195,25 @@ The focused debug run passed all 16 tests, including these six positions.
 The FDN ledger has ten updated rows. All 29 cohort rows were checked for a
 source definition and a named directed fixture.
 
-## Pass 7 · Conceptual alignment complete
+## Pass 7 · Conceptual alignment built (`9fcab2395c`)
 
-All four concept-review items (`7.1`–`7.4`) are implemented:
+- 7.1: wire/API/schemas/text/Academy carry `entry_controller_id`; the internal
+  `Permanent.control_differs_from_entry` bit and v11 column stay.
+- 7.2: `SourceQuality::{ALL, wire_name, from_wire_name}`; observations carry plain
+  names, the encoder maps back to `token_name()` so v11 tokens are unchanged.
+- 7.3: `CombatState.blocked` (CR 509.1h); phase-out removes from combat
+  (CR 506.4, 702.26b); test `c17::phased_out_blocker_leaves_combat_while_attacker_stays_blocked`.
+- 7.4: `Condition::CastFrom { zone, owner }` replaces `EntryCastFrom` and the
+  condition `CastFromGraveyard` (token rename recorded).
 
-- **7.1 (`entry_controller_id`):** Kept `Permanent.control_differs_from_entry`
-  compact internally and preserved v11 column `permanent::CONTROL_DIFFERS_FROM_ENTRY`,
-  while replacing `control_differs_from_entry` on `PermanentData`, wire JSON,
-  PyO3 bindings, `managym/__init__.pyi`, `experience.rs/.py`,
-  `experience_projection.py`, all six `protocol/*.schema.json` schemas,
-  `manabot/semantic/text_observation.py`, and Academy UI (`types.ts`, `view.ts`,
-  `view.test.ts`, `Board.svelte`, `Inspect.svelte`). Text and Inspector now
-  name the actual entry controller (`entered under your control` /
-  `entered under Opponent's control`) without inverting perspective.
-- **7.2 (`SourceQuality` wire names & complete vocabulary):** Added
-  `SourceQuality::ALL`, `wire_name`, and `from_wire_name` in
-  `managym/state/src/card.rs`. Observations and wire projections now carry plain
-  domain names (`"everything"`, `"black"`, `"instant"`, …); the encoder maps
-  wire names back to `SourceQuality::token_name()` so v11 `FactKind::EffectProgram`
-  tokens are unchanged; `record_vocabulary.rs` registers every `SourceQuality::ALL`
-  variant statically; `text_observation.py` and `Inspect.svelte` render plain
-  names without `::` parsing; doc comments in `observation_encoder.rs` and
-  `observation_layout.rs` document `StaticAbility::HexproofFrom` and
-  `StaticAbility::Protection`.
-- **7.3 (`CombatState.blocked` & phase-out removal):** Replaced
-  `blocked_without_blockers` with `CombatState.blocked: Vec<PermanentId>` (CR
-  509.1h) across `combat.rs`, `combat_actions.rs`, and `state/hash.rs`.
-  `record_continuous` removes phased-out permanents from combat (CR 506.4,
-  702.26b), clearing `attacking` and calling `combat.remove_from_combat(id)`.
-  Added `c17::phased_out_blocker_leaves_combat_while_attacker_stays_blocked`
-  covering both non-trample and trample attackers.
-- **7.4 (unified `Condition::CastFrom`):** Replaced `Condition::EntryCastFrom`
-  and `Condition::CastFromGraveyard` with `Condition::CastFrom { zone: Option<ZoneType>, owner: Option<Actor> }`
-  across `ability.rs`, `statics.rs`, `proposed_event.rs`,
-  `ability_description.rs`, `chk.rs`, `fdn.rs`, `fin.rs`, and `observability.rs`,
-  and recorded `(Variant, "Condition::CastFromGraveyard", None)` in
-  `token_renames.rs` after confirming neither pinned pilot binds
-  `fin.esper_origins`.
+Passed on the rebuilt release extension: protocol/vocab Rust tests, directed
+card tests (329, usg/dom/chk/fdn/con/c17/fin/observability), `combat_preview`,
+`test_text_observation.py` (105), pinned v9/v11 pilots (u1952 skipped),
+Academy protocol/replay Python tests and UI view/prompt/protocol tests.
+Six schemas and five Academy opening fixtures refreshed.
 
-### Verification for Pass 7
+## Remaining (gate)
 
-- Exported all six protocol schemas and refreshed Academy opening fixtures
-  (`learn`, `precision`, `precision-mana`, `convoke`, and `choice-navigation`)
-  against the rebuilt release extension (`managym/_managym.cpython-313-darwin.so`).
-- Passed:
-  - Rust protocol & vocab tests: `experience_protocol_tests` (5),
-    `canonical_replay_tests` (6), `study_protocol_tests` (4),
-    `study_index_protocol_tests` (4), `record_vocabulary` (3),
-    `rules_tests combat_preview` (6).
-  - Directed card tests (`managym-cards --test cards`): `usg::`, `dom::`,
-    `chk::`, `fdn::`, `con::`, `c17::`, `fin::`, `observability::` (329 tests,
-    including `c17::phased_out_blocker_leaves_combat_while_attacker_stays_blocked`
-    and updated `observability::blocking_one_attacker_differs_from_blocking_another`).
-  - Python checks: `tests/semantic/test_text_observation.py` (105 passed, after
-    fixing `test_stack_text_states_granted_spell_keywords_only_when_present` to
-    omit false `changeling` per canonical `KeywordData` serialization),
-    `tests/model/test_pinned_pilot.py` (`v9` and `v11` passed; optional `u1952`
-    skipped), `tests/academy/test_experience_protocol.py` (14),
-    `tests/academy/test_study_protocol.py` (16), `tests/academy/test_replay_index.py` (19).
-  - Academy UI checks: `view.test.ts` (294), `prompt.test.ts` (115),
-    `protocol-conformance.test.ts` (5), `study-protocol.test.ts` (8),
-    `replay-index.test.ts` (7), `inspect.test.ts` (12).
-- Gate owns the full debug nextest suite (CI profile, two build jobs and two
-  test threads) and the Engine Budget reference record with its reason.
+No unbuilt slices. Gate owns the full debug nextest suite (CI profile,
+`CARGO_BUILD_JOBS=2`, `--test-threads 2`) and the Engine Budget reference
+record with its reason.
