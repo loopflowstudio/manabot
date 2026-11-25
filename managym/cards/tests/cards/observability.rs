@@ -137,12 +137,13 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
     let Permanent {
         transforms: _,
         id: _,
         object: _,
         controller: _,
+        control_differs_from_entry: _,
         tapped: _,
         summoning_sick: _,
         damage: _,
@@ -168,6 +169,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
         ),
         ("card", Seen::Permanent(permanent::DEFINITION)),
         ("controller", Seen::Permanent(permanent::IS_MINE)),
+        (
+            "control_differs_from_entry",
+            Seen::Permanent(permanent::CONTROL_DIFFERS_FROM_ENTRY),
+        ),
         ("transforms", Seen::Via("Transforms fact rows")),
         ("tapped", Seen::Permanent(permanent::TAPPED)),
         ("summoning_sick", Seen::Permanent(permanent::SUMMONING_SICK)),
@@ -363,8 +368,8 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::KeepUnspentMana",
             Seen::Player(player::KEEPS_RED_MANA, player::KEEPS_RED_MANA + 1),
         ),
-        Modification::ControlChanged { .. } => (
-            "Modification::ControlChanged",
+        Modification::Control => (
+            "Modification::Control",
             Seen::Via("the permanent's row moves to its new controller's permanents"),
         ),
         Modification::ModeChosen { .. } => (
@@ -474,9 +479,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         (true, Modification::LifeTotalCantChange),
         (true, Modification::ProtectionFromEverything),
         permanent(Modification::PhasedOut),
-        permanent(Modification::ControlChanged {
-            previous: PlayerId(1),
-        }),
+        permanent(Modification::Control),
         permanent(Modification::ModeChosen { mode: 1 }),
         permanent(Modification::HasAbilitiesOfSource),
     ]
@@ -582,13 +585,14 @@ fn player_selector_token(player: &PlayerSelector) -> &'static str {
         PlayerSelector::EachPlayer => "PlayerSelector::EachPlayer",
         PlayerSelector::TriggeringPlayer => "PlayerSelector::TriggeringPlayer",
         PlayerSelector::TriggeringPlayersOpponents => "PlayerSelector::TriggeringPlayersOpponents",
+        PlayerSelector::TargetClause(_) => "PlayerSelector::TargetClause",
         PlayerSelector::Target(_) => "PlayerSelector::Target",
         PlayerSelector::TargetController => "PlayerSelector::TargetController",
         PlayerSelector::Owner => "PlayerSelector::Owner",
     }
 }
 
-fn player_selector_witnesses() -> [PlayerSelector; 8] {
+fn player_selector_witnesses() -> [PlayerSelector; 9] {
     [
         PlayerSelector::You,
         PlayerSelector::EachOpponent,
@@ -596,6 +600,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 8] {
         PlayerSelector::TriggeringPlayer,
         PlayerSelector::TriggeringPlayersOpponents,
         PlayerSelector::Target(Box::new(TargetSpec::Player)),
+        PlayerSelector::TargetClause(0),
         PlayerSelector::TargetController,
         PlayerSelector::Owner,
     ]
@@ -2816,6 +2821,7 @@ fn each_permanent_status_moves_its_named_column() {
     let (_, base) = observe(&base_game, 0);
     let fields = permanent_fields(base_game.state.permanents[ogre].as_ref().unwrap());
     let mutate = |field: &str, permanent: &mut Permanent| match field {
+        "control_differs_from_entry" => permanent.control_differs_from_entry = true,
         "tapped" => permanent.tapped = !permanent.tapped,
         "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
         "damage" => permanent.damage = 1,
@@ -3665,6 +3671,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_animated => [column(Permanent, permanent::ANIMATED)],
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
+        blocked => [column(Permanent, permanent::BLOCKED)],
+        control_differs_from_entry => [column(Permanent, permanent::CONTROL_DIFFERS_FROM_ENTRY)],
         first_strike_participant => [column(Permanent, permanent::FIRST_STRIKE_PARTICIPANT)],
         attacking => [column(Permanent, permanent::ATTACKING)],
         exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],

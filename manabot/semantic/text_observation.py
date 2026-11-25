@@ -467,6 +467,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LifeTotalCantChange": "life total can't change",
         "ProtectionFromEverything": "protection from everything",
         "PhasedOut": "phased out (treated as though it doesn't exist)",
+        "Control": "controlled by the effect’s controller",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -1041,6 +1042,10 @@ class _Renderer:
         for permanent in state.agent_permanents + state.opponent_permanents:
             characteristics = permanent.characteristics
             optional = ""
+            if permanent.blocked:
+                optional += "; blocked"
+            if permanent.control_differs_from_entry:
+                optional += "; entered under the other player’s control"
             if permanent.first_strike_participant:
                 optional += "; participated in the first-strike damage step"
             if permanent.attacking:

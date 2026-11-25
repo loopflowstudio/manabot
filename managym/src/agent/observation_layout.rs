@@ -432,6 +432,8 @@ columns! { permanent {
     53: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
+    56: CONTROL_DIFFERS_FROM_ENTRY => ("control_differs_from_entry", ValueLayout::FLAG),
+    57: BLOCKED => ("blocked", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The

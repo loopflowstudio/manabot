@@ -1627,6 +1627,8 @@ fn encode_permanent_features(
             flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
+        out[permanent::BLOCKED] = flag(permanent.blocked);
+        out[permanent::CONTROL_DIFFERS_FROM_ENTRY] = flag(permanent.control_differs_from_entry);
         out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
     } else {
         out[super::legacy_input::PERMANENT_VALID] = Integer(1);

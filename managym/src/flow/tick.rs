@@ -281,6 +281,7 @@ impl Game {
                 // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
                 self.end_until_your_next_turn_effects(active);
+                self.refresh_control();
                 self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);

@@ -36,10 +36,11 @@ const BASIC_LANDS: [(&str, &str); 5] = [
 ];
 
 /// Evaluation order, including the four distinct power/toughness sublayers.
-/// Copy and control are committed by their event owners before this context.
+/// Copiable values are committed at entry, before this context.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Layer {
     Name,
+    Control,
     Type,
     Color,
     Ability,
@@ -50,8 +51,9 @@ enum Layer {
 }
 
 impl Layer {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Name,
+        Self::Control,
         Self::Type,
         Self::Color,
         Self::Ability,
@@ -71,6 +73,7 @@ struct StaticEntry {
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct LayerObject {
     pub view: Arc<Characteristics>,
+    pub controller: PlayerId,
     statics: Vec<StaticEntry>,
 }
 #[derive(Clone)]
@@ -127,7 +130,7 @@ pub(super) struct SourceSeed {
 /// Walk each predicate/condition once, including nested alternatives.
 #[derive(Clone, Copy, Default)]
 struct ReadSet {
-    fields: u8,
+    fields: u16,
     mana: bool,
     tapped: bool,
     life: bool,
@@ -276,6 +279,7 @@ impl SourcePlan {
         }
         for (_, operation) in &self.parts {
             match operation {
+                Operation::Modify(Modification::Control) => reads.fields |= CONTROL,
                 Operation::Buff(buff) => {
                     if buff.per_creature_type_max.is_some() {
                         reads.fields |= SUBTYPES;
@@ -324,6 +328,7 @@ impl Node {
 
 #[derive(Clone, Debug, PartialEq)]
 enum Operation {
+    Control(PlayerId),
     Modify(Modification<LayerValue>),
     LandType(String),
     // Expressions resolve before becoming per-target instructions. Indirection
@@ -339,20 +344,22 @@ enum Operation {
     CatalogTrigger(Box<crate::state::ability::Ability>),
 }
 // Intermediate fields that instructions can read or change. State-only reads
-// (zones, counters, mana, controller, printed mana value) cannot change during
+// (zones, counters, mana, printed mana value) cannot change during
 // a layer pass. ABILITIES includes a generating static's continued existence.
-const NAME: u8 = 1;
-const CARD_TYPES: u8 = 2;
-const SUBTYPES: u8 = 4;
-const SUPERTYPES: u8 = 8;
-const COLORS: u8 = 16;
-const KEYWORDS: u8 = 32;
-const POWER: u8 = 64;
-const ABILITIES: u8 = 128;
+const CONTROL: u16 = 256;
+const NAME: u16 = 1;
+const CARD_TYPES: u16 = 2;
+const SUBTYPES: u16 = 4;
+const SUPERTYPES: u16 = 8;
+const COLORS: u16 = 16;
+const KEYWORDS: u16 = 32;
+const POWER: u16 = 64;
+const ABILITIES: u16 = 128;
 
 impl Operation {
-    fn writes(&self) -> u8 {
+    fn writes(&self) -> u16 {
         match self {
+            Self::Control(_) => CONTROL,
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Cda { .. } | Self::Buff(_) => POWER,
             Self::Inherit | Self::CatalogTrigger(_) => 0,
@@ -376,7 +383,7 @@ impl Operation {
                 | Modification::GrantTriggered(_)
                 | Modification::HasAbilitiesOfSource => 0,
                 // Future rules payloads remain conservative until classified.
-                _ => u8::MAX,
+                _ => u16::MAX,
             },
         }
     }
@@ -390,6 +397,7 @@ struct Instruction {
 
 fn layer<N>(modification: &Modification<N>) -> Option<Layer> {
     Some(match modification {
+        Modification::Control => Layer::Control,
         Modification::SetName(_) => Layer::Name,
         Modification::SetCreatureTypes(_)
         | Modification::AddSubtypes(_)
@@ -447,6 +455,7 @@ impl<'a> Context<'a> {
                 seed.source.shares_definition_with(source)
                     && seed.incarnation == p.id
                     && seed.timestamp == p.timestamp
+                    && seed.object.controller == p.entry_controller()
             });
             if !reusable {
                 seeds[slot] = Some(Arc::new(context.seed(id, p, source)));
@@ -486,6 +495,8 @@ impl<'a> Context<'a> {
                 };
                 let operation = if record.modification == Modification::HasAbilitiesOfSource {
                     Operation::Inherit
+                } else if record.modification == Modification::Control {
+                    Operation::Control(record.controller)
                 } else {
                     Operation::Modify(record.modification.map_amount(|n| LayerValue::Fixed(*n)))
                 };
@@ -574,6 +585,7 @@ impl<'a> Context<'a> {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.source_plans += 1);
         let mut object = LayerObject {
+            controller: permanent.entry_controller(),
             view: Arc::new(Characteristics {
                 name: source.name.clone(),
                 subtypes: source.subtypes.clone(),
@@ -718,6 +730,15 @@ impl<'a> Context<'a> {
         let plausible = |a: usize, b: usize| {
             let node = &nodes[pending[a]];
             let reads = node.reads.fields | if node.targets.is_none() { ABILITIES } else { 0 };
+            // An unconditional attachment reads only its own controller
+            // in layer 2. Independent Auras can apply in one timestamp pass.
+            if layer == Layer::Control
+                && node.condition.is_none()
+                && matches!(node.scope, StaticScope::This | StaticScope::Attached)
+                && !instructions[b].iter().any(|i| i.target == node.source)
+            {
+                return false;
+            }
             a != b && node.cda == nodes[pending[b]].cda && reads & writes[b] != 0
         };
         let independent = !(0..pending.len()).any(|a| (0..pending.len()).any(|b| plausible(a, b)))
@@ -811,6 +832,17 @@ impl<'a> Context<'a> {
         {
             return Vec::new();
         }
+        match node.scope {
+            StaticScope::Attached => {
+                return self
+                    .game
+                    .attached_permanent(node.source)
+                    .into_iter()
+                    .collect()
+            }
+            StaticScope::This => return vec![node.source],
+            _ => {}
+        }
         self.objects
             .keys()
             .copied()
@@ -829,6 +861,9 @@ impl<'a> Context<'a> {
                     .filter(move |(part, _)| *part == layer)
                     .map(move |(_, op)| {
                         let operation = match op {
+                            Operation::Modify(Modification::Control) => {
+                                Operation::Control(self.controller(node.source))
+                            }
                             Operation::Modify(m) => Operation::Modify(
                                 m.map_amount(|n| LayerValue::Fixed(self.value(n, id))),
                             ),
@@ -886,7 +921,7 @@ impl<'a> Context<'a> {
         })
     }
     fn controller(&self, id: PermanentId) -> PlayerId {
-        self.game.live_permanent(id).controller
+        self.objects[&id].controller
     }
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
@@ -1010,7 +1045,12 @@ impl<'a> Context<'a> {
     /// Static comparisons see the characteristics at this point in the layer system.
     fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
         let controller = self.controller(source);
-        let controlled = || self.game.iter_battlefield_permanents(controller);
+        let controlled = || {
+            self.objects
+                .keys()
+                .copied()
+                .filter(|&id| self.controller(id) == controller && !self.game.is_phased_out(id))
+        };
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {
@@ -1292,6 +1332,10 @@ impl<'a> Context<'a> {
         for (ordinal, instruction) in instructions.iter().enumerate() {
             let id = instruction.target;
             let object = Arc::make_mut(self.objects.get_mut(&id).unwrap());
+            if let Operation::Control(controller) = instruction.operation {
+                object.controller = controller;
+                continue;
+            }
             let view = Arc::make_mut(&mut object.view);
             match &instruction.operation {
                 Operation::Modify(Modification::SetName(name)) => {

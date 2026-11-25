@@ -934,7 +934,14 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.resolve_top_of_stack();
         let source = game.state.delayed_triggers[0].source_object();
         let source_permanent = game.state.permanent_of(game.state.now(source)).unwrap();
-        game.change_control(source_permanent, PlayerId(1 - controller.0));
+        let affected = game.affected_permanent(source_permanent);
+        game.apply_continuous(
+            None,
+            PlayerId(1 - controller.0),
+            affected,
+            crate::state::effect::Modification::Control,
+            crate::state::effect::EffectDuration::Indefinite,
+        );
         game.move_object(source, ZoneType::Graveyard);
         stack(&mut game, Entry::Spell, controller, vec![], vec![], vec![]);
         let StackObject::Spell(spell) = game.state.stack_objects.last().unwrap() else {
@@ -5338,7 +5345,14 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
             );
         }
     }
-    game.change_control(angel, caster);
+    let affected = game.affected_permanent(angel);
+    game.apply_continuous(
+        None,
+        caster,
+        affected,
+        crate::state::effect::Modification::Control,
+        crate::state::effect::EffectDuration::Indefinite,
+    );
     game.finish_action_step();
     assert!(cast_offer(&game, copies[0]).is_none());
     assert!(cast_offer(&game, copies[1]).is_some());

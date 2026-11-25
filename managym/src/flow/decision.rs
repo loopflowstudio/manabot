@@ -1303,6 +1303,7 @@ impl Game {
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while !self.is_game_over() {
+            self.refresh_control();
             if let Some(mut batch) = frame.batch.take() {
                 match self.advance_event_batch(&mut batch) {
                     BatchProgress::Choice { player, candidates } => {
@@ -1446,6 +1447,7 @@ impl Game {
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
                                         transformed: profile == SpellProfile::BackFace,
+                                        attached_to: attach_to,
                                         x: frame.x,
                                         // Spend effects that applied to
                                         // this spell as it was cast.
@@ -1513,14 +1515,6 @@ impl Game {
                                     crate::state::effect::Modification::AddKeywords(gained),
                                     crate::state::effect::EffectDuration::EndOfTurn,
                                 );
-                            }
-                            if attach_to.is_some() {
-                                self.state.permanents[permanent_id]
-                                    .as_mut()
-                                    .expect("entered")
-                                    .attached_to = attach_to;
-                                self.invalidate_mana_cache(PlayerId(0));
-                                self.invalidate_mana_cache(PlayerId(1));
                             }
                         }
                         self.capture_resolution(&frame);

@@ -1189,6 +1189,8 @@ class Permanent:
     has_exile_link: bool
     exile_if_dies_this_turn: bool
     attacking: bool
+    blocked: bool
+    control_differs_from_entry: bool
     first_strike_participant: bool
     exhausted_abilities: int
     once_each_turn_used: int

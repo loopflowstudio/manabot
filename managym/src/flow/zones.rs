@@ -742,6 +742,10 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
+        let attachment_changed = entry.attached_to.is_some()
+            || departing_lki
+                .as_ref()
+                .is_some_and(|lki| lki.attached_to.is_some());
         let event_controller = departing_lki.as_ref().map_or(holder, |lki| lki.controller);
         if let Some(lki) = departing_lki {
             let history = &mut self.state.turn.history[lki.controller.0];
@@ -831,6 +835,7 @@ impl Game {
                 &self.state[object_id],
             );
             permanent.controller = holder;
+            permanent.attached_to = entry.attached_to;
             permanent.entry_turn = self.state.turn.turn_number;
             permanent.was_cast = cast.is_some();
             if let Some(cast) = cast {
@@ -888,8 +893,7 @@ impl Game {
         // its creature's controller, possibly the opponent, can produce.
         let card_def = &self.state[object_id];
         if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
-            && (card_def.attached_characteristics().is_some()
-                || card_def.attached_grants().next().is_some()
+            && (attachment_changed
                 || card_def
                     .statics
                     .iter()
@@ -945,7 +949,11 @@ impl Game {
     /// moves to their battlefield without changing zones, and has not been
     /// under their control continuously since their turn began (CR 302.6).
     /// "For as long as you control" effects of its previous controller end.
-    pub(crate) fn change_control(&mut self, permanent_id: PermanentId, controller: PlayerId) {
+    pub(super) fn commit_control_change(
+        &mut self,
+        permanent_id: PermanentId,
+        controller: PlayerId,
+    ) {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
         };
@@ -954,15 +962,24 @@ impl Game {
         }
         let (object_id, previous) = (permanent.object, permanent.controller);
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
+        permanent.control_differs_from_entry = controller != permanent.entry_controller();
         permanent.controller = controller;
         permanent.summoning_sick = true;
         permanent.attacking = false;
         self.state
             .place_object(object_id, controller, ZoneType::Battlefield);
+        if let Some(combat) = self.state.combat.as_mut() {
+            combat.remove_from_combat(permanent_id);
+        }
         self.invalidate_mana_cache(previous);
         self.invalidate_mana_cache(controller);
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
+            self.emit(GameEvent::ControlChanged {
+                object,
+                previous,
+                controller,
+            });
         }
     }
 

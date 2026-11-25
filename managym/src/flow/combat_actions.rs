@@ -191,7 +191,6 @@ impl Game {
                 .get(&attacker_id)
                 .map(Vec::as_slice)
                 .unwrap_or_default();
-            let was_blocked = !declared_blockers.is_empty();
             let blockers: Vec<PermanentId> = declared_blockers
                 .iter()
                 .copied()
@@ -271,7 +270,7 @@ impl Game {
                 remaining_damage -= assigned;
             }
 
-            if !was_blocked || (can_trample && remaining_damage > 0) {
+            if !combat.is_blocked(attacker_id) || (can_trample && remaining_damage > 0) {
                 events.push(ProposedEvent::Damage {
                     source: attacker_ref,
                     target: ProposedDamageTarget::Player(defender),

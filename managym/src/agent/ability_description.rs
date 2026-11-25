@@ -884,6 +884,7 @@ fn player_description(player: &PlayerSelector) -> String {
         PlayerSelector::TriggeringPlayer => "that player".into(),
         PlayerSelector::TriggeringPlayersOpponents => "each of that player's opponents".into(),
         PlayerSelector::TargetController => "its controller".into(),
+        PlayerSelector::TargetClause(_) => "target player".into(),
         PlayerSelector::Target(target) => target_description(target),
         PlayerSelector::Owner => "its owner".into(),
     }
@@ -1710,7 +1711,7 @@ fn continuous_description_in(
             format!("{subject}: protection from everything{until}")
         }
         Modification::PhasedOut => format!("{subject} phase out{until}"),
-        Modification::ControlChanged { .. } => {
+        Modification::Control => {
             format!("You control {}{until}", subject.to_lowercase())
         }
         Modification::ModeChosen { mode } => format!("{subject} has chosen mode {}", mode + 1),

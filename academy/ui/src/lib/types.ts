@@ -128,6 +128,8 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Attacking in the current combat. */
   attacking?: boolean;
+  blocked?: boolean;
+  control_differs_from_entry?: boolean;
   first_strike_participant?: boolean;
   attacked_this_turn?: boolean;
   /** The attacking permanent this one blocks. */

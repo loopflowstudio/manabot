@@ -2139,6 +2139,20 @@
       "W"
     ]
   },
+  "Confiscate": {
+    "name": "Confiscate",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant permanent\nYou control enchanted permanent.",
+    "colors": [
+      "U"
+    ]
+  },
   "Consider": {
     "name": "Consider",
     "mana_cost": "{U}",
@@ -5151,6 +5165,18 @@
     "oracle_text": "When this creature enters, create a number of 1/1 white Rabbit creature tokens equal to the number of other creatures you control named Hare Apparent.\nA deck can have any number of cards named Hare Apparent.",
     "colors": [
       "W"
+    ]
+  },
+  "Harmless Offering": {
+    "name": "Harmless Offering",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent gains control of target permanent you control.",
+    "colors": [
+      "R"
     ]
   },
   "Harmonized Trio": {

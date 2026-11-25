@@ -815,6 +815,10 @@ pub(super) struct WirePermanentData {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub control_differs_from_entry: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -996,6 +1000,8 @@ impl From<WirePermanentData> for PermanentData {
             is_animated: w.is_animated,
             has_exile_link: w.has_exile_link,
             exile_if_dies_this_turn: w.exile_if_dies_this_turn,
+            blocked: w.blocked,
+            control_differs_from_entry: w.control_differs_from_entry,
             first_strike_participant: w.first_strike_participant,
             attacking: w.attacking,
             exhausted_abilities: w.exhausted_abilities,
@@ -1070,6 +1076,8 @@ impl Serialize for PermanentData {
             is_animated: self.is_animated,
             has_exile_link: self.has_exile_link,
             exile_if_dies_this_turn: self.exile_if_dies_this_turn,
+            blocked: self.blocked,
+            control_differs_from_entry: self.control_differs_from_entry,
             first_strike_participant: self.first_strike_participant,
             attacking: self.attacking,
             exhausted_abilities: self.exhausted_abilities,

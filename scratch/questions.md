@@ -9,3 +9,8 @@
   cached result, rather than adding a static-only control path beside resolution records.
 - Open: whether `StaticAbility::NoMaximumHandSize` folds into `ControllerHas` cleanly; only fold
   it if its readers become simpler.
+- Slice 1 retains the entry controller as one bit relative to the current controller
+  in the two-seat permanent record. This preserves the existing permanent size
+  and leaves ordinary unchanged-control state hashes free of a redundant seat.
+- Harmless Offering reads its opponent through a clause index. Existing player
+  selectors keep the active clause, including the binding used inside modal effects.

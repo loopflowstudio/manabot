@@ -142,12 +142,9 @@ pub enum Modification<N = i32> {
     /// untap step before they untap (CR 702.26a); a permanent phased out
     /// indirectly with the one it is attached to phases in with it.
     PhasedOut,
-    /// Layer 2 (CR 613.1b): the record's controller controls the object;
-    /// when the record ends with the object still theirs, control returns
-    /// to `previous`. Only resolutions create it (`Effect::GainControl`).
-    ControlChanged {
-        previous: PlayerId,
-    },
+    /// Layer 2 (CR 613.1b): the source's controller (static ability) or
+    /// the player specified at resolution controls the affected permanent.
+    Control,
     /// The source's triggered ability chose mode `mode` ("choose one that
     /// hasn't been chosen"); lasts as long as the object.
     ModeChosen {
@@ -223,9 +220,7 @@ impl<N> Modification<N> {
             Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
             Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
             Self::PhasedOut => Modification::PhasedOut,
-            Self::ControlChanged { previous } => Modification::ControlChanged {
-                previous: *previous,
-            },
+            Self::Control => Modification::Control,
             Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
             Self::HasAbilitiesOfSource => Modification::HasAbilitiesOfSource,
         }
@@ -292,7 +287,7 @@ impl Modification {
             | Self::LifeTotalCantChange
             | Self::ProtectionFromEverything
             | Self::PhasedOut
-            | Self::ControlChanged { .. }
+            | Self::Control
             | Self::ModeChosen { .. }
             | Self::HasAbilitiesOfSource => return false,
         }

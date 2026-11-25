@@ -49,6 +49,12 @@ pub(crate) struct ZoneEntry {
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
+    /// A resolving Aura enters already attached (CR 608.3b).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attached_to: Option<ObjectId>,
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
@@ -806,6 +812,9 @@ impl Game {
             }
             results.push(result);
         }
+        // Derive control once all simultaneous moves are visible. An Aura
+        // departing with its host cannot transfer the departing host back.
+        self.refresh_control();
         self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
         if let EventBinding::Moved {
             linked: Some((source, returns)),

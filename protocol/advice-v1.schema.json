@@ -2686,6 +2686,9 @@
           ],
           "title": "Base Toughness"
         },
+        "blocked": {
+          "type": "boolean"
+        },
         "blocking": {
           "anyOf": [
             {
@@ -2708,6 +2711,9 @@
             "maximum": 255,
             "minimum": 0
           }
+        },
+        "control_differs_from_entry": {
+          "type": "boolean"
         },
         "controller_id": {
           "maximum": 4294967295,

@@ -682,7 +682,7 @@ pub const MODIFICATION_NAMES: [&str; 40] = [
     "LifeTotalCantChange",
     "ProtectionFromEverything",
     "PhasedOut",
-    "ControlChanged",
+    "Control",
     "ModeChosen",
     "HasAbilitiesOfSource",
     "Saddled",
@@ -801,10 +801,7 @@ impl ContinuousEffectData {
             Modification::LifeTotalCantChange => "LifeTotalCantChange",
             Modification::ProtectionFromEverything => "ProtectionFromEverything",
             Modification::PhasedOut => "PhasedOut",
-            Modification::ControlChanged { previous } => {
-                data.amount = Some(previous.0 as i32);
-                "ControlChanged"
-            }
+            Modification::Control => "Control",
             Modification::ModeChosen { mode } => {
                 data.amount = Some(i32::from(*mode));
                 "ModeChosen"
@@ -861,6 +858,8 @@ pub struct PermanentData {
     /// Declared as an attacker in the current combat. Omitted when false, so
     /// observations retained before this field stay canonical.
     pub attacking: bool,
+    pub blocked: bool,
+    pub control_differs_from_entry: bool,
     pub first_strike_participant: bool,
     /// Exhaust abilities this object has activated; each can never be
     /// activated again by this object (CR 702.177a).
@@ -1678,6 +1677,12 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
+            blocked: game
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.is_blocked(perm_id)),
+            control_differs_from_entry: permanent.control_differs_from_entry,
             first_strike_participant: game
                 .state
                 .combat
@@ -2261,6 +2266,7 @@ impl Observation {
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
+            | GameEvent::ControlChanged { .. }
             | GameEvent::PermanentUntapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CombatDamageToPlayers { .. }

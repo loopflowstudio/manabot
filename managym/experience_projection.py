@@ -220,6 +220,8 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attached_to": permanent.attached_to,
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
+        "blocked": bool(permanent.blocked) or None,
+        "control_differs_from_entry": bool(permanent.control_differs_from_entry) or None,
         "first_strike_participant": bool(permanent.first_strike_participant) or None,
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,

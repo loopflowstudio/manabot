@@ -472,6 +472,10 @@ pub struct LegacyPermanentView {
     pub attacking: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub first_strike_participant: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub blocked: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub control_differs_from_entry: bool,
     /// The attacking permanent this one blocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocking: Option<u32>,

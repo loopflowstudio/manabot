@@ -1369,6 +1369,9 @@
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "blocked": {
+          "type": "boolean"
+        },
         "blocking": {
           "description": "The attacking permanent this one blocks.",
           "type": [
@@ -1386,6 +1389,9 @@
             "maximum": 255,
             "minimum": 0
           }
+        },
+        "control_differs_from_entry": {
+          "type": "boolean"
         },
         "controller_id": {
           "type": "integer",

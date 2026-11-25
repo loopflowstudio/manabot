@@ -37,7 +37,11 @@ impl Game {
         modification: Modification,
         duration: EffectDuration,
     ) {
+        let changes_control = modification == Modification::Control;
         self.record_continuous(source, None, controller, affected, modification, duration);
+        if changes_control {
+            self.refresh_control();
+        }
     }
 
     /// [`Game::apply_continuous`], naming the exact source object a
@@ -354,6 +358,7 @@ impl Game {
             effect.modification == Modification::PhasedOut
                 && matches!(effect.affected, Affected::Object(object) if phasing_in.contains(&object))
         });
+        self.refresh_control();
     }
 
     /// `player`'s turn begins: their "until your next turn" records end.
@@ -392,30 +397,7 @@ impl Game {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
-        // A control change that ends hands its object back (CR 613.1b).
-        let returned: Vec<_> = self
-            .state
-            .effects
-            .iter()
-            .filter(|effect| ends(effect))
-            .filter_map(|effect| match (effect.affected, &effect.modification) {
-                (Affected::Object(object), Modification::ControlChanged { previous }) => {
-                    Some((object, effect.controller, *previous))
-                }
-                _ => None,
-            })
-            .collect();
         self.state.effects.retain(|effect| !ends(effect));
-        for (object, holder, previous) in returned {
-            if let Ok(id) = self.lookup_current_permanent(object) {
-                if self.state.permanents[id]
-                    .as_ref()
-                    .is_some_and(|permanent| permanent.controller == holder)
-                {
-                    self.change_control(id, previous);
-                }
-            }
-        }
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
     }

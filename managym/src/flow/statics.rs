@@ -15,6 +15,7 @@ use crate::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             SpellProfile, StaticAbility, StaticScope,
         },
+        effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -208,6 +209,7 @@ pub(super) struct StaticPlayPermissions {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct LayerBoard {
+    control_changes: Vec<(PermanentId, PlayerId)>,
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
@@ -271,14 +273,18 @@ impl Game {
         let context = Context::evaluate(self, sources);
         let mut objects = vec![None; self.state.permanents.len()];
         let mut restrictions = Vec::new();
+        let mut control_changes = Vec::new();
         let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
         for (id, object) in context.objects {
+            let permanent = self.state.permanents[id].as_ref().unwrap();
+            if object.controller != permanent.controller && !self.is_phased_out(id) {
+                control_changes.push((id, object.controller));
+            }
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
             if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
-                let permanent = self.state.permanents[id].as_ref().unwrap();
-                let controller = permanent.controller;
+                let controller = object.controller;
                 let permissions = &mut play_permissions[controller.0];
                 for ability in &object.view.static_abilities {
                     match ability {
@@ -321,6 +327,7 @@ impl Game {
             permissions.extra_land_plays += land_plays_each_player;
         }
         LayerBoard {
+            control_changes,
             reads_mana: context.reads_mana,
             reads_tapped: context.reads_tapped,
             reads_life: context.reads_life,
@@ -373,6 +380,50 @@ impl Game {
         self.derived.borrow_mut().at(revisions).board = Some(board.clone());
         board
     }
+    /// Commit layer 2 before subsequent instructions, triggers or choices.
+    /// A change can end an effect lasting while its source is controlled.
+    pub(crate) fn refresh_control(&mut self) {
+        loop {
+            let cached = self
+                .derived
+                .borrow_mut()
+                .at(self.state.revisions())
+                .board
+                .clone();
+            // Most games have no layer-2 instruction. When another write
+            // invalidated the board, inspect live sources before rebuilding
+            // every layer solely to check control. Granted statics start
+            // in layer 6, after control has been determined.
+            if cached.is_none()
+                && !self
+                    .state
+                    .effects
+                    .iter()
+                    .any(|e| e.modification == Modification::Control)
+                && ![PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|seat| self.iter_battlefield_permanents(seat))
+                    .any(|id| {
+                        let p = self.state.permanents[id].as_ref().unwrap();
+                        p.control_differs_from_entry
+                            || self.state[p.object].statics.iter().any(|ability| {
+                                matches!(ability, StaticAbility::Continuous(effect)
+                                if effect.modifications.contains(&Modification::Control))
+                            })
+                    })
+            {
+                return;
+            }
+            let board = cached.unwrap_or_else(|| self.layer_board());
+            if board.control_changes.is_empty() {
+                return;
+            }
+            for &(id, controller) in &board.control_changes {
+                self.commit_control_change(id, controller);
+            }
+        }
+    }
+
     pub(super) fn layer_view(&self, id: PermanentId) -> Arc<Characteristics> {
         self.layer_board()
             .objects

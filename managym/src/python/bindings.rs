@@ -2322,6 +2322,14 @@ impl PyPermanent {
         self.data.exile_if_dies_this_turn = value;
     }
     #[getter]
+    fn blocked(&self) -> bool {
+        self.data.blocked
+    }
+    #[getter]
+    fn control_differs_from_entry(&self) -> bool {
+        self.data.control_differs_from_entry
+    }
+    #[getter]
     fn first_strike_participant(&self) -> bool {
         self.data.first_strike_participant
     }

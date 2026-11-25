@@ -40,6 +40,7 @@ const STATES: &[(&str, &str)] = &[
     ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
     ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
+    ("control-auras", "Each Confiscate controls one opposing Gray Ogre"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("collector-food", "N Cat Collectors and N Foods; resolve one Food and order first-gain triggers"),
@@ -419,6 +420,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "herald-healthy"
         | "duplicate-tokens"
         | "diverse-statics"
+        | "control-auras"
         | "attachments"
         | "triggers"
         | "entry-cascade"
@@ -467,6 +469,12 @@ fn recipe(name: &str, size: usize) -> Recipe {
                             .extend(std::iter::repeat_n("Gray Ogre".into(), size));
                     }
                     _ => seat.add("Gray Ogre", size),
+                }
+                if name == "control-auras" {
+                    seat.add("Confiscate", size);
+                    seat.add("Plains", 2);
+                    seat.hand.push("Disenchant".into());
+                    continue;
                 }
                 if name == "attachments" {
                     seat.add("Kyoshi Battle Fan", size);
@@ -577,7 +585,8 @@ fn build(recipe: &Recipe) -> Env {
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
-    if recipe.state == "attachments" {
+    if matches!(recipe.state.as_str(), "attachments" | "control-auras") {
+        let swap = recipe.state == "control-auras";
         let game = env.benchmark_game_mut();
         for i in 0..2 {
             let creatures: Vec<_> = game
@@ -587,7 +596,7 @@ fn build(recipe: &Recipe) -> Env {
                 .flatten()
                 .filter(|p| {
                     let card = &game.state[p.object];
-                    card.owner == PlayerId(i) && card.name == "Gray Ogre"
+                    card.owner == PlayerId(if swap { 1 - i } else { i }) && card.name == "Gray Ogre"
                 })
                 .map(|p| p.object)
                 .collect();
@@ -606,19 +615,19 @@ fn build(recipe: &Recipe) -> Env {
                         (
                             object.owner,
                             object.name == "Gray Ogre",
-                            object.name == "Forest",
+                            object.types.is_land(),
                         )
                     })
                 })
                 .collect();
             for (p, role) in state.permanents.iter_mut().zip(roles) {
-                let (Some(p), Some((owner, ogre, forest))) = (p.as_mut(), role) else {
+                let (Some(p), Some((owner, ogre, land))) = (p.as_mut(), role) else {
                     continue;
                 };
                 if owner == PlayerId(i) {
-                    if ogre {
+                    if ogre && !swap {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if !forest {
+                    } else if !ogre && !land {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }
@@ -904,7 +913,7 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
     match recipe.state.as_str() {
         "collector-food" | "mixed-life-gain" | "fumigate-panda" | "venom-team"
-        | "blast-discard" => {
+        | "blast-discard" | "control-auras" => {
             let env = match recipe.state.as_str() {
                 "collector-food" | "mixed-life-gain" => follow(root, &[("activate", 0)]),
                 "venom-team" => {

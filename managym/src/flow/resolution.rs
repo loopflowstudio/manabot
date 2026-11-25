@@ -754,6 +754,17 @@ impl Game {
                 Some(Target::Player(player)) => vec![player],
                 _ => Vec::new(),
             },
+            PlayerSelector::TargetClause(index) => frame
+                .targets
+                .iter()
+                .find_map(|slot| match slot.target {
+                    Target::Player(player) if slot.requirement == *index && slot.legal => {
+                        Some(player)
+                    }
+                    _ => None,
+                })
+                .into_iter()
+                .collect(),
             PlayerSelector::Owner => Vec::new(),
             PlayerSelector::TargetController => match frame.primary_target() {
                 Some(Target::Permanent(id)) => self.last_known_controller(id).into_iter().collect(),
@@ -1387,21 +1398,18 @@ impl Game {
                 let [player] = self.selected_players(player, frame)[..] else {
                     return None;
                 };
-                for id in self.selected_permanents(what, frame) {
-                    let Some(previous) = self.state.permanents[id].as_ref().map(|p| p.controller)
-                    else {
-                        continue;
-                    };
-                    self.change_control(id, player);
-                    let affected = self.affected_permanent(id);
-                    self.apply_continuous(
-                        frame.source(),
-                        player,
-                        affected,
-                        Modification::ControlChanged { previous },
-                        *duration,
-                    );
-                }
+                let affected: Vec<_> = self
+                    .selected_permanents(what, frame)
+                    .into_iter()
+                    .filter_map(|id| self.affected_permanent(id))
+                    .collect();
+                self.apply_continuous(
+                    frame.source(),
+                    player,
+                    affected,
+                    Modification::Control,
+                    *duration,
+                );
                 None
             }
             Effect::Airbend { what } => {

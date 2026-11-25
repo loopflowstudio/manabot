@@ -1,16 +1,43 @@
 //! Urza's Saga.
 use managym_state::{
-    ability::{Effect, TargetSpec},
+    ability::{Effect, TargetRequirement, TargetSpec},
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
-        ReplacementEffect,
+        ReplacementEffect, StaticAbility, StaticScope,
     },
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![duress(), fog_bank()]
+    vec![confiscate(), duress(), fog_bank()]
+}
+
+fn confiscate() -> CardDefinition {
+    let permanent = TargetSpec::Permanent {
+        predicate: CardPredicate::default(),
+    };
+    CardDefinition {
+        key: "usg.confiscate",
+        scryfall_id: "7cba6d4a-58d0-42d6-b49b-65c72b86007f",
+        printed: PrintedCharacteristics {
+            name: "Confiscate".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![StaticAbility::continuous(
+                StaticScope::Attached,
+                None,
+                vec![Modification::Control],
+            )],
+            spell_effects: vec![Effect::enchant(permanent.clone())],
+            targeting: vec![TargetRequirement::one(permanent)],
+            text_box: "Enchant permanent\nYou control enchanted permanent.".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn fog_bank() -> CardDefinition {

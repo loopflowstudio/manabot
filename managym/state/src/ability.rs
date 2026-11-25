@@ -858,6 +858,8 @@ pub enum PlayerSelector {
     TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
+    /// The legal player target of a separately declared (zero-based) clause.
+    TargetClause(usize),
     /// The controller of the frame's primary target permanent or spell, as
     /// it is or last existed ("its controller").
     TargetController,
@@ -875,6 +877,7 @@ impl PlayerSelector {
             | Self::EachPlayer
             | Self::TriggeringPlayer
             | Self::TriggeringPlayersOpponents
+            | Self::TargetClause(_)
             | Self::TargetController
             | Self::Owner => None,
         }

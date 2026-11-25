@@ -16,7 +16,6 @@ from manabot.env.observation import (
     FACT_ABILITY_RESOLUTION,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_OBJECT_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_ONCE_EACH_TURN_INDEX,
     ObservationSpace,
@@ -897,6 +896,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "id": "the permanent's alias",
         "registry_key": "[definition]",
         "controller_id": "controller",
+        "control_differs_from_entry": "entered under the other player's control",
         "tapped": "tapped",
         "damage": "damage",
         "is_summoning_sick": "summoning sick",
@@ -921,6 +921,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "creature_types": "creature types set to",
         "is_granted_land": "land through an effect",
         "attacking": "attacking",
+        "blocked": "blocked",
         "first_strike_participant": "participated in the first-strike damage step",
         "exhausted_abilities": "exhaust abilities used",
         "once_each_turn_used": "once-each-turn abilities used this turn",
@@ -1288,6 +1289,19 @@ def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
     assert "; colors colorless" in text
     assert "keyword counter timestamps {'flying': 77}" in text
     assert "It is blue and black." in text
+
+
+def test_permanent_control_and_blocked_status_are_visible() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    _, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    ogre.update(control_differs_from_entry=True, attacking=True, blocked=True)
+    line = next(
+        line
+        for line in render_decision(_redigest(payload)).text.splitlines()
+        if "entered under the other player’s control" in line
+    )
+    assert "; blocked;" in line and "; attacking;" in line
 
 
 @pytest.mark.parametrize("historical", (False, True))

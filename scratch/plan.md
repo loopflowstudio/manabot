@@ -50,8 +50,9 @@ MTG-431 the committed revision and paths once they land (`questions.md`).
 | Angel of Vitality | `m20.rs` | 8 |
 
 New set files register in `cards/src/lib.rs`. New cards shift definition ids:
-refresh Academy fixtures (`uv run python scripts/refresh_academy_fixtures.py`) and
-the state-hash pin in `cards/tests/cards/lea.rs` once per slice that adds cards.
+refresh Academy fixtures (`uv run python scripts/refresh_academy_fixtures.py`) once per
+slice that adds cards. The Clone test in `cards/tests/cards/lea.rs` compares
+fork hashes directly at this revision. There is no literal hash to update.
 Append each printing to `managym/tests/fixtures/scryfall_cards.json`. First-printing Scryfall ids (name, set | id):
 
 - Dreadwing Scavenger, fdn | e24d838b-ab48-410a-9a50-dbfea5da089b
@@ -86,54 +87,9 @@ Append each printing to `managym/tests/fixtures/scryfall_cards.json`. First-prin
 
 ## Slices, riskiest first
 
-### 1 · Control is layer 2 (Confiscate, Harmless Offering)
+**1 · Built.** Confiscate and Harmless Offering share CR 613.1b control. Ten directed Rust checks passed, as did both bundled pilot replays, the two LLM checks and Academy's land-grouping check. Academy replayed four demos (192 Commands) and five navigation positions. The optional frontier checkpoint was unavailable. Player hexproof joins the target tests with Crystal Barricade in slice 3. Next is slice 2.
 
-Today control is the stored `Permanent.controller`, written by
-`zones.rs::change_control`. `Effect::GainControl` writes it and records
-`Modification::ControlChanged { previous }`, and `end_effects` hands control back.
-`layers.rs::Layer` has no control layer, so a static cannot change control.
-
-- Add `Layer::Control` (CR 613.1b) between copy/text and type. A
-  `Modification::Control` record or static part says "the record's (or source's)
-  controller controls the affected object". Effects apply in timestamp order
-  over the entry controller (`Permanent.entry_controller`, new: the player it
-  entered under, CR 110.2).
-- Confiscate is `StaticAbility::continuous(StaticScope::Attached, None,
-  [Modification::Control])`. When it is detached or leaves, the layer stops
-  applying and the next effect, or the entry controller, takes over.
-  Competing timestamps (Confiscate, then a later GainControl) resolve by order.
-- `Permanent.controller` stays the cached result. One place refreshes it after
-  every characteristics revision (stabilization, before priority and SBA). A change
-  goes through `change_control`'s consequences: summoning sickness (CR 302.6
-  reads it), removal from combat (CR 506.4), and `ControlChanged` events for
-  triggers. Debug recomputation asserts that the cache equals the layer result.
-- Harmless Offering: "target opponent gains control of target permanent you
-  control" needs two target clauses, a player and a permanent.
-  `PlayerSelector::Target` reads only the primary target (resolution.rs:753).
-  Give `PlayerSelector::Target` the clause index (`TargetClause(n)`) and resolve
-  it per clause. Don't use `EachOpponent`: it is wrong in multiplayer and it is
-  not a target.
-- Obsolete: `Modification::ControlChanged { previous }` (becomes
-  `Modification::Control`), `end_effects`' hand-back branch (effects.rs:395-417),
-  and `Effect::GainControl` writing `controller` directly.
-- Checks: `cargo test -p managym-cards --test cards -- usg:: emn::` plus
-  `rules_tests cr_613`. Interactions:
-  - Confiscate on an opponent's creature, then the Aura is destroyed: control
-    returns, and the creature can't attack the same turn.
-  - Confiscate, then a later until-EOT GainControl by the opponent, then EOT:
-    the Aura's controller has it again.
-  - Confiscate on a land the opponent tapped for mana (the land stays tapped).
-  - Harmless Offering into a hexproof opponent (illegal player target), and
-    with the permanent gone by resolution.
-  - The existing GainControl/threaten cards (`tla.rs:5395`, `frf.rs:38`) keep
-    their tests.
-  - Replay and forks reproduce control. Observation: `controller` is already
-    projected; the ControlChanged fact row moves to the Control record's token
-    (`record_vocabulary.rs`, `token_renames.rs` for the retired name).
-- Stress: `attachments` plus many Confiscates on one board (control refresh
-  is now per revision). Add `control-auras` to `bench_states` (8/16 Confiscates
-  swapping creatures) and compare `characteristics` and `step:resolve` rows
-  before and after.
+Release `bench_states` on arm64, median of three on a busy host: at 8/16 Confiscates per seat, cold characteristics took 9.3/17.6 µs before Disenchant and 5.8/17.9 µs afterward. Resolving Disenchant took 38.4/91.7 µs and rebuilt the board three times at both sizes. The existing `attachments` priority check took 17.3/296.4 µs at sizes 8/16 (52/100 permanents). The base revision has no Confiscate benchmark for a same-position comparison.
 
 ### 2 · Block requirements are maximized over the whole declaration (Joraga Invocation, Vampire Soulcaller)
 
