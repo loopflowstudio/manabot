@@ -369,7 +369,7 @@ def self_play(
             first_update = counts.updates + 1
             for update in run.steps("updates", to=updates):
                 row = step(settings, learner, ema, collector, counts, rng, out=run.out, backend=backend)
-                if update == first_update:
+                if update == first_update and restored is not None:
                     if restored.sampling_reseeded:
                         row["run/sampling_reseeded"] = 1
                     if restored.adam_steps_aligned:
