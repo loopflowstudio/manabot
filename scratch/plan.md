@@ -212,6 +212,16 @@ card tests (329, usg/dom/chk/fdn/con/c17/fin/observability), `combat_preview`,
 Academy protocol/replay Python tests and UI view/prompt/protocol tests.
 Six schemas and five Academy opening fixtures refreshed.
 
+## Coverage review at `92aa1dd819`
+
+No defects. The compress pass (`a0194b3441`) moved phase-out and control-change
+combat removal into one `remove_permanent_from_combat`. It also derived the spell's
+graveyard-cast flag inline and made the cast-origin text read "cast from exile".
+The debug card suite covers usg, dom, chk, fdn, con, dst, prtr, psnc, shm, m20,
+m21, ori, emn, c17 and observability. Its 363 tests passed, including the
+phased-out blocker and Confiscate departure positions. The Python text tests need
+a rebuilt extension, so they are deferred to gate.
+
 ## Remaining (gate)
 
 No unbuilt slices. Gate owns the full debug nextest suite (CI profile,
