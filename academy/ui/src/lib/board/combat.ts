@@ -51,6 +51,12 @@ export function addressOf(frame: ExperienceFrame): CombatAddress | null {
   return frame.prompt ? { match_id: frame.match_id, revision: frame.revision, prompt_id: frame.prompt.id, frame_hash: frame.frame_hash } : null;
 }
 
+/** Add the creatures caught by a sweep, keeping earlier selections and their order. */
+export function addAttackers(draft: Draft, hits: ReadonlySet<number>): Draft {
+  const attackers = new Set([...draft.attackers, ...hits]);
+  return attackers.size === draft.attackers.length ? draft : { ...draft, attackers: [...attackers] };
+}
+
 export function toggleAttacker(draft: Draft, id: number): Draft {
   const attackers = draft.attackers.includes(id) ? draft.attackers.filter(other => other !== id) : [...draft.attackers, id];
   return { ...draft, attackers };
@@ -138,6 +144,8 @@ function list(parts: string[]): string {
   return parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
 }
 
+export const BLOCK_INSTRUCTION = 'Drag a blocker onto an attacker, or click each';
+
 export interface DraftWords {
   /** The primary button: "Attack with 3", "No attack". */
   text: string;
@@ -165,7 +173,7 @@ export function draftWords(
     return { text, plan: `${count === 1 ? `Attack with ${name(draft.attackers[0])}` : text} · not with ${left.length > 2 ? `${out.length} others` : list(left)}` };
   }
   const count = draft.blocks.length;
-  if (count === 0) return { text: 'No blocks', plan: 'No blocks · click a blocker, then the attacker it blocks' };
+  if (count === 0) return { text: 'No blocks', plan: `No blocks · ${BLOCK_INSTRUCTION}` };
   const byAttacker = new Map<number, string[]>();
   for (const [blocker, attacker] of draft.blocks) byAttacker.set(attacker, [...(byAttacker.get(attacker) ?? []), name(blocker)]);
   const lines = [...byAttacker].map(([attacker, blockers]) => `${list(counted(blockers))} on ${name(attacker)}`);

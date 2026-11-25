@@ -28,14 +28,14 @@
   import { permissionTerms } from './inspect';
   import Lines from './Lines.svelte';
   import { prefersReducedMotion, settle, Travel } from './motion';
-  import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, move as moveGesture, playable, press, promote, release, type ConnectDrag, type ConnectTarget, type Gesture } from './drag';
+  import { carriedAt, cancel as cancelGesture, dropLabel, IDLE, marqueeBounds, move as moveGesture, overlap, playable, press, promote, release, type ConnectDrag, type ConnectTarget, type Gesture } from './drag';
   import { region } from './region';
   import { BEAT_MS, beatsFor, turnAt, type Beat, type BeatPace } from './beats';
   import { boardAt, type StepBoard } from './boards';
   import { moveList, type MoveTurn } from './moves';
   import { EVIDENCE, nameSeats, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
-  import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
+  import { addAttackers, addressOf, BLOCK_INSTRUCTION, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type Endpoint, type RecentView } from './recent';
@@ -164,7 +164,7 @@
 
   const connect = $derived(current.phase === 'dragging' && current.drag.kind === 'connect' ? current.drag : null);
   const snapped = $derived(connect?.target?.endpoint);
-  const dropPermanent = $derived(snapped?.kind === 'object' ? snapped.id : undefined);
+  const marquee = $derived(current.phase === 'dragging' && current.drag.kind === 'marquee' ? marqueeBounds(current.start, current.pointer) : null);
   const draftLine = $derived(connect && current.phase === 'dragging'
     ? { from: connect.from, to: snapped ?? current.pointer, kind: connect.style } : null);
 
@@ -512,6 +512,10 @@
       return;
     }
     if (!canDrag || !(event.target instanceof Element)) return;
+    if (canMarquee && event.target.closest('.board .rows')) {
+      gesture = press({ kind: 'marquee' }, event.pointerId, frame.revision, { x: event.clientX, y: event.clientY });
+      return;
+    }
     const source = event.target.closest<HTMLElement>('[data-connect-source]');
     if (!source) return;
     const from: Endpoint = source.dataset.stackEntry !== undefined
@@ -782,6 +786,24 @@
 
   // ———————————————— Pointer gestures
 
+  const canMarquee = $derived(canDrag && drafting && preview?.kind === 'attackers' && !readingOut);
+  const dropPermanents = $derived.by(() => {
+    const hits = new Set<number>();
+    if (snapped?.kind === 'object') hits.add(snapped.id);
+    if (marquee && canMarquee && root) {
+      for (const field of root.querySelectorAll('.rows [data-testid=field-row]')) {
+        // Only scrolling fields clip their cards. Attackers in ordinary rows can lean past the edge.
+        const area = field.classList.contains('overflow') ? overlap(marquee, field.getBoundingClientRect()) : marquee;
+        if (!area) continue;
+        for (const card of field.querySelectorAll<HTMLElement>('[data-draft][data-object-id]')) {
+          const id = Number(card.dataset.objectId);
+          if (declarable.has(id) && overlap(area, card.getBoundingClientRect())) hits.add(id);
+        }
+      }
+    }
+    return hits;
+  });
+
   // Press a playable card in hand and drag it: it follows the pointer while
   // its slot steps back, and releasing it over the battlefield is a click on
   // it. Released anywhere else, or on Escape, it settles back with nothing sent.
@@ -824,6 +846,7 @@
   function onDragMove(event: PointerEvent): void {
     if (current.phase !== 'pressed' && current.phase !== 'dragging') return;
     const next = moveGesture(current, event.pointerId, { x: event.clientX, y: event.clientY }, drag => {
+      if (drag.kind === 'marquee') return drag;
       const hit = document.elementFromPoint(event.clientX, event.clientY);
       return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half') } : { ...drag, target: connectTarget(drag, hit) };
     });
@@ -856,6 +879,14 @@
     // The click that follows this release is part of the drag.
     swallowClick = true;
     if (result.outcome === 'cancel') { settleHome(result.drag, result.at); return; }
+    if (result.outcome === 'marquee') {
+      if (canMarquee && dropPermanents.size) {
+        draft = addAttackers(draft, dropPermanents);
+        stopNote = null;
+      }
+      gesture = ended.gesture;
+      return;
+    }
     gesture = ended.gesture;
     if (result.outcome === 'connect') {
       const target = result.target;
@@ -934,6 +965,7 @@
           { key: 'F6', does: 'Pass turn: pass every priority window until it ends' },
         ]),
     { key: 'Esc', does: recording ? 'Close a menu or preview' : "Cancel a drag; close a menu or preview; skip the opponent's moves" },
+    ...(canDrag ? [{ key: 'Drag', does: 'Play a hand card, choose a target, assign a blocker, or box-select attackers', plain: true }] : []),
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
     { key: '?', does: 'Show or hide these keys' },
   ]);
@@ -1047,17 +1079,17 @@
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.opponent.player_index} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
-      <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} drop={dropPermanent} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} drop={dropPermanent} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+      <div class="rows" class:selectable={canMarquee} bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} drop={snapped?.kind === 'player' && snapped.index === boardProjection.agent.player_index} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
-      <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} drop={dropPermanent} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} drop={dropPermanent} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+      <div class="rows" class:selectable={canMarquee} bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {fieldSources} {dropPermanents} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -1149,7 +1181,7 @@
         {#if draft.attackers.length || draft.blocks.length}
           <button type="button" class="btn btn-secondary secondary" data-testid="combat-clear" aria-disabled={readingOut || undefined} onclick={() => { draft = EMPTY_DRAFT; armed = null; }}>Clear the draft</button>
         {/if}
-        <p class="type-caption text-ink-3">Nothing is declared until you confirm{preview?.kind === 'blockers' ? '. Click a blocker, then the attacker it blocks' : ''}.</p>
+        <p class="type-caption text-ink-3">Nothing is declared until you confirm{preview?.kind === 'blockers' ? '. ' + BLOCK_INSTRUCTION : ''}.</p>
       {/if}
     </div>
   {/snippet}
@@ -1181,6 +1213,10 @@
     <StopBar {track} oncycle={oncyclestop} aside={strip ? stripToggle : undefined} />
   </nav>
   <Lines lines={standingLines} {draftLine} {root} revision={frame.revision} />
+  {#if marquee}
+    <div class="marquee" aria-hidden="true" data-testid="attack-marquee" style:left={`${marquee.left}px`} style:top={`${marquee.top}px`}
+      style:width={`${marquee.right - marquee.left}px`} style:height={`${marquee.bottom - marquee.top}px`}></div>
+  {/if}
   {#if carried && carriedPoint}
     <!-- The carried card: a copy for the eye, following the pointer; the card in hand stays the control. -->
     <div class="carried" inert aria-hidden="true" data-testid="drag-ghost" data-holding={current.phase === 'holding' ? current.reason : undefined}
@@ -1294,12 +1330,16 @@
   .hand-card { position: absolute; bottom: 0; transition: transform var(--motion-fast) ease-out; }
   .hand-card:hover, .hand-card:focus-within { transform: translateY(-10px); z-index: 30; }
   /* A playable card is dragged, never panned; while a card is carried, its neighbours stay still. */
-  .hand-card.draggable { touch-action: none; }
+  .rows.selectable, .hand-card.draggable { touch-action: none; }
   .game :global([data-connect-source]) { touch-action: none; }
   .game :global(button[data-drop]) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .dragging { user-select: none; }
   .dragging .hand-card:hover, .dragging .hand-card:focus-within { transform: none; }
 
+  .marquee {
+    position: fixed; z-index: var(--layer-drag); pointer-events: none;
+    border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
   .carried { position: fixed; left: 0; top: 0; z-index: var(--layer-drag); pointer-events: none; }
   .carried :global(.tcard) { box-shadow: var(--lift-selected); }
   .drop-zone {

@@ -36,8 +36,9 @@ import { inspectableCards } from './view';
 export type Endpoint =
   | { kind: 'object'; id: number }
   | { kind: 'player'; index: number }
+  /** A live rail entry has a stack object id, including abilities with no card. */
   | { kind: 'stack-entry'; id: number }
-  /** A spell on (or just off) the stack, by its card id. */
+  /** A spell thumbnail uses its card id, even before a stack object exists or after it resolves. */
   | { kind: 'stack'; id: number };
 
 export interface BoardLine {

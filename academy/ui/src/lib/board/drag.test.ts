@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CardState, InteractionOffer } from '$lib/types';
-import { carriedAt, cancel, DRAG_THRESHOLD_PX, dropLabel, IDLE, move, playable, press, promote, release, type Gesture, type PlayDrag } from './drag';
+import { carriedAt, cancel, DRAG_THRESHOLD_PX, dropLabel, IDLE, marqueeBounds, overlap, move, playable, press, promote, release, type Gesture, type PlayDrag } from './drag';
 import type { PlacedOffer } from './view';
 
 const offer = (id: number, verb: InteractionOffer['verb'], label: string): PlacedOffer => ({
@@ -71,6 +71,15 @@ it('releases a connection on its last recipient, without holding the source', ()
   expect(release(over, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', target } });
   const off = move(over, 1, { x: 20, y: 80 }, drag => ({ ...drag, target: null }));
   expect(release(off, 1)).toEqual({ gesture: IDLE, release: { outcome: 'connect', target: null } });
+});
+
+it('counts even edge contact when sweeping back toward the press', () => {
+  const box = marqueeBounds({ x: 50, y: 70 }, { x: 10, y: 20 });
+  expect(box).toEqual({ left: 10, right: 50, top: 20, bottom: 70 });
+  const card = { left: 50, right: 80, top: 70, bottom: 90 };
+  expect(overlap(box, card)).toEqual({ left: 50, right: 50, top: 70, bottom: 70 });
+  expect(overlap(box, { ...card, left: 51 })).toBeNull();
+  expect(overlap(box, { ...card, top: 71 })).toBeNull();
 });
 
 describe('cancelling', () => {

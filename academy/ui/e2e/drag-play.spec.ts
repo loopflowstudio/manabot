@@ -4,6 +4,7 @@ import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with {
 import type { CardState, Command, DecisionObjectView, ExperienceFrame, InteractionOffer, Observation, RecoveryEnvelope, SubjectRef } from '../src/lib/types';
 import type { RestoredReplayDecision } from '../src/lib/replay-index';
 import type { CombatPlan } from '../src/lib/board/combat';
+import { startCombat } from './fixtures/combat';
 import { tableSnapshot } from './fixtures/table';
 
 // Dragging on the board: a drop goes where a click goes. These drive the
@@ -398,4 +399,105 @@ test('a targeted creature with two offers opens its choices from an asked stack 
   expect(authority.commands).toEqual([]);
   await menu.getByRole('menuitem', { name: /Choose the second offer/ }).click();
   await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 18]]);
+});
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`attack marquee highlights the current sweep and confirms its draft in ${colorScheme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.emulateMedia({ colorScheme, reducedMotion: colorScheme === 'light' ? 'no-preference' : 'reduce' });
+    const authority = await startCombat(page);
+    const otterCard = permanent(page, otter.display_id);
+    const tigerCard = permanent(page, tiger.display_id);
+    const start = await center(otterCard);
+    const end = await center(tigerCard);
+    const marquee = page.getByTestId('attack-marquee');
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y + 20, { steps: 6 });
+    await expect(marquee).toBeVisible();
+    await expect(otterCard).toHaveAttribute('data-drop', 'true');
+    await expect(tigerCard).toHaveAttribute('data-drop', 'true');
+    await expect(tigerCard).toHaveAttribute('data-draft', 'can');
+    await page.screenshot({ path: testInfo.outputPath(`marquee-${colorScheme}.png`) });
+    await page.mouse.move(start.x, start.y + 12);
+    await expect(tigerCard).not.toHaveAttribute('data-drop');
+    await page.mouse.move(end.x, end.y + 20);
+    await page.mouse.up();
+    await expect(marquee).toHaveCount(0);
+    await expect(otterCard).toHaveAttribute('data-draft', 'in');
+    await expect(tigerCard).toHaveAttribute('data-draft', 'in');
+    const confirm = page.getByTestId('primary-action');
+    await expect(confirm).toHaveAttribute('data-draft-ready', 'true');
+    expect(authority.commands).toEqual([]);
+    await confirm.click();
+    await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.prompt_id, c.offer_id]))
+      .toEqual([[10, 110, 101], [11, 111, 103]]);
+    await expect(page.getByTestId('decision-prompt')).toContainText('No blocks · Drag a blocker onto an attacker, or click each');
+  });
+}
+
+test('attack marquee starts only in the rows and Escape preserves the draft', async ({ page }) => {
+  const authority = await startCombat(page);
+  const otterCard = permanent(page, otter.display_id);
+  const tigerCard = permanent(page, tiger.display_id);
+  await otterCard.click();
+  const end = await center(tigerCard);
+  const marquee = page.getByTestId('attack-marquee');
+  for (const outside of [page.locator('.half.you .plate'), page.locator('.hand')]) {
+    const from = await center(outside);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 4 });
+    await expect(marquee).toHaveCount(0);
+    await page.mouse.up();
+  }
+
+  // Empty space on the opponent's side can start a sweep across the table.
+  const from = await center(page.locator('.half.opponent .rows'));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 4 });
+  await expect(marquee).toBeVisible();
+  await expect(tigerCard).toHaveAttribute('data-drop', 'true');
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect(marquee).toHaveCount(0);
+  await expect(otterCard).toHaveAttribute('data-draft', 'in');
+  await expect(tigerCard).toHaveAttribute('data-draft', 'can');
+  expect(authority.commands).toEqual([]);
+});
+
+test('an attack marquee can draft one exposed copy in a pile', async ({ page }) => {
+  const authority = await startCombat(page, {}, 2);
+  const pile = page.getByTestId('pile-count');
+  await expect(pile).toHaveAccessibleName('Tiger-Seal: 0 of 3 attacking');
+  const copies = page.locator('.rows [data-card-name="Tiger-Seal"]');
+  const boxes = await copies.evaluateAll(cards => cards.map(card => card.getBoundingClientRect().toJSON()));
+  const last = boxes.sort((a, b) => b.right - a.right)[0];
+  const x = last.right - 2;
+  const y = last.top + last.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 16, { steps: 4 });
+  await expect(page.locator('.rows [data-drop]')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(pile).toHaveAccessibleName('Tiger-Seal: 1 of 3 attacking');
+  expect(authority.commands).toEqual([]);
+});
+
+test('an attack marquee catches only the visible part of a scrolling row', async ({ page }) => {
+  const authority = await startCombat(page);
+  // Constrain a two-creature row to one card so its other attacker is scrolled out of view.
+  await page.addStyleTag({ content: '.you .creatures .field[role=group] { width: 50px; height: 70px; }' });
+  const row = page.getByRole('group', { name: 'Your creatures', exact: true });
+  await expect(row).toHaveClass(/overflow/);
+  const box = (await row.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + 8, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 140, y + 8, { steps: 4 });
+  await expect(row.locator('[data-drop]')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(row.locator('[data-draft=in]')).toHaveCount(1);
+  expect(authority.commands).toEqual([]);
 });

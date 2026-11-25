@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ExperienceFrame } from '$lib/types';
 import {
-  committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock,
+  addAttackers, committedOf, drawDraft, draftWords, EMPTY_DRAFT, loadDraft, pileCounts, planKey, planOf, saveDraft, setBlock, setPileCount, stepOffer, toggleAttacker, toggleBlock,
   type CombatPreview, type DeclarableCreature, type DeclarationStep,
 } from './combat';
 
@@ -68,6 +68,12 @@ describe('drafting', () => {
     const one = toggleBlock(EMPTY_DRAFT, 3, 1);
     expect(toggleBlock(one, 3, 2).blocks).toEqual([[3, 2]]);
     expect(toggleBlock(one, 3, 1).blocks).toEqual([]);
+  });
+
+  it('adds newly swept attackers without toggling earlier selections', () => {
+    const draft = addAttackers(EMPTY_DRAFT, new Set([3, 2]));
+    expect(addAttackers(draft, new Set([2, 1])).attackers).toEqual([3, 2, 1]);
+    expect(addAttackers(draft, new Set([2]))).toBe(draft);
   });
 
   it('dropping a blocker keeps its assignment or moves only that blocker', () => {

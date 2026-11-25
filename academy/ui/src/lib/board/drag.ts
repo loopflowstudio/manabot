@@ -4,7 +4,8 @@
  * A drag adds no capability: every drop ends where a click already goes.
  * Dropping a card from hand on the battlefield is clicking it (one offer
  * commits, several open its choices, at the drop point). A connection places
- * a draft block or activates the offers on its recipient. This module is the
+ * a draft block or activates the offers on its recipient. A marquee adds the
+ * creatures it touches to the attack draft. This module is the
  * gesture's lifecycle, kept free of the DOM: `Board.svelte` reads the
  * pointer and what is under it, and acts on what `release` returns.
  *
@@ -58,12 +59,29 @@ export interface ConnectDrag {
   target: ConnectTarget | null;
 }
 
-type Drag = PlayDrag | ConnectDrag;
+type Drag = PlayDrag | ConnectDrag | { kind: 'marquee' };
+
+type Bounds = Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>;
+
+/** Viewport bounds of a sweep in either direction, including a horizontal or vertical stroke. */
+export function marqueeBounds(start: Point, pointer: Point): Bounds {
+  return {
+    left: Math.min(start.x, pointer.x), right: Math.max(start.x, pointer.x),
+    top: Math.min(start.y, pointer.y), bottom: Math.max(start.y, pointer.y),
+  };
+}
+
+/** The shared area, including contact along a single edge. */
+export function overlap(a: Bounds, b: Bounds): Bounds | null {
+  const left = Math.max(a.left, b.left), right = Math.min(a.right, b.right);
+  const top = Math.max(a.top, b.top), bottom = Math.min(a.bottom, b.bottom);
+  return left <= right && top <= bottom ? { left, right, top, bottom } : null;
+}
 
 export type Gesture =
   | { phase: 'idle' }
   | { phase: 'pressed'; pointerId: number; revision: number; start: Point; drag: Drag }
-  | { phase: 'dragging'; pointerId: number; revision: number; pointer: Point; drag: Drag }
+  | { phase: 'dragging'; pointerId: number; revision: number; start: Point; pointer: Point; drag: Drag }
   /** Released on the battlefield: the Command is pending (`pending`) or the card's choices are open (`menu`). */
   | { phase: 'holding'; revision: number; at: Point; drag: PlayDrag; reason: 'pending' | 'menu' };
 
@@ -71,6 +89,7 @@ export const IDLE: Gesture = { phase: 'idle' };
 
 /** What a release does: nothing of its own (`click`: the browser's click follows), commit, choose, or settle back. */
 export type Release =
+  | { outcome: 'marquee' }
   | { outcome: 'connect'; target: ConnectTarget | null }
   | { outcome: 'click' }
   | { outcome: 'none' }
@@ -91,7 +110,7 @@ export function press(drag: Drag, pointerId: number, revision: number, start: Po
 export function move(gesture: Gesture, pointerId: number, pointer: Point, locate: (drag: Drag) => Drag): Gesture {
   if ((gesture.phase !== 'pressed' && gesture.phase !== 'dragging') || gesture.pointerId !== pointerId) return gesture;
   if (gesture.phase === 'pressed' && Math.hypot(pointer.x - gesture.start.x, pointer.y - gesture.start.y) < DRAG_THRESHOLD_PX) return gesture;
-  return { phase: 'dragging', pointerId, revision: gesture.revision, pointer, drag: locate(gesture.drag) };
+  return { phase: 'dragging', pointerId, revision: gesture.revision, start: gesture.start, pointer, drag: locate(gesture.drag) };
 }
 
 /** The carried card's top-left corner, px, while it is drawn. */
@@ -106,6 +125,7 @@ export function release(gesture: Gesture, pointerId: number): { gesture: Gesture
   if (gesture.phase === 'pressed' && gesture.pointerId === pointerId) return { gesture: IDLE, release: { outcome: 'click' } };
   if (gesture.phase !== 'dragging' || gesture.pointerId !== pointerId) return { gesture, release: { outcome: 'none' } };
   const { drag, revision } = gesture;
+  if (drag.kind === 'marquee') return { gesture: IDLE, release: { outcome: 'marquee' } };
   if (drag.kind === 'connect') return { gesture: IDLE, release: { outcome: 'connect', target: drag.target } };
   const at = carriedAt(gesture)!;
   if (!drag.overField || !drag.offers.length) return { gesture: IDLE, release: { outcome: 'cancel', at, drag } };
