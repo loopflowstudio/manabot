@@ -28,3 +28,7 @@
 - Ordinary trample against a planeswalker uses CR 702.19b and 702.19f.
   CR 702.19c and 702.19e cover the separate “trample over planeswalkers”
   ability. [Comprehensive Rules, November 6, 2026](https://media.wizards.com/2026/downloads/MagicCompRules%2020261106.txt).
+
+- Use the source counter’s signed 32-bit quantity for announced activation X.
+  The payment planner still prices mana symbols in its existing mana units.
+  A loyalty-only X can use every counter left after other source-counter costs.

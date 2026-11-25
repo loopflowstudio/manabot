@@ -14,19 +14,35 @@ Done:
   Theorist across play, v11, text and Academy (`a5534ee7bb`). Three directed
   native cases; the cp313 wheel passed shared offer, fork and observation
   checks and replayed all five Academy opening fixtures.
+- Variable loyalty and the shared activation continuation (`aa35e1a2b6`).
+  All eight FRA cases and Katara’s mana-X case passed in the debug build.
+  The rebuilt cp313 wheel passed Academy’s loyalty offer/fork test and
+  reopened the saved combat Command at the next Ogre’s declaration.
 
 ## Passes remaining
 
-1. Next: variable loyalty (−X) and combat defenders (slice 2). Both change
-   the proposed data model:
+1. Next: combat defenders (slice 2).
 
-   - Variable loyalty needs an announced X that can preserve every payable
-     counter count through targeting, payment, stack and resolution. At 256
-     loyalty the legal −256 is lost by the current mana-X path. A targeted
-     −X also bypasses the targeting decision in `choose_activation_x_action`.
-     Carry the chosen quantity through the shared activation continuation.
-     Prove X = 256 on a targeted ability and that declining an optional target
-     preserves X. Do not cap the legal action space at 255.
+   - **Replay compatibility changes the combat design.** A native v1 snapshot
+     replays a sequence of indices or Commands. An issued object precondition
+     binds the fingerprint of the complete action-aligned offer projection.
+     The seed-0 snapshot in `scratch/combat-snapshot-v1.json` declares a
+     Gray Ogre at the defending player while that player controls The
+     Theorist. The attack Command names an object candidate in a two-offer
+     frame. Adding a third offer necessarily changes the address, even when
+     the two older offers keep their indices. The snapshot ends at the next
+     Ogre’s declaration. Its final state digest includes that action space, so
+     even a bare index replay would have to reproduce the historical options.
+   - Keep the old attack-player and decline indices (0 and 1) and projection
+     bytes on unchanged positions. For an old position with newly legal
+     defenders, exact cold replay needs the historical offer authority.
+     Standalone v1 snapshots record the package version and catalog digest but
+     omit the source revision. Choose how to resolve the historical engine
+     before changing the native action. Exercise the saved Command with its
+     original precondition and verify the final digest. The Academy combat
+     draft and the compound declaration currently carry only a set of
+     attackers. Both need attacker-to-defender assignments in this position.
+
    - Combat needs the defending player or permanent for **every attacking
      creature**. Fire Navy Trebuchet's Ballistic Boulder enters attacking
      during trigger resolution, and Doubling Season makes two. Each can attack
@@ -69,7 +85,7 @@ o:loyalty or o:emblem)`, `set:fra o:planeswalker`, `set:fdn t:planeswalker`).
 - `ZoneType::Command` storage exists; nothing ever moves there.
 
 The Theorist is the first defined planeswalker. Remaining primitives include
-variable loyalty costs, combat defenders, emblems, divided damage, loyalty
+combat defenders, emblems, divided damage, loyalty
 activation events, a zero-loyalty SBA exception, proliferate and behold.
 
 ## Classes and Rooms against loyalty (decided before fixing the representation)
@@ -107,7 +123,7 @@ Everything else in the cohort is built here, on the slices below.
 
 ## Slices (build order, riskiest first)
 
-### Slice 1 — Loyalty abilities and starting loyalty (fixed costs implemented)
+### Slice 1 — Loyalty abilities and starting loyalty (implemented)
 
 Types:
 - `PrintedCharacteristics.loyalty: Option<i32>` (CR 306.5b printed starting
@@ -120,7 +136,7 @@ Types:
   in `payment.rs` to the ordinary source-counter components with
   `EventCause::Cost` — never doubled (Doubling Season acceptance). A negative
   cost needs at least that many loyalty counters (CR 606.6). For −X the
-  shared activation-X path needs the quantity and targeting changes above.
+  shared activation continuation retains X while targets are chosen.
 - Quota: `Permanent.loyalty_activated_this_turn: bool` (CR 606.3), checked for
   every ability with `loyalty.is_some()`, cleared at cleanup beside
   `activated_this_turn`. Default timing: main phase, own turn, empty stack.
@@ -182,8 +198,8 @@ Deletes: none (new capability).
 Consumers: action rows gain an attack-target reference (one-based object join,
 0 = player); LLM text "attack Vivien Reid"; Academy declare-attackers UI picks
 a target per attacker through the shared offers (no browser-only semantics);
-replay of old recordings: `attack: bool` is serialized — keep the wire key and
-map `true` → `Player(defender)` on read (serialized keys keep their spelling).
+preserve the serialized `attack` key and the old player/decline indices.
+Exact replay of a changed offer set also needs the historical frame described above.
 Combat history (`AttackedThisTurn`, attack-batch triggers) records the target.
 
 Checks: `cargo test combat` + new `managym/tests/rules/attack_targets.rs`:

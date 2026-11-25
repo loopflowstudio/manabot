@@ -1,27 +1,31 @@
-at: 39b9cb6c4a4c01e637b92b1a238e2eb39700d0b0
+at: 15f55a69496500a707c85f0cb7718e0021684a86
 first:
   - path: docs/engine.md
-    why: Shows what happens when Jace pays loyalty
-  - path: managym/cards/src/fra.rs
-    why: The Theorist and the Commons and Annex lands
+    why: Follows a loyalty activation from announcement through resolution
   - path: managym/state/src/card.rs
-    why: Printed starting loyalty and signed activation costs
+    why: Defines printed loyalty and fixed or variable costs
+  - path: managym/cards/src/fra.rs
+    why: Defines The Theorist and ten planeswalker lands
   - path: managym/state/src/permanent.rs
-    why: Shares the activation limit across one permanent's abilities
-  - path: managym/src/flow/proposed_event.rs
-    why: Applies starting loyalty through entry replacements
+    why: Checks available counters and the shared activation limit
+  - path: managym/src/flow/game.rs
+    why: Keeps announced X alongside targeting progress
+  - path: managym/src/flow/play.rs
+    why: Offers payable values and resumes after each choice
   - path: managym/src/flow/payment.rs
-    why: Pays the loyalty symbol before resolution
-  - path: managym/src/agent/observation_layout.rs
-    why: Names the policy columns for loyalty
+    why: Pays loyalty before placing the ability on stack
+  - path: managym/src/agent/continuation.rs
+    why: Projects announced X while choosing and resolving
   - path: managym/cards/tests/cards/fra.rs
-    why: Exercises timing, payment, Doubling Season and the lands
+    why: Exercises 256 loyalty, targets, costs and resolution
   - path: tests/academy/test_loyalty.py
-    why: Casts Jace and commits his activation across forks
+    why: Commits a loyalty offer across exact forks
   - path: scratch/plan.md
-    why: Explains the outstanding X and combat decisions
+    why: Explains the combat replay case and remaining work
+  - path: scratch/combat-snapshot-v1.json
+    why: Reopens the recorded Ogre attack against Jace’s controller
 hide:
   - path: managym/academy/fixtures/
-    why: Replayed manifests, frames and digests
+    why: Replayed opening manifests, frames and digests
   - path: managym/tests/fixtures/scryfall_cards.json
     why: Snapshotted Oracle characteristics
