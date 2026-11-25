@@ -1,7 +1,7 @@
 import type { StopsConfig } from './types';
 
-// Stop steps mirror gui/server.py STOP_STEP_TO_ENGINE_STEP: the priority
-// windows a player can choose to stop on, in turn order.
+// Stop steps mirror managym/academy/server.py STOP_STEP_TO_ENGINE_STEP: the
+// priority windows a player can choose to stop on, in turn order.
 export const STOP_STEPS = [
   { key: 'upkeep', label: 'Upkeep' },
   { key: 'draw', label: 'Draw' },
@@ -15,6 +15,10 @@ export const STOP_STEPS = [
 ] as const;
 
 const STOP_STEP_KEYS = new Set<string>(STOP_STEPS.map((step) => step.key));
+
+// Mirrors managym/academy/server.py ACTIVE_COMBAT_STOP_STEPS: these stops only
+// pause while creatures are attacking.
+export const ACTIVE_COMBAT_STOP_STEPS = new Set<string>(['declare_attackers', 'declare_blockers']);
 
 export const STOPS_STORAGE_KEY = 'etude.gui.stops';
 export const STOPS_DEFAULTS_VERSION_KEY = 'academy.stops.defaults_version';

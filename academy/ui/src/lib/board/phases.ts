@@ -56,7 +56,7 @@ export interface PhaseTrack {
   marks: PhaseMark[];
   /** The side whose turn it is: its stops are the ones that hold now. */
   active: StopSide;
-  /** Priority stops are off: every step holds, whatever is set. */
+  /** Full control (`auto_pass` off): every priority choice pauses, whatever is set. */
   every: boolean;
 }
 

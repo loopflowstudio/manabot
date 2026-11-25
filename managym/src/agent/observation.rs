@@ -1199,19 +1199,19 @@ impl Observation {
                                 continuation_index: game.trigger_action_frame(action, agent_player),
                                 action_type: action.action_type(),
                                 pays_directly: matches!(action, Action::WaterbendTap { .. }),
-                                is_mana_ability: matches!(action, Action::TapForMana { .. })
-                                    || matches!(
-                                        action,
-                                        Action::ActivateAbility {
-                                            permanent,
-                                            ability_index,
-                                            ..
-                                        } if game
-                                            .characteristics(*permanent)
-                                            .activated_abilities
-                                            .get(*ability_index)
-                                            .is_some_and(|ability| ability.mana_choices().is_some())
-                                    ),
+                                is_mana_ability: match action {
+                                    Action::TapForMana { .. } => true,
+                                    Action::ActivateAbility {
+                                        permanent,
+                                        ability_index,
+                                        ..
+                                    } => game
+                                        .characteristics(*permanent)
+                                        .activated_abilities
+                                        .get(*ability_index)
+                                        .is_some_and(|ability| ability.is_mana_ability()),
+                                    _ => false,
+                                },
                                 announces_x: mode_index.is_some() && game.announces_x(),
                                 focus: Self::action_focus(game, action)
                                     .into_iter()
@@ -2962,21 +2962,22 @@ mod characteristics_tests {
 
         let mut game = Game::new(
             vec![
-                PlayerConfig::new(
-                    "a",
-                    [("Forest".into(), 10), ("Kyoshi Village".into(), 10)].into(),
-                ),
+                PlayerConfig::new("a", [("Forest".into(), 20)].into()),
                 PlayerConfig::new("b", [("Island".into(), 20)].into()),
             ],
             7,
             false,
         );
         game.mana_floats = [ManaFloats::All, ManaFloats::Off];
-        let _forest = game
-            .scenario_force_battlefield(PlayerId(0), "Forest", true)
-            .unwrap();
+        for _ in 0..2 {
+            game.scenario_force_battlefield(PlayerId(0), "Forest", true)
+                .unwrap();
+        }
         let _treasure = game
             .create_token("token.treasure", PlayerId(0), false)
+            .unwrap();
+        let _clue = game
+            .create_token("token.clue", PlayerId(0), false)
             .unwrap();
         let actions = game.compute_player_actions(PlayerId(0));
         game.publish_action_space(crate::agent::action::ActionSpace {
@@ -3007,8 +3008,8 @@ mod characteristics_tests {
             .collect();
         assert!(!tap_actions.is_empty());
         assert!(tap_actions.iter().all(|a| a.is_mana_ability));
-        assert!(!activate_actions.is_empty());
-        assert!(activate_actions.iter().all(|a| a.is_mana_ability));
+        assert!(activate_actions.iter().any(|a| a.is_mana_ability));
+        assert!(activate_actions.iter().any(|a| !a.is_mana_ability));
         assert_eq!(pass_actions.len(), 1);
         assert!(!pass_actions[0].is_mana_ability);
 

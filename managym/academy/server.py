@@ -587,9 +587,8 @@ def _has_non_mana_play(obs: managym.Observation) -> bool:
 
 def _has_attackers(obs: managym.Observation) -> bool:
     """Whether at least one permanent on either battlefield is currently attacking."""
-    return any(
-        bool(permanent.attacking)
-        for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
+    return any(permanent.attacking for permanent in obs.agent_permanents) or any(
+        permanent.attacking for permanent in obs.opponent_permanents
     )
 
 

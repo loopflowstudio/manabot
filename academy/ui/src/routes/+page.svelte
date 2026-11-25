@@ -304,6 +304,8 @@
     const frame = gameStore.protocolFrame;
     if (!frame || frame.revision === onceChecked) return;
     onceChecked = frame.revision;
+    // Guard before recording `arrivedAt` so non-priority choices in the same
+    // step (e.g. DECLARE_ATTACKER) do not mark it visited before its priority window.
     if (
       gameStore.watchMode ||
       frame.status === 'game_over' ||

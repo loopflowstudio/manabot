@@ -10,8 +10,9 @@
    * bar is read-only.
    */
   import type { Snippet } from 'svelte';
+  import { ACTIVE_COMBAT_STOP_STEPS } from '$lib/stops';
   import type { StopSide } from '$lib/types';
-  import { nextStopState, STOP_STATE_WORDS, type PhaseTrack, type StopState } from './phases';
+  import { nextStopState, STOP_STATE_WORDS, type PhaseMark, type PhaseTrack, type StopState } from './phases';
 
   interface Props {
     track: PhaseTrack;
@@ -41,12 +42,10 @@
     toolbar?.querySelector<HTMLElement>(`[data-side="${sides[side]}"][data-step="${track.marks[step].key}"]`)?.focus();
   }
 
-  const ACTIVE_COMBAT_STEPS = new Set(['declare_attackers', 'declare_blockers']);
-
-  function words(side: StopSide, key: string, label: string, state: StopState): string {
-    if (track.every) return `Stop at ${label} on ${SIDE_WORDS[side]}: full control is on, every priority choice pauses`;
-    const activeCombat = ACTIVE_COMBAT_STEPS.has(key) ? ' (active combat with a non-mana play)' : '';
-    return `Stop at ${label} on ${SIDE_WORDS[side]}${activeCombat}: ${STOP_STATE_WORDS[state]}${editable ? `. Press for ${STOP_STATE_WORDS[nextStopState(state)]}` : ''}`;
+  function words(side: StopSide, mark: PhaseMark, state: StopState): string {
+    if (track.every) return `Stop at ${mark.label} on ${SIDE_WORDS[side]}: full control is on, every priority choice pauses`;
+    const activeCombat = ACTIVE_COMBAT_STOP_STEPS.has(mark.key) ? ' (active combat with a non-mana play)' : '';
+    return `Stop at ${mark.label} on ${SIDE_WORDS[side]}${activeCombat}: ${STOP_STATE_WORDS[state]}${editable ? `. Press for ${STOP_STATE_WORDS[nextStopState(state)]}` : ''}`;
   }
 </script>
 
@@ -63,13 +62,14 @@
         aria-label={mark.label} aria-current={mark.current ? 'step' : undefined}>
         {#each sides as side, row (side)}
           {@const state = track.every ? 'every' : mark.state[side]}
+          {@const tip = words(side, mark, state)}
           {#if editable}
             <button type="button" class={`stop ${state}`} class:below={row === 1} data-testid={`bar-stop-${side}-${mark.key}`} data-state={state}
-              data-side={side} data-step={mark.key} aria-label={words(side, mark.key, mark.label, state)} title={words(side, mark.key, mark.label, state)}
+              data-side={side} data-step={mark.key} aria-label={tip} title={tip}
               tabindex={focusAt.side === row && focusAt.step === step ? 0 : -1}
               onfocus={() => (focusAt = { side: row, step })} onclick={() => oncycle?.(side, mark.key)}><i aria-hidden="true"></i></button>
           {:else}
-            <span class={`stop ${state}`} class:below={row === 1} data-testid={`bar-stop-${side}-${mark.key}`} data-state={state} title={words(side, mark.key, mark.label, state)}>
+            <span class={`stop ${state}`} class:below={row === 1} data-testid={`bar-stop-${side}-${mark.key}`} data-state={state} title={tip}>
               <i aria-hidden="true"></i><span class="sr-only">{state === 'off' ? '' : `, stops on ${SIDE_WORDS[side]}`}</span>
             </span>
           {/if}
