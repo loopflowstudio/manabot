@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept Review (Post-Implementation) — MTG-436: Published Library API &amp; Compatibility Contract</title>
+<title>Concept Review (Pass 2) — MTG-436: Published Library API &amp; Compatibility Contract</title>
 <style>
   :root {
     --bg: #f8f6f1;
@@ -166,13 +166,10 @@
   .callout {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-left: 4px solid var(--accent);
+    border-left: 4px solid var(--yes-fg);
     border-radius: 8px;
     padding: 1rem 1.15rem;
     margin: 1rem 0 1.4rem;
-  }
-  .callout-danger {
-    border-left-color: var(--no-fg);
   }
   .grid-2 {
     display: grid;
@@ -224,206 +221,167 @@
 <body>
 <main>
   <header>
-    <div class="kicker">Concept Review &middot; MTG-436 &middot; Post-Implementation Audit at <code>bb824541f4</code></div>
+    <div class="kicker">Concept Review &middot; MTG-436 &middot; Pass 2 Final Audit at <code>a36d8ac72f</code></div>
     <h1>Do the product's API boundary concepts and the built code's concepts line up?</h1>
     <p class="area-line">
-      <strong>Area reviewed:</strong> The built published library API boundary and release-compatibility contract across <code>manabot</code> and <code>managym</code> &mdash; module <code>__all__</code> declarations, the extractor and compatibility checker in <code>scripts/public_api.py</code>, the snapshot in <code>tests/public_api.json</code>, the contract and external-consumer tests, documentation in <code>manabot/README.md</code> / <code>docs/development.md</code> / <code>AGENTS.md</code>, and CI job selection in <code>.github/ci/select-tests.sh</code>.
+      <strong>Area reviewed:</strong> The complete published library API boundary and release-compatibility contract across <code>manabot</code> and <code>managym</code> &mdash; module <code>__all__</code> declarations, <code>scripts/public_api.py</code>, <code>tests/public_api.json</code>, contract and external-consumer tests, documentation in <code>manabot/README.md</code> / <code>docs/development.md</code> / <code>AGENTS.md</code>, and CI wiring in <code>.github/ci/select-tests.sh</code> and <code>.github/workflows/manabot-integration.yml</code>.
     </p>
     <div class="legend">
-      <span><span class="badge b-existing">Built at HEAD</span> What is committed at <code>bb824541f4</code></span>
-      <span><span class="badge b-proposed">Proposed</span> Refinements added to <code>scratch/plan.md</code> before shipping</span>
-      <span><span class="badge b-no">No</span> Concept mismatch in built code</span>
+      <span><span class="badge b-existing">Built at HEAD</span> Committed at <code>a36d8ac72f</code> (vs. base <code>183f6daf59</code>)</span>
       <span><span class="badge b-yes">Yes</span> Concepts align</span>
+      <span><span class="badge b-no">No</span> Concept mismatch (none remaining)</span>
     </div>
   </header>
 
-  <h2>1. Concept Alignment Matrix (Built Work vs. Product Concepts)</h2>
-  <p>The core architecture built in MTG-436 is solid: opaque handles, strict <code>--allow-break --reason</code> rollover rules, single-meaning <code>__all__</code> across <code>manabot/</code>, shape-only signatures, and the CPU external-consumer proof all align. Auditing the actual snapshot and CI wiring at <code>HEAD</code> against first principles turned up four concrete mismatches &mdash; two of which become sticky <code>0.2.x</code> commitments the moment MTG-436 merges.</p>
+  <div class="callout">
+    <p><strong>Pass 2 outcome: nothing to change.</strong> All four mismatches found in Pass 1 (at <code>bb824541f4</code>) were resolved in commits <code>af931f56d4</code>, <code>8d665adbdd</code>, and <code>5edbd417be</code>, and verified across CPython 3.13 and an installed CPython 3.12 wheel venv (<code>a36d8ac72f</code>). No new concept mismatches remain; the branch is ready for <code>gate</code> and <code>ship-review</code>.</p>
+  </div>
+
+  <h2>1. Concept Alignment Matrix (Built Work at <code>HEAD</code> vs. Product Concepts)</h2>
 
   <table>
     <thead>
       <tr>
         <th style="width: 22%;">Product concept</th>
-        <th style="width: 30%;">Code concept <span class="badge b-existing">Built at HEAD</span></th>
+        <th style="width: 34%;">Code concept <span class="badge b-existing">Built at HEAD</span></th>
         <th style="width: 8%;">Aligns?</th>
-        <th>Assessment / what is wrong</th>
+        <th>Assessment</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td><strong>Config model contract</strong><br><span class="small">Fields, public constructors/methods, and validation behavior</span></td>
-        <td><code>python_class()</code> records every non-underscore method on Pydantic models, including <strong>10 internal <code>@field_validator</code> / <code>@model_validator</code> hooks</strong> (<code>validate_world</code>, <code>reject_other_inputs</code>, <code>valid_population</code>, <code>bounded_warmup</code>, &hellip;).</td>
-        <td><span class="badge b-no">No</span></td>
-        <td><strong>Code concept the consumer never sees.</strong> Zero callers invoke Pydantic validator callbacks directly; Pydantic registers them via <code>__pydantic_decorators__</code>. Because <code>AGENTS.md</code> forbids leading underscores on internal methods, validators have plain names and get frozen as public API. Refactoring or renaming a validator on <code>0.2.x</code> triggers a false <code>BREAKING</code> error.</td>
+        <td><code>python_class()</code> skips method names registered in Pydantic's <code>__pydantic_decorators__</code> (field/model validators and serializers) while keeping all fields and real methods.</td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td>Resolved from Pass 1 (<code>8d665adbdd</code>). Ten internal validator hooks were removed from the <code>0.2</code> baseline; verified by <code>test_match_config_publishes_fields_and_methods_without_validator_hooks</code> and live QA rename of <code>validate_world</code>.</td>
       </tr>
       <tr>
-        <td><strong>One defining module per published symbol</strong><br><span class="small"><code>AGENTS.md</code> &amp; <code>manabot/README.md</code>: "import each symbol from its defining module"</span></td>
-        <td><code>PackedActions</code> is listed in <code>__all__</code> of <em>both</em> <code>manabot.training.rollout.actions</code> (its defining module) and <code>manabot.training.rollout.collection</code> (re-export), duplicating 70 lines in <code>tests/public_api.json</code>.</td>
-        <td><span class="badge b-no">No</span></td>
-        <td><strong>One idea published under two module addresses.</strong> Zero internal callers import <code>PackedActions</code> from <code>collection</code>. Once MTG-436 merges on <code>0.2.x</code>, dropping the accidental duplicate re-export would itself become a <code>BREAKING</code> removal until <code>0.3.0</code>.</td>
+        <td><strong>One defining module per published symbol</strong><br><span class="small">Import each symbol from its defining module; empty <code>__init__.py</code></span></td>
+        <td><code>PackedActions</code> is exported only from <code>manabot.training.rollout.actions</code>; <code>test_published_symbols_come_from_their_defining_module</code> asserts uniqueness and <code>value.__module__ == mod</code> across all 15 <code>PUBLIC_MODULES</code>.</td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td>Resolved from Pass 1 (<code>8d665adbdd</code>, tightened in <code>5edbd417be</code>). No duplicate exports; deprecated aliases (e.g. <code>ObservationEncoder</code>) remain exempted while scheduled for <code>0.3.0</code> removal.</td>
       </tr>
       <tr>
         <td><strong>Documented table enforced by CI</strong><br><span class="small"><code>manabot/README.md#library-api</code> stays in lockstep with <code>__all__</code></span></td>
-        <td><code>test_readme_lists_the_published_exports()</code> parses <code>manabot/README.md</code>, but <code>.github/ci/select-tests.sh</code> matches <code>*/README.md</code> on line 35 and selects <strong>zero jobs</strong> when <code>manabot/README.md</code> changes.</td>
-        <td><span class="badge b-no">No</span></td>
-        <td><strong>Enforced contract input treated as prose-only by CI.</strong> A PR that edits <code>manabot/README.md</code> and breaks the Library API table passes CI green, then breaks <code>main</code> for the next <code>manabot/</code> PR.</td>
+        <td><code>test_readme_lists_the_published_exports</code> parses <code>manabot/README.md</code>, and <code>.github/ci/select-tests.sh</code> matches <code>manabot/README.md</code> ahead of <code>*/README.md</code> to select <code>integration</code>.</td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td>Resolved from Pass 1 (<code>af931f56d4</code>). Verified in <code>tests/infra/test_ci_selection.py</code> and live shell check; documented in <code>docs/development.md</code>.</td>
       </tr>
       <tr>
         <td><strong><code>0.3.0</code>-deprecated <code>managym</code> API</strong><br><span class="small">Marked <code>deprecated: true</code> on <code>0.2.x</code> so <code>0.3.0</code> rollover drops it cleanly</span></td>
-        <td><code>scripts/public_api.py</code> reads <code>@deprecated</code>, <code>"""Deprecated..."""</code> docstrings, and inline <code># Deprecated</code> on <code>Assign</code> only &mdash; missing preceding <code># Deprecated</code> comments on <code>FunctionDef</code> / <code>AnnAssign</code>.</td>
-        <td><span class="badge b-no">No</span></td>
-        <td><strong>Inconsistent stub deprecation rule.</strong> <code>managym.Observation.legacy_card_lists</code> and <code>managym.PlayerConfig.disclosure</code> both have <code># Deprecated ... removed in 0.3.0</code> directly above their stub declarations, yet are recorded as live non-deprecated APIs (failing <code>0.3.0</code> rollover as <code>BREAKING</code>).</td>
+        <td><code>deprecated_stub_lines()</code> uses <code>tokenize</code> to recognize inline and immediately-preceding <code># Deprecated</code> comments alongside <code>@deprecated</code>, <code>Deprecated</code> docstrings, and runtime <code>__getattr__</code> warnings.</td>
+        <td><span class="badge b-yes">Yes</span></td>
+        <td>Resolved from Pass 1 (<code>8d665adbdd</code>). Marks <code>LearningCatalog</code>, <code>WORLD_VERSION</code>, <code>PlayerConfig.disclosure</code>, and <code>Observation.legacy_card_lists</code> with zero false positives and no edits to <code>managym/__init__.pyi</code>.</td>
       </tr>
       <tr>
         <td><strong>Opaque handles vs. data contracts</strong><br><span class="small"><code>Prepared</code>, <code>Collector</code>, <code>Prefix</code>, <code>MemoryArchive</code></span></td>
-        <td>Recorded as <code>kind: "opaque"</code> via <code>OPAQUE_TYPES</code>; internal RL routing and stream fields evolve freely on <code>0.2.x</code>.</td>
+        <td>Recorded as <code>kind: "opaque"</code> via <code>OPAQUE_TYPES</code>; internal RL routing and stream fields stay free to evolve on <code>0.2.x</code>.</td>
         <td><span class="badge b-yes">Yes</span></td>
-        <td>Clean separation: class identity stays promised while hot-path fields remain internal. Verified in QA by renaming a <code>Collector</code> field.</td>
+        <td>Class identity stays promised for annotations and <code>isinstance</code> while hot-path fields remain internal. Verified in QA by renaming <code>Collector.num_envs</code>.</td>
       </tr>
       <tr>
         <td><strong>One meaning for <code>__all__</code></strong><br><span class="small"><code>__all__</code> inside installed wheel == published surface</span></td>
-        <td>15 published modules define <code>__all__</code>; legacy internal <code>__all__</code> removed; <code>test_only_published_modules_declare_exports</code> enforces exact equality (exempting <code>0.3.0</code> shim <code>flat.py</code>).</td>
+        <td>15 published modules define <code>__all__</code>; legacy internal <code>__all__</code> removed; <code>test_only_published_modules_declare_exports</code> enforces exact equality (exempting <code>0.3.0</code> shim <code>manabot/sim/search/flat.py</code>).</td>
         <td><span class="badge b-yes">Yes</span></td>
-        <td>Truthful in installed wheels without shipping <code>scripts/public_api.py</code>.</td>
+        <td>Truthful in installed wheels without shipping <code>scripts/public_api.py</code>. Verified by walking an installed wheel in a fresh 3.12 venv.</td>
       </tr>
       <tr>
         <td><strong>Patch-clean <code>0.Y.x</code> vs. <code>0.(Y+1).0</code> rollover</strong><br><span class="small">No silent breaks; minor rollover drops only prior deprecations</span></td>
         <td>Plain <code>record</code> refuses <code>BREAKING</code> and <code>DEPRECATED_REMOVED</code> on <code>0.2.x</code>; on <code>0.3.0</code> accepts <code>DEPRECATED_REMOVED</code> while still refusing un-deprecated breaks unless <code>--allow-break --reason</code>.</td>
         <td><span class="badge b-yes">Yes</span></td>
-        <td>Tested both in unit tests and live QA across patch breaks, deprecation aliases, and <code>0.3.0</code> rollover.</td>
+        <td>Verified in unit tests and live QA across patch breaks, additions, deprecations, break-glass overrides, and <code>0.3.0</code> rollover.</td>
       </tr>
       <tr>
         <td><strong>External RL library consumer proof</strong><br><span class="small">End-to-end learner using only published imports</span></td>
         <td><code>tests/infra/test_external_consumer.py</code> runs collection, TD update, checkpoint save/load, inference, and <code>catalog_tokens()</code>, and AST-checks every <code>manabot</code>/<code>managym</code> import against <code>tests/public_api.json</code> and <code>__all__</code>.</td>
         <td><span class="badge b-yes">Yes</span></td>
-        <td>Runs in ~0.7 s in both <code>python-unit</code> and <code>integration</code>; README example also verified verbatim in an isolated 3.12 wheel venv under <code>-W error::DeprecationWarning</code>.</td>
+        <td>Runs in &lt;1 s in both <code>python-unit</code> and <code>integration</code>; README example also verified verbatim in an isolated 3.12 wheel venv under <code>-W error::DeprecationWarning</code>.</td>
       </tr>
     </tbody>
   </table>
 
-  <h2>2. Biggest Mismatch: Internal Pydantic Validators &amp; Duplicate Re-export Frozen into the <code>0.2.x</code> Contract</h2>
-
-  <div class="callout callout-danger">
-    <p><strong>Why fix this now rather than in a follow-up:</strong> Both mismatches live directly inside <code>tests/public_api.json</code> and module <code>__all__</code>. Once MTG-436 merges onto <code>main</code>, removing a frozen validator name or removing the duplicate <code>PackedActions</code> export from <code>collection</code> becomes a <strong><code>BREAKING</code> contract change on <code>0.2.x</code></strong>. Getting the baseline snapshot clean before merge prevents freezing 10 internal hooks and 1 redundant module address for the entire <code>0.2.x</code> cycle.</p>
-    <ul>
-      <li><strong>10 Pydantic validator hooks currently frozen in <code>tests/public_api.json</code>:</strong>
-        <code>MatchConfig.{validate_sideboard_counts, validate_sources, validate_world}</code>,
-        <code>ModelConfig.{reject_compound_decisions, reject_pooled_token_stream, validate_value_architecture}</code>,
-        <code>ObservationConfig.reject_other_inputs</code>,
-        <code>UniformDecks.valid_population</code>,
-        <code>GameAttempt.resource_limit_has_input_contract</code>,
-        <code>GameErrorPolicy.bounded_warmup</code>.
-        (Public methods on the same models &mdash; like <code>UniformDecks.check</code>, <code>MatchConfig.authored</code>, <code>ModelConfig.from_checkpoint</code> &mdash; are not in <code>__pydantic_decorators__</code> and stay recorded.)
-      </li>
-      <li><strong>Duplicate export:</strong> <code>PackedActions</code> is exported in both <code>manabot.training.rollout.actions.__all__</code> and <code>manabot.training.rollout.collection.__all__</code>, contradicting the single-defining-module rule in <code>manabot/README.md</code> and <code>AGENTS.md</code>.</li>
-    </ul>
-  </div>
-
-  <h3>Before vs. After: Refactoring a config validator on <code>0.2.x</code></h3>
+  <h2>2. What Pass 1 Caught and Pass 2 Resolved (Before vs. After)</h2>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">
-        <span>Before: Validator names frozen as methods</span>
+        <span>Before (Pass 1 at <code>bb824541f4</code>)</span>
+        <span class="badge b-no">Had 4 mismatches</span>
+      </div>
+<pre><span class="diff-del">- 10 Pydantic @field_validator/@model_validator
+  callbacks frozen as public methods
+- PackedActions duplicated in both actions.__all__
+  and collection.__all__ (+70 snapshot lines)
+- manabot/README.md matched */README.md in
+  select-tests.sh (0 CI jobs on README edits)
+- PlayerConfig.disclosure &amp; Observation.legacy_card_lists
+  recorded as non-deprecated despite # Deprecated comments</span></pre>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span>After (Pass 2 at <code>a36d8ac72f</code>)</span>
         <span class="badge b-existing">Built at HEAD</span>
       </div>
-      <p class="small">A contributor combines <code>ModelConfig.reject_compound_decisions</code> and <code>reject_pooled_token_stream</code> into one <code>@model_validator</code> preserving identical validation behavior.</p>
-<pre><span class="diff-del">BREAKING manabot.infra.config.ModelConfig.reject_compound_decisions:
-  removed
-BREAKING manabot.infra.config.ModelConfig.reject_pooled_token_stream:
-  removed</span>
-<span class="diff-dim">main is on the 0.2.x patch line (pyproject.toml: 0.2.5).
-Restore the published API or keep a DeprecationWarning alias...</span></pre>
-      <p class="small">No external caller ever invoked either validator method; the contract blocks a pure internal refactor.</p>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <span>After: Skip <code>__pydantic_decorators__</code> hooks</span>
-        <span class="badge b-proposed">Proposed</span>
-      </div>
-      <p class="small"><code>python_class()</code> skips method names registered in <code>cls.__pydantic_decorators__</code> (<code>field_validators</code>, <code>model_validators</code>, <code>field_serializers</code>, <code>model_serializers</code>). Real methods and all fields remain frozen.</p>
-<pre><span class="diff-add"># Refactoring ModelConfig validators while keeping fields:</span>
-<span class="diff-add">public API matches tests/public_api.json</span>
-<span class="diff-dim"># Dropping ModelConfig.hidden_dim or ModelConfig.from_checkpoint:</span>
-<span class="diff-del">BREAKING manabot.infra.config.ModelConfig.hidden_dim: removed</span></pre>
-      <p class="small">Contract tracks what consumers actually construct, pass, and call &mdash; not Pydantic's internal callback names.</p>
+<pre><span class="diff-add">+ python_class() skips cls.__pydantic_decorators__ hooks;
+  fields and real methods stay recorded
++ PackedActions published only from actions; defining-module
+  ownership enforced across all 15 PUBLIC_MODULES
++ manabot/README.md routes to integration in select-tests.sh
++ deprecated_stub_lines() marks inline and preceding
+  # Deprecated stub declarations uniformly</span></pre>
     </div>
   </div>
 
-  <h2>3. Failure &amp; Recovery Walkthroughs for the Other Two Fixes</h2>
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">
-        <span>CI blind spot: editing <code>manabot/README.md</code></span>
-        <span class="badge b-proposed">Proposed</span>
-      </div>
-      <p class="small"><strong>Counterexample at HEAD:</strong> A PR renames a heading or deletes a symbol in <code>manabot/README.md#library-api</code>. <code>.github/ci/select-tests.sh</code> matches <code>*/README.md</code> &rarr; selects no jobs &rarr; PR merges green &rarr; next <code>manabot/</code> PR fails <code>test_readme_lists_the_published_exports</code>.</p>
-<pre><span class="diff-add"># .github/ci/select-tests.sh (before */README.md):
-manabot/README.md) select_jobs integration ;;</span></pre>
-      <p class="small"><strong>Recovery:</strong> Any edit to <code>manabot/README.md</code> now triggers <code>integration</code> (which runs <code>tests/test_public_api_contract.py</code>), matching how <code>docs/experiment-metrics.md</code> is already classified as non-prose.</p>
-    </div>
-
-    <div class="card">
-      <div class="card-title">
-        <span>Stub comment deprecations on <code>0.3.0</code> rollover</span>
-        <span class="badge b-proposed">Proposed</span>
-      </div>
-      <p class="small"><strong>Counterexample at HEAD:</strong> On <code>0.3.0</code> rollover (MTG-435), deleting <code>Observation.legacy_card_lists</code> and <code>PlayerConfig.disclosure</code> fails as <code>BREAKING</code> despite <code># Deprecated ... removed in 0.3.0</code> directly above each declaration in <code>managym/__init__.pyi</code>.</p>
-<pre><span class="diff-add"># Uniform stub helper in scripts/public_api.py:
-# Checks @deprecated, docstring.startswith("Deprecated"),
-# inline "# Deprecated", or preceding line "# Deprecated".</span></pre>
-      <p class="small"><strong>Counterexample check:</strong> Audited every AST node in <code>managym/__init__.pyi</code>; this matches exactly 4 nodes (<code>LearningCatalog</code>, <code>WORLD_VERSION</code>, <code>PlayerConfig.disclosure</code>, <code>Observation.legacy_card_lists</code>) with zero false positives and zero edits to <code>managym/__init__.pyi</code>.</p>
-    </div>
-  </div>
-
-  <h2>4. Choices Made for Review (Autonomous Graph Pass)</h2>
+  <h2>3. Choices Made for Review (Reversible)</h2>
+  <p>These choices are built at <code>HEAD</code> for review at <code>ship-review</code>; none are irreversible before merge, and all additions remain patch-compatible afterward (see also <code>scratch/questions.md</code>):</p>
   <ul>
-    <li><strong>Exclude Pydantic <code>__pydantic_decorators__</code> hooks from <code>python_class()</code>:</strong> Chosen over keeping validator names frozen as public methods. Validators are framework callbacks, not user-callable APIs; real methods (<code>UniformDecks.check</code>, <code>MatchConfig.authored</code>, <code>ModelConfig.from_checkpoint</code>, <code>ModelConfig.checkpoint_payload</code>, <code>ModelConfig.catalog_records</code>) stay recorded.</li>
-    <li><strong>Drop duplicate <code>PackedActions</code> from <code>manabot.training.rollout.collection.__all__</code>:</strong> Chosen over publishing <code>PackedActions</code> from two modules. <code>manabot.training.rollout.actions</code> is its defining module, is already published, and is what every caller imports. (Reversible before merge; sticky after merge.)</li>
-    <li><strong>Route <code>manabot/README.md</code> to <code>integration</code> in <code>select-tests.sh</code>:</strong> Chosen over leaving the README contract check unguarded on README-only PRs. Consistent with <code>docs/development.md</code> ("Runtime inputs such as experiment Markdown ... are not prose-only").</li>
-    <li><strong>Read preceding/inline <code># Deprecated</code> comments uniformly across <code>managym/__init__.pyi</code> nodes:</strong> Chosen over editing <code>managym/__init__.pyi</code> in MTG-436 (avoids Rust/full-suite CI fanout and any merge conflict with MTG-437). Leaves block-comment flat characteristic aliases on <code>Card</code>/<code>Permanent</code> untouched rather than inventing fragile multi-line comment heuristics.</li>
+    <li><strong>Opaque handles (<code>Prepared</code>, <code>Collector</code>, <code>Prefix</code>, <code>MemoryArchive</code>):</strong> Recorded as <code>kind: "opaque"</code> so RL hot-path fields evolve freely on <code>0.2.x</code>.</li>
+    <li><strong>Single-meaning <code>__all__</code> across <code>manabot/</code>:</strong> Legacy unused <code>__all__</code> lists in <code>manabot/belief/*.py</code> and <code>manabot/semantic/learning.py</code> were removed (exempting <code>0.3.0</code> shim <code>manabot/sim/search/flat.py</code>).</li>
+    <li><strong>Narrow initial export set:</strong> Speculative exports with no external consumer (<code>RuntimeConfig</code>, <code>SimulationConfig</code>, <code>collect_pair</code>, <code>load_metadata</code>, <code>MemoryStore</code>, <code>catalog_programs</code>) stay internal for now; adding any later is patch-compatible.</li>
+    <li><strong>Shape-only signatures:</strong> Records parameter names, kinds, order, and optionality (plus field names/required-ness and enum integer values), omitting type annotations and default expressions to stay identical across CPython 3.12 and 3.13.</li>
+    <li><strong>Pydantic hooks excluded, stub comments parsed:</strong> <code>__pydantic_decorators__</code> callbacks are treated as internal; inline/preceding <code># Deprecated</code> comments in <code>managym/__init__.pyi</code> mark deprecations without modifying the stub in this PR.</li>
   </ul>
 
-  <h2>5. Outside This Work</h2>
+  <h2>4. Outside This Work</h2>
   <ul>
-    <li><strong><code>Card</code> and <code>Permanent</code> flat characteristic alias annotations in <code>managym/__init__.pyi</code>:</strong> Currently documented by class docstring (<code>Card</code>) and a multi-attribute comment (<code>Permanent</code>) rather than per-attribute deprecation markers. Annotating individual stub attributes or dropping them with <code>--allow-break --reason</code> belongs with <code>managym</code>/MTG-435 work.</li>
+    <li><strong>Picklable <code>managym.ObservationBatch</code>, <code>RolloutBatch.concatenate</code>, <code>ObservationSpace.max_actions</code>:</strong> Sibling Task MTG-437 (<code>0.2.6</code>). Whichever lands second runs plain <code>uv run python scripts/public_api.py record</code>.</li>
+    <li><strong><code>0.3.0</code> deprecation removals:</strong> MTG-435 (waits until minor rollover per the patch-clean <code>main</code> rule).</li>
+    <li><strong><code>Card</code> and <code>Permanent</code> flat characteristic alias markers in <code>managym/__init__.pyi</code>:</strong> Currently documented by class docstring / multi-attribute block comment; per-attribute markers or <code>--allow-break --reason</code> belong with MTG-435.</li>
     <li><strong><code>managym</code> Python submodules (<code>managym.enums</code>, <code>managym.disclosure</code>, <code>managym.policy</code>, <code>managym.recording</code>):</strong> Separate follow-up Task to audit <code>managym/*.py</code> and add <code>__all__</code> + contract entries.</li>
-    <li><strong>Picklable <code>managym.ObservationBatch</code>, <code>RolloutBatch.concatenate</code>, <code>ObservationSpace.max_actions</code>:</strong> Sibling Task MTG-437 (<code>0.2.6</code>).</li>
-    <li><strong><code>from manabot.env.observation import *</code> warning on <code>ObservationEncoder</code>:</strong> Noted in QA; keeping <code>0.3.0</code>-deprecated aliases in <code>__all__</code> is intentional so the contract tracks their removal on <code>0.3.0</code>, and the repo uses explicit imports everywhere.</li>
   </ul>
 
-  <h2>6. Questions for Review</h2>
-  <p class="small">Reply with shorthand like <code>1a 2a 3a 4a</code>.</p>
+  <h2>5. Questions for Ship Review</h2>
+  <p class="small">All defaults below are built at <code>HEAD</code>. Reply with shorthand like <code>1a 2a 3a 4a</code> if you want to adjust any choice before merge.</p>
 
   <div class="question-card">
-    <strong>1. Pydantic validator/serializer hooks in <code>tests/public_api.json</code></strong>
+    <strong>1. Opaque handle list (<code>Prepared</code>, <code>Collector</code>, <code>Prefix</code>, <code>MemoryArchive</code>)</strong>
     <ol>
-      <li><strong>Exclude <code>__pydantic_decorators__</code> hooks (chosen in plan):</strong> freeze model fields and real methods, not internal validator callback names.</li>
-      <li>Keep validator methods recorded in <code>tests/public_api.json</code> alongside regular methods.</li>
+      <li><strong>Keep all four opaque (built):</strong> class identity promised, internal fields free to evolve on <code>0.2.x</code>.</li>
+      <li>Freeze specific attributes on <code>Collector</code> (e.g. <code>stats</code>, <code>game_error_state</code>) in <code>tests/public_api.json</code>.</li>
     </ol>
   </div>
 
   <div class="question-card">
-    <strong>2. <code>PackedActions</code> in <code>manabot.training.rollout.collection.__all__</code></strong>
+    <strong>2. Single-meaning <code>__all__</code> across <code>manabot/</code></strong>
     <ol>
-      <li><strong>Publish only from its defining module <code>manabot.training.rollout.actions</code> (chosen in plan):</strong> keeps one defining module per symbol and removes 70 duplicated snapshot lines.</li>
-      <li>Keep <code>PackedActions</code> published in both <code>actions</code> and <code>collection</code>.</li>
+      <li><strong>Remove unused internal <code>__all__</code> lists (built):</strong> <code>__all__</code> inside installed wheels equals the published boundary.</li>
+      <li>Restore internal <code>__all__</code> lists in <code>belief/</code> and <code>semantic/learning.py</code> and rely only on <code>PUBLIC_MODULES</code>.</li>
     </ol>
   </div>
 
   <div class="question-card">
-    <strong>3. <code>manabot/README.md</code> in <code>.github/ci/select-tests.sh</code></strong>
+    <strong>3. Narrow initial export set (15 modules, no speculative exports)</strong>
     <ol>
-      <li><strong>Select <code>integration</code> on <code>manabot/README.md</code> edits (chosen in plan):</strong> prevents README-only PRs from breaking <code>test_readme_lists_the_published_exports</code> on <code>main</code>.</li>
-      <li>Keep <code>manabot/README.md</code> matched by prose-only <code>*/README.md</code>.</li>
+      <li><strong>Keep narrow (built):</strong> publish additional symbols only when an external consumer needs them (always patch-compatible).</li>
+      <li>Add any specific symbol now before merging the <code>0.2</code> baseline.</li>
     </ol>
   </div>
 
   <div class="question-card">
-    <strong>4. Unifying <code># Deprecated</code> comment detection across <code>managym/__init__.pyi</code> nodes</strong>
+    <strong>4. Deprecation status label in <code>scripts/public_api.py</code> output</strong>
     <ol>
-      <li><strong>Check preceding/inline <code># Deprecated</code> comments in <code>scripts/public_api.py</code> (chosen in plan):</strong> marks <code>PlayerConfig.disclosure</code> and <code>Observation.legacy_card_lists</code> as <code>deprecated: true</code> without touching <code>managym/__init__.pyi</code>.</li>
-      <li>Leave comment-only stub deprecations unmarked until MTG-435 adds explicit <code>@deprecated</code> decorators or uses <code>--allow-break --reason</code> on <code>0.3.0</code>.</li>
+      <li><strong>Keep three-state status (<code>ADDED</code> / <code>DEPRECATED_REMOVED</code> / <code>BREAKING</code>, built):</strong> newly deprecated symbols print <code>ADDED &lt;path&gt;: deprecated</code> as a patch-compatible change.</li>
+      <li>Add a distinct <code>DEPRECATED</code> display label (cosmetic).</li>
     </ol>
   </div>
 </main>
