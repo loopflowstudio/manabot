@@ -459,7 +459,10 @@ def test_legacy_sampler_zip_is_refused(tmp_path: Path, reader: str) -> None:
         expected_world_identity=dataset.world_identity,
         expected_checkpoint_identity=digest,
     )
-    with pytest.raises(ValueError, match="^unknown sampler checkpoint format$"):
+    with pytest.raises(
+        ValueError,
+        match="^unknown sampler checkpoint format: expected a belief.safetensors",
+    ):
         read_belief_sampler(path, codec=resolve(reader).belief, **bindings)
     # Non-zip bytes with the high bit set in the length prefix also refuse cleanly.
     raw = tmp_path / "corrupt.safetensors"
@@ -471,5 +474,8 @@ def test_legacy_sampler_zip_is_refused(tmp_path: Path, reader: str) -> None:
         expected_world_identity=dataset.world_identity,
         expected_checkpoint_identity=hashlib.sha256(b"\xff" * 16).hexdigest(),
     )
-    with pytest.raises(ValueError, match="^unknown sampler checkpoint format$"):
+    with pytest.raises(
+        ValueError,
+        match="^unknown sampler checkpoint format: expected a belief.safetensors",
+    ):
         read_belief_sampler(raw, codec=resolve(reader).belief, **raw_bindings)

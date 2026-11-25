@@ -44,3 +44,10 @@ listed in `scratch/concept-review.html`.
   safetensors codec. It has no training dataset or fit metrics.
 - Gate needs a disposition for the 20 consumer failures that also reproduce
   with the base sources. Their search and belief behavior is outside MTG-435.
+- QA extended the sampler refusal to `unknown sampler checkpoint format: expected a
+  belief.safetensors container; fit .pt samplers again with the sampler job, or
+  read them with manabot 0.2.5` (one `UNKNOWN_FORMAT` constant); the bare
+  message gave no next step. The prefix is unchanged.
+- The `learner.pt` refusal's warm-start advice works only when the old run's
+  policy matches current card content; every legacy save found locally fails
+  that check, so 0.2.5 is the realistic recovery for those. Left as written.

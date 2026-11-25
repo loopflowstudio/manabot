@@ -32,7 +32,7 @@ save/belief loaders":
   run's published policy. Original save bytes and live tensors stay untouched.
 - A belief sampler whose bytes are a Torch zip (or any non-safetensors payload)
   is refused on both backends with `ValueError("unknown sampler checkpoint
-  format")`; only the `belief.safetensors` container loads.
+  format: ...")`; only the `belief.safetensors` container loads.
 - Nothing changes for current recipes, current saves, published policy
   checkpoints (`.pt` and `.safetensors`), recorded games, or Academy opening
   files earlier releases wrote.

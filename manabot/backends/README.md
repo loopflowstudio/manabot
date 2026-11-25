@@ -237,7 +237,7 @@ the random stream and learned state) and lazy `backend.belief_fit`
 (`BeliefTrainer`), and read and write one portable `belief.safetensors`
 container (`manabot.belief.checkpoint`); non-safetensors payloads (including
 legacy `.pt` archives) are refused on both backends with
-`ValueError("unknown sampler checkpoint format")`.
+a `ValueError` naming "unknown sampler checkpoint format" and the recovery.
 `manabot.reports.belief` reads sampler metadata without raw `torch.load`, while
 the host pools calibration, Brier scores and support violations per decision.
 

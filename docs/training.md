@@ -522,7 +522,9 @@ and MLX (`manabot.belief.checkpoint`), validated by exact bytes, schema,
 dataset, policy and world identities. A sampler saved by one backend loads on
 the other with matching `log_prob`. Only the `belief.safetensors` container is
 accepted; legacy `.pt` archives or other non-safetensors payloads are refused
-on both backends with `ValueError("unknown sampler checkpoint format")`.
+on both backends with `ValueError("unknown sampler checkpoint format: expected a
+belief.safetensors container; fit .pt samplers again with the sampler job, or
+read them with manabot 0.2.5")`.
 
 A policy run taken further publishes later checkpoints beside the one a
 sampler read. Use a new sampler experiment label for a sampler trained from

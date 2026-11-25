@@ -257,7 +257,8 @@ policy, world, hyperparameter and metric metadata. `load_belief_sampler` checks
 exact bytes and every binding identity, so a sampler trained on MLX loads in
 Torch (and vice versa) with matching `log_prob`. Both backends accept only
 `belief.safetensors` and refuse legacy `.pt` archives or other non-safetensors
-payloads with `ValueError("unknown sampler checkpoint format")`.
+payloads with a `ValueError` naming "unknown sampler checkpoint format", which
+says to fit the sampler again or read it with manabot 0.2.5.
 
 ### Architecture mirror and execution
 

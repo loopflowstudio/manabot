@@ -57,6 +57,12 @@ class AdmittedSampler:
     training_seed: int | None
 
 
+UNKNOWN_FORMAT = (
+    "unknown sampler checkpoint format: expected a belief.safetensors container; "
+    "fit .pt samplers again with the sampler job, or read them with manabot 0.2.5"
+)
+
+
 def read_belief_sampler(
     path: Path,
     *,
@@ -75,9 +81,9 @@ def read_belief_sampler(
         parameters, metadata = decode_safetensors(data)
         payload = {key: json.loads(value) for key, value in metadata.items()}
     except ValueError as error:
-        raise ValueError("unknown sampler checkpoint format") from error
+        raise ValueError(UNKNOWN_FORMAT) from error
     if payload.get("format") != FORMAT:
-        raise ValueError("unknown sampler checkpoint format")
+        raise ValueError(UNKNOWN_FORMAT)
     expected = {
         "dataset_identity": expected_dataset_identity,
         "policy_identity": expected_policy_identity,
