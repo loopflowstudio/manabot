@@ -64,20 +64,19 @@ def _one(steps: list[Step], label: str) -> Step:
 def _delivery(
     steps: list[Step],
     target: int,
-    verification: str = "verify",
     *,
-    review: str = "demo",
+    review: str = "ship-review",
 ) -> None:
     boundary = [
-        _one(steps, label)
-        for label in ("pr-publish", review, "land --wait-and-fix", verification)
+        _one(steps, label) for label in ("pr-publish", review, "land --wait-and-fix")
     ]
     positions = [steps.index(step) for step in boundary]
     assert positions == sorted(positions), "Delivery boundaries changed order"
-    for gate_review in (boundary[1], boundary[-1]):
-        assert gate_review.interactive and gate_review.returns_to == target, (
-            gate_review.label
-        )
+    gate_review = boundary[1]
+    assert gate_review.interactive and gate_review.returns_to == target, (
+        gate_review.label
+    )
+    assert not any(step.label == "verify" for step in steps), "verify was removed"
 
 
 def _compile_graphs(root: Path) -> dict[str, list[Step]]:
@@ -115,19 +114,27 @@ def _phase(
     review: str,
     *,
     worker: str = "implement",
+    decider: str | None = None,
 ) -> int:
     """Check one sliced build/review phase; return the index after it.
 
     The plan step cuts the work into slices. Sync runs before the worker so
-    the worker decides the slice loop directly, and the phase's review decides
-    whether to return to implementation or advance.
+    the worker decides the slice loop directly, and the outer decider (review,
+    or a following step such as realign) decides whether to return to
+    implementation or advance.
     """
-    end = [step.label for step in steps].index(review, start)
+    final = decider or review
+    expected = (
+        [plan, "sync", worker, review, decider]
+        if decider
+        else [plan, "sync", worker, review]
+    )
+    end = [step.label for step in steps].index(final, start)
     phase = steps[start : end + 1]
-    assert [step.label for step in phase] == [plan, "sync", worker, review], phase
-    sync, build, decider = phase[1], phase[2], phase[3]
+    assert [step.label for step in phase] == expected, phase
+    sync, build, outer = phase[1], phase[2], phase[-1]
     assert build.returns_to == sync.key, f"{worker} decides the slice loop"
-    assert decider.returns_to == sync.key, f"{review} decides the phase"
+    assert outer.returns_to == sync.key, f"{final} decides the phase"
     assert not any(step.interactive for step in phase), f"{plan} phase is headless"
     return end + 1
 
@@ -135,7 +142,12 @@ def _phase(
 def _coverage(coverage: list[Step]) -> None:
     """Check the two-pass coverage graph: sliced build/review, then card-perf xor."""
     position = _phase(
-        coverage, 0, "card-batch", "card-review", worker="card-implement"
+        coverage,
+        0,
+        "card-batch",
+        "card-review",
+        worker="card-implement",
+        decider="realign",
     )
     perf = coverage[position]
     assert perf.label == "card-perf" and perf.kind == "xor", perf

@@ -32,9 +32,9 @@ The workflow measures the update and plans each improvement as a slice. It
 syncs and implements slice after slice (`implement` decides whether more slices
 remain), then lets the performance review decide whether another bottleneck is
 worth a pass. Once optimization finishes, a single `compress` pass simplifies
-the settled diff before `pr-publish`, interactive `ship-review`, `deliver` and
-`verify`. Its result is a software change with supported timing evidence, or a
-documented reason to stop when no useful improvement is supported.
+the settled diff before `pr-publish`, interactive `ship-review` and `deliver`.
+Its result is a software change with supported timing evidence, or a documented
+reason to stop when no useful improvement is supported.
 
 Use `experiment-performance` when the question spans collection, policy inference,
 learner work or evaluation matches, including how these costs change with model
@@ -126,17 +126,18 @@ observation versions and recipes remain unchanged.
 ## Coverage
 
 `coverage` is a narrow fork of the builtin code lifecycle with two passes before
-a single `compress` → `pr-publish` → `ship-review` → `deliver` → `verify`
-handoff:
+a single `compress` → `pr-publish` → `ship-review` → `deliver` handoff:
 
 1. **Build and review:** `card-batch` cuts the cohort into ~30–50 minute
    mechanism slices and names the large-board stress shapes the new cards could
    make expensive. An inner `sync` → `card-implement` loop builds slice after
    slice (with `card-implement` collapsing finished slices in `scratch/plan.md`
    and deciding directly whether more slices remain). Once the slices are built,
-   `card-review` checks outward concepts/wire contracts, inward Rust
-   composability, dead-code/duplication simplifications and workspace behavior
-   together, returning to `card-implement` for one batched fix pass when needed.
+   read-only `card-review` (`extends: concept-review`) checks outward
+   concepts/wire contracts, inward Rust composability, dead-code/duplication
+   simplifications and workspace behavior on `scratch/concept-review.html`, and
+   `realign` reconciles findings into one batched fix pass in `scratch/plan.md`
+   and decides whether to return to `card-implement` or advance.
 2. **Targeted new-card performance gate (`card-perf`):** after `card-review`
    advances, the `card-perf` `xor` router measures the new cards' `bench_states`
    stress shapes for superlinear scaling and checks uninstrumented release
@@ -148,8 +149,7 @@ handoff:
    rather than parallel card branches.
 
 After `card-perf`, a single `compress` pass simplifies the settled diff before
-`pr-publish` and interactive `ship-review`, followed by `deliver` and
-interactive `verify`.
+`pr-publish` and interactive `ship-review`, followed by `deliver`.
 
 A slice is a cohort, not a card: a shared primitive with every card in the
 batch it unlocks, or 10–30 cards that already compose. Defer branch-wide Academy
