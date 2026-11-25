@@ -36,7 +36,7 @@ fn main() {
         managym::benchmark_layers::reset();
         #[cfg(feature = "benchmark")]
         managym::benchmark_payments::reset();
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         env.reset(curated::setup(usable_taps)).unwrap();
         if layers {
             curated::add_layer_board(&mut env);
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn layered_root_keeps_the_curated_decks_and_exposes_a_real_decision() {
-        let mut env = Env::new(244, true, false, false);
+        let mut env = Env::new(244, true, false);
         env.reset(curated::setup(false)).unwrap();
         curated::add_layer_board(&mut env);
         let observation = env.observation_for_player(1).unwrap();

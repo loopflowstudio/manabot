@@ -37,7 +37,7 @@ else
       managym/academy/packs/*) select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
       managym/academy/fixtures/*|managym/academy/server.py|managym/academy/presentation.py|managym/academy/play_demo.py|managym/academy/curated_pack.py|managym/academy/villain.py|managym/academy/presets.py)
         select_jobs academy_integration protocol_v1 frontend ;;
-      managym/academy/*|academy/__init__.py) select_jobs academy_integration protocol_v1 ;;
+      managym/academy/*) select_jobs academy_integration protocol_v1 ;;
       content/*|conformance/*|manabot/managym/*|managym/src/*|managym/state/src/*|managym/cards/src/*|managym/*.py|managym/*.pyi)
         all ;;
       tests/semantic/fixtures/elemental/*) select_jobs academy_integration ;;

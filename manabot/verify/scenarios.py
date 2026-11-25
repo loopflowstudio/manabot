@@ -554,7 +554,6 @@ def build_scenario_env(
         Reward(RewardConfig()),
         seed=seed,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
     raw, _ = env.reset(seed=seed)
     while raw.turn.turn_number == 0:

@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 import json
+from pathlib import Path
 import sqlite3
 
 from fastapi.testclient import TestClient
@@ -21,7 +22,7 @@ def rows(path):
         ]
 
 
-def test_replacement_preserves_authority_and_records_prefix(tmp_path):
+def test_replacement_preserves_authority_and_records_prefix(tmp_path: Path) -> None:
     game = server.GameSession(trace_dir=tmp_path)
     initial = game.new_game(
         {"villain_type": "random", "seed": 79, "request_id": "first"}
@@ -29,7 +30,7 @@ def test_replacement_preserves_authority_and_records_prefix(tmp_path):
     match = game.match_id
     seed = game.trace.config.seed
     with pytest.raises(ValueError):
-        game.new_game({"villain_type": "checkpoint"})
+        game.new_game({"villain_type": "policy"})
     for invalid in ({"seed": -1}, {"hero_deck": {"Nonexistent card": 60}}):
         with pytest.raises(ValueError):
             game.new_game({"villain_type": "random", **invalid})

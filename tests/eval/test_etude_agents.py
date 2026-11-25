@@ -240,7 +240,7 @@ def test_checkpoint_priority_taps_follow_seats_through_replay(
     )
     key = arena_fixture().key.model_copy(
         update={
-            "world": managym.WORLD_VERSION,
+            "world": "w17",
             "content_suite": matchup.content_suite,
             "viewer_boundary": "acting-viewer",
         }

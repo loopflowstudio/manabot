@@ -182,7 +182,7 @@ impl VectorEnv {
     ) -> Self {
         let envs = (0..num_envs)
             .map(|idx| {
-                Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false)
+                Env::new(seed.saturating_add(idx as u64), skip_trivial, false)
                     .with_player_policies(player_policies)
             })
             .collect();
@@ -1135,7 +1135,7 @@ mod tests {
         let players = sample_player_configs();
         let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(players.clone()).unwrap();
-        let mut scalar = Env::new(42, true, false, false);
+        let mut scalar = Env::new(42, true, false);
         scalar.reset(players).unwrap();
         let before = scalar.state_digest().unwrap();
         assert_eq!(
@@ -1400,7 +1400,7 @@ mod tests {
         let actual = vector.current_player_configs();
         for (index, players) in actual.iter().enumerate() {
             assert_ne!(players[0].deck.main, players[1].deck.main);
-            let mut scalar = Env::new(seeds[index], true, false, false);
+            let mut scalar = Env::new(seeds[index], true, false);
             scalar.reset(players.clone()).unwrap();
             assert_eq!(
                 scalar.state_digest().unwrap(),
@@ -1531,7 +1531,7 @@ mod tests {
             for (seat, pair) in vector.current_matchup_indices().into_iter().enumerate() {
                 reached[seat].insert(pair);
                 if seed < 100 {
-                    let mut scalar = Env::new(seeds[seat], true, false, false);
+                    let mut scalar = Env::new(seeds[seat], true, false);
                     let obs = scalar
                         .reset(vec![roster[pair.0].clone(), roster[pair.1].clone()])
                         .unwrap()
@@ -1549,7 +1549,7 @@ mod tests {
             .iter()
             .zip(vector.current_matchup_indices())
             .map(|(seed, (a, b))| {
-                let mut env = Env::new(*seed, true, false, false);
+                let mut env = Env::new(*seed, true, false);
                 env.reset(vec![roster[a].clone(), roster[b].clone()])
                     .unwrap();
                 env
@@ -1832,7 +1832,7 @@ mod tests {
         vector
             .reset_seeds_into(seeds.to_vec(), |_, _, _, _, _| Ok(()))
             .unwrap();
-        let mut scalar = seeds.map(|seed| Env::new(seed, true, false, false));
+        let mut scalar = seeds.map(|seed| Env::new(seed, true, false));
         for env in &mut scalar {
             env.reset(sample_player_configs()).unwrap();
         }
@@ -1872,7 +1872,7 @@ mod tests {
             serde_json::to_value(&configs).unwrap()
         );
         assert_eq!(context["failed_action_index"], 999_999);
-        let mut scalar = Env::new(context["seed"].as_u64().unwrap(), true, false, false);
+        let mut scalar = Env::new(context["seed"].as_u64().unwrap(), true, false);
         scalar.reset(configs).unwrap();
         for action in context["trace"]["actions"].as_array().unwrap() {
             scalar.step(action.as_i64().unwrap()).unwrap();
@@ -1915,7 +1915,7 @@ mod tests {
             })
             .collect();
         let mut seeds = [33_u64, 34, 35];
-        let mut scalar = seeds.map(|seed| Env::new(seed, true, false, false));
+        let mut scalar = seeds.map(|seed| Env::new(seed, true, false));
         for (env, setup) in scalar.iter_mut().zip(&configs) {
             env.reset(setup.clone()).unwrap();
         }

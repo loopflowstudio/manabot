@@ -26,13 +26,12 @@ class StepEnum(IntEnum):
     COMBAT_BEGIN = 4
     COMBAT_DECLARE_ATTACKERS = 5
     COMBAT_DECLARE_BLOCKERS = 6
-    COMBAT_DAMAGE = 7
-    COMBAT_END = 8
-    POSTCOMBAT_MAIN_STEP = 9
-    ENDING_END = 10
-    ENDING_CLEANUP = 11
-    # Appended as 12 to preserve Observation JSON discriminants; reorder before COMBAT_DAMAGE in 0.3.0.
-    COMBAT_FIRST_STRIKE_DAMAGE = 12
+    COMBAT_FIRST_STRIKE_DAMAGE = 7
+    COMBAT_DAMAGE = 8
+    COMBAT_END = 9
+    POSTCOMBAT_MAIN_STEP = 10
+    ENDING_END = 11
+    ENDING_CLEANUP = 12
 
 
 class ActionEnum(IntEnum):

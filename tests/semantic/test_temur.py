@@ -8,9 +8,11 @@ from manabot.env.observation import (
     CARD_DIM,
     PLAYER_DIM,
     ObservationSpace,
+    column,
 )
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
+from manabot.verify.text_observation import priority_root
 import managym
 from tests.fixtures.observation_rows import observation_arrays
 
@@ -31,15 +33,18 @@ def test_temur_learning_catalog_closes_the_registered_cards() -> None:
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:
     match = MatchConfig.authored("elemental-temur-v1", "temur_left", "temur_right")
-    env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=163)
+    space = ObservationSpace()
+    env = Env(Match(match), space, Reward(RewardConfig()), seed=163)
     observation, _ = env.reset(seed=163)
-    # Policy input v5, the default: every observed fact has a column.
-    assert observation["agent_player"].shape[-1] == PLAYER_DIM
-    assert observation["agent_cards"].shape[-1] == CARD_DIM
+    encoded = observation_arrays(space, observation)
+    assert encoded["agent_player"].shape[-1] == PLAYER_DIM
+    assert encoded["agent_cards"].shape[-1] == CARD_DIM
     rng = np.random.default_rng(163)
     for _ in range(5000):
-        actions = np.flatnonzero(observation["actions_valid"])
-        observation, _, terminal, truncated, info = env.step(int(rng.choice(actions)))
+        action_count = len(observation.action_space.actions)
+        observation, _, terminal, truncated, info = env.step(
+            int(rng.integers(action_count))
+        )
         assert not truncated
         assert not info["action_space_truncated"]
         assert not info["card_space_truncated"]
@@ -50,16 +55,10 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
 
 
 def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
-    env = managym.Env(seed=163, skip_trivial=False)
-    env.reset(
-        [
-            managym.authored_deck_setup("elemental-temur-v1", key)
-            for key in ("temur_left", "temur_right")
-        ]
+    env = priority_root(
+        (), ("Hermitic Herbalist", "Iroh, Grand Lotus"), mana_floats="all"
     )
-    env.scenario_force_battlefield(0, "Hermitic Herbalist")
-    env.scenario_force_battlefield(0, "Iroh, Grand Lotus")
-    observation = env.scenario_refresh()
+    observation = env.observation_for_player(env.current_agent_index())
     activation = next(
         i
         for i, action in enumerate(observation.action_space.actions)
@@ -73,6 +72,18 @@ def test_temur_restricted_mana_and_legendary_flags_encode() -> None:
     )
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
-    assert any(card.is_legendary for card in observation.agent_cards)
-    encoded = observation_arrays(ObservationSpace(ObservationConfig()), observation)
-    assert encoded["agent_player"][0, 37] == np.float32(0.2)
+    iroh = next(
+        i
+        for i, permanent in enumerate(observation.agent_permanents)
+        if permanent.characteristics.name == "Iroh, Grand Lotus"
+    )
+    assert observation.agent_permanents[iroh].characteristics.is_legendary
+    space = ObservationSpace(ObservationConfig())
+    encoded = observation_arrays(space, observation)
+    assert encoded["agent_player"][
+        0, column("agent_player", "lesson_mana_red")
+    ] == np.float32(0.2)
+    assert (
+        encoded["agent_permanents"][iroh, column("agent_permanents", "is_legendary")]
+        == 1
+    )

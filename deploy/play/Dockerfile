@@ -15,7 +15,6 @@ ENV PATH=/root/.cargo/bin:$PATH
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/
 WORKDIR /build
 COPY managym/ managym/
-COPY academy/__init__.py academy/__init__.py
 COPY content/ content/
 COPY --from=web /build/academy/ui/build/ managym/academy/site/
 # Match the release staging project root so explicit site includes are honored.

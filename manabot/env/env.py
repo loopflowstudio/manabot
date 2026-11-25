@@ -64,7 +64,6 @@ class Env(gym.Env[managym.Observation, int]):
         reward: Reward,
         seed: int = 0,
         enable_profiler: bool = False,
-        enable_behavior_tracking: bool = False,
         *,
         capture: ScalarCapture | None = None,
     ) -> None:
@@ -86,10 +85,9 @@ class Env(gym.Env[managym.Observation, int]):
         )
         self.skip_trivial = True
         self.enable_profiler = enable_profiler
-        self.enable_behavior_tracking = enable_behavior_tracking
         logger = getLogger(__name__)
         logger.info(
-            f"Initializing Env with seed={self.seed}, skip_trivial={self.skip_trivial}, enable_profiler={self.enable_profiler}, enable_behavior_tracking={self.enable_behavior_tracking}"
+            f"Initializing Env with seed={self.seed}, skip_trivial={self.skip_trivial}, enable_profiler={self.enable_profiler}"
         )
         self._engine = managym.Env(
             seed=self.seed,
@@ -97,7 +95,6 @@ class Env(gym.Env[managym.Observation, int]):
             decision_memory_include_own=obs_space.config.decision_memory_include_own,
             skip_trivial=self.skip_trivial,
             enable_profiler=self.enable_profiler,
-            enable_behavior_tracking=self.enable_behavior_tracking,
         )
 
         self.failure_context = self._capture.context

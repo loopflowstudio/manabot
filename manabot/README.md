@@ -122,10 +122,7 @@ whole game. It is a read-only seat sequence; slicing and re-wrapping with
 `GameSetup(setup)` preserve disclosure unless explicitly overridden.
 A plain list of seats uses the open default.
 `MatchConfig.from_players(first, second, decklists="closed")`
-records native seats and rejects differing worlds. The old
-`PlayerConfig.disclosure` alias warns and will be removed in 0.3.0; disagreeing
-legacy seat values or hints conflicting with the game setting raise when
-creating a game. Evaluation matchups take
+records native seats and rejects differing worlds. Evaluation matchups take
 `MatchConfig.decklists`, open or closed, never mixed; an
 [`AuthoredMatchup`](#explicit-research-evaluation-matrices) sets it for all of
 its legs.

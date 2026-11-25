@@ -10,7 +10,6 @@ import managym
 from managym.recording import (
     RecordedVectorEnv,
     ScalarCapture,
-    read_failure,
     read_record,
 )
 from managym.replay import replay_failure_inputs, require_replay_runtime
@@ -176,7 +175,7 @@ def test_decision_memory_option_survives_journal_reset_and_replay(
         scalar.step(game, 0)
         scalar.reset(game, players)
         scalar.step(game, 0)
-    evidence = read_failure(path)
+    evidence = read_record(path)
     assert evidence.games[0].decision_memory_include_own is include_own
     assert evidence.games[0].decision_memory is (enabled or include_own)
     assert evidence.games[0].actions == [0]

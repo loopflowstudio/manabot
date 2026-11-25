@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use super::observation_encoder::{phase_index, step_index};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
@@ -1052,8 +1053,8 @@ pub(crate) fn capture(
         kind: format!("{:?}", space.kind),
         context: DecisionContext {
             turn: game.state.turn.turn_number,
-            phase: game.state.turn.current_phase_kind() as u8,
-            step: game.state.turn.current_step_kind() as u8,
+            phase: phase_index(game.state.turn.current_phase_kind()),
+            step: step_index(game.state.turn.current_step_kind()),
             life: players.map(|p| game.state.players[p.0].life),
             hand,
             board_counts,
@@ -1142,6 +1143,25 @@ mod tests {
                 player: PlayerId(0),
             },
         )
+    }
+
+    #[test]
+    fn decision_memory_keeps_the_stored_combat_damage_and_cleanup_indices() {
+        use crate::flow::turn::{PhaseKind, StepKind, PHASE_STEPS};
+
+        let mut game = game();
+        for (phase, step, saved_phase, saved_step) in [
+            (PhaseKind::Combat, StepKind::CombatDamage, 2, 7),
+            (PhaseKind::Ending, StepKind::Cleanup, 4, 11),
+        ] {
+            game.state.turn.current_phase = phase as usize;
+            game.state.turn.current_step = PHASE_STEPS[phase as usize]
+                .iter()
+                .position(|&scheduled| scheduled == step)
+                .unwrap();
+            let context = pending_pass(&game).unwrap().record.context;
+            assert_eq!((context.phase, context.step), (saved_phase, saved_step));
+        }
     }
 
     #[test]

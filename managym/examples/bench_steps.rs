@@ -35,7 +35,7 @@ fn main() {
     let mut capped = 0u64;
     let start = Instant::now();
     for seed in seeds {
-        let mut env = Env::new(seed, true, false, false);
+        let mut env = Env::new(seed, true, false);
         env.reset(curated::setup(usable_taps)).unwrap();
         if layers {
             curated::add_layer_board(&mut env);

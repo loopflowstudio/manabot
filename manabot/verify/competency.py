@@ -456,7 +456,6 @@ def play_probed_games(
         Reward(RewardConfig()),
         seed=seed,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
 
     records: list[dict[str, Any]] = []

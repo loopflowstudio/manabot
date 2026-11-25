@@ -636,8 +636,9 @@ toughness. The v11 stack column stores the amount in tenths. Both viewers see
 the unscaled amount in the ability description. `Permanent.name` keeps its old
 override meaning (`None` while the printed name applies).
 
-The old Python `.card` accessors and flat characteristic getters are derived
-compatibility aliases, warn, and are removed in 0.3.0. Frozen viewer JSON
+Read card, permanent and spell characteristics through `.characteristics` (and
+object metadata such as `object_id`, `owner_id`, `is_token` and `is_copy` on the
+permanent or stack object itself). Frozen viewer JSON
 keeps its existing fields and bytes; those wire records are normalized on read.
 Historical captures whose object identity is missing or ambiguous are refused.
 Academy's retained `base_power`/`base_toughness` fields still mean effective

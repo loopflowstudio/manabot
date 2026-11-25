@@ -703,12 +703,12 @@ fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [Cell]
         out[player::LIBRARY_COUNT + i] = Scalar(player.zone_counts[i] as f32 / 60.0);
     }
 
-    let phase_index = phase_index(turn.phase);
+    let phase_index = usize::from(phase_index(turn.phase));
     if phase_index < PHASE_DIM {
         out[player::PHASE_BEGINNING + phase_index] = Integer(1);
     }
 
-    let step_index = step_index(turn.step);
+    let step_index = usize::from(step_index(turn.step));
     if step_index < STEP_DIM {
         out[player::STEP_UNTAP + step_index] = Integer(1);
     }
@@ -1551,7 +1551,7 @@ fn encode_events(
     Ok(())
 }
 
-fn phase_index(phase: PhaseKind) -> usize {
+pub(super) fn phase_index(phase: PhaseKind) -> u8 {
     match phase {
         PhaseKind::Beginning => 0,
         PhaseKind::PrecombatMain => 1,
@@ -1561,7 +1561,7 @@ fn phase_index(phase: PhaseKind) -> usize {
     }
 }
 
-fn step_index(step: StepKind) -> usize {
+pub(super) fn step_index(step: StepKind) -> u8 {
     match step {
         StepKind::Untap => 0,
         StepKind::Upkeep => 1,

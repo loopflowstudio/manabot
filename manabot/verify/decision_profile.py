@@ -171,7 +171,6 @@ def play_profile_games(
         reward,
         seed=seed,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
     hero_policy = build_hero_policy(
         hero_policy_name,

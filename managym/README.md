@@ -1103,9 +1103,13 @@ the rest. Without trample, that sole blocker takes all 5. The engine deals
 the assignments together after the final choice.
 
 When a combatant has first strike or double strike (CR 510.4), the first damage
-step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`),
-followed by the regular `StepKind::CombatDamage` (`COMBAT_DAMAGE`) step. Each
-permanent's `first_strike_participant` remembers whether it had first strike or
+step is exposed as `StepKind::FirstStrikeCombatDamage` (`COMBAT_FIRST_STRIKE_DAMAGE`,
+discriminant `7`), followed by the regular `StepKind::CombatDamage`
+(`COMBAT_DAMAGE`, `8`) through `StepKind::Cleanup` (`ENDING_CLEANUP`, `12`).
+`Observation.toJSON()` writes `turn.phase` and `turn.step` as their public enum
+names while `Observation.from_json` continues to decode 0.2.x integer codes
+([turn steps and Observation JSON](../docs/engine.md#turn-steps-and-observation-json)).
+Each permanent's `first_strike_participant` remembers whether it had first strike or
 double strike when the first step began, including after its abilities change.
 ### Reading power during combat
 

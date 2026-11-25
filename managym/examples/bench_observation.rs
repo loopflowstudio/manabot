@@ -11,13 +11,14 @@ use managym::{
         observation_layout::{configured_arrays, ArrayLayout},
         observation_rows::PackedRows,
     },
+    flow::turn::PhaseKind,
     state::player::PlayerConfig,
 };
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, hint::black_box, time::Instant};
 
 fn root(large: bool) -> (Env, Observation) {
-    let mut env = Env::new(23, false, false, false);
+    let mut env = Env::new(23, false, false);
     let deck = [
         ("Swamp".into(), 20),
         ("Deadly Precision".into(), 40),
@@ -38,7 +39,7 @@ fn root(large: bool) -> (Env, Observation) {
             ),
         ])
         .unwrap();
-    while obs.turn.phase as i32 != 1 {
+    while obs.turn.phase != PhaseKind::PrecombatMain {
         let pass = obs
             .action_space
             .actions

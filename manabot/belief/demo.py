@@ -60,7 +60,6 @@ def runtime_env() -> tuple[Env, managym.Observation]:
         Reward(RewardConfig()),
         seed=19,
         enable_profiler=False,
-        enable_behavior_tracking=False,
     )
     env.reset(seed=19)
     return env, env.last_raw_obs

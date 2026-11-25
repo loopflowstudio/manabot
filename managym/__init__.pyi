@@ -16,7 +16,6 @@ from typing import (
 )
 
 import numpy as np
-from typing_extensions import deprecated
 
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
@@ -145,8 +144,6 @@ class CatalogTokens(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
-
 def catalog_tokens() -> CatalogTokens:
     """Tokenized rules text of every catalog definition, rows by CardDefId."""
 
@@ -165,13 +162,6 @@ def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same
     concept. Namespaces: `token`, `name`, `restriction`."""
-
-@deprecated("use catalog_tokens; removed in 0.3.0")
-def learning_catalog() -> CatalogTokens: ...
-@deprecated("use catalog_token_value; removed in 0.3.0")
-def learning_token_value(name: str) -> int: ...
-@deprecated("use record_vocabulary; removed in 0.3.0")
-def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]: ...
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -264,7 +254,6 @@ class Env:
         seed: int = 0,
         skip_trivial: bool = True,
         enable_profiler: bool = False,
-        enable_behavior_tracking: bool = False,
         *,
         decision_memory_include_own: bool = False,
         decision_memory: bool = False,
@@ -534,7 +523,6 @@ class VectorEnv:
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
         *,
         decision_memory_include_own: bool = False,
@@ -642,14 +630,11 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         world: str | None = None,
-        disclosure: DecklistDisclosure | None = None,
     ) -> None: ...
     name: str
     world: str | None
     """``WORLD_SETUP`` submits the deck to the world (reset admits it); ``None``
     runs it as given. Any other value raises: content packs are retired."""
-    # Deprecated per-seat hint, removed in 0.3.0; use GameSetup.decklists.
-    disclosure: DecklistDisclosure
     @property
     def deck(self) -> Deck: ...
     @property
@@ -787,13 +772,12 @@ class StepEnum(IntEnum):
     COMBAT_BEGIN = 4
     COMBAT_DECLARE_ATTACKERS = 5
     COMBAT_DECLARE_BLOCKERS = 6
-    COMBAT_DAMAGE = 7
-    COMBAT_END = 8
-    POSTCOMBAT_MAIN_STEP = 9
-    ENDING_END = 10
-    ENDING_CLEANUP = 11
-    # Appended as 12 to preserve Observation JSON discriminants; reorder before COMBAT_DAMAGE in 0.3.0.
-    COMBAT_FIRST_STRIKE_DAMAGE = 12
+    COMBAT_FIRST_STRIKE_DAMAGE = 7
+    COMBAT_DAMAGE = 8
+    COMBAT_END = 9
+    POSTCOMBAT_MAIN_STEP = 10
+    ENDING_END = 11
+    ENDING_CLEANUP = 12
 
 class ActionEnum(IntEnum):
     PRIORITY_PLAY_LAND = 0
@@ -1019,10 +1003,7 @@ class ObservationCharacteristics:
     mana_cost: ManaCost
 
 class Card:
-    """A visible card outside the battlefield and stack.
-
-    Flat characteristic accessors are deprecated aliases, removed in 0.3.0.
-    """
+    """A visible card outside the battlefield and stack."""
 
     characteristics: ObservationCharacteristics
 
@@ -1030,22 +1011,9 @@ class Card:
     owner_id: int
     id: int
     registry_key: int
-    name: str
-    text_box: str
-    power: int
-    toughness: int
     is_token: bool
-    is_legendary: bool
-    is_ally: bool
-    is_lesson: bool
-    ward_cost: int
-    kicker_cost: int
-    card_types: CardTypes
-    keywords: Keywords
-    mana_cost: ManaCost
     face_down: bool
     cast_permissions: list[CastPermission]
-    cast_permission: Optional[CastPermission]
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
@@ -1124,9 +1092,6 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
-    # Derived characteristic aliases warn; removed in 0.3.0.
-    power: int
-    toughness: int
     is_animated: bool
     has_exile_link: bool
     exile_if_dies_this_turn: bool
@@ -1136,8 +1101,6 @@ class Permanent:
     once_each_turn_used: int
     granted_firebending: int
     temp_subtypes: List[str]
-    # Effective keywords (printed + until-EOT grants).
-    keywords: Keywords
     # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, age, ice, ...).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
@@ -1164,9 +1127,6 @@ class Permanent:
     timestamp: int | None
     # The copy effect that made it a copy; None for an original.
     copy: CopyEffect | None
-    @property
-    @deprecated("use characteristics and object_id/owner_id/is_token; removed in 0.3.0")
-    def card(self) -> Card | None: ...
 
 class Turn:
     creature_died_this_turn: bool
@@ -1249,9 +1209,6 @@ class StackObject:
     # A spell cast with flashback (exiled as it leaves the stack).
     @property
     def flashback(self) -> bool: ...
-    @property
-    @deprecated("use characteristics and object_id/owner_id/is_copy; removed in 0.3.0")
-    def card(self) -> Card | None: ...
 
 class EventData:
     event_type: EventTypeEnum
@@ -1296,8 +1253,6 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
-# Deprecated: the label of the last numbered world; removed in 0.3.0.
-WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 # Most options one naming prompt offers; larger scopes publish groups first.

@@ -14,7 +14,7 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
         pack.player_config("arena-seat-0", "elemental_wb").unwrap(),
         pack.player_config("arena-seat-1", "elemental_ug").unwrap(),
     ];
-    let mut env = managym::agent::env::Env::new(2165384, true, false, false);
+    let mut env = managym::agent::env::Env::new(2165384, true, false);
     let mut setup = GameSetup::from(configs);
     setup.mana_floats = [ManaFloats::Usable; 2];
     env.reset(setup).unwrap();

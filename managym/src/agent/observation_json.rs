@@ -93,8 +93,8 @@ impl Serialize for TurnJson<'_> {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("active_player_id", &value.active_player_id)?;
         map.serialize_entry("agent_player_id", &value.agent_player_id)?;
-        map.serialize_entry("phase", &(value.phase as i32))?;
-        map.serialize_entry("step", &(value.step as i32))?;
+        map.serialize_entry("phase", value.phase.name())?;
+        map.serialize_entry("step", value.step.name())?;
         if value.creature_died_this_turn {
             map.serialize_entry("creature_died_this_turn", &true)?;
         }
@@ -456,11 +456,38 @@ macro_rules! integer_enum {
         }
     };
 }
-integer_enum!(phase, PhaseKind, {0 => PhaseKind::Beginning, 1 => PhaseKind::PrecombatMain, 2 => PhaseKind::Combat, 3 => PhaseKind::PostcombatMain, 4 => PhaseKind::Ending});
-// 0.3.0: switch `turn.step` (and `phase`) in `Observation.toJSON()` to string
-// names (accepting these legacy ints on deserialize) and reorder
-// `StepKind::FirstStrikeCombatDamage` before `CombatDamage`.
-integer_enum!(step, StepKind, {0 => StepKind::Untap, 1 => StepKind::Upkeep, 2 => StepKind::Draw, 3 => StepKind::Main, 4 => StepKind::BeginningOfCombat, 5 => StepKind::DeclareAttackers, 6 => StepKind::DeclareBlockers, 7 => StepKind::CombatDamage, 8 => StepKind::EndOfCombat, 9 => StepKind::PostcombatMain, 10 => StepKind::End, 11 => StepKind::Cleanup, 12 => StepKind::FirstStrikeCombatDamage});
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TurnField {
+    Name(String),
+    LegacyCode(i64),
+}
+
+impl TurnField {
+    fn decode<T, E: serde::de::Error>(
+        self,
+        from_name: fn(&str) -> Option<T>,
+        from_code: fn(i64) -> Option<T>,
+    ) -> Result<T, E> {
+        match self {
+            Self::Name(name) => {
+                from_name(&name).ok_or_else(|| E::custom(format!("unsupported enum value {name}")))
+            }
+            Self::LegacyCode(code) => {
+                from_code(code).ok_or_else(|| E::custom(format!("unsupported enum value {code}")))
+            }
+        }
+    }
+}
+
+pub fn phase<'de, D: Deserializer<'de>>(de: D) -> Result<PhaseKind, D::Error> {
+    TurnField::deserialize(de)?.decode(PhaseKind::from_name, PhaseKind::from_legacy_code)
+}
+
+pub fn step<'de, D: Deserializer<'de>>(de: D) -> Result<StepKind, D::Error> {
+    TurnField::deserialize(de)?.decode(StepKind::from_name, StepKind::from_legacy_code)
+}
+
 integer_enum!(zone, ZoneType, {0 => ZoneType::Library, 1 => ZoneType::Hand, 2 => ZoneType::Battlefield, 3 => ZoneType::Graveyard, 4 => ZoneType::Stack, 5 => ZoneType::Exile, 6 => ZoneType::Command});
 integer_enum!(action, ActionType, {0 => ActionType::PriorityPlayLand, 1 => ActionType::PriorityCastSpell, 2 => ActionType::PriorityPassPriority, 3 => ActionType::DeclareAttacker, 4 => ActionType::DeclareBlocker, 5 => ActionType::ChooseTarget, 6 => ActionType::PriorityActivateAbility, 7 => ActionType::ScryKeep, 8 => ActionType::ScryBottom, 9 => ActionType::SelectCard, 10 => ActionType::DeclineChoice, 11 => ActionType::PayCost, 12 => ActionType::ChooseMode, 13 => ActionType::TapForCost, 14 => ActionType::LearnTakeLesson, 15 => ActionType::LearnDiscard, 16 => ActionType::ChooseTrigger});
 integer_enum!(space, ActionSpaceKind, {0 => ActionSpaceKind::GameOver, 1 => ActionSpaceKind::Priority, 2 => ActionSpaceKind::DeclareAttacker, 3 => ActionSpaceKind::DeclareBlocker, 4 => ActionSpaceKind::ChooseTarget, 5 => ActionSpaceKind::Scry, 6 => ActionSpaceKind::LookAndSelect, 7 => ActionSpaceKind::PayOrNot, 8 => ActionSpaceKind::Modal, 9 => ActionSpaceKind::Learn, 10 => ActionSpaceKind::Waterbend, 11 => ActionSpaceKind::Discard, 12 => ActionSpaceKind::LegendRule, 13 => ActionSpaceKind::OrderTriggers});
@@ -527,7 +554,7 @@ pub fn parse_with_history(text: &str) -> Result<Observation, String> {
 }
 
 fn parse_observation(text: &str, include_history: bool) -> Result<Observation, String> {
-    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let mut value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let observation: Observation =
         serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
     let canonical = if include_history {
@@ -540,6 +567,15 @@ fn parse_observation(text: &str, include_history: bool) -> Result<Observation, S
     };
     let roundtrip: serde_json::Value =
         serde_json::from_str(&canonical).map_err(|e| e.to_string())?;
+    // Compare the entire capture, allowing only the two historical integer spellings.
+    for (key, name) in [
+        ("phase", observation.turn.phase.name()),
+        ("step", observation.turn.step.name()),
+    ] {
+        if value["turn"][key].is_i64() {
+            value["turn"][key] = name.into();
+        }
+    }
     if value != roundtrip || !observation.validate() {
         return Err("noncanonical viewer observation".into());
     }
@@ -713,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_json_preserves_baseline_bytes_and_hashes() {
+    fn baseline_captures_change_only_the_turn_names() {
         use sha2::{Digest, Sha256};
         use std::{fs, path::Path};
 
@@ -737,16 +773,32 @@ mod tests {
         for case in provenance.cases {
             let expected = fs::read_to_string(root.join(format!("{}.json", case.name))).unwrap();
             let observation: Observation = serde_json::from_str(&expected).unwrap();
-            let actual = observation.to_json();
-            assert_eq!(actual.as_bytes(), expected.as_bytes(), "{}", case.name);
+            // Compare before parse upgrades historical battlefield and stack rows.
+            let named = expected
+                .replace(
+                    r#""phase":1,"step":3"#,
+                    r#""phase":"PRECOMBAT_MAIN","step":"PRECOMBAT_MAIN_STEP""#,
+                )
+                .replace(
+                    r#""phase":0,"step":1"#,
+                    r#""phase":"BEGINNING","step":"BEGINNING_UPKEEP""#,
+                );
+            assert_ne!(named, expected, "{}", case.name);
+            assert_eq!(observation.to_json(), named, "{}", case.name);
             assert_eq!(
-                format!("{:x}", Sha256::digest(actual.as_bytes())),
+                parse(&expected).unwrap(),
+                parse(&named).unwrap(),
+                "{}",
+                case.name
+            );
+            assert_eq!(
+                format!("{:x}", Sha256::digest(expected.as_bytes())),
                 case.sha256,
                 "{}",
                 case.name
             );
             assert_eq!(
-                blake3::hash(actual.as_bytes()).to_hex().as_str(),
+                blake3::hash(expected.as_bytes()).to_hex().as_str(),
                 case.blake3,
                 "{}",
                 case.name

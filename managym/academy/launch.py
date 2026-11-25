@@ -21,7 +21,6 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
-import warnings
 import webbrowser
 
 from managym.disclosure import DecklistDisclosure
@@ -46,40 +45,6 @@ class RecordedGame:
     ended: str
     digest: str
     _record: dict[str, Any] = field(repr=False, compare=False)
-
-    @property
-    def deal_seed(self) -> int:
-        _warn_listing_field("deal_seed", "seed")
-        return self.seed
-
-    @property
-    def leg(self) -> int:
-        _warn_listing_field("leg", "stream")
-        return self.stream
-
-    @property
-    def game_trace_sha256(self) -> str:
-        _warn_listing_field("game_trace_sha256", "digest")
-        return self.digest
-
-    @property
-    def decks(self) -> tuple[str, str]:
-        _warn_listing_field("decks", "the original record's setups")
-        if "seat_decks" in self._record:
-            return _seat_pair(self._record, "seat_decks")
-        games = self._record.get("games")
-        if games:
-            names = [player["name"] for player in games[0]["players"]]
-            return names[0], names[1]
-        return "interactive", "interactive"
-
-
-def _warn_listing_field(name: str, replacement: str) -> None:
-    warnings.warn(
-        f"RecordedGame.{name} is deprecated; use {replacement}; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=3,
-    )
 
 
 class AcademyLaunchError(ValueError):

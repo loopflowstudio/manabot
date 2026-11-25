@@ -132,6 +132,52 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 Consumers read the encoded arrays by name; see
 [encoded observations](#encoded-observations).
 
+#### Turn steps and Observation JSON
+
+Rust `StepKind` and the integer values of Python's `managym.StepEnum` follow
+rules order. First-strike damage (`COMBAT_FIRST_STRIKE_DAMAGE`, `7`) precedes
+regular damage (`COMBAT_DAMAGE`, `8`). Cleanup (`ENDING_CLEANUP`, `12`)
+is the last step. `Observation.toJSON()` writes `turn.phase` and `turn.step`
+as their public enum names.
+
+```python
+import json
+import managym
+
+game = managym.Env(seed=42)
+obs, _ = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 20, "Gray Ogre": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 20, "Llanowar Elves": 20}),
+])
+for _ in range(2):  # keep both opening hands
+    obs, _, _, _, _ = game.step(0)
+
+wire = json.loads(obs.toJSON())
+print(wire["turn"]["phase"], wire["turn"]["step"])
+# PRECOMBAT_MAIN PRECOMBAT_MAIN_STEP
+print(
+    int(managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE),
+    int(managym.StepEnum.COMBAT_DAMAGE),
+)
+# 7 8
+
+# 0.2.x captures with integer phase/step codes (including 12 for first strike) still load.
+wire["turn"]["phase"], wire["turn"]["step"] = 1, 3
+restored = managym.Observation.from_json(json.dumps(wire))
+assert restored.toJSON() == obs.toJSON()
+```
+
+`Observation.from_json` reads standalone observations. `validate_observation_json`
+checks the same turn fields inside a semantic observation's `viewer_state`.
+Both accept public enum names and 0.2.x integer codes. Legacy phase codes
+range from `0` to `4`. Legacy step codes range from `0` to `12`, with `12`
+meaning `COMBAT_FIRST_STRIKE_DAMAGE`. Unknown names, out-of-range integers,
+floats, booleans and nulls raise an error.
+
+Live `viewer_state_hash` values reflect the names in canonical observation
+JSON. Policy inputs and decision memory keep the stored step indices `0..=11`.
+Both damage steps use index `7`, and cleanup uses `11`.
+
 ### Executing an action
 
 Whatever chose the action, the engine checks it again before anything changes.
@@ -382,14 +428,12 @@ Supplying an external index for a built-in chooser raises an error. Native
 trivial skipping still applies. Each seat owns independent heuristic memory;
 reset clears both, even with the same seed, and forks copy both.
 
-The Python training wrapper accepts the same tuple. The public vector
-`opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:
-`none` maps to `(agent, agent)`, other values to `(agent, value)`. Supplying both
-arguments or an unknown name raises `ValueError`.
+The Python training wrapper accepts the same tuple. Supplying an unknown policy
+name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch a player policy to random play.
-`"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through RecordedVectorEnv and Torch. Retained failure evidence keeps its original
+`"passive"` is unsupported and raises `ValueError`, including
+through `RecordedVectorEnv` and Torch. Retained failure evidence keeps its original
 policy name; replaying a passive-policy receipt requires its original source.
 
 ### Built-in heuristic
@@ -886,17 +930,6 @@ rather than identities, `managym.catalog_tokens()` gives each definition's
 tokenized rules text, rows by `CardDefId`, with the same `keys` and
 `registry_names` beside them, so the tokens describe cards a model has not
 seen.
-
-### Deprecated names
-
-Engine names describe what managym produces. These earlier spellings, named for
-manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
-
-| Deprecated | Use |
-|---|---|
-| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
-| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
-| `managym.learning_record_names()` | `managym.record_vocabulary()` |
 
 ## Cards as programs
 
@@ -1588,8 +1621,7 @@ The engine has no world label. `managym.world_identity()`
 ([`world.rs`](../managym/src/world.rs)) names the installed cards by their
 digest; checkpoints, recordings and evaluation records written before the
 label was removed still carry one, which nothing compares
-([history](../WORLDS.md)). `managym.WORLD_VERSION` is a deprecated alias,
-removed in 0.3.0. Which checkpoints load is
+([history](../WORLDS.md)). Which checkpoints load is
 [compatibility](observation-and-model.md#running-a-checkpoint-on-a-later-revision);
 which measurements line up is
 [evaluation](evaluation.md#comparing-measurements-across-revisions).

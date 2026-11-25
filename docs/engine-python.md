@@ -320,9 +320,6 @@ read through the same functions. Private snapshot replays (`managym-snapshot-v1`
 exported by `GameSnapshot.to_replay_json()`) also open directly through
 `read_record`, `read_records`, `records_from_source`, `walk`, and
 `managym academy replay`, executing any recorded boundary interventions natively.
-`FailureEvidence` and `read_failure` are the
-former names of `GameRecord` and `read_record`; they warn and are removed in
-0.3.0.
 
 ### Keep a durable journal
 

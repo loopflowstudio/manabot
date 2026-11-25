@@ -9,7 +9,7 @@ use crate::state::{
 /// A once-each-turn use, keyed by exact source, printed face and ability index.
 pub type OnceEachTurnKey = (ObjectId, crate::state::card::CardDefId, usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[repr(i32)]
 pub enum PhaseKind {
     // CR 500.1 — Turn phases in order.
@@ -20,7 +20,7 @@ pub enum PhaseKind {
     Ending = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[repr(i32)]
 pub enum StepKind {
     // CR 501-514 — Step order for a standard two-player turn.
@@ -31,18 +31,58 @@ pub enum StepKind {
     BeginningOfCombat = 4,
     DeclareAttackers = 5,
     DeclareBlockers = 6,
-    CombatDamage = 7,
-    EndOfCombat = 8,
-    PostcombatMain = 9,
-    End = 10,
-    Cleanup = 11,
-    /// CR 510.4 — Additional combat damage step for creatures with first
-    /// strike or double strike; precedes `CombatDamage` when present.
-    /// Appended as 12 while `Observation.toJSON()` serializes steps as ints;
-    /// switch `Observation.toJSON()` to string step names and reorder before
-    /// `CombatDamage` in 0.3.0.
-    FirstStrikeCombatDamage = 12,
+    /// CR 510.4 — Additional damage step for first strike or double strike.
+    FirstStrikeCombatDamage = 7,
+    CombatDamage = 8,
+    EndOfCombat = 9,
+    PostcombatMain = 10,
+    End = 11,
+    Cleanup = 12,
 }
+
+// Viewer JSON uses the public enum names. The integer column belongs to
+// captures written through 0.2.x and is independent of the enum's order.
+macro_rules! turn_wire_names {
+    ($kind:ident { $($variant:ident => ($name:literal, $code:literal)),+ $(,)? }) => {
+        impl $kind {
+            pub(crate) fn name(self) -> &'static str {
+                match self { $(Self::$variant => $name,)+ }
+            }
+
+            pub(crate) fn from_name(name: &str) -> Option<Self> {
+                match name { $($name => Some(Self::$variant),)+ _ => None }
+            }
+
+            pub(crate) fn from_legacy_code(code: i64) -> Option<Self> {
+                match code { $($code => Some(Self::$variant),)+ _ => None }
+            }
+        }
+    };
+}
+
+turn_wire_names!(PhaseKind {
+    Beginning => ("BEGINNING", 0),
+    PrecombatMain => ("PRECOMBAT_MAIN", 1),
+    Combat => ("COMBAT", 2),
+    PostcombatMain => ("POSTCOMBAT_MAIN", 3),
+    Ending => ("ENDING", 4),
+});
+
+turn_wire_names!(StepKind {
+    Untap => ("BEGINNING_UNTAP", 0),
+    Upkeep => ("BEGINNING_UPKEEP", 1),
+    Draw => ("BEGINNING_DRAW", 2),
+    Main => ("PRECOMBAT_MAIN_STEP", 3),
+    BeginningOfCombat => ("COMBAT_BEGIN", 4),
+    DeclareAttackers => ("COMBAT_DECLARE_ATTACKERS", 5),
+    DeclareBlockers => ("COMBAT_DECLARE_BLOCKERS", 6),
+    FirstStrikeCombatDamage => ("COMBAT_FIRST_STRIKE_DAMAGE", 12),
+    CombatDamage => ("COMBAT_DAMAGE", 7),
+    EndOfCombat => ("COMBAT_END", 8),
+    PostcombatMain => ("POSTCOMBAT_MAIN_STEP", 9),
+    End => ("ENDING_END", 10),
+    Cleanup => ("ENDING_CLEANUP", 11),
+});
 
 pub const PHASE_STEPS: [&[StepKind]; 5] = [
     // CR 500.1 — Structured phase/step progression.

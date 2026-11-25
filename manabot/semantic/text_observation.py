@@ -46,13 +46,12 @@ _STEPS = (
     "beginning of combat",
     "declare attackers",
     "declare blockers",
+    "first-strike combat damage",
     "combat damage",
     "end of combat",
     "second main",
     "end",
     "cleanup",
-    # Appended at index 12 to match StepEnum; reorder before "combat damage" in 0.3.0.
-    "first-strike combat damage",
 )
 _SPACES = (
     "game over",

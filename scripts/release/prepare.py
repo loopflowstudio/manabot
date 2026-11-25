@@ -34,7 +34,6 @@ def prepare(destination: Path, site: Path) -> None:
             continue
         if path.parts[0] not in {
             "manabot",
-            "academy",
             "content",
             "managym",
         } and name not in {
@@ -45,13 +44,9 @@ def prepare(destination: Path, site: Path) -> None:
             "protocol/experience-v1.schema.json",
         }:
             continue
-        if name.startswith("academy/ui/"):
-            continue
         if name.startswith("managym/libmanagym.dylib.dSYM/"):
             continue
-        target = (
-            engine if path.parts[0] in {"managym", "academy"} else destination
-        ) / path
+        target = (engine if path.parts[0] == "managym" else destination) / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / path, target)
         # Source receipts use installed paths, not staging paths. Bind

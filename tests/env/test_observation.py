@@ -6,6 +6,7 @@ Capacity refusal for cards, permanents and focus is in
 `tests/verify/test_native_buffer_capacities.py`.
 """
 
+import json
 from typing import Tuple
 
 import numpy as np
@@ -126,15 +127,15 @@ class TestEnumParity:
                 StepEnum.COMBAT_DECLARE_BLOCKERS,
                 managym.StepEnum.COMBAT_DECLARE_BLOCKERS,
             ),
+            (
+                StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+                managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
+            ),
             (StepEnum.COMBAT_DAMAGE, managym.StepEnum.COMBAT_DAMAGE),
             (StepEnum.COMBAT_END, managym.StepEnum.COMBAT_END),
             (StepEnum.POSTCOMBAT_MAIN_STEP, managym.StepEnum.POSTCOMBAT_MAIN_STEP),
             (StepEnum.ENDING_END, managym.StepEnum.ENDING_END),
             (StepEnum.ENDING_CLEANUP, managym.StepEnum.ENDING_CLEANUP),
-            (
-                StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
-                managym.StepEnum.COMBAT_FIRST_STRIKE_DAMAGE,
-            ),
         ],
     )
     def test_step_enum(self, py_enum, cpp_enum):
@@ -187,6 +188,48 @@ class TestEnumParity:
     )
     def test_event_entity_kind_enum(self, py_enum, cpp_enum):
         assert int(cpp_enum) == py_enum
+
+
+def test_retained_turn_codes_decode_to_rules_order(
+    env: managym.Env,
+    observation: managym.Observation,
+) -> None:
+    wire = json.loads(observation.toJSON())
+    semantic = json.loads(env.semantic_observation_json(env.current_agent_index()))
+    # Each tuple is in rules order. Its entries are the old wire codes.
+    for field, enum, codes in (
+        ("phase", PhaseEnum, (0, 1, 2, 3, 4)),
+        ("step", StepEnum, (0, 1, 2, 3, 4, 5, 6, 12, 7, 8, 9, 10, 11)),
+    ):
+        for current, legacy in enumerate(codes):
+            wire["turn"][field] = legacy
+            semantic["viewer_state"]["turn"][field] = legacy
+            managym.validate_observation_json(json.dumps(semantic))
+            restored = managym.Observation.from_json(json.dumps(wire))
+            assert int(getattr(restored.turn, field)) == current
+            named = restored.toJSON()
+            assert json.loads(named)["turn"][field] == enum(current).name
+            assert managym.Observation.from_json(named).toJSON() == named
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("phase", 5),
+        ("phase", False),
+        ("step", 13),
+        ("step", 1.0),
+        ("step", None),
+        ("step", "FirstStrikeCombatDamage"),
+    ],
+)
+def test_invalid_turn_fields_are_rejected(
+    observation: managym.Observation, field: str, value: object
+) -> None:
+    wire = json.loads(observation.toJSON())
+    wire["turn"][field] = value
+    with pytest.raises(ValueError):
+        managym.Observation.from_json(json.dumps(wire))
 
 
 class TestObservationSpace:
@@ -319,23 +362,25 @@ class TestObservationSpace:
             assert step_slice[int(observation.turn.step)] == pytest.approx(1.0)
 
     def test_card_and_permanent_features_are_partitioned_and_normalized(
-        self, observation_space, observation, config
-    ):
+        self, observation_space: ObservationSpace, observation: managym.Observation
+    ) -> None:
         encoded = observation_arrays(observation_space, observation)
 
         for i, card in enumerate(observation.agent_cards):
+            characteristics = card.characteristics
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
-            assert vec[8] == pytest.approx(card.power / 10.0)
-            assert vec[9] == pytest.approx(card.toughness / 10.0)
-            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+            assert vec[8] == pytest.approx(characteristics.power / 10.0)
+            assert vec[9] == pytest.approx(characteristics.toughness / 10.0)
+            assert vec[10] == pytest.approx(characteristics.mana_cost.mana_value / 10.0)
 
         for i, card in enumerate(observation.opponent_cards):
+            characteristics = card.characteristics
             vec = encoded["opponent_cards"][i]
             assert vec[7] == pytest.approx(0.0)
-            assert vec[8] == pytest.approx(card.power / 10.0)
-            assert vec[9] == pytest.approx(card.toughness / 10.0)
-            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+            assert vec[8] == pytest.approx(characteristics.power / 10.0)
+            assert vec[9] == pytest.approx(characteristics.toughness / 10.0)
+            assert vec[10] == pytest.approx(characteristics.mana_cost.mana_value / 10.0)
 
         for i, perm in enumerate(observation.agent_permanents):
             vec = encoded["agent_permanents"][i]

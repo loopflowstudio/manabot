@@ -144,9 +144,6 @@ pub struct PlayGrant {
     pub condition: Option<crate::state::ability::Condition>,
 }
 
-#[deprecated(note = "use PlayGrant; ExileCastGrant will be removed in 0.4.0")]
-pub type ExileCastGrant = PlayGrant;
-
 impl PlayGrant {
     /// A grant with no further terms: cast for the card's mana cost, any time
     /// its timing allows.

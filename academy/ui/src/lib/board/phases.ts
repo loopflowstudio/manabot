@@ -21,7 +21,7 @@ const ENGINE_STEPS: Record<string, string[]> = {
   begin_combat: ['COMBAT_BEGIN'],
   declare_attackers: ['COMBAT_DECLARE_ATTACKERS', 'DECLARE_ATTACKERS_STEP'],
   declare_blockers: ['COMBAT_DECLARE_BLOCKERS', 'DECLARE_BLOCKERS_STEP'],
-  combat_damage: ['COMBAT_DAMAGE', 'COMBAT_FIRST_STRIKE_DAMAGE', 'COMBAT_END'],
+  combat_damage: ['COMBAT_FIRST_STRIKE_DAMAGE', 'COMBAT_DAMAGE', 'COMBAT_END'],
   main2: ['POSTCOMBAT_MAIN_STEP'],
   end_step: ['ENDING_END', 'END_STEP', 'ENDING_CLEANUP'],
 };

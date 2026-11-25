@@ -600,8 +600,7 @@ def _backend_violations(path: str, source: str) -> list[int]:
 def test_only_composition_roots_choose_a_backend() -> None:
     violations = [
         f"{path.relative_to(REPO_ROOT)}:{line}"
-        for package in ("manabot", "academy")
-        for path in (REPO_ROOT / package).rglob("*.py")
+        for path in (REPO_ROOT / "manabot").rglob("*.py")
         if _BACKENDS not in path.parents
         for line in _backend_violations(
             str(path.relative_to(REPO_ROOT)), path.read_text()
@@ -678,19 +677,6 @@ with patch('managym.academy.extensions.entry_points', return_value=[]):
     policy = build_villain_policy(config)
     observation, *_ = engine.step(policy(engine, observation))
     assert observation.action_space.actions or observation.game_over
-"""
-    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
-
-
-def test_deprecated_academy_alias_keeps_module_identity() -> None:
-    probe = """
-import warnings
-with warnings.catch_warnings(record=True) as seen:
-    warnings.simplefilter('always')
-    import academy.server as old
-    import managym.academy.server as current
-assert old is current
-assert any('0.3.0' in str(row.message) for row in seen)
 """
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 

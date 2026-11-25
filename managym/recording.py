@@ -336,7 +336,12 @@ class GameRecord(BaseModel):
     @property
     def resolved_player_policies(self) -> tuple[str, str]:
         """Read either receipt spelling without deprecating retained evidence."""
-        return self.player_policies or _retained_player_policies(self.opponent_policy)
+        if self.player_policies is not None:
+            return self.player_policies
+        return (
+            "agent",
+            "agent" if self.opponent_policy in (None, "none") else self.opponent_policy,
+        )
 
 
 class GameChange(BaseModel):
@@ -631,15 +636,6 @@ class _Capture:
 
     def _snapshot(self) -> GameRecord:
         raise NotImplementedError
-
-    def evidence(self) -> GameRecord:
-        """Deprecated spelling of snapshot, removed in 0.3.0."""
-        warnings.warn(
-            "evidence() is deprecated; use snapshot(); removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.snapshot()
 
     def snapshot(self) -> GameRecord:
         """Copy replay inputs without accessing a live native game from a watchdog."""
@@ -1209,37 +1205,6 @@ _VECTOR_READS = frozenset(
 )
 
 
-def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
-    """Translate retained names; native construction validates the resulting seats."""
-    return (
-        "agent",
-        "agent" if opponent_policy in (None, "none") else opponent_policy,
-    )
-
-
-def resolve_player_policies(
-    opponent_policy: str | None, player_policies: tuple[str, str] | None
-) -> tuple[str, str]:
-    """Per-seat chooser policies from either spelling of the argument.
-
-    The legacy ``opponent_policy`` warns (removal in 0.3.0): ``none`` surfaces
-    both seats and any other name plays seat 1 natively. Native construction
-    rejects unknown per-seat names.
-    """
-    if opponent_policy is None:
-        return player_policies or ("agent", "agent")
-    if opponent_policy not in ("none", "random", "heuristic"):
-        raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
-    if player_policies is not None:
-        raise ValueError("use player_policies or opponent_policy, not both")
-    warnings.warn(
-        "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return _retained_player_policies(opponent_policy)
-
-
 class _ExposureSummary(BaseModel):
     """Narrow the native per-generation receipt once at the extension boundary."""
 
@@ -1266,7 +1231,6 @@ class RecordedVectorEnv(_Capture):
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str | None = None,
         player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
@@ -1288,7 +1252,9 @@ class RecordedVectorEnv(_Capture):
         self.decision_memory = decision_memory or decision_memory_include_own
         self._branch_roots: list[BranchRoot | None] = [None] * num_envs
         self.skip_trivial = skip_trivial
-        self.player_policies = resolve_player_policies(opponent_policy, player_policies)
+        self.player_policies = (
+            ("agent", "agent") if player_policies is None else player_policies
+        )
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             decision_memory=self.decision_memory,
@@ -2293,36 +2259,3 @@ def read_record(path: Path) -> GameRecord:
     if record is None or next(records, None) is not None:
         raise ValueError("expected exactly one game record")
     return record
-
-
-class FailureEvidence(GameRecord):
-    """Deprecated name of GameRecord, removed in 0.3.0."""
-
-    def __init__(self, **data: Any) -> None:
-        warnings.warn(
-            "FailureEvidence is deprecated; use GameRecord; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(**data)
-
-
-def read_failure(path: Path) -> GameRecord:
-    warnings.warn(
-        "read_failure is deprecated; use read_record; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return read_record(path)
-
-
-def __getattr__(name: str) -> Any:
-    if name == "CapturedVector":
-        warnings.warn(
-            "managym.recording.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return RecordedVectorEnv
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

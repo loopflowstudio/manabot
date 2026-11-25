@@ -15,7 +15,9 @@ from manabot.env.observation import (
     step_buffers,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.policy.decision_memory import MemoryCursor, admit_chunk
 from manabot.policy.spans import ObservationSelection
+from manabot.verify.text_observation import reset_to_first_main
 import managym
 from managym.decision_memory import read_records
 from tests.fixtures.observation_rows import observation_arrays, vector_arrays
@@ -118,6 +120,63 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
             )
     env.reset(Match().to_rust())
     assert _observations(env) == ["[]", "[]"]
+
+
+def test_damage_windows_and_cleanup_keep_their_recorded_step() -> None:
+    env = managym.Env(seed=23, decision_memory=True)
+    deck = {"Mountain": 20, "Lightning Bolt": 20, "Drogskol Reaver": 20}
+    actor = reset_to_first_main(
+        env,
+        managym.GameSetup([managym.PlayerConfig(name, deck) for name in ("a", "b")]),
+    )
+    env.scenario_force_battlefield(actor, "Drogskol Reaver", ready=True)
+    env.scenario_force_battlefield(actor, "Mountain", ready=True)
+    # A castable instant gives priority in each damage step. The Reaver's
+    # draws leave enough cards for a discard decision in cleanup.
+    env.scenario_force_card_in_hand(actor, "Lightning Bolt")
+    obs = env.scenario_refresh()
+    viewer = 1 - actor
+    saved = {"COMBAT_FIRST_STRIKE_DAMAGE": 7, "COMBAT_DAMAGE": 7, "ENDING_CLEANUP": 11}
+    windows: list[str] = []
+    for _ in range(48):
+        name = json.loads(obs.toJSON())["turn"]["step"]
+        actor_decision = env.current_agent_index() == actor
+        actions = obs.action_space.actions
+        if name == "ENDING_CLEANUP":
+            assert obs.action_space.action_space_type == managym.ActionSpaceEnum.DISCARD
+            index = 0
+        else:
+            index = next(
+                i
+                for i, action in enumerate(actions)
+                if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+                or (
+                    action.action_type == managym.ActionEnum.DECLARE_ATTACKER
+                    and action.declared
+                )
+            )
+        obs = env.step(index)[0]
+        if actor_decision and name in saved:
+            retained = env.observation_for_player(viewer)
+            records = read_records(retained.decision_memory_json())
+            assert records[-1].context.step == saved[name]
+            if not windows or windows[-1] != name:
+                windows.append(name)
+            if name == "ENDING_CLEANUP":
+                break
+    assert windows == list(saved)
+
+    space = ObservationSpace(
+        ObservationConfig(
+            max_decision_records=32,
+            max_decision_reference_details=32768,
+            max_decision_references=1024,
+            max_decision_members=16384,
+        )
+    )
+    batch = managym.encode_observation_batch([retained], space.layout)
+    rows = ObservationSelection(space, ((batch, 0),)).live_memory(0, (0, 0, 0, 0))
+    assert admit_chunk(rows, MemoryCursor()).records == len(records)
 
 
 def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
