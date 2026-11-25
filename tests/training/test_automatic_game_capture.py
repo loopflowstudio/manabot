@@ -494,12 +494,3 @@ def test_search_construction_failure_retains_original_error(tmp_path: Path) -> N
     assert failed.value is original
     evidence = read_record(scope.paths[0])
     assert evidence.mode == "search" and evidence.error == str(original)
-
-
-@pytest.mark.parametrize("name", ["GameRecord", "GameInputs", "PlayerSetup"])
-def test_portable_record_names_warn_before_removal(name: str) -> None:
-    from manabot.env import failures
-    from managym import recording
-
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        assert getattr(failures, name) is getattr(recording, name)

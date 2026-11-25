@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 import gzip
 import json
@@ -31,7 +32,7 @@ from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
 import managym
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
-from managym.recording import GameRecord, read_record
+from managym.recording import GameInputs, GameRecord, read_record
 from managym.replay import (
     ReplayAgreement,
     matches_retained_error,
@@ -75,6 +76,71 @@ class ReplayReceipt:
 
     def to_dict(self) -> dict[str, Any]:
         return {**asdict(self), "passed": self.passed}
+
+
+def record_actions(
+    setup: GameInputs,
+    actions: Iterable[int],
+    *,
+    players: tuple[str, str],
+    source: dict[str, object],
+) -> dict[str, Any]:
+    """Reconstruct one complete game, refusing missing or unoffered decisions."""
+    if len(setup.players) != 2:
+        raise ValueError("a game requires two player setups")
+    native = setup.setup()
+    first, second = native
+    game: dict[str, Any] = {
+        "match_id": f"recorded:{canonical_sha256({'setup': setup.model_dump(), 'source': source})}",
+        "deal_seed": setup.seed,
+        "leg": 0,
+        "seat_players": list(players),
+        "match_hypers": MatchConfig.from_players(
+            first,
+            second,
+            decklists=native.decklists,
+            mana_floats=native.mana_floats,
+            mana_payment=native.mana_payment,
+        ).model_dump(),
+        "observation_hypers": ObservationConfig().model_dump(),
+        "world": managym.world_identity(),
+        "source": source,
+        "decisions": [],
+        "winner": None,
+        "terminated": False,
+        "truncated": False,
+        "failure": None,
+    }
+    env, _ = replay_environment(game)
+    try:
+        game["initial_state_digest"] = env._engine.state_digest()
+        for revision, action in enumerate(actions):
+            if game["terminated"]:
+                raise ValueError(
+                    f"decision {revision}: actions continue after game ended"
+                )
+            frame = build_viewer_frame(
+                env.last_raw_obs,
+                match_id=game["match_id"],
+                revision=revision,
+                content_hash=UNVERSIONED_CONTENT_HASH,
+                asset_manifest_hash=RECORDED_ASSET_MANIFEST_HASH,
+            )
+            row = decision_row(env, frame, action)
+            row["player_id"] = players[row["actor"]]
+            _, _, terminal, truncated, _ = env.step(action)
+            row["post_state_digest"] = env._engine.state_digest()
+            game["decisions"].append(row)
+            if truncated:
+                raise ValueError(f"decision {revision}: game truncated")
+            game["terminated"] = bool(terminal)
+        if not game["terminated"]:
+            raise ValueError("game is cut off; export requires a complete game")
+        game["winner"] = env._engine.winner_index()
+    finally:
+        env.close()
+    game["game_trace_sha256"] = canonical_sha256(game)
+    return game
 
 
 def write_trace(path: Path, games: list[dict[str, Any]]) -> dict[str, Any]:

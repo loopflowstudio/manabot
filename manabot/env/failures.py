@@ -5,33 +5,22 @@ markers. Adapters retain policy cutoff accounting; the
 engine owns replay inputs, native boundaries and durable journal projection.
 """
 
-from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-import hashlib
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
-import warnings
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel
 
 from manabot.infra.log import getLogger
 from manabot.infra.run_settings import RunSettings
 import managym
 from managym import recording
-from managym.card_capture import CapturedCards
 from managym.diagnostics import Diagnostics, Operation
-from managym.recording import (
-    GameInputs as _GameInputs,
-    GameRecord as _GameRecord,
-    PlayerSetup as _PlayerSetup,
-    _game_disclosure,
-    _jsonl,
-)
 
 
 class ActionCutoffCounts(BaseModel):
@@ -45,97 +34,7 @@ class ActionCutoffSample(BaseModel):
     retained_count: int
     dropped_count: int
     decision_kind: str
-    game: _GameInputs
-
-
-class NativeTrainingTrace(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    player_configs: list[_PlayerSetup]
-    decision_memory: bool = Field(default=True, exclude_if=lambda value: value)
-    decision_memory_include_own: bool = Field(
-        default=False, exclude_if=lambda value: not value
-    )
-    actions: list[int]
-
-    @model_validator(mode="after")
-    def uniform_disclosure(self) -> "NativeTrainingTrace":
-        _game_disclosure(self.player_configs)
-        return self
-
-
-class NativeTrainingGame(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    seed: int
-    terminal: bool
-    trace: NativeTrainingTrace
-    cards: CapturedCards
-
-    @model_validator(mode="after")
-    def bound(self) -> "NativeTrainingGame":
-        if len(self.trace.player_configs) != 2:
-            raise ValueError("training capture seed or seating differs")
-        if self.cards.capture.exposure is None:
-            raise ValueError("training capture has no exposure instrument")
-        for seat, player in enumerate(self.trace.player_configs):
-            for origin, expected in (
-                ("deck", player.decklist),
-                ("outside", player.sideboard),
-            ):
-                observed = Counter(
-                    card.name
-                    for card in self.cards.capture.initial
-                    if card.owner == seat and card.origin == origin
-                )
-                if dict(observed) != expected:
-                    raise ValueError("training capture cards differ from replay decks")
-        choices = self.cards.capture.exposure.choices
-        if len(choices) > len(self.trace.actions) or any(
-            later.revision <= earlier.revision
-            for earlier, later in zip(choices, choices[1:])
-        ):
-            raise ValueError("training choices do not match a committed replay prefix")
-        return self
-
-
-class TrainingExposureReceipt(BaseModel):
-    """Private observed game, not a claim that its transitions reached an update.
-
-    Native replay inputs own sampled decks, seed and committed positional actions.
-    Context binds the learner/run and update coordinates at retention. Terminal
-    and interrupted prefixes remain separate; replay has not been executed.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    schema_version: Literal["training-exposure-v1"] = Field(
-        default="training-exposure-v1", alias="schema"
-    )
-    phase: Literal["training"] = "training"
-    stream: int
-    game: NativeTrainingGame
-    skip_trivial: bool
-    identities: dict[str, object]
-    context: dict[str, object]
-    seconds: float
-
-    @model_validator(mode="after")
-    def committed_choices(self) -> "TrainingExposureReceipt":
-        exposure = self.game.cards.capture.exposure
-        assert exposure is not None
-        if (
-            not self.skip_trivial
-            or [choice.selected for choice in exposure.choices]
-            != self.game.trace.actions
-        ):
-            raise ValueError(
-                "training exposure must retain every surfaced replay choice"
-            )
-        return self
-
-    @property
-    def sha256(self) -> str:
-        """Digest of the exact durable JSONL bytes written by the capture owner."""
-        body = _jsonl(self.model_dump(mode="json", by_alias=True))
-        return hashlib.sha256(body.encode()).hexdigest()
+    game: recording.GameInputs
 
 
 @dataclass
@@ -230,7 +129,7 @@ class _TrainingCapture:
         scope = _scope.get() or self.scope
         return scope.context() if scope else {}
 
-    def _retain(self, evidence: _GameRecord) -> Path:
+    def _retain(self, evidence: recording.GameRecord) -> Path:
         scope = _scope.get() or self.scope
         if scope is not None:
             self.failure_directory = scope.directory
@@ -243,7 +142,7 @@ class _TrainingCapture:
             self.scope._diagnostics.add_capture(self)
 
     def record_policy_actions(
-        self, count: int, kind: str, capacity: int, game: _GameInputs
+        self, count: int, kind: str, capacity: int, game: recording.GameInputs
     ) -> None:
         """Count decisions consumed under the explicit first-legal policy.
 
@@ -333,23 +232,3 @@ class RecordedVectorEnv(_TrainingCapture, recording.RecordedVectorEnv):
 
 class CapturedSearch(_TrainingCapture, recording.CapturedSearch):
     """Engine search evidence with training policy accounting."""
-
-
-# Published evidence names retain a warning-only alias until 0.3.0.
-def __getattr__(name: str) -> Any:
-    if name == "CapturedVector":
-        warnings.warn(
-            "manabot.env.failures.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return RecordedVectorEnv
-    if name.startswith("_") or not hasattr(recording, name):
-        raise AttributeError(name)
-    warnings.warn(
-        f"manabot.env.failures.{name} moved to managym.recording; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return getattr(recording, name)

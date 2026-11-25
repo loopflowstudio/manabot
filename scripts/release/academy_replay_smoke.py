@@ -15,10 +15,9 @@ from threading import Thread
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
-from manabot.env.failures import GameInputs, PlayerSetup
-from manabot.sim.recording import record_actions
-from manabot.sim.replay import write_trace
+from manabot.sim.replay import record_actions, write_trace
 from managym.academy.launch import serve
+from managym.recording import GameInputs, PlayerSetup
 
 
 def write_example_trace(path: Path) -> None:
