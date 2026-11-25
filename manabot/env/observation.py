@@ -233,6 +233,9 @@ class ObservationSpace(gym.spaces.Space):
             }
         )
 
+    def __reduce__(self) -> tuple[type, tuple[ObservationConfig]]:
+        return ObservationSpace, (self.config,)
+
     def allocate(self, *leading_dims: int) -> dict[str, np.ndarray]:
         """Zeroed dense buffers for this space, with `leading_dims` before each shape.
 

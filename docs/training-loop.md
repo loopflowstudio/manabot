@@ -118,8 +118,8 @@ all pickle directly without densifying native spans. Pickling drops ephemeral
 caches (`ObservationSelection` cached properties and `Prefix` serving/feature
 caches), reconstructs `ObservationSpace` from its `ObservationConfig`, and
 preserves shared native batches and memory chunks through pickle's memo table.
-Unpickling a corrupt batch, truncated chain or out-of-capacity prefix raises
-`ValueError`.
+Restoring malformed table boundaries, a disconnected memory chain or a prefix
+over its declared capacity raises `ValueError`.
 
 `RolloutBatch.concatenate(batches)` merges one or more packed `[rows, 1]`
 batches — either complete-game batches (`trajectories=None`, every part ending

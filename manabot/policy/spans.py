@@ -166,6 +166,13 @@ class ObservationSelection(Mapping[str, np.ndarray]):
     coordinates: tuple[BatchRow, ...]
     memory: PrefixObservation | None = None
 
+    def __reduce__(
+        self,
+    ) -> tuple[
+        type, tuple[ObservationSpace, tuple[BatchRow, ...], PrefixObservation | None]
+    ]:
+        return ObservationSelection, (self.space, self.coordinates, self.memory)
+
     @cached_property
     def batch(self) -> managym.ObservationBatch:
         if not self.coordinates:
