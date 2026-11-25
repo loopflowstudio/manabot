@@ -121,9 +121,12 @@ from .deck_import import DeckImportInput
 from .deck_pools import (
     deck_file_payload,
     deck_pool_catalog,
+    deck_pools,
     deck_to_source,
+    ensure_default_deck_pools,
     is_pool_key,
     resolve_deck_pool,
+    set_deck_pools,
 )
 from .numbers import game_numbers, wilson_interval
 from .opponent import (
@@ -132,6 +135,7 @@ from .opponent import (
     opponent_catalog,
     opponent_kind,
     policy_registry,
+    policy_settings_fit,
 )
 from .play_session import (
     SessionSetupUpdate,
@@ -717,11 +721,63 @@ def _bundled_deck_file(name: str, seat: str) -> dict[str, str]:
 
 
 def resolve_pool_decks(data: dict[str, Any], *, seed: int | None) -> dict[str, Any]:
-    """Expand any ``pool:<id>`` seat selection into concrete admitted ``deck_import`` payloads."""
-    if data.get("deck_import") is not None:
-        return data
+    """Expand ``pool:<id>`` selections and one-sided ``deck_import`` payloads."""
+    raw_import = data.get("deck_import")
     raw_hero = data.get("hero_deck", DEFAULT_HERO_DECK_NAME)
     raw_villain = data.get("villain_deck", DEFAULT_VILLAIN_DECK_NAME)
+
+    if (is_pool_key(raw_hero) or is_pool_key(raw_villain)) and not deck_pools():
+        defaults = ensure_default_deck_pools()
+        if defaults:
+            set_deck_pools(defaults)
+
+    if isinstance(raw_import, dict):
+        has_hero = raw_import.get("hero") is not None
+        has_villain = raw_import.get("villain") is not None
+        if has_hero and has_villain:
+            return data
+        if has_hero or has_villain:
+            import random as _random
+
+            rng = (
+                _random.Random(seed)
+                if isinstance(seed, int)
+                else _random.SystemRandom()
+            )
+            hero_payload = raw_import.get("hero")
+            villain_payload = raw_import.get("villain")
+            hero_pool = resolve_deck_pool(raw_hero) if is_pool_key(raw_hero) else None
+            villain_pool = (
+                resolve_deck_pool(raw_villain) if is_pool_key(raw_villain) else None
+            )
+            if hero_payload is None:
+                if hero_pool is not None:
+                    sampled = hero_pool.sample(rng)
+                    hero_payload = deck_file_payload(sampled.deck, name=sampled.name)
+                elif is_pool_key(raw_hero):
+                    raise ValueError(f"Unknown deck pool {raw_hero!r}.")
+                else:
+                    hero_payload = _bundled_deck_file(str(raw_hero), "hero")
+            if villain_payload is None:
+                if villain_pool is not None:
+                    sampled = villain_pool.sample(rng)
+                    villain_payload = deck_file_payload(sampled.deck, name=sampled.name)
+                elif is_pool_key(raw_villain):
+                    raise ValueError(f"Unknown deck pool {raw_villain!r}.")
+                else:
+                    villain_payload = _bundled_deck_file(str(raw_villain), "villain")
+            resolved_partial = dict(data)
+            resolved_partial["deck_import"] = {
+                "hero": hero_payload,
+                "villain": villain_payload,
+            }
+            if hero_pool is not None:
+                resolved_partial["hero_deck_pool"] = hero_pool.key
+            if villain_pool is not None:
+                resolved_partial["villain_deck_pool"] = villain_pool.key
+            return resolved_partial
+        return data
+
     hero_pool = resolve_deck_pool(raw_hero) if is_pool_key(raw_hero) else None
     villain_pool = resolve_deck_pool(raw_villain) if is_pool_key(raw_villain) else None
     if is_pool_key(raw_hero) and hero_pool is None:
@@ -4177,7 +4233,11 @@ async def get_opponents() -> dict[str, Any]:
 
 
 @app.get("/api/deck-pools")
-def get_deck_pools() -> dict[str, Any]:
+async def get_deck_pools() -> dict[str, Any]:
+    if not deck_pools():
+        defaults = await asyncio.to_thread(ensure_default_deck_pools)
+        if defaults and not deck_pools():
+            set_deck_pools(defaults)
     return {"pools": deck_pool_catalog()}
 
 
@@ -4191,13 +4251,26 @@ def get_launch_setup(launch_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/policies/check")
-def check_policy_setup(config: dict[str, Any]) -> dict[str, str | bool | None]:
+def check_policy_setup(config: dict[str, Any]) -> dict[str, Any]:
     """Preview admission without loading a session; Start repeats the same checks."""
     try:
-        _parse_game_config(config)
+        parsed = _parse_game_config(config)
     except (ValueError, OSError, ImportError) as exc:
-        return {"compatible": False, "reason": str(exc)}
-    return {"compatible": True, "reason": None}
+        return {"compatible": False, "reason": str(exc), "fit": None}
+    fit: dict[str, Any] | None = None
+    opp_key = config.get("opponent_sha256")
+    if isinstance(opp_key, str) and opp_key:
+        planned: dict[str, str] = {"decklists": str(parsed.decklists)}
+        mana_payment = config.get("mana_payment")
+        if isinstance(mana_payment, str) and mana_payment in ("manual", "auto"):
+            planned["mana_payment"] = mana_payment
+        mana_floats = config.get("mana_floats")
+        if isinstance(mana_floats, str) and mana_floats in ("off", "usable", "all"):
+            planned["mana_floats"] = mana_floats
+        report = policy_settings_fit(opp_key, planned)
+        if report is not None:
+            fit = report.to_dict()
+    return {"compatible": True, "reason": None, "fit": fit}
 
 
 def _record_owners(tokens: str | None) -> set[str]:

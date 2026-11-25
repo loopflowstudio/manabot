@@ -1765,27 +1765,32 @@ for reading, inspection and recovery behavior.
 
 ## Playing a trained challenger
 
-### Ten-deck Elemental play
+### Top-level CLI and hosted policies
 
 ```sh
-doppler run --project manabot --config prd -- ./scripts/play-elemental
-./scripts/play-elemental --offline     # later runs, no credentials or network
+managym play                                             # Play vs recommended policy (TLA trophies)
+managym play --order draw --deck ur_lessons --opponent search-64
+managym play --opponent ./my_bot.py:choose               # Play against any Python callable
+managym watch --bot1 heuristic --bot2 manabot            # Watch bot vs bot
+managym opponents                                        # List available built-ins & policies
 ```
 
-`scripts/play_elemental.py` reads MTG-183's published checkpoints (default
-segment `f3748bcabac8`; `--run` selects another), picks the highest recorded
-training update, verifies SHA-256 and size, checks world admission and CPU
-placement, and pins those bytes for the server's lifetime. It never trains or
-swaps the opponent mid-match. `--prepare-only`
-downloads and verifies; `--port`/`--frontend-port` override 18479/18480.
-Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
-`.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
+When `manabot` is installed, its `managym.bots` provider discovers the hosted
+default policy from `https://policies.manabot.gg/index.json`, verifies its
+SHA-256 into `~/.cache/manabot/sha256/`, and loads it alongside any local
+checkpoints. Set `ACADEMY_HOSTED_POLICIES=0` to disable hosted catalog fetches
+offline, or pass `--no-discover` to hide discovered policies when testing a
+single custom policy. In a repo checkout, `./scripts/play` runs the same
+packaged launcher with the `play-runtime` dependency group.
 
-The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
-native seat. **Edit next game** prepares the next matchup in the current session;
-starting it replaces the current attempt. **New game** starts a separate session.
-On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
+From Python, pass any `Policy` or plain callable `(obs) -> int | Sequence[float] | PolicyDecision`:
+
+```python
+from managym.academy.launch import play, watch
+
+play(opponent=lambda obs: 0, order="draw")
+watch(bot1="./my_bot.py:choose", bot2="heuristic")
+```
 
 ### Other checkpoints
 

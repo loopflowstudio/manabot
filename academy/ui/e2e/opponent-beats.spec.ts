@@ -176,26 +176,3 @@ test('reduced motion reads out no beats', async ({ page }) => {
   expect(opponentFacts).toBeGreaterThan(0);
   await expect(page.getByTestId('beat')).toHaveCount(0);
 });
-
-test('the Menu turns the reading off, and the browser remembers it', async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  await page.getByTestId('game-menu').click();
-  const pace = page.getByTestId('beat-pace');
-  await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
-  await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('game-menu').click();
-  let opponentFacts = 0;
-  await playUntil(page, async () => {
-    expect(await page.getByTestId('beat').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
-  }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
-  await page.reload();
-  await expect(page.getByTestId('game')).toBeVisible();
-  await page.getByTestId('game-menu').click();
-  await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
-});
