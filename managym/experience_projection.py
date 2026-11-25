@@ -230,6 +230,7 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "attacking": bool(permanent.attacking) or None,
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
+        "face_down": bool(permanent.face_down) or None,
         "keywords": _keywords(permanent.characteristics.keywords) or None,
         "combat_damage_to_players": list(permanent.combat_damage_to_players) or None,
         "damaged_permanents": list(permanent.damaged_permanents) or None,

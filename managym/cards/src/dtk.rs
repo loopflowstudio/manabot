@@ -33,10 +33,10 @@ fn clone_legion() -> CardDefinition {
             name: "Clone Legion".into(),
             mana_cost: Some(ManaCost::parse("{7}{U}{U}")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effects: vec![Effect::CreateTokenCopy {
-                of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
-                exceptions: vec![],
-            }],
+            spell_effects: vec![Effect::create_token_copies(
+                ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
+                1,
+            )],
             text_box: text_box.into(),
             ..Default::default()
         },

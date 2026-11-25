@@ -1,11 +1,9 @@
 # MTG-430 — Planeswalkers, loyalty, empowerment and emblems (FDN + FRA)
 
-Base `cf73d9778f`; main `e0dd3aed3b` (#600) merged in `57495c4bc1`.
-MTG-420 (PR #593, head `b94cc50b94`) still open on 2026-11-24. `lf sync main`
-once it merges, before slice 3 (emblem sources need its persistent
-ability-source representation). Slice 1's quota is its own
-`loyalty_activated_this_turn` field; expect only a textual conflict at the
-reset site when syncing.
+Base `cf73d9778f`; synced main through MTG-420 (#593, `45ddf3bca7`).
+Slice 3 can use its persistent ability-source representation. The retained
+combat snapshot was recorded at `aa35e1a2b6` before this sync, with that
+revision's catalog digest.
 
 Done:
 - Slice 8's ten FRA Commons/Annex lands (`b17ed61f62`, ledger `55430f5c91`);
@@ -58,7 +56,8 @@ Done:
 3. Slices 5 + 6: granted loyalty abilities, zero-loyalty exception, loyalty
    activation events and their cards.
 4. Slice 7 planeswalkers and the rest of slice 8; ledger, fixtures, debug
-   nextest, budget.
+   nextest, budget. Record current-catalog conformance and authored-match
+   evidence at gate, retaining main's MTG-420 receipts at their revision.
 
 Cohort: the 5 FDN planeswalkers, FRA's 40 `05_loyalty_tokens_emblems` rows, and
 adjacent FRA rows that depend on 05 and compose once it exists. Oracle text

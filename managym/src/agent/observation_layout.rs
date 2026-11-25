@@ -439,8 +439,9 @@ columns! { permanent {
     53: COMBAT_DAMAGE_TO_ME => ("combat_damage_to_me", ValueLayout::FLAG),
     54: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     55: ATTACKED_THIS_TURN => ("attacked_this_turn", ValueLayout::FLAG),
-    56: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
-    57: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
+    56: FACE_DOWN => ("face_down", ValueLayout::FLAG),
+    57: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    58: LOYALTY_ACTIVATED_THIS_TURN => ("loyalty_activated_this_turn", ValueLayout::FLAG),
 } }
 
 // One row per spell or ability on the stack, top first (input v11). The
@@ -493,7 +494,8 @@ columns! { stack {
     43: COMBAT_DAMAGE_TO_OPPONENT => ("combat_damage_to_opponent", ValueLayout::FLAG),
     44: MANA_SPENT => ("mana_spent", ValueLayout::COUNT),
     45: PAID_AMOUNT => ("paid_amount", ValueLayout::NUMBER_TENTHS),
-    46: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
+    46: CAST_FROM_GRAVEYARD => ("cast_from_graveyard", ValueLayout::FLAG),
+    47: PRINTED_LOYALTY => ("printed_loyalty", ValueLayout::COUNT),
 } }
 
 columns! { action {
@@ -1266,7 +1268,7 @@ mod tests {
                 (
                     "agent_permanents",
                     config.permanent_dim(),
-                    if one_token { 58 } else { 38 },
+                    if one_token { 59 } else { 38 },
                 ),
                 (
                     "actions",
@@ -1296,7 +1298,7 @@ mod tests {
             }
             if one_token {
                 assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 47);
+                assert_eq!(stack::WIDTH, 48);
                 assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
                 assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             }
@@ -1325,7 +1327,8 @@ mod tests {
                 layout["agent_permanents"].columns[permanent_valid].name,
                 "valid"
             );
-            for key in ["agent_cards", "facts", "effects"] {
+            assert_eq!(layout["agent_cards"].columns[card::VALID].name, "valid");
+            for key in ["facts", "effects"] {
                 assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
             assert_eq!(layout["actions"].columns[action::VALID].name, "valid");

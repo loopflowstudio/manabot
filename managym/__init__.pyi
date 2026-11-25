@@ -1167,6 +1167,8 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    @property
+    def mana_value(self) -> int: ...
     characteristics: ObservationCharacteristics
     # Underlying object identity; live/normalized observations always have it.
     object_id: int | None
@@ -1208,6 +1210,8 @@ class Permanent:
     is_granted_land: bool
     blocking: int | None
     abilities_lost: bool
+    # Face down (CR 708.2); a face-up copy of a manifest is nameless, not face down.
+    face_down: bool
     combat_damage_to_players: list[int]
     damaged_permanents: list[int]
     ability_resolutions: list[tuple[int, int]]
@@ -1297,6 +1301,8 @@ class StackObject:
     x: int
     # Keywords a static grants this spell on the stack.
     granted_keywords: Keywords | None
+    @property
+    def cast_from_graveyard(self) -> bool: ...
     # Whether a spell's kicker cost was paid.
     kicked: bool
     # A spell cast from a prepared copy; its stack copies are not.
@@ -1381,6 +1387,7 @@ class ContinuationFrame:
     remembered: list[VisibleReference]
     inherited_from: VisibleReference | None
     attackers: str | None
+    trigger_damage: int
     source_transforms: int
     kind: int
     decision: int

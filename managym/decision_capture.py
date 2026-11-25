@@ -156,7 +156,7 @@ class PlayerReference(CaptureModel):
 
 class CardReference(CaptureModel):
     kind: Literal["card"]
-    definition: int
+    definition: int | None
     owner: int
     zone: int | None
     context_id: int | None

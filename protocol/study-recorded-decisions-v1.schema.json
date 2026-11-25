@@ -1434,6 +1434,10 @@
         "exile_if_dies_this_turn": {
           "type": "boolean"
         },
+        "face_down": {
+          "description": "Face down (CR 708.2).",
+          "type": "boolean"
+        },
         "first_strike_participant": {
           "type": "boolean"
         },

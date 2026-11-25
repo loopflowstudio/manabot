@@ -2,7 +2,7 @@
 // Player action computation and action space construction.
 
 use crate::agent::ability_description::{
-    counter_description, effects_description, mana_description,
+    counter_description, effects_description, mana_description, pending_trigger_description,
 };
 use crate::state::ability::LibraryEnd;
 
@@ -168,7 +168,7 @@ impl Game {
                     .find(|t| t.id == *trigger_id)?;
                 let mut label = format!(
                     "Put on stack next — {}",
-                    self.pending_trigger_description(trigger)?
+                    pending_trigger_description(self, trigger)?
                 );
                 if let Some(event) = trigger
                     .context
@@ -188,7 +188,7 @@ impl Game {
                 if options.iter().all(|paid| paid.toward == Toward::Waterbend) {
                     return None;
                 }
-                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 Some(format!("Tap {name} to pay {}", tap_payments_text(&options)))
             }
             // A fixed source tapped while an announced cost is paid: its mana
@@ -197,10 +197,15 @@ impl Game {
                 if self.state.suspended_decision.is_none()
                     && matches!(self.paying(), Some((_, _, CostComponent::Mana { .. }))) =>
             {
-                let name = &self.state[self.permanent_object(*permanent)?].name;
+                let name = self.observed_object_name(self.permanent_object(*permanent)?);
                 let output = crate::flow::mana::fixed_output(&self.characteristics(*permanent));
                 Some(format!("Tap {name} for {}", mana_description(&output)))
             }
+            Action::TurnFaceUp { object, .. } => Some(format!(
+                "Turn {} face up for {}",
+                self.state[*object].retained_base().1.name,
+                crate::agent::ability_description::cost_description(self.manifest_cost(*object)?)
+            )),
             Action::Foretell {
                 object: object_id, ..
             } => Some(format!("Foretell {}", self.state[*object_id].name)),
@@ -304,6 +309,9 @@ impl Game {
                                 LibraryEnd::Bottom => "bottom",
                             }
                         )),
+                        Decision::ManifestDread { .. } => {
+                            Some(format!("Manifest {}", self.state[*object_id].name))
+                        }
                         Decision::Surveil { .. } => Some(format!(
                             "Put {} into your graveyard",
                             self.state[*object_id].name
@@ -378,21 +386,32 @@ impl Game {
                 };
                 Some(format!(
                     "{} assigns {mode} to {}, {rest} {recipient}",
-                    self.characteristics(self.state.permanent_of(*attacker)?)
-                        .name,
-                    self.characteristics(self.state.permanent_of(*blocker)?)
-                        .name
+                    self.observed_object_name(*attacker),
+                    self.observed_object_name(*blocker)
                 ))
             }
             _ if self.announces_x() => Some(format!("X = {mode}")),
+            Some(Decision::OrderMeldedCards { cards, .. }) => {
+                let card = self.state.cards[*cards.get(mode)?];
+                Some(format!(
+                    "Place {} first",
+                    default_content_pack().definition(card.definition)?.name
+                ))
+            }
             Some(Decision::OrderReplacement { candidates, .. }) => {
                 let candidate = candidates.get(mode)?;
-                let name = match candidate.source_definition {
-                    Some(definition) => {
-                        &default_content_pack().definition(definition)?.printed.name
-                    }
-                    None => &self.state[candidate.source()].name,
-                };
+                let name = candidate
+                    .source_definition
+                    .and_then(|definition| default_content_pack().definition(definition))
+                    .map_or_else(
+                        || {
+                            self.spell_on_stack(candidate.source()).map_or_else(
+                                || self.observed_object_name(candidate.source()),
+                                |spell| self.state[spell.object].name.clone(),
+                            )
+                        },
+                        |definition| definition.name.clone(),
+                    );
                 Some(format!("{name}: {}", candidate.description()))
             }
             Some(Decision::NameCard { names, scope, .. }) => match scope.option(mode)? {
@@ -466,7 +485,7 @@ impl Game {
                 if let Some((_, _, CostComponent::TapPays { tapped, options })) = self.paying() {
                     return Some(format!(
                         "{} pays {}",
-                        self.state[*tapped].name,
+                        self.observed_object_name(*tapped),
                         tap_payments_text(std::slice::from_ref(
                             options.iter().find(|paid| paid.mode() == mode)?
                         ))
@@ -478,7 +497,11 @@ impl Game {
                     cast.spell(&self.state[*object]).spell_modes()?
                 } else {
                     let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
-                    self.unchosen_trigger_modes(trigger)?
+                    let Effect::TriggerModes { modes, .. } = self.pending_mode_rule(trigger)?
+                    else {
+                        return None;
+                    };
+                    modes
                 };
                 Some(effects_description(modes.get(mode)?))
             }
@@ -561,6 +584,11 @@ impl Game {
             } => self.state.card_id(object).and_then(|card| {
                 self.activation_ability(ActivationSource::Card(card), ability_index)
             }),
+            Action::TurnFaceUp { object, .. } => {
+                return self
+                    .manifest_cost(object)
+                    .is_some_and(|cost| cost.mana_value > 0)
+            }
             Action::Foretell { .. } => return true,
             _ => return false,
         };
@@ -575,6 +603,19 @@ impl Game {
         })
     }
 
+    fn manifest_cost(&self, object: ObjectId) -> Option<&ManaCost> {
+        self.state.permanent_of(object)?;
+        let card = &self.state[object];
+        if !card.is_face_down() {
+            return None;
+        }
+        let (_, printing) = card.retained_base();
+        printing
+            .mana_cost
+            .as_ref()
+            .filter(|_| printing.types.is_creature())
+    }
+
     fn priority_activate_ability_actions(
         &self,
         player: PlayerId,
@@ -586,6 +627,15 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
+            if self
+                .manifest_cost(permanent.object)
+                .is_some_and(|cost| self.can_pay_mana_cost(player, cost))
+            {
+                actions.push(Action::TurnFaceUp {
+                    player,
+                    object: permanent.object,
+                });
+            }
             if self.activations_prohibited(permanent_id) {
                 continue;
             }
@@ -1235,6 +1285,39 @@ impl Game {
                 object,
                 ability_index,
             } => self.activate_card_ability_action(*player, *object, *ability_index),
+            Action::TurnFaceUp { player, object } => {
+                use super::decision::{
+                    Decision, EffectFrame, FrameCompletion, SuspendedResolution,
+                };
+                use super::payment::PaymentProgress;
+                let permanent = self
+                    .lookup_current_permanent(*object)
+                    .map_err(|_| AgentError("manifest has departed".into()))?;
+                if self.state.priority.holder != *player
+                    || self.state.permanents[permanent]
+                        .as_ref()
+                        .unwrap()
+                        .controller
+                        != *player
+                {
+                    return Err(AgentError("manifest controller must have priority".into()));
+                }
+                let cost = self
+                    .manifest_cost(*object)
+                    .ok_or_else(|| AgentError("no manifest turn-up cost".into()))?
+                    .clone();
+                let mut frame = EffectFrame::new(*player, Vec::new());
+                frame.bind_source(Some(*object), Some(*object));
+                frame.completion = FrameCompletion::TurnFaceUp(*object);
+                let mut payment =
+                    PaymentProgress::new(*player, CostComponent::mana(cost), vec![], vec![]);
+                payment.committed = true;
+                *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    frame,
+                    decision: Decision::Payment(payment),
+                });
+                Ok(())
+            }
             Action::Foretell { player, object } => {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
@@ -1577,7 +1660,8 @@ mod identity_tests {
             .scenario_force_battlefield(player, "Mountain", true)
             .unwrap();
         let mountain = game.state.permanents[permanent].as_ref().unwrap().object;
-        game.airbend(mountain);
+        let arrival = game.move_object(mountain, ZoneType::Exile);
+        game.grant_airbend_cast(arrival);
         let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
         assert!(game.live_grants(player, exiled).next().is_some());
         game.scenario_refresh_priority().unwrap();
@@ -1712,7 +1796,8 @@ mod identity_tests {
             .scenario_force_battlefield(player, "Bofur, Reliable Guardian", true)
             .unwrap();
         let bofur = game.state.permanents[bofur].as_ref().unwrap().object;
-        game.airbend(bofur);
+        let arrival = game.move_object(bofur, ZoneType::Exile);
+        game.grant_airbend_cast(arrival);
         let exiled = game.state.zones.zone_objects(ZoneType::Exile, player)[0];
         assert!(game.live_grants(player, exiled).next().is_some());
         let cast = Action::CastSpell {

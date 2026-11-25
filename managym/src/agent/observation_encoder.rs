@@ -1620,7 +1620,7 @@ fn encode_permanent_features(
         out[permanent::LOYALTY_ACTIVATED_THIS_TURN] = flag(permanent.loyalty_activated_this_turn);
         out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
         out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
-        out[permanent::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
+        out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
         out[permanent::IS_LAND] = flag(card.card_types.is_land);
         out[permanent::IS_CREATURE] = flag(card.card_types.is_creature);
         out[permanent::IS_ARTIFACT] = flag(card.card_types.is_artifact);
@@ -1636,6 +1636,7 @@ fn encode_permanent_features(
         out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
         out[permanent::VALID] = Integer(1);
         out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
+        out[permanent::FACE_DOWN] = flag(permanent.face_down);
     } else {
         out[super::legacy_input::PERMANENT_VALID] = Integer(1);
     }
@@ -1678,6 +1679,7 @@ fn encode_stack_features(object: &StackObjectData, viewer_id: i32, out: &mut [Ce
     out[stack::PAID_AMOUNT] = Scalar(object.paid_amount.unwrap_or_default() as f32 / 10.0);
     out[stack::ABILITY_RESOLUTIONS] = Integer(i64::from(object.ability_resolutions));
     if let Some(card) = &object.spell {
+        out[stack::CAST_FROM_GRAVEYARD] = flag(card.cast_from_graveyard);
         out[stack::PRINTED_LOYALTY] = Integer(i64::from(card.printed_loyalty.unwrap_or_default()));
         out[stack::IS_COPY] = flag(card.is_copy);
         out[stack::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);

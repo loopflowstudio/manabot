@@ -119,6 +119,9 @@ pub struct ContinuationFrame {
     /// Its token is a fact; its readable form comes from the rules predicate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attackers: Option<String>,
+    /// Amount actually dealt in the damage event that fired this trigger.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub trigger_damage: i32,
     /// Transform count captured for this ability's source (CR 701.27f).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub source_transforms: u32,
@@ -202,17 +205,41 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     }
 }
 
+/// A rules program as a frame shows it: its learning tokens and text, or
+/// nothing for no instructions.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ProgramProjection {
+    pub(crate) tokens: Vec<(u16, i32)>,
+    pub(crate) description: Option<String>,
+}
+
+impl ProgramProjection {
+    pub(crate) fn of(effects: &[crate::state::ability::Effect]) -> Self {
+        if effects.is_empty() {
+            return Self {
+                tokens: Vec::new(),
+                description: None,
+            };
+        }
+        Self {
+            tokens: crate::cards::tokens::rules_tokens(
+                &effects,
+                crate::cards::content_pack::default_content_pack(),
+            )
+            .expect("rules program tokens"),
+            description: Some(super::ability_description::effects_description(effects)),
+        }
+    }
+}
+
 impl ContinuationFrame {
     fn program(&mut self, effects: &[crate::state::ability::Effect]) {
-        if effects.is_empty() {
-            return;
-        }
-        self.program = crate::cards::tokens::rules_tokens(
-            &effects,
-            crate::cards::content_pack::default_content_pack(),
-        )
-        .expect("rules program tokens");
-        self.program_description = Some(super::ability_description::effects_description(effects));
+        let ProgramProjection {
+            tokens,
+            description,
+        } = ProgramProjection::of(effects);
+        self.program = tokens;
+        self.program_description = description;
     }
     fn cost(&mut self, cost: &ManaCost) {
         self.cost = Some(cost.cost);
@@ -222,6 +249,25 @@ impl ContinuationFrame {
             .map(|pair| [pair[0] as u8, pair[1] as u8])
             .collect();
         self.lesson = !cost.purpose.is_resolving();
+    }
+}
+
+/// The damage that fired a "whenever this deals damage" trigger, or zero for
+/// any other trigger.
+fn trigger_damage(
+    face: Option<&crate::state::card::PrintedCharacteristics>,
+    index: usize,
+    amount: i32,
+) -> i32 {
+    use crate::state::ability::{Ability, TriggerCondition};
+    let Some(Ability::Triggered { condition, .. }) =
+        face.and_then(|face| face.abilities.get(index))
+    else {
+        return 0;
+    };
+    match condition.leaf() {
+        TriggerCondition::SourceDealsDamage | TriggerCondition::SourceDealsCombatDamage => amount,
+        _ => 0,
     }
 }
 
@@ -270,7 +316,10 @@ impl Game {
     pub(crate) fn visible_reference(&self, object: ObjectId, viewer: PlayerId) -> VisibleReference {
         if self.state.live(object).is_none() {
             return VisibleReference {
-                definition: self.object_lki(object).map(|lki| lki.definition_id.0),
+                definition: self
+                    .object_lki(object)
+                    .and_then(|lki| lki.definition_id.catalog_id())
+                    .map(|id| id.0),
                 ..VisibleReference::default()
             };
         }
@@ -296,14 +345,18 @@ impl Game {
         if !visible || self.hides_face_down_exile(object, viewer) {
             return VisibleReference::default();
         }
+        let permanent = self
+            .state
+            .permanent_of(object)
+            .and_then(|id| self.state.permanents[id].as_ref());
         VisibleReference {
-            object: Some(
-                self.lookup_current_permanent(object)
-                    .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(record.id.0, |p| p.id.0) as i32,
-            ),
-            definition: Some(record.definition_id.0),
+            object: Some(permanent.map_or(record.id, |p| p.id).0 as i32),
+            definition: permanent
+                .map_or_else(
+                    || record.definition_id.catalog_id(),
+                    |p| self.observed_permanent_definition(viewer, p),
+                )
+                .map(|id| id.0),
             player: None,
         }
     }
@@ -507,7 +560,10 @@ impl Game {
             .source_ref()
             .map(|r| self.visible_reference(r, viewer))
             .unwrap_or_default();
-        source.definition = Some(self.state.source_base(trigger.source_object()).0 .0);
+        source.definition = source.definition.or_else(|| {
+            self.observed_source_definition(trigger.source_object())
+                .map(|definition| definition.0)
+        });
         let context = match &trigger.event {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
@@ -517,7 +573,7 @@ impl Game {
             | DelayedTriggerEvent::YouCastSpell(_)
             | DelayedTriggerEvent::Upkeep => None,
         };
-        ContinuationFrame {
+        let mut frame = ContinuationFrame {
             remembered: self.remembered_references(&trigger.remembered, viewer),
             kind: 10,
             decision: delayed_event_code(&trigger.event),
@@ -530,7 +586,11 @@ impl Game {
             }),
             this_turn: trigger.expiry == DelayedExpiry::ThisTurn,
             ..ContinuationFrame::default()
-        }
+        };
+        let program = trigger.effects.projection();
+        frame.program = program.tokens.clone();
+        frame.program_description = program.description.clone();
+        frame
     }
 
     fn remembered_references(
@@ -578,7 +638,10 @@ impl Game {
                     .source_ref()
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(self.pending_trigger_definition(trigger).0);
+                source.definition = self
+                    .pending_trigger_definition(trigger)
+                    .catalog_id()
+                    .map(|id| id.0);
                 let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing
@@ -597,8 +660,14 @@ impl Game {
                         crate::flow::trigger::TriggerOrderingClass::AbilityTriggered => 2,
                     },
                     ability: Some(trigger.ability_index),
+                    kicked: trigger.kicked,
                     x: trigger.x,
                     triggering_amount: trigger.triggering_amount,
+                    trigger_damage: trigger_damage(
+                        self.pending_trigger_face(trigger),
+                        trigger.ability_index,
+                        trigger.triggering_amount,
+                    ),
                     source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
                     active_clause: Some(trigger.requirement_index),
                     targets: self.clause_targets(
@@ -610,12 +679,10 @@ impl Game {
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
                 };
-                if trigger.program {
-                    frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
+                if let Some(effects) = self.pending_trigger_program(trigger) {
+                    frame.program(&effects);
                 }
-                if trigger.modes_chosen {
-                    frame.mode = super::observation::single_chosen_mode(&trigger.chosen_modes);
-                }
+                frame.mode = crate::flow::triggers::pending_trigger_mode(trigger);
                 super::effect_execution::project_pending_trigger(self, trigger, viewer, &mut frame);
                 frames.push(frame);
             }
@@ -648,20 +715,19 @@ impl Game {
         let mut frame = ContinuationFrame {
             controller: object.controller().0,
             ability: object.ability_index(),
+            kicked: object.kicked(),
+            x: object.x(),
             ..ContinuationFrame::default()
         };
-        let clauses: &[usize] = match object {
+        match object {
             StackObject::Spell(spell) => {
                 frame.kind = 1;
                 frame.source = self.object_reference(spell.object, viewer);
                 frame.mode = spell.mode;
-                frame.kicked = spell.kicked;
-                frame.x = i32::from(spell.x);
                 frame.granted_keywords = KeywordData::from_keywords(
                     &self.spell_keywords(spell.object, spell.controller),
                 )
                 .flags();
-                &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
@@ -669,26 +735,26 @@ impl Game {
                     frame.program(&ability.effects);
                 }
                 frame.source = self.visible_reference(ability.source_object(), viewer);
-                frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
                     definition: Some(id.0),
                     ..Default::default()
                 });
                 frame.source_transforms = ability.source_transforms;
-                &ability.target_req_indices
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
-                frame.triggering_amount = ability.triggering_amount;
-                if ability.program {
-                    frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                if let Some(effects) = crate::flow::resolution::stacked_trigger_program(ability) {
+                    frame.program(&effects);
                 }
-                frame.mode = super::observation::single_chosen_mode(&ability.chosen_modes);
-                // Several chosen modes project as the program they will run.
-                if ability.chosen_modes.len() > 1 {
-                    if let Some(effects) = self.stacked_trigger_effects(ability) {
-                        frame.program(&effects);
-                    }
+                frame.mode = crate::flow::resolution::stacked_trigger_mode(ability);
+                frame.triggering_amount = ability.triggering_amount;
+                frame.trigger_damage = trigger_damage(
+                    Some(crate::flow::resolution::stacked_trigger_face(ability)),
+                    ability.ability_index,
+                    ability.triggering_amount,
+                );
+                if frame.trigger_damage > 0 {
+                    super::effect_execution::project_trigger_damage(self, viewer, &mut frame);
                 }
                 frame.inherited_from = ability
                     .source_lki
@@ -698,7 +764,6 @@ impl Game {
                         definition: Some(id.0),
                         ..Default::default()
                     });
-                frame.x = ability.x;
                 frame.source_transforms = ability.source_transforms;
                 frame.source = ability
                     .source_ref()
@@ -706,12 +771,14 @@ impl Game {
                     .unwrap_or_default();
                 frame.remembered = self.remembered_references(&ability.remembered, viewer);
                 frame.context = ability.context.map(|t| self.target_reference(t, viewer));
-                &ability.target_req_indices
             }
-        };
-        // Stack definitions remain public after the original source departs.
-        frame.source.definition = Some(object.source_definition_id().0);
-        frame.targets = self.clause_targets(object.targets(), clauses, viewer);
+        }
+        // Stack definitions remain public after the original source departs;
+        // a face-down source's ability records none (CR 708.2).
+        if let Some(definition) = object.source_definition_id().catalog_id() {
+            frame.source.definition = Some(definition.0);
+        }
+        frame.targets = self.clause_targets(object.targets(), object.target_req_indices(), viewer);
         super::effect_execution::project_stack_object(self, object, viewer, &mut frame, false);
         frame
     }
@@ -1067,7 +1134,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 32;
+pub const MAX_DECISION_CODE: u8 = 34;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1075,6 +1142,7 @@ pub const MAX_DECISION_CODE: u8 = 32;
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
         Decision::AssignCombatDamage { .. } => 32,
+        Decision::OrderMeldedCards { .. } => 34,
         Decision::OrderReplacement { .. } => 29,
         Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
@@ -1099,6 +1167,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::DistributeCounters { .. } => 19,
         Decision::KeepCreatures { .. } => 20,
         Decision::Retarget { .. } => 21,
+        Decision::ManifestDread { .. } => 33,
         Decision::Surveil { .. } => 22,
         Decision::OrderLibrary {
             end: LibraryEnd::Bottom,
@@ -1401,6 +1470,10 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::OrderMeldedCards {
+                player,
+                cards: [game.state.players[0].deck[0], game.state.players[0].deck[1]],
+            },
             Decision::ManaSpend {
                 player,
                 cost: ManaCost::default(),
@@ -1486,6 +1559,10 @@ mod tests {
                 remaining: vec![],
                 top: vec![],
                 bottom: vec![],
+            },
+            Decision::ManifestDread {
+                player,
+                looked: vec![],
             },
             Decision::Surveil {
                 player,

@@ -6,18 +6,20 @@
 //! source snapshot and returns its results with the consequences its caller
 //! runs next.
 
+use std::sync::Arc;
+
+use super::decision::Decision;
 use crate::state::{
     ability::Actor,
-    card::{DamageTransform, Keyword},
+    card::{DamageTransform, SpellProfile},
 };
 use crate::{
     flow::{event::GameEvent, game::Game},
-    state::card::StaticAbility,
     state::{
-        card::{CardDefId, ReplacementEffect},
+        card::{CardDefId, Keyword, ReplacementEffect, StaticAbility},
         effect::{ContinuousEffect, Modification},
-        game_object::{ObjectId, ObjectLki, PermanentId, PlayerId, PublicId},
-        permanent::{CounterKind, Counters},
+        game_object::{CardId, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId},
+        permanent::{CounterKind, Counters, SpellEntry},
         zone::ZoneType,
     },
 };
@@ -33,9 +35,9 @@ pub(crate) struct ZoneEntry {
     pub adventure_player: Option<PlayerId>,
     #[serde(
         rename = "cast_adventure",
-        skip_serializing_if = "crate::state::card::SpellProfile::is_front"
+        skip_serializing_if = "SpellProfile::is_front"
     )]
-    pub profile: crate::state::card::SpellProfile,
+    pub profile: SpellProfile,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub prepared: bool,
     /// Battlefield: enters tapped.
@@ -43,23 +45,33 @@ pub(crate) struct ZoneEntry {
     /// Battlefield or exile: enters with these counters ("exile it with a
     /// stash counter on it").
     pub counters: Counters,
-    /// Battlefield: the announced X of the resolving spell becoming this
-    /// permanent.
-    pub x: u8,
+    /// A resolving permanent spell supplies its choices and payment. The
+    /// stack and suspended frame already serialize these, except the entry's
+    /// historical X projection.
+    #[serde(rename = "x", serialize_with = "entry_x")]
+    pub spell: Option<Arc<SpellEntry>>,
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
-    /// Battlefield: enters with its back face up (CR 712.14).
-    pub transformed: bool,
+    /// Battlefield: what the entering permanent shows.
+    #[serde(flatten)]
+    pub face: EntryFace,
     /// CR 614.1c, 614.12: this entry owns the prospective copy already on
     /// the row. It is an instruction for the new object, not old copy state
     /// carried across a zone change. The row already records its values in
     /// v16, and `PendingEvent::copy_chosen` records the answered choice.
     #[serde(skip)]
     pub entry_copy: bool,
+    /// Battlefield: an Aura spell enters attached to this object (CR 303.4f),
+    /// so triggers on its entry see it attached (CR 603.6a).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::state::game_object::exact"
+    )]
+    pub attached_to: Option<ObjectId>,
     /// The instruction removes the publicly identified top position.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub library_top_departure: bool,
@@ -68,7 +80,96 @@ pub(crate) struct ZoneEntry {
     pub inspected_library_departure: bool,
 }
 
+/// What a card shows as it enters the battlefield. The forms exclude one
+/// another: a manifest shows no face, and a meld result is the combined
+/// card's single face.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum EntryFace {
+    #[default]
+    Front,
+    /// A transforming double-faced card enters transformed (CR 712.14).
+    Transformed,
+    /// A modal double-faced card played or cast as its back face enters
+    /// with that face up (CR 712.11). It never transforms.
+    ModalBack,
+    /// Manifested: a face-down nameless 2/2 creature (CR 701.40a, 708.2).
+    Manifested,
+    /// This card and `partner` enter melded as the `result` card
+    /// (CR 701.42a, 712.4c).
+    Melded { partner: CardId, result: CardDefId },
+}
+
+impl EntryFace {
+    /// The face a permanent spell or land shows when it resolves or is played
+    /// as `profile`: only a modal back face differs from the front.
+    pub(crate) fn played_as(profile: SpellProfile) -> Self {
+        if profile == SpellProfile::BackFace {
+            Self::ModalBack
+        } else {
+            Self::Front
+        }
+    }
+}
+
+/// Recorded bytes keep the historical entry keys in their order: `manifested`
+/// only when true, `transformed` always, `modal_back` only when true and
+/// `meld` as a `[partner, result]` pair only when present.
+impl serde::Serialize for EntryFace {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct Keys {
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            manifested: bool,
+            transformed: bool,
+            #[serde(skip_serializing_if = "std::ops::Not::not")]
+            modal_back: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            meld: Option<(CardId, CardDefId)>,
+        }
+        Keys {
+            manifested: *self == EntryFace::Manifested,
+            transformed: *self == EntryFace::Transformed,
+            modal_back: *self == EntryFace::ModalBack,
+            meld: match *self {
+                EntryFace::Melded { partner, result } => Some((partner, result)),
+                _ => None,
+            },
+        }
+        .serialize(serializer)
+    }
+}
+
+fn entry_x<S: serde::Serializer>(
+    spell: &Option<Arc<SpellEntry>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_u8(spell.as_ref().map_or(0, |entry| entry.x))
+}
+
 impl ZoneEntry {
+    /// The entering object shows no printing: a foretold exile or a manifest
+    /// (CR 406.3, 708.2).
+    pub(crate) fn is_face_down(&self) -> bool {
+        self.face_down || self.face == EntryFace::Manifested
+    }
+
+    /// Apply entry counters granted by the mana spent to cast this spell.
+    pub(crate) fn from_spell(controller: PlayerId, spell: SpellEntry) -> Self {
+        let mut counters = Counters::default();
+        if let Some(receipt) = &spell.payment {
+            counters.change(
+                CounterKind::PlusOnePlusOne,
+                i32::from(receipt.entry_counters()),
+            );
+        }
+        Self {
+            controller: Some(controller),
+            spell: Some(Arc::new(spell)),
+            counters,
+            ..Self::default()
+        }
+    }
+
     /// The terms `zone` takes: battlefield terms only for the battlefield;
     /// face down and counters for exile.
     pub(crate) fn for_zone(&self, zone: ZoneType) -> Self {
@@ -140,15 +241,9 @@ pub(crate) enum TokenSource {
     /// The token definition with this `token.*` key.
     Registered(String),
     Copy {
-        definition_id: crate::state::card::CardDefId,
-        /// The copied object as it stood; the token takes its `printed`.
-        definition: crate::state::card::ObjectDefinition,
-        front: Option<(
-            crate::state::card::CardDefId,
-            std::sync::Arc<crate::state::card::PrintedCharacteristics>,
-        )>,
-        copy: Option<crate::state::effect::CopyEffect>,
-        exceptions: Vec<crate::state::effect::Modification>,
+        #[serde(flatten)]
+        values: crate::state::game_object::CopiableValues,
+        exceptions: Vec<crate::state::effect::CopyException>,
     },
 }
 
@@ -388,7 +483,7 @@ impl ReplacementCandidate {
             ReplacementEffect::EntersWithXCounters { kind } => {
                 format!("Enter with X {kind:?} counters")
             }
-            ReplacementEffect::EntersWithCounters { kind, count } => {
+            ReplacementEffect::EntersWithCounters { kind, count, .. } => {
                 format!("Enter with {count} {kind:?} counters")
             }
             ReplacementEffect::OpponentDamagePlusCounters { kind } => {
@@ -418,6 +513,8 @@ pub(crate) struct PendingEvent {
     /// Its "enter as a copy" choice has been made (or had no candidate).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub(crate) copy_chosen: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) second_card_first: Option<bool>,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -434,20 +531,29 @@ pub(crate) struct EventBatch {
 }
 
 impl EventBatch {
-    /// Choosing replacements for an entry exposes the entering objects. Their
-    /// current hidden-zone membership remains fixed until the batch commits.
-    pub(crate) fn public_entries(&self, out: &mut Vec<ObjectId>) {
-        for pending in &self.events {
-            if let ProposedEvent::ZoneMove {
-                object_id: object,
-                from: Some(_),
-                to: ZoneType::Battlefield,
-                ..
-            } = pending.event
-            {
-                out.push(object);
-            }
-        }
+    /// Every object a pending move takes out of a zone, with its destination
+    /// and entry. Its current zone membership stays fixed until the batch
+    /// commits.
+    pub(crate) fn pending_movers(&self) -> impl Iterator<Item = (ObjectId, ZoneType, &ZoneEntry)> {
+        self.events
+            .iter()
+            .filter_map(|pending| match &pending.event {
+                ProposedEvent::ZoneMove {
+                    object_id,
+                    from: Some(_),
+                    to,
+                    entry,
+                } => Some((*object_id, *to, entry)),
+                _ => None,
+            })
+    }
+
+    /// Choosing replacements for a face-up battlefield entry exposes the
+    /// entering object; a face-down entry stays hidden (CR 708.2).
+    pub(crate) fn public_entries(&self) -> impl Iterator<Item = ObjectId> + '_ {
+        self.pending_movers()
+            .filter(|(_, to, entry)| *to == ZoneType::Battlefield && !entry.is_face_down())
+            .map(|(object, ..)| object)
     }
 }
 
@@ -485,6 +591,27 @@ pub(crate) enum EventBinding {
     Created {
         attacking: bool,
     },
+    /// A linked exile (Hama, Azula): `actor` exiles, so orders a melded pair
+    /// (CR 713.8); `grantee` may cast each exiled arrival as `grant` allows
+    /// while controlling `source`. Without a source the cards are only exiled.
+    ExileLinked {
+        actor: PlayerId,
+        grantee: PlayerId,
+        #[serde(serialize_with = "crate::state::game_object::exact")]
+        source: Option<ObjectId>,
+        grant: crate::state::ability::LinkedGrant,
+    },
+}
+
+impl EventBinding {
+    /// The player performing the batch's instruction, when it is not the
+    /// effect's controller.
+    pub(crate) fn actor(&self) -> Option<PlayerId> {
+        match self {
+            EventBinding::ExileLinked { actor, .. } => Some(*actor),
+            _ => None,
+        }
+    }
 }
 
 /// One member's outcome, in the order of the batch's events.
@@ -493,7 +620,8 @@ pub(crate) struct EventResult {
     pub committed: bool,
     /// Signed difference of the committed life totals for a LifeChange member.
     pub life_delta: i32,
-    pub moved: Option<ObjectId>,
+    /// Destination appearances of this event, in draw order for library placement.
+    pub moved: [Option<ObjectId>; 2],
     pub excess_damage: Option<i32>,
     pub combat_damage: Option<(ObjectId, u32)>,
     pub combat_hit: Option<crate::flow::event::CombatPlayerHit>,
@@ -501,19 +629,14 @@ pub(crate) struct EventResult {
     pub lifelink: Option<crate::flow::damage::LifelinkGain>,
 }
 
+impl EventResult {
+    pub fn arrivals(&self) -> impl DoubleEndedIterator<Item = ObjectId> {
+        self.moved.into_iter().flatten()
+    }
+}
+
 pub(crate) enum BatchProgress {
-    Choice {
-        player: PlayerId,
-        candidates: Vec<ReplacementCandidate>,
-    },
-    /// The member at the cursor may enter as a copy of one of `candidates`
-    /// (CR 707.5); its entering controller chooses before any other entry
-    /// replacement applies (CR 616.1c).
-    EntryCopy {
-        player: PlayerId,
-        object: ObjectId,
-        candidates: Vec<PermanentId>,
-    },
+    Decision(Box<Decision>),
     /// Every member committed. Cards returning as a linked exile ends are
     /// consequences of the committed event: a new simultaneous event the
     /// caller runs next, which never replaces these results.
@@ -576,6 +699,7 @@ impl Game {
             sacrifice,
             applied: Vec::new(),
             copy_chosen: false,
+            second_card_first: None,
         })
     }
 
@@ -617,7 +741,11 @@ impl Game {
         }
     }
 
-    pub(crate) fn advance_event_batch(&mut self, batch: &mut EventBatch) -> BatchProgress {
+    pub(crate) fn advance_event_batch(
+        &mut self,
+        batch: &mut EventBatch,
+        effect_controller: Option<PlayerId>,
+    ) -> BatchProgress {
         // Earlier instructions and paid tap/life costs happened before this
         // proposal. Match them while their sources still exist; committing a
         // sacrifice must not erase the source's already-earned tap trigger.
@@ -661,13 +789,18 @@ impl Game {
                             .filter_map(|event| self.pending_event(ordinal, event)),
                     );
                 }
-                [] => batch.cursor += 1,
+                [] => {
+                    if let Some(decision) = self.meld_order_choice(pending, effect_controller) {
+                        return BatchProgress::Decision(Box::new(decision));
+                    }
+                    batch.cursor += 1;
+                }
                 [candidate] => self.apply_replacement(&mut batch.events[batch.cursor], candidate),
                 _ => {
-                    return BatchProgress::Choice {
+                    return BatchProgress::Decision(Box::new(Decision::OrderReplacement {
                         player: self.affected_player(&pending.event),
                         candidates,
-                    }
+                    }))
                 }
             }
         }
@@ -689,6 +822,21 @@ impl Game {
             .collect();
         let sources = if departing.iter().any(Option::is_some) {
             self.snapshot_trigger_sources()
+        } else {
+            Vec::new()
+        };
+        // CR 603.10a: graveyard-departure triggers look back, including when
+        // the source enters the battlefield from the graveyard in this batch.
+        let graveyard_sources = if batch.events.iter().any(|pending| {
+            matches!(
+                pending.event,
+                ProposedEvent::ZoneMove {
+                    from: Some(ZoneType::Graveyard),
+                    ..
+                }
+            )
+        }) {
+            self.graveyard_departure_sources()
         } else {
             Vec::new()
         };
@@ -727,7 +875,7 @@ impl Game {
                 }
             }
             if sacrifices {
-                self.process_event_batch(&sources);
+                self.process_event_batch(&sources, &[]);
             }
         }
         for (pending, departing_lki) in batch.events.iter().zip(departing) {
@@ -775,7 +923,10 @@ impl Game {
                 }
                 _ => None,
             };
-            let result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            let mut result = self.commit_proposed_event(event, departing_lki, &mut followups);
+            if let Some(second_first) = pending.second_card_first {
+                self.order_meld_arrivals(&mut result, second_first, &batch.binding);
+            }
             if result.committed {
                 if matches!(
                     batch.binding,
@@ -784,11 +935,7 @@ impl Game {
                         ..
                     }
                 ) {
-                    if let Some(object_id) = result.moved.filter(|object_id| {
-                        self.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
-                    }) {
-                        self.place_entrant_on_bottom(object_id);
-                    }
+                    self.place_library_arrivals(&result, false);
                 }
                 if let Some((owner, definition, count)) = known_hand_entry {
                     self.set_known_hand_count(owner, definition, count);
@@ -812,7 +959,7 @@ impl Game {
             ..
         } = batch.binding
         {
-            for object in results.iter().filter_map(|result| result.moved) {
+            for object in results.iter().flat_map(|result| result.arrivals()) {
                 if self.state.zones.zone_of(object) != Some(ZoneType::Exile) {
                     continue;
                 }
@@ -842,7 +989,7 @@ impl Game {
         if !totals.is_empty() {
             self.emit_trigger_event(GameEvent::CombatDamageTotals { dealt: totals });
         }
-        self.process_event_batch(&sources);
+        self.process_event_batch(&sources, &graveyard_sources);
         BatchProgress::Complete { results, followups }
     }
 
@@ -859,23 +1006,8 @@ impl Game {
         for _ in 0..count {
             let object = match &definition {
                 TokenSource::Registered(key) => self.prepare_token(key, controller),
-                TokenSource::Copy {
-                    definition_id,
-                    definition,
-                    front,
-                    copy,
-                    exceptions,
-                } => {
-                    let mut template = crate::state::game_object::Object::from_definition(
-                        crate::state::game_object::PublicId(0),
-                        controller,
-                        *definition_id,
-                        std::sync::Arc::clone(&definition.printed),
-                        true,
-                    );
-                    template.set_front_face(front.clone());
-                    template.copy = copy.clone();
-                    Some(self.prepare_token_copy(template, controller, exceptions.clone()))
+                TokenSource::Copy { values, exceptions } => {
+                    Some(self.prepare_token_copy(values, controller, exceptions))
                 }
             };
             if let Some(object) = object {
@@ -900,7 +1032,8 @@ impl Game {
         if pending.copy_chosen {
             return None;
         }
-        let (scope, predicate, _) = self.entry_copy_terms(*object)?;
+        let (scope, predicate, _) =
+            Self::entry_copy_terms(self.battlefield_entry_face(*object, entry)?)?;
         let player = entry
             .controller
             .unwrap_or(self.state.entry_object(*object).owner);
@@ -915,11 +1048,11 @@ impl Game {
             pending.copy_chosen = true;
             return None;
         }
-        Some(BatchProgress::EntryCopy {
+        Some(BatchProgress::Decision(Box::new(Decision::EnterAsCopy {
             player,
-            object,
+            object_id: object,
             candidates,
-        })
+        })))
     }
 
     /// Answer the cursor member's entry-copy question: it becomes a copy of
@@ -928,7 +1061,9 @@ impl Game {
         let pending = &mut batch.events[batch.cursor];
         pending.copy_chosen = true;
         let ProposedEvent::ZoneMove {
-            object_id: object, ..
+            object_id: object,
+            ref entry,
+            ..
         } = pending.event
         else {
             return;
@@ -937,7 +1072,10 @@ impl Game {
             return;
         };
         let source = self.state[source.object].clone();
-        let Some((_, _, exceptions)) = self.entry_copy_terms(object) else {
+        let Some((_, _, exceptions)) = self
+            .battlefield_entry_face(object, entry)
+            .and_then(Self::entry_copy_terms)
+        else {
             return;
         };
         let exceptions = exceptions.to_vec();
@@ -952,16 +1090,13 @@ impl Game {
     /// The scope, predicate and copy exceptions of the card's "enter as a
     /// copy" replacement, if it has one.
     fn entry_copy_terms(
-        &self,
-        object: ObjectId,
+        face: &crate::state::card::PrintedCharacteristics,
     ) -> Option<(
         crate::state::ability::Scope,
         &crate::state::predicate::CardPredicate,
-        &[crate::state::effect::Modification],
+        &[crate::state::effect::CopyException],
     )> {
-        self.state
-            .entry_object(object)
-            .replacement_effects
+        face.replacement_effects
             .iter()
             .find_map(|effect| match effect {
                 ReplacementEffect::EntersAsCopy {
@@ -1036,10 +1171,14 @@ impl Game {
         batch: &mut EventBatch,
     ) -> (Vec<EventResult>, Vec<ProposedEvent>) {
         loop {
-            match self.advance_event_batch(batch) {
+            match self.advance_event_batch(batch, None) {
                 BatchProgress::Complete { results, followups } => return (results, followups),
-                BatchProgress::EntryCopy { .. } => self.choose_entry_copy(batch, None),
-                BatchProgress::Choice { .. } => {
+                BatchProgress::Decision(decision)
+                    if matches!(*decision, Decision::EnterAsCopy { .. }) =>
+                {
+                    self.choose_entry_copy(batch, None)
+                }
+                BatchProgress::Decision(_) => {
                     panic!("event requiring a choice needs a retained caller")
                 }
             }
@@ -1090,6 +1229,8 @@ impl Game {
                     return false;
                 }
                 self.state.zones.is_latest(*object_id)
+                    && (*to != ZoneType::Battlefield
+                        || self.battlefield_entry_face(*object_id, entry).is_some())
             }
         }
     }
@@ -1121,9 +1262,9 @@ impl Game {
                     entry
                         .resolving_adventure
                         .map(|_| ReplacementEffect::AdventureExile),
-                    self.stack_spell(*object_id)
-                        .filter(|spell| spell.exile_instead_of_graveyard)
-                        .map(|_| ReplacementEffect::ExileInsteadOfGraveyard),
+                    self.spell_on_stack(*object_id)
+                        .is_some_and(|spell| spell.exile_instead_of_graveyard)
+                        .then_some(ReplacementEffect::ExileInsteadOfGraveyard),
                 ]
                 .into_iter()
                 .enumerate()
@@ -1260,9 +1401,10 @@ impl Game {
                 let entering_controller = entry
                     .controller
                     .unwrap_or(self.state.entry_object(*object_id).owner);
-                let mut entries: Vec<_> = self
-                    .state
-                    .entry_object(*object_id)
+                let Some(face) = self.battlefield_entry_face(*object_id, entry) else {
+                    return Vec::new();
+                };
+                let mut entries: Vec<_> = face
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -1270,8 +1412,16 @@ impl Game {
                         let effect = match effect {
                             ReplacementEffect::EntersPrepared
                             | ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. }
-                            | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
+                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersWithCounters { if_cast, .. }
+                                if !if_cast
+                                    || entry
+                                        .spell
+                                        .as_ref()
+                                        .is_some_and(|spell| spell.payment.is_some()) =>
+                            {
+                                effect.clone()
+                            }
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
                                     self.check_static_condition(condition, entering_controller)
@@ -1298,25 +1448,17 @@ impl Game {
                     .collect();
                 // CR 306.5b is intrinsic to the face that will enter, including
                 // a face chosen by an earlier enter-as-a-copy replacement.
-                let object = self.state.entry_object(*object_id);
-                let back = entry
-                    .transformed
-                    .then(|| {
-                        crate::cards::content_pack::default_content_pack()
-                            .back_face(object.definition_id)
-                    })
-                    .flatten();
-                let face = back.as_ref().map_or(&**object, |(_, face)| face.as_ref());
                 if let Some(count) = face
                     .loyalty
                     .filter(|&n| n > 0 && face.types.is_planeswalker())
                 {
                     entries.push(ReplacementCandidate::printed(
                         source,
-                        object.replacement_effects.len(),
+                        face.replacement_effects.len(),
                         ReplacementEffect::EntersWithCounters {
                             kind: CounterKind::Loyalty,
                             count,
+                            if_cast: false,
                         },
                     ));
                 }
@@ -1341,7 +1483,7 @@ impl Game {
                             }
                             _ => continue,
                         };
-                        if self.entry_matches_predicate(*object_id, predicate) {
+                        if self.entry_matches_predicate(*object_id, entry, predicate) {
                             entries.push(ReplacementCandidate::printed_static(
                                 source,
                                 definition_index,
@@ -1401,7 +1543,10 @@ impl Game {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
-                        _ => self.entry_matches_predicate(object_id, predicate),
+                        ProposedEvent::ZoneMove { entry, .. } => {
+                            self.entry_matches_predicate(object_id, entry, predicate)
+                        }
+                        _ => unreachable!("counter placement"),
                     };
                     let matches_kind = match event {
                         ProposedEvent::CounterChange { kind: placed, .. } => {
@@ -1552,11 +1697,14 @@ impl Game {
                 ProposedEvent::ZoneMove { entry, .. },
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
-                entry.counters.change(*kind, i32::from(entry.x));
+                entry.counters.change(
+                    *kind,
+                    entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),
+                );
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithCounters { kind, count },
+                ReplacementEffect::EntersWithCounters { kind, count, .. },
             ) => {
                 entry.counters.change(*kind, (*count).max(0));
             }
@@ -1613,15 +1761,14 @@ impl Game {
                 to,
                 ref entry,
             } => {
-                result.moved = Some(self.commit_zone_move(
+                return self.commit_zone_move(
                     object_id,
                     from,
                     to,
                     entry.for_zone(to),
                     lki,
                     followups,
-                ));
-                true
+                )
             }
         };
         result
@@ -1639,15 +1786,6 @@ impl Game {
         let Ok(permanent_id) = self.lookup_current_permanent(target) else {
             return false;
         };
-        // A land-type overwrite's counters change other players' mana.
-        if self.state[target]
-            .statics
-            .iter()
-            .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
-        {
-            self.invalidate_mana_cache(PlayerId(0));
-            self.invalidate_mana_cache(PlayerId(1));
-        }
         let timestamp =
             (delta > 0 && kind.keyword().is_some()).then(|| self.state.id_gen_mut().next_id());
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
@@ -1780,9 +1918,12 @@ mod tests {
                         provenance: CounterProvenance::new(cause),
                     }],
                 );
-                while let super::BatchProgress::Choice { candidates, .. } =
-                    game.advance_event_batch(&mut batch)
+                while let super::BatchProgress::Decision(decision) =
+                    game.advance_event_batch(&mut batch, None)
                 {
+                    let super::Decision::OrderReplacement { candidates, .. } = *decision else {
+                        panic!("expected a replacement choice")
+                    };
                     // Apply the unconditional +1 first when both are initially
                     // eligible. For costs/turn actions it is initially the only
                     // replacement; its result then admits the effect-only one.
@@ -1966,9 +2107,11 @@ mod tests {
         let tyrant_object = game.permanent_object(tyrant).unwrap();
         let proposal = damage(game.permanent_object(cat).unwrap(), fog_object, true, 1);
         let mut batch = game.event_batch(EventBinding::None, [proposal.clone()]);
-        let BatchProgress::Choice { player, candidates } = game.advance_event_batch(&mut batch)
-        else {
+        let BatchProgress::Decision(decision) = game.advance_event_batch(&mut batch, None) else {
             panic!("competing prevention and doubling")
+        };
+        let super::Decision::OrderReplacement { player, candidates } = *decision else {
+            panic!("replacement order expected")
         };
         assert_eq!(player, PlayerId(1));
         assert_eq!(candidates.len(), 2);
@@ -1994,7 +2137,7 @@ mod tests {
             );
             assert_eq!(pending.events[0].applied, [choice.identity]);
             let BatchProgress::Complete { followups, .. } =
-                branch.advance_event_batch(&mut pending)
+                branch.advance_event_batch(&mut pending, None)
             else {
                 panic!("replacement order must complete")
             };

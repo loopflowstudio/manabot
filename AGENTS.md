@@ -558,17 +558,16 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
   `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`.
-- Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
-  `bench_steps` in release for the change and for the reference commit of
-  `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
-  slower than the reference or with a changed search/decision digest. A moved
-  digest (a rules change reaching the curated decks, or a change to the
-  benchmarks or curated lists), an accepted cost or a kept speedup moves the
-  reference by adopting the PR's own run (`gh run download`, then
-  `scripts/engine_budget.py record --reason`); a reference that no longer
-  builds with the change's benchmarks is recorded the same way
-  ([engine performance budget](docs/development.md#engine-performance-budget));
-  wall time is never compared across runners.
+- Engine speed is budgeted in CI: `Engine Budget` compares release
+  `bench_search` and `bench_steps` against `managym/perf/baseline.json` on
+  one runner (never across runners) and fails a PR >10% slower or with a
+  changed digest. A moved digest, accepted cost, kept speedup or broken
+  reference build adopts the PR's run with `scripts/engine_budget.py record
+  --reason` ([engine performance budget](docs/development.md#engine-performance-budget)).
+  To stay under inline `size_of` ceilings in `managym/src/flow/game.rs`, box
+  cold or rarely populated fields (`Option<Box<...>>`), never an always-hot
+  lookup table (`ZoneManager.slots`), which adds pointer indirection on every
+  lookup and a heap allocation on every `GameState::clone`.
 - **CI runs the Rust suite in debug, so validate in debug before landing.**
   The dev profile is opt-level 1 with debug assertions on; CI runs it with
   `cargo nextest run --profile ci`, which terminates any test after 5 minutes.

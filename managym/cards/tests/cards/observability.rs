@@ -53,7 +53,7 @@ use managym::{
         turn::{PlayerTurnHistory, StepKind, TurnState},
     },
     state::{
-        effect::{Affected, EffectDuration, Modification},
+        effect::{Affected, CopyException, EffectDuration, Modification},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::Color,
         permanent::CounterKind,
@@ -137,8 +137,10 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     let Permanent {
+        manifested: _,
+
         transforms: _,
         id: _,
         object: _,
@@ -152,11 +154,9 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
         timestamp: _,
         counters: _,
         attacking: _,
-        was_cast: _,
-        cast_x: _,
-        cast_spent: _,
+        spell_entry: _,
         attached_to: _,
-        exhausted: _,
+        spent_abilities: _,
         activated_this_turn: _,
         loyalty_activated_this_turn: _,
         keyword_counter_timestamps: _,
@@ -168,6 +168,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
             Seen::Permanent(permanent::ENTERED_THIS_TURN),
         ),
         ("card", Seen::Permanent(permanent::DEFINITION)),
+        (
+            "manifested",
+            Seen::Via("viewer-specific definition and object reference"),
+        ),
         ("controller", Seen::Permanent(permanent::IS_MINE)),
         ("transforms", Seen::Via("Transforms fact rows")),
         ("tapped", Seen::Permanent(permanent::TAPPED)),
@@ -189,19 +193,11 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 21] {
         ),
         ("attacking", Seen::Permanent(permanent::ATTACKING)),
         (
-            "was_cast",
-            Seen::Transient("read only by entering-the-battlefield triggers as it enters"),
-        ),
-        (
-            "cast_x",
-            Seen::Transient("copied into its own entering trigger's X as it fires"),
-        ),
-        (
-            "cast_spent",
-            Seen::Transient("copied into its own entering trigger's mana spent as it fires"),
+            "spell_entry",
+            Seen::Transient("its own entering trigger captures the spell's choices and payment"),
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
-        ("exhausted", Seen::Fact(FactKind::UsedAbility)),
+        ("spent_abilities", Seen::Fact(FactKind::UsedAbility)),
         (
             "loyalty_activated_this_turn",
             Seen::Permanent(permanent::LOYALTY_ACTIVATED_THIS_TURN),
@@ -380,6 +376,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::HasAbilitiesOfSource",
             Seen::Via("its shared-effect row"),
         ),
+        Modification::AllCreatureTypes => (
+            "Modification::AllCreatureTypes",
+            Seen::Via("its shared-effect row"),
+        ),
         Modification::NextCreatureCastFlash => (
             "Modification::NextCreatureCastFlash",
             Seen::Via("its shared-effect row"),
@@ -430,7 +430,6 @@ fn resolved(modification: &Modification<EffectValue>) -> Modification {
 fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
-        permanent(Modification::SetName("Legitimate Businessperson".into())),
         permanent(Modification::SetCreatureTypes(vec!["Bear".into()])),
         permanent(Modification::AddTypes(vec![CardType::Artifact])),
         permanent(Modification::SetTypes {
@@ -486,6 +485,8 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         }),
         permanent(Modification::ModeChosen { mode: 1 }),
         permanent(Modification::HasAbilitiesOfSource),
+        permanent(Modification::SetName("Humble Merchant".into())),
+        permanent(Modification::AllCreatureTypes),
     ]
 }
 
@@ -510,6 +511,7 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
+        ObjectSelector::ExiledWithSource => "ObjectSelector::ExiledWithSource",
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
@@ -522,10 +524,11 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
+        ObjectSelector::ZoneMatching { .. } => "ObjectSelector::ZoneMatching",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 20] {
+fn selector_witnesses() -> [ObjectSelector; 22] {
     [
         ObjectSelector::ExactSource,
         ObjectSelector::This,
@@ -536,6 +539,7 @@ fn selector_witnesses() -> [ObjectSelector; 20] {
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Remembered,
+        ObjectSelector::ExiledWithSource,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
         ObjectSelector::CardsThisWay,
@@ -558,6 +562,11 @@ fn selector_witnesses() -> [ObjectSelector; 20] {
             except: None,
             max_mana_value: Some(Box::new(EffectValue::X)),
             exact_mana_value: None,
+        },
+        ObjectSelector::ZoneMatching {
+            zone: ZoneType::Graveyard,
+            owner: Actor::AnyPlayer,
+            predicate: CardPredicate::creature(),
         },
     ]
 }
@@ -764,6 +773,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
         Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
+        Effect::ExileMeldPair { .. } => "Effect::ExileMeldPair",
+        Effect::MeldExiled { .. } => "Effect::MeldExiled",
         Effect::TransformSource => "Effect::TransformSource",
         Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
@@ -810,8 +821,10 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
+        Effect::ManifestDread => "Effect::ManifestDread",
         Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
+        Effect::RevealLibraryTop => "Effect::RevealLibraryTop",
         Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
         Effect::Learn => "Effect::Learn",
         Effect::Modal { .. } => "Effect::Modal",
@@ -865,7 +878,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 94;
+const EFFECT_VARIANTS: usize = 98;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -879,8 +892,9 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateTokenCopy {
+            count: 1.into(),
             of: ObjectSelector::Target(TargetSpec::Creature),
-            exceptions: vec![Modification::Nonlegendary],
+            exceptions: vec![CopyException::Nonlegendary],
         },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
         Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
@@ -984,6 +998,7 @@ fn effect_witnesses() -> Vec<Effect> {
             }),
         },
         Effect::Scry { count: 1 },
+        Effect::ManifestDread,
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             max_mana_value: None,
@@ -995,6 +1010,7 @@ fn effect_witnesses() -> Vec<Effect> {
             max_select: 1,
             predicate: creature(),
         },
+        Effect::RevealLibraryTop,
         Effect::PutTopCardsInHand { count: 1 },
         Effect::Learn,
         Effect::Modal {
@@ -1129,6 +1145,16 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
         Effect::EachPlayerSacrificesCreatures { count: 13 },
+        Effect::ExileMeldPair {
+            partner: "Fang, Fearless l'Cie".into(),
+        },
+        Effect::MeldExiled {
+            fronts: [
+                "Vanille, Cheerful l'Cie".into(),
+                "Fang, Fearless l'Cie".into(),
+            ],
+            result: "Ragnarok, Divine Deliverance".into(),
+        },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -1221,6 +1247,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
         TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
         TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
+        TriggerCondition::CardsLeaveYourGraveyard => "TriggerCondition::CardsLeaveYourGraveyard",
+        TriggerCondition::SourceDealsDamage => "TriggerCondition::SourceDealsDamage",
+        TriggerCondition::SourceDealsCombatDamage => "TriggerCondition::SourceDealsCombatDamage",
         TriggerCondition::DealsCombatDamage { .. } => "TriggerCondition::DealsCombatDamage",
         TriggerCondition::DealsDamage { .. } => "TriggerCondition::DealsDamage",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
@@ -1271,6 +1300,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             whose: Actor::Opponent,
             predicate: CardPredicate::default(),
         },
+        TriggerCondition::CardsLeaveYourGraveyard,
+        TriggerCondition::SourceDealsDamage,
+        TriggerCondition::SourceDealsCombatDamage,
         TriggerCondition::DealsCombatDamage {
             subject: TriggerSubject::any(CardPredicate::creature()),
             to: Some(Actor::You),
@@ -1390,9 +1422,12 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::Compare { .. } => "Condition::Compare",
         Condition::CreatureDiedThisTurn => "Condition::CreatureDiedThisTurn",
         Condition::AnyOf(_) => "Condition::AnyOf",
+        Condition::CastFromGraveyard => "Condition::CastFromGraveyard",
         Condition::Not(_) => "Condition::Not",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::OwnsMeldPair { .. } => "Condition::OwnsMeldPair",
+        Condition::AtMostHalfStartingLife => "Condition::AtMostHalfStartingLife",
         Condition::OpponentHasMoreCardsInHand => "Condition::OpponentHasMoreCardsInHand",
         Condition::OpponentControlsMoreCreatures => "Condition::OpponentControlsMoreCreatures",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
@@ -1408,6 +1443,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
         Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
+        Condition::AttachedCountersAtLeast { .. } => "Condition::AttachedCountersAtLeast",
     }
 }
 
@@ -1459,9 +1495,14 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::CreatureDiedThisTurn,
         Condition::AnyOf(vec![Condition::YourTurn]),
+        Condition::CastFromGraveyard,
         Condition::not(Condition::YourTurn),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
+        Condition::OwnsMeldPair {
+            partner: "Fang, Fearless l'Cie".into(),
+        },
+        Condition::AtMostHalfStartingLife,
         Condition::OpponentControlsMoreCreatures,
         Condition::OpponentHasMoreCardsInHand,
         Condition::TargetDealtDamageThisTurn,
@@ -1483,6 +1524,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,
         Condition::TargetControlledByYou,
+        Condition::AttachedCountersAtLeast {
+            kind: CounterKind::PlusOnePlusOne,
+            count: 3,
+        },
     ]
 }
 
@@ -3117,7 +3162,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
             if let managym::state::card::ReplacementEffect::EntersAsCopy { exceptions, .. } = effect
             {
                 exceptions.retain(|exception| {
-                    !matches!(exception, Modification::GrantStatic(granted)
+                    !matches!(exception, CopyException::GrantStatic(granted)
                         if std::mem::discriminant(&**granted) == std::mem::discriminant(&ability))
                 });
             }
@@ -3660,6 +3705,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        front_mana_value => [column(Permanent, permanent::MANA_VALUE)],
         colors => [Fact(FactKind::EffectiveColor)],
         keyword_counter_timestamps => [Fact(FactKind::KeywordCounterTimestamp)],
         transforms => [Fact(FactKind::Transforms)],
@@ -3696,6 +3742,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
         blocking => [Join(Permanent, permanent::BLOCKING)],
         abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
+        face_down => [column(Permanent, permanent::FACE_DOWN)],
         attacked_this_turn => [column(Permanent, permanent::ATTACKED_THIS_TURN)],
         entered_this_turn => [column(Permanent, permanent::ENTERED_THIS_TURN)],
         dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
@@ -3771,6 +3818,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         owner_id => [Side],
         registry_key => [Join(Stack, stack::DEFINITION)],
         is_copy => [column(Stack, stack::IS_COPY)],
+        cast_from_graveyard => [column(Stack, stack::CAST_FROM_GRAVEYARD)],
         has_announced_x => [column(Stack, stack::HAS_X)],
         characteristics => [Rows("CharacteristicsData below")],
     }));
@@ -3791,6 +3839,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
+        trigger_damage => [Rows("ContinuationProgram effect execution, trigger damage")],
         source_transforms => [Rows("Transforms fact rows, id = frame index + 1")],
         kind => [column(Relation, relation::FRAME_KIND)],
         decision => [column(Relation, relation::DECISION)],
@@ -4987,7 +5036,7 @@ fn mai(exhausted: bool) -> (Scenario, PermanentId) {
         s.game_mut().state.permanents[mai]
             .as_mut()
             .unwrap()
-            .exhausted
+            .spent_abilities
             .push(0);
     }
     (s, mai)

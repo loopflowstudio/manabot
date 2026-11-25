@@ -32,3 +32,8 @@
 - Use the source counter’s signed 32-bit quantity for announced activation X.
   The payment planner still prices mana symbols in its existing mana units.
   A loyalty-only X can use every counter left after other source-counter costs.
+
+- At the MTG-420 sync, keep main's v11 `face_down` and
+  `cast_from_graveyard` columns at their existing indices and append the
+  loyalty columns. Regenerate the five Academy opening fixtures from the
+  combined catalog using their recorded Command prefixes.
