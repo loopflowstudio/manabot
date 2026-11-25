@@ -623,6 +623,10 @@ class StackEntryView(ProtocolModel):
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # What the spell or ability targets, in the order chosen.
+    targets: list[SubjectRef] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     # A spell cast from a prepared copy; its stack copies are not.
     from_prepared: bool = Field(default=False, exclude_if=lambda value: not value)

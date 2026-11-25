@@ -1522,10 +1522,16 @@ explicit `sources=` are additional discovery calls. Multiple providers coexist.
 Academy does not import a training framework or know their artifact layouts.
 
 A session implements `observe(view)`, `choose(view)` and `close()`. The shared
-runner sends each seat its viewer-safe native observations after setup and
-transitions, preserving live decision focus. `PolicyView` carries the observation,
-seat, complete ordered `choices`, one-use `binding` and optional native text
-capture. It contains no live environment. Return
+runner calls `observe(view)` once after every committed state transition (after
+setup, after each committed Command by either seat, and on terminal `game_over`),
+with `view.choices` populated only when this seat is acting and
+`view.observation.recent_events` carrying the last step's public events.
+`choose(view)` proposes an action for the already-observed pending decision and
+may be retried without another `observe()` call if a proposal fails or times out;
+recurrent policies should update state in `observe()` only (native decision
+memory is also populated on `view.observation.decision_memory_json()`).
+`PolicyView` carries the observation, seat, complete ordered `choices`, one-use
+`binding` and optional native text capture. It contains no live environment. Return
 `PolicyDecision(choice=view.choices[index], binding=view.binding)`.
 Optional probabilities must cover that entire ordered set and sum to one;
 optional `ValueEstimate` declares units and viewer seat. Action-only choices
@@ -1807,27 +1813,32 @@ track across the game; Study has an isolated scope. See
 
 ## Playing a trained challenger
 
-### Ten-deck Elemental play
+### Top-level CLI and hosted policies
 
 ```sh
-doppler run --project manabot --config prd -- ./scripts/play-elemental
-./scripts/play-elemental --offline     # later runs, no credentials or network
+managym play                                             # Play vs recommended policy (TLA trophies)
+managym play --order draw --deck ur_lessons --opponent search-64
+managym play --opponent ./my_bot.py:choose               # Play against any Python callable
+managym watch --bot1 heuristic --bot2 manabot            # Watch bot vs bot
+managym opponents                                        # List available built-ins & policies
 ```
 
-`scripts/play_elemental.py` reads MTG-183's published checkpoints (default
-segment `f3748bcabac8`; `--run` selects another), picks the highest recorded
-training update, verifies SHA-256 and size, checks world admission and CPU
-placement, and pins those bytes for the server's lifetime. It never trains or
-swaps the opponent mid-match. `--prepare-only`
-downloads and verifies; `--port`/`--frontend-port` override 18479/18480.
-Checkpoint records live in `.runs/elemental-play/checkpoints/`, attempts in
-`.runs/elemental-play/human-play/play.sqlite` marked `human_exploratory`.
+When `manabot` is installed, its `managym.bots` provider discovers the hosted
+default policy from `https://policies.manabot.gg/index.json`, verifies its
+SHA-256 into `~/.cache/manabot/sha256/`, and loads it alongside any local
+checkpoints. Set `ACADEMY_HOSTED_POLICIES=0` to disable hosted catalog fetches
+offline, or pass `--no-discover` to hide discovered policies when testing a
+single custom policy. In a repo checkout, `./scripts/play` runs the same
+packaged launcher with the `play-runtime` dependency group.
 
-The printed **Elemental deck browser** link assigns either seat from the ten
-`elemental-world-v2` setups (mirrors allowed) with a deck assignment for each
-native seat. **Edit next game** prepares the next matchup in the current session;
-starting it replaces the current attempt. **New game** starts a separate session.
-On a scripted seed-0 game (2026-10-26), stop and forced-step automation cut deliberate inputs from 289 to 73.
+From Python, pass any `Policy` or plain callable `(obs) -> int | Sequence[float] | PolicyDecision`:
+
+```python
+from managym.academy.launch import play, watch
+
+play(opponent=lambda obs: 0, order="draw")
+watch(bot1="./my_bot.py:choose", bot2="heuristic")
+```
 
 ### Other checkpoints
 

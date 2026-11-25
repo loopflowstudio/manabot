@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { Observation, PresentationEvent } from '$lib/types';
 import {
   cursorView,
-  loadBeatPace,
-  saveBeatPace,
   scrubberStops,
   sharedLaterCount,
   unreadWalkStops,
@@ -156,24 +154,6 @@ describe('walk stops over kept boards', () => {
     expect(sharedLaterCount(turns, 2, 6)).toBe(2);
   });
 });
-
-describe('beat pace', () => {
-  it('is quick unless the browser remembers another', () => {
-    const stored = new Map<string, string>();
-    (globalThis as { localStorage?: unknown }).localStorage = {
-      getItem: (key: string) => stored.get(key) ?? null,
-      setItem: (key: string, value: string) => { stored.set(key, value); },
-    };
-    expect(loadBeatPace()).toBe('quick');
-    saveBeatPace('off');
-    expect(loadBeatPace()).toBe('off');
-    localStorage.setItem('academy.table.beat-pace', 'nonsense');
-    expect(loadBeatPace()).toBe('quick');
-    delete (globalThis as { localStorage?: unknown }).localStorage;
-    expect(loadBeatPace()).toBe('quick');
-  });
-});
-
 describe('the turn an event happened in', () => {
   const events = [
     ev(10, { kind: 'turn_started', player: 1, turn_number: 10 }),

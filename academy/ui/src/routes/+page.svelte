@@ -25,7 +25,7 @@
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
-  import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
+  import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
   import { trackMarks } from '$lib/board/history';
   import { spentOnce } from '$lib/board/phases';
   import {
@@ -56,6 +56,25 @@
   let setupStatus = $state('');
 
   let stopsPending = $state<number | null>(null);
+  let autoTap = $state(loadAutoTap());
+  let fullControl = $state<FullControlMode>('off');
+
+  function toggleAutoTap(): void {
+    if (fullControl !== 'off') {
+      fullControl = 'off';
+      autoTap = true;
+      saveAutoTap(true);
+      return;
+    }
+    autoTap = !autoTap;
+    saveAutoTap(autoTap);
+  }
+
+  function handleAutoTap(action: InteractionOffer, note: string): void {
+    if (participantStudying || !canSubmitLive) return;
+    gameStore.appendAutoNote(note, presentationPlayer.events.at(-1)?.seq ?? -1);
+    sendAction(action.id);
+  }
 
   onMount(() => {
     const params = new URLSearchParams(window.location.search);
@@ -220,7 +239,12 @@
     const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
     untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
   });
-  const deckLabel = (key: unknown): string => DECK_CHOICES.find(deck => deck.key === key)?.label ?? 'Imported deck';
+  const deckLabel = (key: unknown): string => {
+    const found = DECK_CHOICES.find(deck => deck.key === key)?.label;
+    if (found) return found;
+    if (typeof key === 'string' && key && key !== 'imported' && key !== 'custom') return key;
+    return 'Imported deck';
+  };
   const homeMatchup = $derived(lastMatchup ?? {
     config: gameStore.setupConfig(),
     opponent: builtinOpponentName(gameStore.opponentChoice) ?? 'Registered policy',
@@ -228,6 +252,20 @@
   });
   const atHome = $derived(mounted && !awaitingRecovery && !demoName && !page.url.searchParams.has('launch')
     && !gameStore.observation && editor.kind === 'closed');
+
+  function startHomeTable(): void {
+    if (gameStore.newGamePending) return;
+    if (gameStore.seedError) { gameStore.setError(gameStore.seedError); return; }
+    if (gameStore.watchMode) {
+      gameStore.newGamePending = true;
+      gameStore.setError(null);
+      void startConfiguredWatch(gameStore).then(id => goto(`/replay?trace=${encodeURIComponent(id)}`))
+        .catch(error => gameStore.setError(error.message)).finally(() => gameStore.newGamePending = false);
+      return;
+    }
+    gameStore.setError(null);
+    sendNewGame(gameStore.newGameConfig());
+  }
 
   function playAgain(): void {
     if (gameStore.newGamePending) return;
@@ -345,9 +383,6 @@
   ));
   const canContinue = $derived(!demoName && gameStore.playSession !== null && !!gameStore.table?.attempt_id && !gameStore.newGamePending && !gameStore.resumeFailed);
 
-  // How the opponent's moves are read out, remembered per browser.
-  let beatPace = $state<BeatPace>(loadBeatPace());
-  const BEAT_PACE_LABELS: Record<BeatPace, string> = { off: 'Off', quick: 'Quick', slow: 'Slow' };
 </script>
 
 {#snippet notices()}
@@ -384,7 +419,12 @@
       {#if demoName}
         <button data-testid="game-result-action" class="btn btn-primary" onclick={startNewGame}>Play again</button>
       {:else}
-        <button data-testid="game-result-action" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
+        {@const heroPool = typeof gameStore.playSession?.draft.hero_deck_pool === 'string' ? gameStore.playSession.draft.hero_deck_pool : null}
+        {@const villainPool = typeof gameStore.playSession?.draft.villain_deck_pool === 'string' ? gameStore.playSession.draft.villain_deck_pool : null}
+        {#if heroPool || villainPool}
+          <button data-testid="game-result-deal-new" class="btn btn-primary" disabled={!canContinue} onclick={() => sendContinuation('rematch', { hero_deck: heroPool ?? gameStore.playSession?.draft.hero_deck, villain_deck: villainPool ?? gameStore.playSession?.draft.villain_deck, seed: null })}>Deal new decks</button>
+        {/if}
+        <button data-testid="game-result-action" class={(heroPool || villainPool) ? 'btn btn-secondary' : 'btn btn-primary'} disabled={!canContinue} onclick={() => sendContinuation('rematch')}>Rematch</button>
         <button data-testid="game-result-swap" class="btn btn-secondary" disabled={!canContinue} onclick={() => sendContinuation('swap_sides')}>Swap sides</button>
         <button data-testid="game-result-change" class="btn btn-secondary" disabled={!canContinue} onclick={() => openEditor('next', true)}>Change opponent</button>
       {/if}
@@ -400,17 +440,11 @@
 {#snippet menu()}
   <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
   <details class="game-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
+    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Game</summary>
     <div class="menu-panel" role="region" aria-label="Session, stops and tools">
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-      <fieldset class="beat-pace" data-testid="beat-pace">
-        <legend class="type-caption text-ink-2">Opponent's moves</legend>
-        {#each BEAT_PACES as pace (pace)}
-          <label class="type-caption"><input type="radio" name="beat-pace" value={pace} checked={beatPace === pace}
-            onchange={() => { beatPace = pace; saveBeatPace(pace); }} />{BEAT_PACE_LABELS[pace]}</label>
-        {/each}
-      </fieldset>
       {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+      <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
       <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
       <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
         <legend class="sr-only">Pilot stop controls</legend>
@@ -468,21 +502,42 @@
         note: gameStore.gameOver ? null : 'Positions open in Review after the game' }}
       result={gameStore.gameOver ? result : undefined}
       {menu}
-      {beatPace}
       {stepBoards}
+      {autoTap}
+      {fullControl}
+      ontoggleautotap={toggleAutoTap}
+      onfullcontrol={mode => { fullControl = mode; }}
+      onautotap={handleAutoTap}
     />
   {:else if atHome}
     {@render notices()}
-    <section class="home" aria-label="Play" data-testid="home">
-      <p class="type-label text-ink-3">{lastMatchup ? 'Your last matchup' : 'Ready to play'}</p>
-      <p class="home-matchup type-title" data-testid="home-matchup">
-        <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
-        <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
-      </p>
-      <button class="btn btn-primary home-play" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
-        onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : lastMatchup ? 'Play again' : 'Play'}</button>
+    <section class="home-table" aria-label="Play" data-testid="home">
+      {#if lastMatchup}
+        <div class="last-strip">
+          <div>
+            <p class="type-label text-ink-3">Your last matchup</p>
+            <p class="home-matchup type-title" data-testid="home-matchup">
+              <span>You</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.hero}</span>{/if}<span class="text-ink-3">{', '}{matchupSeat(homeMatchup.config)}</span>
+              <span class="text-ink-3">{' vs '}</span><span>{homeMatchup.opponent}</span>{#if homeMatchup.decks}<span class="text-ink-3">{' · '}{homeMatchup.decks.villain}</span>{/if}
+            </p>
+          </div>
+          <button class="btn btn-primary" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
+            onclick={playAgain}>{gameStore.newGamePending ? 'Preparing the game…' : 'Play again'}</button>
+        </div>
+      {:else}
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p class="type-label text-ink-3">Academy · Seat Table</p>
+            <h2 class="type-display text-display">Choose seats and start</h2>
+          </div>
+          <button class="btn btn-secondary btn-sm" data-testid="play-again" disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
+            onclick={startHomeTable}>{gameStore.newGamePending ? 'Preparing the game…' : 'Quick Play'}</button>
+        </div>
+      {/if}
+      <GameSetup setup={gameStore} onStart={startHomeTable} disabled={gameStore.newGamePending || gameStore.connection !== 'connected'}
+        applySmartDefaults={!lastMatchup} />
       <p class="type-caption text-ink-2">
-        <a class="underline" data-testid="home-setup" href="/?setup=1">Set up a different game</a> ·
+        <a class="underline" data-testid="home-setup" href="/?setup=1">Full setup sheet</a> ·
         <a class="underline" href="/games">Games</a>
         <span data-testid="connection-badge" data-connection-state={gameStore.connection} role="status" aria-live="polite" aria-atomic="true"
           aria-label={`Connection status: ${gameStore.connection}`} class="type-label uppercase text-ink-3"> · {gameStore.connection}</span>
@@ -559,10 +614,10 @@
   .result h2 { line-height: 1.1; }
   .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .result-links { color: var(--text-secondary); }
-  .home { max-width: 640px; margin: 12vh auto 0; display: grid; gap: 14px; justify-items: start;
-    padding: 28px 30px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .home-table { max-width: 960px; margin: 16px auto 0; display: grid; gap: 10px;
+    padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
+  .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
   .home-matchup { line-height: 1.35; }
-  .home-play { font-size: 16px; padding: 10px 22px; }
   .game-menu { position: relative; }
   .game-menu > summary { list-style: none; }
   .game-menu > summary::-webkit-details-marker { display: none; }
@@ -573,7 +628,4 @@
   }
   .menu-panel > :global(*) { width: 100%; }
   .menu-panel > a { width: auto; }
-  .beat-pace { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; border: 0; padding: 0; margin: 0; }
-  .beat-pace legend { float: left; margin-right: 4px; padding: 0; }
-  .beat-pace label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 </style>

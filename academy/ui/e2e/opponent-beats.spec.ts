@@ -5,8 +5,8 @@
  * from the turn's first stop, Space and clicking the earlier board only return
  * to now without acting, the rail stays live (pressing a choice or number key
  * returns to now and commits), selecting a history line + ← → + Esc move the
- * same cursor, and reduced motion / pace Off never auto-walk while still
- * allowing manual stepping.
+ * same cursor, and reduced motion never auto-walks while still allowing manual
+ * stepping.
  */
 import { expect, test, type Page } from '@playwright/test';
 
@@ -86,7 +86,6 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
 
@@ -162,7 +161,6 @@ test('clicking the earlier board returns to now; selecting a history line and ar
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
-  await page.addInitScript(() => localStorage.setItem('academy.table.beat-pace', 'slow'));
   const sent = { count: 0 };
   await startAgainstRandom(page, sent);
 
@@ -220,31 +218,6 @@ test('reduced motion does not auto-walk, while scrubber and Show their turn agai
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('game-board')).toHaveAttribute('data-board', 'frame');
 });
-
-test('the Menu turns the walk off, and the browser remembers it', async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const sent = { count: 0 };
-  await startAgainstRandom(page, sent);
-  await page.getByTestId('game-menu').click();
-  const pace = page.getByTestId('beat-pace');
-  await expect(pace.getByRole('radio', { name: 'Quick' })).toBeChecked();
-  await pace.getByRole('radio', { name: 'Off' }).check();
-  await page.getByTestId('game-menu').click();
-  let opponentFacts = 0;
-  await playUntil(page, async () => {
-    expect(await page.locator('[data-testid=walk-bar][data-walking=true]').count()).toBe(0);
-    opponentFacts = await page.locator('[data-testid=recent-fact].theirs').count();
-    return opponentFacts > 0;
-  }, 120);
-  expect(opponentFacts).toBeGreaterThan(0);
-  await expect(page.getByTestId('walk-bar')).toHaveAttribute('data-walking', 'false');
-  await page.reload();
-  await expect(page.getByTestId('game')).toBeVisible();
-  await page.getByTestId('game-menu').click();
-  await expect(page.getByTestId('beat-pace').getByRole('radio', { name: 'Off' })).toBeChecked();
-});
-
 test('a reload never walks turns already shown, and the next opponent turn still walks', async ({ page }) => {
   test.setTimeout(180_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });

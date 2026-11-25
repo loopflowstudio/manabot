@@ -205,7 +205,7 @@ describe('GameStore', () => {
     });
     expect(config.stop_on_stack).toBe(true);
     expect(config.auto_pass).toBe(true);
-    expect(config.villain_type).toBe('search');
+    expect(config.villain_type).toBe('random');
   });
 
   it('names a chosen trained checkpoint by its digest', () => {

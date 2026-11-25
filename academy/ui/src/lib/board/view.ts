@@ -210,15 +210,23 @@ function piles(items: PermanentItem[]): Pile[] {
   return [...byKey.values()];
 }
 
-function side(player: PlayerState, offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): SideView {
-  const items = new Map<number, PermanentItem>(player.battlefield.map(permanent => [permanent.id,
+/** Every permanent on the battlefield by id, each host holding its attachments, whoever controls them. */
+function attachedItems(players: readonly PlayerState[], offersAt: (anchor: Anchor) => PlacedOffer[], paid: ReadonlyMap<number, string>): Map<number, PermanentItem> {
+  const items = new Map<number, PermanentItem>(players.flatMap(player => player.battlefield).map(permanent => [permanent.id,
     { permanent, offers: offersAt({ kind: 'object', id: permanent.id }), attached: [], paid: paid.get(permanent.id) ?? null }]));
-  const hosts: PermanentItem[] = [];
   for (const item of items.values()) {
     const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
     if (host && host !== item) host.attached.push(item);
-    else hosts.push(item);
   }
+  return items;
+}
+
+/** One player's rows. An Aura or Equipment sits with its host, on the host's side (an opponent's Aura on your creature is drawn with your creature). */
+function side(player: PlayerState, items: ReadonlyMap<number, PermanentItem>, offersAt: (anchor: Anchor) => PlacedOffer[]): SideView {
+  const hosts = player.battlefield.map(permanent => items.get(permanent.id)!).filter(item => {
+    const host = item.permanent.attached_to === undefined ? undefined : items.get(item.permanent.attached_to);
+    return !host || host === item;
+  });
   const creatures = hosts.filter(item => isCreature(item.permanent));
   const rest = hosts.filter(item => !isCreature(item.permanent));
   const support = [...rest.filter(item => isLand(item.permanent)), ...rest.filter(item => !isLand(item.permanent))];
@@ -386,8 +394,9 @@ export function boardView(frame: ExperienceFrame, players: PlayerNames): BoardVi
   // What the pending cost has already taken, by the object as it is now.
   const paid = new Map((frame.projection.decision_context?.paid ?? [])
     .flatMap(entry => (entry.object ? [[entry.object.display_id, entry.phrase] as const] : [])));
-  const you = side(agent, offersAt, paid);
-  const them = side(opponent, offersAt, paid);
+  const items = attachedItems([agent, opponent], offersAt, paid);
+  const you = side(agent, items, offersAt);
+  const them = side(opponent, items, offersAt);
   alignCombatRows(you, them);
   const stack = stackItems(frame, offersAt);
   const onStack = new Set(stack.map(item => item.card?.id));

@@ -73,6 +73,9 @@ class GameConfig:
     # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
+    # Registered deck pool keys ("pool:<id>") when decks were sampled from a pool.
+    hero_deck_pool: str | None = None
+    villain_deck_pool: str | None = None
 
     # The human controller owns this mode, independent of the chosen seat.
     mana_payment: managym.ManaPayment = "manual"
@@ -92,12 +95,16 @@ class GameConfig:
             raise ValueError("Search requires open decklists.")
 
     def to_record(self) -> dict[str, Any]:
-        """Omit default-off mana offers from retained game configuration."""
+        """Omit default-off mana offers and absent pool keys from retained config."""
         config = asdict(self)
         if self.mana_payment == "manual":
             del config["mana_payment"]
         if self.mana_floats == "off":
             del config["mana_floats"]
+        if self.hero_deck_pool is None:
+            del config["hero_deck_pool"]
+        if self.villain_deck_pool is None:
+            del config["villain_deck_pool"]
         return config
 
     def to_rust(self) -> managym.GameSetup:

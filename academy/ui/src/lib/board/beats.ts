@@ -1,13 +1,13 @@
 /**
  * The opponent's turn on the table, one kept board stop at a time.
  *
- * The walk is the history's one cursor advancing on a timer (`BeatPace`) across
+ * The walk is the history's one cursor advancing on a timer (`BEAT_MS`) across
  * unread board stops: lines that happened at once in the rules (sharing one
  * kept `StepBoard`) form one stop, passes are never a stop, and the caption
  * reads the stop's sentence(s) from `tell` (carried on `HistoryLine.sentence`).
  * Clicking a scrubber tick or selecting a history line moves that same cursor
- * and holds; pace `off` or reduced motion never auto-walks, while the
- * scrubber, captions and "Show their turn again" still work by hand.
+ * and holds; reduced motion never auto-walks, while the scrubber, captions and
+ * "Show their turn again" still work by hand.
  */
 import type { Observation, PresentationEvent, PresentationRule } from '$lib/types';
 import { findBoard, type StepBoard } from './boards';
@@ -269,20 +269,5 @@ export function sharedLaterCount(
 
 // ———————————————————————————————————————— Pace
 
-export type BeatPace = 'off' | 'quick' | 'slow';
-
-export const BEAT_PACES: readonly BeatPace[] = ['off', 'quick', 'slow'];
-
 /** How long each stop stays while walking, in milliseconds. */
-export const BEAT_MS: Record<Exclude<BeatPace, 'off'>, number> = { quick: 700, slow: 1400 };
-
-const PACE_KEY = 'academy.table.beat-pace';
-
-export function loadBeatPace(): BeatPace {
-  const stored = typeof localStorage === 'undefined' ? null : localStorage.getItem(PACE_KEY);
-  return BEAT_PACES.find(pace => pace === stored) ?? 'quick';
-}
-
-export function saveBeatPace(pace: BeatPace): void {
-  localStorage.setItem(PACE_KEY, pace);
-}
+export const BEAT_MS = 700;

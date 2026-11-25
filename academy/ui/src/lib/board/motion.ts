@@ -175,7 +175,7 @@ export class Travel {
 /**
  * Build death marks (travel ghost + rule chip) for creatures dying on the
  * active cursor stop (or since the last decision when staying on now under
- * reduced motion / pace Off).
+ * reduced motion).
  */
 export function collectDeathMarks(params: {
   root: HTMLElement | null;
@@ -187,18 +187,17 @@ export function collectDeathMarks(params: {
   activeSeqs: ReadonlySet<number>;
   cursor: number | null;
   sinceRevision: number | null;
-  pace: string;
   matchId: string;
   revision: number;
   reduced: boolean;
 }): DeathMark[] {
-  const { root, boardEl, travel, projection, events, labelsAt, activeSeqs, cursor, sinceRevision, pace, matchId, revision, reduced } = params;
+  const { root, boardEl, travel, projection, events, labelsAt, activeSeqs, cursor, sinceRevision, matchId, revision, reduced } = params;
   const relevant: { event: PresentationEvent; index: number }[] = [];
   if (cursor !== null) {
     events.forEach((event, index) => {
       if (event.kind.kind === 'died' && activeSeqs.has(event.seq)) relevant.push({ event, index });
     });
-  } else if ((reduced || pace === 'off') && sinceRevision !== null) {
+  } else if (reduced && sinceRevision !== null) {
     events.forEach((event, index) => {
       if (event.kind.kind === 'died' && event.from_revision >= sinceRevision) relevant.push({ event, index });
     });

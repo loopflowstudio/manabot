@@ -10,6 +10,7 @@ import {
 } from './decks';
 import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
+import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -87,6 +88,7 @@ export class GameStore {
   manaPayment = $state<'auto' | 'manual'>('manual');
   manaFloats = $state<'off' | 'usable' | 'all'>('off');
   humanSeat = $state<0 | 1>(0);
+  turnOrder = $state<'play' | 'random' | 'draw'>('play');
   watchMode = $state(false);
   watchPlayerChoice = $state<PlayerChoice>('random');
   watchSearchConfig = $state<SearchConfig | null>(null);
@@ -110,10 +112,14 @@ export class GameStore {
     if (mode !== 'off' && mode !== 'usable' && mode !== 'all') throw new Error('Invalid mana tap mode');
     this.manaFloats = mode;
     this.humanSeat = draft.human_seat === 1 ? 1 : 0;
+    this.turnOrder = draft.human_seat === 1 ? 'draw' : 'play';
     this.dealMode = draft.seed == null ? 'fresh' : 'repeat';
     this.seed = String(draft.seed ?? '0');
     this.deckImport = (draft.deck_import as typeof this.deckImport) ?? null;
-    const named = sanitizeDeckSelection({hero:draft.hero_deck, villain:draft.villain_deck});
+    const named = sanitizeDeckSelection({
+      hero: draft.hero_deck_pool ?? draft.hero_deck,
+      villain: draft.villain_deck_pool ?? draft.villain_deck,
+    });
     if (named) { this.setHeroDeck(named.hero); this.setVillainDeck(named.villain); }
     this.decklists = draft.decklists === 'closed' ? 'closed' : 'open';
     this.searchConfig = parseSearchConfigs([draft.mirror ?? null, null])[0];
@@ -156,14 +162,14 @@ export class GameStore {
   resumeFailed = $state(false);
   recordingId = $state<string | null>(null);
   selectedTargetId = $state<number | null>(null);
-  opponentChoice = $state<PlayerChoice>('search-64');
+  opponentChoice = $state<PlayerChoice>('random');
   decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
   deckImport = $state<{
-    hero: { source: string; filename: string };
-    villain: { source: string; filename: string };
+    hero: { source: string; filename: string; name?: string };
+    villain: { source: string; filename: string; name?: string };
   } | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
@@ -262,6 +268,17 @@ export class GameStore {
 
   setDecklists(next: Decklists): void {
     this.decklists = next;
+    if (next === 'closed') {
+      // Built-in rollout Search requires open decklists; switch away so the
+      // selection cannot stay on a disabled option. Policy-backed `mirror`
+      // search uses physical-deal belief and remains valid on closed lists.
+      if (this.opponentChoice.startsWith('search-')) {
+        this.opponentChoice = 'random';
+      }
+      if (this.watchPlayerChoice.startsWith('search-')) {
+        this.watchPlayerChoice = 'random';
+      }
+    }
   }
 
   setHeroDeck(next: DeckChoice): void {
@@ -277,8 +294,16 @@ export class GameStore {
   }
 
   newGameConfig(): Record<string, unknown> {
+    const base = this.setupConfig();
+    const resolvedSeat =
+      this.turnOrder === 'random'
+        ? (Math.random() < 0.5 ? 0 : 1)
+        : this.turnOrder === 'draw'
+          ? 1
+          : this.humanSeat;
     return {
-      ...this.setupConfig(),
+      ...base,
+      human_seat: resolvedSeat,
       request_id: crypto.randomUUID(),
       player_token: playerToken(),
     };
@@ -286,13 +311,22 @@ export class GameStore {
 
   /** Setup data has no request identity or participant credential. */
   setupConfig(): Record<string, unknown> {
+    let resolvedImport: Record<string, unknown> | null = this.deckImport ? { ...this.deckImport } : null;
+    if (!resolvedImport && (isKeptDeckChoice(this.decks.hero) || isKeptDeckChoice(this.decks.villain))) {
+      const partial: Record<string, unknown> = {};
+      const heroKept = findKeptDeck(this.decks.hero);
+      const villainKept = findKeptDeck(this.decks.villain);
+      if (heroKept) partial.hero = { source: heroKept.source, filename: heroKept.filename, name: heroKept.name };
+      if (villainKept) partial.villain = { source: villainKept.source, filename: villainKept.filename, name: villainKept.name };
+      if (partial.hero || partial.villain) resolvedImport = partial;
+    }
     return {
       ...this.opponentConfig(),
-      human_seat: this.humanSeat,
+      human_seat: this.turnOrder === 'draw' ? 1 : this.humanSeat,
       mana_payment: this.manaPayment,
       mana_floats: this.manaFloats,
       seed: this.dealMode === 'repeat' ? this.seed : null,
-      ...(this.deckImport ? { deck_import: this.deckImport } : {}),
+      ...(resolvedImport ? { deck_import: resolvedImport } : {}),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,
       stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },
@@ -339,6 +373,16 @@ export class GameStore {
       ...this.historyNotes,
       { id: `note-${this.logSequence}`, actor, turn, afterSeq, text },
     ];
+  }
+
+  /** Record client-side automation (e.g. Auto-tap) distinctly from deliberate moves. */
+  appendAutoNote(text: string, afterSeq = -1): void {
+    this.addHistoryNote(
+      'auto',
+      this.observation?.turn.turn_number ?? null,
+      afterSeq,
+      text,
+    );
   }
 
   setStopOnStack(value: boolean): void {
