@@ -272,3 +272,7 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   non-lands, and self-animating lands (e.g. Soulstone Sanctuary) stay distinct.
   Mid-payment color choices are MODAL frames with
   `decision_context.stage == "mana_color"`.
+  `14 Gruul Guildgate / 6 Mountain / 6 Forest / 14 Gray Ogre` (seed 11) reaches
+  Guildgate + Forest + Mountain (exact {2}{R}, no stop) and then two Guildgates
+  + Forest + Mountain (stop, color modal, second stop). Rebuild the static SPA
+  after any `academy/ui` change; a configured launch serves the stale build silently.
