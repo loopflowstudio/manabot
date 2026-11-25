@@ -7,7 +7,7 @@ use crate::{
     flow::{statics::Characteristics, trigger::DelayedTriggerEvent},
     state::{
         ability::Effect,
-        card::{CardType, StaticAbility},
+        card::{CardDefId, CardType, StaticAbility},
         effect::Modification,
         game_object::Target,
         stack_object::StackObject,
@@ -38,7 +38,7 @@ impl Game {
         // contributes at least one tap (`count >= 1`), so it must have at
         // least `spare + 1` interchangeable members sharing a definition.
         let min_opt = spare + 1;
-        let mut def_counts: Vec<(crate::state::card::CardDefId, usize)> = Vec::new();
+        let mut def_counts: Vec<(CardDefId, usize)> = Vec::new();
         for tap in &taps {
             let def = self.state[tap.source.object].definition_id;
             if let Some((_, count)) = def_counts.iter_mut().find(|(id, _)| *id == def) {
@@ -47,7 +47,8 @@ impl Game {
                 def_counts.push((def, 1));
             }
         }
-        if !def_counts.iter().any(|(_, count)| *count >= min_opt) {
+        def_counts.retain(|(_, count)| *count >= min_opt);
+        if def_counts.is_empty() {
             return None;
         }
 
@@ -57,13 +58,8 @@ impl Game {
         let mut candidate_classes: Vec<Vec<usize>> = Vec::new();
         for (index, tap) in taps.iter().enumerate() {
             let def = self.state[tap.source.object].definition_id;
-            if !def_counts
-                .iter()
-                .any(|(id, count)| *id == def && *count >= min_opt)
+            if !def_counts.iter().any(|(id, _)| *id == def) || !self.unbound_mana_source(tap.source)
             {
-                continue;
-            }
-            if !self.unbound_mana_source(tap.source) {
                 continue;
             }
             if let Some(class) = candidate_classes
@@ -86,13 +82,7 @@ impl Game {
                 cost,
                 taps: super::Taps::None,
             }] if model.sources.iter().all(|s| s.abilities.is_empty()) => {
-                let mut total = pool.clone();
-                for source in model.sources.iter().filter(|s| s.untapped) {
-                    if let Some(output) = &source.fixed {
-                        total.add(output);
-                    }
-                }
-                Some((cost, total))
+                Some((cost, model.fixed_total(pool)))
             }
             _ => None,
         };
@@ -124,11 +114,8 @@ impl Game {
         }
         let opt_indices = optional?;
         let opt_source = taps[opt_indices[0]].source;
-        let mandatory_count = tap_count - opt_indices.len();
-        let count = needed.checked_sub(mandatory_count)?;
-        if count == 0 || opt_indices.len() <= count {
-            return None;
-        }
+        // `opt_indices.len() >= spare + 1`, so `1 <= count < opt_indices.len()`.
+        let count = opt_indices.len() - spare;
 
         // Every tap outside the optional class must be mandatory. Deduplicate
         // by payment profile since a lone mana obligation reads only profiles.
@@ -152,15 +139,12 @@ impl Game {
             checked_mandatory.push(tap.source);
         }
 
-        let mut result = Vec::with_capacity(needed);
-        for (index, tap) in taps.iter().enumerate() {
-            if !opt_indices.contains(&index) {
-                result.push(*tap);
-            }
-        }
-        for &index in &opt_indices[..count] {
-            result.push(taps[index]);
-        }
+        let skip = &opt_indices[count..];
+        let mut result: Vec<_> = taps
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, tap)| (!skip.contains(&index)).then_some(tap))
+            .collect();
         result.sort_unstable_by_key(|tap| tap.source.permanent);
         Some(result)
     }

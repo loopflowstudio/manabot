@@ -640,6 +640,12 @@ class _Renderer:
             and not first
         ):
             raise TextEncodingError("action missing required visible focus")
+        uses_native_tap = (
+            kind == "activate_ability"
+            and bool(action.description)
+            and action.description.startswith("Tap ")
+            and len(focus) == 1
+        )
         if kind == "declare_attacker":
             if action.declared is None or len(focus) != 1:
                 raise TextEncodingError("attack declaration missing")
@@ -654,18 +660,13 @@ class _Renderer:
                 if len(focus) == 2
                 else f"Do not block with {first}"
             )
+        elif uses_native_tap:
+            alias = first.split(" ", 1)[0]
+            label = f"{action.description} ({alias})"
         elif kind == "activate_ability":
-            if (
-                action.description
-                and action.description.startswith("Tap ")
-                and len(focus) == 1
-            ):
-                alias = first.split(" ", 1)[0]
-                label = f"{action.description} ({alias})"
-            else:
-                label = f"Activate ability of {first}"
-                if len(focus) == 2:
-                    label += f"; exile {focus[1]} as the cost"
+            label = f"Activate ability of {first}"
+            if len(focus) == 2:
+                label += f"; exile {focus[1]} as the cost"
         else:
             verb = {
                 "play_land": "Play land",
@@ -697,11 +698,7 @@ class _Renderer:
             details.append(f"trigger context R{action.continuation_index + 1}")
         if details:
             label += "; " + "; ".join(details)
-        if action.description and not (
-            kind == "activate_ability"
-            and action.description.startswith("Tap ")
-            and len(focus) == 1
-        ):
+        if action.description and not uses_native_tap:
             label += f". Native description: {action.description}"
         return label
 

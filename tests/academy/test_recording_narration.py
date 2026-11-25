@@ -382,35 +382,41 @@ def test_an_attacker_s_damage_among_its_blockers_is_one_move() -> None:
     )
 
 
+def _trace_event(
+    stage: str,
+    chosen: int,
+    *offers: str,
+    action_type: str,
+    source: str | None = None,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {"stage": stage}
+    if source is not None:
+        context["source"] = {"label": source}
+    return {
+        "actor": 0,
+        "action": chosen,
+        "action_description": offers[chosen],
+        "actions": [{"type": action_type, "description": o} for o in offers],
+        "observation": {"decision_context": context},
+    }
+
+
 def test_choice_of_color_mana_tap_records_resolved_color_not_raw_offer() -> None:
     events = [
-        {
-            "actor": 0,
-            "action": 0,
-            "action_description": "Tap Kyoshi Village for {G}/{W}",
-            "actions": [
-                {
-                    "type": "PRIORITY_ACTIVATE_ABILITY",
-                    "description": "Tap Kyoshi Village for {G}/{W}",
-                }
-            ],
-            "observation": {"decision_context": {"stage": "priority"}},
-        },
-        {
-            "actor": 0,
-            "action": 1,
-            "action_description": "Add {W}",
-            "actions": [
-                {"type": "CHOOSE_MODE", "description": "Add {G}"},
-                {"type": "CHOOSE_MODE", "description": "Add {W}"},
-            ],
-            "observation": {
-                "decision_context": {
-                    "stage": "mana_color",
-                    "source": {"label": "Kyoshi Village"},
-                }
-            },
-        },
+        _trace_event(
+            "priority",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
     ]
     # Opening the color modal waits for the chosen color instead of logging the offer.
     assert (
@@ -459,50 +465,28 @@ def test_choice_of_color_mana_tap_records_resolved_color_not_raw_offer() -> None
 
     # A resolution payment (e.g. Ward) folds the tap + color choice into one phrase.
     ward_events = [
-        {
-            "actor": 0,
-            "action": 0,
-            "action_description": "Tap Kyoshi Village for {G}/{W}",
-            "actions": [
-                {
-                    "type": "PRIORITY_ACTIVATE_ABILITY",
-                    "description": "Tap Kyoshi Village for {G}/{W}",
-                }
-            ],
-            "observation": {
-                "decision_context": {
-                    "stage": "resolution_payment",
-                    "source": {"label": "Waterfall Aerialist"},
-                }
-            },
-        },
-        {
-            "actor": 0,
-            "action": 1,
-            "action_description": "Add {W}",
-            "actions": [
-                {"type": "CHOOSE_MODE", "description": "Add {G}"},
-                {"type": "CHOOSE_MODE", "description": "Add {W}"},
-            ],
-            "observation": {
-                "decision_context": {
-                    "stage": "mana_color",
-                    "source": {"label": "Kyoshi Village"},
-                }
-            },
-        },
-        {
-            "actor": 0,
-            "action": 0,
-            "action_description": "Pay the cost",
-            "actions": [{"type": "PAY_COST", "description": "Pay the cost"}],
-            "observation": {
-                "decision_context": {
-                    "stage": "resolution_payment",
-                    "source": {"label": "Waterfall Aerialist"},
-                }
-            },
-        },
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Tap Kyoshi Village for {G}/{W}",
+            action_type="PRIORITY_ACTIVATE_ABILITY",
+            source="Waterfall Aerialist",
+        ),
+        _trace_event(
+            "mana_color",
+            1,
+            "Add {G}",
+            "Add {W}",
+            action_type="CHOOSE_MODE",
+            source="Kyoshi Village",
+        ),
+        _trace_event(
+            "resolution_payment",
+            0,
+            "Pay the cost",
+            action_type="PAY_COST",
+            source="Waterfall Aerialist",
+        ),
     ]
     assert (
         narrate_move(

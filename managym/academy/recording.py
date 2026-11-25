@@ -79,26 +79,19 @@ class OwnStep:
     # What the choice is for: the resolving spell or ability, by its label.
     source: str | None = None
 
-    def groups_with(self, stage: str | None, source: str | None) -> bool:
-        """Whether another consecutive choice by this actor belongs to the same move."""
+    def continues_with(self, stage: str | None, source: str | None) -> bool:
+        """Whether a following choice by this actor belongs to the same move."""
         if self.stage == "order_triggers":
             return stage == self.stage
+        if self.stage == "mana_color":
+            return stage == "resolution_payment"
+        if stage == "mana_color":
+            return self.stage in {"priority", "payment", "resolution_payment"}
         return (
             self.stage in RESOLVING_STAGES
             and stage in RESOLVING_STAGES
             and source == self.source
         )
-
-
-def _step_precedes(later: OwnStep, earlier: OwnStep) -> bool:
-    """Whether `earlier` belongs to the same move immediately before `later`."""
-    if later.groups_with(earlier.stage, earlier.source):
-        return True
-    if later.stage == "mana_color":
-        return earlier.stage in {"priority", "payment", "resolution_payment"}
-    if later.stage == "resolution_payment" and earlier.stage == "mana_color":
-        return True
-    return False
 
 
 def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
@@ -138,13 +131,12 @@ def own_steps(events: Sequence[Mapping[str, Any]], index: int) -> list[OwnStep]:
         ):
             break
         earlier = step(event)
-        tail = run[-1]
-        if not _step_precedes(tail, earlier):
+        if not earlier.continues_with(run[-1].stage, run[-1].source):
             break
         run.append(earlier)
         # A standalone mana_color choice only pairs with the single tap that
         # opened it; resolution_payment continues grouping earlier taps/choices.
-        if last.stage == "mana_color" and earlier.stage != "mana_color":
+        if last.stage == "mana_color":
             break
     run.reverse()
     return run
@@ -665,15 +657,9 @@ def narrate_move(
     continues = following.get("actor") == actor and (
         following.get("stage") in ANNOUNCING_STAGES
         or (
-            own
-            and (
-                own[-1].groups_with(
-                    following.get("stage"), (following.get("source") or {}).get("label")
-                )
-                or (
-                    own[-1].stage == "mana_color"
-                    and following.get("stage") == "resolution_payment"
-                )
+            bool(own)
+            and own[-1].continues_with(
+                following.get("stage"), (following.get("source") or {}).get("label")
             )
         )
     )
@@ -693,12 +679,12 @@ _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
 
 
 def _pool_delta_mana(
-    before: Mapping[str, Any] | None,
-    after: Mapping[str, Any] | None,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
     side: str | None,
 ) -> str | None:
     """Mana symbols added to `side`'s pool between `before` and `after`, if any."""
-    if before is None or after is None or side is None:
+    if side is None:
         return None
     prev_player = before.get(side)
     next_player = after.get(side)
@@ -756,8 +742,8 @@ def _own_move(
     context: dict[str, Any],
     own: Sequence[OwnStep],
     *,
-    before: Mapping[str, Any] | None = None,
-    after: Mapping[str, Any] | None = None,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
     side: str | None = None,
 ) -> str | None:
     """The person's own move that left nothing on the board to name it by."""

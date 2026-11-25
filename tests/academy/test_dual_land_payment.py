@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -16,23 +17,23 @@ def _setup(
     *,
     spell: str = "Youthful Knight",
     extra_hand: tuple[str, ...] = ("Plains",),
+    mana_floats: str | None = None,
 ) -> tuple[GameSession, ExperienceFrame]:
+    config: dict[str, Any] = {
+        "hero_deck": {
+            "Kyoshi Village": 4,
+            "Plains": 28,
+            spell: 8,
+        },
+        "villain_deck": {"Plains": 40},
+        "villain_type": "passive",
+        "seed": 347,
+        "auto_pass": False,
+    }
+    if mana_floats is not None:
+        config["mana_floats"] = mana_floats
     session = GameSession(trace_dir=tmp_path)
-    frame = ExperienceFrame.model_validate(
-        session.new_game(
-            {
-                "hero_deck": {
-                    "Kyoshi Village": 4,
-                    "Plains": 28,
-                    spell: 8,
-                },
-                "villain_deck": {"Plains": 40},
-                "villain_type": "passive",
-                "seed": 347,
-                "auto_pass": False,
-            }
-        )["frame"]
-    )
+    frame = ExperienceFrame.model_validate(session.new_game(config)["frame"])
     if frame.action_space == "MODAL":
         keep = next(offer for offer in frame.offers if offer.label == "Keep hand")
         _choose(session, frame, keep)
@@ -48,11 +49,11 @@ def _setup(
     return session, ExperienceFrame.model_validate(session._wire_message()["frame"])
 
 
-def _choose(
+def _submit(
     session: GameSession,
     frame: ExperienceFrame,
     offer: InteractionOffer,
-) -> ExperienceFrame:
+) -> tuple[ExperienceFrame, list[dict[str, Any]]]:
     assert frame.prompt is not None
     outcome = session.hero_command(
         {
@@ -65,7 +66,16 @@ def _choose(
         }
     )
     assert outcome["status"] == "accepted"
-    return ExperienceFrame.model_validate(outcome["update"]["frame"])
+    update = outcome["update"]
+    return ExperienceFrame.model_validate(update["frame"]), update.get("log", [])
+
+
+def _choose(
+    session: GameSession,
+    frame: ExperienceFrame,
+    offer: InteractionOffer,
+) -> ExperienceFrame:
+    return _submit(session, frame, offer)[0]
 
 
 def test_exact_dual_land_two_drop_skips_payment(tmp_path: Path) -> None:
@@ -149,58 +159,13 @@ def test_dual_land_plus_three_plains_labels_and_skips_redundant_modal(
 def test_priority_dual_land_float_logs_resolved_color_not_raw_offer(
     tmp_path: Path,
 ) -> None:
-    session = GameSession(trace_dir=tmp_path)
-    frame = ExperienceFrame.model_validate(
-        session.new_game(
-            {
-                "hero_deck": {"Kyoshi Village": 20, "Plains": 20},
-                "villain_deck": {"Plains": 40},
-                "villain_type": "passive",
-                "seed": 347,
-                "auto_pass": False,
-                "mana_floats": "all",
-            }
-        )["frame"]
-    )
-    if frame.action_space == "MODAL":
-        keep = next(offer for offer in frame.offers if offer.label == "Keep hand")
-        _choose(session, frame, keep)
-    assert session.env is not None
-    session.env.scenario_force_battlefield(0, "Kyoshi Village", ready=True)
-    session.obs = session.env.scenario_refresh()
-    session.published_prompt = None
-    frame = ExperienceFrame.model_validate(session._wire_message()["frame"])
-
+    session, frame = _setup(tmp_path, ["Kyoshi Village"], mana_floats="all")
     tap = next(
         offer for offer in frame.offers if offer.label == "Tap Kyoshi Village for {G}/{W}"
     )
-    assert frame.prompt is not None
-    open_modal = session.hero_command(
-        {
-            "command_id": f"dual.float.{frame.revision}.{tap.id}",
-            "match_id": frame.match_id,
-            "expected_revision": frame.revision,
-            "prompt_id": frame.prompt.id,
-            "offer_id": tap.id,
-            "answers": [],
-        }
-    )
-    assert open_modal["status"] == "accepted"
-    assert open_modal["update"].get("log", []) == []
-    modal = ExperienceFrame.model_validate(open_modal["update"]["frame"])
+    modal, open_log = _submit(session, frame, tap)
+    assert open_log == []
     assert modal.action_space == "MODAL"
     add_white = next(offer for offer in modal.offers if offer.label == "Add {W}")
-    assert modal.prompt is not None
-    resolved = session.hero_command(
-        {
-            "command_id": f"dual.color.{modal.revision}.{add_white.id}",
-            "match_id": modal.match_id,
-            "expected_revision": modal.revision,
-            "prompt_id": modal.prompt.id,
-            "offer_id": add_white.id,
-            "answers": [],
-        }
-    )
-    assert resolved["status"] == "accepted"
-    log = resolved["update"].get("log", [])
-    assert [entry["text"] for entry in log] == ["Tap Kyoshi Village for {W}"]
+    _, resolved_log = _submit(session, modal, add_white)
+    assert [entry["text"] for entry in resolved_log] == ["Tap Kyoshi Village for {W}"]
