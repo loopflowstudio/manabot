@@ -40,27 +40,58 @@ Findings that still explain the code:
 
 - Menace after ordinary matching can reject a legal tied completion. The solver reserves
   a partner for a committed singleton and branches on ambiguous menace attackers; work
-  grows exponentially in their number (`joraga-blocks` 9.79–67.04 µs at 8/16).
+  grows exponentially in the number of ambiguous menace attackers. Separately,
+  `joraga-blocks` has zero menace creatures; its superlinear growth comes from
+  `block_options` re-solving the full matching from scratch for each of the `A + 1`
+  candidate choices.
 - Search determinization must bind private discard payments to matching hand cards
   (`selection_sampling.rs`); whole-hand batches preserve committed hand slots.
 - Retiring newtype enum variants needs both the variant and its closing `/Enum::Variant`
   structure token in `token_renames.rs` for pinned pilots to replay unchanged.
 
-### Performance (Apple M4 Max, uninstrumented release, digests identical to baseline)
+### Performance review at `9b73df7caa` (Apple M4 Max, uninstrumented release, digests identical)
 
-| Workload | Reference `7d3ac1eb1c` | Pre-P1 `055e67dda6` | `8fa265d0a8` | vs Reference |
-|---|---:|---:|---:|---:|
-| `bench_steps` instructions | 46.722B | 49.395B | 45.990B | -1.57% |
-| `bench_steps` cycles | 10.984B | 11.710B | 10.757B | -2.06% |
-| `bench_search` instructions | 1,027.894B | 1,105.336B | 981.060B | -4.56% |
-| `bench_search` cycles | 244.491B | 256.941B | 221.497B | -9.40% |
+Rebuilt candidate `9b73df7caa` (post-compress `c4bd9389a7`) and base `3be5a0cfb2` (same
+engine as `managym/perf/baseline.json` reference `7d3ac1eb1c`) on the same contended host
+(load ~17) without `--features benchmark`. All digests match `baseline.json` identically
+(`bench_steps` 512 games, 118,559 steps, `10601622128491155944`; `bench_search` seeds 1–3
+digests, `score_digest_blake3`, `action_counts`, and simulation counts identical).
 
-`myojin-discard` resolve 0.490 → 0.157 ms at size 16. P1–P4 debug checks passed
-(`rules_tests` 207, cards 800 across twelve sets, state/lib unit tests).
+| Workload | Base `3be5a0cfb2` | Pre-P1 `055e67dda6` | Pre-compress `8fa265d0a8` | HEAD `9b73df7caa` | HEAD vs Base |
+|---|---:|---:|---:|---:|---:|
+| `bench_steps` instructions (C/R/R/C med) | 46.737B | 49.395B | 45.990B | 46.205B | -1.14% |
+| `bench_steps` cycles (median) | 10.958B | 11.710B | 10.757B | 10.726B | -2.12% |
+| `bench_steps` wall / throughput (median) | 2.746 s (43,168/s) | 2.944 s (40,277/s) | 2.714 s (43,685/s) | 2.697 s (43,956/s) | +1.83%/s |
+| `bench_search` instructions (C/R) | 1,027.450B | 1,105.336B | 981.060B | 983.443B | -4.28% |
+| `bench_search` cycles (C/R) | 233.776B | 256.941B | 221.497B | 221.300B | -5.34% |
+| `bench_search` wall (total / worst) | 59.990 s / 1.420 s | — | 55.722 s / 1.339 s | 55.375 s / 1.336 s | -7.69% / -5.92% |
+
+Debug checks at `9b73df7caa` (post-compress, with `finish_object` and `layer_board` debug
+assertions active): `rules_tests`, `scenario_tests`, `conformance_tests`, `managym --lib`,
+`managym-state --lib` (638 tests), 23 card/observability/definition suites, and
+`bench_states` unit tests (2/2) all passed.
+
+- **Supported gains** (1 ms `sample` profiles, scaled to instructions retired, HEAD vs Base):
+  - `Context::finish_object`: `7.39% → 0.48%` (**-6.94%**) search, `4.39% → 0.47%` (**-3.92%**) steps; `CreatureTypes::among`: `5.44% → 0.37%` (**-5.08%**) search.
+  - `layer_board` / `Context::evaluate`: `-6.48%` / `-7.08%` search, `-3.83%` / `-3.81%` steps; `Node::resolved` (`0.86% → 0.00%`) eliminated.
+  - `advance_event_batch` (including extracted `collect_replacements`): `-1.53%` search, `-1.89%` steps; `combat_actions + block_requirements` combined: `-0.31%` search, `-0.30%` steps.
+  - `bench_states` (`--features benchmark`): `control-auras`, `counted-buffs`, `banner-choice`, `giada-entry`, `militant-mill`, and `angel-life-gain` scale linearly through size 16–32 (`myojin-discard` resolve `0.165 ms` at size 16, down 3x from pre-P1).
+- **Negative results & regressions:**
+  - `c4bd9389a7` (`lf compress`) added `+0.47%` instructions on `bench_steps` (`45.990B → 46.205B`) and `+0.24%` on `bench_search` (`981.060B → 983.443B`): `PrintedCharacteristics::colors` jumped `0.26% → 1.21%` of `bench_steps`, with `1.16%` called from `Observation::add_permanent` (`characteristics.colors != object.colors()`) allocating a `BTreeSet<Color>` per permanent.
+  - `joraga-blocks` shows superlinear `bench_states` growth with zero menace creatures: `block-0 / actions` `0.001 / 0.005 / 0.022 / 0.120 ms` (sz 4/8/16/32; `16.1x` 4→16, `5.6x` 16→32), `block-1 / actions` `0.001 / 0.005 / 0.026 / 0.170 ms` (`20.0x` 4→16, `6.6x` 16→32), `block-0 / step:block` `0.010 / 0.017 / 0.046 / 0.211 ms` (`4.6x` 16→32), and `block-0 / search` `0.380 / 0.522 / 4.060 / 47.400 ms` (`11.7x` 16→32; `block-8 / search` `20.5x` 16→32) due to `A + 1` full Kuhn matchings from scratch per `block_options` call (`O(A^2 * E)` per blocker, `O(N^4)` over combat).
+- **Open bottlenecks & ruled-out items:**
+  - `Context::evaluate` empty-layer scans (`Vec<usize>` `pending` `1.84%` + filter closure `1.42%` + `evaluate` self `5.51%`, up `+0.45%` after adding `Layer::Control` to `Layer::ALL`) scan all `nodes` on every empty layer (target for P7).
+  - `Game::refresh_control` net self cost is `0.62%` search / `0.00%` steps (`2.14%` / `1.05%` is `DerivedCache::invalidate` moved from `layer_board`); ruled out adding state-mutation bookkeeping flags for <0.6%.
+  - `Arc<Characteristics>::make_mut` (`7.06%` search, `3.16%` steps vs base `6.56%` / `4.03%`) is pre-existing MTG-420 architecture — open engine-wide bottleneck outside MTG-432.
+  - `myojin-discard` (`characteristics` `0.005 / 0.012 / 0.039 ms`, `7.9x` 4→16) and `quality-targets` (`characteristics` `0.003 / 0.006 / 0.012 / 0.034 ms`, `2.8x` 16→32) reflect inherent `O(N^2)` rules work (`N` lords × `N` creatures; `N` Knights checking `N` permanents).
 
 ## Remaining
 
-1. Gate: full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`, `--test-threads 2`),
+1. **Performance pass P5–P7** (profile- and `bench_states`-backed, unchanged semantics & digests):
+   - **P5** (`managym/src/flow/block_requirements.rs`): For non-menace coupled declarations, compute the baseline matching on `remaining` blockers once and evaluate all `A + 1` choices via incremental/residual reachability instead of re-solving from scratch per choice (`O(A^2 * E) → O(A * E)`). Verify against exhaustive small-declaration tests and flatten `joraga-blocks` `actions` / `step:block` / `search` at sizes 16–32.
+   - **P6** (`managym/src/agent/observation.rs`): Compare `characteristics.colors` against `object.color_bits()` in `Observation::add_permanent` without allocating `BTreeSet<Color>` via `object.colors()`, recovering `~1.0–1.2%` on `bench_steps`.
+   - **P7** (`managym/src/flow/layers.rs`): Track an `active_layers: u16` bitmask across `nodes` (updated on population and `discover`) so `Context::evaluate` skips empty layers (such as `Layer::Control`, `Layer::Copy`, `Layer::Text`) in O(1) without scanning `nodes` or allocating `pending`, targeting `~1.5–2.5%` on `bench_search` and `~0.8–1.2%` on `bench_steps` while preserving debug cache assertions.
+2. Gate: full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`, `--test-threads 2`),
    Python text tests on a rebuilt extension, and Engine Budget on `ubuntu-24.04`:
    `gh workflow run ci.yml --ref jack-heart/df83ea-close-foundations-characteristic -f measure=<commit>`
    (record a new reference only with its reason). No x86-64 wall-time claim before then.
