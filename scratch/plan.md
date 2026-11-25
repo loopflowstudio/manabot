@@ -25,11 +25,14 @@ Done:
   frames matched their previous bytes. The player-only object-bound Command
   at revision 12 retained its original fingerprint and cold-restored. A
   separate Command naming Jace and its attacker also cold-restored.
+- Slice 4, empower and `token.jace` with its 22 FRA cards (`4966204033`,
+  fixtures `2327a41b94`).
 
 ## Passes remaining
 
-1. Slice 3 needs command-zone ability sources for the four emblem cards.
-   The independent empower cohort (slice 4) is implemented.
+1. Slice 3: live ability sources by exact object in both evaluators (layers
+   and `TriggerIndex`), then emblems and the four emblem cards. Teaches
+   whether command-zone sources keep Engine Budget's layer rebuild cost.
 2. Slices 5 and 6 cover granted loyalty abilities, the zero-loyalty exception,
    loyalty activation events and their cards.
 3. Slice 7 and the rest of slice 8 close the planeswalker cohort. At gate run
@@ -148,24 +151,10 @@ board scan includes command-zone sources every rebuild).
 
 Deletes: none.
 
-### Slice 4 — Empower and the Jace token
+### Slice 4 — Empower (built: `4966204033`, fixtures `2327a41b94`)
 
-Implemented all 22 cards in `4966204033`. The rules program uses `Effect::empower_jace` and
-`token.jace`. Overwrite reads `Objects { of: Moved, in_zone: Exile }`;
-creating Jace preserves that receipt. Theorist’s Proxy binds a continuous
-effect to the next committed spell, and Plan for All Outcomes counts the
-ordinal among matching casts. All 16 FRA cases passed across the focused
-runs, including the four-token decision with two Doubling Seasons and both
-Ways' triggers. The two selector/modification observability guards and
-printed-card conformance passed.
-The rebuilt CPython 3.13 wheel showed Mindseeker Oculus’s Jace at four
-loyalty to both seats and cold-restored the same pending decision. The five
-Academy fixtures (`2327a41b94`) replayed 444 recorded choices and restored
-all nine final positions. All 109 player-only attack frames matched their
-pre-empower bytes.
-The current replacement catalog cannot redirect a battlefield-to-exile move
-to another zone. The Overwrite case covers actual card and token exiles;
-the diverted-exile case remains open until a replacement supplies it.
+Open defect: no replacement can divert a battlefield-to-exile move, so
+Overwrite's diverted-exile case stays untested until one exists.
 
 ### Slice 5 — Granted loyalty abilities and zero-loyalty exception
 
