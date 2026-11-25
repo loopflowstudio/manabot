@@ -183,3 +183,104 @@ def test_a_burn_spell_is_seen_on_the_stack_then_as_damage_then_as_a_death(
     # A historical board holds no decision: none was published there.
     assert "decision_context" not in cast
     assert "decision_context" not in died
+
+
+def test_trace_retains_per_line_boards_and_recording_read_returns_them(
+    tmp_path: Path,
+) -> None:
+    """Each transition's `TraceEvent.boards` survives persistence and `Recording.read`
+    rebuilds the cast, damage and death boards back from the consequences board."""
+    from managym.academy import trace as trace_store
+    from managym.academy.recording import Recording
+
+    session = _reaper_scenario(tmp_path)
+    _command(session, "Cast Lightning Bolt", "cast")
+    update = _command(session, "Target Gray Ogre", "target")["update"]
+    kinds = {event["seq"]: event["kind"]["kind"] for event in update["presentation"]}
+    trace_id = session.trace_id
+    assert trace_id is not None
+    session.close(end_reason="disconnect")
+
+    payload = trace_store.load_trace(trace_id, tmp_path)
+    recording = Recording(trace_id, payload)
+    # Find the consequences position whose transition emitted the Bolt cast/damage/died events.
+    cast_seq = next(seq for seq, kind in kinds.items() if kind == "cast")
+    damage_seq = next(seq for seq, kind in kinds.items() if kind == "damage")
+    died_seq = next(seq for seq, kind in kinds.items() if kind == "died")
+    consequences_pos = next(
+        pos
+        for pos in recording.positions
+        if pos.kind == "consequences"
+        and any(
+            int(ev["seq"]) == cast_seq
+            for ev in payload["events"][pos.event_index].get("presentation", [])
+        )
+    )
+    read = recording.read(consequences_pos.key)
+    assert read["boards"], "expected mid-step boards on the consequences transition"
+    rebuilt = rebuild(read["observation"], read["boards"])
+
+    def board_of(seq: int) -> dict[str, Any]:
+        for entry, board in zip(read["boards"], rebuilt, strict=True):
+            if entry["first"] <= seq <= entry["last"]:
+                return board
+        return read["observation"]
+
+    cast = board_of(cast_seq)
+    assert [item["label"] for item in cast["stack_objects"]] == ["Lightning Bolt"]
+    ogre_before = _opponent_creature(cast, "Gray Ogre")
+    assert ogre_before is not None and ogre_before["damage"] == 0
+
+    damaged = board_of(damage_seq)
+    assert damaged["stack_objects"] == []
+    ogre_damaged = _opponent_creature(damaged, "Gray Ogre")
+    assert ogre_damaged is not None and ogre_damaged["damage"] == 3
+
+    died = board_of(died_seq)
+    assert _opponent_creature(died, "Gray Ogre") is None
+
+
+def test_auto_passes_emit_null_caused_by() -> None:
+    """Priority-stop automatic passes are automation (`caused_by: None`), never human moves."""
+    game = server.GameSession()
+    game.new_game(
+        {
+            "villain_type": "random",
+            "seed": 0,
+            "hero_deck": "interactive",
+            "villain_deck": "interactive",
+            "auto_pass": True,
+            "stops": {"my": ["main1"], "opponent": []},
+        }
+    )
+    for _ in range(30):
+        frame = game.current_recovery("explicit_resync")["frame"]
+        if frame["status"] != "ready":
+            break
+        offer = next(
+            (o for o in frame["offers"] if o["verb"] == "play_land"),
+            next(
+                (o for o in frame["offers"] if o["verb"] == "pass_priority"),
+                frame["offers"][0],
+            ),
+        )
+        game.hero_command(
+            {
+                "command_id": f"auto-check-{frame['prompt']['id']}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+    assert game.trace is not None
+    auto_passes = [
+        ev
+        for trace_ev in game.trace.events
+        if trace_ev.auto
+        for ev in trace_ev.presentation
+        if ev["kind"]["kind"] == "passed"
+    ]
+    assert auto_passes, "expected at least one priority-stop auto-pass"
+    assert all(ev["caused_by"] is None for ev in auto_passes)

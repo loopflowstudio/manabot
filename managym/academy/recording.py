@@ -499,8 +499,12 @@ class Recording:
             if row
             else deepcopy(self._board(position))
         )
-        event = self.payload["events"][position.event_index] if row else {}
-        analysis = event.get("analysis_observation") if self.watch else None
+        event = (
+            self.payload["events"][position.event_index]
+            if position.event_index < len(self.payload["events"])
+            else {}
+        )
+        analysis = event.get("analysis_observation") if (row and self.watch) else None
         if reveal and analysis is None:
             raise ValueError("spectator_view_unavailable")
         transition_start = cursor
@@ -515,13 +519,18 @@ class Recording:
             if position.kind == "consequences"
             else position.key
         )
+        boards = (
+            deepcopy(event.get("boards", []))
+            if position.kind == "consequences"
+            else []
+        )
         return {
             **self.metadata(position),
             "description": self._description(position),
             "note_key": note_key,
             "observation": deepcopy(analysis) if reveal else observation,
             "decision": decision,
-            "outputs": deepcopy(event.get("bot_decision")),
+            "outputs": deepcopy(event.get("bot_decision")) if row else None,
             "viewer": viewer,
             "revealed": reveal,
             "can_reveal": analysis is not None,
@@ -531,6 +540,7 @@ class Recording:
             "cursor": cursor,
             "transition_start": transition_start,
             "consequences_recorded": bool(self.replay) or bool(track),
+            "boards": boards,
         }
 
 

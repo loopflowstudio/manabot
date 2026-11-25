@@ -199,6 +199,9 @@ class TraceEvent:
     # traces omit this field and remain valid because replay treats it as an
     # empty sequence.
     presentation: list[dict[str, Any]] = field(default_factory=list)
+    # Per-line mid-step boards for Review, patched back from the transition's
+    # post-step board for the recorded person's seat (outside replay identity).
+    boards: list[dict[str, Any]] = field(default_factory=list)
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None
@@ -273,12 +276,15 @@ class Trace:
 
 def event_record(event: TraceEvent) -> dict[str, Any]:
     """One event as its stored record (borrowed, like `Trace.to_record`)."""
-    return {
+    record = {
         **{item.name: getattr(event, item.name) for item in fields(event)},
         "bot_decision": (
             None if event.bot_decision is None else asdict(event.bot_decision)
         ),
     }
+    if not event.boards:
+        record.pop("boards", None)
+    return record
 
 
 def utc_now_iso() -> str:

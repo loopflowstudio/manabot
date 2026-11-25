@@ -116,7 +116,7 @@ from .play_session import (
     setup_draft,
 )
 from .presentation import PresentationProjector
-from .recording import Recording, read_cache
+from .recording import Recording, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
     CanonicalReplayProjectionV1,
@@ -1716,7 +1716,7 @@ class GameSession:
         self.obs = next_obs
         self._bot_decision = None
         self._advance_protocol_revision()
-        caused_by = None if command is None else str(command["command_id"])
+        caused_by = None if command is None or auto else str(command["command_id"])
         presentation_events = self._commit_step_presentation(
             from_revision=from_revision,
             actor=actor_index,
@@ -1993,22 +1993,36 @@ class GameSession:
 
         live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
-        self._keep_step_board(live_events, positions)
+        step_boards = self._keep_step_board(live_events, positions) or []
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
             ]
         if live_events and self.trace is not None and self.trace.events:
+            trace_boards: list[dict[str, Any]] = []
+            if step_boards and self.obs is not None:
+                post_viewer = (
+                    self.human_seat
+                    if self.obs.game_over
+                    else int(self.obs.agent.player_index)
+                )
+                post_board = person_board(
+                    decision_surface_view(self.env, post_viewer),
+                    self.human_seat,
+                    winner=self.env.winner_index() if self.obs.game_over else None,
+                )
+                trace_boards = wire_boards(step_boards, post_board)
             index = len(self.trace.events) - 1
             self.trace.events[index] = replace(
                 self.trace.events[index],
                 presentation=deepcopy(live_events),
+                boards=trace_boards,
             )
         return live_events
 
     def _keep_step_board(
         self, events: list[dict[str, Any]], positions: list[managym.Env]
-    ) -> None:
+    ) -> list[StepBoard]:
         """Keep the person's board after each line of a step's `events`.
 
         Each event names the engine position showing the board just after it
@@ -2018,10 +2032,10 @@ class GameSession:
         transport.
         """
         if self.watch_mode or self.env is None:
-            return
+            return []
         events = [event for event in events if event["kind"]["kind"] != "passed"]
         if not events:
-            return
+            return []
         runs: list[tuple[int | None, list[dict[str, Any]]]] = []
         for event in events:
             position = self.presentation[self.human_seat].position(int(event["seq"]))
@@ -2029,16 +2043,18 @@ class GameSession:
                 runs[-1][1].append(event)
             else:
                 runs.append((position, [event]))
+        kept: list[StepBoard] = []
         for position, run in runs:
             env = self.env if position is None else positions[position]
-            self._step_boards.append(
-                StepBoard(
-                    first=int(run[0]["seq"]),
-                    last=int(run[-1]["seq"]),
-                    projection=decision_surface_view(env, self.human_seat),
-                )
+            board = StepBoard(
+                first=int(run[0]["seq"]),
+                last=int(run[-1]["seq"]),
+                projection=decision_surface_view(env, self.human_seat),
             )
+            kept.append(board)
+            self._step_boards.append(board)
         del self._step_boards[:-MAX_STEP_BOARDS]
+        return kept
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:
