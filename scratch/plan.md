@@ -134,7 +134,7 @@ dunder names still raise `AttributeError`.
 
 Against the consumer itself (the demo): a throwaway environment outside the
 checkout with jace at `9d212cb` and this branch's `manabot` and built
-`managym` installed over its pin, then `pytest tests/test_forks.py
+`managym` installed over its pin, then `uv run --no-sync pytest tests/test_forks.py
 tests/test_fork_batch.py tests/test_rl.py tests/test_manabot_levers.py
 tests/test_full_data.py -q`. Expected: the three fork tests that fail on
 `v0.2.5` with `AttributeError` pass, and the pool tests finish instead of
@@ -190,9 +190,23 @@ in `manabot/env/observation.py` so rollover deletes them with `encoder`.
    8,346,219 B (6 ms dump / 40 ms load), memory prefixes 3,037,646 B,
    selection after reading caches 8,171,210 B, space 633 B.
 2. **Merge and shim — done.** Seeds 7 and 11, four complete-game streams each, Torch seed 71: 960 and 972 independently pickled and restored learner rows joined in 1.05 ms in one local CPU run, with 1,932 retained prefixes. The timing excludes collection and IPC.
-3. **Consumer proof — next.** The jace run described under the acceptance check
-   (throwaway env outside the checkout, jace `9d212cb`); report anything
-   failing outside this change.
+3. **Consumer proof — done.** All 35 tests in the five named files passed in
+   31.46 s on macOS arm64, CPython 3.13.15 and Torch 2.15.0. This includes
+   the three fork regressions, the GRU merge and learner update, and the
+   worker startup error test. Pytest reported 7,421 deprecation warnings.
+   The isolated environment used unchanged jace `9d212cb`, manabot built
+   from `fb5e32451d`, and this branch’s cp313 managym wheel. Installing
+   manabot’s required Etude SDK 0.4.7 over jace’s locked 0.4.3 also moved
+   websockets from 17.4 to 16.1.1. `uv pip check` passed.
+
+   A separate call to jace’s `MultiProcessCollector.collect` exercised a
+   successful queue transfer and jace’s dense merge with two spawned workers,
+   one environment each, seed 7 and four requested steps per environment.
+   Stateless self-play returned 332 learner rows. A snapshot opponent with
+   GRU decision memory returned 285 learner rows and 669 recorded prefixes.
+   Both pools closed, both batches ended on a terminal row, and their first
+   and last chosen-action log probabilities matched the gathered policy rows.
+   The remaining checks belong to gate and CI.
 
 ## Pass 2 checks
 

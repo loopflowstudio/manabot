@@ -41,6 +41,10 @@ Choices made with nobody in the conversation (each documented in
   validating the two memory holders. This accepts jace's archive round trip
   without walking or materializing the history.
 
+- For the consumer proof, start from jace’s lock and install the branch’s
+  required Etude SDK. Exercise successful worker delivery in a throwaway
+  driver because jace’s rollout-pool test covers worker startup failure.
+
 Outside this work (future follow-ups):
 
 - The optional u1952 probability replay already differs at decision 8 on the
