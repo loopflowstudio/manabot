@@ -330,12 +330,14 @@
                     <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
                     <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
                     {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}
-                      <span class="mark type-caption" data-testid="move-mark" data-same={mark.same}>{mark.same ? 'same' : 'differs'}</span>
-                      <svg class="track" viewBox="0 0 40 8" aria-hidden="true" data-testid="move-track">
-                        <line x1="0" x2="40" y1="4" y2="4" />
-                        {#if mark.its !== null}<circle class="its" cx={2 + mark.its * 36} cy="4" r="2.5" />{/if}
-                        {#if mark.yours !== null}<circle class="yours" cx={2 + mark.yours * 36} cy="4" r="2" />{/if}
-                      </svg>
+                      <span class="reading">
+                        <span class="mark type-caption" data-testid="move-mark" data-same={mark.same}>{mark.same ? 'same' : 'differs'}</span>
+                        <svg class="track" viewBox="0 0 32 8" aria-hidden="true" data-testid="move-track">
+                          <line x1="0" x2="32" y1="4" y2="4" />
+                          {#if mark.its !== null}<circle class="its" cx={3 + mark.its * 26} cy="4" r="2.5" />{/if}
+                          {#if mark.yours !== null}<circle class="yours" cx={3 + mark.yours * 26} cy="4" r="1.75" />{/if}
+                        </svg>
+                      </span>
                       <span class="sr-only">{mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
                     {/if}
                   </button>
@@ -461,13 +463,14 @@
   .primary .p { color: inherit; background: none; }
   .move.jump { padding-left: 0; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
-  .mark { flex: none; font-family: var(--font-sans); color: var(--text-tertiary); }
+  .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
+  .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
   .mark[data-same='false'] { color: var(--text-secondary); }
-  .track { flex: none; width: 40px; height: 8px; align-self: center; }
+  .track { width: 32px; height: 8px; }
   .track line { stroke: var(--border); stroke-width: 1; }
   .track .its { fill: none; stroke: var(--text-tertiary); stroke-width: 1; }
   .track .yours { fill: var(--text-secondary); }
-  .who-chose { margin-left: 6px; font-family: var(--font-sans); color: var(--text-tertiary); }
+  .who-chose { display: block; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }
   .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
   .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }

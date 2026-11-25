@@ -80,7 +80,6 @@ from managym.search import (
 )
 
 from . import trace as trace_store, villain as villain_module
-from .analysis import AnalysisChoices, analysed_events, analysis_choices, run_analysis
 from .advice import (
     AdviceRequest,
     AdvisorUnavailable,
@@ -88,6 +87,7 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
+from .analysis import AnalysisChoices, analysed_events, analysis_choices, run_analysis
 from .append_json import encode_list, splice
 from .attempts import (
     CLOSED_RECORD_ENDINGS,

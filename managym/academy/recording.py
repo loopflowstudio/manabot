@@ -179,13 +179,22 @@ def record_of(attempt: RetainedAttempt) -> GameRecord:
             )
         ],
         identities={
-            "world": world["world_version"],
             "card_digest": world["content_digest"],
             "engine_extension_sha256": world.get("rules_binary_sha256"),
         },
         context={},
         seconds=0,
     )
+
+
+def recorded_build(world_json: str) -> str:
+    """The build that recorded a game, in words: its world label where an older
+    row has one, else its rules binary."""
+    world = json.loads(world_json)
+    if world.get("world_version"):
+        return str(world["world_version"])
+    rules = world.get("rules_binary_sha256")
+    return f"rules {str(rules)[:12]}" if rules else "an unknown build"
 
 
 class ReplayedViews:
@@ -205,7 +214,7 @@ class ReplayedViews:
         self.final = attempt.trace["final_observation"]
         self.human_seat = human_seat
         self.complete = attempt.trace["end_reason"] == "game_over"
-        self.build = json.loads(attempt.world_json).get("world_version", "unknown")
+        self.build = recorded_build(attempt.world_json)
         self.person: list[dict[str, Any]] = []
         self.opponent: list[dict[str, Any]] = []
         self.stop: ReplayStop | None = None

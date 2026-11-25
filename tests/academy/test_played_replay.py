@@ -85,7 +85,9 @@ def test_every_position_of_a_finished_game_replays_to_your_own_view(
         assert all(hand_names(board)) and not board["agent"].get("hand_hidden_count")
         index = position.event_index + (position.kind == "consequences")
         if index < len(events) and events[index]["actor"] == "hero":
-            assert board == person_board(events[index]["observation"], seat)
+            assert board == person_board(
+                events[index]["observation"], seat, winner=trace["winner"]
+            )
     assert recording.views is not None and recording.views.stop is not None
     assert recording.views.stop.status == "complete"
     assert recording.views.stop.winner == trace["winner"]
@@ -159,9 +161,15 @@ def test_replay_stops_where_the_stored_track_differs(tmp_path: Path) -> None:
     assert not read["can_reveal"]
 
 
-def test_a_game_from_another_world_opens_from_its_stored_track(tmp_path: Path) -> None:
+def test_a_game_from_another_card_set_opens_from_its_stored_track(
+    tmp_path: Path,
+) -> None:
     _, attempt = played(tmp_path)
-    world = {**json.loads(attempt.world_json), "world_version": "another-world"}
+    world = {
+        **json.loads(attempt.world_json),
+        "content_digest": "another-card-set",
+        "world_version": "another-world",
+    }
     recording = Recording(
         "game", attempt.trace, RetainedAttempt(attempt.trace, json.dumps(world))
     )

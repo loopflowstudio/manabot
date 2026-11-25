@@ -26,7 +26,6 @@ estimate. Entry points: `analyse_game`, a generator of decisions;
 
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
-import json
 import logging
 import math
 
@@ -35,7 +34,7 @@ from pydantic import BaseModel, ConfigDict
 import managym
 from managym.academy.attempts import AttemptStore, RetainedAttempt
 from managym.academy.opponent import Opponent
-from managym.academy.recording import record_of
+from managym.academy.recording import record_of, recorded_build
 from managym.academy.trace import GameConfig, academy_actions
 from managym.policy import PolicyRegistry, PolicyRunner
 from managym.recording import DecisionAnnotation
@@ -227,7 +226,6 @@ def analysis_choices(
     config = GameConfig(**attempt.trace["config"])
     if config.watch_players is not None:
         return AnalysisChoices([], None, "A watched game has no seat of yours.")
-    world = json.loads(attempt.world_json)
     try:
         walk(record_of(attempt))
     except (KeyError, TypeError, ValueError, managym.AgentError):
@@ -235,7 +233,7 @@ def analysis_choices(
             [],
             None,
             "Analysis re-executes the game, which needs the build that recorded it "
-            f"({world.get('world_version', 'unknown')}).",
+            f"({recorded_build(attempt.world_json)}).",
         )
     setup = config.to_rust()
     policies = []

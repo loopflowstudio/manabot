@@ -99,7 +99,9 @@ class SearchedFactory(ReadingFactory):
 
 
 @pytest.fixture
-def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[PolicyRegistry]:
+def registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[PolicyRegistry]:
     monkeypatch.setattr(trace, "TRACES_DIR", tmp_path)
     registry = PolicyRegistry(providers={})
     set_policy_registry(registry)
@@ -127,7 +129,9 @@ def finished(tmp_path: Path, **config: Any) -> RetainedAttempt:
     return attempt
 
 
-def runner_for(registry: PolicyRegistry, factory: ReadingFactory, attempt: RetainedAttempt):
+def runner_for(
+    registry: PolicyRegistry, factory: ReadingFactory, attempt: RetainedAttempt
+):
     key = registry.register(factory)
     config = trace.GameConfig(**attempt.trace["config"])
     return registry.load(key, config.to_rust(), seat=config.human_seat, seed=1)
@@ -160,7 +164,9 @@ def test_closed_decklists_never_read_the_real_hidden_hand(
     decisions = list(analyse_game(attempt, 0, runner, seed=5))
     events = attempt.trace["events"]
     handover = [
-        d for d in decisions if d.event + 1 < len(events)
+        d
+        for d in decisions
+        if d.event + 1 < len(events)
         and events[d.event + 1]["actor"] == "villain"
         and events[d.event]["action"] == 0
     ]
@@ -199,9 +205,7 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     tmp_path: Path, registry: PolicyRegistry
 ) -> None:
     key = registry.register(ReadingFactory())
-    attempt = finished(
-        tmp_path, villain_type="policy", opponent_sha256=key
-    )
+    finished(tmp_path, villain_type="policy", opponent_sha256=key)
     store = AttemptStore(tmp_path / "play.sqlite")
     with store.connect() as db:
         trace_id, before = db.execute("SELECT id, trace_json FROM attempts").fetchone()
@@ -209,7 +213,12 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     listed = client.get(f"/api/traces/{trace_id}/analyses").json()
     # The opponent's own policy opens by default.
     assert listed["default"] == key and listed["analyses"] == []
-    assert client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key}).status_code == 403
+    assert (
+        client.post(
+            f"/api/traces/{trace_id}/analyses", json={"policy": key}
+        ).status_code
+        == 403
+    )
     started = client.post(
         f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
     )
@@ -221,7 +230,9 @@ def test_review_analyses_a_game_and_saves_it_beside_the_game(
     assert [d["event"] for d in analysis["decisions"]] == body["events"]
     assert analysis["total"] == len(body["events"])
     # A second analysis of the same game is its own row.
-    client.post(f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers())
+    client.post(
+        f"/api/traces/{trace_id}/analyses", json={"policy": key}, headers=headers()
+    )
     assert len(wait_complete(client, trace_id)["analyses"]) == 2
     # The game's own row is untouched.
     with store.connect() as db:
