@@ -131,137 +131,57 @@ navigation positions) checks; the optional frontier checkpoint was unavailable. 
 `bench_states`: counted buffs 11.17–51.13 µs per decision at 8/16 buffs;
 `militant-mill` step:resolve 106.58 / 142.58 µs at 8 / 16.
 
-### 6 · Discards know their cause; whole-hand discard (Wilt-Leaf Liege, Myojin's discard)
+**6 · Implemented** (Pass 5, `b2da13add6`): Wilt-Leaf Liege and
+Myojin's whole-hand discard use the instruction's controller and a simultaneous
+batch. The chooser may suspend before any hand card moves. Search preserves
+the number of committed hand slots and the replacement choices already offered.
 
-- A discard proposal carries `cause: Option<EventCause>` naming the spell or
-  ability and its controller (`EventCause` already exists in
-  `CounterProvenance`). Cost discards have their payer as the cause.
-- `ReplacementEffect::DiscardedInstead { by: Actor, to: ZoneType }`: the
-  discarded card's own text (Wilt-Leaf: `by: Opponent, to: Battlefield`),
-  consulted in slice 5's graveyard arm. The battlefield entry uses the ordinary
-  entry pipeline.
-- Exercise hidden-world sampling across the whole-hand batch as well as its
-  exact forks. Slice 5 sampled the single chosen discard and tested simultaneous
-  mill on exact game state.
-- `Effect::DiscardHand { who: PlayerSelector }`: each selected player discards
-  their entire hand in one simultaneous batch (Myojin's `EachOpponent`;
-  MTG-431's Dragon Mage uses `EachPlayer`).
-- Wilt-Leaf Liege's anthems: two `PtBuff OtherYouControl(colors_any)` effects
-  that stack on a green-white creature.
-- Checks: `shm::` and `chk::`. Interactions:
-  - Wilt-Leaf discarded to an opponent's Mind Rot effect enters the battlefield;
-    discarded to your own looting (Dreadwing) or to cleanup hand size, it goes to
-    the graveyard.
-  - Wilt-Leaf in hand when Myojin's discard hits: it enters.
-  - A G/W creature gets +2/+2.
-  - Discard triggers still see the discard, and the battlefield entry triggers
-    ETB.
-- Stress: none new (a discard batch is linear in hand size); covered by
-  `blast-discard`.
+**7 · Implemented** (same pass): Mossborn Hydra, Heroes' Bane, Wildwood
+Scourge, Prime Speaker Zegana, Giada, Banner of Kinship and Myojin use the
+shared entry-counter replacement. Cast origin and the type chosen for Banner
+belong to the pending entry. Giada counts pre-entry Angels and Banner's
+public choice survives as a fact on that permanent.
 
-### 7 · Entry counters read values; choose a creature type as it enters (Mossborn Hydra, Heroes' Bane, Wildwood Scourge, Prime Speaker Zegana, Giada, Banner of Kinship, Myojin's counter)
+**8 · Implemented** (same pass): Angel of Vitality replaces a positive gain.
+Lifelink proposals use damage after prevention and group that damage by
+source before the simultaneous batch commits. Crystal Barricade's prevention
+selects noncombat damage to other creatures its controller controls.
 
-Today `EntersWithCounters{count: i32}`, `EntersWithPlusOneCounters{count,
-condition}` and `EntersWithXCounters{kind}` are fixed. `ModifyCounters` is
-gathered only if the entry already has counters (proposed_event.rs:1343).
-`ZoneEntry` carries no cast zone, and nothing makes a choice as an object enters
-except `EntersAsCopy`.
-
-- One variant, `ReplacementEffect::EntersWithCounters { on: EntryScope, kind,
-  count: EntryValue, condition: Option<Condition> }`:
-  - `EntryScope` is `This` or `OtherYouControl(predicate)` (Giada: other
-    Angels).
-  - `EntryValue` is read as the move commits. Its cases: `Fixed`, `X`,
-    `GreatestPower { predicate }` over permanents already on the battlefield,
-    excluding the entering object (Zegana), and `ControlledAlready(predicate)`
-    (Giada's Angels; Banner's chosen type). It excludes objects entering in the
-    same event.
-  - Condition gains `EntryCastFrom(ZoneType)` (Myojin). It is read from
-    `ZoneEntry.cast_from`, new, which is set from `SpellOnStack.cast_from` at
-    resolution.
-  - The scan runs for every entry, not only entries that already carry counters.
-- Entry choice: `ReplacementEffect::AsEntersChoose(EntryChoice::CreatureType)`.
-  The entering controller picks from the CR 205.3m creature-type list
-  (`subtype.rs`). Above the branching size (64), the choice uses the naming
-  decision's balanced groups (`NameScope`-style sorted groups; only a type
-  choice commits), so every type is offered. The choice is stored on the
-  permanent as `Modification::ChosenCreatureType(String)`, a record lasting as
-  long as the object, like `ModeChosen`. It is public (fact row; text "chosen
-  type: Elf"; token).
-  - `CardPredicate.chosen_type_of_source: bool` reads it for Banner's static
-    scope and count. The choice is made before the counter count is read
-    (CR 614.12).
-- Cards:
-  - Mossborn: fixed 1 counter; landfall puts
-    `Property{This, Counters(+1/+1)}` counters, doubling with current amounts
-    under Doubling Season/ModifyCounters.
-  - Heroes' Bane: fixed 4 counters; activated `put_counters(SourcePower)`.
-  - Wildwood Scourge: X counters; `PutsCountersOn{AnyPlayer, +1/+1,
-    Matching{You, creature not Hydra, another}}` → 1 counter.
-  - Zegana: `GreatestPower` counters, plus ETB `draw(SourcePower)`.
-  - Giada: flying, vigilance; `OtherYouControl(Angel)` counters by
-    `ControlledAlready(Angel)`; `{T}: Add {W}` restricted with
-    `ManaRestriction::spell(["Angel"])`.
-  - Banner: choose type, fellowship counters by `ControlledAlready(chosen
-    type)`; `PtBuff YouControl(chosen type) per SourceCounters(fellowship)`.
-    Add `CounterKind::Fellowship` (append) and divinity if missing.
-  - Myojin: a divinity counter if cast from hand; indestructible while it has one
-    (`SourceCountersAtLeast`); `remove_counters (Divinity,1)` →
-    `DiscardHand(EachOpponent)`.
-- Obsolete: `EntersWithPlusOneCounters` and `EntersWithXCounters`, and the
-  `entry.counters.is_empty()` gate (convert their users).
-- Checks: `fdn:: pjou:: m21:: gtc:: psnc:: chk::` and the converted entry-counter
-  cards' tests. Interactions:
-  - Two Angels entering together under Giada: neither counts the other.
-  - Giada plus a Doubling Season-style ModifyCounters: the counters are scaled
-    once.
-  - Zegana with no other creatures enters 1/1 and draws 1, then draws by its
-    layered power with an anthem.
-  - Mossborn with two landfalls: 1 → 2 → 4.
-  - Wildwood: one counter event on two creatures is two triggers, while a Hydra
-    and Wildwood itself trigger nothing.
-  - Banner choosing Elf with three Elves gets three counters and +3/+3 Elves.
-    A Changeling (slice 4) counts and is buffed.
-  - Myojin reanimated (not cast) has no counter and is destructible, and its
-    discard hits a Wilt-Leaf (slice 6).
-  - Every creature type is reachable in the choice. Replay and forks reproduce
-    the choice, and the observation shows it.
-- Stress: `choices` with the creature-type choice (group depth 2), and 8/16
-  entering Angels under 4 Giadas; `step:resolve`.
-
-### 8 · Life gain and scoped damage prevention in the proposed event (Angel of Vitality, Crystal Barricade's prevention)
-
-- Add a `LifeChange` arm to `collect_replacements`:
-  `ReplacementEffect::ModifyLifeGain { who: Actor, additional: i32 }`. The
-  affected player orders several such effects (CR 616.1). A gain of 0 is no event
-  (CR 119.10) and isn't increased.
-- `ModifyDamage` gets `combat: Option<bool>` and a recipient
-  `DamageRecipient { by: Actor, players: bool, permanents: Option<CardPredicate>,
-  except_source: bool }` in place of `recipient_by: Actor`.
-  Reuse the protection prevention transform `DamageTransform::PreventAll` from Pass 2. Retain partial prevention for existing numeric shields and their tests.
-- Cards: Angel of Vitality is flying, `ModifyLifeGain{You, 1}`, and `PtBuff This`
-  under `LifeAtLeast{25}`. Crystal Barricade prevents noncombat damage to other
-  creatures you control.
-- Obsolete: `ModifyDamage.recipient_by`
-  (convert `ons.rs:50`, `fdn.rs:2016`).
-- Checks: `m20:: fdn::crystal_barricade`. Interactions:
-  - Angel plus lifelink combat damage gains +1 once per event, and two Angels give
-    +2.
-  - Angel at 24 life gaining 1 becomes 26 (+2/+2).
-  - Barricade versus a burn spell on your creature (prevented), on itself (not
-    prevented), and in combat (not prevented).
-  - Barricade versus a damage doubler: prevention and doubling order is chosen by
-    the affected controller.
-- Stress: `mixed-life-gain` with 4/8 Angels; `step:resolve`.
+The first directed run exposed a Tinybones interaction. Its `ForPlayer`
+instruction changed the frame's player before the discard, so the Liege went
+to the graveyard and Tinybones exiled it. `a4504cdc6b` keeps the activating
+player on that frame across the discard choice. The targeted test checks the
+Liege both before and after the Tinybones trigger resolves.
 
 ## Passes
 
-Passes 1–4 built slices 1–5.
+Passes 1–5 implement slices 1–8.
 
-- **Pass 5 · proposed-event replacements:** slices 6, 7 and 8 (6 reuses slice 5's
-  graveyard arm).
-- **Pass 6 · integration:** the cross-slice synergies below, ledger rows, Engine
-  Budget reference.
+- Pass 5 passed the directed card positions, learning-token guards and
+  Scryfall conformance for every registered real card. The release extension
+  replayed the pinned v9 and v11 pilots. The optional frontier pilot was
+  unavailable.
+- The Python text surface replayed Banner's group and leaf Commands on exact
+  forks, encoded every offer, and showed the committed type to both seats.
+  Landcycling triggered Tinybones, and one Angel replaced a gain from 24 to
+  26. Academy replayed 192 demo Commands and all five navigation positions.
+  The board prompt suite passed all 115 cases.
+- Release `bench_states` timings below are medians of three steps on a
+  contended shared host. Giada's size counts simultaneous entrants with
+  four Giadas already present. Banner's size counts Elves, and Angel of
+  Vitality's size counts replacement sources.
+
+  | Position | Size | Resolve (µs) | First choice (µs) | Final choice (µs) |
+  |---|---:|---:|---:|---:|
+  | Giada | 8 | 100.5 | 80.5 | 176.4 |
+  | Giada | 16 | 110.0 | 384.6 | 155.9 |
+  | Banner | 8 | 47.1 | 64.9 | 109.6 |
+  | Banner | 16 | 40.5 | 39.8 | 212.8 |
+  | Angel of Vitality | 4 | 52.0 | 43.9 | 75.0 |
+  | Angel of Vitality | 8 | 25.5 | 62.7 | 83.7 |
+
+- Pass 6 covers the cross-slice synergies and ledger rows. The full debug
+  nextest suite and Engine Budget reference belong to gate.
 
 ## Cross-slice validation (integrated)
 
