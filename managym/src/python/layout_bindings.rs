@@ -107,7 +107,7 @@ impl PackedTableLayout {
     }
 }
 
-/// Resolved policy input, shared by allocation and native buffer validation.
+/// Resolved policy input, shared by batch encoding and archive validation.
 #[pyclass(frozen, module = "managym")]
 #[derive(Clone)]
 pub struct ObservationLayout {
@@ -212,52 +212,6 @@ impl ObservationLayout {
         buffers
     }
 
-    /// Deprecated dense object-reference metadata; removed in 0.3.0.
-    /// Object coordinate columns and their index bases. None denotes the whole buffer.
-    #[getter]
-    fn object_references(
-        &self,
-        py: Python<'_>,
-    ) -> PyResult<BTreeMap<String, Vec<(Option<usize>, usize)>>> {
-        super::bindings::warn_deprecated(
-            py,
-            "ObservationLayout.object_references is deprecated; removed with dense observation admission in 0.3.0",
-        )?;
-        use crate::agent::observation_extents::{joins, Join};
-        let mut references = BTreeMap::new();
-        for key in self.arrays.keys() {
-            for join in joins(key, self.config.policy_history) {
-                let field = match *join {
-                    Join::Objects => (None, 0),
-                    Join::Object(column, base) => (Some(column), base),
-                    _ => continue,
-                };
-                references
-                    .entry(key.clone())
-                    .or_insert_with(Vec::new)
-                    .push(field);
-            }
-        }
-        Ok(references)
-    }
-
-    /// Deprecated dense extent scanner; removed in 0.3.0.
-    /// Occupied or referenced row extents per batch item. Keep all input
-    /// storage stable until return; the scan releases the GIL.
-    #[pyo3(signature = (obs, *, omit_decision_memory=false))]
-    fn axis_extents(
-        &self,
-        py: Python<'_>,
-        obs: &Bound<'_, PyAny>,
-        omit_decision_memory: bool,
-    ) -> PyResult<Option<PyObject>> {
-        super::bindings::warn_deprecated(
-            py,
-            "ObservationLayout.axis_extents is deprecated; use ObservationBatch offsets for v11 observations; removal in 0.3.0",
-        )?;
-        super::layout_extents::axis_extents(py, self, obs, omit_decision_memory)
-    }
-
     #[getter]
     fn arrays(&self, py: Python<'_>) -> PyResult<PyObject> {
         arrays_dict(py, &self.arrays)
@@ -309,21 +263,6 @@ impl ObservationLayout {
             .iter()
             .map(|(k, a)| (k.clone(), a.dtype))
             .collect()
-    }
-
-    #[pyo3(signature=(*leading_dims))]
-    fn allocate(&self, py: Python<'_>, leading_dims: Vec<usize>) -> PyResult<PyObject> {
-        let zeros = py.import_bound("numpy")?.getattr("zeros")?;
-        let out = PyDict::new_bound(py);
-        for (key, array) in &self.arrays {
-            let shape: Vec<_> = leading_dims
-                .iter()
-                .chain(array.shape.iter().flatten())
-                .copied()
-                .collect();
-            out.set_item(key, zeros.call1((shape, array.dtype))?)?;
-        }
-        Ok(out.into())
     }
 }
 

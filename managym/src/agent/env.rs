@@ -6,10 +6,6 @@ use crate::{
         action::AgentError,
         heuristic::Heuristic,
         observation::{EventData, Observation},
-        observation_encoder::{
-            encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
-            ObservationEncoderConfig,
-        },
         player_policy::PlayerPolicy,
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
@@ -1291,21 +1287,6 @@ impl Env {
             AgentError("env.content_pack_manifest called before reset".to_string())
         })?;
         Ok(default_content_pack().manifest())
-    }
-
-    pub fn encode_observation(
-        &self,
-        observation: &Observation,
-    ) -> Result<EncodedObservation, ObservationEncodeError> {
-        encode(observation, &ObservationEncoderConfig::default())
-    }
-
-    pub fn encode_observation_into(
-        &self,
-        observation: &Observation,
-        out: EncodedObservationMut<'_>,
-    ) -> Result<(), ObservationEncodeError> {
-        encode_into(observation, &ObservationEncoderConfig::default(), out)
     }
 
     pub fn export_profile_baseline(&self) -> String {

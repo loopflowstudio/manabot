@@ -204,13 +204,6 @@ impl VectorEnv {
         }
     }
 
-    #[cfg(feature = "python")]
-    pub(crate) fn parked_slots(&self) -> impl Iterator<Item = usize> + '_ {
-        self.slots.iter().enumerate().filter_map(|(slot, state)| {
-            matches!(state, SlotState::Terminal | SlotState::Poisoned).then_some(slot)
-        })
-    }
-
     pub fn next_fresh_seeds(&self) -> &[u64] {
         &self.next_seeds
     }
@@ -556,15 +549,7 @@ impl VectorEnv {
     /// Project each requested native seat without advancing games or chooser state.
     /// The whole request is validated before the first write; an encoding failure
     /// can leave a written prefix, so callers must discard all rows on failure.
-    pub fn write_observations_for_players(
-        &self,
-        players: &[Option<usize>],
-        write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
-    ) -> Result<Vec<ObservationRead>, AgentError> {
-        self.read_observations_for_players(players, write)
-    }
-
-    pub(crate) fn read_observations_for_players<E: From<AgentError>>(
+    pub fn read_observations_for_players<E: From<AgentError>>(
         &self,
         players: &[Option<usize>],
         mut write: impl FnMut(usize, &Observation) -> Result<(), E>,

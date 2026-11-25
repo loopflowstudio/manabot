@@ -333,7 +333,6 @@ fn validate_game(tables: &Tables, game: usize, policy_history: bool) -> PyResult
                         object(table.integer(row, col), base)?;
                     }
                 }
-                _ => (),
             }
         }
     }

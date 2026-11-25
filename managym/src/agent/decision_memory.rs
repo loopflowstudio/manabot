@@ -596,7 +596,6 @@ fn definition_only(reference: &DecisionReference) -> bool {
 /// One viewer prefix, with disjoint record members and shared exact snapshots.
 #[derive(Default)]
 pub struct EncodedMemory {
-    pub reset: bool,
     pub records: Vec<[f32; RECORD_DIM]>,
     pub references: Vec<[f32; REFERENCE_DIM]>,
     pub details: Vec<[f32; DETAIL_DIM]>,
@@ -625,89 +624,24 @@ impl RowWriter for EncodedMemory {
         }
         Ok(())
     }
-
-    fn reset_memory(&mut self) {
-        self.reset = true;
-    }
 }
 
-/// Caller-owned native transport state, never serialized with game facts.
-#[derive(Default)]
-pub struct MemoryEncoding {
-    origin: Option<Arc<()>>,
-    counts: [usize; 4],
-    version: u64,
-    indexes: std::collections::HashMap<usize, usize>,
-    // Keep pointer-indexed snapshots alive until this buffer changes games.
-    log: Option<DecisionLog>,
-}
-
+/// The log's rows in their dense column reading.
 pub fn encode(log: &DecisionLog) -> EncodedMemory {
-    encode_suffix(log, &mut MemoryEncoding::default()).1
-}
-
-pub fn encode_suffix(
-    log: &DecisionLog,
-    cursor: &mut MemoryEncoding,
-) -> ([usize; 4], EncodedMemory) {
     let mut out = EncodedMemory::default();
-    let starts =
-        write_suffix(log, cursor, &mut out).expect("dense memory projection is infallible");
-    (starts, out)
+    write(log, &mut out).expect("dense memory projection is infallible");
+    out
 }
 
-pub(super) fn write_suffix(
+/// Write every record, shared snapshot, detail and member of `log`.
+pub(super) fn write(
     log: &DecisionLog,
-    cursor: &mut MemoryEncoding,
-    out: &mut impl RowWriter,
-) -> Result<[usize; 4], ObservationEncodeError> {
-    let reset = cursor
-        .origin
-        .as_ref()
-        .is_none_or(|origin| !Arc::ptr_eq(origin, &log.origin));
-    if reset {
-        *cursor = MemoryEncoding::default();
-        cursor.origin = Some(log.origin.clone());
-        out.reset_memory();
-    }
-    let mut starts = cursor.counts;
-    if starts[0] > 0 && cursor.version != log.tail_version() {
-        starts[0] -= 1;
-        let last = cursor
-            .log
-            .as_ref()
-            .unwrap()
-            .tail
-            .as_ref()
-            .unwrap()
-            .rows
-            .last()
-            .unwrap();
-        starts[3] -=
-            last.context.mana_sources.len() + last.response.len() + last.choice.references.len();
-    }
-    write_from(log, starts, &mut cursor.indexes, out)?;
-    cursor.counts = [
-        log.len(),
-        log.detail_count(),
-        log.reference_count(),
-        log.member_count(),
-    ];
-    cursor.version = log.tail_version();
-    cursor.log = Some(log.clone());
-    Ok(starts)
-}
-
-fn write_from(
-    log: &DecisionLog,
-    starts: [usize; 4],
-    indexes: &mut std::collections::HashMap<usize, usize>,
     out: &mut impl RowWriter,
 ) -> Result<(), ObservationEncodeError> {
     use crate::cards::tokens::name_value;
-    let [record_start, mut detail_slot, reference_start, mut member_slot] = starts;
-    for (offset, reference) in log.snapshots_since(reference_start).enumerate() {
-        let index = reference_start + offset;
+    let (mut detail_slot, mut member_slot) = (0, 0);
+    let mut indexes = std::collections::HashMap::new();
+    for (index, reference) in log.snapshots_since(0).enumerate() {
         indexes.insert(Arc::as_ptr(reference) as usize, index + 1);
         let mut header = [Cell::ZERO; REFERENCE_DIM];
         header[0] = Integer(reference.role as i64);
@@ -764,7 +698,7 @@ fn write_from(
         header[12] = Integer(1);
         out.write(Table::DecisionReferences, 0, index, &header)?;
     }
-    for (index, record) in log.records_since(record_start).enumerate() {
+    for (index, record) in log.records_since(0).enumerate() {
         let mut header = [Cell::ZERO; RECORD_DIM];
         for (offset, value) in [
             (0, record.ordinal),
@@ -842,7 +776,7 @@ fn write_from(
             header[72] = Integer(1);
             header[73] = Integer(i64::from(value));
         }
-        out.write(Table::DecisionRecords, 0, record_start + index, &header)?;
+        out.write(Table::DecisionRecords, 0, index, &header)?;
     }
     debug_assert_eq!(detail_slot, log.detail_count());
     debug_assert_eq!(member_slot, log.member_count());
@@ -1252,45 +1186,6 @@ mod tests {
         let observation = Observation::for_player(&first, PlayerId(1));
         let decoded = crate::agent::observation_json::parse(&observation.to_json()).unwrap();
         assert_eq!(decoded.decision_memory, observation.decision_memory);
-    }
-
-    #[test]
-    fn suffix_encoding_matches_dense_through_chunks_coalescing_and_reset() {
-        let mut game = game();
-        let pending = pending_pass(&game).unwrap();
-        let mut cursor = MemoryEncoding::default();
-        let mut retained = EncodedMemory::default();
-        for step in 0..100 {
-            let mut row = pending.clone();
-            row.record.context.turn = step / 2; // each second pass coalesces
-            commit(&mut game, Some(row));
-            let log = &game.decision_memory[1];
-            for _ in 0..2 {
-                // unchanged reads write no rows
-                let (starts, suffix) = encode_suffix(log, &mut cursor);
-                if suffix.reset {
-                    retained = EncodedMemory::default();
-                }
-                retained.records.truncate(starts[0]);
-                retained.details.truncate(starts[1]);
-                retained.references.truncate(starts[2]);
-                retained.members.truncate(starts[3]);
-                retained.records.extend(suffix.records);
-                retained.details.extend(suffix.details);
-                retained.references.extend(suffix.references);
-                retained.members.extend(suffix.members);
-                let dense = encode(log);
-                assert_eq!(retained.records, dense.records);
-                assert_eq!(retained.details, dense.details);
-                assert_eq!(retained.references, dense.references);
-                assert_eq!(retained.members, dense.members);
-            }
-        }
-        let restored: DecisionLog =
-            serde_json::from_str(&serde_json::to_string(&game.decision_memory[1]).unwrap())
-                .unwrap();
-        assert!(encode_suffix(&restored, &mut cursor).1.reset);
-        assert!(encode_suffix(&DecisionLog::default(), &mut cursor).1.reset);
     }
 
     #[test]

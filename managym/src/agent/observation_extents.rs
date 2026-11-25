@@ -1,15 +1,13 @@
-//! Variable row axes and the joins that can keep otherwise empty rows alive.
+//! Variable row axes and the object joins a batch archive validates.
 use super::observation_layout::{
-    action, effect, fact, history, member, permanent, relation, stack, ArrayLayout,
+    effect, fact, history, member, permanent, relation, stack, ArrayLayout,
 };
 
-/// A zero-based object coordinate or a one-past-end extent on another axis.
+/// Columns that hold object coordinates.
 #[derive(Clone, Copy)]
 pub(crate) enum Join {
-    Objects,                          // every element in action_focus
-    Object(usize, usize),             // column, coordinate base
-    Extent(&'static str, usize),      // destination and one-based reference column
-    Span(&'static str, usize, usize), // destination, offset and count columns
+    Objects,              // every element in action_focus
+    Object(usize, usize), // column, coordinate base
 }
 
 pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
@@ -20,16 +18,12 @@ pub(crate) fn joins(key: &str, policy_history: bool) -> &'static [Join] {
         "effects" => &[
             Object(effect::CONTROLLER, 1),
             Object(effect::SOURCE, 1),
-            Span("details", effect::DETAIL_OFFSET, effect::DETAIL_COUNT),
-            Span("members", effect::MEMBER_OFFSET, effect::MEMBER_COUNT),
         ],
         "effect_members" => &[Object(member::OBJECT, 1)],
         "relations" => &[
             Object(relation::SOURCE, 1),
             Object(relation::REFERENCE, 1),
-            Extent("relations", relation::FRAME),
         ],
-        "actions" => &[Extent("relations", action::CONTINUATION)],
         "agent_permanents" | "opponent_permanents" => &[
             Object(permanent::ATTACHED_TO, 1),
             Object(permanent::BLOCKING, 1),
