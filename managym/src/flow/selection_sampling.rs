@@ -451,24 +451,14 @@ impl Game {
             })
             .map(|(object, ..)| object)
             .collect();
-        for batch in self.pending_batches() {
-            for pending in batch.events.iter().take(batch.cursor + 1) {
-                if let ProposedEvent::ZoneMove {
-                    from: Some(ZoneType::Hand),
-                    object_id,
-                    entry,
-                    ..
-                } = &pending.event
-                {
-                    if entry.discard.is_some()
-                        && self
-                            .hand_replacements(*object_id, entry.discard)
-                            .iter()
-                            .any(|candidate| candidate.names_card(*object_id))
-                    {
-                        pinned.push(*object_id);
-                    }
-                }
+        for (evaluated, object_id, discard) in self.pending_hand_discards() {
+            if evaluated
+                && self
+                    .hand_replacements(object_id, discard)
+                    .iter()
+                    .any(|candidate| candidate.names_card(object_id))
+            {
+                pinned.push(object_id);
             }
         }
         pinned.extend(
@@ -525,6 +515,60 @@ impl Game {
                 ResolutionRef::Frame(frame) => frame.batch.as_ref(),
                 ResolutionRef::Decision(_) => None,
             })
+    }
+
+    /// Hand discards still pending in any suspended batch, with whether their
+    /// replacement options have already been evaluated (at or before cursor).
+    fn pending_hand_discards(
+        &self,
+    ) -> impl Iterator<Item = (bool, ObjectId, Option<crate::flow::proposed_event::DiscardCause>)> + '_
+    {
+        self.pending_batches().flat_map(|batch| {
+            batch
+                .events
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, pending)| match &pending.event {
+                    ProposedEvent::ZoneMove {
+                        from: Some(ZoneType::Hand),
+                        object_id,
+                        entry,
+                        ..
+                    } if entry.discard.is_some() => {
+                        Some((index <= batch.cursor, *object_id, entry.discard))
+                    }
+                    _ => None,
+                })
+        })
+    }
+
+    fn discard_replacement_predicate(
+        &self,
+        object: ObjectId,
+        discard: Option<crate::flow::proposed_event::DiscardCause>,
+        owner: PlayerId,
+        viewer: PlayerId,
+        pinned: &[ObjectId],
+    ) -> CardPredicate {
+        let original = self.hand_replacements(object, discard);
+        let mut tested = std::collections::BTreeSet::new();
+        let mut names = std::collections::BTreeSet::new();
+        for candidate in unseen_objects(self, owner, viewer, pinned) {
+            let (definition, printing) = self.state[candidate].retained_base();
+            if tested.insert(definition) && self.hand_replacements(candidate, discard) == original {
+                names.insert(printing.name.clone());
+            }
+        }
+        CardPredicate {
+            any_of: names
+                .into_iter()
+                .map(|name| CardPredicate {
+                    named: Some(name),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
     }
 
     /// Prospective face-up battlefield entries are public even while their
@@ -613,60 +657,26 @@ impl Game {
             // At and before the cursor its replacement options have already
             // been evaluated. A substitute must reproduce those options; later
             // members will be evaluated using their newly assigned printing.
-            for batch in self.pending_batches() {
-                for (index, pending) in batch.events.iter().enumerate() {
-                    let ProposedEvent::ZoneMove {
-                        from: Some(ZoneType::Hand),
-                        object_id,
-                        entry,
-                        ..
-                    } = &pending.event
-                    else {
-                        continue;
-                    };
-                    if entry.discard.is_none() {
-                        continue;
-                    }
-                    let owner = self.state[*object_id].owner;
-                    if self.shares_information(viewer, owner)
-                        || pinned.binary_search(object_id).is_ok()
-                    {
-                        continue;
-                    }
-                    let predicate = if index <= batch.cursor {
-                        let original = self.hand_replacements(*object_id, entry.discard);
-                        let mut tested = std::collections::BTreeSet::new();
-                        let mut names = std::collections::BTreeSet::new();
-                        for candidate in unseen_objects(self, owner, viewer, &pinned) {
-                            let (definition, printing) = self.state[candidate].retained_base();
-                            if tested.insert(definition)
-                                && self.hand_replacements(candidate, entry.discard) == original
-                            {
-                                names.insert(printing.name.clone());
-                            }
-                        }
-                        CardPredicate {
-                            any_of: names
-                                .into_iter()
-                                .map(|name| CardPredicate {
-                                    named: Some(name),
-                                    ..Default::default()
-                                })
-                                .collect(),
-                            ..Default::default()
-                        }
-                    } else {
-                        CardPredicate::default()
-                    };
-                    retain(
-                        &Some(ZoneSelection {
-                            owner,
-                            zone: ZoneType::Hand,
-                            predicate,
-                        }),
-                        std::slice::from_ref(object_id),
-                    );
+            for (evaluated, object_id, discard) in self.pending_hand_discards() {
+                let owner = self.state[object_id].owner;
+                if self.shares_information(viewer, owner)
+                    || pinned.binary_search(&object_id).is_ok()
+                {
+                    continue;
                 }
+                let predicate = if evaluated {
+                    self.discard_replacement_predicate(object_id, discard, owner, viewer, &pinned)
+                } else {
+                    CardPredicate::default()
+                };
+                retain(
+                    &Some(ZoneSelection {
+                        owner,
+                        zone: ZoneType::Hand,
+                        predicate,
+                    }),
+                    std::slice::from_ref(&object_id),
+                );
             }
             for decision in suspended.decisions() {
                 let Some((owner, object_ids)) = decision.library_inspection() else {

@@ -827,34 +827,8 @@ impl Game {
                 return choice;
             }
             let pending = &batch.events[batch.cursor];
-            if let ProposedEvent::ZoneMove {
-                object_id,
-                to: ZoneType::Battlefield,
-                entry,
-                ..
-            } = &pending.event
-            {
-                if entry.chosen_creature_type.is_none()
-                    && self
-                        .battlefield_entry_face(*object_id, entry)
-                        .is_some_and(|face| {
-                            face.replacement_effects
-                                .contains(&ReplacementEffect::AsEntersChoose(
-                                    crate::state::card::EntryChoice::CreatureType,
-                                ))
-                        })
-                {
-                    return BatchProgress::Decision(Box::new(Decision::ChooseCreatureType {
-                        player: entry
-                            .controller
-                            .unwrap_or(self.state.entry_object(*object_id).owner),
-                        object_id: *object_id,
-                        scope: crate::cards::names::NameScope {
-                            start: 0,
-                            end: crate::state::subtype::creature_type_names().len(),
-                        },
-                    }));
-                }
+            if let Some(choice) = self.entry_type_choice(pending) {
+                return choice;
             }
             let candidates: Vec<_> = self
                 .collect_replacements(&pending.event)
@@ -1165,6 +1139,47 @@ impl Game {
         entries
     }
 
+    fn entry_controller(&self, object: ObjectId, entry: &ZoneEntry) -> PlayerId {
+        entry
+            .controller
+            .unwrap_or(self.state.entry_object(object).owner)
+    }
+
+    /// The pending entry's "as this enters, choose a creature type" question.
+    fn entry_type_choice(&self, pending: &PendingEvent) -> Option<BatchProgress> {
+        let ProposedEvent::ZoneMove {
+            object_id,
+            to: ZoneType::Battlefield,
+            entry,
+            ..
+        } = &pending.event
+        else {
+            return None;
+        };
+        if entry.chosen_creature_type.is_some()
+            || !self
+                .battlefield_entry_face(*object_id, entry)
+                .is_some_and(|face| {
+                    face.replacement_effects
+                        .contains(&ReplacementEffect::AsEntersChoose(
+                            crate::state::card::EntryChoice::CreatureType,
+                        ))
+                })
+        {
+            return None;
+        }
+        Some(BatchProgress::Decision(Box::new(
+            Decision::ChooseCreatureType {
+                player: self.entry_controller(*object_id, entry),
+                object_id: *object_id,
+                scope: crate::cards::names::NameScope {
+                    start: 0,
+                    end: crate::state::subtype::creature_type_names().len(),
+                },
+            },
+        )))
+    }
+
     /// The pending entry's "enter as a copy" question, once: `None` when it
     /// has none, was answered, or has nothing to copy.
     fn entry_copy_choice(&self, pending: &mut PendingEvent) -> Option<BatchProgress> {
@@ -1182,9 +1197,7 @@ impl Game {
         }
         let (scope, predicate, _) =
             Self::entry_copy_terms(self.battlefield_entry_face(*object, entry)?)?;
-        let player = entry
-            .controller
-            .unwrap_or(self.state.entry_object(*object).owner);
+        let player = self.entry_controller(*object, entry);
         let controllers = self.scope_players(&scope, player, Some(*object), None);
         let candidates: Vec<PermanentId> = controllers
             .into_iter()
@@ -1291,8 +1304,7 @@ impl Game {
                 .permanent_of(*object)
                 .and_then(|id| self.state.permanents[id].as_ref().map(|p| p.controller))
                 .or_else(|| self.spell_on_stack(*object).map(|s| s.controller))
-                .or(entry.controller)
-                .unwrap_or(self.state.entry_object(*object).owner),
+                .unwrap_or_else(|| self.entry_controller(*object, entry)),
         }
     }
 
@@ -1753,9 +1765,7 @@ impl Game {
                 let source = *object_id;
                 // Entry conditions read the prospective controller, including
                 // a spell or reanimation controlled by someone other than its owner.
-                let entering_controller = entry
-                    .controller
-                    .unwrap_or(self.state.entry_object(*object_id).owner);
+                let entering_controller = self.entry_controller(*object_id, entry);
                 let Some(face) = self.battlefield_entry_face(*object_id, entry) else {
                     return Vec::new();
                 };
@@ -1889,12 +1899,9 @@ impl Game {
                 to: ZoneType::Battlefield,
                 entry,
                 ..
-            } if !entry.counters.is_empty() => Some((
-                *object_id,
-                entry
-                    .controller
-                    .unwrap_or(self.state.entry_object(*object_id).owner),
-            )),
+            } if !entry.counters.is_empty() => {
+                Some((*object_id, self.entry_controller(*object_id, entry)))
+            }
             _ => None,
         };
         if let Some((object_id, controller)) = recipient {
@@ -1980,24 +1987,16 @@ impl Game {
         controller: PlayerId,
     ) -> bool {
         match condition {
-            Some(crate::state::ability::Condition::EntryCastFrom(zone)) => {
-                entry.cast_from.is_some_and(|from| {
-                    zone.is_none_or(|z| {
-                        z == from
-                            && (z != ZoneType::Hand
-                                || self.state.entry_object(object).owner == controller)
-                    })
-                })
-            }
+            Some(crate::state::ability::Condition::EntryCastFrom(zone)) => entry
+                .cast_from
+                .is_some_and(|from| self.cast_from_matches(object, controller, from, *zone)),
             Some(condition) => self.check_static_condition(condition, controller),
             None => true,
         }
     }
 
     fn entry_value(&self, value: &EntryValue, object: ObjectId, entry: &ZoneEntry) -> i32 {
-        let controller = entry
-            .controller
-            .unwrap_or(self.state.entry_object(object).owner);
+        let controller = self.entry_controller(object, entry);
         match value {
             EntryValue::Fixed(n) => *n,
             EntryValue::X => entry.spell.as_ref().map_or(0, |spell| i32::from(spell.x)),

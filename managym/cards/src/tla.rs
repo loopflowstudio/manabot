@@ -1,8 +1,5 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
-use managym_state::card::EntryScope;
-use managym_state::card::EntryValue;
-use managym_state::effect::CopyException;
 use managym_state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
@@ -13,13 +10,13 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PowerCda,
-        PrintedCharacteristics, PtCount, ReplacementEffect, Restriction, SacrificeCost,
-        SetCharacteristics, SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType,
-        StaticPtBuff, StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant,
-        TapCost, TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
+        CardDefinition, CardType, CardTypes, EntryScope, EntryValue, Keyword, Keywords,
+        ManaAbility, PowerCda, PrintedCharacteristics, PtCount, ReplacementEffect, Restriction,
+        SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility, StaticKeywordGrant,
+        StaticLandType, StaticPtBuff, StaticRestriction, StaticScope, StaticTriggeredGrant,
+        StaticTypeGrant, TapCost, TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
     },
-    effect::{EffectDuration, Modification},
+    effect::{CopyException, EffectDuration, Modification},
     mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,

@@ -1278,11 +1278,7 @@ impl Game {
                 .is_some_and(|spell| {
                     self.state[spell.object].is_card()
                         && spell.controller == controller
-                        && zone.is_none_or(|z| {
-                            z == spell.cast_from
-                                && (z != ZoneType::Hand
-                                    || self.state[spell.object].owner == controller)
-                        })
+                        && self.cast_from_matches(spell.object, controller, spell.cast_from, *zone)
                 }),
             Condition::CastFromGraveyard => source
                 .and_then(|object| self.spell_on_stack(object))
@@ -1402,6 +1398,19 @@ impl Game {
     ) -> bool {
         self.permanent_matches_with_source(id, predicate, None)
     }
+    pub(super) fn cast_from_matches(
+        &self,
+        object: ObjectId,
+        controller: PlayerId,
+        from: ZoneType,
+        required: Option<ZoneType>,
+    ) -> bool {
+        required.is_none_or(|zone| {
+            zone == from
+                && (zone != ZoneType::Hand || self.state.entry_object(object).owner == controller)
+        })
+    }
+
     pub(super) fn chosen_type_for(
         &self,
         predicate: &CardPredicate,

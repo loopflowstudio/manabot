@@ -1187,7 +1187,6 @@ impl Game {
         if permanent.controller == controller {
             return;
         }
-        let previous = permanent.controller;
         let object_id = permanent.object;
         let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
         permanent.control_differs_from_entry = controller != permanent.entry_controller();
@@ -1201,11 +1200,6 @@ impl Game {
         }
         if let Some(object) = self.permanent_object(permanent_id) {
             self.end_effects_for_control_change(object, controller);
-            self.emit(GameEvent::ControlChanged {
-                object,
-                previous,
-                controller,
-            });
         }
     }
 

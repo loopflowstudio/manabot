@@ -51,7 +51,7 @@ fn gratuitous_violence() -> CardDefinition {
                 creature_source: true,
                 source_by: Actor::You,
                 recipient: DamageRecipient::any(Actor::AnyPlayer),
-                    combat: None,
+                combat: None,
                 transform: DamageTransform::Double,
             }],
             text_box: "If a creature you control would deal damage to a permanent or player, it deals double that damage instead.".into(),

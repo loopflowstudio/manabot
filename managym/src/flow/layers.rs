@@ -921,25 +921,15 @@ impl<'a> Context<'a> {
                 }
             }
             Some(PtCount::ColorsAmong(p)) => self
-                .objects
-                .iter()
-                .filter(|(id, _)| {
-                    self.controller(**id) == controller
-                        && !self.game.is_phased_out(**id)
-                        && self.matches(**id, p, Some(source))
-                })
+                .controlled(controller)
+                .filter(|(id, _)| self.matches(*id, p, Some(source)))
                 .flat_map(|(_, o)| o.view.colors.iter().copied())
                 .collect::<BTreeSet<_>>()
                 .len() as i32,
             Some(PtCount::GraveyardMatching(p)) => self.graveyard_count(controller, p),
             Some(PtCount::YouControl(p)) => self
-                .objects
-                .keys()
-                .filter(|id| {
-                    self.controller(**id) == controller
-                        && !self.game.is_phased_out(**id)
-                        && self.matches(**id, p, Some(source))
-                })
+                .controlled(controller)
+                .filter(|(id, _)| self.matches(*id, p, Some(source)))
                 .count() as i32,
             Some(PtCount::SourceCounters(kind)) => {
                 self.game.live_permanent(source).counter_count(*kind)
@@ -949,6 +939,14 @@ impl<'a> Context<'a> {
             power: LayerValue::Fixed(buff.power * times),
             toughness: LayerValue::Fixed(buff.toughness * times),
         })
+    }
+    fn controlled(&self, controller: PlayerId) -> impl Iterator<Item = (PermanentId, &LayerObject)> {
+        self.objects
+            .iter()
+            .filter(move |(&id, object)| {
+                object.controller == controller && !self.game.is_phased_out(id)
+            })
+            .map(|(&id, object)| (id, object.as_ref()))
     }
     fn controller(&self, id: PermanentId) -> PlayerId {
         self.objects[&id].controller
@@ -1078,12 +1076,7 @@ impl<'a> Context<'a> {
     /// Static comparisons see the characteristics at this point in the layer system.
     fn comparison_value(&self, value: &EffectValue, source: PermanentId) -> i32 {
         let controller = self.controller(source);
-        let controlled = || {
-            self.objects
-                .keys()
-                .copied()
-                .filter(|&id| self.controller(id) == controller && !self.game.is_phased_out(id))
-        };
+        let controlled = || self.controlled(controller).map(|(id, _)| id);
         match value {
             EffectValue::Half(inner) => self.comparison_value(inner, source).div_euclid(2),
             EffectValue::Scaled { factor, value } => {

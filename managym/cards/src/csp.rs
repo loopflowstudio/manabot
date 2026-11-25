@@ -1,10 +1,9 @@
 //! Coldsnap.
-use managym_state::card::EntryScope;
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        ReplacementEffect,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, EntryScope,
+        PrintedCharacteristics, ReplacementEffect,
     },
     mana::{Color, ManaCost},
     permanent::CounterKind,

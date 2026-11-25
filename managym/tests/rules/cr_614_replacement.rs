@@ -1,4 +1,3 @@
-use managym::state::card::EntryScope;
 use managym::{
     agent::action::ActionType,
     flow::{
@@ -7,7 +6,7 @@ use managym::{
     },
     state::{
         ability::Actor,
-        card::{DamageRecipient, DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageTransform, EntryScope, ReplacementEffect},
         game_object::{PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,

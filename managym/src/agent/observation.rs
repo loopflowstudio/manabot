@@ -2338,7 +2338,6 @@ impl Observation {
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
-            | GameEvent::ControlChanged { .. }
             | GameEvent::PermanentUntapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CardsLeftGraveyard { .. }

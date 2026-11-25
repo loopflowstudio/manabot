@@ -1,8 +1,6 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
-use crate::state::ability::LibraryEnd;
-use crate::state::card::EntryScope;
 use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
@@ -13,10 +11,10 @@ use crate::{
     flow::{event::GameEvent, game::Game, turn::StepKind},
     state::{
         ability::{
-            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, ObjectSelector,
-            TargetRequirement, TargetSpec,
+            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, LibraryEnd,
+            ObjectSelector, TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
+        card::{ActivatedAbilityDefinition, CardType, EntryScope, Keyword, Keywords},
         effect::{CopyException, EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         permanent::CounterKind,

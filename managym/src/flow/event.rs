@@ -55,12 +55,6 @@ pub struct CombatPlayerHit {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
-    ControlChanged {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        object: ObjectId,
-        previous: PlayerId,
-        controller: PlayerId,
-    },
     PermanentSacrificed {
         #[serde(rename = "card")]
         object_id: ObjectId,
@@ -284,7 +278,6 @@ pub enum EventKind {
     CardsLeftGraveyard,
     SourceDealtDamage,
     PermanentUntapped,
-    ControlChanged,
 }
 
 impl GameEvent {
@@ -313,7 +306,6 @@ impl GameEvent {
             GameEvent::AbilityTriggered { .. } => EventKind::AbilityTriggered,
             GameEvent::CardDrawn { .. } => EventKind::CardDrawn,
             GameEvent::PermanentTapped { .. } => EventKind::PermanentTapped,
-            GameEvent::ControlChanged { .. } => EventKind::ControlChanged,
             GameEvent::PermanentUntapped { .. } => EventKind::PermanentUntapped,
             GameEvent::PermanentTargeted { .. } => EventKind::PermanentTargeted,
             GameEvent::AttackersDeclared { .. } => EventKind::AttackersDeclared,

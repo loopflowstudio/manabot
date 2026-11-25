@@ -1298,13 +1298,18 @@ impl Game {
             }
             Effect::DrainLife { amount } => {
                 let amount = self.effect_value(amount, frame).max(0);
-                self.change_life(PlayerId(1 - frame.controller.0), -amount);
                 frame.batch = Some(self.event_batch(
                     EventBinding::None,
-                    [ProposedEvent::LifeChange {
-                        player: frame.controller,
-                        delta: amount.max(0),
-                    }],
+                    [
+                        ProposedEvent::LifeChange {
+                            player: PlayerId(1 - frame.controller.0),
+                            delta: -amount,
+                        },
+                        ProposedEvent::LifeChange {
+                            player: frame.controller,
+                            delta: amount,
+                        },
+                    ],
                 ));
                 None
             }

@@ -2034,7 +2034,7 @@ fn twinflame_tyrant() -> CardDefinition {
                 creature_source: false,
                 source_by: Actor::You,
                 recipient: DamageRecipient::any(Actor::Opponent),
-                    combat: None,
+                combat: None,
                 transform: DamageTransform::Double,
             }],
             text_box: "Flying\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals double that damage instead.".into(),

@@ -216,21 +216,22 @@ impl Game {
 
     pub(super) fn can_gain_life(&self, player: PlayerId) -> bool {
         !self.life_total_cant_change(player)
-            && ![PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
-                self.layer_views(self.iter_battlefield_permanents(owner))
-                    .any(|(_, view)| {
-                        view.static_abilities
-                            .contains(&StaticAbility::PlayersCantGainLife)
-                    })
+            && !self.static_sources().any(|(id, _, view)| {
+                !self.is_phased_out(id)
+                    && view
+                        .static_abilities
+                        .contains(&StaticAbility::PlayersCantGainLife)
             })
     }
 
     /// Apply the change and return the signed amount that actually occurred.
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> i32 {
-        if self.life_total_cant_change(player) {
-            return 0;
-        }
-        if delta > 0 && !self.can_gain_life(player) {
+        let blocked = if delta > 0 {
+            !self.can_gain_life(player)
+        } else {
+            self.life_total_cant_change(player)
+        };
+        if delta == 0 || blocked {
             return 0;
         }
         let Some(life) = self.state.life_mut(player) else {

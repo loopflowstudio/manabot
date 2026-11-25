@@ -8,7 +8,6 @@ use crate::support::{
         settle, spend_colorless,
     },
 };
-use managym::state::card::EntryScope;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
@@ -16,6 +15,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
+        card::EntryScope,
         game_object::{PlayerId, Target},
         zone::ZoneType,
     },
