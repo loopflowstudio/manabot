@@ -1,6 +1,7 @@
 # MTG-482 — Academy: swap sides in the middle of a game
 
-Kickoff, 2026-11-25 (headless; choices below are made for review).
+Revised after concept review, 2026-11-25 (headless; `scratch/concept-review.html`;
+choices below are made for review).
 
 Direction, in the words given:
 
@@ -16,200 +17,334 @@ Task's.
 
 ## User-visible outcome
 
-During a Play game the pilot opens Settings → Game and presses **Swap sides
-now**. After a short "Swapping sides…" the board shows the same position from
-the opponent's seat: their hand, their deck name under "You", the same life
-totals, stack and turn. The bot now plays the seat the person left, and moves
-at once if that seat was the one to act. Play continues to an ordinary end, and
-the game counts in My record by how it ends: a win if the seat the person
-finished in won. The control can be used again to swap back.
+During a live Play game the pilot opens Settings → Game and presses **Swap
+sides** (under **This game**, separated from **Next game**, where the existing
+next-game play/draw button is renamed **Swap play/draw** while keeping its wire
+`intent: "swap_sides"`). Almost instantaneously the board flips to the
+opponent's seat in the same game: their hand, their deck name under "You", the
+same life totals, stack and turn, and the live move list stays intact with a
+**Swapped sides** divider. The bot now pilots the seat the person left, and
+moves at once if that seat was the one to act. If **Show analysis** was on, it
+follows the person to the new seat. Play continues to an ordinary end; the game
+appears once in Games (with each player in their final seat and deck), counts
+once in My record by how it ends (win if the seat the person finished in won),
+and opens in Review showing every decision the person actually made before and
+after the swap with a **Swapped sides · Turn T** divider. The control can be
+used again to swap back.
 
-## The design: a swap starts a new recorded game replayed from the live one
+## The model: one live game whose seats swap in place
 
-The swapped game is a new recorded game. It has the live game's seed and native
-setup, the person in the other seat, and every move made so far replayed
-through the Command path with the roles exchanged. The live game ends with
-`end_reason: "swapped_sides"`. This is play-on (`played_from`,
-`managym/academy/server.py` `_played_from_source`, `_play_recorded_prefix`)
-with its three refusals lifted for this one caller: the source is the session's
-own live game, the stopping point is "all of it", and the person changes seat.
+A game has two fixed native seats (0 and 1) and one immutable starting setup
+(`GameConfig`, `config.to_rust()`). Swapping sides mid-game changes only **who
+pilots which seat** from that step onward — never the native game, its seed,
+its match id, or its history.
 
-Why this and not one game with a seat change written into it: a game record
-has one `config.human_seat`, and every reader pairs the `hero`/`villain` role
-of an event with it — `acting_seat`, `step_matches`, `ReplayedViews` and
-`Recording` rows in `recording.py`, `analysed_events` in `analysis.py`,
-`normalize_observation_to_hero` in `trace.py`, the `a.winner=h.seat` record
-queries in `attempts.py`, the per-viewer presentation track, decision restore
-and Study roots in `server.py`. A seat that changes mid-record makes each of
-those time-dependent, and `hero_deck` would stop meaning "your deck". A new
-game keeps the swapped game an ordinary game for all of them. Passed over for
-that reason; its advantages were an instant swap and no stopped source game.
+Why this (and not the kickoff plan's second replayed game):
+- `managym.Env(decision_memory=True)` already runs by native seat and captures
+  decision memory for **both** seats 0 and 1.
+- `CanonicalReplayV1` already records `viewer: 0 | 1` and
+  `source: "client" | "policy"` on every decision, plus both seats'
+  presentation tracks from step 0.
+- `AttemptStore.record`, `summaries`, `session_results`, `session_totals`, and
+  `GameNumbers` already key off `attempt_players.seat` and native seat 0/1.
+- Swapping in place is instant (~5–50 ms for all real policies, instead of
+  2–5 s replaying 100+ frames), creates no hidden stopped half-game, preserves
+  the live move list, Study roots, real `bot_decision` outputs, `committed_at`
+  timestamps and `analysis_shown` marks, handles multiple swaps cleanly, needs
+  no opponent-seat mana fields on `GameConfig`, and keeps `played_from` pure
+  (so a game started via **Play on from here** that also swaps sides stays out
+  of My record).
 
-Probe (`scratch/probe/swap_replay.py`, run against the MTG-389 checkout's built
-engine, same commit): a live game's moves replay into a second session with the
-seats exchanged, the person lands in the other seat, the game plays to
-`game_over` and re-executes `complete` under `ReplayedViews`. Three setups
-passed (every window surfaced; priority stops; second seat with closed
-decklists). What it also showed, each now part of the design:
+### One record field and one pure helper
 
-1. **Action descriptions name players by role.** `academy_actions` writes
-   "Hero"/"Villain" into descriptions, so the recorded description of a move
-   does not match after the exchange (the first run diverged at step 10). The
-   replay compares the acting native seat and the action index, and reads the
-   description under the source game's roles.
-2. **The record ends on the bot's turn.** After the last recorded move the seat
-   to act is the person's old one. The replay stops consulting the record
-   there and the bot chooses (the unmodified hook raised "no longer plays as
-   recorded" one step past the end).
-3. **Native mana modes belong to seats.** `GameConfig.to_rust` gives the
-   human's seat `mana_payment`/`mana_floats` and the bot's seat
-   `"manual"`/`"off"`. Exchanging the roles moved auto payment to the other
-   seat and the replay diverged at step 20. The swapped game keeps each native
-   seat's modes, so the config gains the opponent seat's two modes (default
-   manual/off, omitted from records when default). Consequence: after a swap
-   the person plays the seat as it was set up (manual payment, no floating
-   mana, unless they swap back), and the bot plays the old seat with the
-   person's modes. The browser's Auto-tap is client-side and stays with the
-   person. Games set up with the defaults see no difference.
-4. **Cost is about 56 ms per move** (52 moves in 2.9 s, 31 in 1.5 s, 43 in
-   1.2 s). The profile puts roughly half in reply frames nobody reads
-   (`_accepted_outcome` → `_experience_frame`) and per-step board projections.
+`Trace` gains one optional field:
 
-### The shadow player
+- `seat_swaps: list[int] = field(default_factory=list)` — the `len(trace.events)`
+  indices at which the pilot swapped seats, omitted from serialized JSON when
+  empty (so unswapped traces are byte-identical to today).
 
-The bot that takes the person's old seat is loaded for that seat and shown the
-whole game from it during the replay: `observe` at every step, and for a
-policy that keeps history in its session (`PolicyDescriptor.recurrent`) a
-discarded `choose` at each of that seat's decisions, as `_play_recorded_prefix`
-and `LiveAnalysis` already do. It has exactly the history a policy sitting in
-that seat from the first move would have.
+One pure function in `managym/academy/trace.py` owns seat resolution for every
+reader:
 
-Choice made for review: the shadow is built at the swap, not kept running in
-every game. Finding behind it: the registered checkpoints keep no history in
-the session — `BaselineSession.observe` and `AnchorSession.observe` are `pass`
-(`manabot/sim/policy_provider.py`), and decision memory is the engine's
-per-seat capture (`env.capture_decision(seat, 0)`), which the replayed game
-holds for both seats. Only test fixtures set `recurrent=True`. Passed over: a
-second policy session loaded in the person's seat at the start of every game.
-It would make the swap instant only together with the one-record design above,
-and it charges a load and a policy pass per decision to every game, most of
-which never swap.
+```python
+def human_seat_at(trace: Mapping[str, Any], event_index: int | None = None) -> int:
+    """Native seat the human piloted at `event_index` (or at game end when None)."""
+    seat = int(trace["config"].get("human_seat", 0))
+    swaps = trace.get("seat_swaps") or ()
+    flips = len(swaps) if event_index is None else bisect_right(swaps, event_index)
+    return seat ^ (flips & 1)
+```
 
-### What can refuse
+At every step `i`, `event["actor"] == "hero"` means the human acted (in seat
+`human_seat_at(trace, i)`) and `event["actor"] == "villain"` means the bot
+acted (in seat `1 - human_seat_at(trace, i)`). `academy_actions(obs, seat)` is
+called with `human_seat_at(trace, i)`, so every stored action description
+re-executes and verifies identically across any number of swaps.
 
-- A policy that cannot be admitted or loaded for the other seat: the load
-  happens before the live game is closed (as `new_game` does today), so the
-  swap answers `swap_unavailable: <the policy's reason>` and the game goes on
-  untouched. The manabot provider admits by the pair of decks, not the seat
-  (`policy_provider.py` `admit`), so trained opponents normally can take it.
-- Game over, a bot decision awaiting retry (`mirror_retry`), a Study branch
-  open, a watched game, or a request bound to an older match or revision:
-  refused with the game unchanged.
-- A replay that stops matching (`swap_diverged`). Same process, build, seed
-  and native setup, so this is an engine determinism bug, not an expected
-  state; it is reported and both games stay stored.
+### The shadow player (loaded at swap time)
 
-### The record
+Choice made for review: build the bot for the person's old seat at the swap,
+not at the start of every game.
 
-- The swapped game stores `played_from: {trace_id, event, swapped: true}`,
-  `event` being the number of moves replayed. Its players are recorded in the
-  seats they finish in: the human in the new seat with that seat's deck, the
-  bot in the old one.
-- My record (`AttemptStore.record`) counts a swapped game by its result, in
-  the row of the opponent and decks the person ended with. It still leaves out
-  a game played on from a finished one. No "both hands seen" mark is recorded.
-- The source game stays stored, `stopped`, `swapped_sides`. Games and the
-  session's tallies leave it out (choice made for review; passed over: showing
-  it as one more stopped game, as a game left for a new one shows today — each
-  swap would add a stopped half-game beside the one that counts).
-- Review of a swapped game shows "Swapped sides at turn T" where a played-on
-  game shows where it was played on from, and a divider at that move. Analysis
-  of "your decisions" starts at the swap: the moves before it in that seat
-  were the bot's (`analysed_events`).
-- The session's next-game setup is unchanged by a mid-game swap; the existing
-  next-game **Swap sides** keeps its meaning.
+- All real policies (`BaselineSession`, `AnchorSession`, `Search`, `Random`,
+  `FlatSearchPolicy`, `Passive`) are stateless across `observe` and read
+  decision memory from `env.capture_decision(seat, 0)`, which the live `Env`
+  already captures for both seats. Loading the policy with
+  `build_villain_policy(config, seat=old_human_seat)` and calling
+  `observe_policies((new_policy,), self.env, self.obs)` gives it the exact
+  state a bot sitting in that seat from turn 1 would have — in milliseconds.
+- If `isinstance(new_policy, PolicyRunner) and new_policy.base_descriptor.recurrent`
+  (test fixtures, or any future recurrent policy): before mutating the live
+  session, warm `new_policy` up on a lightweight `managym.replay.walk` of the
+  game so far (`observe_policies` at reset and after each step `0..k-1`, plus
+  discarded `choose_bot` at `old_human_seat`'s decisions if needed by the
+  session contract). No `ExperienceFrame`, no Pydantic, no `clone_env`.
+
+### Exact swap transition (`GameSession.swap_sides`)
+
+All fallible work runs **before** mutating the live session (disposable
+`new_policy` guarded by `ExitStack`):
+
+1. **Idempotency & precondition checks** (under the table lock, behind
+   `TableCapability.CONFIGURE_MATCH`):
+   - Duplicate `request_id` matching the recorded `(match_id, expected_revision)`
+     returns `self.current_message()` without swapping again; reusing the same
+     `request_id` with different bindings raises `ValueError`.
+   - Refuse (leaving the live game untouched) if: no active game, `watch_mode`,
+     `obs.game_over`, `mirror_retry is not None`, active Study branch on the
+     table, `match_id != self.match_id`, or `expected_revision != self.revision`.
+2. **Prepare replacement policy** for `new_bot_seat = self.human_seat`:
+   - `build_villain_policy(self.trace.config, seat=new_bot_seat)` (admits
+     against `config.to_rust()` and loads). Any failure closes the disposable
+     policy and raises `swap_unavailable: <reason>`, leaving the live game
+     untouched and accepting Commands at the same revision.
+   - If recurrent, warm up via `walk` of `record_of` up to `len(trace.events)`.
+     Otherwise `observe_policies((new_policy,), self.env, self.obs)`.
+3. **Commit the swap in place**:
+   - Remember live analysis policy/publisher if `self._live_analysis is not None`,
+     then stop `_live_analysis` and close the old `self.villain_policy`.
+   - Install `self.villain_policy = new_policy`.
+   - Flip `self.human_seat = 1 - self.human_seat`.
+   - Flip `self.deck_names = {"hero": old["villain"], "villain": old["hero"]}`.
+   - Append `len(self.trace.events)` to `self.trace.seat_swaps`.
+   - Update `self.record_players` so the human holds `self.human_seat` (with
+     that seat's deck) and the bot holds `1 - self.human_seat` (with that
+     seat's deck).
+   - Clear `self._f6_turn = None`, `self._step_boards = []`,
+     `self.published_prompt = None`, `self._pending_decision = None`.
+   - Refresh `self.presentation_events` from
+     `self.canonical_presentation[self.human_seat][-MAX_PRESENTATION_EVENTS:]`
+     and `self._last_presentation_cursor = self.presentation.next_seq`.
+   - Bump `self._advance_protocol_revision()` so any in-flight Command for the
+     old seat is rejected as stale.
+   - Record receipt `self._swap_receipts[request_id] = (match_id, expected_revision)`.
+   - Append a live log beat `{"actor": "system", "turn": current_turn, "text": "Swapped sides"}`.
+   - Persist (`self._persist_attempt(config_changed=True)`), which updates the
+     active attempt's `trace_json`, `attempt_players`, and
+     `session_games.matchup_json` atomically.
+   - Run `self._advance()` (so if the person's old seat was to act, the bot
+     immediately moves; if that bot decision times out, `mirror_retry` behaves
+     normally on the swapped game).
+   - If live analysis was on and the game is not over, restart `LiveAnalysis`
+     for the new `self.human_seat` on its background thread (never blocking the
+     swap).
+   - Return `self._wire_message(reason="explicit_resync")` (broadcast to table
+     participants so watchers and `table_snapshot.access.identity.rules_viewer`
+     stay in sync).
+
+### What follows across layers
+
+- **Engine replay (`managym/academy/recording.py` `record_of`)**:
+  Fix the pre-existing omission where `record_of` called
+  `PlayerSetup.retain(player, config.decklists)` without forwarding
+  `mana_floats` and `mana_payment` from `config.to_rust()`. With `GameConfig`
+  staying the immutable starting setup, `record_of(attempt)` reproduces every
+  game — including games with `mana_payment="auto"` or `mana_floats!="off"` —
+  with no new fields on `GameConfig`.
+- **Native mana modes**: stay with their native seats as set up at game start
+  (changing a seat's native mana mode mid-game needs a native setter +
+  `BoundaryIntervention`, excluded as its own engine Task if wanted). Browser
+  Auto-tap stays with the person.
+- **Persistence (`managym/academy/attempts.py`)**:
+  In `AttemptStore.save`, when updating an existing `status='active'` attempt
+  (only when the `UPDATE ... WHERE status='active'` affected 1 row), replace
+  `attempt_players` with the current `players` when they differ, and update
+  `session_games.matchup_json` if the attempt belongs to a session. No schema
+  migration, and **zero changes** to `record`, `summaries`, `session_results`,
+  or `session_totals`: one game = one row, counted once under the final seat
+  and decks, and a `played_from` game that also swapped stays excluded from My
+  record.
+- **Session setup (`play_session.py`)**:
+  `play_sessions.draft_json` is untouched by a mid-game swap. Game number stays
+  unchanged (`Game 1` stays `Game 1`). Next-game **Rematch** and **Swap
+  play/draw** keep their exact meaning.
+- **Recording & Review (`managym/academy/recording.py`, `trace.py`, `server.py`,
+  `academy/ui/src/lib/board/replay.ts`, `routes/replay/+page.svelte`)**:
+  - `ReplayedViews` resolves each step's seat via `human_seat_at(trace, index)`
+    and final board via `human_seat_at(trace, None)`.
+  - `Recording` includes every `ReplayDecision` where
+    `row.source == DecisionSource.CLIENT` (all of the person's decisions across
+    both seats), reads `self.tracks[viewer]` and `person_board` using
+    `human_seat_at`, and exposes `seat_swaps` (list of `{event, turn}`) plus
+    `starting_human_seat` on `/api/traces/{id}/recording`.
+  - `prepare_trace_payload` normalizes each event `i` to
+    `human_seat_at(prepared, i)` and `final_observation` to
+    `human_seat_at(prepared, None)`.
+  - Study restoration (`get_trace_decision`, `_live_decision_summaries`,
+    `restore_decision`) authorizes client-sourced decisions (`source == CLIENT`)
+    of the participant's game in whichever seat they were made.
+  - Play on from Review (`_play_recorded_prefix`): when playing on from an
+    event after a swap in a swapped game, applies the source's `seat_swaps`
+    before `upto` so the person lands in `human_seat_at(source, upto)` with the
+    bot in the other seat.
+  - Review UI (`replay.ts`, `replay/+page.svelte`): `replayLog` and
+    `stripMarks` resolve the human seat per event via `seat_swaps`, insert a
+    **Swapped sides · Turn T** system divider at each swap, show a caption in
+    notices ("Swapped sides at turn T"), and default `perspective` to `chooser`
+    when `seat_swaps` is non-empty so the bottom seat follows the person across
+    the swap (while fixed Seat 1 / Seat 2 perspectives remain selectable).
+- **Analysis & Numbers (`managym/academy/analysis.py`, `numbers.py`,
+  `server.py`)**:
+  - `recorded_steps` and `game_numbers` pass `human_seat_at(trace, index)` to
+    `step_matches`.
+  - `analysed_events(trace)` selects all deliberate human decisions
+    (`event["actor"] == "hero" and not event.get("auto")`), across both seats
+    if swapped (choice made for review; passed over: analysing only the final
+    seat after the swap).
+  - `analyse_game` loads one runner per seat piloted (still 1 for unswapped
+    games, at most 2 when swapped) and reads each decision from
+    `human_seat_at(trace, index)`.
+  - `see_line` (`agent_line`) loads the analysing policy for
+    `seat = human_seat_at(trace, request.event)` and the opponent for
+    `1 - seat`, so **See its line** works at every decision before or after a
+    swap.
+  - `LiveAnalysis` walks `recorded_steps` with `human_seat_at` and reads the
+    current seat's pending decisions.
+- **Wire protocol (`shared_table_protocol.py`, `protocol/`, `socket.svelte.ts`)**:
+  - Add `SwapSidesMessage` (`type: "swap_sides"`, `grant_revision`,
+    `request_id`, `match_id`, `expected_revision`) behind `CONFIGURE_MATCH`,
+    and update `protocol/testing-house-v1.schema.json`,
+    `protocol/fixtures/testing-house-control-v1.json`, and
+    `academy/ui/src/lib/shared-table-protocol.ts` in lockstep.
+  - On the client, `sendSwapSides()` binds `match_id`, `expected_revision`,
+    `grant_revision`, and a fresh `request_id`; `applyRecovery` on the same
+    `match_id` with higher `revision` already updates the board, deck names,
+    stops, and presentation cursor without wiping `actionLog`.
+- **Settings → Game & Game Over (`+page.svelte`, `PlaySessionStrip.svelte`)**:
+  - Group Settings → Game into **This game** (**Swap sides** button with short
+    caption, disabled when not pilot / game over / pending / Study /
+    `mirror_retry`, shows pending state and inline refusal error) and **Next
+    game** (`PlaySessionStrip` + **New game**).
+  - Rename the next-game button in `PlaySessionStrip.svelte` and Game Over
+    from **Swap sides** to **Swap play/draw** (keeping wire
+    `intent: "swap_sides"`), updating `PlaySessionStrip.svelte.test.ts`,
+    `academy/ui/e2e/play-session.spec.ts`, and `docs/academy.md`.
 
 ## Source of truth
 
-The live game's parsed `GameConfig` and its trace events. The swapped config is
-derived from that `GameConfig` directly (hero/villain decks, names, sideboards,
-import sources and pool keys exchanged; `human_seat` flipped; the two seats'
-mana modes exchanged), never re-parsed from a setup draft: a draft re-resolves
-pool decks and imports. `config.to_rust()` of the swapped config equals the
-live game's native setup; a test asserts it.
+- Live: `GameSession.human_seat`, `GameSession.trace.seat_swaps`,
+  `GameSession.trace.config` (immutable starting setup), and `GameSession.env`.
+- Persisted: `attempts.trace_json` (`config` + `seat_swaps` + `events`),
+  `attempt_players` (each player's current/final seat and deck).
 
 ## Affected surfaces
 
-- `managym/academy/trace.py`: `GameConfig` opponent-seat mana modes;
-  `PlayedFrom.swapped`; the config exchange.
-- `managym/academy/server.py`: `GameSession.swap_sides`, the generalized prefix
-  replay, live stops and auto-pass carried into the swapped game, dispatch.
-- `managym/academy/shared_table_protocol.py`: a `swap_sides_now` request bound
-  to match id and revision with a request id, behind `configure_match`.
-- `managym/academy/attempts.py`: `record`, `summaries`, session results/totals.
-- `managym/academy/analysis.py`, `recording.py`, the recording index endpoint.
-- `academy/ui`: the Settings sheet's Game group (`+page.svelte`
-  `gameSettings`), the game store, Review's header (`routes/replay`), Games.
-- Academy docs where play-on and the Settings sheet are described.
+- `managym/academy/trace.py`: `Trace.seat_swaps`, `human_seat_at`,
+  `prepare_trace_payload`.
+- `managym/academy/attempts.py`: `AttemptStore.save` updating active
+  `attempt_players` and `session_games.matchup_json`.
+- `managym/academy/recording.py`: `record_of` mana-mode fix; `ReplayedViews`
+  and `Recording` using `human_seat_at` and `DecisionSource.CLIENT`.
+- `managym/academy/analysis.py`, `numbers.py`: `human_seat_at` in
+  `recorded_steps`, `game_numbers`, `analysed_events`, `analyse_game`,
+  `agent_line`, `LiveAnalysis`.
+- `managym/academy/server.py`: `GameSession.swap_sides`, dispatch,
+  `_participant_from_resume`, `get_recording_index`, `get_trace_decision`,
+  `start_analysis`, `see_line`, `_play_recorded_prefix`.
+- `managym/academy/shared_table_protocol.py`,
+  `protocol/testing-house-v1.schema.json`,
+  `protocol/fixtures/testing-house-control-v1.json`.
+- `academy/ui`: `shared-table-protocol.ts`, `socket.svelte.ts`, `recording.ts`,
+  `board/replay.ts`, `routes/+page.svelte`, `components/PlaySessionStrip.svelte`,
+  `routes/replay/+page.svelte`, plus `PlaySessionStrip.svelte.test.ts` and
+  `e2e/play-session.spec.ts`.
+- `docs/academy.md`, `managym/academy/README.md`.
 
 Must keep working unchanged: play-on from Review and its refusals, rematch and
-next-game Swap sides, reconnect to the pending decision (the swapped game is a
-new match, delivered as a new game is), stale-Command rejection, watcher
-tables, traces written before this change.
+next-game play/draw swap, reconnect to pending decision, stale-Command
+rejection, watcher tables, traces written before this change, `testing-house-v1`
+conformance tests.
 
 ## Operational boundary
 
-- Swapping a 100-move game takes under 3 s on the development laptop (today's
-  path would take about 5.6 s). The replay skips building reply frames and
-  defers persistence to one save, as play-on's prefix defers persistence now.
-- One swap at a time per table, under the table lock; a repeated request with
-  the same id returns the swapped game instead of swapping again.
+- Non-recurrent policy swap (all real checkpoints, Search, Random, Passive)
+  takes under 100 ms (no engine replay). Recurrent test-policy warm-up walks
+  native `Env` without building frames or Pydantic models.
+- One swap at a time under the table lock; duplicate `request_id` is
+  idempotent; stale `expected_revision` is rejected.
 
 ## Exclusions
 
-- Changing a seat's native mana modes mid-game (so auto payment follows the
-  person): a native change that must be in the replay record.
-- Swapping in Watch, in a Study branch, or handing a seat to another person.
+- Changing a seat's native mana modes mid-game (requires native setter +
+  `BoundaryIntervention`; separate Task if wanted).
+- Swapping in Watch, in a Study branch, or handing a seat to another human.
 - Marking or excluding games in which both hands were seen.
-- Speeding up the Command path beyond what the replay skips.
 
 ## What goes
 
-- `scratch/probe/swap_replay.py` once pass 1's tests cover it.
-- Nothing shipped is removed. Play-on's three refusals stay for play-on.
+- `scratch/probe/swap_replay.py` (kickoff probe for the superseded replay
+  approach) once pass 1's tests are in place.
 
 ## Acceptance check at gate
 
-`uv run python -m pytest tests/academy/test_swap_sides.py -q` passes, and its
-central scenario is: start a game in seat 0 with native auto payment and
-priority stops against a fixture policy opponent, play twenty decisions, swap.
-Then: the response is a new match whose frame shows the other seat's hand and
-the same life totals; `config.to_rust()` matches the source's; the first N
-events have the source's native seats and action indices; the bot's session
-observed every step from the old seat; the game plays to `game_over`;
-`ReplayedViews` re-executes it `complete`; `AttemptStore.record` counts it once
-under the final seat's decks; Games lists it and not the source; the recording
-index reports `played_from.swapped`. Beside it: a policy refused for the other
-seat leaves the live game accepting Commands; a swap back returns the person
-to the first seat.
+`uv run python -m pytest tests/academy/test_swap_sides.py -q` passes, covering:
+1. Start a game in seat 0 with `mana_payment="auto"` and priority stops against
+   a fixture policy opponent, play several decisions (with at least one having
+   `analysis_shown=True` if tested), swap sides. Assert:
+   - Same `match_id`, `revision` incremented, response frame shows seat 1's
+     hand, swapped `deck_names`, same life totals, and `Swapped sides` log beat.
+   - `config.to_rust()` unchanged; `trace.seat_swaps == [k]`; pre-swap events
+     keep original `actor`, `bot_decision`, `committed_at`, and `analysis_shown`.
+   - If the opponent is a `recurrent=True` policy, its session observed every
+     step from seat 0 before choosing.
+   - Stale command for the old revision is rejected; duplicate `request_id`
+     returns the current frame without swapping back.
+   - Play to `game_over`: `ReplayedViews` re-executes `complete`,
+     `game_numbers` succeeds, `analyse_game` reads all deliberate human
+     decisions across both seats, `agent_line` works before and after the swap,
+     `AttemptStore.record` counts the game once under the final seat's decks,
+     Games lists exactly 1 row, and the recording index exposes `seat_swaps`.
+2. Refusal: a policy refused for the other seat leaves the live game untouched
+   and still accepting Commands at the same revision.
+3. Double swap: swapping and swapping back produces 1 attempt with two entries
+   in `seat_swaps`, re-executes `complete`, and counts under seat 0.
+4. Play-on + swap: a game started via `played_from` that then swaps sides
+   stays excluded from `AttemptStore.record`.
+5. Protocol conformance: `tests/academy/test_shared_table_protocol.py` passes.
 
-In the browser (one Playwright spec): Play → Settings → Game → Swap sides now →
-the hand changes to the other seat's, the opponent label still names the bot,
-and the next Command is accepted.
+In the browser (Playwright): Play → Settings → Game → **Swap sides** → hand
+flips to the other seat's, deck under "You" updates, opponent label still names
+the bot, live move list keeps earlier moves with a "Swapped sides" note, and
+the next Command is accepted; plus existing `play-session.spec.ts` updated for
+**Swap play/draw**.
 
 ## Passes
 
-1. **Server swap and record** — the pass that could prove the plan wrong. It
-   shows the real replay under exchanged roles holding native modes by seat, a
-   policy opponent taking the other seat with its history, refusal before
-   anything closes, the 3 s bound, and the record, Games and analysis rules.
-   Ends with the acceptance test file green.
-2. **Wire, Settings control, Review** — the request and its dispatch, the
-   button with its pending and refused states, the Review marker, the browser
-   spec, docs.
+1. **In-place server swap, record & readers** — the slice that proves the whole
+   model holds: `Trace.seat_swaps` + `human_seat_at`, `record_of` mana-mode
+   fix, active `attempt_players` update in `AttemptStore.save`,
+   `GameSession.swap_sides` (including refusal before mutation, idempotency,
+   recurrent warm-up, LiveAnalysis handoff), `ReplayedViews` / `Recording` /
+   `analysis.py` / `numbers.py` / `_play_recorded_prefix`, and
+   `tests/academy/test_swap_sides.py` green.
+2. **Protocol, Settings UI, Review & docs** — `SwapSidesMessage` + schema &
+   conformance fixtures, `sendSwapSides`, Settings → Game **This game** / **Next
+   game** split (**Swap sides** vs **Swap play/draw**), Review divider &
+   perspective default, Playwright spec, and docs.
 
 ## Done when
 
-A person mid-game presses Swap sides now and keeps playing from the other seat
-against the same bot; the finished game appears once in Games, counts in My
-record by its result, and opens in Review with the swap marked.
+A person mid-game presses **Swap sides** and immediately keeps playing the same
+game from the other seat against the same bot; the finished game appears once
+in Games, counts in My record by its result, and opens in Review with every
+decision they made and each swap marked.

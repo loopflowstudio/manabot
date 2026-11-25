@@ -2,106 +2,237 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>MTG-389 Study — concept review (built, second pass 2026-11-25)</title>
+<title>MTG-482 Academy: swap sides mid-game — concept review (2026-11-25)</title>
 <style>
-  :root { --bg:#fbfaf7; --ink:#1d1b18; --ink2:#5c574f; --rule:#d9d4ca; --yes:#2f6b3a; --no:#9a3b25; --prop:#2c5d8a; --card:#fff; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --ink:#e9e6df; --ink2:#a6a196; --rule:#3a3d42; --yes:#7fc48d; --no:#e8907a; --prop:#8cbcea; --card:#1f2226; } }
-  body { background:var(--bg); color:var(--ink); font:15px/1.55 system-ui, sans-serif; max-width:1040px; margin:2em auto; padding:0 1.2em; }
-  h1 { font:600 26px/1.2 Georgia, serif; } h2 { font:600 19px/1.3 Georgia, serif; margin-top:2.2em; border-bottom:1px solid var(--rule); padding-bottom:.2em; }
-  table { border-collapse:collapse; width:100%; margin:.6em 0; } th, td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--rule); }
-  th { font-weight:600; color:var(--ink2); font-size:13px; }
-  .yes { color:var(--yes); font-weight:600; } .no { color:var(--no); font-weight:600; }
-  code { font-size:13px; background:color-mix(in srgb, var(--ink) 8%, transparent); padding:0 3px; border-radius:3px; }
-  .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media (max-width:760px){ .cols{ grid-template-columns:1fr; } }
-  .box { background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:10px 14px; }
-  .prop { border-left:4px solid var(--prop); } .prop h3::after { content:" · proposed"; color:var(--prop); font-size:12px; font-weight:600; }
-  .exist h3::after { content:" · as built"; color:var(--ink2); font-size:12px; }
+  :root { --bg:#fbfaf7; --ink:#1d1b18; --ink2:#5c574f; --rule:#d9d4ca; --yes:#2f6b3a; --no:#9a3b25; --prop:#2c5d8a; --card:#fff; --wash:#f3efe7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --ink:#e9e6df; --ink2:#a6a196; --rule:#3a3d42; --yes:#7fc48d; --no:#e8907a; --prop:#8cbcea; --card:#1f2226; --wash:#25292f; } }
+  body { background:var(--bg); color:var(--ink); font:15px/1.55 system-ui, sans-serif; max-width:1060px; margin:2em auto; padding:0 1.2em; }
+  h1 { font:600 26px/1.2 Georgia, serif; }
+  h2 { font:600 19px/1.3 Georgia, serif; margin-top:2.2em; border-bottom:1px solid var(--rule); padding-bottom:.2em; }
   h3 { font-size:15px; margin:.2em 0 .5em; }
-  .rail { font:13px/1.4 system-ui; border:1px solid var(--rule); border-radius:4px; }
-  .rail div { padding:5px 8px; border-bottom:1px solid var(--rule); } .rail .dim { color:var(--ink2); } .rail .big { padding:18px 8px; }
-  .btn { display:inline-block; border:1px solid var(--rule); border-radius:4px; padding:1px 7px; margin:1px 2px; } .btn.off { opacity:.45; }
-  ol.q li { margin:.5em 0; } ol.q ol { list-style:lower-alpha; }
-  img { max-width:100%; border:1px solid var(--rule); border-radius:4px; }
-  .callout { border:2px solid var(--no); border-radius:6px; padding:10px 14px; }
+  table { border-collapse:collapse; width:100%; margin:.6em 0; }
+  th, td { text-align:left; vertical-align:top; padding:6px 8px; border-bottom:1px solid var(--rule); }
+  th { font-weight:600; color:var(--ink2); font-size:13px; }
+  .yes { color:var(--yes); font-weight:600; }
+  .no { color:var(--no); font-weight:600; }
+  code { font-size:13px; background:color-mix(in srgb, var(--ink) 8%, transparent); padding:0 3px; border-radius:3px; }
+  pre { font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--wash); border:1px solid var(--rule); border-radius:4px; padding:8px 10px; overflow-x:auto; margin:.5em 0; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:.8em 0; }
+  @media (max-width:780px){ .cols{ grid-template-columns:1fr; } }
+  .box { background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:12px 14px; }
+  .exist { border-left:4px solid var(--no); }
+  .exist h3::after { content:" · kickoff plan"; color:var(--no); font-size:12px; font-weight:600; }
+  .prop { border-left:4px solid var(--prop); }
+  .prop h3::after { content:" · proposed"; color:var(--prop); font-size:12px; font-weight:600; }
+  .callout { border:2px solid var(--no); border-radius:6px; padding:12px 14px; background:var(--card); }
+  .panel { border:1px solid var(--rule); border-radius:4px; font:13px/1.45 system-ui; background:var(--bg); margin:.5em 0; }
+  .panel .row { padding:6px 10px; border-bottom:1px solid var(--rule); }
+  .panel .row:last-child { border-bottom:none; }
+  .dim { color:var(--ink2); }
+  .btn { display:inline-block; border:1px solid var(--rule); border-radius:4px; padding:2px 8px; margin:2px 4px 2px 0; background:var(--card); font-size:13px; }
+  .btn.pri { border-color:var(--prop); color:var(--prop); font-weight:600; }
+  .tag { display:inline-block; font-size:11px; font-weight:600; padding:0 5px; border-radius:3px; border:1px solid var(--rule); color:var(--ink2); margin-right:4px; }
+  .tag.bad { border-color:var(--no); color:var(--no); }
+  .tag.good { border-color:var(--yes); color:var(--yes); }
+  .timeline { font:13px/1.45 system-ui; border:1px solid var(--rule); border-radius:4px; background:var(--bg); }
+  .timeline div { padding:5px 10px; border-bottom:1px solid var(--rule); }
+  .timeline div:last-child { border-bottom:none; }
+  .timeline .div { background:var(--wash); font-weight:600; color:var(--prop); text-align:center; }
+  ol.q li { margin:.6em 0; }
+  ol.q ol { list-style:lower-alpha; margin-top:.25em; }
+  ol.q ol li { margin:.25em 0; }
 </style>
 </head>
 <body>
-<h1>Study mode, as built: do the product's concepts and the code's line up?</h1>
-<p><b>Area taken:</b> the whole Study surface this Task built on top of a played game — Review of a played game (views, analysis, marks, value chart, key moments, its line, play on, both hands), Games and My record, and Show analysis while playing — reviewed against base <code>3be5a0cfb2</code> at <code>39259d0e41</code>, with the QA pass (<code>scratch/qa.html</code>) as the walk. Watch's branch boundary (MTG-423) is included only where it shares Review's board.</p>
+<h1>Swap sides mid-game: do the product's concepts and the code's line up?</h1>
+<p><b>Area taken:</b> Academy's live seat ownership and mid-game controls across the whole Play → Recording → Review → Games/My record lifecycle — who pilots which native seat (<code>GameSession.human_seat</code>, <code>GameConfig</code>, <code>Trace</code>, <code>CanonicalReplayV1</code>, <code>AttemptStore</code>, <code>ReplayedViews</code>, <code>Analysis</code>, <code>LiveAnalysis</code>, <code>PlaySession</code>) and how switching seats mid-game relates to starting the next game in the other seat — reviewed before build against kickoff plan <code>00fe4922a0</code> (stacked on MTG-389 <code>bf4a23642a</code>).</p>
 
 <h2>The interaction walked</h2>
-<p>You lose a game to the trained bot, press <b>Review this game</b>. Analysis starts by itself; the moves fill with "same / differs" marks; the Menu says "chose as the bot would: 2 of 27". At turn 21 you wonder what would have happened had you attacked. The rail offers <span class="btn">See its line</span> <span class="btn">Play on from here</span> <span class="btn">Next key moment</span> <span class="btn off">Try another line</span> and a sentence: "Trying another line needs the retained rules state and this game's participant credential." Below that: an empty Stack heading, Your choice, an Analysis list showing one row, a Moves list showing two rows, and the play-time stop settings <i>Off / Every time / Once</i>.</p>
-<p><b>Failure:</b> fifteen minutes after the game ended, the one button whose name says what you want (try another line) is disabled for a reason you cannot act on. <b>Recovery:</b> exists — <i>Play on from here</i> does exactly that, forever — but nothing tells you so.</p>
-<img src="shots/qa-marks-mixed.png" alt="Review at turn 21 with four branching buttons and a crowded rail">
+<p>You are on Turn 12 of a close <b>UR Lessons</b> (Seat 1, you) vs <b>GW Allies</b> (Seat 2, Reader) game — 85 recorded steps, you turned on <b>Show analysis</b> for turns 10–11, and it is your Main 1. You wonder whether you could win from Reader's seat. You open <b>Settings → Game</b>.</p>
+<p><b>Under the kickoff plan:</b> Settings → Game shows <i>two</i> buttons with nearly the same name side by side: <span class="btn">Swap sides</span> (which actually stops this game, keeps your deck, and deals a new game with Play/Draw flipped) and <span class="btn">Swap sides now</span> (which moves you to the opponent's seat and deck in this game). Pressing <b>Swap sides now</b> stops the live game (<code>end_reason: "swapped_sides"</code>), hides that stopped row from Games, starts a brand-new <code>match_id</code>, and spends 2–4 seconds replaying all 85 steps from Turn 1 with roles flipped. Your live move log vanishes, Live Analysis turns off, and when you finish and open Review, turns 1–12 have been rewritten backwards: Reader's 40 moves as GW Allies appear as <i>your</i> moves (<code>actor="hero"</code>), your 45 moves as UR Lessons are hidden as opponent moves, Reader's real probabilities/values from turns 1–12 are gone, your <code>analysis_shown</code> marks from turns 10–11 are erased, and every early timestamp says the second you clicked Swap.</p>
+<p><b>Failure and recovery:</b> If the opponent policy refuses admission for your old seat, the load fails <i>before</i> mutating the live game and returns <code>swap_unavailable</code> with the game untouched. If the connection drops mid-swap, retrying the same <code>request_id</code> returns the already-swapped state instead of flipping you back. If you had started the game via <b>Play on from here</b> (excluded from My record) and then swapped sides, the kickoff plan overwrites <code>played_from</code> with <code>swapped: true</code> and wrongly counts a practice branch in My record.</p>
+<p><b>Simpler interaction (proposed):</b> In Settings → Game, <b>This game</b> offers <span class="btn pri">Swap sides</span> ("Take the opponent's seat and hand now; the bot takes yours") and <b>Next game</b> offers <span class="btn">Swap play/draw</span> (keeps your deck, flips play/draw). Pressing <b>Swap sides</b> switches your seat in place on the <i>same</i> live game — instant (~5–50 ms for every real policy), keeps your move log with a <b>Swapped sides</b> divider, moves Live Analysis to your new seat if it was on, leaves one honest row in Games and My record, and lets Review show every decision you actually made before and after the swap.</p>
 
 <h2>Product concepts against code concepts</h2>
 <table>
-<tr><th>What a person knows / does</th><th>In the code</th><th></th><th>What is wrong</th></tr>
-<tr><td>A played game, which can be read again</td><td><code>record_of(attempt) → GameRecord</code>, <code>ReplayedViews</code>, <code>step_matches</code></td><td class="yes">yes</td><td>One record, the engine's own. Nothing new stored.</td></tr>
-<tr><td>My hand stays mine in Review; every move named</td><td>Replayed views for boards; stored track for narration</td><td class="yes">yes</td><td></td></tr>
-<tr><td>An <b>Analysis</b> by a policy of my decisions</td><td><code>analyses</code> + <code>analysed_decisions</code>, <code>analyse_game</code>, <code>PolicyAdmissions</code></td><td class="yes">yes</td><td>Same name, one owner, saved beside the game, never in a frame.</td></tr>
-<tr><td>Same / differs per move</td><td><code>moveMarks</code> (counts every decision of a move since 39259d0e41)</td><td class="yes">yes</td><td>Fixed in the last pass: marks now add up to the summary.</td></tr>
-<tr><td>"This game" numbers</td><td><code>GameNumbers</code>, <code>numbers_json</code>, <code>Totals</code> reducer</td><td class="yes">yes</td><td>Code says <i>numbers</i>, UI says <i>This game</i>; documented, harmless.</td></tr>
-<tr><td>Analysis shown while playing</td><td><code>LiveAnalysis</code>, <code>TraceEvent.analysis_shown</code></td><td class="yes">yes</td><td>"Shown" means sent to the pilot's socket; recorded in questions.md.</td></tr>
-<tr><td><b>Another line from this decision</b></td><td>Three mechanisms: <code>agent_line</code> (read-only play-out), <code>played_from</code> (a new recorded Play game), Study branch (<code>StudyForkProvider</code>, retained roots, 15-minute TTL, Reveal)</td><td class="no">no</td><td>One idea, three owners and four buttons at one decision. One of them is usually disabled with a reason in engine vocabulary ("retained rules state").</td></tr>
-<tr><td>Reviewing (read-only)</td><td>The shared <code>Board</code> draws Play's priority-stop track and Off / Every time / Once in Review</td><td class="no">no</td><td>A play setting with no meaning in a finished game, taking rail and board height that Moves and Analysis need. Predates this Task, but Study is what now needs the room.</td></tr>
-<tr><td>Read the moves against the analysis</td><td>Rail: Stack, Your choice, Analysis list, Moves, each a fixed box</td><td class="no">no</td><td>At 1280×800 Moves shows two rows and Analysis one; the reading the Task exists for needs two small scrolling panes.</td></tr>
-<tr><td>Show both hands</td><td>Menu checkbox; opponent cards behind the Hand plate's dialog</td><td class="yes">partly</td><td>Readable and keyboard-reachable as MTG-423 asked, but the seat still reads "Hand 6". Left as a question.</td></tr>
+<tr><th>What a person knows / does</th><th>Kickoff plan (in code)</th><th></th><th>What is wrong</th></tr>
+<tr>
+  <td><b>One game in which I changed seats mid-game</b></td>
+  <td>Kill live game (<code>end_reason="swapped_sides"</code>), hide stopped row in SQL, create new <code>match_id</code>, replay N steps through <code>played_from: {trace_id, event, swapped: true}</code></td>
+  <td class="no">no</td>
+  <td><b>Biggest mismatch.</b> One game becomes N+1 database rows (one ghost stopped game per swap). Turns 1..k are rewritten with bot moves stored as <code>actor="hero"</code>, real <code>bot_decision</code> / <code>analysis_shown</code> / <code>committed_at</code> destroyed, live move log wiped, 2–5 s wait, and a second swap forgets the first.</td>
+</tr>
+<tr>
+  <td><b>Swap sides</b> (mid-game: take opponent's seat &amp; deck now) vs. <b>next game on the draw</b> (new game: keep my deck, flip play/draw)</td>
+  <td><span class="btn">Swap sides</span> (<code>PlaySessionStrip</code>) right beside <span class="btn">Swap sides now</span> in Settings → Game</td>
+  <td class="no">no</td>
+  <td><b>One name for two opposite ideas.</b> The existing button stops the game, deals fresh, keeps your deck, and flips play/draw. Putting "Swap sides now" next to "Swap sides" hides that one trades decks mid-game and the other restarts with your own deck.</td>
+</tr>
+<tr>
+  <td><b>Play on from a finished game</b> (practice branch, left out of My record)</td>
+  <td><code>Trace.played_from</code> reused for swaps with <code>swapped: true</code>, plus an exception in <code>AttemptStore.record</code></td>
+  <td class="no">no</td>
+  <td><b>One record for two ideas.</b> Breaks on the counterexample: Play on from a finished game, then swap sides mid-game → <code>played_from</code> is overwritten with <code>swapped: true</code> and the practice branch wrongly counts in My record.</td>
+</tr>
+<tr>
+  <td><b>Native mana modes belong to each seat</b></td>
+  <td>Add two new opponent-seat mana fields to <code>GameConfig</code> so replaying with flipped <code>human_seat</code> reproduces the original <code>to_rust()</code></td>
+  <td class="no">no</td>
+  <td><b>Code concept nobody sees.</b> Only needed because the kickoff plan mutated <code>GameConfig</code> to replay from move 0. Keeping <code>GameConfig</code> as the immutable starting setup needs zero new fields. (Separately, <code>recording.py:record_of</code> currently drops mana modes when calling <code>PlayerSetup.retain</code> — a pre-existing bug to fix.)</td>
+</tr>
+<tr>
+  <td><b>The shadow player</b> (bot takes over my old seat with full history)</td>
+  <td>Build the bot at swap time; replay through full Command/frame path</td>
+  <td class="yes">partly</td>
+  <td>Building at swap time is right: all real checkpoints (<code>BaselineSession</code>, <code>AnchorSession</code>, Search, Random, Passive) are stateless across <code>observe</code> and read decision memory from <code>env.capture_decision(seat, 0)</code>, which the live <code>Env</code> already captures for both seats. Only <code>recurrent=True</code> test policies need warm-up — via lightweight <code>managym.replay.walk</code>, not full frame replay.</td>
+</tr>
+<tr>
+  <td><b>Review &amp; Analysis of a swapped game</b></td>
+  <td>Review shows rewritten moves before swap as yours; Analysis skips moves before swap</td>
+  <td class="no">no</td>
+  <td>You cannot review or analyse the decisions you actually made in the first half of your own game.</td>
+</tr>
+<tr>
+  <td><b>Games &amp; My record</b> ("however we end it is what counts")</td>
+  <td>SQL filters hiding <code>swapped_sides</code> in <code>summaries</code>, <code>session_results</code>, <code>session_totals</code>; <code>played_from.swapped</code> exception in <code>record</code></td>
+  <td class="no">no</td>
+  <td>Special-case SQL everywhere to conceal the extra attempts the replay design fabricated. With one attempt whose <code>attempt_players</code> updates on swap while active, every existing SQL query works unchanged.</td>
+</tr>
+<tr>
+  <td><b>Show analysis</b> during play</td>
+  <td>Silently turned off because a new game starts</td>
+  <td class="no">no</td>
+  <td>Turns off an explicit setting the user enabled, and drops earlier <code>analysis_shown</code> marks.</td>
+</tr>
+<tr>
+  <td><b>Refusal &amp; idempotency</b> (policy refused, stale command, double-click)</td>
+  <td>Load before closing; match/revision/request-id bound behind <code>configure_match</code></td>
+  <td class="yes">yes</td>
+  <td>Sound contract; becomes simpler in-place because bumping <code>self.revision</code> on swap automatically rejects any in-flight command for the old seat.</td>
+</tr>
 </table>
 
-<h2>The biggest mismatch: "another line" has three owners</h2>
+<h2>The biggest mismatch: fabricating a second game instead of swapping seats in the live one</h2>
 <div class="callout">
-<p>The person has one question at a decision — <i>what if this went differently?</i> — and two ways to ask it: <b>watch the policy continue</b>, or <b>continue it myself</b>. The code answers the second one twice. <i>Play on from here</i> (built this Task) works on every finished game of yours, for ever, and is recorded. <i>Try another line</i> (the pre-existing Study branch) works only while the live session still holds the root, and is ephemeral with a Reveal step. On a finished played game the two overlap completely, and the older one is the one most often disabled.</p>
+<p>The engine (<code>managym.Env</code>) and the canonical replay (<code>CanonicalReplayV1</code>) <b>already model games by native seat (0 and 1)</b>, not by fixed hero/villain:</p>
+<ul>
+  <li><code>Env(decision_memory=True)</code> already captures decision memory for <b>both</b> seats 0 and 1.</li>
+  <li><code>ReplayDecision</code> already records <code>viewer: 0 | 1</code> <i>and</i> <code>source: "client" | "policy"</code> independently.</li>
+  <li><code>CanonicalReplayV1.presentation_tracks</code> already records <b>both</b> seat 0's and seat 1's presentation tracks from step 0.</li>
+  <li><code>AttemptStore.record</code>, <code>summaries</code>, <code>session_results</code> and <code>GameNumbers</code> already aggregate by <code>attempt_players.seat</code> and native seat 0/1.</li>
+</ul>
+<p>Only the thin Academy wrapper assumed one fixed <code>config.human_seat</code> for the whole trace. Adding one optional list <code>Trace.seat_swaps: list[int]</code> (omitted when empty) and one pure helper <code>human_seat_at(trace, event_index)</code> lets the live game swap seats in place with <b>zero replay, zero ghost games, zero GameConfig mana hacks, and zero SQL special cases</b>.</p>
 </div>
-<div class="cols">
-<div class="box exist"><h3>Review at your decision</h3>
-<div class="rail">
-<div><span class="btn">See its line</span><span class="btn">Play on from here</span><br><span class="btn">Next key moment</span><br><span class="btn off">Try another line</span><br><span class="dim">Trying another line needs the retained rules state and this game's participant credential.</span></div>
-<div class="dim">Stack (empty)</div><div>Your choice …</div><div>Analysis by … (1 row visible)</div><div>Moves (2 rows visible)</div><div class="dim">Off · Every time · Once — Decisions · 27</div>
-</div></div>
-<div class="box prop"><h3>Review at your decision</h3>
-<div class="rail">
-<div><span class="btn">See its line</span><span class="btn">Play on from here</span> <span class="btn">Next key moment</span><br><span class="dim">Try another line appears only while it is available (live Study, Watch, imports); never disabled with an engine reason.</span></div>
-<div>Your choice …</div><div class="big">Analysis by … (its options, scrolls)</div><div class="big">Moves (most of the remaining height)</div>
-<div class="dim">No Stack heading when empty; no stop settings in Review</div>
-</div></div>
-</div>
-<p><b>Before:</b> four affordances, one disabled; a play setting in a read-only view; the two lists the Task is about squeezed. <b>After:</b> two verbs ("see its line", "play on") always present on your analysed decisions; Study's branch shown only where it works; Review's rail gives its height to the analysis and the moves. Nothing is deleted from Study's branch itself, its sealed evidence or its specs: <code>study.spec.ts</code> opens a just-finished game, where it is available, so it still appears.</p>
-<p><b>Counterexample tested:</b> a game watched (bot v bot) has no Play on (not a participant) — Try another line stays its only branch, unchanged. A just-finished played game within 15 minutes shows both; that is honest (an ephemeral branch with Reveal versus a recorded game), named differently, and no longer joined by a disabled button.</p>
-<p><b>Passed over:</b> removing the Study branch from played games (it carries Reveal and Compare plans, which Play on lacks, and has its own specs); merging Play on into Study (Study's roots expire; Play on's record does not).</p>
 
-<h2>Second pass, after the rail pass (2026-11-25, at <code>ef4cbf4447</code>)</h2>
-<p>The three "no" rows above are built: <i>Try another line</i> appears only with <code>can_study</code>; a recording draws no stop toggles, no empty Stack and no disabled answer buttons; Moves take the remaining height and the choices list at most 26%, one line per option. <code>Board</code> now takes an explicit <code>readOnly</code> (set by Replay everywhere but a live Study branch), so <i>See its line</i> keeps Review's layout: one owner for "this board is a recording", where before it was inferred from whether moves jump.</p>
-<div class="box exist"><h3>Review at a nine-option decision</h3><img src="shots/qa-rail-9-options-light.png" alt="Review rail at a Learn decision: See its line, Play on from here, Try another line; Stack with Pop Quiz; Analysis list with four of nine one-line options; Moves with six rows."></div>
+<pre>def human_seat_at(trace: Mapping[str, Any], event_index: int | None = None) -&gt; int:
+    """Native seat the human piloted at event_index (or at game end when None)."""
+    seat = int(trace["config"].get("human_seat", 0))
+    swaps = trace.get("seat_swaps") or ()
+    flips = len(swaps) if event_index is None else bisect_right(swaps, event_index)
+    return seat ^ (flips &amp; 1)</pre>
+
+<h3>Before vs. after: Settings → Game</h3>
+<div class="cols">
+<div class="box exist">
+  <h3>Settings → Game</h3>
+  <div class="panel">
+    <div class="row"><span class="btn">New game</span> <span class="btn pri">Swap sides now</span></div>
+    <div class="row">Game 1 · Play first · Fresh deal · <u>Session history</u><br>
+      <span class="btn">Rematch</span> <span class="btn">Swap sides</span> <span class="btn">Edit next game</span> <span class="btn">Change opponent</span>
+    </div>
+    <div class="row dim"><span class="tag bad">confusion</span> Two "Swap sides" buttons in the same sheet; one trades seats &amp; decks mid-game, the other stops the game and keeps your deck.</div>
+  </div>
+</div>
+<div class="box prop">
+  <h3>Settings → Game</h3>
+  <div class="panel">
+    <div class="row"><b>This game</b><br>
+      <span class="btn pri">Swap sides</span> <span class="dim">Take the opponent's seat and hand now; the bot takes yours.</span>
+    </div>
+    <div class="row"><b>Next game</b> · Game 1 · Play first · Fresh deal · <u>Session history</u><br>
+      <span class="btn">Rematch</span> <span class="btn">Swap play/draw</span> <span class="btn">Edit next game</span> <span class="btn">Change opponent</span> <span class="btn">New game</span>
+    </div>
+    <div class="row dim"><span class="tag good">clear</span> Mid-game swap vs. next-game play/draw reversal are visually separated and named for what they actually do. Wire <code>intent: "swap_sides"</code> stays unchanged.</div>
+  </div>
+</div>
+</div>
+
+<h3>Before vs. after: Record &amp; Review of a game swapped on Turn 12</h3>
+<div class="cols">
+<div class="box exist">
+  <h3>Two attempts, rewritten history</h3>
+  <div class="timeline">
+    <div><span class="tag bad">hidden row</span> Attempt #1: <code>status="stopped"</code>, <code>ending_reason="swapped_sides"</code> (40 moves, hidden by SQL filter)</div>
+    <div><span class="tag bad">rewritten</span> Attempt #2, Turns 1–12: Reader's GW Allies moves stored as <code>actor="hero"</code>; your UR Lessons moves hidden; <code>bot_decision</code>, <code>analysis_shown</code>, timestamps lost; Analysis skips these turns</div>
+    <div class="div">Played on · Swapped sides at turn 12 (<code>played_from.swapped</code>)</div>
+    <div>Attempt #2, Turns 12–16: your moves as GW Allies (the only part analysed)</div>
+  </div>
+  <p class="dim" style="margin:.5em 0 0;font-size:13px">Swap back on turn 14 → Attempt #3, two hidden stopped rows, turn-12 swap forgotten. Wait: ~2–5 s per swap.</p>
+</div>
+<div class="box prop">
+  <h3>One attempt, truthful history</h3>
+  <div class="timeline">
+    <div><span class="tag good">one row</span> Attempt #1, Turns 1–12 (<code>human_seat_at = 0</code>): your real UR Lessons decisions, offers, timestamps, <code>analysis_shown</code>; Reader's real <code>bot_decision</code> on Seat 2; all analysed</div>
+    <div class="div">Swapped sides · Turn 12 (<code>seat_swaps: [85]</code>)</div>
+    <div>Attempt #1, Turns 12–16 (<code>human_seat_at = 1</code>): your real GW Allies decisions; Reader's real <code>bot_decision</code> on Seat 1; all analysed</div>
+    <div><span class="tag good">record</span> <code>attempt_players</code> updated in place while active → Games shows 1 row (final seats); My record counts once by final seat &amp; decks</div>
+  </div>
+  <p class="dim" style="margin:.5em 0 0;font-size:13px">Swap back on turn 14 → <code>seat_swaps: [85, 102]</code>, still 1 row, both dividers shown. Swap time: ~5–50 ms.</p>
+</div>
+</div>
+
+<h2>Counterexamples tested</h2>
 <table>
-<tr><th>What a person knows / does</th><th>In the code</th><th></th><th>Note</th></tr>
-<tr><td>Another line from this decision</td><td><code>agent_line</code> (watch it), <code>played_from</code> (play it, recorded), Study branch only while retained</td><td class="yes">yes</td><td>Two verbs always, a third only where it works and means something else (ephemeral, with Reveal).</td></tr>
-<tr><td>Reviewing is read-only</td><td><code>Board readOnly</code></td><td class="yes">yes</td><td>One flag instead of an inference from <code>onjump</code>.</td></tr>
-<tr><td>Read the moves against the analysis</td><td>Rail: Moves fill, choices ≤ 26%</td><td class="yes">yes</td><td>Nine moves without a Stack; six with one, four of nine options visible.</td></tr>
-<tr><td>"I had analysis by <i>X</i> on when I chose this"</td><td><code>TraceEvent.analysis_shown: bool</code></td><td class="no">partly</td><td>Which policy was shown is a fact no re-execution recovers, and the event keeps only that one was. If you showed a policy other than the opponent, Review's default analysis (the opponent's) marks the same move with a different policy's reading, and nothing says which you saw. Adding an optional policy id later is additive (absent on older events), so it is left as question 6, not built now.</td></tr>
+<tr><th>Scenario</th><th>Kickoff plan</th><th>Proposed (in-place + <code>seat_swaps</code>)</th></tr>
+<tr><td><b>Play on from a finished game, then swap sides mid-game</b></td><td class="no">Fails: <code>played_from</code> overwritten with <code>swapped: true</code> → practice game wrongly counts in My record.</td><td class="yes">Holds: <code>played_from</code> is untouched and <code>seat_swaps</code> is recorded alongside it → still excluded from My record.</td></tr>
+<tr><td><b>Swap twice (swap on turn 5, swap back on turn 9)</b></td><td class="no">Fails: 3 DB rows (2 hidden stopped rows); <code>played_from</code> only remembers turn 9 and forgets turn 5.</td><td class="yes">Holds: 1 DB row with <code>seat_swaps: [k1, k2]</code>; <code>human_seat_at</code> flips cleanly at both indices.</td></tr>
+<tr><td><b>Bot fails / times out on its first move after swap</b></td><td class="yes">Sets <code>mirror_retry</code> on the new game (after old game was already closed).</td><td class="yes">Holds: swap committed (seat flipped, revision bumped), <code>_advance()</code> sets <code>mirror_retry</code> on the same game, Retry search works normally.</td></tr>
+<tr><td><b>Policy refuses admission for the other seat</b></td><td class="yes">Loads before closing; live game untouched.</td><td class="yes">Holds: load, admit, and (if recurrent) walk warm-up run before mutating <code>GameSession</code>; live game untouched.</td></tr>
+<tr><td><b>Duplicate request on reconnect / double-click</b></td><td class="yes">Idempotent via continuation receipt.</td><td class="yes">Holds: <code>request_id</code> receipt returns current frame without swapping again; a second request with old <code>expected_revision</code> is rejected as stale because swap bumps <code>self.revision</code>.</td></tr>
+<tr><td><b>Recurrent policy fixture (<code>recurrent=True</code>)</b></td><td class="yes">Warmed up during full Command replay (~3 s).</td><td class="yes">Holds: warmed up before mutating via lightweight <code>managym.replay.walk</code> + <code>observe_policies</code> (~100 ms, no frames/Pydantic).</td></tr>
+<tr><td><b>Game with <code>mana_payment="auto"</code> re-executed in Review / Numbers</b></td><td class="no">Needs two new opponent-seat mana fields on <code>GameConfig</code>; <code>record_of</code> still drops mana modes.</td><td class="yes">Holds: <code>GameConfig</code> stays immutable starting setup; fixing <code>record_of</code> to pass <code>mana_floats</code>/<code>mana_payment</code> to <code>PlayerSetup.retain</code> makes all walks exact.</td></tr>
+<tr><td><b>Live Analysis on when swapping</b></td><td class="no">Silently turned off; pre-swap <code>analysis_shown</code> erased.</td><td class="yes">Holds: old marks kept; <code>LiveAnalysis</code> restarts on its background thread for the new seat without blocking the swap.</td></tr>
+<tr><td><b>Play on from Review of a swapped game (before or after the swap)</b></td><td class="no">Before swap: you replay from the <i>bot's</i> decision, not yours.</td><td class="yes">Holds: before swap replays in starting seat; after swap applies <code>seat_swaps</code> during prefix and lands in your post-swap seat.</td></tr>
 </table>
-<p><b>Outcome of this pass: nothing to change before gate.</b> The concepts line up; the remaining mismatch is small and additive.</p>
 
 <h2>Larger than this work</h2>
 <ul>
-<li>A Study branch rooted in a re-executed position (no TTL) would let <i>Try another line</i> work on every game and retire the disabled state everywhere; it needs a <code>StudyForkProvider</code> over a walk and Reveal evidence from an analysis. Its own Task.</li>
-<li>Readability with a strong current-world checkpoint is untested: every proof used near-uniform policies, so the chart has always been flat.</li>
+  <li><b>Moving native <code>mana_payment</code> / <code>mana_floats</code> with the human on swap:</b> requires a native setter on <code>managym.Env</code> plus a new <code>BoundaryIntervention</code> in <code>managym/recording.py</code> so replays reproduce mid-game mode changes. Separate engine Task if wanted; browser Auto-tap already follows the human.</li>
+  <li><b>Swapping in Watch, in an open Study branch, or handing a seat to another human participant:</b> out of scope; swap stays pilot-only in live Play.</li>
 </ul>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>At a decision of your finished game, should <i>Try another line</i>
-  <ol><li>appear only while available (chosen, built next);</li><li>stay visible but disabled, as now;</li><li>be removed from played games, leaving Play on.</li></ol></li>
-<li>Review's play-time stop settings and the empty Stack heading
-  <ol><li>are not drawn in Review (chosen);</li><li>stay, as Board draws them everywhere.</li></ol></li>
-<li>The Review rail's height
-  <ol><li>goes mostly to Moves and the Analysis list (chosen);</li><li>stays split as now, with the Analysis list folded behind a disclosure;</li><li>moves the analysis list into the board's offers only (probabilities are already on cards and rows).</li></ol></li>
-<li>Show both hands
-  <ol><li>keeps the opponent's cards behind the Hand plate's dialog (as built);</li><li>turns them face up in the top seat.</li></ol></li>
-<li>"This game" and the analysis selector live in the Review Menu beside recording tools and feedback
-  <ol><li>keep (an expandable place, per "probably needs to be expandable");</li><li>give Study its own disclosure in the rail.</li></ol></li>
-<li>A decision made with analysis shown records
-  <ol><li>only that analysis was shown (as built);</li><li>also which policy was shown, so Review can say "shown: <i>X</i>" and default to that analysis.</li></ol></li>
+  <li><b>Swap model:</b> how should a mid-game swap be represented?
+    <ol>
+      <li>Swap seats in place on the live game, recording <code>Trace.seat_swaps: list[int]</code> and updating <code>attempt_players</code> while active (<b>chosen</b> — instant, one record, truthful history, zero SQL filters).</li>
+      <li>End the live game (<code>swapped_sides</code>) and start a new replayed game via <code>played_from.swapped</code> (kickoff plan).</li>
+    </ol>
+  </li>
+  <li><b>Button labels in Settings → Game and Game Over:</b>
+    <ol>
+      <li>Mid-game button is <b>Swap sides</b> (under <i>This game</i>); rename the existing next-game play/draw button to <b>Swap play/draw</b>, keeping wire <code>intent: "swap_sides"</code> unchanged (<b>chosen</b>).</li>
+      <li>Keep the existing next-game button as <b>Swap sides</b> and label the mid-game button <b>Swap sides now</b> (or <b>Take opponent's seat</b>).</li>
+    </ol>
+  </li>
+  <li><b>Post-game Analysis of a swapped game:</b>
+    <ol>
+      <li>Analyse every deliberate decision you made in the game, each from the seat you piloted at that step (<b>chosen</b> — uses two runners only when a game swapped).</li>
+      <li>Analyse only your final seat from the last swap onward (one runner; leaves earlier turns unanalysed).</li>
+    </ol>
+  </li>
+  <li><b>Live Analysis when you swap while Show analysis is on:</b>
+    <ol>
+      <li>Keep it on and restart <code>LiveAnalysis</code> for your new seat on its background thread (<b>chosen</b>).</li>
+      <li>Turn Show analysis off on swap and let the person turn it back on if wanted.</li>
+    </ol>
+  </li>
+  <li><b>Native mana payment / float modes on swap:</b>
+    <ol>
+      <li>Keep each native seat's modes as configured at game start; browser Auto-tap stays with the person (<b>chosen</b>).</li>
+      <li>Add a native mid-game mana-mode intervention so native auto payment follows the person (separate engine Task).</li>
+    </ol>
+  </li>
 </ol>
 </body>
 </html>

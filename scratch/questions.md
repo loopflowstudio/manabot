@@ -247,25 +247,43 @@ Second concept review (2026-11-25, headless):
 
 # Assumptions and open items — MTG-482 (swap sides mid-game)
 
-Kickoff, 2026-11-25 (headless). Choices made for review; the plan is
-`scratch/plan.md`.
+Concept review, 2026-11-25 (headless; `scratch/concept-review.html`). The
+kickoff plan's "new replayed game via `played_from.swapped`" was replaced by
+swapping seats in place on the live game (`scratch/plan.md`). Choices made for
+review:
 
-1. A swap starts a new recorded game replayed from the live one with the seats
-   exchanged; the live game ends `swapped_sides`. Passed over: one game with a
-   seat change written into it (instant, but every reader of a record assumes
-   one human seat).
-2. The shadow player is built at the swap by showing the bot the whole game
-   from the person's old seat. Passed over: a second policy kept running in
-   every game.
-3. Games and session tallies leave out the game that ended by swapping.
-   Passed over: listing it as a stopped game.
-4. Native mana modes stay with their seats, so a person who set up auto
-   payment plays the other seat with manual payment. Passed over: changing
-   modes mid-game (a native change; its own Task if wanted).
-5. A swapped game counts in My record by its result; a game played on from a
-   finished one is still left out.
-6. Analysis of "your decisions" in a swapped game starts at the swap.
-7. The control reads **Swap sides now**, one press, no confirmation.
-
-Not answered: whether a swap should take 1–3 s. The measured cost is about
-56 ms per replayed move.
+1. **One live game swapping seats in place (`Trace.seat_swaps: list[int]`)**,
+   updating `attempt_players` while active and resolving each step's seat via
+   `human_seat_at(trace, i)`. Instant (~5–50 ms for all real policies), one
+   record, preserves live move log / Study roots / `bot_decision` /
+   `analysis_shown` / timestamps, handles multiple swaps and Play-on + swap,
+   and needs no `GameConfig` mana hacks or SQL hiding filters. Passed over: the
+   kickoff plan's second replayed game (`end_reason: "swapped_sides"` +
+   `played_from.swapped`).
+2. **Button naming**: mid-game button is **Swap sides** (under *This game* in
+   Settings → Game); rename the existing next-game play/draw button in
+   `PlaySessionStrip` and Game Over from **Swap sides** to **Swap play/draw**
+   (keeping wire `intent: "swap_sides"` unchanged). Passed over: putting **Swap
+   sides now** beside **Swap sides** when they do opposite things (trading
+   seats & decks mid-game vs. stopping the game, keeping your deck, and
+   flipping play/draw).
+3. **The shadow player is built at the swap**, before mutating the live game:
+   real policies are stateless across `observe` and read decision memory from
+   `env.capture_decision(seat, 0)` (already captured for both seats); only
+   `recurrent=True` policies warm up via lightweight `managym.replay.walk`.
+   Passed over: keeping a second policy running in your seat in every game.
+4. **Post-game Analysis reads all of your deliberate decisions**, before and
+   after each swap (loading one runner per seat you piloted, at most two).
+   Passed over: analysing only your final seat after the last swap.
+5. **Live Analysis stays on across a swap**: stops the old seat's worker and
+   restarts `LiveAnalysis` for the new seat on its background thread; pre-swap
+   `analysis_shown` marks stay intact. Passed over: turning Show analysis off
+   on swap.
+6. **Native mana modes stay with their native seats** as started (browser
+   Auto-tap stays with the person). Passed over: adding a native mid-game
+   mana-mode intervention (separate engine Task if wanted).
+7. **A swapped game counts in My record by its ending** (final seat and decks),
+   while a game started via **Play on from here** stays left out even if
+   swapped mid-game.
+8. **One press, no confirmation** for **Swap sides** (it is immediately
+   reversible by swapping back).
