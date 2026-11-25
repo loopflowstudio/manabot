@@ -6,11 +6,9 @@ replacement_events, combat_constraints) are `definition pending` at base
 shared primitive it needs here. Oracle text is Scryfall's; set files are the first
 printing (Scryfall `order=released`, promos included, as `pm15.rs` does).
 
-Sync with main as soon as #593 (MTG-420) merges (auto-merge is on; still open and
-`BLOCKED` at 2026-11-25T02:23Z). It adds `CreatureTypes::All` /
-`Characteristics::has_all_creature_types`, which slice 4's changeling builds on, and
-it touches `ZoneEntry`, LKI and layers. Slices 2–3 don't need it; before slice 4,
-`gh pr view 593 --json state` and `lf sync main` once merged.
+#593 (MTG-420) merged as `45ddf3bca7` and is synced here (`b3485ac26c`): it supplies
+`CreatureTypes::All` / `Characteristics::has_all_creature_types` (`flow/statics.rs`),
+which slice 4's changeling builds on.
 
 Overlap with MTG-431 (stack copies, choices, costs; no plan at its checkout yet):
 Three Tree Mascot needs changeling (slice 4) and Dragon Mage needs a simultaneous
@@ -93,56 +91,26 @@ Offering through CR 613.1b layer-2 control. Directed Rust checks, pilot replays,
 checks and Academy replays passed; the full debug nextest suite is deferred to gate.
 Player hexproof target tests come with Crystal Barricade (slice 3).
 
-**2 · Implemented.** Joraga Invocation and Vampire Soulcaller use native block
-offers that maximize the number of satisfied requirements over the entire
-declaration. Mixed flying/reach, overlapping lure, and competing attackers have
-directed fixtures. The matching oracle also compares against enumeration on all
-two-attacker, three-blocker edge sets with menace, blocker limits and fixed prefixes.
+**2 · Built** (`6b9f01345d`, review order `df49092f43`): Joraga Invocation and Vampire
+Soulcaller; native block offers maximize satisfied requirements over the whole
+declaration (4,096-case matching oracle against enumeration).
 
-**3 · Implemented.** The Knights, Elenda and Sphinx use source characteristics
-on announcement and resolution, including last known information. Progenitus
-has protection across damage, attachments, blocks and targets. Crystal Barricade
-grants player hexproof. Progenitus still needs its graveyard replacement in
-slice 5 and Barricade its noncombat prevention in slice 8.
+**3 · Built** (same commits): the Knights, Elenda, Sphinx, Progenitus' protection and
+Crystal Barricade's player hexproof, via source characteristics (with LKI) on
+announcement and resolution. Progenitus still needs slice 5's graveyard
+replacement; Barricade slice 8's noncombat prevention.
 
-**What the combat cases changed.** Checking menace after an ordinary matching
-can reject a legal tied or lower-scoring completion. The solver instead reserves
-a partner for any committed singleton and branches when a relaxed optimum
-leaves an undecided menace attacker with just one blocker. The two branches
-are leaving it unblocked and requiring a pair. Ordinary Joraga and lure boards
-use weighted bipartite matching. Worst-case work with multiple ambiguous menace
-attackers grows exponentially in their number.
+Pass 2's directed, pinned-pilot, LLM, Academy (192 Commands) and schema checks
+passed on the rebuilt extension; the full debug nextest suite and Engine Budget
+reference are deferred to gate.
 
-**Attachment investigation.** Seven release runs on the slice 1 binary measured
-the same priority checkpoint at 52 and 100 permanents. Cold characteristics
-medians were 51.25 and 93.67 µs, with one board rebuild and zero source plans at
-both sizes. Action medians were 31.62 and 65.42 µs, with zero board rebuilds.
-The original 296.4 µs sample did not recur.
-
-Seven runs on the new binary gave cold-characteristics medians of 48.83
-and 101.75 µs and action medians of 39.96 and 96.50 µs. The sample ranges
-overlapped the earlier ranges at both sizes. These observations do not isolate
-a cause for the original spike.
-
-**Pass 2 release measurements.** In `bench_states joraga-blocks`, the 8-on-8
-and 16-on-16 positions exposed six and fourteen block choices along the sampled
-line; the engine completed the forced answers. Enumeration took 9.79–25.00 µs
-and 12.92–67.04 µs per decision, respectively. Whole block steps took
-66.42–230.71 µs and 67.50–146.00 µs. The `quality-targets` recipe enumerated
-10–17 targets per spell for eight spells against sixteen creatures in
-1.67–2.12 µs per spell. These are ranges of per-checkpoint three-sample medians
-on a shared machine.
-
-**Pass 2 checks.** Directed card fixtures, the 4,096-case matching oracle, native
-target authority, menace, combat previews, subtype admission, static/effect
-tokens, both viewers’ policy rows, Scryfall conformance and native protocol
-schemas passed. On the rebuilt CPython 3.13 extension the v9 and v11 pinned
-games replayed, all LLM field checks passed, and a real board with the Knight,
-Progenitus and Barricade rendered their effective abilities in text and Academy.
-The optional frontier checkpoint was unavailable. Academy replayed all 192
-retained Commands and refreshed five navigation positions. Python schema parity
-and the Svelte type check passed. Gate owns the full debug suite and Engine
-Budget reference.
+**Finding that shapes combat code.** Checking menace after an ordinary matching can
+reject a legal tied or lower-scoring completion. The solver reserves a partner for a
+committed singleton and branches (unblocked / paired) when a relaxed optimum leaves an
+undecided menace attacker with one blocker; work grows exponentially in the number of
+ambiguous menace attackers. Release `bench_states joraga-blocks`: 9.79–67.04 µs per
+decision at 8-on-8 and 16-on-16. The slice-1 attachments spike (296.4 µs at 100
+permanents) did not recur in fourteen runs (medians 94–102 µs); no cause isolated.
 
 ### 4 · Changeling and counted static P/T, with the composing cards (Taurean Mauler, Tempest Djinn, Blanchwood Armor, Dreadwing Scavenger, Dwynen, Garruk's Uprising, Crossway Troublemakers, New Horizons)
 
@@ -353,9 +321,9 @@ except `EntersAsCopy`.
 
 ## Passes
 
-Passes 1 and 2 built slices 1–3. Three passes remain.
+Passes 1 and 2 built slices 1–3. Three passes remain; Pass 3 is next and unblocked.
 
-- **Pass 3 · characteristics and graveyard routes:** slices 4 and 5, after #593.
+- **Pass 3 · characteristics and graveyard routes:** slices 4 and 5.
 - **Pass 4 · proposed-event replacements:** slices 6, 7 and 8.
 - **Pass 5 · integration:** the cross-slice synergies below, ledger rows, Engine
   Budget reference.
