@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>MTG-482 Academy: swap sides mid-game — post-build concept review (2026-11-25)</title>
+<title>MTG-482 Academy: swap sides mid-game — concept review of HEAD (2026-11-25)</title>
 <style>
   :root { --bg:#fbfaf7; --ink:#1d1b18; --ink2:#5c574f; --rule:#d9d4ca; --yes:#2f6b3a; --no:#9a3b25; --warn:#8a6116; --prop:#2c5d8a; --card:#fff; --wash:#f3efe7; }
   @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --ink:#e9e6df; --ink2:#a6a196; --rule:#3a3d42; --yes:#7fc48d; --no:#e8907a; --warn:#e3b963; --prop:#8cbcea; --card:#1f2226; --wash:#25292f; } }
@@ -15,17 +15,16 @@
   th { font-weight:600; color:var(--ink2); font-size:13px; }
   .yes { color:var(--yes); font-weight:600; }
   .no { color:var(--no); font-weight:600; }
-  .partly { color:var(--warn); font-weight:600; }
   code { font-size:13px; background:color-mix(in srgb, var(--ink) 8%, transparent); padding:0 3px; border-radius:3px; }
   pre { font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background:var(--wash); border:1px solid var(--rule); border-radius:4px; padding:8px 10px; overflow-x:auto; margin:.5em 0; }
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:.8em 0; }
   @media (max-width:780px){ .cols{ grid-template-columns:1fr; } }
   .box { background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:12px 14px; }
-  .exist { border-left:4px solid var(--no); }
-  .exist h3::after { content:" · built (HEAD)"; color:var(--no); font-size:12px; font-weight:600; }
-  .prop { border-left:4px solid var(--prop); }
-  .prop h3::after { content:" · proposed"; color:var(--prop); font-size:12px; font-weight:600; }
-  .callout { border:2px solid var(--no); border-radius:6px; padding:12px 14px; background:var(--card); }
+  .before { border-left:4px solid var(--no); }
+  .before h3::after { content:" · before Pass 3"; color:var(--no); font-size:12px; font-weight:600; }
+  .built { border-left:4px solid var(--yes); }
+  .built h3::after { content:" · existing (HEAD)"; color:var(--yes); font-size:12px; font-weight:600; }
+  .callout { border:2px solid var(--yes); border-radius:6px; padding:12px 14px; background:var(--card); }
   .mock { border:1px solid var(--rule); border-radius:4px; font:13px/1.45 system-ui; background:var(--bg); margin:.5em 0; }
   .mock .bar { padding:6px 10px; border-bottom:1px solid var(--rule); background:var(--wash); display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
   .mock .grid { display:grid; grid-template-columns:1fr 1.05fr; }
@@ -38,7 +37,6 @@
   .tag { display:inline-block; font-size:11px; font-weight:600; padding:0 5px; border-radius:3px; border:1px solid var(--rule); color:var(--ink2); margin-right:4px; }
   .tag.bad { border-color:var(--no); color:var(--no); }
   .tag.good { border-color:var(--yes); color:var(--yes); }
-  .tag.prop { border-color:var(--prop); color:var(--prop); }
   .step-flow { font:13px/1.5 system-ui; border:1px solid var(--rule); border-radius:4px; background:var(--bg); }
   .step-flow div { padding:6px 10px; border-bottom:1px solid var(--rule); }
   .step-flow div:last-child { border-bottom:none; }
@@ -48,100 +46,88 @@
 </style>
 </head>
 <body>
-<h1>Swap sides mid-game (built): do the product's concepts and the code's line up?</h1>
-<p><b>Area taken:</b> Academy's seat ownership, mid-game swap, and post-game attribution across the whole Play → Recording → Review → Analysis → Games/My record lifecycle (<code>GameSession</code>, <code>Trace</code>, <code>AttemptStore</code>, <code>Recording</code>, <code>ReplayedViews</code>, <code>analysis.py</code>, <code>replay_index.py</code>, <code>server.py</code>, <code>+page.svelte</code>, <code>replay/+page.svelte</code>, <code>numbers.ts</code>, <code>PlaySessionStrip.svelte</code>) — post-build review of <code>HEAD</code> (<code>b41819eede</code>) against base <code>eb83d575be</code>.</p>
+<h1>Swap sides mid-game (HEAD): do the product's concepts and the code's line up?</h1>
+<p><b>Area taken:</b> Academy's seat ownership, mid-game swap, and post-game attribution across the whole Play → Live Analysis → Recording → Review → Analysis → Study → Play on → Games/My record lifecycle (<code>GameSession</code>, <code>Trace</code>, <code>AttemptStore</code>, <code>Recording</code>, <code>ReplayedViews</code>, <code>analysis.py</code>, <code>replay_index.py</code>, <code>server.py</code>, <code>shared_table_protocol.py</code>, <code>+page.svelte</code>, <code>replay/+page.svelte</code>, <code>socket.svelte.ts</code>, <code>replay.ts</code>, <code>numbers.ts</code>, <code>Plate.svelte</code>, <code>Strip.svelte</code>, <code>PlaySessionStrip.svelte</code>) — full post-build review of <code>HEAD</code> (<code>020897f162</code>) against base <code>63bdfc0356</code>.</p>
 
-<p><b>Summary verdict:</b> The core data model (in-place seat flip on one live game, <code>Trace.seat_swaps</code>, <code>human_seat_at</code>, Settings <b>This game</b> / <b>Next game</b> split, and one attempt in Games/My record) holds up cleanly. Three leftover "one fixed seat == one fixed pilot" and "blocking swap" assumptions survived the build and break the experience and authority contract in concrete ways — worth one focused cleanup pass before gate.</p>
+<div class="callout">
+<p><b>Verdict: nothing to change.</b> The in-place swap model and every surface it touches now line up cleanly. Pass 3 (<code>fe642ed643</code>), compress (<code>c6a327a5d2</code>), and QA (<code>020897f162</code>) resolved all four mismatches from the first post-build review: Review cleanly separates permanent native seat from position-dependent pilot; Play's <code>GET /api/traces/{id}/decisions</code> matches the single <code>DecisionSource.CLIENT</code> authority across seats; <code>GameSession.swap_sides</code> commits and publishes the flipped board immediately before <code>_advance()</code> while preserving live analysis; and closed-decklist redaction agrees across endpoints. No unresolved model mismatch or irreversible product choice blocks gate.</p>
+</div>
 
-<h2>The interaction walked (on HEAD)</h2>
-<p>You start a Play game in <b>Seat 1 (on the play, UR Lessons)</b> against a trained checkpoint <b>Reader</b> in <b>Seat 2 (GW Allies)</b>. You play 10 turns, open <b>Settings → Game → This game</b>, and press <b>Swap sides</b>. You finish the game in Seat 2 (GW Allies) and open <b>Review</b>.</p>
+<h2>The interaction walked end-to-end (existing on HEAD)</h2>
+<p>You start a Play game in <b>Seat 1 (on the play, UR Lessons)</b> against a trained checkpoint <b>Reader</b> in <b>Seat 2 (GW Allies)</b>, turn on <b>Show analysis</b>, play 10 turns, open <b>Settings → Game → This game</b>, and press <b>Swap sides</b>. You finish the game in Seat 2 (GW Allies) and open <b>Review</b>.</p>
 <ol>
-  <li><b>During the swap:</b> Because <code>GameSession.swap_sides</code> builds the replacement policy <i>and</i> runs <code>self._advance()</code> synchronously before answering (never calling the <code>committed</code> callback that <code>hero_command</code> already uses), the Settings sheet stays frozen open on <b>Swapping sides…</b> for 3–9 seconds on a checkpoint (QA measured 5.6 s = 1.2 s load + 4.3 s first bot move; up to 30 s against Search). Only after the bot's whole turn completes does the board flip.</li>
-  <li><b>Opening Review at Turn 1 (before the swap):</b> <code>attempt_players</code> records final seats (<code>seat 0 = Reader · UR Lessons</code>, <code>seat 1 = You · GW Allies</code>). Review defaults to <b>Follow the chooser</b>, so Seat 1 (UR Lessons, your opening hand!) is at the bottom. Because <code>replay/+page.svelte</code> still looks up player names from <code>index.players</code> by seat instead of resolving who piloted that seat at Turn 1:
-    <ul>
-      <li>Your bottom plate (over your own hand) says <b>Reader · UR Lessons</b>; the top plate says <b>You · GW Allies</b>; the top bar says <b>Reader · UR Lessons vs You · GW Allies</b>.</li>
-      <li>The rail heading says <b>Reader's choice</b> right above <b>Analysis by Reader — ✓Keep hand (you)</b>, <b>Moves: 0 You Keep hand</b>, and <b>Play on from here</b>.</li>
-      <li><code>identity(seat)</code> hardcodes <code>seat === 1</code> for <code>index.opponent</code> producer/provenance — so when Reader finished in Seat 1, <b>You</b> (Seat 2) inherit Reader's checkpoint provenance.</li>
-      <li><b>This game</b> in Menu says <b>On the draw</b> (final seat only), heads full-game seat-total columns <b>You</b> / <b>Reader</b> even though both piloted each seat, and <code>estimateArc</code> reports one continuous <code>start · peak · end</code> straight across the swap (mixing Seat 0's expected score with Seat 1's complement, contradicting <code>Strip.svelte</code> and <code>keyMoments</code>).</li>
-    </ul>
-  </li>
-  <li><b>Failure / authority check on <code>GET /api/traces/{id}/decisions</code>:</b> Calling the replay decisions endpoint on this swapped game calls <code>project_replay(replay, human_seat_at(trace))</code> (<code>server.py:5257</code>), which filters by <code>row.viewer == 1</code>. It <b>drops</b> all 10 turns of your Seat 0 decisions and <b>leaks</b> all 10 turns of Reader's pre-swap Seat 1 <code>DecisionSource.POLICY</code> decisions (private hand + legal offers) — whose addresses then 404 on <code>GET /api/traces/{id}/decisions/{address}</code> because that route properly enforces <code>DecisionSource.CLIENT</code>.</li>
+  <li><b>Live swap &amp; immediate flip:</b> <code>GameSession.swap_sides</code> prepares and admits the replacement policy for Seat 1 (<code>_build_swap_policy</code>, warming recurrent policies via <code>managym.replay.walk</code>) before mutating anything. On commit, it flips <code>human_seat</code> in place, appends <code>len(events)</code> to <code>Trace.seat_swaps</code>, updates active <code>attempt_players</code> and <code>session_games.matchup_json</code>, bumps the protocol revision, and immediately broadcasts the flipped frame via <code>committed(...)</code> (keeping <code>analysis.policy</code> metadata so <b>Analysis on</b> never flickers). Settings closes on the seat change; you immediately see GW Allies's hand, "Swapped sides" in Moves, and Reader choosing in your old UR seat while <code>_advance()</code> runs.</li>
+  <li><b>Failure &amp; recovery:</b> If the replacement policy refuses the seat or fails to load, <code>swap_sides</code> raises <code>swap_unavailable</code> before mutating: the live game, revision, and Settings error notice stay untouched. Duplicate <code>request_id</code>s replay idempotently; stale pre-swap Commands reject on revision; watchers are refused (<code>CONFIGURE_MATCH</code>); reload/server-restart resumes in <code>human_seat_at(retained)</code>.</li>
+  <li><b>Games, My record &amp; Play again:</b> The game saves once with final seats/decks/winner, counts once in My record by how it ends ("however we end it is what counts"), and <code>saveLastMatchup</code> keeps the session's starting seat/decks for <b>Play again</b>.</li>
+  <li><b>Review at Turn 1 (before the swap) and after:</b> Review defaults to <b>Follow the chooser</b>. At Turn 1, <code>pilotAt(seat, currentHero)</code> labels your bottom plate <b>You · UR Lessons</b> (<code>Your plate</code>), top plate <b>Reader · GW Allies</b>, rail heading <b>Your choice</b>, and Moves <b>You</b> — flipping cleanly across the <b>Swapped sides · Turn 10</b> divider. Bot producer/provenance stays attached to <code>kind === 'bot'</code> (<code>seatIdentity</code>), fixed Perspective and <b>This game</b> columns name permanent seat + deck, <code>playOrDraw</code> notes both starting and final order, <code>Strip.svelte</code> and <code>keyMoments</code> break at swaps, and <code>estimateArc</code> omits cross-swap blending.</li>
+  <li><b>Authority &amp; replay APIs:</b> <code>Recording</code>, <code>_live_decision_summaries</code>, <code>GET /api/traces/{id}/decisions</code> (<code>play_decisions_with_addresses</code>), <code>GET /api/traces/{id}/decisions/{address}</code>, Study fork/retry, and Feedback all authorize the same set for Play traces: every <code>DecisionSource.CLIENT</code> decision across seats, and zero bot <code>DecisionSource.POLICY</code> rows.</li>
 </ol>
-<p><i>Why QA did not see #2:</i> QA swapped <i>twice</i> (ending in its starting seat) and screenshotted Turn 0 and the end — never seeking into Turns 12–15 between the two swaps.</p>
 
 <h2>Product concepts against code concepts (HEAD)</h2>
 <table>
-<tr><th>What a person knows / does</th><th>Built in code (HEAD)</th><th></th><th>What is wrong</th></tr>
+<tr><th>What a person knows / does</th><th>Built in code (HEAD)</th><th></th><th>Notes</th></tr>
 <tr>
   <td><b>One live game swapping seats in place</b></td>
-  <td><code>Trace.seat_swaps: list[int]</code> + <code>human_seat_at(trace, i)</code>; immutable <code>GameConfig</code>; <code>AttemptStore.save</code> updates active <code>attempt_players</code> &amp; <code>matchup_json</code></td>
+  <td><code>Trace.seat_swaps: list[int]</code> (omitted when empty) + <code>human_seat_at</code> / <code>humanSeatAt</code>; immutable <code>GameConfig</code>; <code>AttemptStore.save</code> updates active <code>attempt_players</code> &amp; <code>session_games.matchup_json</code></td>
   <td class="yes">yes</td>
-  <td>Clean, single source of truth for storage, re-execution, numbers, Games, and My record.</td>
+  <td>Single source of truth across live play, re-execution, numbers, Games, and My record.</td>
 </tr>
 <tr>
   <td><b>Swap sides</b> (this game) vs. <b>Swap play/draw</b> (next game)</td>
-  <td>Settings → Game split into <b>This game</b> (<code>swap_sides</code>) and <b>Next game</b> (<code>PlaySessionStrip</code> renamed <b>Swap play/draw</b>; wire <code>intent: "swap_sides"</code> kept)</td>
+  <td>Settings → Game split into <b>This game</b> (<code>swap_sides</code>, one press, reversible) and <b>Next game</b> (<code>PlaySessionStrip</code> &amp; Game Over renamed <b>Swap play/draw</b>; wire <code>intent: "swap_sides"</code> kept)</td>
   <td class="yes">yes</td>
-  <td>Clear separation; <code>saveLastMatchup</code> also re-orients decks to the session's original setup.</td>
+  <td>No name collision; <code>saveLastMatchup</code> re-orients decks to the session's starting setup.</td>
 </tr>
 <tr>
-  <td><b>Who piloted each seat at a position in Review</b></td>
-  <td><code>replayLog</code> uses <code>saidAt(seat, currentHero)</code>, while plates, top bar, <code>positionHeading</code>, <code>identity(seat)</code>, Perspective, <code>This game</code>, and <code>estimateArc</code> still read final <code>index.players</code> / <code>heroSeat</code></td>
-  <td class="no">no</td>
-  <td><b>Biggest mismatch.</b> Native seat (owns deck &amp; seat counts) is conflated with pilot (You vs bot, which flips at each swap). Every pre-swap position of a once-swapped game labels your hand as the bot and the bot as You, attaches bot provenance to Seat 2, and blends complementary scores in <code>estimateArc</code>.</td>
-</tr>
-<tr>
-  <td><b>Your authorized decisions</b> (<code>/api/traces/{id}/decisions</code> vs <code>/decisions/{address}</code>)</td>
-  <td><code>Recording</code>, <code>_live_decision_summaries</code>, and <code>get_trace_decision</code> use <code>DecisionSource.CLIENT</code>; <code>get_trace_decisions</code> still calls <code>project_replay(replay, final_seat)</code></td>
-  <td class="no">no</td>
-  <td><b>Two definitions of "your decisions".</b> <code>GET /api/traces/{id}/decisions</code> filters by <code>row.viewer == final_seat</code>, dropping pre-swap human decisions and exposing pre-swap bot <code>POLICY</code> decisions (whose addresses then 404 when restored).</td>
-</tr>
-<tr>
-  <td><b>Immediate flip when pressing Swap sides</b></td>
-  <td><code>GameSession.swap_sides</code> ignores <code>committed</code> and blocks until both policy load and <code>self._advance()</code> finish</td>
-  <td class="no">no</td>
-  <td><b>Asymmetry with <code>hero_command</code>.</b> Human moves commit and update the board before the bot thinks; Swap sides freezes Settings on "Swapping sides…" for 3–9 s on a checkpoint (and up to 30 s against Search).</td>
-</tr>
-<tr>
-  <td><b>Refusal, idempotency, stale Command rejection, watcher guard</b></td>
-  <td><code>_build_swap_policy</code> before mutation; <code>_swap_receipts</code>; revision bump rejects stale Commands; <code>CONFIGURE_MATCH</code> forbids watchers</td>
+  <td><b>Immediate board flip while the bot plays your old seat</b></td>
+  <td><code>GameSession.swap_sides</code> prepares policy first, commits &amp; persists, broadcasts flipped frame via <code>committed(...)</code> (preserving <code>analysis</code>), then runs <code>_advance()</code>; Settings closes on seat change</td>
   <td class="yes">yes</td>
-  <td>Sound contract.</td>
+  <td>Matches <code>hero_command</code>; pilot sees their new hand immediately while bot thinks/searches.</td>
+</tr>
+<tr>
+  <td><b>Refusal, idempotency, stale rejection, watcher guard, recovery</b></td>
+  <td><code>_build_swap_policy</code> before mutation; <code>_swap_receipts</code>; revision bump rejects stale Commands; <code>CONFIGURE_MATCH</code> forbids watchers; resume uses <code>human_seat_at</code></td>
+  <td class="yes">yes</td>
+  <td>Refusal leaves game untouched; reload and server restart preserve current seat.</td>
+</tr>
+<tr>
+  <td><b>Permanent native seat vs. position-dependent pilot in Review</b></td>
+  <td><code>deckOf(seat)</code> &amp; <code>GameNumbers.seats[seat]</code> stay on native seat; <code>pilotSeatAt</code>, <code>seatIdentity</code>, <code>perspectiveLabel</code>, <code>seatColumnLabel</code>, <code>playOrDraw</code>, <code>estimateArc</code>, <code>Plate.svelte</code> ("Your plate")</td>
+  <td class="yes">yes</td>
+  <td>Plates, top bar, rail heading, Moves, provenance, Perspective, and <b>This game</b> all agree before and after every swap.</td>
+</tr>
+<tr>
+  <td><b>Your authorized decisions across every Play API</b></td>
+  <td><code>Recording</code>, <code>_live_decision_summaries</code>, <code>play_decisions_with_addresses</code>, and <code>_authorized_decision_viewer</code> all select <code>DecisionSource.CLIENT</code> across seats</td>
+  <td class="yes">yes</td>
+  <td>One definition everywhere: all pre- and post-swap human decisions included, zero bot <code>POLICY</code> rows exposed, every address restores 200.</td>
 </tr>
 <tr>
   <td><b>Show analysis &amp; post-game Analysis across swaps</b></td>
-  <td><code>LiveAnalysis</code> restarts for new seat, client clears line on seat change; <code>analyse_game</code> runs per-seat runners for all deliberate human decisions; <code>Strip</code> &amp; <code>keyMoments</code> break at swaps</td>
+  <td><code>LiveAnalysis</code> restarts on the new seat (warming recurrent runners; client clears line on seat change); <code>analyse_game</code> runs one runner per piloted seat; <code>Strip</code> &amp; <code>keyMoments</code> break at swaps</td>
   <td class="yes">yes</td>
-  <td>Matches the experience; only <code>analyses.seat</code> in SQLite still stores <code>final_seat</code> (already ignored by <code>see_line</code>).</td>
+  <td>Seamless live continuity and full-game post-game reading across all stints.</td>
 </tr>
 <tr>
   <td><b>Closed decklists after a swap</b></td>
-  <td><code>get_recording_index</code> hides final <code>kind == "bot"</code> deck (your starting deck); <code>prepare_trace_payload</code> hides <code>config.villain_deck</code> (your final deck)</td>
-  <td class="partly">partly</td>
-  <td>Two places disagree on which deck is closed after one swap; both should apply one rule (and on a closed-decklist game that swapped, align with the current bot seat or reveal both once finished).</td>
+  <td>Live <code>_deck_names_for</code>, <code>prepare_trace_payload</code> (when <code>not reveal_hidden</code>), and <code>get_recording_index</code> all redact the current bot seat</td>
+  <td class="yes">yes</td>
+  <td>Consistent rule across live play, <code>/api/traces/{id}</code>, and <code>/recording</code>.</td>
 </tr>
 <tr>
   <td><b>Play on from here</b> on a swapped game</td>
-  <td><code>_play_recorded_prefix</code> applies <code>source_swaps</code> at their recorded indices and lands in <code>human_seat_at(source, upto)</code>; stays excluded from My record</td>
+  <td><code>_play_recorded_prefix</code> applies <code>source_swaps</code> at recorded indices so the person lands in <code>human_seat_at(source, upto)</code>; stays excluded from My record</td>
   <td class="yes">yes</td>
-  <td>Holds for pre-swap, post-swap, and Play-on + swap.</td>
+  <td>Works from pre-swap decisions, post-swap decisions, and Play-on + swap.</td>
 </tr>
 </table>
 
-<h2>Biggest mismatch: Review conflates native seat with pilot</h2>
-<div class="callout">
-<p>In an unswapped game, <code>seat ∈ {0, 1}</code> and <code>pilot ∈ {You, Bot}</code> are 1-to-1, so <code>index.players.find(p =&gt; p.seat === seat)</code> answered both "which deck is in seat <i>s</i>?" and "who is piloting seat <i>s</i>?". Once seats swap mid-game, those are <b>two different concepts</b>:</p>
-<ul>
-  <li><b>Native seat (<code>0 | 1</code>)</b> is permanent for the game: it owns a decklist (<code>deckOf(seat)</code>) and full-game <code>GameNumbers.seats[seat]</code>.</li>
-  <li><b>Pilot (<code>You</code> vs <code>Bot</code>)</b> changes at each index in <code>seat_swaps</code>, resolved at any position by <code>humanSeatAt(startingHeroSeat, seatSwaps, event)</code>.</li>
-</ul>
-<p>Separating <code>deckOf(seat)</code> (permanent by seat) from <code>pilotAt(seat, event)</code> (resolved by position) fixes plates, top bar, rail heading, <code>replayLog</code>, <code>See its line</code>, and <code>identity</code> from one helper.</p>
-</div>
+<h2>Resolved in Pass 3 (before vs. existing on HEAD)</h2>
 
-<h3>Before vs. after: Review at Turn 1 of a game swapped once (Seat 1 UR → Seat 2 GW)</h3>
+<h3>1. Review attribution: native seat vs. pilot (Turn 1 of a once-swapped game, Seat 1 UR → Seat 2 GW)</h3>
 <div class="cols">
-<div class="box exist">
-  <h3>Review · Position 1 (Turn 0, your mulligan)</h3>
+<div class="box before">
+  <h3>Conflated seat and pilot</h3>
   <div class="mock">
     <div class="bar">
       <span><b>Reader</b> · UR Lessons vs <b>You</b> · GW Allies</span>
@@ -149,20 +135,19 @@
     </div>
     <div class="grid">
       <div class="pane">
-        <div class="plate bad"><span class="tag bad">wrong</span> <b>You</b> · GW Allies (20 life · top)</div>
-        <div class="plate bad"><span class="tag bad">wrong</span> <b>Reader</b> · UR Lessons (20 life · your hand)</div>
+        <div class="plate bad"><span class="tag bad">wrong</span> <b>You</b> · GW Allies (top)</div>
+        <div class="plate bad"><span class="tag bad">wrong</span> <b>Reader</b> · UR Lessons (your hand)</div>
       </div>
       <div class="pane">
         <div><span class="tag bad">contradiction</span> <b>Reader's choice</b></div>
-        <div class="dim">Analysis by Reader · ✓Keep hand <b>you</b></div>
         <div class="dim">Moves: 0 <b>You</b> Keep hand</div>
-        <div class="dim" style="margin-top:4px">This game: On the draw · You | Reader<br>Estimate: 15 start · 99 peak · 99 end</div>
+        <div class="dim">This game: On the draw · Estimate: 15 · 99 · 99</div>
       </div>
     </div>
   </div>
 </div>
-<div class="box prop">
-  <h3>Review · Position 1 (Turn 0, your mulligan)</h3>
+<div class="box built">
+  <h3>Separated <code>deckOf(seat)</code> from <code>pilotAt(seat, event)</code></h3>
   <div class="mock">
     <div class="bar">
       <span><b>You</b> · UR Lessons vs <b>Reader</b> · GW Allies</span>
@@ -170,108 +155,81 @@
     </div>
     <div class="grid">
       <div class="pane">
-        <div class="plate good"><span class="tag good">exact</span> <b>Reader</b> · GW Allies (20 life · top)</div>
-        <div class="plate good"><span class="tag good">exact</span> <b>You</b> · UR Lessons (20 life · your hand)</div>
+        <div class="plate good"><span class="tag good">exact</span> <b>Reader</b> · GW Allies (top)</div>
+        <div class="plate good"><span class="tag good">exact</span> <b>You</b> · UR Lessons (Your plate)</div>
       </div>
       <div class="pane">
         <div><span class="tag good">consistent</span> <b>Your choice</b></div>
-        <div class="dim">Analysis by Reader · ✓Keep hand <b>you</b></div>
         <div class="dim">Moves: 0 <b>You</b> Keep hand</div>
-        <div class="dim" style="margin-top:4px">This game: Started on the play · finished on the draw<br>Seat 1 (UR) | Seat 2 (GW · finished as You)</div>
+        <div class="dim">This game: Started on the play · finished on the draw<br>Seat 1 · UR Lessons (Reader at end) | Seat 2 · GW Allies (You at end)</div>
       </div>
     </div>
   </div>
 </div>
 </div>
 
-<h3>Before vs. after: <code>GET /api/traces/{id}/decisions</code> on a swapped game</h3>
+<h3>2. <code>GET /api/traces/{id}/decisions</code> &amp; 3. Live swap commit timeline</h3>
 <div class="cols">
-<div class="box exist">
-  <h3>Single-viewer projection (<code>final_seat = 1</code>)</h3>
-  <pre>decisions = [row for row in replay.decisions
-             if row.viewer == 1]
-# ❌ Drops your pre-swap Seat 0 CLIENT decisions
-# ❌ Leaks bot's pre-swap Seat 1 POLICY decisions
-# ❌ Returned bot addresses 404 on /decisions/{addr}</pre>
-</div>
-<div class="box prop">
-  <h3>Client-decision projection for Play traces</h3>
+<div class="box built">
+  <h3><code>play_decisions_with_addresses</code> (Play traces)</h3>
   <pre>decisions = [row for row in replay.decisions
              if row.source == DecisionSource.CLIENT]
-# ✓ Every decision YOU made across Seat 0 and Seat 1
-# ✓ Zero bot POLICY decisions ever exposed
+# ✓ Pre-swap Seat 0 + post-swap Seat 1 CLIENT decisions
+# ✓ Zero bot POLICY rows exposed
 # ✓ Every address restores 200 on /decisions/{addr}</pre>
 </div>
-</div>
-
-<h3>Before vs. after: Live Swap sides timeline (checkpoint or Search)</h3>
-<div class="cols">
-<div class="box exist">
-  <h3>Blocks through <code>_advance()</code> (3–9 s; up to 30 s Search)</h3>
+<div class="box built">
+  <h3>Immediate committed board flip before <code>_advance()</code></h3>
   <div class="step-flow">
-    <div>1. Press <b>Swap sides</b> → Settings stays open: <i>Swapping sides…</i></div>
-    <div>2. Server loads policy (~1.2 s) <b>and</b> runs bot's full turn (~4.3 s / up to 30 s Search)</div>
-    <div>3. Board finally flips, after bot already played your old seat</div>
-  </div>
-</div>
-<div class="box prop">
-  <h3>Commits flipped board before <code>_advance()</code> (like <code>hero_command</code>)</h3>
-  <div class="step-flow">
-    <div>1. Press <b>Swap sides</b> → server prepares replacement policy (~0.1–1.2 s)</div>
-    <div>2. Server commits swap &amp; sends flipped frame via <code>committed(...)</code> → Settings closes, board flips to your new seat &amp; hand immediately</div>
-    <div>3. Server runs <code>_advance()</code> while the flipped board shows <i>Reader is choosing / searching</i></div>
+    <div>1. Press <b>Swap sides</b> → server prepares policy (<code>_build_swap_policy</code>)</div>
+    <div>2. Commit, persist &amp; broadcast flipped frame via <code>committed(...)</code> → Settings closes, new hand &amp; "Swapped sides" show immediately, <b>Analysis on</b> stays lit</div>
+    <div>3. <code>_advance()</code> runs bot in vacated seat while board shows <i>Choosing…</i></div>
   </div>
 </div>
 </div>
 
-<h2>Counterexamples tested</h2>
+<h2>Counterexamples verified on HEAD</h2>
 <table>
-<tr><th>Scenario</th><th>HEAD (<code>b41819eede</code>)</th><th>Proposed (Pass 3)</th></tr>
-<tr><td><b>Open Review at Turn 1 of a game swapped once (0 → 1)</b></td><td class="no">Fails: bottom plate says Bot, top plate says You, heading says Bot's choice beside Moves: You.</td><td class="yes">Holds: <code>pilotAt(seat, current.event)</code> labels Seat 0 as You and Seat 1 as Bot before the swap, and flips after.</td></tr>
-<tr><td><b>Bot finished in Seat 0 (e.g. started Seat 1, or swapped 0→1)</b></td><td class="no">Fails: <code>identity(1)</code> attaches <code>index.opponent</code> producer/provenance to You.</td><td class="yes">Holds: <code>identity(seat)</code> attaches <code>index.opponent</code> provenance to the <code>kind === 'bot'</code> player, not hardcoded <code>seat === 1</code>.</td></tr>
-<tr><td><b>Losing 15% in Seat 0, swap to Seat 1 (85%), win (99%)</b></td><td class="no">Fails: <code>estimateArc</code> reports "15 at the start · 99 at its highest · 99 at the end".</td><td class="yes">Holds: <code>estimateArc</code> is omitted (or split per stint) when <code>seatSwaps.length &gt; 0</code>, matching <code>Strip</code> and <code>keyMoments</code>.</td></tr>
-<tr><td><b><code>GET /api/traces/{id}/decisions</code> on swapped Play game</b></td><td class="no">Fails: leaks pre-swap bot <code>POLICY</code> decisions and drops pre-swap human <code>CLIENT</code> decisions.</td><td class="yes">Holds: returns all <code>DecisionSource.CLIENT</code> decisions with valid <code>DecisionAddressV2</code> addresses; zero <code>POLICY</code> rows.</td></tr>
-<tr><td><b>Swap sides against Search 4×2 (or slow checkpoint) while Show analysis is on</b></td><td class="no">Freezes Settings open for 5–30 s while bot thinks; user cannot see new hand.</td><td class="yes">Flips board &amp; closes Settings before <code>_advance()</code>; preserves <code>analysis</code> metadata on the intermediate frame so "Analysis on" chip never flickers.</td></tr>
-<tr><td><b>Closed-decklists game swapped once, then read via <code>/api/traces/{id}</code> vs <code>/recording</code></b></td><td class="no">Disagrees: <code>/recording</code> hides Seat 0 (starting human deck), <code>/api/traces/{id}</code> hides Seat 1 (final human deck).</td><td class="yes">Aligned: both follow the same rule (when <code>not reveal_hidden</code>, redact the current bot seat consistently).</td></tr>
+<tr><th>Scenario</th><th>Result on HEAD (<code>020897f162</code>)</th></tr>
+<tr><td><b>Open Review at Turn 1 of a game swapped once (0 → 1)</b></td><td class="yes">Holds (unit + Playwright <code>swap-sides.spec.ts</code> + QA): Seat 0 plate says You ("Your plate"), heading says "Your choice", deck header says "You · UR Lessons".</td></tr>
+<tr><td><b>Bot finished in Seat 0 (started Seat 1 or swapped 0 → 1)</b></td><td class="yes">Holds (<code>replay.test.ts</code>): <code>seatIdentity</code> attaches <code>index.opponent</code> producer/provenance to <code>kind === 'bot'</code>, never to You.</td></tr>
+<tr><td><b>Losing 15% in Seat 0, swap to Seat 1 (85%), win (99%)</b></td><td class="yes">Holds (<code>analysis.test.ts</code>, <code>numbers.test.ts</code>): <code>keyMoments</code> skips cross-swap pairs, <code>Strip</code> breaks polyline with dashed rule, <code>estimateArc</code> returns <code>null</code>.</td></tr>
+<tr><td><b><code>GET /api/traces/{id}/decisions</code> on swapped Play game</b></td><td class="yes">Holds (<code>test_swap_sides.py</code> + QA): returns all Seat 0 + Seat 1 <code>CLIENT</code> decisions, zero <code>POLICY</code> rows, every address restores 200.</td></tr>
+<tr><td><b>Slow bot / Search swap with Show analysis on and a watcher</b></td><td class="yes">Holds (<code>test_swap_sides.py</code> + QA): both pilot and watcher receive flipped <code>rules_viewer</code> &amp; <code>work.state === "running"</code> before slow bot finishes; <code>analysis.policy</code> stays intact.</td></tr>
+<tr><td><b>Closed-decklists swap across <code>/api/traces/{id}</code> and <code>/recording</code></b></td><td class="yes">Holds (<code>test_swap_sides.py</code>): while hidden info is not revealed, both redact the current bot seat consistently.</td></tr>
 </table>
 
-<h2>Larger than this work</h2>
+<h2>Outside this work (separate Tasks if wanted)</h2>
 <ul>
-  <li><b>Reusing a warm stateless <code>PolicyRunner</code> across seats without reloading weights:</b> would require a new seat-retarget or shared-weights contract in <code>managym.policy</code> / <code>BaselineFactory</code> without bypassing <code>Policy.load(seat=...)</code> refusal checks. Separate optimization Task if 1 s policy load still feels slow after immediate commit.</li>
+  <li><b>Reusing a warm stateless <code>PolicyRunner</code> across seats without reloading weights:</b> would add a seat-retarget or shared-weights contract in <code>managym.policy</code> / <code>BaselineFactory</code> without bypassing <code>Policy.load(seat=...)</code> refusal checks.</li>
   <li><b>Moving native <code>mana_payment</code> / <code>mana_floats</code> with the human on swap:</b> requires a native setter + <code>BoundaryIntervention</code> in <code>managym</code>.</li>
-  <li><b>Making <code>analyses.seat</code> nullable in SQLite:</b> avoids storing <code>final_seat</code> on multi-seat analyses, but requires a schema migration and changes no reader (<code>see_line</code> already uses <code>human_seat_at</code>).</li>
+  <li><b>Making <code>analyses.seat</code> nullable in SQLite:</b> avoids storing <code>final_seat</code> on multi-seat analyses; requires a schema migration and changes no reader (<code>see_line</code> already uses <code>human_seat_at</code>).</li>
 </ul>
 
-<h2>Questions</h2>
+<h2>Choices made for review (none irreversible)</h2>
 <ol class="q">
-  <li><b>Review attribution for a swapped game:</b>
+  <li><b>One live game in place (<code>Trace.seat_swaps</code>) vs. a second replayed game:</b>
     <ol>
-      <li>Resolve pilot names (plates, top bar, rail heading, Moves) at the shown position via <code>humanSeatAt</code>, label fixed Perspective options by seat + deck when swapped, and label <b>This game</b> seat-total columns by seat + deck noting who finished (<b>chosen</b>).</li>
-      <li>Keep static final-seat names on plates/headings and add a banner saying seats swapped.</li>
+      <li>Swap seats in place on the live game; one record in Games and My record (<b>built</b>).</li>
+      <li>End the first game and start a second replayed game via <code>played_from.swapped</code>.</li>
     </ol>
   </li>
-  <li><b><code>This game</code> estimate arc when a game swapped sides:</b>
+  <li><b>Review attribution on a swapped game:</b>
     <ol>
-      <li>Omit the single-line <code>start · peak · end</code> arc when <code>seatSwaps.length &gt; 0</code> (the chart already shows each stint broken by dashed swap rules) (<b>chosen</b>).</li>
-      <li>Show one short arc per stint (e.g., <code>Seat 1: 52 → 18 · Seat 2: 82 → 99</code>).</li>
+      <li>Resolve pilot names at the shown position via <code>humanSeatAt</code>, label fixed Perspective and <b>This game</b> columns by permanent native seat + deck, and omit cross-swap <code>estimateArc</code> (<b>built</b>).</li>
+      <li>Keep static final-seat names on plates/headings with a banner, or draw per-stint estimate arcs in Menu.</li>
     </ol>
   </li>
-  <li><b><code>GET /api/traces/{id}/decisions</code> on a swapped Play game:</b>
+  <li><b>Next-game play/draw button name:</b>
     <ol>
-      <li>Return all <code>DecisionSource.CLIENT</code> decisions across seats (never <code>POLICY</code> rows), matching <code>Recording</code> and <code>/decisions/{address}</code> (<b>chosen</b>).</li>
-      <li>Keep single-viewer <code>project_replay</code> filtered to <code>CLIENT</code> only (fixes the leak, but still omits pre-swap decisions).</li>
-    </ol>
-  </li>
-  <li><b>Swap sides perceived latency:</b>
-    <ol>
-      <li>Emit the flipped board via <code>committed(...)</code> right after committing the swap and before <code>_advance()</code>, matching <code>hero_command</code> (<b>chosen</b>).</li>
-      <li>Wait for <code>_advance()</code> before flipping the board (current behavior).</li>
+      <li>Rename the next-game button to <b>Swap play/draw</b> (keeping wire <code>intent: "swap_sides"</code>) so <b>Swap sides</b> unambiguously means mid-game (<b>built</b>).</li>
+      <li>Keep both named <b>Swap sides</b> / <b>Swap sides now</b>.</li>
     </ol>
   </li>
   <li><b>Games archive row marker:</b>
     <ol>
-      <li>Leave the Games row unadorned (Review shows "Swapped sides at turn T", keeping My record / Games quiet per "however we end it is what counts") (<b>chosen</b>).</li>
-      <li>Add a subtle <code>swapped sides</code> note in the Games row beside <code>analysis shown</code> / <code>played on from another game</code> (adds <code>seat_swaps: int</code> to <code>GameNumbers</code>).</li>
+      <li>Leave the Games row unadorned (Review notes "Swapped sides at turn T"; Games and My record stay quiet per "however we end it is what counts") (<b>built</b>).</li>
+      <li>Add a <code>swapped sides</code> tag to the Games row (adds <code>seat_swaps: int</code> to <code>GameNumbers</code>).</li>
     </ol>
   </li>
 </ol>
