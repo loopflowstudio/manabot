@@ -413,7 +413,14 @@ class CopyView(ProtocolModel):
     )
 
 
+class AbilityGrantView(ProtocolModel):
+    effect_timestamp: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    counter: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
 class KeywordAbilityView(ProtocolModel):
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
     effect_timestamp: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     label: str
     granted: bool = Field(default=False, exclude_if=lambda value: not value)
@@ -427,8 +434,13 @@ class PermanentRestriction(str, Enum):
     MUST_ATTACK = "must_attack"
 
 
+class RestrictionView(ProtocolModel):
+    kind: PermanentRestriction
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
 class LegacyPermanentView(ProtocolModel):
-    keyword_grants: dict[str, UInt32 | None] | None = Field(
+    keyword_grants: dict[str, AbilityGrantView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     keyword_abilities: list[KeywordAbilityView] = Field(
@@ -437,7 +449,7 @@ class LegacyPermanentView(ProtocolModel):
     attacks_despite_defender: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
-    restrictions: list[PermanentRestriction] = Field(
+    restrictions: list[RestrictionView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
     types: LegacyCardTypesView | None = Field(

@@ -643,9 +643,11 @@ Firebending 1 Soldier token. Attacking and blocking do not take chip space: an
 attacker steps toward the player it attacks and tilts a few degrees (one that
 tapped lies just past the quarter, a vigilant one stays upright), and a blocker
 is joined to its attacker by a line. Chips are placed whole and never clipped
-mid-word: on a narrow or crowded card, any chips that do not fit whole collapse
-into a trailing `+N`, with the full list in the inspection and the card's
-accessible name. On a short tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
+mid-word. A narrow card can show `Firebend 2` or `Ward`. Hover the chip or
+inspect the card for the full ability and Ward cost. Chips use the space beside
+power/toughness when available. Hover a trailing `+N` for the hidden badges.
+The inspection and the card’s accessible name include every badge. On a short
+tapped card the count can sit beside the name. Something a spell on the stack targets has a dashed red edge.
 Cards in hand have the type line under the name and the cost on the art; a hand
 card's name stays on one line, shortened with an ellipsis when long, and its
 full name is in the inspection.
@@ -666,12 +668,12 @@ inspect it: its rules text, type line and cost, effective keywords and keyword
 abilities (including `Flash`, and `Defender · can attack anyway` when Defender
 is overridden) with why it has each (printed, the effect that granted it with
 source and duration, the counter for a keyword counter such as a double strike
-counter, or "another ability" for a grant from another permanent's static
-ability), where its power and toughness come from (printed or set,
+counter, or the permanent granting the ability, such as Sokka), where its power and toughness come from (printed or set,
 counters, each effect by its source and duration, and whatever those do not
 explain as "other effects"), and its full battlefield state (summoning sickness
 in words, attacking or blocking, active restrictions from static abilities or
-effects with their provenance, and ability loss). Older recordings without
+effects with their provenance, and ability loss). For example, a creature
+enchanted by Watery Grasp reads “Doesn’t untap · Watery Grasp”. Older recordings without
 extended permanent details still render plain `Defender`, effective keywords,
 recorded effect statuses and granted Firebending. The
 inspection floats beside the card and closes when the pointer leaves, when you

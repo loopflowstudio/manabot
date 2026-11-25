@@ -26,11 +26,9 @@ impl Game {
     ) -> bool {
         self.has_restriction(id, Restriction::CantAttackOrBlock)
             || view.static_abilities.iter().any(|ability| match ability {
-                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => {
-                    !self.iter_battlefield_permanents(controller).any(|other| {
-                        other != id && self.permanent_matches_predicate(other, predicate)
-                    })
-                }
+                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => !self
+                    .iter_battlefield_permanents(controller)
+                    .any(|other| other != id && self.permanent_matches_predicate(other, predicate)),
                 _ => false,
             })
     }

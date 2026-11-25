@@ -207,33 +207,20 @@ and feeds `BoardCard.svelte`, `Inspect.svelte`, `BoardCard.svelte`'s
    restriction helpers, `decision_surface_view` join, protocol schemas.
 2. **Done (63583fc3ff).** `badges.ts`, `BoardCard.svelte`, `Inspect.svelte`,
    `view.ts:pileKey`, Vitest, Playwright light/dark e2e, live-game QA.
-3. **Next — Unified provenance & real-game board fit (from post-build concept review).**
-   - **Slice 3a (Rust + wire + Python + schemas)**: Add `AbilitySource`, replace
-     `effect_timestamp` on `EffectiveTrigger` and `Option<PublicId>` on
-     `Characteristics.keyword_grants`, expose static restriction source, update
-     `PermanentDetails` (`AbilityGrantView`, `KeywordAbilityView.source`,
-     `RestrictionView`), regenerate all 6 `protocol/*.schema.json`, update
-     `managym/experience.py` and `academy/ui/src/lib/types.ts`. Add Rust tests
-     for Avatar Kyoshi (`StaticScope::This` → own, not granted), Sokka Ally
-     (`source: "Sokka, Tenacious Tactician"`), printed keyword + keyword counter
-     (own, not granted), Mai double-strike counter (`counter: true`), and
-     freeze/Pacifism Aura (`RestrictionView.source` = Aura name) vs own static
-     restriction (`source: None`).
-   - **Slice 3b (UI + real-game e2e + docs)**: Update `badges.ts` for exact
-     provenance, `shortLabel` fallback, multi-width row packing, and
-     overflow-aware fitting returning `hidden: Badge[]`. Update
-     `BoardCard.svelte` for explicit `.chip-row` rendering, bottom row beside
-     P/T (guarded against `.policy`), `4px` chip padding / `2px` inset, and
-     `title` on `+N`. Update `badges.test.ts` (including printed keyword +
-     counter, Sokka source, Aura + effect merged sources, 112×80 turned Ty Lee,
-     80×112 upright Fire Nation Cadets, Watch `.policy` guard). Add a real-game
-     board test in `e2e/card-badges.spec.ts` WITH lands and 4 cards in hand at
-     1280×800 verifying upright Fire Nation Cadets shows `Firebend 2` (or
-     `Firebending 2`), turned Ty Lee shows both `Doesn't untap` and `Prowess`
-     (not `+2`), upright Unagi shows `Ward` (not `+1`), and zero chips clip or
-     overlap P/T or `.policy`. Update `docs/academy.md`, `academy/ui/DESIGN.md`,
-     and `managym/academy/README.md`.
-4. **Gate.** Full targeted Rust, Python, protocol conformance,
+3. **Done.** Unified Layer 6 & restriction provenance (`AbilitySource`,
+   `AbilityGrantView`, `KeywordAbilityView.source`, `RestrictionView`, regenerated
+   all 6 `protocol/*.schema.json`, `managym/experience.py`, `types.ts`) and
+   real-game board badge fitting (`badges.ts` exact provenance, width-triggered
+   `shortLabel` fallbacks, overflow-aware multi-row packing, `+N` tooltips;
+   `BoardCard.svelte` bottom row beside P/T yielding to Watch `.policy`; 1280×800
+   real-board & Watch e2e tests; updated `docs/academy.md`, `academy/ui/DESIGN.md`,
+   and `managym/academy/README.md`).
+   - *What it taught*: Avatar Kyoshi grants keywords to lands (`source: "Avatar Kyoshi"`),
+     while self-scoped `StaticScope::This` conditional grants (e.g. Foggy Swamp Hunters)
+     stay `AbilitySource::Own`; Playwright's `locator.evaluateAll` can race with webfont
+     refit between query and evaluation, so `wholeChips` awaits `document.fonts.ready`
+     and evaluates atomically in one `page.evaluate`.
+4. **Next — Gate.** Full targeted Rust, Python, protocol conformance,
    `scripts/public_api.py check`, Vitest, Svelte check, and Playwright e2e in
    both themes.
 

@@ -14707,6 +14707,14 @@ fn the_legend_of_kyoshi_draws_by_power_earthbends_by_hand_size_and_returns_as_av
         land.keywords.has(Keyword::Trample) && land.keywords.has(Keyword::Hexproof),
         "lands have both"
     );
+    let board = s.game().permanent_details(PlayerId(0));
+    let grants = board[&permanent(&s, forest).id.0]
+        .keyword_grants
+        .as_ref()
+        .unwrap();
+    for keyword in ["trample", "hexproof"] {
+        assert_eq!(grants[keyword].source.as_deref(), Some("Avatar Kyoshi"));
+    }
     clear_summoning_sickness(&mut s, kyoshi);
     s.set_player_mana_pool(0, "");
     activate(&mut s, kyoshi, 0);
@@ -17140,7 +17148,9 @@ fn replacement_order_separates_prevented_combat_damage_from_prohibited_lifelink(
 
 #[test]
 fn permanent_details_follow_public_board_and_layer_six_grants() {
-    use managym::experience::{KeywordAbilityView, PermanentRestriction};
+    use managym::experience::{
+        AbilityGrantView, KeywordAbilityView, PermanentRestriction, RestrictionView,
+    };
     use managym::state::ability::PaymentCost;
 
     let mut s = five_color_unfunded_setup(&[
@@ -17151,6 +17161,8 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
         "Sire of Seven Deaths",
         "Abandon Attachments",
         "Watery Grasp",
+        "Tiger-Dillo",
+        "Foggy Swamp Hunters",
     ]);
     let bear = s.force_permanent_on_battlefield(0, "Platypus-Bear");
     let mai = s.force_permanent_on_battlefield(0, "Mai, Jaded Edge");
@@ -17168,14 +17180,39 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
             .remove(&permanent(s, id).id.0)
             .unwrap()
     };
+    let tiger = s.force_permanent_on_battlefield(0, "Tiger-Dillo");
+    assert_eq!(
+        details(&s, tiger).restrictions,
+        [RestrictionView {
+            kind: PermanentRestriction::CantAttackOrBlock,
+            source: None
+        }]
+    );
+    let hunters = s.force_permanent_on_battlefield(0, "Foggy Swamp Hunters");
+    s.game_mut().state.turn.history[0].cards_drawn = 2;
+    assert!(observed_keywords(&s, hunters).lifelink);
+    assert!(details(&s, hunters).keyword_grants.unwrap().is_empty());
+    add_counters(&mut s, mai, CounterKind::DoubleStrike, 1);
+    assert!(details(&s, mai).keyword_grants.unwrap()["double_strike"].counter);
+    add_counters(&mut s, sire, CounterKind::Trample, 1);
+    assert!(!details(&s, sire)
+        .keyword_grants
+        .unwrap()
+        .contains_key("trample"));
+    let sokka = "Sokka, Tenacious Tactician";
     let label = |name: &str, granted, effect_timestamp| KeywordAbilityView {
+        source: None,
         label: name.into(),
         granted,
         effect_timestamp,
     };
     assert_eq!(
         details(&s, ally).keyword_grants.unwrap().get("menace"),
-        Some(&None)
+        Some(&AbilityGrantView {
+            effect_timestamp: None,
+            source: Some(sokka.into()),
+            counter: false
+        })
     );
     assert!(details(&s, bear).keyword_grants.unwrap().is_empty());
     assert!(!details(&s, bear).attacks_despite_defender);
@@ -17192,7 +17229,10 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
     );
     assert_eq!(
         details(&s, ally).keyword_abilities,
-        [label("Prowess", true, None)]
+        [KeywordAbilityView {
+            source: Some(sokka.into()),
+            ..label("Prowess", true, None)
+        }]
     );
     assert_eq!(
         details(&s, soldier).keyword_abilities,
@@ -17229,7 +17269,10 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
     enchant(&mut s, "Watery Grasp", "U", vanilla);
     assert_eq!(
         details(&s, vanilla).restrictions,
-        [PermanentRestriction::DoesntUntap]
+        [RestrictionView {
+            kind: PermanentRestriction::DoesntUntap,
+            source: Some("Watery Grasp".into())
+        }]
     );
 }
 

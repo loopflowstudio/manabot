@@ -11,10 +11,10 @@ use crate::{
         turn::RecordedCast,
     },
     state::{
-        ability::{Condition, EffectValue, PaymentCost},
+        ability::{AbilitySource, Condition, EffectValue, PaymentCost},
         card::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
-            SpellProfile, StaticAbility, StaticScope,
+            SpellProfile, StaticAbility, StaticRestriction, StaticScope,
         },
         game_object::{ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -83,8 +83,8 @@ pub struct Characteristics {
     pub is_animated: bool,
     /// Layer 6 keywords.
     pub keywords: Keywords,
-    /// Layer 6 gains still present, with the resolved record timestamp when applicable.
-    pub keyword_grants: Vec<(Keyword, Option<crate::state::game_object::PublicId>)>,
+    /// Sources of effective keywords supplied from outside the permanent.
+    pub keyword_grants: Vec<(Keyword, AbilitySource)>,
     /// Firebending N granted by records after any ability loss, summed.
     pub firebending: u8,
     /// Whether it has lost all abilities (a record, or a characteristic-
@@ -230,7 +230,7 @@ pub(super) struct LayerBoard {
     objects: Vec<Option<Arc<Characteristics>>>,
     /// Layered permissions for both seats, computed during the board's scan.
     pub play_permissions: [StaticPlayPermissions; 2],
-    restrictions: Vec<(PermanentId, PlayerId, crate::state::card::StaticRestriction)>,
+    restrictions: Vec<(PermanentId, PlayerId, StaticRestriction)>,
     reads_mana: bool,
     reads_tapped: bool,
     reads_life: bool,
@@ -944,15 +944,37 @@ impl Game {
     }
 
     pub(crate) fn has_restriction(&self, target: PermanentId, kind: Restriction) -> bool {
-        self.layer_board()
+        self.restriction_sources(&self.layer_board(), target, kind)
+            .next()
+            .is_some()
+    }
+
+    pub(crate) fn external_restriction_sources(
+        &self,
+        target: PermanentId,
+        kind: Restriction,
+    ) -> Vec<PermanentId> {
+        self.restriction_sources(&self.layer_board(), target, kind)
+            .filter(|source| *source != target)
+            .collect()
+    }
+
+    fn restriction_sources<'a>(
+        &'a self,
+        board: &'a LayerBoard,
+        target: PermanentId,
+        kind: Restriction,
+    ) -> impl Iterator<Item = PermanentId> + 'a {
+        board
             .restrictions
             .iter()
-            .any(|(source, controller, rule)| {
-                rule.kind == kind
+            .filter_map(move |(source, controller, rule)| {
+                (rule.kind == kind
                     && rule.unless.as_ref().is_none_or(|condition| {
                         !self.check_static_condition(condition, *controller)
                     })
-                    && self.static_scope_applies(&rule.scope, *source, *controller, target)
+                    && self.static_scope_applies(&rule.scope, *source, *controller, target))
+                .then_some(*source)
             })
     }
 

@@ -25,6 +25,44 @@
       "title": "AbiIdentity",
       "type": "object"
     },
+    "AbilityGrantView": {
+      "additionalProperties": false,
+      "properties": {
+        "counter": {
+          "default": false,
+          "title": "Counter",
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect Timestamp"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "title": "AbilityGrantView",
+      "type": "object"
+    },
     "AdviceRequest": {
       "additionalProperties": false,
       "description": "The sole POST /api/advice body, bridging legacy and advice-v1 callers.",
@@ -2296,6 +2334,18 @@
         "label": {
           "title": "Label",
           "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
         }
       },
       "required": [
@@ -2930,16 +2980,7 @@
           "anyOf": [
             {
               "additionalProperties": {
-                "anyOf": [
-                  {
-                    "maximum": 4294967295,
-                    "minimum": 0,
-                    "type": "integer"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/$defs/AbilityGrantView"
               },
               "type": "object"
             },
@@ -2996,7 +3037,7 @@
         },
         "restrictions": {
           "items": {
-            "$ref": "#/$defs/PermanentRestriction"
+            "$ref": "#/$defs/RestrictionView"
           },
           "title": "Restrictions",
           "type": "array"
@@ -4237,6 +4278,31 @@
         "instruction"
       ],
       "title": "PromptView",
+      "type": "object"
+    },
+    "RestrictionView": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "RestrictionView",
       "type": "object"
     },
     "SampledWorldRobustness": {

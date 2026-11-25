@@ -23,6 +23,29 @@
     "landmarks"
   ],
   "$defs": {
+    "AbilityGrantView": {
+      "type": "object",
+      "properties": {
+        "counter": {
+          "type": "boolean"
+        },
+        "effect_timestamp": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "AnalysisBudgetIdentity": {
       "type": "object",
       "properties": {
@@ -1165,6 +1188,12 @@
         },
         "label": {
           "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -1653,12 +1682,7 @@
             "null"
           ],
           "additionalProperties": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "uint32",
-            "minimum": 0
+            "$ref": "#/$defs/AbilityGrantView"
           }
         },
         "keywords": {
@@ -1688,7 +1712,7 @@
         "restrictions": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/PermanentRestriction"
+            "$ref": "#/$defs/RestrictionView"
           }
         },
         "summoning_sick": {
@@ -2475,6 +2499,24 @@
       "format": "uint8",
       "maximum": 255,
       "minimum": 0
+    },
+    "RestrictionView": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PermanentRestriction"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ]
     },
     "SampledWorldRobustness": {
       "type": "object",

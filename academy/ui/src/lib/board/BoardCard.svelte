@@ -115,7 +115,10 @@
   const showCost = $derived(!field && width >= 58);
   const plate = $derived(upright >= 110 ? 14 : 12);
   const hasPt = $derived(creature && power !== null);
-  const below = $derived(hasPt ? LINE[plate] + 4 : 3);
+  const showPolicy = $derived(recorded && (recorded.p !== null || recorded.chosen));
+  const besidePlate = $derived(hasPt && !showPolicy);
+  let plateWidth = $state(0);
+  const below = $derived(showPolicy ? Math.max(18, hasPt ? LINE[plate] : 0) + 5 : 3);
   const badges = $derived(permanent ? badgesOf(permanent, face, blocks) : []);
   let artHeight = $state(0);
   let chipFont = $state('12px system-ui');
@@ -126,9 +129,17 @@
       chipFont = `12px ${getComputedStyle(document.documentElement).getPropertyValue('--font-sans')}`;
     });
   });
-  const rows = $derived(Math.max(0, Math.floor((artHeight - below + 2) / 18)));
-  const chips = $derived(fitBadges(badges, boxWidth - 8, rows, text => chipWidth(text, chipFont)));
-  const titleOverflow = $derived(field && !rows && chips.hidden > 0);
+  const fullWidth = $derived(boxWidth - 6);
+  const rowWidths = $derived.by(() => {
+    const available = artHeight - below;
+    if (available < 16) return [];
+    const foot = besidePlate ? LINE[plate] : 16;
+    const upperRows = Math.max(0, Math.floor((available - foot) / 18));
+    return [...Array<number>(upperRows).fill(fullWidth), besidePlate ? fullWidth - plateWidth - 4 : fullWidth];
+  });
+  const chips = $derived(fitBadges(badges, rowWidths, fullWidth, text => chipWidth(text, chipFont)));
+  const overflowTitle = $derived(chips.hidden.map(badgeReading).join(' · '));
+  const titleOverflow = $derived(field && !chips.rows.length && chips.hidden.length > 0);
 
   // The name bar's colour: one colour's tint, several blended left to right
   // (each holds its side, blended across the middle), colourless grey.
@@ -223,7 +234,7 @@
   >
     <span class="bar" aria-hidden="true" style={barStyle} style:--slice={slice === null ? undefined : `${slice - 10}px`}>
       <span class="title" class:with-overflow={titleOverflow}>
-        {#if titleOverflow}<i class="chip overflow">+{chips.hidden}</i>{/if}
+        {#if titleOverflow}<i class="chip overflow" title={overflowTitle}>+{chips.hidden.length}</i>{/if}
         {#if slice !== null && face?.cost && !showType}<span class="bar-cost" data-testid="slice-cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         <span class="name" style:font-size={`${nameSize}px`} style:line-height={`${LINE[nameSize]}px`}>{name}{#if count}{' '}<b class="count" data-testid="pile-count-badge">×{count}</b>{/if}</span>
       </span>
@@ -240,23 +251,30 @@
         {#if showCost && face?.cost}<span class="cost"><Pips cost={face.cost} size={pip} /></span>{/if}
         {#if offers.length > 1 && live}<span class="many">{offers.length}</span>{/if}
       </span>
-      {#if field && rows && (chips.visible.length || chips.hidden)}
-        <span class="chips" style:bottom={`${below}px`}>
-          {#each chips.visible as chip}
-            <i class={`chip ${chip.kind}`} class:granted={chip.granted} class:overridden={chip.overridden} title={badgeReading(chip)}>
-              {#if chip.kind === 'sick'}
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                  <title>Summoning sick</title>
-                  <path d="M8 8c.9-1 2.4-.2 2.1 1.1-.4 1.9-3.2 2.2-4.5.5-1.9-2.4 0-5.9 3-6 3.6-.2 6.1 3.5 4.5 7.1-1.8 4-7.2 4.4-10 1"/>
-                </svg>
-              {:else}{chip.label}{/if}
-            </i>
+      {#if field && chips.rows.length}
+        <span class="chips" style:bottom={`${below}px`} style:--foot={`${besidePlate ? LINE[plate] : 16}px`}>
+          {#each chips.rows as row}
+            <span class="chip-row">
+              {#each row as { badge: chip, label: boardLabel }}
+                {#if chip}
+                  <i class={`chip ${chip.kind}`} class:granted={chip.granted} class:overridden={chip.overridden} title={badgeReading(chip)}>
+                    {#if chip.kind === 'sick'}
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <title>Summoning sick</title>
+                        <path d="M8 8c.9-1 2.4-.2 2.1 1.1-.4 1.9-3.2 2.2-4.5.5-1.9-2.4 0-5.9 3-6 3.6-.2 6.1 3.5 4.5 7.1-1.8 4-7.2 4.4-10 1"/>
+                      </svg>
+                    {:else}{boardLabel}{/if}
+                  </i>
+                {:else}
+                  <i class="chip overflow" title={overflowTitle}>{boardLabel}</i>
+                {/if}
+              {/each}
+            </span>
           {/each}
-          {#if chips.hidden}<i class="chip overflow">+{chips.hidden}</i>{/if}
         </span>
       {/if}
       {#if hasPt}
-        <span class="pt" class:hurt={(permanent?.damage ?? 0) > 0}
+        <span class="pt" bind:offsetWidth={plateWidth} class:hurt={(permanent?.damage ?? 0) > 0}
           class:up={permanent && ((permanent.power ?? 0) > (face?.power ?? Infinity) || (permanent.toughness ?? 0) > (face?.toughness ?? Infinity))}
           style:font-size={`${plate}px`} style:line-height={`${LINE[plate]}px`}>{power}/{toughness}</span>
       {/if}
@@ -264,7 +282,7 @@
         <span class="plan"><b>{planned.order}</b>{#if planned.output}<Pips cost={planned.output} size={Math.max(10, pip)} />{/if}</span>
       {/if}
       {#if paid}<span class="paid-mark" title={paid}>committed</span>{/if}
-      {#if recorded && (recorded.p !== null || recorded.chosen)}
+      {#if showPolicy && recorded}
         <span class="policy" data-testid="card-policy" data-chosen={recorded.chosen}>{#if recorded.chosen}✓{/if}{recorded.p !== null ? formatProbability(recorded.p) : ''}</span>
       {/if}
       {#if dealt}{#key dealt}<span class="dealt" data-testid="damage-dealt">−{dealt}</span>{/key}{/if}
@@ -339,10 +357,12 @@
   }
 
   .chips {
-    position: absolute; left: 3px; right: 3px; display: flex; flex-wrap: wrap; gap: 2px;
+    position: absolute; left: 2px; right: 2px; display: flex; flex-direction: column; gap: 2px;
   }
+  .chip-row { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+  .chip-row:last-child { height: var(--foot); }
   .chip {
-    flex: none; padding: 0 5px; border-radius: var(--radius-sm); white-space: nowrap;
+    flex: none; padding: 0 4px; border-radius: var(--radius-sm); white-space: nowrap;
     font: 400 12px/16px var(--font-sans);
     color: var(--text); background: var(--bg-surface); box-shadow: inset 0 0 0 1px var(--border);
   }

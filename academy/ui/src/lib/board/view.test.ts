@@ -204,10 +204,10 @@ describe('where decisions land', () => {
     const frame = structuredClone(navigation.CHOOSE_TARGET.frame);
     const copies: Partial<PermanentState>[] = [
       {}, {}, { keywords: ['defender'] }, { keywords: ['defender'], attacks_despite_defender: true },
-      { keywords: ['defender'], keyword_grants: { defender: null } },
+      { keywords: ['defender'], keyword_grants: { defender: { source: "Shield" } } },
       { keyword_abilities: [{ label: 'Firebending 1' }] }, { granted_firebending: 1 },
       { keyword_abilities: [{ label: 'Prowess' }] }, { keyword_abilities: [{ label: 'Prowess', granted: true }] },
-      { restrictions: ['cant_block'] }, { abilities_lost: true },
+      { restrictions: [{ kind: 'cant_block' }] }, { abilities_lost: true },
     ];
     frame.offers = [];
     frame.projection.agent.battlefield = copies.map((extra, index) => ({

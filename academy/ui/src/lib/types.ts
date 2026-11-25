@@ -94,7 +94,14 @@ export interface ContinuousEffect {
   timestamp: number;
 }
 
+export interface AbilityGrantView {
+  effect_timestamp?: number;
+  source?: string;
+  counter?: boolean;
+}
+
 export interface KeywordAbilityView {
+  source?: string;
   effect_timestamp?: number;
   label: string;
   granted?: boolean;
@@ -107,12 +114,17 @@ export type PermanentRestriction =
   | 'doesnt_untap'
   | 'must_attack';
 
+export interface RestrictionView {
+  kind: PermanentRestriction;
+  source?: string;
+}
+
 export interface PermanentState {
   /** Effective evergreen grants, keyed by keyword. A record grant names its timestamp. */
-  keyword_grants?: Record<string, number | null>;
+  keyword_grants?: Record<string, AbilityGrantView>;
   keyword_abilities?: KeywordAbilityView[];
   attacks_despite_defender?: boolean;
-  restrictions?: PermanentRestriction[];
+  restrictions?: RestrictionView[];
   types?: CardTypes;
   is_token?: boolean;
   temp_subtypes?: string[];

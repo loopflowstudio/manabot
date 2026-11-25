@@ -120,16 +120,21 @@ Battlefield cards and the inspection share one effective state vocabulary:
 - **Overridden Defender**: remains visible in `--text-tertiary` with
   `text-decoration: line-through` while the creature can attack anyway; Inspect
   reads `"Defender · can attack anyway"`.
-- **Granted abilities**: any keyword or keyword ability not printed on the
-  current face carries a 1 px `--gain` ring.
+- **Granted abilities**: a keyword supplied by another permanent, a counter or a
+  resolved effect carries a 1 px `--gain` ring. A creature’s own active
+  conditional ability uses the ordinary ring.
 - **Board vs. Inspect**: `Flash` stays in Inspect only; attacking and blocking
   are carried by card lean, tilt and the block line on the board and listed in
   words in Inspect and `aria-label`. `"Struck first"` stays on the card during
   the first-strike combat-damage window.
 - **Whole-chip fit**: `.chip` never uses `text-overflow: ellipsis` or clips
   mid-word (`scrollWidth <= clientWidth` at every card width). Chips that do not
-  fit whole in the card's available rows fold into a trailing `+N`. When the
-  name and power/toughness plate leave no full row, the count sits beside the name.
+  fit whole in the card’s available rows fold into a trailing `+N`. Its tooltip
+  lists each hidden badge. Rows sit 2 px inside the art and chips have 4 px
+  horizontal padding. The bottom row shares space with power/toughness.
+  Recorded policy occupies that row in Watch. Only a label too wide for the
+  card uses a compact form such as `Firebend 2` or `Ward`. Inspect retains
+  the full text. When the art has no room for the count, it sits beside the name.
 
 ## Checks
 

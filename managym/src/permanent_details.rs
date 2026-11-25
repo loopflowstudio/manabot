@@ -4,13 +4,16 @@ use std::{collections::BTreeMap, sync::LazyLock};
 
 use crate::{
     agent::ability_description::cost_description,
-    experience::{KeywordAbilityView, PermanentDetails, PermanentRestriction},
+    experience::{
+        AbilityGrantView, KeywordAbilityView, PermanentDetails, PermanentRestriction,
+        RestrictionView,
+    },
     state::{
         ability::{
-            Ability, Condition, Effect, EffectValue, PaymentCost, Per, TriggerCondition,
-            TriggerSubject,
+            Ability, AbilitySource, Condition, Effect, EffectValue, PaymentCost, Per,
+            TriggerCondition, TriggerSubject,
         },
-        card::Keywords,
+        card::{Keywords, Restriction},
         game_object::PlayerId,
         mana::Color,
     },
@@ -83,6 +86,7 @@ fn keyword_label(ability: &Ability, active: impl FnOnce(&Condition) -> bool) -> 
 
 impl Game {
     pub fn permanent_details(&self, viewer: PlayerId) -> BTreeMap<u32, PermanentDetails> {
+        let _scan = self.board_scan();
         let sides = [viewer, PlayerId(1 - viewer.0)];
         let ids = sides
             .into_iter()
@@ -91,45 +95,74 @@ impl Game {
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 let controller = permanent.controller;
-                // Layer 6 starts with the current copiable face's trigger list.
-                // Grants append instances; ability loss clears the entire prefix.
-                let own = if view.abilities_lost {
-                    0
-                } else {
-                    self.state[permanent.object].abilities.len()
+                let grant = |source| AbilityGrantView {
+                    source: match source {
+                        AbilitySource::Permanent(id) => Some(self.characteristics(id).name.clone()),
+                        _ => None,
+                    },
+                    effect_timestamp: match source {
+                        AbilitySource::Effect(timestamp) => Some(timestamp.0),
+                        _ => None,
+                    },
+                    counter: matches!(source, AbilitySource::Counter(_)),
                 };
                 let keyword_abilities = view
                     .triggered_abilities
                     .iter()
-                    .enumerate()
-                    .filter_map(|(i, trigger)| {
+                    .filter_map(|trigger| {
+                        let origin = grant(trigger.source);
                         Some(KeywordAbilityView {
                             label: keyword_label(&trigger.ability, |condition| {
                                 self.check_static_condition(condition, controller)
                             })?,
-                            granted: i >= own,
-                            effect_timestamp: trigger.effect_timestamp.map(|timestamp| timestamp.0),
+                            granted: trigger.source != AbilitySource::Own,
+                            effect_timestamp: origin.effect_timestamp,
+                            source: origin.source,
                         })
                     })
                     .collect();
                 let restrictions = [
                     (
                         PermanentRestriction::CantBeBlocked,
+                        Some(Restriction::CantBeBlocked),
                         self.cant_be_blocked_unconditionally(id, &view, controller),
                     ),
                     (
                         PermanentRestriction::CantBlock,
+                        None,
                         self.cant_block_unconditionally(id, &view),
                     ),
                     (
                         PermanentRestriction::CantAttackOrBlock,
+                        Some(Restriction::CantAttackOrBlock),
                         self.cant_attack_or_block(id, &view, controller),
                     ),
-                    (PermanentRestriction::DoesntUntap, self.doesnt_untap(id)),
-                    (PermanentRestriction::MustAttack, self.must_attack(id)),
+                    (
+                        PermanentRestriction::DoesntUntap,
+                        Some(Restriction::DoesntUntap),
+                        self.doesnt_untap(id),
+                    ),
+                    (
+                        PermanentRestriction::MustAttack,
+                        Some(Restriction::AttacksEachCombat),
+                        self.must_attack(id),
+                    ),
                 ]
                 .into_iter()
-                .filter_map(|(rule, active)| active.then_some(rule))
+                .filter(|(_, _, active)| *active)
+                .flat_map(|(kind, rule, _)| {
+                    let sources = rule
+                        .map(|rule| self.external_restriction_sources(id, rule))
+                        .unwrap_or_default();
+                    let own = sources
+                        .is_empty()
+                        .then_some(RestrictionView { kind, source: None });
+                    own.into_iter()
+                        .chain(sources.into_iter().map(move |source| RestrictionView {
+                            kind,
+                            source: Some(self.characteristics(source).name.clone()),
+                        }))
+                })
                 .collect();
                 (
                     permanent.id.0,
@@ -139,7 +172,9 @@ impl Game {
                         keyword_grants: (view.keywords != Keywords::default()).then(|| {
                             view.keyword_grants
                                 .iter()
-                                .map(|(k, t)| (k.name().to_owned(), t.map(|t| t.0)))
+                                .map(|(keyword, source)| {
+                                    (keyword.name().to_owned(), grant(*source))
+                                })
                                 .collect()
                         }),
                         restrictions,

@@ -417,7 +417,20 @@ pub struct ContinuousEffectView {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct AbilityGrantView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_timestamp: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub counter: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct KeywordAbilityView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_timestamp: Option<u32>,
     pub label: String,
@@ -435,16 +448,24 @@ pub enum PermanentRestriction {
     MustAttack,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RestrictionView {
+    pub kind: PermanentRestriction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub struct PermanentDetails {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub keyword_grants: Option<std::collections::BTreeMap<String, Option<u32>>>,
+    pub keyword_grants: Option<std::collections::BTreeMap<String, AbilityGrantView>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keyword_abilities: Vec<KeywordAbilityView>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacks_despite_defender: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub restrictions: Vec<PermanentRestriction>,
+    pub restrictions: Vec<RestrictionView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

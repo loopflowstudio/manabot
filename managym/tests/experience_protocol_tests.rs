@@ -166,8 +166,9 @@ fn permanent_details_round_trip_alongside_historical_permanents() {
     };
     assert_eq!(round_trip(&row), row);
     row["attacks_despite_defender"] = json!(true);
-    row["restrictions"] = json!(["cant_block"]);
-    row["keyword_abilities"] = json!([{"label": "Prowess", "granted": true}]);
+    row["restrictions"] = json!([{"kind": "cant_block"}]);
+    row["keyword_grants"] = json!({"menace": {"source": "Sokka"}});
+    row["keyword_abilities"] = json!([{"label": "Prowess", "granted": true, "source": "Sokka"}]);
     assert_eq!(round_trip(&row), row);
     row["unknown_detail"] = json!(true);
     assert!(from_value::<LegacyPermanentView>(row).is_err());

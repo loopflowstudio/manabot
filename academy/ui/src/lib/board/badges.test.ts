@@ -11,10 +11,11 @@ const face = { cost: '', type_line: 'Creature', power: 1, toughness: 1, colors: 
 
 describe('effective battlefield state', () => {
   it('uses public frame details even with no face, or a same-name face with other abilities', () => {
-    const p = creature({ keywords: ['menace', 'flash'], keyword_grants: { menace: null },
-      keyword_abilities: [{ label: 'Prowess', granted: true }] });
+    const p = creature({ keywords: ['menace', 'flash'], keyword_grants: { menace: { source: 'Sokka' } },
+      keyword_abilities: [{ label: 'Prowess', granted: true, source: 'Sokka' }] });
     expect(badgesOf(p, face)).toEqual(badgesOf(p, null));
     expect(board(p).map(b => [b.label, b.granted])).toEqual([['Menace', true], ['Prowess', true]]);
+    expect(board(p).map(badgeReading)).toEqual(['Menace · Sokka', 'Prowess · Sokka']);
     expect(badgesOf(p).map(badgeReading)).toContain('Flash');
     expect(board(creature())).toEqual([]);
     expect(board(creature({ keyword_abilities: [{ label: 'Firebending 1' }] })).map(b => b.label)).toEqual(['Firebending 1']);
@@ -25,7 +26,7 @@ describe('effective battlefield state', () => {
     expect(board(bear).map(badgeReading)).toEqual(['Defender']);
     expect(board({ ...bear, attacks_despite_defender: true }).map(badgeReading)).toEqual(['Defender · can attack anyway']);
     expect(badgesOf(creature({ abilities_lost: true, face_down: true }), face).map(badgeReading)).toEqual(['No abilities', 'Untapped']);
-    const grant = creature({ abilities_lost: true, keywords: ['flying'], keyword_grants: { flying: 4 },
+    const grant = creature({ abilities_lost: true, keywords: ['flying'], keyword_grants: { flying: { effect_timestamp: 4 } },
       effects: [{ modification: 'LoseAllAbilities', duration: 'EndOfTurn', source: 'Frogify', timestamp: 1 },
         { modification: 'AddKeywords', keywords: ['flying'], duration: 'EndOfTurn', source: 'Yip Yip!', timestamp: 4 }] });
     expect(board(grant).map(badgeReading)).toEqual(['Lost base abilities · Frogify, until end of turn', 'Flying · Yip Yip!, until end of turn']);
@@ -52,21 +53,25 @@ describe('effective battlefield state', () => {
   it('keeps restrictions once, in priority order, and combat roles in Inspect and speech', () => {
     const p = creature({ damage: 2, summoning_sick: true, first_strike_participant: true, plus1_counters: 2,
       blocking: 0, attacking: true, entered_this_turn: true, attacked_this_turn: true, counters: { charge: 1 },
-      restrictions: ['cant_be_blocked', 'cant_block', 'cant_attack_or_block', 'doesnt_untap', 'must_attack'],
+      restrictions: [{ kind: 'cant_be_blocked' }, { kind: 'cant_block' }, { kind: 'cant_attack_or_block' },
+        { kind: 'doesnt_untap', source: 'Watery Grasp' }, { kind: 'must_attack' }],
       effects: [{ modification: 'DoesntUntap', duration: 'Indefinite', source: 'Frost', timestamp: 1 }],
       keywords: ['first_strike', 'flash', 'future_keyword'] });
     expect(board(p).map(b => b.label)).toEqual(['2 damage', 'Summoning sick', "Can't be blocked", "Can't block",
       "Can't attack or block", "Doesn't untap", 'Must attack', 'Struck first', '+2/+2', 'Charge ×1', 'First strike', 'Future keyword']);
     expect(badgesOf(p, null, 'Badgermole').map(badgeReading)).toEqual(expect.arrayContaining([
-      "Doesn't untap · Frost", 'first-strike participant', 'blocking Badgermole', 'attacking', 'Flash', 'entered this turn', 'attacked this turn',
+      "Doesn't untap · Watery Grasp · Frost", "Must attack", 'first-strike participant', 'blocking Badgermole', 'attacking', 'Flash', 'entered this turn', 'attacked this turn',
     ]));
   });
 
   it('names a keyword counter as the source of its keyword, on one chip', () => {
-    const mai = creature({ counters: { double_strike: 1 }, keywords: ['double_strike'], keyword_grants: { double_strike: null },
+    const mai = creature({ counters: { double_strike: 1 }, keywords: ['double_strike'], keyword_grants: { double_strike: { counter: true } },
       keyword_abilities: [{ label: 'Prowess' }] });
     expect(board(mai).map(b => [badgeReading(b), b.granted])).toEqual([['Double strike · 1 double strike counter', true], ['Prowess', undefined]]);
     expect(badgesOf(mai).map(badgeReading)).toContain('1 double strike counter');
+    const printed = board({ ...mai, keyword_grants: {} })[0];
+    expect(badgeReading(printed)).toBe('Double strike');
+    expect(printed.granted).toBe(false);
     const shocked = creature({ counters: { stun: 1 } });
     expect(board(shocked).map(b => b.label)).toEqual(['Stun ×1']);
   });
@@ -75,21 +80,33 @@ describe('effective battlefield state', () => {
 describe('whole-chip fitting', () => {
   const labels = (...values: string[]): Badge[] => values.map(label => ({ label, kind: 'ability' }));
   const measure = (s: string) => s.length * 8 + 10;
-  it('skips an oversized label, fitting a later one and the exact overflow count', () => {
-    const result = fitBadges(labels('Ward—Discard a card', 'Prowess', 'Ward {2}'), 97, 1, measure);
-    expect(result.visible.map(b => b.label)).toEqual(['Prowess']);
-    expect(result.hidden).toBe(2);
+  it('keeps a shorter ability beside overflow when a longer ability would displace it', () => {
+    const badges = labels('First strike', 'Prowess', 'Ward {2}');
+    const result = fitBadges(badges, [108], 108, measure);
+    expect(result.rows.map(row => row.map(chip => chip.label))).toEqual([['Prowess', '+2']]);
+    expect(result.hidden.map(b => b.label)).toEqual(['First strike', 'Ward {2}']);
   });
-  it('makes room when the overflow count gains a digit', () => {
+  it('reserves space for the actual number of hidden chips', () => {
     const badges = labels('AA', 'BB', ...Array(9).fill('Exceeds width'));
-    const result = fitBadges(badges, 60, 1, measure);
-    expect(result.visible).toEqual([]);
-    expect(result.hidden).toBe(11);
+    const result = fitBadges(badges, [60], 60, measure);
+    expect(result.rows[0].map(chip => chip.label)).toEqual(['+11']);
+    expect(result.hidden).toEqual(badges);
   });
-  it('fits the spiral at 16px and uses the count alone when no row is available', () => {
+  it('places two full labels on a turned card and compacts only at narrow full widths', () => {
+    const tyLee = board(creature({ restrictions: [{ kind: 'doesnt_untap' }], keyword_abilities: [{ label: 'Prowess' }] }));
+    const textWidth = (s: string) => 6 * s.length + 10;
+    expect(fitBadges(tyLee, [106, 70], 106, textWidth).rows.map(row => row.map(c => c.label)))
+      .toEqual([["Doesn't untap"], ['Prowess']]);
+    const cadets = board(creature({ keyword_abilities: [{ label: 'Firebending 2' }] }));
+    expect(fitBadges(cadets, [74, 42], 74, textWidth).rows[0][0].label).toBe('Firebend 2');
+    expect(fitBadges(cadets, [106], 106, textWidth).rows[0][0].label).toBe('Firebending 2');
+  });
+  it('fits the spiral at 16px; the name takes overflow when the plate fills the last row', () => {
     const sick: Badge = { kind: 'sick', label: 'Summoning sick' };
     const badges = [sick, ...labels('Ward {2}'), { kind: 'ability', label: 'Flash', inspectOnly: true } satisfies Badge];
-    expect(fitBadges(badges, 74, 2, measure)).toEqual({ visible: badges.slice(0, 2), hidden: 0 });
-    expect(fitBadges(badges, 74, 0, measure)).toEqual({ visible: [], hidden: 2 });
+    expect(fitBadges(badges, [74, 74], 74, measure).rows.map(row => row.map(c => c.badge))).toEqual([[sick], [badges[1]]]);
+    for (const widths of [[], [10]]) {
+      expect(fitBadges(badges, widths, 74, measure)).toEqual({ rows: [], hidden: badges.slice(0, 2) });
+    }
   });
 });
