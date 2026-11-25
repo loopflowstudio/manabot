@@ -1,4 +1,4 @@
-at: 63d66a841754b8291024cef7c7c66d9efea2b9a5
+at: 7c75706ef1e67385909684d24dd53f7b17b03375
 first:
   - path: docs/engine.md
     why: Viewer-safe pile splits and cast-time target division contracts
@@ -7,7 +7,7 @@ first:
   - path: managym/state/src/ability.rs
     why: Target relations, GrantPlay, LibraryTop, composite ward, Repeat, Fight
   - path: managym/state/src/card.rs
-    why: Entry choices, Changeling, spell division, nonmana activation ban
+    why: Entry choices, fixed entry mana, Changeling, division, activation ban
   - path: managym/state/src/permanent.rs
     why: EntryChoice stored per battlefield incarnation; Wish counters
   - path: managym/state/src/mana.rs
@@ -37,11 +37,11 @@ first:
   - path: managym/src/flow/resolution.rs
     why: Target shares, LibraryTop/Unselected, GrantPlay, Repeat, Fight, expiry mana
   - path: managym/src/flow/layers.rs
-    why: Chosen types, Changeling, dirty finish_object bits, fast targets
+    why: Chosen types, fixed entry mana, Changeling, dirty bits, fast targets
   - path: managym/src/flow/statics.rs
     why: Guarded source-relative predicates, graveyard arrivals, Spyglass bans
   - path: managym/src/flow/mana.rs
-    why: Chosen-value mana, expiry clearing, purpose-projected search equivalence and dedup
+    why: Chosen-value mana, expiry, fixed fast-paths, source-class cache, search pruning
   - path: managym/src/flow/turn.rs
     why: Unified graveyard arrivals and casts-before-triggering lookup
   - path: managym/src/flow/zones.rs
@@ -89,7 +89,7 @@ first:
   - path: managym/src/flow/target_authority_tests.rs
     why: Whole-assignment target swaps vs single-slot retargeting
   - path: managym/src/flow/mana/tests.rs
-    why: Purpose-projected equivalence, bitmasks, mana dedup, and search bound tests
+    why: Fixed fast-paths, tap dedup, sibling pruning, equivalence, bound tests
   - path: managym/examples/bench_states.rs
     why: Entry-choice, Changeling, Genesis Wave, and Ventmaw stress states
   - path: managym/cards/tests/cards/fdn.rs
