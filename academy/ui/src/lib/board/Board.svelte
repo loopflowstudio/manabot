@@ -26,15 +26,15 @@
   import Lines from './Lines.svelte';
   import { animateDeathTravel, collectDeathMarks, prefersReducedMotion, Travel, type DeathMark } from './motion';
   import { region } from './region';
-  import { BEAT_MS, computeStopDeltas, scrubberStops, sharedLaterCount, stopHasSeq, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
+  import { BEAT_MS, computeStopDeltas, cursorView, scrubberStops, sharedLaterCount, stopHasSeq, turnAt, unreadWalkStops, walkStops, type BeatPace } from './beats';
   import { findBoard, type StepBoard } from './boards';
-  import { buildHistory, cursorReading, lineAtCursor, stepCursor, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
+  import { buildHistory, cursorReading, hasTrackHistory, recentHistory, stepCursor, type CursorScope, type CursorSelection, type HistoryLine, type HistoryNote, type HistoryTurn } from './history';
   import { EVIDENCE, type OfferEvidence, type StripLine } from './replay';
   import { paymentPlan, previewable } from './payment';
   import { addressOf, committedOf, drawDraft, draftWords, EMPTY_DRAFT, isDeclaration, loadDraft, pileCounts as draftPiles, planKey, planOf, saveDraft,
     setPileCount, stepOffer, toggleAttacker, toggleBlock, type CombatFetcher, type CombatPreview, type DeclarationStep, type Draft } from './combat';
   import { primaryLabel, promptHint, promptLine } from './prompt';
-  import { recentView, boardLines, turnOwners, type RecentView } from './recent';
+  import { recentMarks, boardLines, turnOwners, type RecentMarks } from './recent';
   import Plate from './Plate.svelte';
   import Rail from './Rail.svelte';
   import BoardCard from './BoardCard.svelte';
@@ -85,15 +85,11 @@
     onjump?: (id: string, boardSeq: number | null) => void;
     /** The move the shown position belongs to. */
     currentMove?: string | null;
-    /** Review sub-step reading shown in the top bar when inspecting a line inside a transition. */
-    cursorBanner?: string | null;
-    /** Review sub-step highlighted history line ids. */
-    cursorLineIds?: ReadonlySet<string>;
-    /** Review sub-step cast/activation seq marked when inspecting a standalone resolution. */
-    cursorSourceSeq?: number | null;
-    /** Review sub-step raised board subjects. */
-    cursorSubjects?: ReadonlySet<number>;
-    /** Clear Review sub-step cursor (Esc / "Esc for now"). */
+    /** External cursor seq (Review sub-step inside a `consequences` transition). */
+    cursorSeq?: number | null;
+    /** Error reconstructing `stepBoards` patches (surfaces "Board unavailable for this step"). */
+    stepBoardsError?: string | null;
+    /** Clear Review sub-step cursor (Esc / "Esc for now" / clicking the earlier board). */
     onclearcursor?: () => void;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
@@ -119,8 +115,7 @@
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', notes = [], canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, history: historyGiven, onjump, currentMove = null, cursorBanner = null, cursorLineIds: externalCursorLineIds,
-    cursorSourceSeq: externalCursorSourceSeq = null, cursorSubjects: externalCursorSubjects, onclearcursor,
+    since: sinceGiven, history: historyGiven, onjump, currentMove = null, cursorSeq = null, stepBoardsError = null, onclearcursor,
     evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
@@ -366,7 +361,7 @@
   // The revision your last move was made at; events after it are "since your last move".
   let since = $state.raw<number | null>(null);
   const sinceRevision = $derived(sinceGiven !== undefined ? sinceGiven : since);
-  const recent = $derived(recentView(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index), players));
+  const recent = $derived(recentMarks(frame, sinceRevision, presentation.events, index => presentation.labelsAt(index)));
 
   // ———————————————— History and one cursor
 
@@ -382,49 +377,37 @@
     },
   ));
 
-  // One cursor into the history (`{ cursor: seq | null, walking: boolean }`).
-  // `cursor === null` rests on now. Walking the opponent's turn, stepping with
-  // ← →, selecting a history line, clicking a scrubber tick, and "Show their
-  // turn again" all move this one cursor; the rail's decision stays live
-  // throughout.
+  // One cursor into the history (`selection: { seq, scope } | null` + timer
+  // state `walking: boolean`). `selection === null` rests on now. Walking,
+  // clicking a scrubber tick, and "Show their turn again" select `scope: 'stop'`
+  // (keeping multi-line stops intact when paused); clicking a history line,
+  // pressing ← →, or stepping into a Review transition selects `scope: 'line'`.
   let shownSeq = untrack(() => presentation.events.at(-1)?.seq ?? -1);
   let shownMatch = untrack(() => frame.match_id);
   let shownRevision = untrack(() => frame.revision);
   let wasConnected = untrack(() => connection === 'connected');
-  let cursor = $state<number | null>(null);
+  let selection = $state<CursorSelection | null>(null);
   let walking = $state(false);
   let walkQueue = $state.raw<number[]>([]);
   let captionHovered = $state(false);
 
+  const activeCursor = $derived<CursorSelection | null>(
+    connection !== null ? selection : cursorSeq !== null ? { seq: cursorSeq, scope: 'line' } : null,
+  );
+  const cursor = $derived(activeCursor?.seq ?? null);
+
   const stopsAll = $derived(walkStops(history, stepBoards));
   const scrubber = $derived(scrubberStops(stopsAll, cursor));
   const hasOpponentTurn = $derived(stopsAll.some(stop => stop.opponentAction));
-  const showWalkBar = $derived(connection !== null && (hasOpponentTurn || cursor !== null));
-  const activeStop = $derived(cursor === null ? null : stopsAll.find(stop => stopHasSeq(stop, cursor!)) ?? null);
-  const activeLine = $derived(cursor === null ? null : lineAtCursor(history, cursor));
-  const activeStopIndex = $derived(cursor === null ? -1 : scrubber.stops.findIndex(stop => stopHasSeq(stop, cursor!)));
-  const liveCursorLineIds = $derived.by<ReadonlySet<string>>(() => {
-    if (cursor === null) return new Set();
-    if (walking && activeStop) return new Set(activeStop.lineIds);
-    if (activeLine) return new Set([activeLine.line.id]);
-    return activeStop ? new Set(activeStop.lineIds) : new Set();
-  });
-  const railCursorLineIds = $derived(externalCursorLineIds ?? liveCursorLineIds);
-  const railCursorSourceSeq = $derived(externalCursorSourceSeq ?? activeLine?.line.sourceSeq ?? null);
-  const raisedSubjects = $derived<Set<number>>(
-    externalCursorSubjects ? new Set(externalCursorSubjects)
-      : cursor === null ? new Set()
-        : new Set(walking ? (activeStop?.subjects ?? []) : (activeLine?.line.subjects ?? activeStop?.subjects ?? [])),
-  );
-  const walkCaptionText = $derived(
-    cursor === null ? '' : (walking ? activeStop?.caption : activeLine?.line.sentence) ?? activeStop?.caption ?? '',
-  );
+  const showWalkBar = $derived(connection !== null && (hasOpponentTurn || selection !== null));
+  const active = $derived(cursorView(history, stopsAll, activeCursor));
+  const activeStopIndex = $derived(cursor === null ? -1 : scrubber.stops.findIndex(stop => stopHasSeq(stop, cursor)));
 
-  function setCursor(next: number | null): void {
+  function setCursor(next: number | null, scope: CursorScope = 'line'): void {
     walking = false;
     walkQueue = [];
     captionHovered = false;
-    cursor = next;
+    selection = next === null ? null : { seq: next, scope };
   }
 
   function returnToNow(): void {
@@ -433,14 +416,14 @@
 
   function selectHistoryLine(selected: HistoryLine): void {
     const seq = selected.boardSeq ?? selected.seq;
-    if (seq !== null) setCursor(seq);
+    if (seq !== null) setCursor(seq, 'line');
   }
 
   function replayTurn(): void {
     const turnStops = scrubber.stops;
     if (!turnStops.length) return;
     walkQueue = turnStops.map(stop => stop.seq);
-    cursor = walkQueue[0];
+    selection = { seq: walkQueue[0], scope: 'stop' };
     captionHovered = false;
     walking = beatPace !== 'off' && !prefersReducedMotion();
   }
@@ -461,7 +444,7 @@
         const fresh = prefersReducedMotion() || beatPace === 'off' ? [] : unreadWalkStops(currentStops, shownSeq);
         if (fresh.length > 0) {
           walkQueue = fresh.map(stop => stop.seq);
-          cursor = walkQueue[0];
+          selection = { seq: walkQueue[0], scope: 'stop' };
           walking = true;
           captionHovered = false;
         } else if (revision !== shownRevision) {
@@ -477,13 +460,14 @@
 
   // Walk timer: advances one kept board stop per pace tick; pauses while the pointer rests on the caption.
   $effect(() => {
-    if (!walking || cursor === null || captionHovered) return;
+    const seq = selection?.seq ?? null;
+    if (!walking || seq === null || captionHovered) return;
     if (beatPace === 'off') { walking = false; return; }
-    const index = walkQueue.indexOf(cursor);
+    const index = walkQueue.indexOf(seq);
     if (index < 0) { walking = false; return; }
     const timer = setTimeout(() => {
       if (index + 1 < walkQueue.length) {
-        cursor = walkQueue[index + 1];
+        selection = { seq: walkQueue[index + 1], scope: 'stop' };
       } else {
         returnToNow();
       }
@@ -491,47 +475,56 @@
     return () => clearTimeout(timer);
   });
 
-  // Damage window totals and the result card wait until the cursor reaches now.
-  const NO_DAMAGE: RecentView['damage'] = { objects: new Map(), players: new Map() };
-  const damage = $derived(cursor !== null ? NO_DAMAGE : recent.damage);
-  const finished = $derived(result !== undefined && cursor === null);
+  // Window totals, now's `.touched` rings, the recap, and the result card wait until the cursor reaches now.
+  const NO_DAMAGE: RecentMarks['damage'] = { objects: new Map(), players: new Map() };
+  const EMPTY_TOUCHED = new Set<number>();
+  const damage = $derived(activeCursor !== null ? NO_DAMAGE : recent.damage);
+  const touched = $derived(activeCursor !== null ? EMPTY_TOUCHED : recent.touched);
+  const finished = $derived(result !== undefined && activeCursor === null);
+  const recapSource = $derived(
+    historyGiven && !hasTrackHistory(presentation.events)
+      ? buildHistory(presentation.events, index => presentation.labelsAt(index), tellPlayers)
+      : history,
+  );
+  const recentFacts = $derived(
+    activeCursor !== null ? [] : recentHistory(recapSource, sinceRevision, presentation.events.at(-1)?.seq ?? null),
+  );
 
-  // Per-stop damage and counter deltas shown on cards/plates while walking or looking back.
-  const activeSeqSet = $derived.by<ReadonlySet<number>>(() => {
-    if (cursor === null) return new Set();
-    if (walking && activeStop) return new Set(activeStop.seqs);
-    if (activeLine) return new Set(activeLine.line.seqs);
-    return new Set(activeStop?.seqs ?? [cursor]);
-  });
-
-  // Look up the kept board for `cursor`: a past board has no live offers, while
-  // the rail stays live throughout.
-  const cursorHit = $derived(cursor !== null ? findBoard(stepBoards, cursor) : null);
-  const boardMissing = $derived(cursor !== null && cursorHit === null);
-  const boardSharedCount = $derived(cursor !== null && cursorHit?.fallback ? sharedLaterCount(history, cursor, cursorHit.last) : 0);
-  const drawn = $derived(cursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
-  const board = $derived(cursor !== null ? boardView(drawn, players) : view);
+  // Look up the kept board for `activeCursor`: a past board has no live offers,
+  // while the rail stays live throughout.
+  const cursorHit = $derived(activeCursor !== null && !stepBoardsError ? findBoard(stepBoards, activeCursor.seq) : null);
+  const boardMissing = $derived(activeCursor !== null && !stepBoardsError && cursorHit === null);
+  const boardSharedCount = $derived(activeCursor !== null && cursorHit?.fallback ? sharedLaterCount(history, activeCursor.seq, cursorHit.last) : 0);
+  const drawn = $derived(activeCursor !== null ? { ...frame, projection: cursorHit?.projection ?? frame.projection, offers: [] } : drafted);
+  const board = $derived(activeCursor !== null ? boardView(drawn, players) : view);
   const boardProjection = $derived(drawn.projection);
-  const stopDeltas = $derived(computeStopDeltas(presentation.events, activeSeqSet, boardProjection));
-  const boardNames = $derived(cursor !== null && cursorHit
+  const stopDeltas = $derived(computeStopDeltas(presentation.events, active.seqs, boardProjection));
+  const boardNames = $derived(activeCursor !== null && cursorHit
     ? new Map([...cursorHit.projection.agent.battlefield, ...cursorHit.projection.opponent.battlefield]
       .map(permanent => [permanent.id, permanent.name ?? 'permanent']))
     : names);
   const owners = $derived(turnOwners(frame, presentation.events));
-  const turnNumber = $derived(cursor !== null ? turnAt(presentation.events, cursor) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
+  const turnNumber = $derived(activeCursor !== null ? turnAt(presentation.events, activeCursor.seq) ?? boardProjection.turn.turn_number : boardProjection.turn.turn_number);
   const turnStep = $derived(turnNumber === boardProjection.turn.turn_number ? boardProjection.turn.step : null);
   const yourTurn = $derived(turnStep !== null ? boardProjection.turn.active_player_id === boardProjection.agent.id : owners.get(turnNumber) === 'you');
   const track = $derived(phaseTrack(turnStep, stops, yourTurn, onceStops));
-  const lines = $derived(boardLines(drawn, presentation.events, cursor !== null ? [] : recent.resolved, cursor !== null ? null : sinceRevision));
+  const lines = $derived(boardLines(drawn, presentation.events, activeCursor !== null ? [] : recent.resolved, activeCursor !== null ? null : sinceRevision));
   /** Permanents something on the stack targets: a dashed edge in the damage colour. */
   const targeted = $derived(new Set(lines.flatMap(line => line.kind === 'target' && line.to.kind === 'object' ? [line.to.id] : [])));
   /** The person may act on the drawn board now: what they cannot act on steps back. */
-  const acting = $derived(live && cursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
-  const activeCursorReading = $derived(
-    cursorBanner ?? (cursor !== null ? cursorReading(history, presentation.events, cursor, players) : null),
-  );
+  const acting = $derived(live && activeCursor === null && frame.prompt?.actor === projection.agent.player_index && (view.list.length > 0 || drafting));
+  const activeCursorReading = $derived.by<string | null>(() => {
+    if (activeCursor === null) return null;
+    const reading = cursorReading(history, presentation.events, activeCursor, players, active.stop);
+    if (stepBoardsError) return `${reading} · Board unavailable for this step`;
+    if (!showWalkBar && boardMissing) return `${reading} · Board not kept for this step`;
+    if (!showWalkBar && boardSharedCount > 0) {
+      return `${reading} · shared with ${boardSharedCount} later ${boardSharedCount === 1 ? 'line' : 'lines'}`;
+    }
+    return reading;
+  });
   function clearActiveCursor(): void {
-    if (cursor !== null) returnToNow();
+    if (selection !== null) returnToNow();
     else onclearcursor?.();
   }
 
@@ -562,7 +555,7 @@
       projection: boardProjection,
       events: presentation.events,
       labelsAt: index => presentation.labelsAt(index),
-      activeSeqs: activeSeqSet,
+      activeSeqs: active.seqs,
       cursor,
       sinceRevision,
       pace: beatPace,
@@ -854,7 +847,7 @@
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && armed !== null) { armed = null; return; }
     if (event.key === 'Escape' && (menuAt || zoneAt || hovered)) { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
-    if (event.key === 'Escape' && (cursor !== null || cursorBanner !== null)) { clearActiveCursor(); return; }
+    if (event.key === 'Escape' && activeCursor !== null) { clearActiveCursor(); return; }
     if (!recording && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       const target = event.target as HTMLElement | null;
       const inControl = target !== null && target !== document.body && target !== document.documentElement
@@ -862,7 +855,7 @@
         && (target.closest('button, a, input, select, textarea, summary, [data-testid=stop-bar], [data-region]') !== null);
       if (!inControl) {
         event.preventDefault();
-        setCursor(stepCursor(history, cursor, event.key === 'ArrowLeft' ? -1 : 1));
+        setCursor(stepCursor(history, cursor, event.key === 'ArrowLeft' ? -1 : 1), 'line');
         return;
       }
     }
@@ -901,8 +894,8 @@
       <span class="text-ink" title={[opponent.name, opponent.description].filter(Boolean).join(' — ')}>{said}</span>{#if opponent.deck}<span class="text-ink-3">{' · '}{opponent.deck}</span>{/if}
     </p>
     {#if activeCursorReading}
-      <p class="turn cursor-reading" data-testid="turn-number" data-cursor={cursor ?? 'review'}>
-        <span data-testid="cursor-reading">{activeCursorReading}</span><span aria-hidden="true">&nbsp;·&nbsp;</span><button type="button" class="esc-now" data-testid="cursor-now" onclick={clearActiveCursor}>Esc for now</button>
+      <p class="turn cursor-reading" data-testid="turn-number" data-cursor={cursor} title={activeCursorReading}>
+        <span class="cursor-text" data-testid="cursor-reading">{activeCursorReading}</span><span class="cursor-sep" aria-hidden="true">&nbsp;·&nbsp;</span><button type="button" class="esc-now" data-testid="cursor-now" onclick={clearActiveCursor}>Esc for now</button>
       </p>
     {:else}
       <p class="turn" data-testid="turn-number">Turn {turnNumber} · {yourTurn ? 'yours' : 'theirs'}{#if turnStep !== null && boardProjection.turn.creature_died_this_turn} · A creature died this turn{/if}</p>
@@ -924,15 +917,15 @@
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (clicking an earlier board returns to now; Esc and Space do the same from the keyboard) -->
   <div class="board" id="board" data-testid="game-board" aria-label="Board" bind:this={boardEl} bind:clientHeight={boardHeight} style:grid-template-rows={`minmax(0, 1fr) minmax(0, 1fr) ${handTrack}`}
-    data-board={cursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
-    onclick={event => { if (cursor !== null && !(event.target instanceof Element && event.target.closest('.zone'))) returnToNow(); }}>
+    data-board={activeCursor !== null ? (cursorHit ? 'step' : 'missing') : 'frame'}
+    onclick={event => { if (activeCursor !== null && !(event.target instanceof Element && event.target.closest('.zone'))) clearActiveCursor(); }}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
         stopDamage={stopDeltas.players.get(boardProjection.opponent.player_index) ?? 0}
         choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
-        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {touched} beat={active.subjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {touched} beat={active.subjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
@@ -940,8 +933,8 @@
         stopDamage={stopDeltas.players.get(boardProjection.agent.player_index) ?? 0}
         side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
-        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
-        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={raisedSubjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {touched} beat={active.subjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
+        <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} {touched} beat={active.subjects} damage={damage.objects} stopDeltas={stopDeltas.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
       </div>
     </section>
     <section use:region={{ across: connection !== null }} class="hand" aria-label={`Your hand, ${board.hand.length} cards`} bind:clientWidth={handWidth}>
@@ -1014,12 +1007,12 @@
   </div>
 
   <div class="rail-slot" id="rail-choices">
-    <Rail {view} stack={board.stack} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {history}
+    <Rail {view} stack={board.stack} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recentFacts} resolvedSpells={recent.resolved} {history}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
       {evidence} {recapTitle} {onjump} {currentMove}
       onselectline={connection !== null ? selectHistoryLine : undefined}
-      cursorLineIds={railCursorLineIds} cursorSourceSeq={railCursorSourceSeq}
+      cursorLineIds={active.lineIds} cursorSourceSeq={active.sourceSeq}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 
@@ -1064,11 +1057,13 @@
           <div class="walk-row">
             <!-- svelte-ignore a11y_no_static_element_interactions (resting the pointer on the caption holds the walk) -->
             <div class="walk-caption" data-testid="walk-caption" data-walking={walking} data-holding={walking && captionHovered}
-              aria-live="polite" title={walkCaptionText || undefined}
+              aria-live="polite" title={active.caption || undefined}
               onmouseenter={() => (captionHovered = true)} onmouseleave={() => (captionHovered = false)}>
               {#if cursor !== null}
-                <span class="walk-text">{walkCaptionText}</span>
-                {#if boardMissing}
+                <span class="walk-text">{active.caption}</span>
+                {#if stepBoardsError}
+                  <span class="walk-note" data-testid="board-unavailable"> · Board unavailable for this step</span>
+                {:else if boardMissing}
                   <span class="walk-note" data-testid="board-not-kept"> · Board not kept for this step</span>
                 {:else if boardSharedCount > 0}
                   <span class="walk-note" data-testid="board-shared"> · shared with {boardSharedCount} later {boardSharedCount === 1 ? 'line' : 'lines'}</span>
@@ -1098,7 +1093,7 @@
                 aria-pressed={isActive}
                 aria-label={`Stop ${idx + 1} of ${scrubber.stops.length}: ${stop.caption}`}
                 title={stop.caption}
-                onclick={() => setCursor(stop.seq)}>
+                onclick={() => setCursor(stop.seq, 'stop')}>
                 <span class="tick-bar" aria-hidden="true"></span>
               </button>
             {/each}
@@ -1190,12 +1185,17 @@
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
   }
-  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 20px; line-height: 28px; color: var(--accent-text); }
-  .matchup { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* The matchup gives way first: the turn and the controls keep their width. */
+  .brand { font-family: var(--font-serif); font-weight: 600; font-size: 20px; line-height: 28px; color: var(--accent-text); flex-shrink: 0; }
+  .matchup { min-width: 0; flex: 0 2 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The matchup gives way first: the turn and the controls keep their width; a long cursor reading truncates cleanly before Esc for now. */
   .turn { margin: 0 auto; flex-shrink: 0; font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
-  .turn.cursor-reading { color: var(--accent-text); }
-  .esc-now { font: inherit; color: var(--text-secondary); text-decoration: underline dotted; cursor: pointer; }
+  .turn.cursor-reading {
+    display: flex; align-items: baseline; min-width: 0; flex: 0 1 auto; overflow: hidden;
+    color: var(--accent-text);
+  }
+  .cursor-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cursor-sep, .esc-now { flex: none; }
+  .esc-now { font: inherit; min-height: 0; color: var(--text-secondary); text-decoration: underline dotted; cursor: pointer; }
   .esc-now:hover { color: var(--text); }
   .stops-slot { grid-row: 4; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
   .right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
@@ -1251,7 +1251,7 @@
   .walk-actions { flex: none; display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); }
   .walk-count { font-variant-numeric: tabular-nums; color: var(--text-tertiary); }
   .walk-btn {
-    display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: var(--radius-sm);
+    min-height: 0; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: var(--radius-sm);
     color: var(--text-secondary); white-space: nowrap;
   }
   .walk-btn:hover, .walk-btn:focus-visible { color: var(--text); background: var(--bg-field); }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Observation, PresentationEvent } from '$lib/types';
 import {
+  cursorView,
   loadBeatPace,
   saveBeatPace,
   scrubberStops,
@@ -100,6 +101,18 @@ describe('walk stops over kept boards', () => {
     expect(stops[2].rules).toEqual(['lethal_damage']);
     expect(unreadWalkStops(stops, 40).map(s => s.seq)).toEqual([41, 44, 45, 46, 47]);
     expect(unreadWalkStops(stops, 48)).toEqual([]);
+
+    // Scrubber click / hold selects `scope: 'stop'`, preserving both lines, seqs, and full caption of the multi-line stop.
+    const heldStop = cursorView(turns, stops, { seq: 47, scope: 'stop' });
+    expect([...heldStop.lineIds]).toEqual(['seq-47', 'seq-48']);
+    expect([...heldStop.seqs]).toEqual([47, 48]);
+    expect(heldStop.caption).toBe("Tiger-Seal's trigger resolved · Heuristic drew a card");
+
+    // Clicking an individual history line or pressing ← → selects `scope: 'line'`, focusing only that line.
+    const singleLine = cursorView(turns, stops, { seq: 47, scope: 'line' });
+    expect([...singleLine.lineIds]).toEqual(['seq-47']);
+    expect([...singleLine.seqs]).toEqual([47]);
+    expect(singleLine.caption).toBe("Tiger-Seal's trigger resolved");
   });
 
   it('plays nothing for the person\'s own moves or an empty opponent draw step alone', () => {

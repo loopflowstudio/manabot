@@ -8,6 +8,7 @@ import {
   hasTrackHistory,
   isMoveEvent,
   legacyMoveHistory,
+  recentHistory,
   stepCursor,
   trackMarks,
   type HistoryNote,
@@ -275,6 +276,92 @@ describe('isMoveEvent, hasTrackHistory and trackMarks', () => {
     expect(stepCursor(turns, 3, 1)).toBe(5);
     expect(stepCursor(turns, 6, 1)).toBeNull();
     expect(cursorReading(turns, events, 6, { you: 'You', opponent: 'Heuristic' }))
-      .toBe("Turn 6 · Heuristic's Lightning Strike");
+      .toBe("Turn 6 · Heuristic's Lightning Strike · Earth Kingdom Jailer died · lethal damage");
+    expect(cursorReading(turns, events, 5, { you: 'You', opponent: 'Heuristic' }))
+      .toBe("Turn 6 · Heuristic's Lightning Strike · 3 damage to Earth Kingdom Jailer");
+    expect(cursorReading(turns, events, 3, { you: 'You', opponent: 'Heuristic' }))
+      .toBe('Turn 6 · Heuristic cast Lightning Strike');
+  });
+
+  it('names the active line or multi-line stop directly when its parent is not a player move', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 1, turn_number: 6 }),
+      ev(2, { kind: 'died', objects: [{ entity: 30, incarnation: 1 }] }, {
+        rule: 'lethal_damage',
+        labels: { objects: { '30:1': 'Vengeful Bloodwitch' } },
+      }),
+      ev(3, { kind: 'triggered', source: { entity: 30, incarnation: 1 }, controller: 1, stack: 90 }, {
+        cause: 2,
+        labels: { objects: { '30:1': 'Vengeful Bloodwitch' }, stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      ev(4, { kind: 'targeted', source: { kind: 'stack', id: 90 }, target: { kind: 'player', id: 0 } }, {
+        cause: 3,
+        labels: { stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      ev(5, { kind: 'ability_resolved', source: { entity: 30, incarnation: 1 }, stack: 90 }, {
+        labels: { objects: { '30:1': 'Vengeful Bloodwitch' }, stacks: { '90': 'Vengeful Bloodwitch' } },
+      }),
+      ev(6, { kind: 'life', player: 0, amount: -1, total: 11 }, { cause: 5 }),
+      ev(7, { kind: 'life', player: 1, amount: 1, total: 20 }, { cause: 5 }),
+    ];
+    const turns = buildHistory(events, () => EMPTY, { youSeat: 0, you: 'You', opponent: 'Search 8' });
+    const names = { you: 'You', opponent: 'Search 8' };
+
+    // Parent is a combat death (not a player move): top bar names the trigger itself, not the death.
+    expect(cursorReading(turns, events, 3, names))
+      .toBe('Turn 6 · Trigger · Vengeful Bloodwitch, targeting you');
+    // Parent is trigger resolution (not a player move): top bar names the life change itself.
+    expect(cursorReading(turns, events, 6, names))
+      .toBe('Turn 6 · You lost 1 life (now 11)');
+    // Stop scope on the 2-line drain stop keeps both phrases.
+    expect(cursorReading(turns, events, { seq: 6, scope: 'stop' }, names, {
+      turn: 6,
+      caption: 'You lost 1 life (now 11) · Search 8 gained 1 life (now 20)',
+      lineIds: ['seq-6', 'seq-7'],
+    })).toBe('Turn 6 · You lost 1 life (now 11) · Search 8 gained 1 life (now 20)');
+  });
+});
+
+describe('recentHistory', () => {
+  it('derives the unread recap tail from history with hoverable card segments, sides, cast stack ids, and maxSeq bounds', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 0, turn_number: 1 }, { from_revision: 1, to_revision: 2 }),
+      ev(2, { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 }, {
+        from_revision: 1, to_revision: 2, caused_by: 'cmd-1', labels: { objects: { '10:1': 'Island' } },
+      }),
+      ev(3, { kind: 'passed', player: 0 }, { from_revision: 2, to_revision: 3, caused_by: 'cmd-2' }),
+      ev(4, { kind: 'cast', object: { entity: 44, incarnation: 1 }, controller: 1, stack: 44 }, {
+        from_revision: 3, to_revision: 4, labels: { objects: { '44:1': 'Allies at Last' }, stacks: { '44': 'Allies at Last' } },
+      }),
+      ev(5, { kind: 'targeted', source: { kind: 'stack', id: 44 }, target: { kind: 'object', id: { entity: 137, incarnation: 3 } } }, {
+        from_revision: 3, to_revision: 4, cause: 4, labels: { objects: { '137:3': 'Tiger-Seal' }, stacks: { '44': 'Allies at Last' } },
+      }),
+      ev(6, { kind: 'resolved', stack: 44 }, {
+        from_revision: 3, to_revision: 4, cause: 4, labels: { stacks: { '44': 'Allies at Last' } },
+      }),
+      ev(7, { kind: 'died', objects: [{ entity: 137, incarnation: 3 }] }, {
+        from_revision: 3, to_revision: 4, cause: 6, rule: 'lethal_damage', labels: { objects: { '137:3': 'Tiger-Seal' } },
+      }),
+      ev(8, { kind: 'discarded', objects: [{ entity: 96, incarnation: 2 }], player: 1 }, {
+        from_revision: 4, to_revision: 5, labels: { objects: { '96:2': 'Earth Kingdom Jailer' } },
+      }),
+      ev(9, { kind: 'revealed', cards: ['Kyoshi Warriors'], player: 1 }, {
+        from_revision: 5, to_revision: 6,
+      }),
+    ];
+    const turns = buildHistory(events, () => EMPTY, { youSeat: 0, you: 'You', opponent: 'Search 64' });
+
+    expect(recentHistory(turns, null)).toEqual([]);
+    const tail = recentHistory(turns, 3);
+    expect(tail.map(item => [item.by, item.text, item.spell, item.line.boardSeq])).toEqual([
+      ['opponent', 'Search 64 cast Allies at Last, targeting Tiger-Seal', 44, 4],
+      [null, 'Tiger-Seal died · lethal damage', null, 7],
+      ['opponent', 'Search 64 discarded Earth Kingdom Jailer', null, 8],
+      ['opponent', 'Search 64 revealed Kyoshi Warriors', null, 9],
+    ]);
+    // Hoverable card segments are preserved directly from `tell`.
+    expect(tail[0].segments.filter(s => s.card !== null).map(s => s.card)).toEqual(['Allies at Last', 'Tiger-Seal']);
+    // Review prefix bound (`maxSeq`) clips later game lines cleanly.
+    expect(recentHistory(turns, 3, 7).map(item => item.seq)).toEqual([4, 7]);
   });
 });

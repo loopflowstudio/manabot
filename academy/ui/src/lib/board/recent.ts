@@ -1,15 +1,17 @@
 /**
- * What changed on the board since the person last decided, and the lines that
- * join cards to what they act on.
+ * Board-level marks since the person last decided, and the standing lines that
+ * join stack entries and blockers to what they act on.
  *
- * `recentView(frame, since, events, labelsAt, names)` reads the authority's
- * presentation events (never a diff of snapshots) for what happened after
- * revision `since`: board marks (`touched`, `damage`), resolved spells, and
- * recap facts worded by the shared `tell` module.
- * `boardLines(frame, events)` draws standing facts: a spell on the stack to
- * each of its targets, and each blocker to the attacker it blocks, from the
- * projection while combat lasts and from the block events since the person's
- * last move after it, as long as both creatures are still on the board.
+ * `recentMarks(frame, since, events, labelsAt)` reads the authority's
+ * presentation events (never a diff of snapshots) for board marks after
+ * revision `since`: `touched` objects, `damage` totals, and `resolved` spells
+ * that have left the stack. Recap lines themselves come directly from
+ * `history.ts:recentHistory` so there is only one history pass.
+ *
+ * `boardLines(frame, events)` draws standing facts: every spell or ability on
+ * the stack to each of its targets, and each blocker to the attacker it blocks,
+ * from the projection while combat lasts and from the block events since the
+ * person's last move after it, as long as both creatures are still on the board.
  */
 import type {
   ExperienceFrame,
@@ -17,20 +19,13 @@ import type {
   PresentationLabels,
   SubjectRef,
 } from '$lib/types';
-import { preprocessTrackEvents } from './history';
-import {
-  eventObjectName,
-  eventStackName,
-  segmentText,
-  tell,
-  type TellPlayers,
-} from './tell';
+import { eventObjectName, eventStackName } from './tell';
 
 /** Something on screen a line can start or end at. */
 export type Endpoint =
   | { kind: 'object'; id: number }
   | { kind: 'player'; index: number }
-  /** A spell on (or just off) the stack, by its card id. */
+  /** A spell or ability on (or just off) the stack, by its card or stack-object id. */
   | { kind: 'stack'; id: number };
 
 export interface BoardLine {
@@ -47,21 +42,11 @@ export interface ResolvedSpell {
   name: string;
 }
 
-export interface RecentFact {
-  seq: number;
-  by: Side | null;
-  text: string;
-  /** The card id of the spell a cast fact names. */
-  spell: number | null;
-}
-
-export interface RecentView {
+export interface RecentMarks {
   /** Spells cast since `since` that are no longer on the stack, in cast order. */
   resolved: ResolvedSpell[];
   /** Objects that attacked, blocked, were dealt damage or arrived since `since`. */
   touched: Set<number>;
-  /** One line per fact since `since`, in authority order. */
-  facts: RecentFact[];
   /** Damage dealt since `since`, by object id and by player index. */
   damage: { objects: Map<number, number>; players: Map<number, number> };
 }
@@ -79,8 +64,13 @@ function playerIndex(frame: ExperienceFrame, id: number): number | null {
   return side === null ? null : side === 'you' ? frame.projection.agent.player_index : frame.projection.opponent.player_index;
 }
 
-function stackCardIds(frame: ExperienceFrame): Set<number> {
-  return new Set([...frame.projection.agent.stack, ...frame.projection.opponent.stack].map(card => card.id));
+/** Stack card ids (spells) and stack-object ids (triggered/activated abilities) currently on the stack. */
+function stackIds(frame: ExperienceFrame): Set<number> {
+  return new Set([
+    ...frame.projection.agent.stack.map(card => card.id),
+    ...frame.projection.opponent.stack.map(card => card.id),
+    ...(frame.projection.stack_objects ?? []).map(entry => entry.id),
+  ]);
 }
 
 function battlefieldIds(frame: ExperienceFrame): Set<number> {
@@ -98,14 +88,14 @@ function endpoint(subject: SubjectRef, frame: ExperienceFrame, onBoard: Set<numb
   return null;
 }
 
-/** Standing lines: spells on the stack to their targets, blockers to attackers. */
+/** Standing lines: spells and abilities on the stack to their targets, blockers to attackers. */
 export function boardLines(
   frame: ExperienceFrame,
   events: readonly PresentationEvent[],
   resolved: readonly ResolvedSpell[] = [],
   since: number | null = null,
 ): BoardLine[] {
-  const onStack = stackCardIds(frame);
+  const onStack = stackIds(frame);
   const onBoard = battlefieldIds(frame);
   const lines: BoardLine[] = [];
   const seen = new Set<string>();
@@ -120,7 +110,7 @@ export function boardLines(
     const to = endpoint(event.kind.target, frame, onBoard, onStack);
     if (to) add({ from: { kind: 'stack', id: event.kind.source.id }, to, kind: 'target' });
   }
-  // Targets already chosen for the spell the person is casting now.
+  // Targets already chosen for the spell or ability the person is announcing now.
   const context = frame.projection.decision_context;
   if (context?.source && (context.announcing || onStack.has(context.source.display_id))) {
     for (const target of context.targets) {
@@ -149,110 +139,65 @@ export function boardLines(
   return lines;
 }
 
-const SKIPPED_RECAP_KINDS = new Set(['targeted', 'resolved', 'turn_started', 'passed']);
-
-function factSide(frame: ExperienceFrame, kind: PresentationEvent['kind']): Side | null {
-  switch (kind.kind) {
-    case 'cast':
-      return playerSide(frame, kind.controller) ?? 'opponent';
-    case 'activated':
-      return playerSide(frame, kind.controller);
-    case 'attack_group': {
-      const defender = kind.defender.kind === 'player' ? playerSide(frame, kind.defender.id) : null;
-      return defender === 'you' ? 'opponent' : defender === 'opponent' ? 'you' : null;
-    }
-    case 'land_played':
-    case 'discarded':
-    case 'drew':
-    case 'revealed':
-    case 'searched':
-    case 'looked':
-    case 'sacrificed':
-    case 'lost':
-    case 'life':
-      return playerSide(frame, kind.player);
-    default:
-      return null;
-  }
-}
-
 /**
- * What happened after revision `since`, from presentation events alone.
- * `labelsAt(i)` gives fallback names retained for older recordings without `event.labels`.
+ * Board marks (`touched`, `damage`, `resolved`) after revision `since`, from
+ * presentation events alone. `labelsAt(i)` gives fallback names retained for
+ * older recordings without `event.labels`.
  */
-export function recentView(
+export function recentMarks(
   frame: ExperienceFrame,
   since: number | null,
   events: readonly PresentationEvent[],
   labelsAt: (index: number) => PresentationLabels,
-  names: { you: string; opponent: string },
-): RecentView {
-  const view: RecentView = { resolved: [], touched: new Set(), facts: [], damage: { objects: new Map(), players: new Map() } };
-  if (since === null) return view;
-  const players: TellPlayers = {
-    youSeat: frame.projection.agent.player_index,
-    you: names.you,
-    opponent: names.opponent,
-  };
-  const onStack = stackCardIds(frame);
+): RecentMarks {
+  const marks: RecentMarks = { resolved: [], touched: new Set(), damage: { objects: new Map(), players: new Map() } };
+  if (since === null) return marks;
+  const onStack = stackIds(frame);
   const casts = new Map<number, ResolvedSpell>();
-  const { consumed, foldedTargets, stackTriggers } = preprocessTrackEvents(events, labelsAt);
 
   events.forEach((event, index) => {
     if (event.from_revision < since) return;
     const kind = event.kind;
-    if (kind.kind === 'targeted') {
-      if (kind.target.kind === 'object') view.touched.add(kind.target.id.entity);
-      return;
-    }
-    if (consumed.has(index) || SKIPPED_RECAP_KINDS.has(kind.kind)) return;
-
-    const labels = labelsAt(index);
-    let spell: number | null = null;
     switch (kind.kind) {
+      case 'targeted':
+        if (kind.target.kind === 'object') marks.touched.add(kind.target.id.entity);
+        break;
       case 'cast': {
+        const labels = labelsAt(index);
         const name =
           eventObjectName(event, kind.object, labels)
           ?? eventStackName(event, kind.stack, labels)
           ?? 'a spell';
         casts.set(kind.stack, { id: kind.stack, name });
-        spell = kind.stack;
         break;
       }
       case 'activated':
-        view.touched.add(kind.source.entity);
+        marks.touched.add(kind.source.entity);
         break;
       case 'counters':
       case 'land_played':
-        view.touched.add(kind.object.entity);
+        marks.touched.add(kind.object.entity);
         break;
       case 'damage':
         if (kind.target.kind === 'object') {
-          view.touched.add(kind.target.id.entity);
-          view.damage.objects.set(kind.target.id.entity, (view.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
+          marks.touched.add(kind.target.id.entity);
+          marks.damage.objects.set(kind.target.id.entity, (marks.damage.objects.get(kind.target.id.entity) ?? 0) + kind.amount);
         } else if (kind.target.kind === 'player') {
           const idx = playerIndex(frame, kind.target.id);
-          if (idx !== null) view.damage.players.set(idx, (view.damage.players.get(idx) ?? 0) + kind.amount);
+          if (idx !== null) marks.damage.players.set(idx, (marks.damage.players.get(idx) ?? 0) + kind.amount);
         }
         break;
       case 'attack_group':
-        kind.attackers.forEach(o => view.touched.add(o.entity));
+        kind.attackers.forEach(o => marks.touched.add(o.entity));
         break;
       case 'blocked':
-        view.touched.add(kind.attacker.entity);
-        kind.blockers.forEach(o => view.touched.add(o.entity));
+        marks.touched.add(kind.attacker.entity);
+        kind.blockers.forEach(o => marks.touched.add(o.entity));
         break;
     }
-
-    const segments = tell(event, labels, players, {
-      form: 'sentence',
-      targets: foldedTargets.get(event.seq),
-      trigger: kind.kind === 'ability_resolved' && stackTriggers.has(kind.stack),
-    });
-    view.facts.push({ seq: event.seq, by: factSide(frame, kind), text: segmentText(segments), spell });
   });
-  view.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));
-  return view;
+  marks.resolved = [...casts.values()].filter(spell => !onStack.has(spell.id));
+  return marks;
 }
 
 /** Turn number → whose turn, from the retained turn starts and the current frame. */

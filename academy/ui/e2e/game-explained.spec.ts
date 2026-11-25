@@ -8,6 +8,11 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { selectDeck } from './deck-selection';
+import { tableSnapshot } from './fixtures/table';
+import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
+import type { PresentationEvent, RecoveryEnvelope } from '../src/lib/types';
+
+const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
 
 async function playToDeath(page: Page): Promise<boolean> {
   for (let i = 0; i < 100; i += 1) {
@@ -86,8 +91,9 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(0);
   await expect(page.getByTestId('death-travel')).toHaveCount(0);
   await expect(page.getByTestId('death-chip').first()).toContainText('lethal damage');
-  await expect(page.getByTestId('turn-number')).toContainText('Your Lightning Bolt');
+  await expect(page.getByTestId('turn-number')).toContainText('Your Lightning Bolt · Gray Ogre died · lethal damage');
   await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
+  await expect(page.getByTestId('recent')).toHaveCount(0);
   await expect(page.getByTestId('walk-caption')).toContainText('lethal damage');
   await page.screenshot({ path: testInfo.outputPath('live-death-cursor.png') });
 
@@ -111,18 +117,29 @@ test('indented consequences, per-line kept boards, and Review TraceEvent.boards 
   for (let i = 0; i < await reviewToggles.count(); i += 1) {
     await reviewToggles.nth(0).click();
   }
+  const reviewCast = page.locator('[data-testid=game-log] button[data-move]').filter({ hasText: /Cast Lightning Bolt, targeting Gray Ogre/ }).first();
   const reviewDamage = page.locator('[data-testid=game-log] [data-testid=history-consequence] button[data-move]').filter({ hasText: /3 damage to Gray Ogre/ }).first();
   const reviewDeath = page.locator('[data-testid=game-log] [data-testid=history-consequence] button[data-move]').filter({ hasText: /died · lethal damage/ }).first();
-  // Selecting damage inside the consequences transition rebuilds its per-line board via TraceEvent.boards (Ogre still on board!).
+  // Selecting damage inside the consequences transition uses Board's one cursor: Gray Ogre on board with −3 stop-delta, no whole-transition damage-dealt, and recap hidden.
   await reviewDamage.click();
   await expect(reviewDamage).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(1);
-  // Selecting died inside the same transition shows Gray Ogre gone.
+  await expect(page.locator('.half.opponent [data-testid=stop-delta][data-delta-kind=damage]').first()).toHaveText('−3');
+  await expect(page.getByTestId('damage-dealt')).toHaveCount(0);
+  await expect(page.getByTestId('recent')).toHaveCount(0);
+  // Selecting died inside the same transition shows Gray Ogre gone with its death chip and exact top-bar reading.
   await reviewDeath.click();
   await expect(reviewDeath).toHaveAttribute('aria-current', 'true');
+  await expect(reviewDamage).not.toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.half.opponent [data-testid=board-card]').filter({ hasText: 'Gray Ogre' })).toHaveCount(0);
+  await expect(page.getByTestId('death-chip').first()).toContainText('lethal damage');
+  await expect(page.getByTestId('turn-number')).toContainText('Your Lightning Bolt · Gray Ogre died · lethal damage');
   await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
   await page.screenshot({ path: testInfo.outputPath('review-death-cursor.png') });
+  // Clicking the player move's own line from its consequences transition jumps cleanly back to `choice`.
+  await reviewCast.click();
+  await expect(page.getByTestId('turn-number')).not.toContainText('Esc for now');
+  await expect(page.getByTestId('study-open')).toBeVisible();
 });
 
 test('normal motion animates a death travelling to the graveyard within 180 ms with its rule', async ({ page }, testInfo) => {
@@ -182,4 +199,126 @@ test('normal motion animates a death travelling to the graveyard within 180 ms w
   expect(anim.toTranslate).toMatch(/-\d+/);
   await expect(page.getByTestId('death-chip').first()).toContainText('lethal damage');
   await page.screenshot({ path: testInfo.outputPath('normal-death-travel.png') });
+});
+
+test('triggered ability on the stack draws its target arrow and names itself in the top bar', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+
+  const recovery = structuredClone(boltFixture.recovery);
+  recovery.reason = 'initial_connect';
+  recovery.frame.match_id = 'ability-arrow-proof';
+  recovery.frame.revision = 20;
+  recovery.frame.frame_hash = 'ability-arrow-20';
+  recovery.frame.projection.turn = {
+    turn_number: 6,
+    phase: 'COMBAT',
+    step: 'COMBAT_DAMAGE_STEP',
+    active_player_id: 1,
+    agent_player_id: 0,
+  };
+  recovery.frame.projection.agent.life = 12;
+  recovery.frame.projection.opponent.life = 19;
+  recovery.frame.projection.agent.stack = [];
+  recovery.frame.projection.opponent.stack = [];
+  recovery.frame.projection.stack_objects = [
+    {
+      id: 901,
+      kind: 'triggered_ability',
+      controller: 1,
+      label: 'Vengeful Bloodwitch — Drain',
+      source_permanent: 30,
+    },
+  ];
+  recovery.frame.offers = [
+    {
+      id: 1,
+      actor: 0,
+      verb: 'pass_priority',
+      source: null,
+      label: 'Pass priority',
+      help: null,
+      choices: [],
+      confirm_label: 'Pass priority',
+      action_type: 'PRIORITY_PASS_PRIORITY',
+      focus: [],
+    },
+  ];
+  recovery.frame.action_space = 'PRIORITY';
+  recovery.frame.prompt = {
+    id: 1,
+    actor: 0,
+    kind: 'priority',
+    title: 'Priority',
+    instruction: 'Respond to Vengeful Bloodwitch, or pass priority.',
+  };
+  const ev = (seq: number, kind: PresentationEvent['kind'], extra: Partial<PresentationEvent> = {}): PresentationEvent => ({
+    seq,
+    from_revision: 19,
+    to_revision: 20,
+    caused_by: null,
+    group: 1,
+    importance: 'normal',
+    suggested_ms: 0,
+    sound: null,
+    kind,
+    ...extra,
+  });
+  recovery.presentation_tail = [
+    ev(0, { kind: 'turn_started', player: 1, turn_number: 6 }),
+    ev(1, { kind: 'died', objects: [{ entity: 30, incarnation: 1 }] }, {
+      rule: 'lethal_damage',
+      labels: { objects: { '30:1': 'Vengeful Bloodwitch' } },
+    }),
+    ev(2, { kind: 'triggered', source: { entity: 30, incarnation: 1 }, controller: 1, stack: 901 }, {
+      cause: 1,
+      labels: { objects: { '30:1': 'Vengeful Bloodwitch' }, stacks: { '901': 'Vengeful Bloodwitch' } },
+    }),
+    ev(3, { kind: 'targeted', source: { kind: 'stack', id: 901 }, target: { kind: 'player', id: 0 } }, {
+      cause: 2,
+      labels: { stacks: { '901': 'Vengeful Bloodwitch' } },
+    }),
+  ];
+  recovery.presentation_cursor = 0;
+
+  await page.routeWebSocket('**/ws/play', socket => {
+    socket.onMessage(raw => {
+      const message = JSON.parse(String(raw)) as { type?: string };
+      if (message.type === 'new_game' || message.type === 'resume') {
+        socket.send(JSON.stringify({
+          type: 'observation',
+          table: tableSnapshot(),
+          data: recovery.frame.projection,
+          actions: [],
+          session_id: 'ability-arrow-session',
+          resume_token: 'ability-arrow-token',
+          recovery,
+        }));
+      }
+    });
+  });
+
+  await page.goto('/?setup=1');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected');
+  await page.getByRole('button', { name: 'Start game' }).first().click();
+  await expect(page.getByTestId('game')).toBeVisible();
+
+  // Triggered ability on the stack exposes data-stack-card and draws its target arrow to your plate.
+  await expect(page.getByTestId('stack-entry').first()).toHaveAttribute('data-stack-card', '901');
+  await expect(page.locator('[data-testid=board-lines] [data-line-kind=target]')).toHaveCount(1);
+
+  // Selecting the trigger in History names the trigger itself (not the parent death) in the top bar.
+  const triggerBtn = page.locator('[data-testid=game-log] [data-testid=history-consequence] button[data-history-seq]').filter({ hasText: /Trigger · Vengeful Bloodwitch, targeting you/ });
+  await triggerBtn.click();
+  await expect(page.getByTestId('turn-number')).toContainText('Turn 6 · Trigger · Vengeful Bloodwitch, targeting you');
+  await expect(page.getByTestId('turn-number')).not.toContainText('died');
+  await expect(page.getByTestId('turn-number')).toContainText('Esc for now');
+  await expect(page.getByTestId('recent')).toHaveCount(0);
+  await expect(page.locator('[data-testid=board-lines] [data-line-kind=target]')).toHaveCount(1);
+
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('ability-target-arrow-wash.png') });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: testInfo.outputPath('ability-target-arrow-night.png') });
 });

@@ -8,10 +8,10 @@
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
-  import type { HistoryLine, HistoryTurn } from './history';
+  import type { HistoryLine, HistoryTurn, RecentHistoryItem } from './history';
   import type { Segment } from './tell';
   import { committed, type PrimaryLabel } from './prompt';
-  import type { RecentView } from './recent';
+  import type { ResolvedSpell } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
   import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
@@ -39,7 +39,10 @@
     workStarted: number | null;
     interrupted: boolean;
     canPassTurn: boolean;
-    recent: RecentView;
+    /** Unread history tail derived from `history` (empty whenever a cursor is active). */
+    recentFacts: readonly RecentHistoryItem[];
+    /** Spells cast since your last move that left the stack, for lingering target arrows. */
+    resolvedSpells: readonly ResolvedSpell[];
     history: HistoryTurn[];
     opponentName: string;
     onact: (placed: PlacedOffer) => void;
@@ -75,7 +78,7 @@
   }
 
   let {
-    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, history, opponentName,
+    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recentFacts, resolvedSpells, history, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock,
     evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, stopped = null,
   }: Props = $props();
@@ -92,13 +95,13 @@
   const detail = $derived(context?.instruction ?? frame.prompt?.instruction ?? '');
   const secondary = $derived(view.buttons.filter(placed => placed !== view.primary));
   const mine = (controller: number): boolean => controller === frame.projection.agent.player_index;
-  const resolved = $derived(new Map(recent.resolved.map(spell => [spell.id, spell])));
+  const resolved = $derived(new Map(resolvedSpells.map(spell => [spell.id, spell])));
 
   // The recap shows its first lines; the rest open on demand and fold again when the recap changes.
   const RECAP_LINES = 3;
   let recapOpen = $state(false);
-  $effect(() => { void recent.facts; recapOpen = false; });
-  const facts = $derived(recapOpen ? recent.facts : recent.facts.slice(0, RECAP_LINES));
+  $effect(() => { void recentFacts; recapOpen = false; });
+  const facts = $derived(recapOpen ? recentFacts : recentFacts.slice(0, RECAP_LINES));
 
   // Seconds the opponent or the server has been working, beside "… is choosing".
   let elapsed = $state(0);
@@ -125,6 +128,7 @@
     void history.length;
     void history.at(-1)?.lines.length;
     void history.at(-1)?.lines.at(-1)?.children.length;
+    void cursorLineIds;
     const hasCursor = (cursorLineIds?.size ?? 0) > 0;
     const current = currentMove;
     if (!hasCursor && current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
@@ -183,7 +187,7 @@
           {@const provenance = stackProvenance(item.entry)}
           <li>
             <button type="button" class="stack-entry" class:legal={live && item.offers.length > 0} class:top={index === 0}
-              data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : undefined)}
+              data-testid="stack-entry" data-stack-card={item.card?.id ?? (item.announcing ? item.entry.source_permanent : item.entry.id)}
               data-announcing={item.announcing}
               data-travel-id={item.card ? `card:${item.card.id}` : `stack:${item.entry.id}`}
               data-travel-source={item.entry.source_permanent !== undefined ? `perm:${item.entry.source_permanent}` : undefined}
@@ -206,23 +210,32 @@
         {/each}
       </ol>
     {/if}
-    {#if recent.facts.length}
+    {#if recentFacts.length}
       <div class="recent" data-testid="recent">
         <h3><span class="type-heading text-ink-2">{recapTitle}</span></h3>
         <ol>
           {#each facts as fact (fact.seq)}
             {@const spell = fact.spell === null ? undefined : resolved.get(fact.spell)}
+            {@const isFactJump = Boolean(onjump && fact.line.jumpKey)}
+            {@const isFactSelectable = Boolean(onselectline && fact.line.boardSeq !== null)}
             <li class="type-caption fact" class:theirs={fact.by === 'opponent'} data-testid="recent-fact">
               {#if spell}
                 <span class="resolved" data-stack-card={spell.id} tabindex="-1" {...hover(spell.name)}><Thumb name={spell.name} /></span>
               {/if}
-              <span class="fact-text" title={fact.text}>{fact.text}</span>
+              {#if isFactJump || isFactSelectable}
+                <button type="button" class="fact-btn" title={fact.text}
+                  onclick={() => (isFactJump ? onjump!(fact.line.jumpKey!, fact.line.boardSeq) : onselectline!(fact.line))}>
+                  <span class="fact-text">{@render lineSegments(fact.segments, false)}</span>
+                </button>
+              {:else}
+                <span class="fact-text" title={fact.text}>{@render lineSegments(fact.segments, true)}</span>
+              {/if}
             </li>
           {/each}
         </ol>
-        {#if recent.facts.length > RECAP_LINES}
+        {#if recentFacts.length > RECAP_LINES}
           <button type="button" class="more type-caption" data-testid="recent-more" aria-expanded={recapOpen} onclick={() => (recapOpen = !recapOpen)}>
-            {recapOpen ? 'Fewer' : `${recent.facts.length - RECAP_LINES} more`}
+            {recapOpen ? 'Fewer' : `${recentFacts.length - RECAP_LINES} more`}
           </button>
         {/if}
       </div>
@@ -361,20 +374,16 @@
                   <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
                     data-move={isJump ? jumpId : undefined} data-history-seq={entry.boardSeq ?? undefined}
                     onclick={() => (isJump ? onjump!(jumpId, entry.boardSeq) : onselectline!(entry))}>
-                    <span class="who" class:repeat={!entry.passes && entry.who !== '' && prevWho === entry.who}>{entry.passes ? '' : entry.who}</span>
-                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{@render lineSegments(entry.segments, false)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
+                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, false)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
                   </button>
                 </li>
               {:else if entry.passes}
                 <li class="move type-caption quiet" data-testid="pass-run">
-                  <span class="who" aria-hidden="true"></span>
                   <span class="what">passed{#each entry.passes as part, idx (part.actor)}{idx ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
                 </li>
               {:else}
                 <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
-                  <!-- A score names the player once per run of their moves. -->
-                  <span class="who" class:repeat={entry.who !== '' && prevWho === entry.who}>{entry.who}</span>
-                  <span class="what">{@render lineSegments(entry.segments, true)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+                  <span class="what">{#if entry.who !== '' && prevWho !== entry.who}<span class="who">{entry.who}</span>{/if}{@render lineSegments(entry.segments, true)}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
                 </li>
               {/if}
               {#if entry.children.length > 0}
@@ -450,8 +459,13 @@
   .recent { margin-top: 8px; }
   .recent h3 { margin-bottom: 3px; }
   .recent ol { display: grid; gap: 3px; }
-  .fact { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+  .fact { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
   .fact.theirs { color: var(--text); }
+  .fact-btn {
+    flex: 1 1 auto; min-width: 0; min-height: 0; padding: 1px 4px; margin: 0 -4px; border-radius: var(--radius-sm);
+    text-align: left; color: inherit; background: none; cursor: pointer;
+  }
+  .fact-btn:hover { background: var(--bg-field); }
   .fact-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .resolved { display: inline-flex; border-radius: var(--radius-sm); outline: 1px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
   .prompt { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -474,7 +488,7 @@
   .pass-turn { justify-self: center; display: inline-flex; gap: 6px; align-items: center; color: var(--text-secondary); padding: 2px 6px; border-radius: var(--radius-sm); }
   .pass-turn:hover { color: var(--text); background: var(--bg-field); }
   .status { min-height: 16px; }
-  .choices { flex: 1 1 auto; min-height: 110px; display: flex; flex-direction: column; }
+  .choices { flex: 0 1 auto; min-height: 0; max-height: 40%; display: flex; flex-direction: column; }
   .heading { display: flex; justify-content: space-between; }
   .list { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 0; margin: 0 -6px; padding: 2px 6px; }
   .row {
@@ -486,19 +500,21 @@
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
-  .log { flex: 0 1 190px; min-height: 92px; display: flex; flex-direction: column; border-bottom: 0; }
-  .turns { flex: 1; min-height: 0; overflow-y: auto; mask-image: linear-gradient(transparent, var(--text) 14px); display: grid; align-content: start; gap: 4px; }
-  .turn-head { display: flex; gap: 8px; align-items: baseline; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+  .log { flex: 1 1 220px; min-height: 120px; display: flex; flex-direction: column; border-bottom: 0; }
+  .turns { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 6px; }
+  .turn ol { display: grid; gap: 1px; }
+  .turn-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; color: var(--text-secondary); border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
   .turn-head .number { min-width: 18px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .move { display: flex; align-items: baseline; gap: 6px; padding-left: 26px; color: var(--text); line-height: 16px; }
+  .move { padding: 1px 4px; color: var(--text); line-height: 20px; }
   /* What happened is the game's face; who did it and the count stay the interface's. */
-  .move .what { flex: 1; min-width: 0; font: 14px/20px var(--font-serif); }
-  .move .who { flex: none; width: 60px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .move .who.repeat { visibility: hidden; }
+  .move .what { display: block; min-width: 0; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
+  .move .who {
+    display: inline; margin-right: 5px; font: 500 12px/16px var(--font-sans); color: var(--text-tertiary);
+  }
   .move.you .who { color: var(--info-text); }
   .move.auto { color: var(--text-tertiary); }
   .move.quiet { color: var(--text-tertiary); }
-  .more { color: var(--text-secondary); padding: 0 4px; margin-left: 30px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
+  .more { min-height: 0; color: var(--text-secondary); padding: 1px 4px; border-radius: var(--radius-sm); text-decoration: underline dotted; }
   .more:hover { color: var(--text); }
   .elapsed { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
   .docked { flex: none; max-height: 36%; overflow-y: auto; }
@@ -519,18 +535,18 @@
   .row:disabled.chosen { color: var(--text); }
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
-  .move.jump { padding-left: 0; }
-  .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .move.jump { padding: 0; }
+  .move.jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
   .move.jump button[data-cursor-source='true'] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 2px 0 0 var(--border-strong); }
-  .consequences-wrap, .consequence-summary { padding-left: 92px; }
-  .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 8px; margin: 1px 0 3px; }
-  .consequence { color: var(--text-secondary); line-height: 16px; }
-  .consequence .what { font: 14px/20px var(--font-serif); }
-  .consequence.jump button { width: 100%; display: block; padding: 0 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .consequences-wrap, .consequence-summary { padding-left: 6px; }
+  .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 7px; margin: 1px 0 3px; }
+  .consequence { color: var(--text-secondary); line-height: 20px; }
+  .consequence .what { display: block; font: 14px/20px var(--font-serif); overflow-wrap: break-word; }
+  .consequence.jump button { width: 100%; min-height: 0; display: block; padding: 2px 5px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .consequence.jump button:hover { background: var(--bg-field); }
   .consequence.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
-  .consequence-toggle { color: var(--text-tertiary); padding: 0 2px; text-decoration: underline dotted; }
+  .consequence-toggle { min-height: 0; color: var(--text-tertiary); padding: 1px 3px; text-decoration: underline dotted; }
   .consequence-toggle:hover { color: var(--text); }
 </style>

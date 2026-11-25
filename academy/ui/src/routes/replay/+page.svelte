@@ -25,16 +25,14 @@
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
-  import { sharedLaterCount } from '$lib/board/beats';
-  import { boardAt, stepBoards } from '$lib/board/boards';
-  import { buildHistory, cursorReading, hasTrackHistory, legacyMoveHistory, lineAtCursor, type HistoryTurn } from '$lib/board/history';
+  import { buildHistory, hasTrackHistory, legacyMoveHistory, type HistoryTurn } from '$lib/board/history';
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    bottomSeat, historyKeyAt, moveAt, offerEvidence, perspectiveOf, positionHeading, positionKeyForEvent, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    bottomSeat, historyKeyAt, moveAt, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { createReplayStore } from '$lib/replay.svelte';
-  import { orientBoard, type RecordedPosition } from '$lib/recording';
+  import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
   import { mergePresentationLabels, presentationLabelsFromFrame, presentationLabelsFromObservation } from '$lib/presentation';
@@ -104,30 +102,12 @@
 
   // ———————————————— What the board draws
 
-  const transitionBoardsState = $derived.by(() => {
-    if (inStudy || !current || current.kind !== 'consequences' || !current.boards?.length) {
-      return { boards: [], error: null as string | null };
-    }
-    try {
-      return { boards: stepBoards(current.observation, current.boards), error: null };
-    } catch (reason) {
-      return { boards: [], error: reason instanceof Error ? reason.message : 'Board patch failed' };
-    }
-  });
-  const transitionBoards = $derived(transitionBoardsState.boards);
-  const subBoard = $derived(
-    !inStudy && subCursor !== null && current?.kind === 'consequences'
-      ? boardAt(transitionBoards, subCursor)
-      : null,
+  const transitionBoardsState = $derived(
+    !inStudy && current && index
+      ? reviewTransitionBoards(current, bottom, index.winner)
+      : { boards: [], error: null as string | null },
   );
-  const recorded = $derived.by<ExperienceFrame | null>(() => {
-    if (!current || !index) return null;
-    const base = recordedFrame(current, index, bottom);
-    if (subBoard !== null) {
-      return { ...base, projection: orientBoard(subBoard, bottom, index.winner), offers: [] };
-    }
-    return base;
-  });
+  const recorded = $derived(current && index ? recordedFrame(current, index, bottom) : null);
   // Study draws the restored decision live, then the branch it played, on the same board.
   const studyFrame = $derived.by<ExperienceFrame | null>(() => {
     const restored = studyStore.restored;
@@ -180,27 +160,6 @@
       }
     }
     return historyKeyAt(keys, positions, replayStore.selected);
-  });
-  const subLine = $derived(!studying && subCursor !== null ? lineAtCursor(history, subCursor) : null);
-  const reviewCursorLineIds = $derived(subLine ? new Set([subLine.line.id]) : undefined);
-  const reviewCursorSourceSeq = $derived(subLine?.line.sourceSeq ?? null);
-  const reviewCursorSubjects = $derived(subLine ? new Set(subLine.line.subjects) : undefined);
-  const reviewCursorBanner = $derived.by<string | null>(() => {
-    if (studying || subCursor === null || current?.kind !== 'consequences' || !index) return null;
-    const trackEvents = index.watch ? presentation.events : (index.history ?? presentation.events);
-    const reading = cursorReading(history, trackEvents, subCursor, {
-      you: saidOf(heroSeat),
-      opponent: saidOf(1 - heroSeat),
-    });
-    if (transitionBoardsState.error) {
-      return `${reading} · Board unavailable for this step`;
-    }
-    if (transitionBoards.length === 0) {
-      const lastSeq = current.history.at(-1)?.seq ?? null;
-      const shared = lastSeq !== null ? sharedLaterCount(history, subCursor, lastSeq) : 0;
-      if (shared > 0) return `${reading} · shared with ${shared} later ${shared === 1 ? 'line' : 'lines'}`;
-    }
-    return reading;
   });
   const marks = $derived(stripMarks(positions, heroSeat));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
@@ -328,22 +287,18 @@
     else { subCursor = null; replayStore.playing = true; }
   }
   function jump(key: string, boardSeq: number | null = null): void {
-    if (current?.kind === 'consequences' && boardSeq !== null && boardAt(transitionBoards, boardSeq) !== null) {
-      subCursor = boardSeq;
+    const plan = planReviewJump(positions, replayStore.selected, current?.key ?? null, key, boardSeq);
+    if (!plan) return;
+    if (plan.kind === 'subcursor') {
+      subCursor = plan.seq;
       return;
     }
-    const at = positions.findIndex(position => position.key === key);
-    if (at < 0) return;
-    if (positions[at].kind === 'consequences' && boardSeq !== null) {
-      if (at === replayStore.selected && current?.key === key) {
-        subCursor = boardSeq;
-        return;
-      }
-      pendingSubCursor = boardSeq;
-      seek(at, true);
+    if (plan.pendingSubCursor !== null) {
+      pendingSubCursor = plan.pendingSubCursor;
+      seek(plan.index, true);
       return;
     }
-    seek(at);
+    seek(plan.index);
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -639,10 +594,9 @@
     {history}
     onjump={locked ? undefined : jump}
     {currentMove}
-    cursorBanner={reviewCursorBanner}
-    cursorLineIds={reviewCursorLineIds}
-    cursorSourceSeq={reviewCursorSourceSeq}
-    cursorSubjects={reviewCursorSubjects}
+    cursorSeq={studying ? null : subCursor}
+    stepBoards={transitionBoardsState.boards}
+    stepBoardsError={transitionBoardsState.error}
     onclearcursor={() => { subCursor = null; }}
     {evidence}
     bottom={bottomEdge}

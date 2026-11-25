@@ -11,10 +11,82 @@
  */
 import type { Observation, PresentationEvent, PresentationRule } from '$lib/types';
 import { findBoard, type StepBoard } from './boards';
-import { flattenHistory, turnAt, type HistoryTurn } from './history';
+import {
+  flattenHistory,
+  lineAtCursor,
+  turnAt,
+  type CursorSelection,
+  type FlatHistoryLine,
+  type HistoryTurn,
+} from './history';
 import { tellCounter } from './tell';
 
 export { turnAt };
+
+export interface CursorView {
+  stop: WalkStop | null;
+  line: FlatHistoryLine | null;
+  lineIds: ReadonlySet<string>;
+  sourceSeq: number | null;
+  subjects: Set<number>;
+  seqs: ReadonlySet<number>;
+  caption: string;
+}
+
+const EMPTY_CURSOR_VIEW: CursorView = {
+  stop: null,
+  line: null,
+  lineIds: new Set(),
+  sourceSeq: null,
+  subjects: new Set(),
+  seqs: new Set(),
+  caption: '',
+};
+
+/**
+ * Resolve what the board, rail and caption focus for `selection`.
+ * `scope: 'stop'` (walk, scrubber tick, "Show their turn again") keeps every
+ * line, subject, seq and caption phrase of the kept board stop intact even
+ * when the walk is paused; `scope: 'line'` (clicking a history line, ← →, or
+ * a Review sub-step) focuses that exact line.
+ */
+export function cursorView(
+  turns: readonly HistoryTurn[],
+  stops: readonly WalkStop[],
+  selection: CursorSelection | null,
+): CursorView {
+  if (selection === null) return EMPTY_CURSOR_VIEW;
+  const stop = stops.find(candidate => stopHasSeq(candidate, selection.seq)) ?? null;
+  const line = lineAtCursor(turns, selection.seq);
+  const isStop = selection.scope === 'stop';
+  const lineIds = isStop && stop
+    ? new Set(stop.lineIds)
+    : line
+      ? new Set([line.line.id])
+      : stop
+        ? new Set(stop.lineIds)
+        : new Set<string>();
+  const subjects = new Set(
+    isStop
+      ? (stop?.subjects ?? line?.line.subjects ?? [])
+      : (line?.line.subjects ?? stop?.subjects ?? []),
+  );
+  const seqs = isStop && stop
+    ? new Set(stop.seqs)
+    : line
+      ? new Set(line.line.seqs)
+      : new Set(stop?.seqs ?? [selection.seq]);
+  const caption = (isStop ? stop?.caption : line?.line.sentence) ?? stop?.caption ?? '';
+  return {
+    stop,
+    line,
+    lineIds,
+    sourceSeq: line?.line.sourceSeq ?? null,
+    subjects,
+    seqs,
+    caption,
+  };
+}
 
 export interface StopDelta {
   kind: 'damage' | 'counters';

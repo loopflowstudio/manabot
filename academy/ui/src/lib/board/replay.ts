@@ -24,6 +24,7 @@
  */
 import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
 import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
+import { mergeBoards, type StepBoard } from './boards';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
@@ -228,6 +229,65 @@ export function positionKeyForEvent(
     if (fallback === null) fallback = position.key;
   }
   return fallback;
+}
+
+export type ReviewJump =
+  | { kind: 'subcursor'; seq: number }
+  | { kind: 'seek'; index: number; pendingSubCursor: number | null };
+
+/**
+ * Decide how clicking a history line in Review moves: only stay on the current
+ * `consequences` transition when `targetKey` names that exact transition; a
+ * player move's `choice` key always seeks to `choice`.
+ */
+export function planReviewJump(
+  positions: readonly Pick<Position, 'key' | 'kind'>[],
+  selected: number,
+  currentKey: string | null,
+  targetKey: string,
+  boardSeq: number | null,
+): ReviewJump | null {
+  const at = positions.findIndex(position => position.key === targetKey);
+  if (at < 0) return null;
+  if (positions[at].kind === 'consequences' && boardSeq !== null) {
+    if (at === selected && currentKey === targetKey) {
+      return { kind: 'subcursor', seq: boardSeq };
+    }
+    return { kind: 'seek', index: at, pendingSubCursor: boardSeq };
+  }
+  return { kind: 'seek', index: at, pendingSubCursor: null };
+}
+
+/**
+ * Rebuild a Review `consequences` transition's per-line boards via `mergeBoards`
+ * before orienting each board to `nearSeat`, preserving capped-prefix fallbacks
+ * and surfacing patch reconstruction errors explicitly.
+ */
+export function reviewTransitionBoards(
+  position: Pick<RecordedPosition, 'kind' | 'revision' | 'observation' | 'history' | 'boards'>,
+  nearSeat: 0 | 1,
+  winner: number | null,
+): { boards: StepBoard[]; error: string | null } {
+  if (position.kind !== 'consequences') return { boards: [], error: null };
+  const nonPass = position.history.filter(
+    event => event.from_revision === position.revision && event.kind.kind !== 'passed',
+  );
+  const range = nonPass.length > 0
+    ? { first: nonPass[0].seq, last: nonPass.at(-1)!.seq }
+    : null;
+  const patches = position.boards ?? [];
+  if (patches.length === 0 && range === null) return { boards: [], error: null };
+  try {
+    const raw = mergeBoards([], position.observation, patches, range);
+    const boards = raw.map(board => ({
+      ...board,
+      projection: orientBoard(board.projection, nearSeat, winner),
+      ...(patches.length === 0 && board.first < board.last ? { fallback: true } : {}),
+    }));
+    return { boards, error: null };
+  } catch (reason) {
+    return { boards: [], error: reason instanceof Error ? reason.message : 'Board patch failed' };
+  }
 }
 
 /** The history jump key matching the shown Review position, or the latest before it. */

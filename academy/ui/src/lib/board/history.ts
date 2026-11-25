@@ -63,7 +63,13 @@ export interface HistoryLine {
   fromRevision: number | null;
   actor: HistoryActor;
   who: string;
+  /** Player side associated with this event (for `.theirs` in "Since your last move"). */
+  side: 'you' | 'opponent' | null;
+  /** Stack id of a `cast` event, for matching resolved-spell thumbnails in the recap. */
+  castStackId: number | null;
   segments: Segment[];
+  /** Complete sentence form worded by `tell`, with inspectable card segments, for the recap. */
+  sentenceSegments: Segment[];
   /** Complete sentence form worded by `tell`, for walk captions. */
   sentence: string;
   /** True when this line is a non-pass player move (marks heavier scrubber ticks). */
@@ -282,6 +288,36 @@ export function preprocessTrackEvents(
   return { consumed, foldedTargets, stackTriggers, stackSourceSeq };
 }
 
+function sideForEvent(
+  event: PresentationEvent,
+  players: TellPlayers,
+  actor: HistoryActor,
+): 'you' | 'opponent' | null {
+  if (actor === 'you') return 'you';
+  if (actor === 'opponent') return 'opponent';
+  const kind = event.kind;
+  switch (kind.kind) {
+    case 'cast':
+    case 'activated':
+    case 'triggered':
+      return playerSide(kind.controller, players.youSeat);
+    case 'attack_group':
+      return kind.defender.kind === 'player' ? playerSide(1 - kind.defender.id, players.youSeat) : null;
+    case 'land_played':
+    case 'discarded':
+    case 'drew':
+    case 'revealed':
+    case 'searched':
+    case 'looked':
+    case 'sacrificed':
+    case 'lost':
+    case 'life':
+      return playerSide(kind.player, players.youSeat);
+    default:
+      return null;
+  }
+}
+
 function makeLine(
   fields: Pick<HistoryLine, 'id' | 'actor' | 'who' | 'segments' | 'sentence'> & Partial<HistoryLine>,
 ): HistoryLine {
@@ -291,6 +327,9 @@ function makeLine(
     seqs: [],
     sourceSeq: null,
     fromRevision: null,
+    side: null,
+    castStackId: null,
+    sentenceSegments: fields.segments,
     isMove: false,
     children: [],
     rule: null,
@@ -520,12 +559,13 @@ export function buildHistory(
       trigger: isTrigger,
       targets,
     });
-    const sentence = segmentText(tell(event, labels, players, {
+    const sentenceSegments = tell(event, labels, players, {
       form: 'sentence',
       indented: false,
       trigger: isTrigger,
       targets,
-    }));
+    });
+    const sentence = segmentText(sentenceSegments);
 
     const sourceSeq =
       (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved')
@@ -541,7 +581,10 @@ export function buildHistory(
       fromRevision: event.from_revision,
       actor,
       who: whoForActor(actor, players),
+      side: sideForEvent(event, players, actor),
+      castStackId: event.kind.kind === 'cast' ? event.kind.stack : null,
       segments,
+      sentenceSegments,
       sentence,
       isMove: move,
       rule: event.rule ?? null,
@@ -669,6 +712,23 @@ export function trackMarks(
 
 // ———————————————————————————————————————— One cursor over the history
 
+export type CursorScope = 'stop' | 'line';
+
+export interface CursorSelection {
+  seq: number;
+  scope: CursorScope;
+}
+
+export interface RecentHistoryItem {
+  seq: number;
+  by: 'you' | 'opponent' | null;
+  segments: Segment[];
+  text: string;
+  /** Stack id of a cast spell, to attach its resolved-spell thumbnail when off the stack. */
+  spell: number | null;
+  line: HistoryLine;
+}
+
 export interface FlatHistoryLine {
   line: HistoryLine;
   turn: number | null;
@@ -707,6 +767,34 @@ export function flattenHistory(turns: readonly HistoryTurn[]): FlatHistoryLine[]
   return flat;
 }
 
+/**
+ * Unread history tail for "Since your last move": selectable non-pass lines
+ * with `fromRevision >= sinceRevision` (and `seq <= maxSeq` when bounded by a
+ * Review position prefix).
+ */
+export function recentHistory(
+  turns: readonly HistoryTurn[],
+  sinceRevision: number | null,
+  maxSeq: number | null = null,
+): RecentHistoryItem[] {
+  if (sinceRevision === null) return [];
+  const items: RecentHistoryItem[] = [];
+  for (const entry of flattenHistory(turns)) {
+    const { line } = entry;
+    if (line.fromRevision === null || line.fromRevision < sinceRevision) continue;
+    if (maxSeq !== null && line.seq !== null && line.seq > maxSeq) continue;
+    items.push({
+      seq: line.seq ?? entry.cursor,
+      by: line.side,
+      segments: line.sentenceSegments,
+      text: line.sentence,
+      spell: line.castStackId,
+      line,
+    });
+  }
+  return items;
+}
+
 function cursorIndex(flat: readonly FlatHistoryLine[], cursor: number): number {
   const exact = flat.findIndex(item => item.cursor === cursor);
   return exact >= 0 ? exact : flat.findIndex(item => item.line.seqs.includes(cursor));
@@ -735,31 +823,50 @@ export function stepCursor(turns: readonly HistoryTurn[], cursor: number | null,
 }
 
 /**
- * Short top-bar reading for a historical cursor, e.g.
- * `"Turn 6 · Heuristic's Lightning Strike"`. The caller appends `" · Esc for now"`.
+ * Top-bar reading for a historical cursor: names the active line or stop
+ * itself, prefixed with the parent move's primary card only when the parent is
+ * a named player move (e.g. `"Turn 9 · Your Lightning Bolt · Gray Ogre died ·
+ * lethal damage"` or `"Turn 6 · Trigger · Vengeful Bloodwitch, targeting
+ * you"`). The caller appends `" · Esc for now"`.
  */
 export function cursorReading(
   turns: readonly HistoryTurn[],
   events: readonly PresentationEvent[],
-  cursor: number,
+  cursor: number | CursorSelection,
   players: { you: string; opponent: string },
+  stop?: { turn: number | null; caption: string; lineIds?: readonly string[] } | null,
 ): string {
-  const entry = lineAtCursor(turns, cursor);
-  const turn = entry?.turn ?? turnAt(events, cursor);
-  const root = entry?.parent ?? entry?.line ?? null;
-  let detail = '';
-  if (root) {
-    const primaryCard = root.segments.find(segment => segment.card !== null)?.card ?? null;
-    if (root.actor === 'you' || root.actor === 'opponent') {
-      const owner = root.actor === 'you'
-        ? (players.you === 'You' ? 'Your' : possessive(players.you))
-        : possessive(players.opponent);
-      if (primaryCard) detail = `${owner} ${primaryCard}`;
-      else detail = root.sentence || segmentText(root.segments);
-    } else {
-      detail = segmentText(root.segments);
-    }
+  const selection: CursorSelection = typeof cursor === 'number' ? { seq: cursor, scope: 'line' } : cursor;
+  const entry = lineAtCursor(turns, selection.seq);
+  const turn = entry?.turn ?? (selection.scope === 'stop' ? stop?.turn ?? null : null) ?? turnAt(events, selection.seq);
+  const isMultiLineStop = selection.scope === 'stop' && Boolean(stop?.caption) && (stop?.lineIds?.length ?? 0) > 1;
+  const parent = entry?.parent ?? null;
+  const parentCard =
+    parent && parent.isMove && (parent.actor === 'you' || parent.actor === 'opponent')
+      ? (parent.segments.find(segment => segment.card !== null)?.card ?? null)
+      : null;
+  const parentPrefix = parentCard && parent
+    ? `${parent.actor === 'you' ? (players.you === 'You' ? 'Your' : possessive(players.you)) : possessive(players.opponent)} ${parentCard}`
+    : null;
+
+  let body = '';
+  if (isMultiLineStop && stop) {
+    body = stop.caption;
+  } else if (entry) {
+    body = parentPrefix
+      ? segmentText(entry.line.segments)
+      : (entry.line.sentence || segmentText(entry.line.segments));
+  } else if (stop?.caption) {
+    body = stop.caption;
   }
+
+  let detail = body;
+  if (parentPrefix && body && !body.includes(parentCard!)) {
+    detail = `${parentPrefix} · ${body}`;
+  } else if (!detail && parentPrefix) {
+    detail = parentPrefix;
+  }
+
   if (turn !== null && detail) return `Turn ${turn} · ${detail}`;
   if (turn !== null) return `Turn ${turn}`;
   return detail || 'Earlier step';

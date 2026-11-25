@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
-import type { ExperienceFrame } from '$lib/types';
+import type { ExperienceFrame, PresentationEvent } from '$lib/types';
+import { findBoard } from './boards';
 import { legacyMoveHistory } from './history';
-import { bottomSeat, historyKeyAt, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, positionKeyForEvent, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { bottomSeat, historyKeyAt, moveAt, nameSeats, offerEvidence, perspectiveOf, planReviewJump, positionHeading, positionKeyForEvent, recordedFrame, replayLog, reviewTransitionBoards, sinceRevision, stripMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -171,5 +172,85 @@ describe('a position says what it is', () => {
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 1)).toBe('Game over · Heuristic wins');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 0)).toBe('Game over · You win');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, null)).toBe('Game over · Draw');
+  });
+});
+
+describe('Review transition boards and jumps', () => {
+  it('rebuilds transition boards via mergeBoards before orienting, preserves capped fallbacks, and surfaces patch errors', () => {
+    const baseObs = structuredClone(frame.projection);
+    const seat = baseObs.agent.player_index as 0 | 1;
+    const otherSeat = (1 - seat) as 0 | 1;
+    baseObs.turn.step = 'END_STEP';
+    const ev = (seq: number): PresentationEvent => ({
+      seq,
+      from_revision: 4,
+      to_revision: 5,
+      caused_by: null,
+      group: 10,
+      importance: 'normal',
+      suggested_ms: 0,
+      sound: null,
+      kind: { kind: 'drew', player: 1 },
+    });
+
+    const rebuilt = reviewTransitionBoards(
+      {
+        kind: 'consequences',
+        revision: 4,
+        observation: baseObs,
+        history: [ev(10), ev(11), ev(12), ev(13)],
+        // Capped before seq 12: seq 10..11 fall back to seq 12's board; seq 13 gets post-step observation.
+        boards: [{ first: 12, last: 12, patch: { o: { turn: { o: { step: { '=': 'COMBAT_DAMAGE_STEP' } } } } } }],
+      },
+      otherSeat,
+      null,
+    );
+    expect(rebuilt.error).toBeNull();
+    expect(findBoard(rebuilt.boards, 10)).toMatchObject({ first: 10, last: 11, fallback: true });
+    expect(findBoard(rebuilt.boards, 10)?.projection.turn.step).toBe('COMBAT_DAMAGE_STEP');
+    expect(findBoard(rebuilt.boards, 10)?.projection.agent.player_index).toBe(otherSeat);
+    expect(findBoard(rebuilt.boards, 12)?.fallback).toBeUndefined();
+    expect(findBoard(rebuilt.boards, 13)?.projection.turn.step).toBe('END_STEP');
+    expect(findBoard(rebuilt.boards, 13)?.projection.agent.player_index).toBe(otherSeat);
+
+    // Corrupt patch reports an explicit error rather than silently falling back.
+    const corrupt = reviewTransitionBoards(
+      {
+        kind: 'consequences',
+        revision: 4,
+        observation: baseObs,
+        history: [ev(10)],
+        boards: [{ first: 10, last: 10, patch: { o: { agent: { o: { battlefield: { a: [{ k: 999999 }] } } } } } }],
+      },
+      seat,
+      null,
+    );
+    expect(corrupt.boards).toEqual([]);
+    expect(corrupt.error).toMatch(/Board patch names no item/);
+  });
+
+  it('jumps to a player move choice even when already on its consequences transition', () => {
+    const list: Pick<Position, 'key' | 'kind'>[] = [
+      { key: 'choice:10', kind: 'choice' },
+      { key: 'after:10', kind: 'consequences' },
+      { key: 'after:11', kind: 'consequences' },
+    ];
+    // Already on `after:10`: clicking a player move whose key is `choice:10` must jump to `choice:10`.
+    expect(planReviewJump(list, 1, 'after:10', 'choice:10', 41)).toEqual({
+      kind: 'seek',
+      index: 0,
+      pendingSubCursor: null,
+    });
+    // Clicking another line belonging to `after:10` updates subCursor directly.
+    expect(planReviewJump(list, 1, 'after:10', 'after:10', 45)).toEqual({
+      kind: 'subcursor',
+      seq: 45,
+    });
+    // Clicking a consequence belonging to a different transition seeks there with pendingSubCursor.
+    expect(planReviewJump(list, 1, 'after:10', 'after:11', 52)).toEqual({
+      kind: 'seek',
+      index: 2,
+      pendingSubCursor: 52,
+    });
   });
 });

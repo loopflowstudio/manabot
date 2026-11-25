@@ -411,14 +411,14 @@
   }
   .plan b { font: 600 12px/16px var(--font-sans); color: var(--planned-text); min-width: 9px; text-align: center; }
   .dealt {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -30%);
-    font: 600 20px/28px var(--font-sans); color: var(--bg);
-    padding: 0 6px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
+    position: absolute; top: 3px; right: 3px; pointer-events: none;
+    font: 600 16px/24px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--bg);
+    padding: 0 5px; border-radius: var(--radius-sm); background: var(--damage); box-shadow: var(--shadow-raised);
     animation: land var(--motion-move) var(--motion-move-ease);
   }
   .stop-deltas {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
+    position: absolute; top: 3px; right: 3px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none;
   }
   .stop-delta {
     font: 600 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -427,7 +427,7 @@
   }
   .stop-delta.damage { color: var(--bg); background: var(--damage); }
   .stop-delta.counters { color: var(--bg); background: var(--gain); }
-  @keyframes land { from { transform: translate(-50%, -90%) scale(1.25); opacity: 0; } }
+  @keyframes land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   @keyframes delta-land { from { transform: translateY(-6px) scale(1.15); opacity: 0; } }
   .pt {
     position: absolute; right: 3px; bottom: 3px; padding: 0 0.35em; border-radius: var(--radius-sm);

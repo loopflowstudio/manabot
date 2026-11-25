@@ -664,18 +664,20 @@ label.
 The rail holds:
 
 - **Stack**, top first, each entry with its card and who controls it; a stack
-  entry an action applies to is outlined. A line joins a spell on the stack to
-  each of its targets. A spell you are casting, or an ability you are
-  activating, is on top of the stack with a dashed border (**casting**,
+  entry an action applies to is outlined. A line joins every spell or ability
+  on the stack to each of its targets. A spell you are casting, or an ability
+  you are activating, is on top of the stack with a dashed border (**casting**,
   **activating**) from the moment you choose it, through its targets and
   payment, with lines to the targets already chosen; the card leaves your hand.
-- **Since your last move**: the lines of the history you have not read yet,
-  from your last choice to now. The first three show; the rest open with
-  **more**. A spell that already resolved keeps its card here, and its line to
-  a target that is still on the board, until your next move. Cards that
-  attacked, blocked, were targeted or were dealt damage are ringed on the
-  board, and damage dealt since your last move shows on the card or the
-  player's plate as it lands ("−2").
+- **Since your last move**: the unread tail of the history from your last
+  choice to now (hidden while walking or looking back so it never contradicts a
+  historical stack). Hovering a card name inspects it and clicking a line seeks
+  the board to it. The first three show; the rest open with **more**. A spell
+  that already resolved keeps its card here, and its line to a target that is
+  still on the board, until your next move. Cards that attacked, blocked, were
+  targeted or were dealt damage are ringed on the board at now, and damage dealt
+  since your last move shows in the card's corner or on the player's plate as it
+  lands ("−2").
 - **The decision** shows who decides, what they are deciding ("Pay {1}{U} for
   Accumulate Wisdom"), and the buttons. For mana payments the hint below the
   prompt says how to pay. It stays steady as different previews appear.
@@ -1040,7 +1042,7 @@ becomes the board as it was after that line, with what the line is about
 raised. The Jailer is gone, and the top bar reads
 
 ```
-Turn 6 · Heuristic's Lightning Strike · Esc for now
+Turn 6 · Heuristic's Lightning Strike · Earth Kingdom Jailer died · lethal damage · Esc for now
 ```
 
 When a folded spell has consequences under it (like Lightning Strike above),
@@ -1768,14 +1770,18 @@ as a spent browser-only "once" stop) into turns, lines with depth, and board
 stops (seq order, indented under a cause that is the nearest line above, an
 immediate resolution folded into its cast with the cast board when
 consequences follow and the resolved board otherwise, runs of passes folded,
-and one walk stop per kept board). One cursor (`{ cursor: seq | null, walking:
-boolean }`) selects what the board draws: in live play `null` is now and the
-walk advances `cursor` on a timer across unread stops with its caption and
-scrubber in the bottom bar; `board/result.ts` and the live decision strip also
-read the track. `board/boards.ts` answers `boardAt(seq)` from the frames and
-per-line boards this page was sent, up to 512; the server serves no past board
-to a live session. Review uses the same `boardAt(seq)` over the selected
-transition's retained `boards` patches.
+and one walk stop per kept board). One cursor (`selection: { seq: number;
+scope: 'stop' | 'line' } | null` plus timer state `walking: boolean`) selects
+what the board draws in both live play and Review sub-step inspection: in live
+play `null` is now, walks and scrubber ticks select `scope: 'stop'` (keeping
+multi-line stops intact when paused) with the caption and scrubber in the bottom
+bar, and selecting a history line or pressing ← → selects `scope: 'line'`;
+`board/result.ts` and the live decision strip also read the track.
+`board/boards.ts` answers `boardAt(seq)` from the frames and per-line boards
+this page was sent, up to 512; the server serves no past board to a live
+session. Review rebuilds each `consequences` transition's retained `boards`
+patches through the same `mergeBoards` / `findBoard` path before orienting and
+feeds `cursorSeq` into `Board.svelte`.
 
 **Recovery** commits the complete frame, returns the cursor to now and merges
 validated `presentation_tail` events (with each event's `labels` intact) with

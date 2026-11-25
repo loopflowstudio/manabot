@@ -75,7 +75,7 @@ async function snapshotWhileWalking(page: Page): Promise<WalkSnapshot | null> {
       railDisabled: row?.getAttribute('aria-disabled') === 'true',
       onStep: board.getAttribute('data-board') === 'step',
       outlined: board.querySelectorAll('[data-testid=board-card][data-offer-count]:not([data-offer-count="0"])').length,
-      windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card]').length,
+      windowMarks: document.querySelectorAll('[data-testid=player-damage], [data-testid=damage-dealt], [data-testid=result-card], [data-testid=recent]').length,
       topBar,
       walkBarHeight: Math.round(bar.getBoundingClientRect().height),
     };
@@ -136,8 +136,10 @@ test('the board walks the opponent turn with a steady-height caption and scrubbe
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByTestId('walk-caption').hover();
   await expect(page.getByTestId('walk-caption')).toHaveAttribute('data-holding', 'true');
+  await page.waitForTimeout(150);
   await page.screenshot({ path: testInfo.outputPath('walk-holding-wash.png') });
   await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForTimeout(150);
   await page.screenshot({ path: testInfo.outputPath('walk-holding-night.png') });
   await page.emulateMedia({ colorScheme: 'light' });
   await page.mouse.move(2, 2);
