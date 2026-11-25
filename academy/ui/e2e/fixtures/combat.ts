@@ -231,5 +231,10 @@ export async function showEachCreaturesChoice(page: Page): Promise<void> {
   if (kind !== 'DECLARE_ATTACKER' && kind !== 'DECLARE_BLOCKER') return;
   const raw = page.getByTestId('per-creature-choices');
   try { await raw.waitFor({ state: 'attached', timeout: 10_000 }); } catch { return; }
-  if (!(await raw.evaluate(details => (details as HTMLDetailsElement).open))) await raw.locator('summary').click();
+  // A first click during an opponent read-out ends the read-out; click again until the disclosure opens.
+  await expect(async () => {
+    if (await raw.count() === 0) return;
+    if (!(await raw.evaluate(details => (details as HTMLDetailsElement).open))) await raw.locator('summary').click();
+    if (await raw.count() > 0) await expect(raw).toHaveJSProperty('open', true);
+  }).toPass({ timeout: 10_000 });
 }

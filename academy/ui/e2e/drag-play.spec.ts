@@ -240,14 +240,18 @@ test('choosing a different offer returns the carried card while that Command is 
   await expect(inHand(page, 'Island')).toHaveCount(0);
 });
 
-test('dropping a hand card over a battlefield tray plays the carried card', async ({ page }) => {
+test('dropping a hand card over the hand tray cancels with nothing sent', async ({ page }) => {
   const initial = mainPhase(REVISION);
   initial.offers.push(offer(5, 'cast', 'Cast from exile', 'PRIORITY_CAST_SPELL', [75]));
   const authority = await installAuthority(page, { initial });
-  await carry(page, inHand(page, 'Lightning Bolt'), await center(page.getByTestId('tray')));
-  await expect(page.getByTestId('drop-zone')).toContainText('Cast Lightning Bolt');
+  const bolt = inHand(page, 'Lightning Bolt');
+  await carry(page, bolt, await center(page.getByTestId('tray')));
+  await expect(page.getByTestId('drop-zone')).toHaveAttribute('data-over', 'false');
+  await expect(page.getByTestId('drop-zone')).toContainText('Release to cancel');
   await page.mouse.up();
-  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 1]]);
+  await expect(ghost(page)).toHaveCount(0);
+  await expect(bolt).toHaveAttribute('data-travel-id', `card:${BOLT}`);
+  expect(authority.commands).toEqual([]);
 });
 
 test('a refused drop returns the card to hand', async ({ page }) => {

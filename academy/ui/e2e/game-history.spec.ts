@@ -125,7 +125,7 @@ test('shared history identifies both players and preserves private prefixes and 
     const over = alice.getByTestId('result-card');
     const actions = alice.getByTestId('action-option');
     for (let step = 0; step < 600 && !(await over.isVisible()); step++) {
-      await expect(actions.first().or(over).or(alice.getByTestId('per-creature-choices'))).toBeVisible();
+      await expect(actions.first().or(over).or(alice.getByTestId('per-creature-choices')).first()).toBeVisible();
       if (await over.isVisible()) break;
       await showEachCreaturesChoice(alice);
       await expect(actions.first()).toBeEnabled();
