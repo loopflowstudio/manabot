@@ -12,8 +12,10 @@ import dataclasses
 from importlib import import_module
 import inspect
 from inspect import Parameter, Signature
+from io import StringIO
 from pathlib import Path
 import sys
+import tokenize
 import tomllib
 from types import ModuleType
 from typing import Literal, TypeAliasType, get_origin
@@ -151,11 +153,20 @@ def python_class(cls: type) -> Symbol:
     if f"{cls.__module__}.{cls.__qualname__}" in OPAQUE_TYPES:
         return Symbol(kind="opaque")
     members: dict[str, Symbol] = {}
+    hooks: set[str] = set()
+    if issubclass(cls, BaseModel):
+        decorators = cls.__pydantic_decorators__
+        hooks.update(
+            decorators.field_validators,
+            decorators.model_validators,
+            decorators.field_serializers,
+            decorators.model_serializers,
+        )
     for base in reversed(cls.__mro__):
         if base.__module__.partition(".")[0] not in {"manabot", "managym"}:
             continue
         for name, member in vars(base).items():
-            if name.startswith("_") and name != "__init__":
+            if name in hooks or (name.startswith("_") and name != "__init__"):
                 continue
             if isinstance(member, property):
                 members[name] = Symbol(
@@ -234,14 +245,37 @@ def decorator_names(node: ast.FunctionDef | ast.ClassDef) -> set[str]:
     }
 
 
+def deprecated_stub_lines(source: str) -> set[int]:
+    """Map marker comments to the declaration they precede or share a line with."""
+    marked: set[int] = set()
+    statement = None
+    for token in tokenize.generate_tokens(StringIO(source).readline):
+        if token.type == tokenize.COMMENT:
+            if token.string.startswith("# Deprecated"):
+                marked.add(statement or token.start[0] + 1)
+        elif token.type == tokenize.NEWLINE:
+            statement = None
+        elif statement is None and token.type not in (
+            tokenize.NL,
+            tokenize.INDENT,
+            tokenize.DEDENT,
+        ):
+            statement = token.start[0]
+    return marked
+
+
 def is_stub_deprecated(
-    node: ast.FunctionDef | ast.ClassDef, decorators: set[str]
+    node: ast.FunctionDef | ast.ClassDef, marked: set[int], decorators: set[str]
 ) -> bool:
-    doc = ast.get_docstring(node) or ""
-    return "deprecated" in decorators or doc.startswith("Deprecated")
+    return (
+        node.lineno in marked
+        or any(d.lineno in marked for d in node.decorator_list)
+        or "deprecated" in decorators
+        or (ast.get_docstring(node) or "").startswith("Deprecated")
+    )
 
 
-def stub_function(node: ast.FunctionDef, *, method: bool) -> Symbol:
+def stub_function(node: ast.FunctionDef, marked: set[int], *, method: bool) -> Symbol:
     decorators = decorator_names(node)
     if "overload" in decorators:
         raise ValueError(
@@ -258,11 +292,13 @@ def stub_function(node: ast.FunctionDef, *, method: bool) -> Symbol:
         signature=None
         if kind == "property"
         else signature_text(stub_parameters(node.args)),
-        deprecated=is_stub_deprecated(node, decorators),
+        deprecated=is_stub_deprecated(node, marked, decorators),
     )
 
 
-def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
+def stub_class(
+    node: ast.ClassDef, exports: Mapping[str, Symbol], marked: set[int]
+) -> Symbol:
     bases = [ast.unparse(b) for b in node.bases]
     kind: Literal["enum", "class", "typed_dict"] = (
         "enum" if "IntEnum" in bases else "class"
@@ -281,7 +317,7 @@ def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
         if isinstance(item, ast.FunctionDef) and (
             item.name == "__init__" or not item.name.startswith("_")
         ):
-            members[item.name] = stub_function(item, method=True)
+            members[item.name] = stub_function(item, marked, method=True)
         elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
             if kind == "typed_dict":
                 optional = (
@@ -291,35 +327,40 @@ def stub_class(node: ast.ClassDef, exports: Mapping[str, Symbol]) -> Symbol:
                 member = Symbol(kind="field", required=not optional)
             else:
                 member = Symbol(kind="attribute")
+            member.deprecated = item.lineno in marked
             members[item.target.id] = member
         elif kind == "enum" and isinstance(item, ast.Assign):
             members[ast.unparse(item.targets[0])] = Symbol(
-                kind="enum_member", value=ast.literal_eval(item.value)
+                kind="enum_member",
+                value=ast.literal_eval(item.value),
+                deprecated=item.lineno in marked,
             )
     return Symbol(
         kind=kind,
         members=members,
-        deprecated=is_stub_deprecated(node, decorator_names(node)),
+        deprecated=is_stub_deprecated(node, marked, decorator_names(node)),
     )
 
 
 def native_exports() -> dict[str, Symbol]:
     module = import_module("managym")
     source = (ROOT / "managym/__init__.pyi").read_text()
-    lines = source.splitlines()
+    marked = deprecated_stub_lines(source)
     exports: dict[str, Symbol] = {}
     for node in ast.parse(source).body:
         if isinstance(node, ast.ClassDef):
-            exports[node.name] = stub_class(node, exports)
+            exports[node.name] = stub_class(node, exports, marked)
         elif isinstance(node, ast.FunctionDef):
-            exports[node.name] = stub_function(node, method=False)
+            exports[node.name] = stub_function(node, marked, method=False)
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            exports[node.target.id] = Symbol(kind="value")
+            exports[node.target.id] = Symbol(
+                kind="value", deprecated=node.lineno in marked
+            )
         elif isinstance(node, ast.Assign):
             name = ast.unparse(node.targets[0])
             exports[name] = Symbol(
                 kind="type_alias",
-                deprecated="Deprecated" in lines[node.lineno - 1],
+                deprecated=node.lineno in marked,
             )
         elif isinstance(node, ast.ImportFrom) and (
             node.level or (node.module or "").startswith("managym.")

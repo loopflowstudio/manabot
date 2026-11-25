@@ -117,7 +117,6 @@ __all__ = [
     "Collector",
     "RolloutBatch",
     "RecordedObservations",
-    "PackedActions",
 ]
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")

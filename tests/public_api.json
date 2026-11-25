@@ -486,18 +486,6 @@
             "kind": "field",
             "required": false
           },
-          "validate_sideboard_counts": {
-            "kind": "classmethod",
-            "signature": "(cls, value)"
-          },
-          "validate_sources": {
-            "kind": "method",
-            "signature": "(self)"
-          },
-          "validate_world": {
-            "kind": "classmethod",
-            "signature": "(cls, value)"
-          },
           "villain": {
             "kind": "field",
             "required": false
@@ -603,21 +591,9 @@
             "kind": "field",
             "required": false
           },
-          "reject_compound_decisions": {
-            "kind": "classmethod",
-            "signature": "(cls, data)"
-          },
-          "reject_pooled_token_stream": {
-            "kind": "classmethod",
-            "signature": "(cls, data)"
-          },
           "stream_norm": {
             "kind": "field",
             "required": false
-          },
-          "validate_value_architecture": {
-            "kind": "method",
-            "signature": "(self)"
           },
           "value_aggregation": {
             "kind": "field",
@@ -707,10 +683,6 @@
           "policy_input_version": {
             "kind": "field",
             "required": false
-          },
-          "reject_other_inputs": {
-            "kind": "classmethod",
-            "signature": "(cls, value)"
           }
         }
       },
@@ -826,10 +798,6 @@
           "sampling": {
             "kind": "field",
             "required": false
-          },
-          "valid_population": {
-            "kind": "method",
-            "signature": "(self)"
           }
         }
       }
@@ -928,78 +896,6 @@
     "manabot.training.rollout.collection": {
       "Collector": {
         "kind": "opaque"
-      },
-      "PackedActions": {
-        "kind": "class",
-        "members": {
-          "__init__": {
-            "kind": "method",
-            "signature": "(self, offsets, slots, capacity, fields, log_probabilities, native=...)"
-          },
-          "action_columns": {
-            "kind": "method",
-            "signature": "(self, positions, columns)"
-          },
-          "behavior": {
-            "kind": "method",
-            "signature": "(self, indexes)"
-          },
-          "capacity": {
-            "kind": "field",
-            "required": true
-          },
-          "check": {
-            "kind": "method",
-            "signature": "(self, actions, selected_logs, *, validator)"
-          },
-          "concatenate": {
-            "kind": "classmethod",
-            "signature": "(cls, rows)"
-          },
-          "fields": {
-            "kind": "field",
-            "required": true
-          },
-          "log_probabilities": {
-            "kind": "field",
-            "required": true
-          },
-          "native": {
-            "kind": "field",
-            "required": false
-          },
-          "nbytes": {
-            "kind": "property"
-          },
-          "offsets": {
-            "kind": "field",
-            "required": true
-          },
-          "pack": {
-            "kind": "classmethod",
-            "signature": "(cls, observation, log_probabilities, *, validator)"
-          },
-          "row": {
-            "kind": "method",
-            "signature": "(self, index)"
-          },
-          "selected_types": {
-            "kind": "method",
-            "signature": "(self, actions, type_width)"
-          },
-          "slots": {
-            "kind": "field",
-            "required": true
-          },
-          "unpack": {
-            "kind": "method",
-            "signature": "(self, indexes)"
-          },
-          "unpack_logs": {
-            "kind": "method",
-            "signature": "(self, indexes)"
-          }
-        }
       },
       "RecordedObservations": {
         "kind": "class",
@@ -1224,10 +1120,6 @@
             "kind": "field",
             "required": true
           },
-          "resource_limit_has_input_contract": {
-            "kind": "method",
-            "signature": "(self)"
-          },
           "seat": {
             "kind": "field",
             "required": true
@@ -1256,10 +1148,6 @@
       "GameErrorPolicy": {
         "kind": "class",
         "members": {
-          "bounded_warmup": {
-            "kind": "method",
-            "signature": "(self)"
-          },
           "max_game_actions": {
             "kind": "field",
             "required": false
@@ -2819,6 +2707,7 @@
             "kind": "attribute"
           },
           "legacy_card_lists": {
+            "deprecated": true,
             "kind": "method",
             "signature": "(self)"
           },
@@ -3358,6 +3247,7 @@
             "kind": "property"
           },
           "disclosure": {
+            "deprecated": true,
             "kind": "attribute"
           },
           "name": {

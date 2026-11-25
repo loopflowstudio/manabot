@@ -307,7 +307,7 @@ installed wheel names the same boundary as this table:
 | `manabot.backends.torch.collection` | `CollectionSession` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
 | `manabot.policy.prepare` | `Prepared`, `reference_distribution` |
-| `manabot.training.rollout.collection` | `open_collector`, `collect`, `close_collector`, `Collector`, `RolloutBatch`, `RecordedObservations`, `PackedActions` |
+| `manabot.training.rollout.collection` | `open_collector`, `collect`, `close_collector`, `Collector`, `RolloutBatch`, `RecordedObservations` |
 | `manabot.training.rollout.actions` | `PackedActions`, `ActionRows` |
 | `manabot.training.state.game_errors` | `GameErrorPolicy`, `GameAttempt`, `GameErrorState`, `GameErrorLimit`, `GameOutcome`, `settle` |
 
@@ -316,8 +316,9 @@ installed wheel names the same boundary as this table:
 
 **Stability promise.** Within a `0.Y.x` patch line, published symbols, callable
 signatures, dataclass/Pydantic fields, attributes, and `managym` enum values
-stay backwards-compatible. Four container types — `Prepared`, `Collector`,
-`Prefix`, and `MemoryArchive` — are **opaque handles**: their class identity is
+stay backwards-compatible. Pydantic validator and serializer callbacks are
+internal and may be renamed between patch releases. Four container types —
+`Prepared`, `Collector`, `Prefix`, and `MemoryArchive` — are **opaque handles**: their class identity is
 promised for type annotations and `isinstance`, while their internal fields may
 change on `0.Y.x`. When a published API is replaced, the old spelling stays as
 a `DeprecationWarning` alias targeting `0.(Y+1).0`. Everything outside these

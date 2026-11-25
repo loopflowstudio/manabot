@@ -9,13 +9,49 @@ import sys
 
 import pytest
 
-from scripts.public_api import PUBLIC_MODULES, ROOT, Contract, Symbol, main, update
+from manabot.infra.config import MatchConfig
+from scripts.public_api import (
+    PUBLIC_MODULES,
+    ROOT,
+    Contract,
+    Symbol,
+    main,
+    native_exports,
+    python_class,
+    update,
+)
 
 
 def test_public_api_matches_snapshot() -> None:
     subprocess.run(
         [sys.executable, "scripts/public_api.py", "check"], cwd=ROOT, check=True
     )
+
+
+def test_match_config_publishes_fields_and_methods_without_validator_hooks() -> None:
+    members = python_class(MatchConfig).members
+    assert members["world"].kind == "field"
+    assert members["authored"].kind == "classmethod"
+    decorators = MatchConfig.__pydantic_decorators__
+    assert members.keys().isdisjoint(decorators.field_validators)
+    assert members.keys().isdisjoint(decorators.model_validators)
+
+
+def test_packed_actions_is_published_from_its_defining_module() -> None:
+    owners = [
+        mod for mod in PUBLIC_MODULES if "PackedActions" in import_module(mod).__all__
+    ]
+    assert owners == ["manabot.training.rollout.actions"]
+
+
+def test_stub_comments_mark_only_the_deprecated_declaration() -> None:
+    """The marked declarations are scheduled for removal in 0.3.0."""
+    exports = native_exports()
+    assert exports["LearningCatalog"].deprecated
+    assert exports["PlayerConfig"].members["disclosure"].deprecated
+    assert not exports["PlayerConfig"].members["deck"].deprecated
+    assert exports["Observation"].members["legacy_card_lists"].deprecated
+    assert not exports["Observation"].members["validate"].deprecated
 
 
 def test_readme_lists_the_published_exports() -> None:
