@@ -170,7 +170,7 @@ from .shared_table_protocol import (
     ViewerRole,
 )
 from .step_boards import MAX_STEP_BOARDS, StepBoard, wire_boards
-from .summary import game_summary, wilson_interval
+from .numbers import game_numbers, wilson_interval
 from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
 from .study_runtime import (
     HistoricalStudyEvidenceProvider,
@@ -2467,7 +2467,7 @@ class GameSession:
             self._study_provider = study_provider
             self._trace_saved = True
             if not self.watch_mode:
-                save_game_summary(
+                save_game_numbers(
                     self.attempt_store,
                     self.match_id,
                     RetainedAttempt(retained.to_record(), json.dumps(world)),
@@ -3828,7 +3828,7 @@ async def authorize_record(
         public_read = request.method == "GET" and (
             len(parts) == 4
             or parts[4]
-            in {"decisions", "recording", "positions", "analyses", "summary"}
+            in {"decisions", "recording", "positions", "analyses", "numbers"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -4064,40 +4064,40 @@ def get_record(
     }
 
 
-def save_game_summary(
+def save_game_numbers(
     store: AttemptStore, trace_id: str, attempt: RetainedAttempt
 ) -> dict[str, Any] | None:
     """Compute and save a finished game's numbers; None where it does not
     re-execute here. A failure never reaches the game that just ended."""
     try:
-        summary = game_summary(attempt)
+        numbers = game_numbers(attempt)
     except Exception:  # noqa: BLE001 - numbers are derived; the game is saved
         logging.getLogger(__name__).exception("Summary of %s failed", trace_id)
         return None
-    if summary is None:
+    if numbers is None:
         return None
-    store.save_summary(trace_id, summary.model_dump_json())
-    return summary.model_dump(mode="json")
+    store.save_numbers(trace_id, numbers.model_dump_json())
+    return numbers.model_dump(mode="json")
 
 
-@app.get("/api/traces/{trace_id}/summary")
-def get_game_summary(trace_id: str) -> dict[str, Any]:
+@app.get("/api/traces/{trace_id}/numbers")
+def get_game_numbers(trace_id: str) -> dict[str, Any]:
     """A played game's numbers, computed on first read for a game saved
     before summaries were (null where it does not re-execute here)."""
     store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
-    saved = store.summary(trace_id)
+    saved = store.numbers(trace_id)
     if saved is None:
         raise HTTPException(404, "recording_not_found")
-    status, summary_json = saved
-    if summary_json is not None:
-        return {"summary": json.loads(summary_json)}
+    status, numbers_json = saved
+    if numbers_json is not None:
+        return {"numbers": json.loads(numbers_json)}
     if status == "active":
-        return {"summary": None}
+        return {"numbers": None}
     attempt = store.load_attempt(trace_id)
     assert attempt is not None
     if attempt.trace["config"].get("watch_players") is not None:
-        return {"summary": None}
-    return {"summary": save_game_summary(store, trace_id, attempt)}
+        return {"numbers": None}
+    return {"numbers": save_game_numbers(store, trace_id, attempt)}
 
 
 def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:

@@ -1,11 +1,11 @@
 """The game in numbers: what each seat of a played game did, and a record.
 
-`game_summary` re-executes a played game (`record_of`) once and reduces it
+`game_numbers` re-executes a played game (`record_of`) once and reduces it
 with the engine's own reducers (`managym.statistics.Behaviour` and `Totals`),
 checking each step against the stored track as an analysis does. The result,
-a `GameSummary`, is saved beside the game (`attempts.summary_json`) once the
+a `GameNumbers`, is saved beside the game (`attempts.numbers_json`) once the
 game is no longer being played, so lists never re-execute; an older game gets
-its summary the first time one is read (`server.game_summary_of`).
+its numbers the first time they are read (`GET /api/traces/{id}/numbers`).
 
 `wilson_interval` bounds a win rate for the My games record table.
 """
@@ -21,7 +21,7 @@ from managym.replay import walk
 from managym.statistics import Behaviour, BehaviourRow, Reduction, Totals, TotalsRow
 
 
-class SeatSummary(BaseModel):
+class SeatNumbers(BaseModel):
     """One native seat's counts (definitions in `managym.statistics`)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -34,7 +34,7 @@ class SeatSummary(BaseModel):
     damage_taken: int | None
 
 
-class GameSummary(BaseModel):
+class GameNumbers(BaseModel):
     """A played game's numbers. `complete` is False for a game that stopped
     before game over; its counts run to where it stopped. `seats` are in
     native seat order (seat 0 is on the play)."""
@@ -42,15 +42,15 @@ class GameSummary(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     complete: bool
     turns: int
-    seats: tuple[SeatSummary, SeatSummary]
+    seats: tuple[SeatNumbers, SeatNumbers]
 
 
-def game_summary(attempt: RetainedAttempt) -> GameSummary | None:
+def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     """The game's numbers, or None where it does not re-execute as stored
     (another build or card set, or a divergence)."""
     trace = attempt.trace
     if trace["end_reason"] == "active":
-        raise ValueError("A game still being played has no summary yet.")
+        raise ValueError("A game still being played has no numbers yet.")
     human = trace["config"].get("human_seat", 0)
     try:
         walker = walk(record_of(attempt), capture_cards=True)
@@ -72,15 +72,15 @@ def game_summary(attempt: RetainedAttempt) -> GameSummary | None:
     behaviour: list[BehaviourRow]
     totals: list[TotalsRow]
     behaviour, totals = reduction.tables()
-    return GameSummary(
+    return GameNumbers(
         complete=stop.status == "complete",
         turns=totals[0].turns,
         seats=(_seat(behaviour[0], totals[0]), _seat(behaviour[1], totals[1])),
     )
 
 
-def _seat(behaviour: BehaviourRow, totals: TotalsRow) -> SeatSummary:
-    return SeatSummary(
+def _seat(behaviour: BehaviourRow, totals: TotalsRow) -> SeatNumbers:
+    return SeatNumbers(
         seat=totals.seat,
         lands_played=behaviour.lands_played,
         spells_cast=totals.spells_cast,
