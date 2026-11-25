@@ -54,7 +54,8 @@ describe('releasing a carried card', () => {
     const { gesture, release: result } = release(dragged([cast, cycle]), 1);
     expect(result.outcome).toBe('play');
     expect(gesture).toMatchObject({ phase: 'holding', reason: 'menu' });
-    expect(promote(gesture)).toMatchObject({ phase: 'holding', reason: 'pending' });
+    expect(promote(gesture, 42)).toBe(gesture);
+    expect(promote(gesture, cycle.offer.id)).toMatchObject({ phase: 'holding', reason: 'pending' });
   });
 
   it('anywhere else sends nothing and settles back', () => {

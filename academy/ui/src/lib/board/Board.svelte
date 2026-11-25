@@ -664,7 +664,7 @@
   function send(offer: InteractionOffer): void {
     if (!live) return;
     endReadOut();
-    gesture = promote(gesture);
+    gesture = promote(gesture, offer.id);
     menuAt = null;
     stopNote = null;
     hush();
@@ -880,7 +880,7 @@
     const next = moveGesture(current, event.pointerId, { x: event.clientX, y: event.clientY }, drag => {
       if (drag.kind === 'marquee') return drag;
       const hit = document.elementFromPoint(event.clientX, event.clientY);
-      return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half') } : connectTarget(drag, hit);
+      return drag.kind === 'play' ? { ...drag, overField: !!hit?.closest('.board .half, .board .tray') } : connectTarget(drag, hit);
     });
     if (next === current) return;
     if (current.phase === 'pressed') {

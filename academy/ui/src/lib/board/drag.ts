@@ -136,9 +136,10 @@ export function cancel(gesture: Gesture): Gesture {
   return gesture.phase === 'pressed' || gesture.phase === 'dragging' ? IDLE : gesture;
 }
 
-/** An offer was chosen from a dropped card's choices: its Command is now pending. */
-export function promote(gesture: Gesture): Gesture {
-  return gesture.phase === 'holding' && gesture.reason === 'menu' ? { ...gesture, reason: 'pending' } : gesture;
+/** Only choosing the held card keeps it at the drop point after its menu closes. */
+export function promote(gesture: Gesture, offerId: number): Gesture {
+  if (gesture.phase !== 'holding' || gesture.reason !== 'menu') return gesture;
+  return gesture.drag.offers.some(({ offer }) => offer.id === offerId) ? { ...gesture, reason: 'pending' } : gesture;
 }
 
 /** What releasing here does, in words. */

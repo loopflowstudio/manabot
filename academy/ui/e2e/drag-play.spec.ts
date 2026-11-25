@@ -61,8 +61,8 @@ interface Authority { commands: Command[]; previews: number[] }
 
 /** Accepts every Command but `refuse`'s offers, which it rejects at the same revision. */
 async function installAuthority(page: Page, {
-  refuse = [], initial = mainPhase(REVISION), after, study, stopEcho,
-}: { refuse?: number[]; initial?: ExperienceFrame; study?: RestoredReplayDecision; stopEcho?: Promise<void>; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
+  refuse = [], initial = mainPhase(REVISION), after, study, stopEcho, commandReply,
+}: { refuse?: number[]; initial?: ExperienceFrame; study?: RestoredReplayDecision; stopEcho?: Promise<void>; commandReply?: Promise<void>; after?: (command: Command) => ExperienceFrame } = {}): Promise<Authority> {
   const authority: Authority = { commands: [], previews: [] };
   let current = initial;
   await page.route('**/api/sessions/*/payment-preview', async route => {
@@ -92,6 +92,7 @@ async function installAuthority(page: Page, {
       if (message.type !== 'command' || !message.command) return;
       const command = message.command;
       authority.commands.push(command);
+      await commandReply;
       if (refuse.includes(command.offer_id)) {
         socket.send(JSON.stringify({ type: 'command_outcome', status: 'rejected',
           rejection: { command_id: command.command_id, code: 'stale_revision', message: 'That play is no longer available.',
@@ -221,6 +222,32 @@ test('a card with several plays opens its choices where it was dropped', async (
   await page.mouse.up();
   await menu.getByRole('menuitem', { name: /Cast Shock with kicker/ }).click();
   await expect.poll(() => authority.commands.map(command => [command.expected_revision, command.offer_id])).toEqual([[REVISION, 3]]);
+});
+
+test('choosing a different offer returns the carried card while that Command is pending', async ({ page }) => {
+  const reply = Promise.withResolvers<void>();
+  const authority = await installAuthority(page, { commandReply: reply.promise });
+  const shock = inHand(page, 'Shock');
+  await carry(page, shock, await field(page));
+  await page.mouse.up();
+  await expect(ghost(page)).toHaveAttribute('data-holding', 'menu');
+  await page.getByTestId('action-option').filter({ hasText: 'Play Island' }).click();
+  await expect(page.getByTestId('game')).toHaveAttribute('data-live', 'false');
+  await expect(ghost(page)).toHaveCount(0);
+  await expect(shock).toHaveAttribute('data-travel-id', `card:${SHOCK}`);
+  expect(authority.commands.map(c => c.offer_id)).toEqual([4]);
+  reply.resolve();
+  await expect(inHand(page, 'Island')).toHaveCount(0);
+});
+
+test('dropping a hand card over a battlefield tray plays the carried card', async ({ page }) => {
+  const initial = mainPhase(REVISION);
+  initial.offers.push(offer(5, 'cast', 'Cast from exile', 'PRIORITY_CAST_SPELL', [75]));
+  const authority = await installAuthority(page, { initial });
+  await carry(page, inHand(page, 'Lightning Bolt'), await center(page.getByTestId('tray')));
+  await expect(page.getByTestId('drop-zone')).toContainText('Cast Lightning Bolt');
+  await page.mouse.up();
+  await expect.poll(() => authority.commands.map(c => [c.expected_revision, c.offer_id])).toEqual([[REVISION, 1]]);
 });
 
 test('a refused drop returns the card to hand', async ({ page }) => {
