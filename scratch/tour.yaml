@@ -1,17 +1,23 @@
-at: e025de680c0b01d6efdb581a0dae1c7291553150
+at: 737ed04a809e3d7d5ce493941d2377044dbc2c50
 first:
   - path: docs/training.md
-    why: Recovery options and accepted checkpoint formats
+    why: Supported formats and recovery options for older runs
+  - path: docs/academy.md
+    why: How earlier training games still open
   - path: manabot/training/state/continuation.py
-    why: Reject old saves before reading portable tensors
-  - path: manabot/training/loops/self_play.py
-    why: Model and readings checks precede weight restoration
+    why: Save admission precedes model and tensor restoration
   - path: manabot/belief/checkpoint.py
     why: Both backends admit the same sampler bytes
   - path: managym/replay.py
-    why: Source and native identity checks for replay
+    why: Engine owns replay runtime checks
+  - path: manabot/sim/replay.py
+    why: Command traces reconstructed from recorded inputs and actions
+  - path: manabot/env/failures.py
+    why: Training capture retains its scope and policy accounting
   - path: tests/training/test_cross_backend_continuation.py
-    why: Old save refusal preserves live weights and disk state
+    why: Old save refusal preserves weights and disk state
   - path: tests/belief/test_sampling_report.py
     why: Real archives exercise both readers
+  - path: tests/sim/test_replay.py
+    why: Round trip verifies Commands and rejects unoffered actions
 hide: []

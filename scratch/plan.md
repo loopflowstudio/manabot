@@ -44,28 +44,9 @@ save/belief loaders":
    `RestoredContinuation.host` is required; legacy Torch/MLX save loaders gone.
 2. **Done (3a7afc0e9a).** Belief samplers are safetensors-only; decode errors
    raise `ValueError("unknown sampler checkpoint format")`.
-3. **One recording module (`managym.recording`), one arena-trace module
-   (`manabot.sim.replay`), one replay runtime check (`managym.replay`).**
-   - Move `record_actions` (dropping its dead `option_counts` parameter, whose
-     only caller was `TrainingGame.export`) into `manabot/sim/replay.py`,
-     beside `replay_environment`, `write_trace`, `read_trace`, and
-     `replay_games`, and delete `manabot/sim/recording.py` completely (removing
-     the duplicate `recording.py` filename across `managym` and `manabot`).
-   - Update `scripts/release/academy_replay_smoke.py` to import `GameInputs,
-     PlayerSetup` from `managym.recording` and `record_actions, write_trace`
-     from `manabot.sim.replay`.
-   - Delete `manabot/env/replay.py` and `manabot/env/failures.py`'s
-     `runtime_identities`. In `manabot/sim/replay.py`, collapse the duplicate
-     `require_record_runtime` alias to one `from managym.replay import
-     require_replay_runtime`. In `manabot/training/state/game_errors.py`,
-     import `require_replay_runtime` from `managym.replay`.
-   - In `manabot/env/failures.py`, delete `__getattr__`,
-     `TrainingExposureReceipt`, `NativeTrainingGame`, `NativeTrainingTrace`,
-     and all imports made dead by those removals. Reference
-     `recording.GameInputs` and `recording.GameRecord` via the existing
-     `from managym import recording` import (do NOT import bare `GameRecord` or
-     `GameInputs` at module scope, which would leave `hasattr(failures,
-     "GameRecord") == True`).
+3. **Done (213995e159, c6fa430a1e).** `managym.recording` owns game inputs and
+   records, `manabot.sim.replay` reconstructs and verifies Command traces, and
+   `managym.replay` admits the runtime.
 
 ## What goes
 
@@ -211,6 +192,7 @@ checks = {
     "manabot.sim.table_bots": ("CheckpointVillain",),
     "manabot.training.updates.damped_policy": ("compute_targets", "DampedTargets"),
     "manabot.training.rollout.snapshot_vector": ("InMemorySnapshotVector",),
+    "manabot.backends.torch.learner": ("StepRecorder",),
     "manabot.backends.torch.rl": ("damped_policy_loss",),
     "manabot.backends.mlx.rl": ("damped_policy_loss",),
     "manabot.backends.torch.state": ("restore_legacy", "legacy_file", "legacy_parameters", "legacy_adam"),
@@ -228,6 +210,8 @@ for module, names in checks.items():
     assert not [n for n in names if hasattr(loaded, n)], (module, names)
 import manabot.managym  # retained alias
 from manabot.sim.replay import record_actions  # moved from deleted sim/recording.py
+from manabot.reports.self_play import SelfPlayPoint
+assert not hasattr(SelfPlayPoint, "position")
 print("ok")
 EOF
 uv run manabot export-game x --out y; test $? -eq 2
@@ -252,7 +236,7 @@ uv run --extra dev pytest tests/test_package_boundaries.py tests/sim tests/belie
   tests/model/test_policy_input_rejection.py tests/academy/test_watch.py \
   tests/academy/test_checkpoint_catalog.py tests/academy/test_configured_launch.py \
   -q -W error::DeprecationWarning:manabot
-uv run python scripts/release/academy_replay_smoke.py --help
+ACADEMY_FRONTEND_BUILD="$PWD/academy/ui/build" uv run python scripts/release/academy_replay_smoke.py
 ```
 
 plus the repository's lint/type configuration, and
@@ -264,18 +248,31 @@ plus the repository's lint/type configuration, and
    to `managym.replay` (`manabot/env/replay.py` deleted, 213995e159). Torch ↔ MLX
    portable resume, refusal with missing settings/readings and intact
    weights/save bytes, sampler reports, and both replay CLIs passed.
-2. **Next: shims, aliases, CLI and `sim/recording.py`.** Everything in "What
-   goes" still present at 43fb4add55: `card_capture.py`, `infra/journal.py`,
-   `sim/search/flat.py`, `sim/recording.py` (move `record_actions` to
-   `sim/replay.py`), `failures.py` `__getattr__` / `TrainingExposureReceipt` /
-   `NativeTrainingGame` / `NativeTrainingTrace` / `runtime_identities`,
-   `export-game`, `CheckpointVillain`, `SelfPlayPoint.position`,
-   `compute_targets`, `InMemorySnapshotVector`, torch `learner.__getattr__`,
-   both `rl.damped_policy_loss`; with the test, CI-path and smoke-script
-   conversions in "Tests removed and converted". Delivers the acceptance script printing `ok`.
+2. **Implemented (c6fa430a1e, ac40bab096, 737ed04a80).** Removed the remaining shims,
+   aliases and CLI command. Converted checkpoint admission and training tests
+   and added the Command trace round trip and refusal to integration CI.
 3. **Gate.** Acceptance check, consumer tests with manabot
    `DeprecationWarning`s as errors, CI workflow paths, docs re-read against the
    final code.
+
+## Pass 2 validation
+
+The removal check printed `ok`. Typer rejected `export-game` with exit 2.
+Academy opened the complete Command trace through Python and the replay CLI
+(`ACADEMY_REPLAY_PROOF passed`). Ruff lint and format checks passed.
+
+With the CPython 3.13 extension rebuilt for the synced checkout, the consumer
+list finished with **610 passed, 20 failed**. The search fixture now writes an
+untrained safetensors sampler, and the failure-capture fixture injects invalid
+actions through the packed batch interface.
+
+The same 20 node IDs failed with the same exceptions and assertions when the
+changed and deleted Python modules were loaded from the task base
+`45ddf3bca7` using the same native extension. Fourteen conditional-search
+fixtures try to refresh Priority at the opening-hand Modal decision. One PUCT
+test compares stored and live decision rows. Five belief tests fail on choice
+deltas, absent priority offers, hand tracking or a pinned receipt digest.
+The full consumer gate remains open on those baseline failures.
 
 ## Done when
 

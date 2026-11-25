@@ -37,3 +37,10 @@ listed in `scratch/concept-review.html`.
 - The model-settings test also built a legacy save to exercise the initial-policy
   fallback. Both model changes now use portable saves. The cross-backend
   refusal test covers the historical save with its model and readings omitted.
+- `StepRecorder` is an annotation-only import in the Torch learner. A runtime
+  import under its original name would keep the retired import working.
+- Integration CI runs the new replay test in the retired export test's slot.
+- The local-update sampler fixture publishes an untrained model with the
+  safetensors codec. It has no training dataset or fit metrics.
+- Gate needs a disposition for the 20 consumer failures that also reproduce
+  with the base sources. Their search and belief behavior is outside MTG-435.
