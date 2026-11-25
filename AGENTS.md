@@ -603,9 +603,9 @@ a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
 function to its set file's `cards()`. New behavior is a new rules-type variant
 (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
 card-specific logic. Rebuild the extension after card changes. A new definition
-shifts the name-ordered definition ids: refresh Academy fixtures with
-`uv run python scripts/refresh_academy_fixtures.py` (labels stay unchanged) and
-the catalog-dependent state-hash pin in `managym/cards/tests/cards/lea.rs`.
+shifts the name-ordered definition ids. Refresh Academy fixtures with
+`uv run --extra dev python scripts/refresh_academy_fixtures.py`. The script
+replays each recorded offer and checks its label before writing the new digests.
 
 Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
 an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,

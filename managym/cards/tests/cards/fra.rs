@@ -184,3 +184,40 @@ fn codie_copies_prepared_spells_and_prepares_each_creature() {
     assert_eq!(prepared.len(), 2, "one copy for each Improviser");
     assert!(prepared.contains(&kept[0]));
 }
+
+#[test]
+fn commons_and_annex_lands_check_their_controllers_planeswalkers_and_pay_either_color() {
+    use crate::support::{
+        game::{five_color_unfunded_setup, set_counters},
+        inspect::tapped,
+        play::{play_land, tapped_dual_land_pays_either_color},
+    };
+    use managym::state::permanent::CounterKind;
+
+    for (name, colors) in [
+        ("Dedicated Commons", "RW"),
+        ("Fatehold Annex", "WU"),
+        ("Formidable Commons", "BG"),
+        ("Innovative Commons", "UR"),
+        ("Konstrari Annex", "RG"),
+        ("Meticulous Commons", "WB"),
+        ("Stingerquill Annex", "BR"),
+        ("Theorix Annex", "UB"),
+        ("Transformative Commons", "GU"),
+        ("Vigorbloom Annex", "GW"),
+    ] {
+        tapped_dual_land_pays_either_color(name, colors, |_, _| {});
+        for controller in [0, 1] {
+            let mut s = five_color_unfunded_setup(&[name, "Gray Ogre"]);
+            let walker = s.force_permanent_on_battlefield(controller, "Gray Ogre");
+            crate::make_planeswalker(&mut s, walker);
+            set_counters(&mut s, walker, CounterKind::Loyalty, 3);
+            let land = play_land(&mut s, name);
+            assert_eq!(
+                tapped(&s, land),
+                controller != 0,
+                "{name}, planeswalker seat {controller}"
+            );
+        }
+    }
+}

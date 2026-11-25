@@ -7,8 +7,8 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, InsetSpell, Keyword,
-        Keywords, LayerValue, PrintedCharacteristics, Restriction, StaticAbility, StaticContinuous,
-        StaticRestriction, StaticScope,
+        Keywords, LayerValue, PrintedCharacteristics, ReplacementEffect, Restriction,
+        StaticAbility, StaticContinuous, StaticRestriction, StaticScope,
     },
     effect::Modification,
     mana::{Mana, ManaCost, ManaRestriction},
@@ -64,6 +64,16 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         semester_foreseer(),
         theorix_metamage(),
         vigorbloom_vanguard(),
+        dedicated_commons(),
+        fatehold_annex(),
+        formidable_commons(),
+        innovative_commons(),
+        konstrari_annex(),
+        meticulous_commons(),
+        stingerquill_annex(),
+        theorix_annex(),
+        transformative_commons(),
+        vigorbloom_annex(),
         void_extrapolator(),
     ]
 }
@@ -689,4 +699,125 @@ fn prudent_fateseer() -> CardDefinition {
         },
         ..Default::default()
     }
+}
+
+fn planeswalker_land(
+    key: &'static str,
+    scryfall_id: &'static str,
+    name: &str,
+    colors: [&str; 2],
+) -> CardDefinition {
+    let [first, second] = colors;
+    CardDefinition {
+        key,
+        scryfall_id,
+        printed: PrintedCharacteristics {
+            name: name.into(),
+            types: CardTypes::new([CardType::Land]),
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Planeswalker),
+                    ..Default::default()
+                },
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::mana_choice(colors.map(Mana::parse))],
+                ..Default::default()
+            }],
+            text_box: format!("This land enters tapped unless you control a planeswalker.\n{{T}}: Add {{{first}}} or {{{second}}}."),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn dedicated_commons() -> CardDefinition {
+    planeswalker_land(
+        "fra.dedicated_commons",
+        "3223e5db-5cc4-42f9-ae9e-ff58abc7c390",
+        "Dedicated Commons",
+        ["R", "W"],
+    )
+}
+
+fn fatehold_annex() -> CardDefinition {
+    planeswalker_land(
+        "fra.fatehold_annex",
+        "5140f962-62f3-40fd-a322-44896c7e2613",
+        "Fatehold Annex",
+        ["W", "U"],
+    )
+}
+
+fn formidable_commons() -> CardDefinition {
+    planeswalker_land(
+        "fra.formidable_commons",
+        "e6ca6c3e-f145-42d6-8a17-90770c15afaf",
+        "Formidable Commons",
+        ["B", "G"],
+    )
+}
+
+fn innovative_commons() -> CardDefinition {
+    planeswalker_land(
+        "fra.innovative_commons",
+        "84ea799a-faa2-4ff1-a933-432d4ee31a3b",
+        "Innovative Commons",
+        ["U", "R"],
+    )
+}
+
+fn konstrari_annex() -> CardDefinition {
+    planeswalker_land(
+        "fra.konstrari_annex",
+        "39c805e3-82cd-42a9-80fe-8d81712a94ea",
+        "Konstrari Annex",
+        ["R", "G"],
+    )
+}
+
+fn meticulous_commons() -> CardDefinition {
+    planeswalker_land(
+        "fra.meticulous_commons",
+        "93ac525e-1919-43dd-aba4-073b7e4c1768",
+        "Meticulous Commons",
+        ["W", "B"],
+    )
+}
+
+fn stingerquill_annex() -> CardDefinition {
+    planeswalker_land(
+        "fra.stingerquill_annex",
+        "6ede3143-69ac-4cbe-922a-d25b07c26da7",
+        "Stingerquill Annex",
+        ["B", "R"],
+    )
+}
+
+fn theorix_annex() -> CardDefinition {
+    planeswalker_land(
+        "fra.theorix_annex",
+        "97bbbd23-ecb1-4407-ac14-dede08532a1e",
+        "Theorix Annex",
+        ["U", "B"],
+    )
+}
+
+fn transformative_commons() -> CardDefinition {
+    planeswalker_land(
+        "fra.transformative_commons",
+        "b57d5be7-3157-4b49-aeb8-d7368ca7e9dd",
+        "Transformative Commons",
+        ["G", "U"],
+    )
+}
+
+fn vigorbloom_annex() -> CardDefinition {
+    planeswalker_land(
+        "fra.vigorbloom_annex",
+        "db8c7bdd-76cd-4be0-ae0d-d430e9a5fe7a",
+        "Vigorbloom Annex",
+        ["G", "W"],
+    )
 }

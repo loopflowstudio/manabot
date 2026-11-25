@@ -2602,6 +2602,16 @@
       "B"
     ]
   },
+  "Dedicated Commons": {
+    "name": "Dedicated Commons",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {R} or {W}.",
+    "colors": []
+  },
   "Deer-Dog": {
     "name": "Deer-Dog",
     "mana_cost": "{1}{R}",
@@ -3756,6 +3766,16 @@
       "R"
     ]
   },
+  "Fatehold Annex": {
+    "name": "Fatehold Annex",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {W} or {U}.",
+    "colors": []
+  },
   "Fatehold Chronologist": {
     "name": "Fatehold Chronologist",
     "mana_cost": "{1}{W/U}",
@@ -4448,6 +4468,16 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "({T}: Add {G}.)",
+    "colors": []
+  },
+  "Formidable Commons": {
+    "name": "Formidable Commons",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {B} or {G}.",
     "colors": []
   },
   "Frog-Squirrels": {
@@ -5706,6 +5736,16 @@
       "W"
     ]
   },
+  "Innovative Commons": {
+    "name": "Innovative Commons",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {U} or {R}.",
+    "colors": []
+  },
   "Inspiring Call": {
     "name": "Inspiring Call",
     "mana_cost": "{2}{G}",
@@ -6325,6 +6365,16 @@
     "colors": [
       "R"
     ]
+  },
+  "Konstrari Annex": {
+    "name": "Konstrari Annex",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {R} or {G}.",
+    "colors": []
   },
   "Konstrari Improviser": {
     "name": "Konstrari Improviser",
@@ -7041,6 +7091,16 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Meticulous Commons": {
+    "name": "Meticulous Commons",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {W} or {B}.",
     "colors": []
   },
   "Michelangelo, Game Master": {
@@ -9777,6 +9837,16 @@
     "oracle_text": "Flying\n{2}: This creature gets +1/+0 until end of turn.\n{X}: Destroy each nonland permanent with mana value X whose controller was dealt combat damage by this creature this turn. Activate only once each turn.",
     "colors": []
   },
+  "Stingerquill Annex": {
+    "name": "Stingerquill Annex",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {B} or {R}.",
+    "colors": []
+  },
   "Stingerquill Voxmancer": {
     "name": "Stingerquill Voxmancer",
     "mana_cost": "{B/R}",
@@ -10619,6 +10689,16 @@
     "oracle_text": "Defender\nOther permanents you control have indestructible.",
     "colors": []
   },
+  "Theorix Annex": {
+    "name": "Theorix Annex",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {U} or {B}.",
+    "colors": []
+  },
   "Theorix Metamage": {
     "name": "Theorix Metamage",
     "mana_cost": "{2}{U/B}",
@@ -10943,6 +11023,16 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {W} or {U}.",
+    "colors": []
+  },
+  "Transformative Commons": {
+    "name": "Transformative Commons",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {G} or {U}.",
     "colors": []
   },
   "Treetop Freedom Fighters": {
@@ -11496,6 +11586,16 @@
     "colors": [
       "R"
     ]
+  },
+  "Vigorbloom Annex": {
+    "name": "Vigorbloom Annex",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a planeswalker.\n{T}: Add {G} or {W}.",
+    "colors": []
   },
   "Vigorbloom Vanguard": {
     "name": "Vigorbloom Vanguard",
