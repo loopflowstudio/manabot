@@ -23,6 +23,13 @@ abilities. Live layers and triggers also resolve exact command-zone sources.
   (`division_remaining`, `EffectValue::TargetDivision`, v11 `action::DIVISION`
   column 31), `SpellTargeting` factored, `−X` offers filtered by target
   availability; directed witnesses in `flow/target_authority_tests.rs`.
+- Pass 2: removed `FactKind::EmblemAbility` and `"Emblem::Static"` /
+  `"Emblem::Triggered"` record tokens (emblems observed via `agent_cards` /
+  `opponent_cards` `ZONE_COMMAND` + `semantic_cards` → `catalog_tokens`);
+  projected `StaticAbility::StateBasedActionDoesntApply { action: ZeroLoyalty, .. }`
+  onto `Characteristics.exempt_from_zero_loyalty` in `flow/layers.rs` (`Layer::Ability`,
+  covering battlefield and command-zone sources) and restored the zero-allocation
+  streaming `layer_views` loop in `flow/sba.rs` with unit tests in `sba::tests`.
 
 ## Target model (updated by concept review)
 
@@ -32,25 +39,7 @@ The core planeswalker rules (`PrintedCharacteristics.loyalty`, per-turn
 `ZoneType::Command` flowing through `layers.rs` and `triggers.rs`) hold.
 Concept review (`scratch/concept-review.html`) identified six mismatches
 between Comprehensive Rules / v11 / Academy concepts and the current branch
-code; Passes 2–3 repair the rest before the Pass 4 gate. Build Pass 2 next.
-
-### Pass 2 — Remove derived `FactKind::EmblemAbility` and move zero-loyalty SBA exemption into `layers.rs`
-
-- **Emblem v11 observation:** Delete `FactKind::EmblemAbility` and the
-  `"Emblem::Static"` / `"Emblem::Triggered"` record-vocabulary tokens from
-  `observation_encoder.rs`, `observation_layout.rs`, `record_vocabulary.rs`,
-  and `observability.rs`. Emblems are already observed via their
-  `agent_cards` / `opponent_cards` row (`card::ZONE_COMMAND = 1`) joined via
-  `semantic_cards` to `catalog_tokens`, which carries their full static and
-  triggered token streams. (Choice made for review in
-  `scratch/concept-review.html` Q1.)
-- **Zero-loyalty SBA exemption via `layers.rs`:** Project
-  `StaticAbility::StateBasedActionDoesntApply { action: ZeroLoyalty, scope }`
-  onto `PermanentView` in `layers.rs` (`Layer::Ability`, covering both
-  battlefield permanents and command-zone emblems). Restore
-  `sba.rs::perform_state_based_batch` to a zero-allocation streaming loop over
-  `self.layer_views(...)`, deleting its per-SBA `views: Vec` and
-  `loyalty_exemptions: Vec` allocations.
+code; Pass 3 repairs the remaining items before the Pass 4 gate. Build Pass 3 next.
 
 ### Pass 3 — Unify combat-defender state, candidate binding, `ZoneEntry.attack_target`, death-to-exile replacement, and Academy drafting
 

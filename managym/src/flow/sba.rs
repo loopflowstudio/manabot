@@ -10,7 +10,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TriggerCondition},
-        card::{Keyword, StateBasedAction, StaticAbility},
+        card::{Keyword, StaticAbility},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
@@ -160,24 +160,9 @@ impl Game {
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
         let mut candidates = Vec::new();
-        let views: Vec<_> = self
-            .layer_views((0..self.state.permanents.len()).map(PermanentId))
-            .collect();
-        let loyalty_exemptions: Vec<_> = views
-            .iter()
-            .flat_map(|(id, view)| {
-                view.static_abilities
-                    .iter()
-                    .filter_map(move |ability| match ability {
-                        StaticAbility::StateBasedActionDoesntApply {
-                            action: StateBasedAction::ZeroLoyalty,
-                            scope,
-                        } => Some((*id, scope)),
-                        _ => None,
-                    })
-            })
-            .collect();
-        for (permanent_id, characteristics) in views.iter().map(|(id, view)| (*id, view)) {
+        for (permanent_id, characteristics) in
+            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+        {
             let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
@@ -187,10 +172,7 @@ impl Game {
             // is introduced, its pending trigger must delay this battle SBA.
             let zero_counters = (characteristics.types.is_planeswalker()
                 && permanent.counter_count(CounterKind::Loyalty) == 0
-                && !loyalty_exemptions.iter().any(|(source, scope)| {
-                    let controller = self.state.permanents[*source].as_ref().unwrap().controller;
-                    self.static_scope_applies(scope, *source, controller, permanent_id)
-                }))
+                && !characteristics.exempt_from_zero_loyalty)
                 || (characteristics.types.is_battle()
                     && permanent.counter_count(CounterKind::Defense) == 0);
             let legend_loser = legend_losers.contains(&permanent.object);
@@ -431,5 +413,152 @@ impl Game {
         !self.attached_permanent(aura).is_some_and(|object| {
             object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use crate::{
+        flow::{game::Game, sba::SbaProgress},
+        state::{
+            card::{CardType, PrintedCharacteristics, StateBasedAction, StaticAbility, StaticScope},
+            effect::{EffectDuration, Modification},
+            game_object::{Object, ObjectKind, PermanentId, PlayerId},
+            permanent::CounterKind,
+            player::PlayerConfig,
+            predicate::CardPredicate,
+            zone::ZoneType,
+        },
+    };
+
+    fn zero_loyalty_fixture() -> Game {
+        let deck = BTreeMap::from([
+            ("Sanctum Lurker".to_string(), 4),
+            ("The Theorist, Jace Beleren".to_string(), 4),
+            ("Swamp".to_string(), 32),
+        ]);
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("p0", deck.clone()),
+                PlayerConfig::new("p1", deck),
+            ],
+            430_002,
+            false,
+        );
+        game.keep_opening_hands();
+        game
+    }
+
+    fn set_zero_loyalty(game: &mut Game, walker: PermanentId) {
+        let current = game.state.permanents[walker]
+            .as_ref()
+            .unwrap()
+            .counter_count(CounterKind::Loyalty);
+        if current != 0 {
+            game.state.permanents[walker]
+                .as_mut()
+                .unwrap()
+                .change_counters(CounterKind::Loyalty, -current);
+        }
+    }
+
+    #[test]
+    fn command_zone_emblem_projects_zero_loyalty_exemption_to_controllers_planeswalkers() {
+        let mut game = zero_loyalty_fixture();
+        let own_walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        let opp_walker = game
+            .scenario_force_battlefield(PlayerId(1), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, own_walker);
+        set_zero_loyalty(&mut game, opp_walker);
+
+        let id = game.state.id_gen_mut().next_id();
+        let mut printed = PrintedCharacteristics::default();
+        printed.name = "Emblem — Test".into();
+        printed.statics = vec![StaticAbility::StateBasedActionDoesntApply {
+            action: StateBasedAction::ZeroLoyalty,
+            scope: StaticScope::YouControl(CardPredicate::card_type(CardType::Planeswalker)),
+        }];
+        let emblem = Object::from_definition(
+            id,
+            PlayerId(0),
+            crate::state::card::CardDefId(0),
+            std::sync::Arc::new(printed),
+            ObjectKind::Emblem,
+        );
+        game.state.objects.push(emblem);
+        game.state.object_to_permanent.push(None);
+        let object = game.state.zones.allocate();
+        game.state
+            .place_object(object, PlayerId(0), ZoneType::Command);
+
+        assert!(game.characteristics(own_walker).exempt_from_zero_loyalty);
+        assert!(!game.characteristics(opp_walker).exempt_from_zero_loyalty);
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[own_walker].is_some());
+        assert!(game.state.permanents[opp_walker].is_none());
+    }
+
+    #[test]
+    fn zero_loyalty_exemption_follows_layers_for_ability_loss_and_phasing() {
+        let mut game = zero_loyalty_fixture();
+        let lurker = game
+            .scenario_force_battlefield(PlayerId(0), "Sanctum Lurker", false)
+            .unwrap();
+        let walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, walker);
+
+        // Removing the planeswalker's own abilities keeps Sanctum Lurker's exemption.
+        let affected_walker = game.affected_permanent(walker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_walker],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(game.characteristics(walker).exempt_from_zero_loyalty);
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Stable);
+        assert!(game.state.permanents[walker].is_some());
+
+        // Phasing out Sanctum Lurker removes its static ability from layers.
+        let affected_lurker = game.affected_permanent(lurker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_lurker],
+            Modification::PhasedOut,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game.characteristics(walker).exempt_from_zero_loyalty);
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[walker].is_none());
+
+        // Removing abilities from Sanctum Lurker in layer 6 also removes the exemption.
+        let mut game = zero_loyalty_fixture();
+        let lurker = game
+            .scenario_force_battlefield(PlayerId(0), "Sanctum Lurker", false)
+            .unwrap();
+        let walker = game
+            .scenario_force_battlefield(PlayerId(0), "The Theorist, Jace Beleren", false)
+            .unwrap();
+        set_zero_loyalty(&mut game, walker);
+        let affected_lurker = game.affected_permanent(lurker).unwrap();
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected_lurker],
+            Modification::LoseAllAbilities,
+            EffectDuration::EndOfTurn,
+        );
+        assert!(!game.characteristics(walker).exempt_from_zero_loyalty);
+        assert_eq!(game.perform_state_based_actions(), SbaProgress::Changed);
+        assert!(game.state.permanents[walker].is_none());
     }
 }

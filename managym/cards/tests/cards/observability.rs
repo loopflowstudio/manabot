@@ -3515,7 +3515,6 @@ enum Encoded {
 /// The field each fact kind states; no wildcard, so a new kind must name it.
 fn fact_field(kind: FactKind) -> &'static str {
     match kind {
-        FactKind::EmblemAbility => "CardData.registry_key",
         FactKind::ContinuationProgram => "ContinuationFrame.program",
         FactKind::EffectProgram => "ContinuousEffectData.program",
         FactKind::EffectiveColor => "PermanentData.colors",
@@ -3684,7 +3683,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
         owner_id => [column(Card, card::IS_MINE), Side],
         id => [Identity],
-        registry_key => [Rows("semantic_cards"), Fact(FactKind::EmblemAbility)],
+        registry_key => [Rows("semantic_cards")],
         is_token => [
             column(Card, card::IS_TOKEN),
             column(Permanent, permanent::IS_TOKEN),

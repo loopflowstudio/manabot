@@ -11,7 +11,7 @@ use crate::{
         },
         card::{
             AbilityGrant, ActivatedAbilityDefinition, CardType, CardTypes, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            LayerValue, PowerCda, StateBasedAction, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
         game_object::{
@@ -341,6 +341,7 @@ enum Operation {
     Buff(Box<StaticPtBuff>),
     Inherit,
     CatalogTrigger(Box<crate::state::ability::Ability>),
+    ExemptStateBasedAction(StateBasedAction),
 }
 // Intermediate fields that instructions can read or change. State-only reads
 // (zones, counters, mana, controller, printed mana value) cannot change during
@@ -359,7 +360,7 @@ impl Operation {
         match self {
             Self::LandType(_) => SUBTYPES | ABILITIES | KEYWORDS,
             Self::Cda { .. } | Self::Buff(_) => POWER,
-            Self::Inherit | Self::CatalogTrigger(_) => 0,
+            Self::Inherit | Self::CatalogTrigger(_) | Self::ExemptStateBasedAction(_) => 0,
             Self::Modify(m) => match m {
                 Modification::SetName(_) => NAME,
                 Modification::SetCreatureTypes(_)
@@ -1332,6 +1333,13 @@ impl<'a> Context<'a> {
                     Modification::GrantActivated(Box::new(tap_for_mana(Effect::any_color_mana()))),
                 );
             }
+            StaticAbility::StateBasedActionDoesntApply { action, scope } => {
+                plan.scope = scope.clone();
+                plan.parts.push((
+                    Layer::Ability,
+                    Operation::ExemptStateBasedAction(*action),
+                ));
+            }
             _ => return None,
         }
         Some(Node {
@@ -1391,6 +1399,9 @@ impl<'a> Context<'a> {
                         ability: (**ability).clone(),
                         program: false,
                     })
+                }
+                Operation::ExemptStateBasedAction(StateBasedAction::ZeroLoyalty) => {
+                    view.exempt_from_zero_loyalty = true;
                 }
                 Operation::Modify(modification) => match modification {
                     Modification::SetName(name) => {

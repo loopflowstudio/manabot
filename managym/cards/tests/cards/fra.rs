@@ -872,10 +872,16 @@ fn emblems_buff_only_their_controllers_creatures_after_the_walker_dies() {
     use managym::{
         agent::{
             observation::Observation,
-            observation_encoder::{encode, FactKind, ObservationEncoderConfig, FACT_DIM},
-            observation_layout::fact,
+            observation_encoder::{encode, ObservationEncoderConfig},
+            observation_layout::card,
         },
-        state::{game_object::PlayerId, permanent::CounterKind, zone::ZoneType},
+        cards::content_pack::default_content_pack,
+        state::{
+            card::CardDefId,
+            game_object::{ObjectKind, PlayerId},
+            permanent::CounterKind,
+            zone::ZoneType,
+        },
     };
 
     let mut s = five_color_setup(&["Ajani Resolute", "Vivien Reid", "Gray Ogre"]);
@@ -917,14 +923,29 @@ fn emblems_buff_only_their_controllers_creatures_after_the_walker_dies() {
                 .find(|p| p.characteristics.name == "Gray Ogre")
                 .unwrap();
             assert_eq!(view.characteristics.keywords.indestructible, index > 0);
-            let rows = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
-            assert_eq!(
-                rows.facts
-                    .chunks_exact(FACT_DIM)
-                    .filter(|r| r[fact::KIND] == FactKind::EmblemAbility as u8 as f32)
-                    .count(),
-                index + 1
-            );
+            let config = ObservationEncoderConfig::default();
+            let rows = encode(&obs, &config).unwrap();
+            let (card_rows, semantic_offset) = if seat == 0 {
+                (&rows.agent_cards, 0)
+            } else {
+                (&rows.opponent_cards, config.max_cards_per_player)
+            };
+            let command_slots: Vec<_> = card_rows
+                .chunks_exact(config.card_dim())
+                .enumerate()
+                .filter(|(_, row)| row[card::ZONE_COMMAND] == 1.0)
+                .map(|(slot, _)| slot)
+                .collect();
+            assert_eq!(command_slots.len(), index + 1);
+            for (slot, emblem) in command_slots.into_iter().zip(&emblems) {
+                let joined = rows.semantic_cards[semantic_offset + slot];
+                assert_eq!(joined, (emblem.registry_key + 1) as f32);
+                let def = default_content_pack()
+                    .definition(CardDefId(emblem.registry_key as u32))
+                    .expect("emblem definition in catalog");
+                assert_eq!(def.kind, ObjectKind::Emblem);
+                assert!(!def.statics.is_empty());
+            }
         }
     }
 }
