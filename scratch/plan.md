@@ -30,6 +30,14 @@ between Comprehensive Rules / v11 / Academy concepts and the current branch
 code; repair them before gate in three focused passes, starting with the
 slice that validates the announcement/observation contract soonest.
 
+Behavior review at `196a17675e` confirmed every Pass 1–3 defect is still
+in code: `announces_x` lists `DivideAmount` (`flow/action.rs:39`),
+`continuation.rs:874` writes `frame.x = *remaining`,
+`legal_activation_x_values` (`flow/play.rs:1860`) returns a range without a
+target-availability filter, `FactKind::EmblemAbility` (`observation_encoder.rs:76`),
+`loyalty_exemptions: Vec` (`sba.rs:166`) and `attackers_without_defender`
+(`flow/combat.rs:36`). No pass has been built yet; build Pass 1 next.
+
 ### Pass 1 — Separate target division from `X` and unify `−X` target authority (build first)
 
 - **Continuation & action separation:** Stop returning `true` from
