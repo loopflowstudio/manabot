@@ -346,7 +346,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   one row. Both `player_turn_state` and `card_turn_state` are part of v11.
   Checkpoints, replays and saved configurations must record v11. An omitted
   version in saved input means v1. Raise `UnsupportedPolicyInput` naming
-  `v0.2.5` as the last release supporting v9-v10 and `ac601834d` as the
+  `v0.2.6` as the last release supporting v9-v10 and `ac601834d` as the
   last revision supporting v1-v8.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are

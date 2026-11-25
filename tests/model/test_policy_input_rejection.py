@@ -55,7 +55,7 @@ def _saved(path: Path, version: int | None) -> dict[str, Any]:
 def _assert_names_the_recording_revision(message: str, version: int) -> None:
     assert f"written for policy input v{version}" in message
     assert "run from the revision that recorded it" in message
-    assert "v0.2.5 is the last release supporting v9-v10" in message
+    assert "v0.2.6 is the last release supporting v9-v10" in message
     assert LAST_MULTI_INPUT_REVISION == "ac601834d"
     assert (
         f"{LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8" in message
@@ -133,5 +133,5 @@ def test_replay_of_another_input_is_rejected(version: int) -> None:
 
 @pytest.mark.parametrize("version", [9, 10])
 def test_native_layout_rejects_retired_versions(version: int) -> None:
-    with pytest.raises(ValueError, match=rf"policy input v{version}.*v0.2.5"):
+    with pytest.raises(ValueError, match=rf"policy input v{version}.*v0.2.6"):
         managym.ObservationLayout(policy_input_version=version)

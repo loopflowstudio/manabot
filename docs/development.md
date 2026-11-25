@@ -398,7 +398,7 @@ The pilot received one SGD update on an opening decision and was saved on main
 at `44f76fe987`. `tests/model/test_pinned_pilot.py` (Integration) loads it
 through `load_checkpoint`, replays the recorded actions on the current tree and
 compares. Earlier v9/v10 checkpoints (such as frontier Small u1952) are verified
-from `v0.2.5`. A change that would alter what a stored player computes fails,
+from `v0.2.6`. A change that would alter what a stored player computes fails,
 and the failure names the layer:
 
 ```text

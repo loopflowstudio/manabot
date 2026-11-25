@@ -143,3 +143,6 @@ reversible before merge.
     reads v9/v10, and the PR is held for the 0.3.0 cut, so a later 0.2.x could
     follow. Assumed: name whatever 0.2.x tag is last when the PR merges
     (currently `v0.2.6`); the sweep is in the plan's remaining work.
+    **Resolved before publishing (2026-11-25):** swept to `v0.2.6`, the last
+    0.2.x tag; `release/v0.3.0/NOTES.md` keeps "deprecated in v0.2.5".
+    Rejection, archive, local-update and Etude migration tests: 48 passed.

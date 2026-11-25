@@ -1,7 +1,7 @@
 # v0.3.0
 
 Policy input v11 is required for training, checkpoint evaluation and replay.
-Use v0.2.5 for v9 and v10 checkpoints, including frontier Small u1952.
+Use v0.2.6 for v9 and v10 checkpoints, including frontier Small u1952.
 For v1 through v8, use revision `ac601834d`. Existing v11 checkpoints and
 packed observation archives retain their input layout.
 
@@ -23,4 +23,4 @@ and `step_active`, and `ObservationLayout.allocate`, `axis_extents` and
 `step_active_batch(actions)`. Policies, admission and preparation accept only
 these batches, and offline captures store them with
 `ObservationBatch.to_bytes()`. Search receipts recorded with v9 or v10 pools
-replay at v0.2.5.
+replay at v0.2.6.

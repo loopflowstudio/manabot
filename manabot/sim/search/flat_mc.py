@@ -237,7 +237,7 @@ def make_player(
 
         if spec.get("native_encoder") is False:
             raise ValueError(
-                "run local-update specs with native_encoder=false from v0.2.5"
+                "run local-update specs with native_encoder=false from v0.2.6"
             )
         teacher = LocalUpdateTeacher(
             Path(spec["checkpoint"]),

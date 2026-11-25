@@ -29,7 +29,7 @@ Read when the change touches evaluation, search or simulation (`manabot/eval`, `
   checkpoint inference is needed. MTG-415: 51 MTG-408 trophy matches (204
   games) replayed in about 3 minutes.
 - A frontier Small u1952 checkpoint uses v9. Local evaluation must reject it
-  with a message naming v0.2.5. Its original evaluation is reproduced from
+  with a message naming v0.2.6. Its original evaluation is reproduced from
   the revision in `experiments/reports/best-player-on-main.md`.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`

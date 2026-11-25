@@ -82,7 +82,7 @@ class UnsupportedPolicyInput(ValueError):
         super().__init__(
             f"the checkpoint was written for policy input v{version} and must "
             "be run from the revision that recorded it; this revision supports "
-            f"policy input v{POLICY_INPUT_VERSION}. v0.2.5 is the last release supporting v9-v10, "
+            f"policy input v{POLICY_INPUT_VERSION}. v0.2.6 is the last release supporting v9-v10, "
             f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
         )
 

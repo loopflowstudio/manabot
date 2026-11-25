@@ -152,7 +152,7 @@ impl ObservationLayout {
         max_decision_members: usize,
     ) -> PyResult<Self> {
         if policy_input_version != 11 {
-            return Err(PyValueError::new_err(format!("unsupported policy input v{policy_input_version}; v0.2.5 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8")));
+            return Err(PyValueError::new_err(format!("unsupported policy input v{policy_input_version}; v0.2.6 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8")));
         }
         Self::from_config(ObservationEncoderConfig {
             policy_history,

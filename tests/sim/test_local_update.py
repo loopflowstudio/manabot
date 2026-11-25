@@ -469,7 +469,7 @@ def test_compact_rollouts_match_full_evidence(
 
 
 def test_stored_row_encoder_spec_names_its_release() -> None:
-    with pytest.raises(ValueError, match="v0.2.5"):
+    with pytest.raises(ValueError, match="v0.2.6"):
         make_player(
             {"kind": "local_update", "native_encoder": False},
             seed=0,

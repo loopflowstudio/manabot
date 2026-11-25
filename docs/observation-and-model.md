@@ -433,7 +433,7 @@ Nothing in the file is rewritten. `model` then plays any deck the pool admits,
 including cards it never saw. Evaluate its strength on those decks through
 [local evaluation](evaluation.md#quick-local-evaluation). Earlier v9 and v10
 checkpoints (such as the historical frontier Small u1952) are refused with
-`UnsupportedPolicyInput` naming `v0.2.5`; run them from the `v0.2.5` tag.
+`UnsupportedPolicyInput` naming `v0.2.6`; run them from the `v0.2.6` tag.
 
 ### What a checkpoint is bound to
 
@@ -453,7 +453,7 @@ can use an expanded card set on a later revision.
 | A decision kind, the naming representation or naming branching changed | Refused, naming the field. |
 | The token kinds or roles changed (`learning_schema_sha256`) | Refused. |
 | The model architecture differs from the saved configuration | Refused, as before. |
-| The policy input version is not v11 | `UnsupportedPolicyInput`, naming `v0.2.5` for v9–v10 and `ac601834d` for v1–v8. |
+| The policy input version is not v11 | `UnsupportedPolicyInput`, naming `v0.2.6` for v9–v10 and `ac601834d` for v1–v8. |
 | The possible-world version changed | Refused only for a model with belief inputs; no other model reads it. |
 | Engine rules changed | Loads. Play uses the current rules. An evaluation measures the effect on strength. |
 
@@ -562,7 +562,7 @@ that historical checkout, with its native extension built, run
 Main supports policy input v11 only (`ObservationConfig.policy_input_version == 11`,
 always serialized). A configuration, checkpoint, replay or saved regime bound to
 any other version, or omitting it, raises `UnsupportedPolicyInput`, naming the
-tag or revision to run it from (`v0.2.5` is the last release supporting v9–v10,
+tag or revision to run it from (`v0.2.6` is the last release supporting v9–v10,
 and [`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is
 the last revision supporting v1–v8):
 
@@ -573,7 +573,7 @@ try:
     ObservationConfig(policy_input_version=10)
 except UnsupportedPolicyInput as error:
     print(error)
-# The error names v0.2.5 for v9-v10 and ac601834d for v1-v8.
+# The error names v0.2.6 for v9-v10 and ac601834d for v1-v8.
 ```
 
 Load saved configurations through `ObservationConfig.from_checkpoint` (where an

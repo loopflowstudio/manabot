@@ -82,7 +82,7 @@ def test_archive_checks_layout_before_reading_rows(
     for version in (9, 10):
         info = json.loads(header)
         info["config"].update(layout="Legacy", turn_state=version == 10)
-        with pytest.raises(ValueError, match="v11.*v0.2.5"):
+        with pytest.raises(ValueError, match="v11.*v0.2.6"):
             managym.ObservationBatch.from_bytes(
                 seal(json.dumps(info).encode(), payload)
             )

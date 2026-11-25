@@ -223,7 +223,7 @@ pub(super) fn decode(py: Python<'_>, bytes: &[u8]) -> PyResult<ObservationBatch>
     )?;
     require(
         header.config.layout == "OneToken" && header.config.turn_state,
-        "observation batch requires policy input v11; v0.2.5 is the last release supporting v9-v10",
+        "observation batch requires policy input v11; v0.2.6 is the last release supporting v9-v10",
     )?;
     let layout = ObservationLayout::from_config(header.config.encoder)?;
     require(

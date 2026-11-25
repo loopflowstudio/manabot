@@ -479,7 +479,7 @@ every legal action to fit the checkpoint's layout.
 
 A teacher owns its search state, so only one search may use it at a time; give
 each concurrent search its own teacher. Recorded search specs that set
-`"native_encoder": false` are refused naming `v0.2.5`.
+`"native_encoder": false` are refused naming `v0.2.6`.
 
 ### Inference threads
 
@@ -699,7 +699,7 @@ keeps absent gradients so Adam does not update its momentum spuriously.
 
 The input version is explicit in saved observation and configuration
 identities. Main supports policy input v11 only; earlier v9/v10 checkpoints
-run from `v0.2.5`. See
+run from `v0.2.6`. See
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-10` renders each native payload once with exact public source and
