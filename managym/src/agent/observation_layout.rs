@@ -816,6 +816,13 @@ pub enum Storage {
 }
 
 impl Storage {
+    pub fn bytes(self) -> usize {
+        match self {
+            Self::Int32 | Self::Float32 => 4,
+            Self::Uint8 => 1,
+        }
+    }
+
     pub fn dtype(self) -> &'static str {
         match self {
             Self::Int32 => "int32",
@@ -833,6 +840,10 @@ pub struct PackedField {
 }
 
 impl ArrayLayout {
+    pub fn packed_seat_axis(&self, table: &str) -> bool {
+        self.axes[0] == "viewer_relative_seat" && table != "player_turn_state"
+    }
+
     pub fn packed_fields(&self, table: &str) -> Vec<PackedField> {
         let field = |name: &'static str, index, kind: ValueKind| {
             let memory_flag = table.starts_with("decision_")
