@@ -13,7 +13,7 @@ from manabot.env.failures import RecordedVectorEnv
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
@@ -132,7 +132,7 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         else managym.VectorEnv(2, seed=42)
     )
     space = ObservationSpace()
-    buffers = allocate_vector_buffers(space, 2)
+    buffers = {**space.layout.allocate(2), **step_buffers(2)}
     vector.set_buffers(buffers, layout=space.layout)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])

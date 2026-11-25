@@ -14,6 +14,7 @@ from manabot.env.observation import (
     DECKLIST_DIM,
     ObservationSpace,
     column,
+    encode_policy_batch,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.managym.experience_projection import serialize_observation
@@ -53,9 +54,7 @@ def _policy() -> ActorCritic:
 def _prepared(
     space: ObservationSpace, obs: managym.Observation
 ) -> Prepared[np.ndarray]:
-    return _policy().prepare(
-        {k: v[None] for k, v in observation_arrays(space, obs).items()}
-    )
+    return _policy().prepare(encode_policy_batch(space, [obs]))
 
 
 def _assert_same_view(a: managym.Observation, b: managym.Observation) -> None:
@@ -250,7 +249,7 @@ def test_public_reveal_then_departure_updates_closed_known_hand() -> None:
             view = env.observation_for_player(1 - owner)
             encoded = observation_arrays(space, view)
             assert not encoded["decklists"][1].any()
-            prepared = _policy().prepare({k: v[None] for k, v in encoded.items()})
+            prepared = _policy().prepare(encode_policy_batch(space, [view]))
             assert revealed is not None
             selected = encoded["known_hand"][1, :, 0] == revealed + 1
             if prepared_row is None:

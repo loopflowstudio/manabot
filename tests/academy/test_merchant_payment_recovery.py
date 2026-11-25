@@ -9,7 +9,7 @@ import pytest
 
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
@@ -124,7 +124,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
         assert game.env is not None and game.trace is not None
         space = ObservationSpace(ObservationConfig())
         vector = managym.VectorEnv(num_envs=1, seed=seed)
-        buffers = allocate_vector_buffers(space, 1)
+        buffers = {**space.layout.allocate(1), **step_buffers(1)}
         vector.set_buffers(buffers, layout=space.layout)
         vector.reset_all_into_buffers(game.trace.config.to_rust())
         for event in game.trace.events:

@@ -7,7 +7,7 @@ import torch
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.infra.config import ObservationConfig
 import managym
@@ -62,14 +62,14 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
         else managym.VectorEnv(2, seed=42)
     )
     players = _players(disclosure)
-    execution = allocate_vector_buffers(space, 2)
+    execution = {**space.layout.allocate(2), **step_buffers(2)}
     vector.set_buffers(execution, layout=space.layout)
     vector.reset_all_into_buffers(players)
     scalars = [managym.Env(seed=42 + slot) for slot in range(2)]
     for scalar in scalars:
         observation, _ = scalar.reset(players)
         assert observation.decklists_closed is (disclosure == "closed")
-    buffers = space.allocate(2)
+    buffers = space.layout.allocate(2)
     try:
         for _ in range(6):
             before = {key: value.copy() for key, value in execution.items()}
@@ -112,7 +112,7 @@ def test_fixed_seat_scalar_parity_and_unchanged_execution(
 def test_fixed_seat_invalid_requests_and_buffers_do_not_write() -> None:
     vector = managym.VectorEnv(2, seed=42)
     space = ObservationSpace()
-    buffers = space.allocate(2)
+    buffers = space.layout.allocate(2)
     for value in buffers.values():
         value.fill(19)
     with pytest.raises(managym.AgentError, match="must be reset"):
@@ -151,7 +151,7 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
     vector.reset_all(players)
     scalar.reset(players)
     tiny = ObservationSpace(ObservationConfig(max_actions=1))
-    buffers = tiny.allocate(1)
+    buffers = tiny.layout.allocate(1)
     assert len(scalar.observation_for_player(0).action_space.actions) > 1
     with pytest.raises(managym.AgentError, match="[Cc]apacity|actions"):
         vector.write_observations_for_players([0], buffers, layout=tiny.layout)
@@ -168,17 +168,22 @@ def test_fixed_seat_supplied_capacities_and_action_overflow() -> None:
     small = ObservationSpace(ObservationConfig(max_cards_per_player=1))
     with pytest.raises(managym.AgentError, match="[Cc]apacity|cards"):
         vector.write_observations_for_players(
-            [0], small.allocate(1), action_overflow="first-legal", layout=small.layout
+            [0],
+            small.layout.allocate(1),
+            action_overflow="first-legal",
+            layout=small.layout,
         )
 
 
 def test_fixed_seat_reset_reassign_and_replacement_identities() -> None:
     space = ObservationSpace()
     vector = RecordedVectorEnv(num_envs=2, seed=42)
-    vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
+    vector.set_buffers(
+        {**space.layout.allocate(2), **step_buffers(2)}, layout=space.layout
+    )
     players = _players()
     vector.reset_all_into_buffers(players)
-    buffers = space.allocate(2)
+    buffers = space.layout.allocate(2)
     try:
         first = vector.write_observations_for_players(
             [1, 0], buffers, layout=space.layout
@@ -217,7 +222,7 @@ def test_fixed_seat_done_reads_terminal_including_maximum_seed() -> None:
     vector = managym.VectorEnv(1, seed=2**64 - 1)
     vector.reset_all(players)
     space = ObservationSpace()
-    buffers = space.allocate(1)
+    buffers = space.layout.allocate(1)
     before = vector.write_observations_for_players([1], buffers, layout=space.layout)[0]
     for _ in range(120):
         [(_, _, terminated, truncated, _)] = vector.step([0])

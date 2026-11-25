@@ -39,8 +39,8 @@ from manabot.env.observation import (
     RELATION_X_INDEX,
     ObservationConfig,
     ObservationSpace,
-    allocate_vector_buffers,
     column,
+    step_buffers,
 )
 from manabot.infra.config import UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
@@ -105,7 +105,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
 
     expected = observation_arrays(space, restored)
     assert int(expected["agent_cards_valid"].sum()) == 7
-    out = space.allocate()
+    out = space.layout.allocate()
     for value in out.values():
         value.fill(-7)
     managym.encode_observation_into(restored, space.layout, out)
@@ -179,7 +179,7 @@ def test_malformed_buffers_fail_before_a_capacity_overflow(
     space = ObservationSpace(ObservationConfig(max_cards_per_player=4))
     with pytest.raises(managym.ObservationCapacity):
         observation_arrays(space, obs)
-    buffers = malform(space.allocate())
+    buffers = malform(space.layout.allocate())
     arrays = [value for value in buffers.values() if isinstance(value, np.ndarray)]
     for value in arrays:
         if value.flags.writeable:
@@ -200,11 +200,11 @@ def test_env_encode_methods_warn_and_name_their_removal() -> None:
     env = managym.Env(seed=5, skip_trivial=True)
     obs, _ = env.reset(make_player_configs())
     space = ObservationSpace()
-    out = space.allocate()
+    out = space.layout.allocate()
     with pytest.warns(DeprecationWarning, match=r"encode_observation_into.*0\.3\.0"):
         env.encode_observation_into(obs, out)
-    with pytest.warns(DeprecationWarning, match=r"observation_arrays.*0\.3\.0"):
-        env.observation_arrays(obs)
+    with pytest.warns(DeprecationWarning, match=r"encode_observation.*0\.3\.0"):
+        env.encode_observation(obs)
     np.testing.assert_array_equal(
         out["agent_cards"], observation_arrays(space, obs)["agent_cards"]
     )
@@ -229,7 +229,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         skip_trivial=True,
         player_policies=("agent", "random"),
     )
-    buffers = allocate_vector_buffers(space, num_envs)
+    buffers = {**space.layout.allocate(num_envs), **step_buffers(num_envs)}
     hot.set_buffers(buffers, layout=space.layout)
 
     compat_reset = compat.reset_all(player_configs)
@@ -293,7 +293,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         player_policies=("agent", "agent"),
     )
     space = ObservationSpace(config)
-    good = allocate_vector_buffers(space, num_envs)
+    good = {**space.layout.allocate(num_envs), **step_buffers(num_envs)}
 
     env.set_buffers(good, layout=space.layout)
     env.reset_all_into_buffers(player_configs)
@@ -622,7 +622,7 @@ def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     config = ObservationConfig(max_facts=capacity)
     space = ObservationSpace(config)
     env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     env.set_buffers(buffers, layout=space.layout)
     obs, _ = env.reset_all(make_player_configs())[0]
     env.reset_seeds_into_buffers([213])
@@ -733,7 +733,7 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
     obs = env.observation_for_player(actor)
     space = ObservationSpace()
     reference = observation_arrays(space, obs)
-    batch = space.allocate(1)
+    batch = space.layout.allocate(1)
     assert managym.encode_observations_into([env], space.layout, batch, 1) == [5]
     for key, value in reference.items():
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
@@ -793,7 +793,7 @@ def test_tap_pays_choice_names_its_payment_and_focuses_the_tapped_creature() -> 
     assert [action.mode_index for action in obs.action_space.actions] == [0, 5]
     space = ObservationSpace()
     reference = observation_arrays(space, obs)
-    batch = space.allocate(1)
+    batch = space.layout.allocate(1)
     assert managym.encode_observations_into([env], space.layout, batch, 1) == [2]
     for key, value in reference.items():
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)

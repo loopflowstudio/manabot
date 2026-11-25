@@ -16,7 +16,7 @@ import pytest
 
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
@@ -127,7 +127,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
         hand = len([c for c in game.obs.agent_cards if c.zone == managym.ZoneEnum.HAND])
         space = ObservationSpace()
         vector = managym.VectorEnv(num_envs=1, seed=seed)
-        buffers = allocate_vector_buffers(space, 1)
+        buffers = {**space.layout.allocate(1), **step_buffers(1)}
         vector.set_buffers(buffers, layout=space.layout)
         vector.reset_all_into_buffers(game.trace.config.to_rust())
         for event in game.trace.events:

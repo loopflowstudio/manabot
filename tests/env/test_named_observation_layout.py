@@ -16,7 +16,7 @@ from manabot.env import observation
 from manabot.env.decision_memory import MEMORY_WIDTHS
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
@@ -122,24 +122,6 @@ def test_fact_kinds_are_named_native_row_kinds() -> None:
     assert observation.FACT_TRIGGERING_AMOUNT == names["triggering_amount"] == 16
     assert observation.FACT_KINDS == max(names.values())
     assert observation.FACT_EFFECT not in names.values(), "reserved: shared-effect rows"
-
-
-def test_encoder_names_warn_and_name_their_removal(
-    board: tuple[managym.Env, managym.Observation],
-) -> None:
-    _, obs = board
-    space = ObservationSpace()
-    with pytest.warns(DeprecationWarning, match=r"ObservationSpace\.encode .*0\.3\.0"):
-        encoded = space.encode(obs)
-    expected = observation_arrays(space, obs)
-    assert encoded.keys() == expected.keys()
-    for key, value in expected.items():
-        np.testing.assert_array_equal(encoded[key], value, err_msg=key)
-    with pytest.warns(DeprecationWarning, match=r"encoder is deprecated .*0\.3\.0"):
-        assert space.encoder is space
-    with pytest.warns(DeprecationWarning, match=r"ObservationEncoder .*0\.3\.0"):
-        layout = observation.ObservationEncoder(ObservationConfig(max_actions=7))
-    assert layout.config.max_actions == layout.allocate()["actions"].shape[0] == 7
 
 
 @pytest.mark.parametrize(
@@ -361,16 +343,20 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
     space = ObservationSpace()
     vector = managym.VectorEnv(1)
     with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
-        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        vector.set_buffers(
+            {**space.layout.allocate(1), **step_buffers(1)}, layout=space.layout
+        )
 
     env = managym.Env(seed=7)
     obs, _ = env.reset(
         [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     )
     with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
-        managym.encode_observation_into(obs, space.layout, space.allocate())
+        managym.encode_observation_into(obs, space.layout, space.layout.allocate())
     with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
-        managym.encode_observations_into([env], space.layout, space.allocate(1), 1)
+        managym.encode_observations_into(
+            [env], space.layout, space.layout.allocate(1), 1
+        )
     # Standalone Observation items encode directly into an ObservationBatch.
     batch = managym.encode_observation_batch([obs, env], space.layout)
     assert batch.batch_size == 2
@@ -379,13 +365,13 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
     pool = env.rollout_pool(1, 1, 7, 100)
     with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
         pool.set_buffers(
-            allocate_vector_buffers(space, pool.num_slots),
+            {**space.layout.allocate(pool.num_slots), **step_buffers(pool.num_slots)},
             pool.num_slots,
             layout=space.layout,
         )
 
     with pytest.warns(DeprecationWarning, match=r"axis_extents.*0\.3\.0"):
-        space.layout.axis_extents(space.allocate(1))
+        space.layout.axis_extents(space.layout.allocate(1))
     with pytest.warns(DeprecationWarning, match=r"object_references.*0\.3\.0"):
         _ = space.layout.object_references
 
@@ -393,7 +379,7 @@ def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
 def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (
     None
 ):
-    buffers = allocate_vector_buffers(ObservationSpace(), 1)
+    buffers = {**ObservationSpace().layout.allocate(1), **step_buffers(1)}
     plain = managym.VectorEnv(1)
     with pytest.warns(DeprecationWarning, match="0.3.0"):
         plain.set_buffers(buffers)

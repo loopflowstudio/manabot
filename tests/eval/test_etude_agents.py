@@ -13,7 +13,7 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.eval.admission import register_anchor
 from manabot.eval.agent_loader import load
 from manabot.eval.agents import Sampler, build, game_players, registration
@@ -32,7 +32,6 @@ from managym.replay import walk
 from managym.statistics import Reduction
 from tests.eval.arena_fixture import arena_fixture
 from tests.fixtures.evaluation_callbacks import PanicException
-from tests.fixtures.observation_rows import observation_arrays
 
 
 @pytest.mark.parametrize(
@@ -212,12 +211,12 @@ def test_loader_keeps_effect_and_program_routes_across_distinct_rows(
     assert isinstance(sampler, Sampler)
     rows = []
     for env in (shared_effect_root(1), kellan_upgrade_root()):
-        obs = observation_arrays(
-            space, env.observation_for_player(env.current_agent_index())
+        batch = encode_policy_batch(
+            space, [env.observation_for_player(env.current_agent_index())]
         )
         rows.append(
             prepare(
-                {k: v[None] for k, v in obs.items()},
+                admit(batch, sampler.spec, bucketed=False),
                 sampler.spec.tables,
                 binding=sampler.spec.binding,
             )

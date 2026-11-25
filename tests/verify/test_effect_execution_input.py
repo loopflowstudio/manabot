@@ -13,7 +13,7 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
 from manabot.semantic.text_observation import render_decision
@@ -105,7 +105,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
         )
     records = _evidence()
     for start in range(0, len(records), 2):
-        encoded = []
+        observations = []
         texts: list[str] = []
         for record in records[start : start + 2]:
             capture_json = json.dumps(record.capture)
@@ -129,21 +129,18 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
                 np.testing.assert_array_equal(
                     tensors[name], native, err_msg=f"{record.case}: {name}"
                 )
-            encoded.append(tensors)
+            observations.append(obs)
             text = render_decision(capture_json).text
             assert "effect execution:" in text
             texts.append(text)
         assert texts[0] != texts[1]
-        batch = {
-            key: torch.from_numpy(np.stack([value[key] for value in encoded]))
-            for key in encoded[0]
-        }
-        logits, values = model(device_input(model, batch))
+        prepared = device_input(model, encode_policy_batch(space, observations))
+        logits, values = model(prepared)
         assert torch.isfinite(values).all()
         assert not torch.equal(values[0], values[1]), records[start].case
         assert not torch.equal(logits[0], logits[1]), records[start].case
         model.zero_grad()
-        (values.sum() + logits[batch["actions_valid"].bool()].sum()).backward()
+        (values.sum() + logits[prepared.legal].sum()).backward()
         assert any(
             p.grad is not None and p.grad.abs().sum() > 0
             for p in model.facts.parameters()

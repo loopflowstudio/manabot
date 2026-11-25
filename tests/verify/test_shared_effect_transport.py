@@ -7,7 +7,7 @@ import pytest
 
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    step_buffers,
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
@@ -51,7 +51,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
     scalar_obs, _ = scalar.reset(players)
     assert scalar_obs.decklists_closed is closed
     space = ObservationSpace()
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     vector = managym.VectorEnv(
         num_envs=1,
         seed=game.seed,

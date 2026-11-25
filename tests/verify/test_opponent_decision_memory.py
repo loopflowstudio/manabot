@@ -8,12 +8,14 @@ import numpy as np
 import pytest
 
 from manabot.env.match import Match
-from manabot.env.memory_store import CompactObservation, MemoryStore, PrefixIdentity
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    encode_policy_batch,
+    step_buffers,
 )
 from manabot.infra.config import ObservationConfig
+from manabot.policy.spans import ObservationSelection
 import managym
 from managym.decision_memory import read_records
 from tests.fixtures.observation_rows import observation_arrays
@@ -85,12 +87,13 @@ def test_decision_memory_live_native_python_replay_fork_and_roundtrip(
         obs = env.observation_for_player(seat)
         expected = observation_arrays(space, obs)
         store = MemoryStore((32, 32768, 1024, 16384))
+        batch = encode_policy_batch(space, [obs])
         prefix = store.capture(
-            {key: value[None] for key, value in expected.items()},
+            ObservationSelection(space, ((batch, 0),)),
             0,
             PrefixIdentity("native-replay", seat, "root"),
         )
-        compact = CompactObservation({}, [prefix], (32, 32768, 1024, 16384))
+        compact = gather_memory([prefix])
         for key, width in (
             ("decision_records", 74),
             ("decision_reference_details", 6),
@@ -136,7 +139,7 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
     )
     with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
         observation_arrays(space, obs)
-    buffers = space.allocate()
+    buffers = space.layout.allocate()
     del buffers["decision_members"]
     with pytest.raises(ValueError, match="decision_members"):
         managym.encode_observation_into(obs, space.layout, buffers)
@@ -158,7 +161,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     hot = managym.VectorEnv(
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
-    buffers = allocate_vector_buffers(space, 2)
+    buffers = {**space.layout.allocate(2), **step_buffers(2)}
     hot.set_buffers(buffers, layout=space.layout)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)

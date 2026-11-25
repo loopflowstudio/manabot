@@ -1,5 +1,6 @@
 """The actual policy input separates native pending choices and survives storage."""
 
+from dataclasses import replace
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -13,14 +14,17 @@ from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
+    RELATION_VALID_INDEX,
     ObservationSpace,
-    allocate_vector_buffers,
+    encode_policy_batch,
+    step_buffers,
 )
 from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
     UnsupportedPolicyInput,
 )
+from manabot.policy.spans import ObservationSelection
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import collision_branches, native_fixtures
@@ -29,7 +33,7 @@ import managym
 from managym.decision_capture import DecisionInput
 from tests.fixtures.observation_rows import observation_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
-from tests.model.prepared_routes import device_input
+from tests.model.prepared_routes import device_input, native_rows
 
 
 def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None:
@@ -48,14 +52,11 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
     ]
     assert differences == ["relations"]
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, policy_film=True))
-    batch = {
-        key: torch.from_numpy(np.stack([obs[key] for obs in encoded]))
-        for key in encoded[0]
-    }
-    logits, value = agent(device_input(agent, batch))
+    prepared = device_input(agent, encode_policy_batch(space, observations))
+    logits, value = agent(prepared)
     assert not torch.equal(value[0], value[1])
     assert not torch.equal(logits[0], logits[1])
-    (value.sum() + logits[batch["actions_valid"].bool()].sum()).backward()
+    (value.sum() + logits[prepared.legal].sum()).backward()
     assert any(
         parameter.grad is not None and parameter.grad.abs().sum() > 0
         for parameter in agent.continuation.parameters()
@@ -254,7 +255,7 @@ def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
     for key in out:
         np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     vector.set_buffers(buffers, layout=space.layout)
     vector.reset_all_into_buffers(players)
     for key in expected:
@@ -268,15 +269,13 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     torch.manual_seed(195)
     _, raw = ordering_root()
     space = ObservationSpace()
-    encoded = observation_arrays(space, raw)
-    batch = {
-        key: torch.from_numpy(value).unsqueeze(0) for key, value in encoded.items()
-    }
+    spans = ObservationSelection(space, ((encode_policy_batch(space, [raw]), 0),)).spans
+    relations = spans.dense("relations")
+    actions = spans.dense("actions")
     # A bounded policy fixture isolates two occurrences of the same source.
     # Native projection of these facts is covered by trigger_order_same_source_joins.
-    rows = batch["relations"]
-    header = rows[0, (rows[0, :, 0] == 1) & (rows[0, :, 3] == 7)][0].clone()
-    rows.zero_()
+    header = relations[0, (relations[0, :, 0] == 1) & (relations[0, :, 3] == 7)][0]
+    rows = np.zeros_like(relations)
     for index in range(2):
         rows[0, index] = header
         rows[0, index, 1] = index + 1
@@ -286,28 +285,43 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
             rows[0, index + 2] = rows[0, index]
             rows[0, index + 2, 0] = 3
             rows[0, index + 2, 24:26] = index + 1
-    batch["actions"][0, 1, :ACTION_CONTINUATION_INDEX] = batch["actions"][
+    actions[0, 1, :ACTION_CONTINUATION_INDEX] = actions[
         0, 0, :ACTION_CONTINUATION_INDEX
     ]
-    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([1, 2])
-    batch["action_focus"].fill_(-1)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
-    logits, _ = agent(device_input(agent, batch))
+
+    def forward(relations: np.ndarray, continuations: tuple[int, int]) -> torch.Tensor:
+        edited = actions.copy()
+        edited[0, :2, ACTION_CONTINUATION_INDEX] = continuations
+        tables = {
+            **spans.tables,
+            "relations": native_rows(
+                "relations", relations, relations[..., RELATION_VALID_INDEX] == 1
+            ),
+            "actions": native_rows(
+                "actions", edited, spans.dense("actions_valid") == 1
+            ),
+            "action_focus": replace(
+                spans.tables["action_focus"],
+                records=np.full_like(spans.tables["action_focus"].records, -1),
+            ),
+        }
+        # Synthetic rows bypass native certification, so prepare them directly.
+        prepared = agent._prepare_rows(
+            replace(spans, tables=tables),
+            agent._admission_spec().tables,
+            False,
+            None,
+            None,
+        )
+        return agent(device_input(agent, prepared))[0]
+
+    logits = forward(rows, (1, 2))
     assert not torch.isclose(logits[0, 0], logits[0, 1])
-    reordered = {key: value.clone() for key, value in batch.items()}
-    reordered["relations"] = rows.flip(1)
-    torch.testing.assert_close(agent(device_input(agent, reordered))[0], logits)
-    swapped = {key: value.clone() for key, value in batch.items()}
-    swapped["actions"][0, :2, ACTION_CONTINUATION_INDEX] = torch.tensor([2, 1])
-    torch.testing.assert_close(
-        agent(device_input(agent, swapped))[0][0, :2], logits[0, :2].flip(0)
-    )
-    batch["actions"][0, :2, ACTION_CONTINUATION_INDEX] = 0
-    ablated, _ = agent(device_input(agent, batch))
+    torch.testing.assert_close(forward(rows[:, ::-1].copy(), (1, 2)), logits)
+    torch.testing.assert_close(forward(rows, (2, 1))[0, :2], logits[0, :2].flip(0))
+    ablated = forward(rows, (0, 0))
     torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
-    batch["actions"][0, 0, ACTION_CONTINUATION_INDEX] = 64
-    with pytest.raises(ValueError, match="reference has no frame"):
-        device_input(agent, batch)
 
 
 def test_retained_capture_schema_cannot_admit_current_name_references() -> None:

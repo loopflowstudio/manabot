@@ -12,9 +12,12 @@ from manabot.env.observation import (
     PERMANENT_DIM,
     WARD,
     ObservationSpace,
+    encode_policy_batch,
 )
 from manabot.infra.config import ObservationConfig
 from manabot.policy import admission
+from manabot.policy.readings import PROGRAM_KINDS
+from manabot.policy.spans import ObservationSelection
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.text_observation import priority_root
 import managym
@@ -70,7 +73,16 @@ def test_sire_of_seven_deaths_ward_is_life_in_columns_facts_json_and_text() -> N
 
         # The policy admits the rows: "Ward" and the program's tokens are
         # in the record vocabulary.
-        admission.facts(expected["facts"][None], config.max_facts, 10_000, vocabulary)
+        assert vocabulary is not None
+        live = (
+            ObservationSelection(space, ((encode_policy_batch(space, [obs]), 0),))
+            .spans.tables["facts"]
+            .integers
+        )
+        kinds = live[:, FACT_KIND_INDEX]
+        admission.fact_vocabulary(
+            live, kinds, np.isin(kinds, PROGRAM_KINDS), vocabulary
+        )
 
         # The JSON boundary keeps the price.
         restored = managym.Observation.from_json(obs.toJSON())

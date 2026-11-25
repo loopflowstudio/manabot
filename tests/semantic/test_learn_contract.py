@@ -12,7 +12,7 @@ from manabot.belief.population import BeliefTrainingExample, pack_belief_example
 from manabot.belief.range import BeliefState
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
-from manabot.env.observation import allocate_vector_buffers
+from manabot.env.observation import step_buffers
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.decision import (
@@ -354,7 +354,7 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
     from manabot.infra.config import ObservationConfig
 
     space = ObservationSpace(ObservationConfig())
-    buffers = allocate_vector_buffers(space, 1)
+    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     configs = [
         managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
         for key in ("ur_lessons", "gw_allies")

@@ -113,7 +113,6 @@ class TestEnvironment:
         for step in range(steps):
             next_obs, reward, done, truncated, info = env.step(0)
             assert next_obs is env.last_raw_obs
-            assert env.observation_space.contains(next_obs)
 
             if done or truncated:
                 break

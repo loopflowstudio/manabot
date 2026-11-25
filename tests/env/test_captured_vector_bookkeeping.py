@@ -7,7 +7,6 @@ from manabot import managym
 from manabot.env.failures import RecordedVectorEnv
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
     step_buffers,
 )
 from managym.recording import GameRecord
@@ -72,7 +71,9 @@ def test_native_reads_are_delegated() -> None:
 def test_seeded_reset_rejects_bad_seeds_before_replacing_any_stream() -> None:
     vector = RecordedVectorEnv(num_envs=2, seed=12)
     space = ObservationSpace()
-    vector.set_buffers(allocate_vector_buffers(space, 2), layout=space.layout)
+    vector.set_buffers(
+        {**space.layout.allocate(2), **step_buffers(2)}, layout=space.layout
+    )
     setups = [managym.GameSetup(_players()), managym.GameSetup(_players()[::-1])]
     try:
         vector.reset_each_into_buffers(setups, seeds=[71, 41])

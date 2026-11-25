@@ -17,7 +17,8 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
+    encode_policy_batch,
+    step_buffers,
 )
 from manabot.infra.config import ModelConfig
 import managym
@@ -136,7 +137,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     vector.reset_all(game.trace.config.to_rust())
                     for event in game.trace.events:
                         vector.step([event.action])
-                    buffers = allocate_vector_buffers(space, 1)
+                    buffers = {**space.layout.allocate(1), **step_buffers(1)}
                     vector.set_buffers(buffers, layout=space.layout)
                     vector.scenario_naming_vocabulary_into_buffers()
                     model = ActorCritic(
@@ -160,7 +161,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 game.env.semantic_decision_frame_json()
             )
-            obs = {key: torch.from_numpy(value)[None] for key, value in values.items()}
+            obs = encode_policy_batch(space, [game.obs])
             wanted = frame.offers.index(_toward(frame, target))
             for _ in range(20):
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
