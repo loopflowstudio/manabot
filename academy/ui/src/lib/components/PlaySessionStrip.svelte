@@ -3,9 +3,21 @@
   import { sendContinuation } from '$lib/socket.svelte';
   let { onChangeOpponent, onEditNext }: { onChangeOpponent: () => void; onEditNext: () => void } = $props();
   const session = $derived(gameStore.playSession);
+  const heroPool = $derived(typeof session?.draft.hero_deck_pool === 'string' ? session.draft.hero_deck_pool : null);
+  const villainPool = $derived(typeof session?.draft.villain_deck_pool === 'string' ? session.draft.villain_deck_pool : null);
+  const hasDeckPool = $derived(heroPool !== null || villainPool !== null);
   function continueGame(intent: 'rematch' | 'swap_sides'): void {
     if (!gameStore.gameOver && !window.confirm('Stop the current game and start the next game in this session?')) return;
     sendContinuation(intent);
+  }
+  function dealNewDecks(): void {
+    if (!session || !hasDeckPool) return;
+    if (!gameStore.gameOver && !window.confirm('Stop the current game and deal new decks from the pool?')) return;
+    sendContinuation('rematch', {
+      hero_deck: heroPool ?? session.draft.hero_deck,
+      villain_deck: villainPool ?? session.draft.villain_deck,
+      seed: null,
+    });
   }
 </script>
 
@@ -16,7 +28,8 @@
       <a class="underline" href={`/games?session=${encodeURIComponent(session.id)}`}>Session history</a>
       <!-- An interrupted session no longer exists on the server; only New game starts again. -->
       {#if gameStore.hasCapability('configure_match') && !gameStore.resumeFailed}
-        <button class="btn btn-primary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('rematch')}>Rematch</button>
+        {#if hasDeckPool}<button data-testid="deal-new-decks" class="btn btn-primary btn-sm" disabled={gameStore.newGamePending} onclick={dealNewDecks}>Deal new decks</button>{/if}
+        <button class={hasDeckPool ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'} disabled={gameStore.newGamePending} onclick={() => continueGame('rematch')}>Rematch</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={() => continueGame('swap_sides')}>Swap sides</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onEditNext}>Edit next game</button>
         <button class="btn btn-secondary btn-sm" disabled={gameStore.newGamePending} onclick={onChangeOpponent}>Change opponent</button>

@@ -24,9 +24,22 @@ from urllib.parse import urlencode
 import warnings
 import webbrowser
 
+import managym
+from managym.academy.deck_pools import (
+    DeckPool,
+    NamedDeck,
+    deck_file_payload,
+    is_pool_key,
+    resolve_deck_pool,
+    set_deck_pools,
+)
 from managym.disclosure import DecklistDisclosure
 from managym.policy import PolicyFactory, PolicySource, PolicySpec
 from managym.search import SearchConfig, SearchError, search_descriptor
+
+DeckInput = str | Path | managym.Deck | NamedDeck | tuple[str, managym.Deck]
+PlayerInput = str | Path | PolicyFactory | PolicySpec
+_GENERIC_DECK_STEMS = frozenset({"deck", "hero", "villain"})
 
 if TYPE_CHECKING:
     import uvicorn
@@ -316,52 +329,76 @@ class Academy:
         from managym.academy.opponent import set_policy_registry
 
         set_policy_registry(None)
+        set_deck_pools(None)
         _ACTIVE_LOCK.release()
+
+    def _deck_config(
+        self,
+        deck: DeckInput,
+        opponent_deck: DeckInput,
+    ) -> dict[str, Any]:
+        from managym.academy import server
+
+        seats = (
+            ("hero", deck, "your deck"),
+            ("villain", opponent_deck, "opponent deck"),
+        )
+        normalized: list[DeckInput] = []
+        for _, selected, label in seats:
+            if isinstance(selected, str):
+                if selected in server.NAMED_DECKS:
+                    normalized.append(selected)
+                elif (pool := resolve_deck_pool(selected)) is not None:
+                    normalized.append(pool.key)
+                elif is_pool_key(selected):
+                    raise AcademyLaunchError(
+                        "deck.unknown",
+                        f"{label.capitalize()} {selected!r} is not a registered deck pool.",
+                    )
+                else:
+                    raise AcademyLaunchError(
+                        "deck.unknown",
+                        f"{label.capitalize()} {selected!r} is not a bundled deck; "
+                        f"bundled names: {', '.join(sorted(server.NAMED_DECKS))}."
+                        + _file_hint(selected, _DECK_SUFFIXES),
+                    )
+            else:
+                normalized.append(selected)
+        if all(isinstance(item, str) for item in normalized):
+            return {"hero_deck": normalized[0], "villain_deck": normalized[1]}
+        return {
+            "deck_import": {
+                seat: _deck_file(selected, label)
+                for (seat, _, label), selected in zip(seats, normalized, strict=True)
+            }
+        }
 
     def new_game(
         self,
         *,
-        deck: str | Path = "ur_lessons",
-        opponent_deck: str | Path = "gw_allies",
-        opponent: str | Path = "search",
+        deck: DeckInput = "ur_lessons",
+        opponent_deck: DeckInput = "gw_allies",
+        opponent: PlayerInput = "search",
         sims: int = 64,
         seed: int | None = None,
         decklists: DecklistDisclosure = "open",
         search: SearchConfig | None = None,
     ) -> Launched:
         self._require_open()
-        import managym
         from managym.academy import server
         from managym.academy.villain import player_fields
 
-        seats = (
-            ("hero", deck, "your deck"),
-            ("villain", opponent_deck, "opponent deck"),
-        )
-        for _, selected, label in seats:
-            if isinstance(selected, str) and selected not in server.NAMED_DECKS:
-                raise AcademyLaunchError(
-                    "deck.unknown",
-                    f"{label.capitalize()} {selected!r} is not a bundled deck; "
-                    f"bundled names: {', '.join(sorted(server.NAMED_DECKS))}."
-                    + _file_hint(selected, _DECK_SUFFIXES),
-                )
+        deck_fields = self._deck_config(deck, opponent_deck)
         opponent = self._player(opponent, "opponent.unavailable")
         checkpoint = opponent.startswith("policy:")
-        imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
         config: dict[str, Any] = {
             "villain_sims": sims,
             "seed": seed,
             "decklists": decklists,
             "mirror": asdict(search) if search is not None else None,
             **player_fields(opponent),
+            **deck_fields,
         }
-        if imported:
-            config["deck_import"] = {
-                seat: _deck_file(selected, label) for seat, selected, label in seats
-            }
-        else:
-            config.update(hero_deck=deck, villain_deck=opponent_deck)
         try:
             server._parse_game_config(config)
         except managym.DeckImportError as exc:
@@ -377,13 +414,15 @@ class Academy:
         server.LAUNCH_CONFIGS[launch_id] = config
         return Launched(f"{self.url}/?{urlencode({'launch': launch_id})}")
 
-    def _player(self, value: str | Path, code: str) -> str:
+    def _player(self, value: PlayerInput, code: str) -> str:
         from managym.academy.opponent import policy_registry
 
         try:
             registry = policy_registry()
             if isinstance(value, Path):
                 return f"policy:{registry.register(PolicySpec.read(value))}"
+            if isinstance(value, PolicySpec) or not isinstance(value, str):
+                return f"policy:{registry.register(value)}"
             key = value.removeprefix("policy:")
             if (
                 key in registry.aliases
@@ -405,13 +444,18 @@ class Academy:
     def watch(
         self,
         *,
-        players: tuple[str | Path, str | Path],
+        players: tuple[PlayerInput, PlayerInput],
         search: tuple[SearchConfig | None, SearchConfig | None] = (None, None),
+        decks: tuple[DeckInput, DeckInput] | None = None,
+        seed: int | None = None,
+        decklists: DecklistDisclosure = "open",
     ) -> Launched:
         """Open Watch setup with exact seats selected, without starting a game."""
         self._require_open()
         seats = [self._player(player, "player.unavailable") for player in players]
+        from managym.academy import server
         from managym.academy.opponent import policy_registry
+        from managym.academy.villain import player_fields
 
         for player, spec in zip(seats, search, strict=True):
             if spec is not None:
@@ -427,11 +471,38 @@ class Academy:
                     )
                 except SearchError as exc:
                     raise AcademyLaunchError("setup.invalid", str(exc)) from exc
-        query = {"watch": "1", "seat1": seats[0], "seat2": seats[1]}
+        query: dict[str, str] = {"watch": "1", "seat1": seats[0], "seat2": seats[1]}
         if any(search):
             query["search"] = json.dumps(
                 [asdict(spec) if spec else None for spec in search]
             )
+        if decks is not None or seed is not None or decklists != "open":
+            deck_fields = (
+                self._deck_config(decks[0], decks[1])
+                if decks is not None
+                else {"hero_deck": "ur_lessons", "villain_deck": "gw_allies"}
+            )
+            setup: dict[str, Any] = {
+                "seed": seed,
+                "decklists": decklists,
+                **deck_fields,
+            }
+            try:
+                for player, spec in zip(seats, search, strict=True):
+                    server._parse_game_config(
+                        {
+                            **setup,
+                            "mirror": asdict(spec) if spec is not None else None,
+                            **player_fields(player),
+                        }
+                    )
+            except managym.DeckImportError as exc:
+                raise AcademyLaunchError("deck.rejected", str(exc)) from exc
+            except (ValueError, SearchError) as exc:
+                raise AcademyLaunchError("setup.invalid", str(exc)) from exc
+            launch_id = secrets.token_hex(16)
+            server.LAUNCH_CONFIGS[launch_id] = setup
+            query["launch"] = launch_id
         return Launched(f"{self.url}/replay?{urlencode(query)}")
 
     def replay(self, source: str | Path, game: int | str | None = None) -> Launched:
@@ -475,10 +546,22 @@ class Academy:
         return Launched(f"{self.url}/replay?{urlencode({'trace': source})}")
 
 
-def _deck_file(deck: str | Path, seat: str) -> dict[str, str]:
+def _deck_file(deck: DeckInput, seat: str) -> dict[str, str]:
+    if isinstance(deck, NamedDeck):
+        return deck_file_payload(deck.deck, name=deck.name)
+    if (
+        isinstance(deck, tuple)
+        and len(deck) == 2
+        and isinstance(deck[0], str)
+        and isinstance(deck[1], managym.Deck)
+    ):
+        named = NamedDeck(deck[0], deck[1])
+        return deck_file_payload(named.deck, name=named.name)
+    if isinstance(deck, managym.Deck):
+        return deck_file_payload(deck, name=f"Deck {deck.identity[:8]}")
     if isinstance(deck, Path):
         try:
-            return {
+            payload: dict[str, str] = {
                 "source": deck.expanduser().read_text(encoding="utf-8"),
                 "filename": deck.name,
             }
@@ -486,6 +569,14 @@ def _deck_file(deck: str | Path, seat: str) -> dict[str, str]:
             raise AcademyLaunchError(
                 "deck.unreadable", f"{seat}: {deck}: {exc}"
             ) from exc
+        if deck.stem.lower() not in _GENERIC_DECK_STEMS:
+            payload["name"] = deck.stem
+        return payload
+    if isinstance(deck, str) and (pool := resolve_deck_pool(deck)) is not None:
+        import random as _random
+
+        sampled = pool.sample(_random.SystemRandom())
+        return deck_file_payload(sampled.deck, name=sampled.name)
     from managym.academy import server
 
     # Parse the named setup once to retain its native sideboard as well as main.
@@ -507,6 +598,7 @@ def serve(
     traces_dir: Path | None = None,
     policies: Mapping[str, PolicyFactory | PolicySpec] | None = None,
     sources: Sequence[PolicySource] = (),
+    deck_pools: Sequence[DeckPool] | None = None,
 ) -> Academy:
     """Start the site without opening a browser; the caller must close the server."""
     if not 0 <= port <= 65535:
@@ -538,7 +630,9 @@ def serve(
         if not (directory / "index.html").is_file():
             raise AcademyLaunchError(
                 "site.missing",
-                "Packaged frontend missing. From a checkout use ./scripts/play, or set ACADEMY_FRONTEND_BUILD to a built site.",
+                "Packaged frontend missing (git/source installs omit the built UI). "
+                "Install a published managym[academy] wheel, run ./scripts/play from "
+                "a manabot checkout, or set ACADEMY_FRONTEND_BUILD to a built academy/ui directory.",
             )
         traces = (
             (traces_dir or Path(os.environ.get("ACADEMY_TRACES_DIR", "academy/traces")))
@@ -550,6 +644,10 @@ def serve(
 
         trace.TRACES_DIR = traces
         set_policy_registry(None)
+        try:
+            set_deck_pools(deck_pools)
+        except ValueError as exc:
+            raise AcademyLaunchError("setup.invalid", str(exc)) from exc
         registry = policy_registry()
         try:
             registry.discover(sources)
@@ -604,6 +702,7 @@ def serve(
         else:
             if listener is not None:
                 listener.close()
+            set_deck_pools(None)
             _ACTIVE_LOCK.release()
         if isinstance(exc, OSError):
             if exc.errno == errno.EADDRINUSE:
