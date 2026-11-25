@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept Review — MTG-437 Rollout &amp; Observation Transport (HEAD 8d0ad07704)</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --surface: #ffffff;
+    --surface-alt: #f3f1eb;
+    --border: #ddd8cc;
+    --text: #1c1b18;
+    --muted: #5c584e;
+    --yes-bg: #e6f4ea;
+    --yes-fg: #136535;
+    --yes-bd: #a8dab5;
+    --no-bg: #fce8e6;
+    --no-fg: #a50e0e;
+    --no-bd: #f5b7b1;
+    --existing-bg: #eef2f7;
+    --existing-fg: #2c4a70;
+    --proposed-bg: #fef3dc;
+    --proposed-fg: #7a4b00;
+    --accent: #6c3f18;
+    --code-bg: #f1efe9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141311;
+      --surface: #1d1b18;
+      --surface-alt: #25221e;
+      --border: #3a352e;
+      --text: #ece7dc;
+      --muted: #a9a192;
+      --yes-bg: #13311e;
+      --yes-fg: #8ce0a8;
+      --yes-bd: #245c38;
+      --no-bg: #3b1716;
+      --no-fg: #f69b94;
+      --no-bd: #732c29;
+      --existing-bg: #1c2836;
+      --existing-fg: #99c2f0;
+      --proposed-bg: #3a2b10;
+      --proposed-fg: #f5c976;
+      --accent: #e0a56b;
+      --code-bg: #26231e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 2rem 1.25rem 4rem;
+  }
+  main { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 1.7rem; line-height: 1.25; margin: 0 0 0.4rem; }
+  h2 { font-size: 1.25rem; margin: 2.25rem 0 0.85rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+  h3 { font-size: 1.02rem; margin: 1.35rem 0 0.5rem; }
+  p { margin: 0.55rem 0; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.1rem 1.25rem;
+    margin: 0.9rem 0;
+  }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+  }
+  .callout.warn { border-left-color: var(--no-fg); }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.14rem 0.5rem;
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .yes { background: var(--yes-bg); color: var(--yes-fg); border: 1px solid var(--yes-bd); }
+  .no { background: var(--no-bg); color: var(--no-fg); border: 1px solid var(--no-bd); }
+  .existing { background: var(--existing-bg); color: var(--existing-fg); }
+  .proposed { background: var(--proposed-bg); color: var(--proposed-fg); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.92rem;
+  }
+  th { background: var(--surface-alt); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.86em;
+    background: var(--code-bg);
+    padding: 0.1rem 0.34rem;
+    border-radius: 4px;
+  }
+  pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    margin: 0.6rem 0;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 1rem;
+    margin: 0.8rem 0;
+  }
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.75rem;
+    margin: 0.9rem 0;
+  }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+  }
+  .metric .label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric .val { font-size: 1.12rem; font-weight: 700; margin-top: 0.15rem; }
+  .question-list { list-style: none; padding: 0; margin: 0; }
+  .question-list > li {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.95rem 1.15rem;
+    margin: 0.75rem 0;
+  }
+  .options { list-style: none; padding-left: 0.25rem; margin: 0.45rem 0 0; }
+  .options li { margin: 0.3rem 0; }
+  .chosen { font-weight: 600; color: var(--accent); }
+  .small { font-size: 0.86rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Concept Review: Rollout &amp; Observation Transport (MTG-437)</h1>
+  <p class="subtitle">Post-implementation review of <code>HEAD</code> (<code>8d0ad07704</code>) against base <code>183f6daf59</code> &middot; Outcome: <strong>nothing to change</strong> (all 0.2.6 concepts align; pre-existing 0.2.x dual-holder seam noted for 0.3.0)</p>
+
+  <div class="callout">
+    <strong>Area reviewed:</strong> Native v11 rollout &amp; observation transport across process boundaries and downstream library consumers — <code>managym.ObservationLayout</code> &amp; <code>managym.ObservationBatch</code>, <code>manabot.env.observation.ObservationSpace</code> (and its 0.3.0 encoder shim), <code>manabot.env.memory_store</code> prefixes, <code>manabot.policy.spans.ObservationSelection</code>, <code>manabot.training.rollout.actions.PackedActions</code>, and <code>manabot.training.rollout.collection.{RecordedObservations, RolloutBatch}</code>.<br>
+    <strong>Why this area:</strong> Both reported 0.2.5 regressions (unpicklable <code>ObservationBatch</code> hanging worker queues and missing <code>obs_space.encoder.max_actions</code>) plus multi-worker batch merging live on the contract between in-process native collection and external multi-process consumers (<code>RyanSaxe/jace</code> at <code>9d212cb</code>).
+  </div>
+
+  <h2>1. Do the Product Concepts and Code Concepts Line Up at <code>HEAD</code>?</h2>
+  <p>Each row pairs what a downstream RL library consumer relies on with what the branch actually ships (<span class="badge existing">Existing on base</span> vs <span class="badge proposed">Added / changed on this branch</span>).</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 23%">Product concept</th>
+        <th style="width: 31%">Code concept at <code>HEAD</code></th>
+        <th style="width: 9%">Match</th>
+        <th style="width: 37%">Assessment</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Sealed native encoder batch</strong><br><span class="small">Immutable v11 CSR tables minted by native encoding and preserved across IPC without densifying or exposing a raw-bytes builder.</span></td>
+        <td><span class="badge existing">Base</span> <code>managym.ObservationBatch</code> (frozen, no <code>#[new]</code>)<br><span class="badge proposed">Branch</span> <code>PackedTableLayout</code> cached on <code>ObservationLayout</code>; <code>ObservationBatch.__reduce__</code> &rarr; <code>managym._managym._restore_observation_batch</code>; <code>__copy__</code>/<code>__deepcopy__</code>; <code>ObservationLayout.__reduce__</code> via <code>copyreg.__newobj_ex__</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Single stride/capacity/seat-axis owner (<code>PackedTableLayout</code> + <code>ArrayLayout::packed_seat_axis</code>) shared by <code>PackedRows</code>, <code>freeze</code>, <code>gather</code>, and restore. Sealed hook stays out of <code>managym.__init__</code> / <code>.pyi</code>. Validates v11, exact table keys, <code>seat_axis</code>, monotonic in-bounds offsets, and exact byte length. Works on pickle protocols 0&ndash;5 and preserves shared <code>PyBytes</code> across <code>blank_decision_memory()</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Declarative layout descriptor</strong><br><span class="small">Small config-derived schema carried by every selection and batch.</span></td>
+        <td><span class="badge existing">Base</span> <code>ObservationSpace</code> (pickled 627 KB of <code>gym.spaces.Box</code> arrays)<br><span class="badge proposed">Branch</span> <code>ObservationSpace.__reduce__</code> &rarr; <code>(ObservationSpace, (self.config,))</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Drops wire size from 627 KB to 633 B without breaking historical pickles or checkpoints (which store JSON <code>ObservationConfig</code> in safetensors).</td>
+      </tr>
+      <tr>
+        <td><strong>Coordinate view over native batches</strong><br><span class="small">Immutable <code>(batch, row)</code> view with ephemeral host caches that never cross IPC, joinable without projecting tables.</span></td>
+        <td><span class="badge existing">Base</span> <code>ObservationSelection</code> with <code>@cached_property</code> caches (<code>batch</code>, <code>action_counts</code>, <code>spans</code>)<br><span class="badge proposed">Branch</span> <code>ObservationSelection.__reduce__</code> + <code>ObservationSelection.concatenate</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td><code>__reduce__</code> ships only <code>(space, coordinates, memory)</code>; warm and cold pickles are byte-identical. <code>concatenate</code> validates <code>space.config</code>, memory capacities, and prefix counts on every part (even 1-element lists) without touching <code>batch</code> or <code>spans</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Interned decision-memory prefix graph</strong><br><span class="small">Exact-byte chunk DAG shared across <code>recorded.memory</code>, <code>recorded.rows.memory</code>, and <code>next_obs.memory</code>; O(1) pickle depth; runtime caches dropped.</span></td>
+        <td><span class="badge existing">Base</span> <code>Chunk</code>, <code>Tail</code>, <code>Prefix</code>, <code>PrefixObservation</code>, <code>CompactObservation</code>, <code>MemoryArchive</code><br><span class="badge proposed">Branch</span> <code>__reduce__</code> on all five transport types + <code>restore_prefix</code> (oldest-first chain)</td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Every restore re-runs SHA-256 content/chain certificates, read-only buffer freezing, <code>admit_chunk</code> cursors, and capacity checks. Drops <code>ChunkFeatures</code>, <code>native_epoch</code>, and <code>RecordVersion</code> serving caches. Handles <code>tail=None</code> and preserves caller edits on <code>CompactObservation</code>. <code>MemoryArchive</code> stays as explicit storage.</td>
+      </tr>
+      <tr>
+        <td><strong>Multi-worker packed batch merge</strong><br><span class="small">Join packed <code>[rows, 1]</code> worker rollouts without densifying, preserving trajectories, bootstraps, and worker-local branch groups.</span></td>
+        <td><span class="badge existing">Base</span> <code>PackedActions.concatenate</code> only (crashed on <code>[]</code>, skipped <code>native.space</code>)<br><span class="badge proposed">Branch</span> <code>RolloutBatch.concatenate</code>, <code>RecordedObservations.concatenate</code>, hardened <code>PackedActions.concatenate</code>, <code>offset_worker_groups</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Validates every part (even 1-element lists) for packed <code>[rows, 1]</code> shape, terminal/explicit consistency, index bounds, and optional field presence. Re-offsets non-negative <code>branch_group_id</code>s without mutating inputs, skips 0-row terminal-only <code>next_obs</code> parts (<code>{}</code>), and supports both native spans and dense 0.2.x dicts.</td>
+      </tr>
+      <tr>
+        <td><strong>Recorded decision-memory ownership (0.2.x seam)</strong><br><span class="small">One recorded history per rollout store.</span></td>
+        <td><span class="badge existing">Base</span> Held in two places on v11: <code>recorded.memory</code> AND <code>recorded.rows.memory.prefixes</code><br><span class="badge proposed">Branch</span> <code>same_prefix(a, b)</code> in <code>RecordedObservations.concatenate</code> bridges separately restored archives and reunifies onto <code>rows.memory.prefixes</code></td>
+        <td><span class="badge no">No</span></td>
+        <td><strong>Only remaining mismatch (pre-existing 0.2.x compatibility constraint).</strong> Dense 0.2.x consumers (including jace's <code>pack_batch_for_ipc</code> and <code>_merge_recorded</code>) depend on <code>recorded.memory</code> because plain dict <code>rows</code> carry no <code>.memory</code>. Removing the second holder would break 0.2.x; it dissolves when dense transport is removed in <code>0.3.0</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Deprecated <code>ObservationEncoder</code> shim</strong><br><span class="small">0.2.x callers read <code>obs_space.encoder.max_actions</code> and <code>ObservationEncoder(cfg).max_actions</code> with <code>0.3.0</code> warning while <code>space.encoder is space</code> holds.</span></td>
+        <td><span class="badge existing">Base</span> <code>ObservationSpace.encoder</code> returns <code>self</code>; shortcut attributes dropped in #566<br><span class="badge proposed">Branch</span> <code>ObservationSpace.__getattr__</code> + <code>ENCODER_SHORTCUTS</code> (20 attrs) under <code>REMOVAL_RELEASE = "0.3.0"</code></td>
+        <td><span class="badge yes">Yes</span></td>
+        <td>Serves both <code>space.encoder.&lt;attr&gt;</code> and <code>ObservationEncoder(cfg).&lt;attr&gt;</code> across v9, v10, and v11 (<code>max_stack_objects=0</code> and <code>library_shape</code> from <code>V11_LAYOUT</code> on legacy inputs). Guards uninitialized instances; emits <code>DeprecationWarning</code> naming <code>0.3.0</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Before &amp; After on the Primary Seam</h2>
+  <div class="callout warn">
+    <strong>What changed conceptually across <code>183f6daf59..8d0ad07704</code>:</strong> Instead of exposing a raw-bytes <code>ObservationBatch</code> constructor or forcing multi-process consumers to densify into float32 dicts before IPC, the branch preserves the native v11 CSR + interned-prefix graph intact across <code>pickle</code> and <code>RolloutBatch.concatenate</code>, while bridging the one pre-existing 0.2.x dual-holder seam (<code>recorded.memory</code> vs <code>recorded.rows.memory</code>) via O(1) certificate-key matching (<code>same_prefix</code>).
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3><span class="badge existing">Before</span> Base <code>183f6daf59</code> (v0.2.5)</h3>
+<pre>Worker (spawn process)
+  batch = collect_pair(..., batch_closure="complete-games")[0]
+  queue.put(batch)
+    -&gt; TypeError: cannot pickle 'managym.ObservationBatch' object
+    -&gt; worker dies; parent hangs on queue.get()
+
+  ObservationSpace pickle: 627 KB (gym Box bounds)
+  Prefix pickle: O(chain) recursion, ships serving/feature caches
+  obs_space.encoder.max_actions -&gt; AttributeError
+
+Parent
+  No RolloutBatch.concatenate; consumers densify via Mapping face
+  (12.2 ms stateless / 28.3 ms GRU for 2 workers)</pre>
+    </div>
+    <div class="card">
+      <h3><span class="badge proposed">After</span> Built <code>8d0ad07704</code> (for v0.2.6)</h3>
+<pre>Worker (spawn process)
+  batch = collect_pair(..., batch_closure="complete-games")[0]
+  queue.put(batch)
+    |- ObservationSpace     -&gt; (ObservationSpace, (config,))     [633 B]
+    |- ObservationSelection -&gt; (space, coords, memory)           [0 cache leak]
+    |- ObservationBatch     -&gt; _restore_observation_batch(...)   [sealed, validated]
+    +- Prefix / Tail / Chunk-&gt; oldest-first restore_prefix       [O(1) depth]
+
+Parent
+  merged = RolloutBatch.concatenate([b0, b1])  # 0.14 ms / 0.47 ms, stays native
+  jace dense _merge_recorded + pack_batch_for_ipc also pass unchanged
+  obs_space.encoder.max_actions -&gt; 512 (DeprecationWarning: removed in 0.3.0)</pre>
+    </div>
+  </div>
+
+  <div class="metric-row">
+    <div class="metric">
+      <div class="label">ObservationSpace pickle</div>
+      <div class="val">627 KB &rarr; 633 B</div>
+      <div class="small">~990&times; smaller per worker payload</div>
+    </div>
+    <div class="metric">
+      <div class="label">2-worker merge (QA at HEAD)</div>
+      <div class="val">0.14 ms / 0.47 ms</div>
+      <div class="small">vs 12.2 ms / 28.3 ms dense (60&ndash;85&times; faster, bit-identical)</div>
+    </div>
+    <div class="metric">
+      <div class="label">Unchanged jace 9d212cb</div>
+      <div class="val">35 / 35 tests pass</div>
+      <div class="small">+ live spawn pool (stateless &amp; GRU)</div>
+    </div>
+    <div class="metric">
+      <div class="label">In-repo transport &amp; layout</div>
+      <div class="val">85 / 85 tests pass</div>
+      <div class="small">including spawn queue, tampered restore, boundary tests</div>
+    </div>
+  </div>
+
+  <h2>3. Failure, Recovery, and Counterexample Verification</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 28%">Failure / edge case</th>
+          <th style="width: 36%">What happens at <code>HEAD</code></th>
+          <th style="width: 36%">Where verified</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Tampered / corrupt pickled <code>ObservationBatch</code></strong><br>(wrong table keys, non-v11 layout, flipped <code>seat_axis</code>, non-zero start, decreasing offset, span &gt; capacity, truncated bytes)</td>
+          <td><code>_restore_observation_batch</code> raises <code>ValueError</code> at unpickle time before any NumPy <code>scatter</code> or Rust slice runs.</td>
+          <td><code>test_restore_checks_packed_table_boundaries</code></td>
+        </tr>
+        <tr>
+          <td><strong>Deep prefix chain / tampered chunk / capacity overflow</strong></td>
+          <td>96-record chain round-trips under <code>recursionlimit=120</code>; truncated or disconnected chains fail <code>restore_prefix</code>; capacity overflow fails <code>PrefixObservation.__init__</code>; restored chunk arrays are read-only.</td>
+          <td><code>test_deep_prefixes_restore_certificates_and_preserve_edits</code></td>
+        </tr>
+        <tr>
+          <td><strong>Consumer strips &amp; re-archives only <code>recorded.memory</code></strong><br>(jace's <code>pack_batch_for_ipc</code>)</td>
+          <td><code>recorded.memory</code> and <code>recorded.rows.memory.prefixes</code> hold distinct Python <code>Prefix</code> objects with identical <code>(identity, tail.key)</code>. <code>same_prefix</code> validates in O(1) and <code>RecordedObservations.concatenate</code> reunifies onto one shared tuple.</td>
+          <td><code>test_archive_and_dense_worker_merge</code> &amp; live jace GRU pool QA</td>
+        </tr>
+        <tr>
+          <td><strong>Mixed terminal / non-terminal snapshot workers + worker-local <code>branch_group_id</code></strong></td>
+          <td><code>RolloutBatch.concatenate</code> skips 0-row <code>next_obs={}</code> parts, rebases <code>TrajectorySpan</code> starts/stops/bootstraps, and offsets non-negative <code>branch_group_id</code>s via <code>offset_worker_groups</code> without mutating input batches.</td>
+          <td><code>test_concatenate_snapshot_trajectories</code></td>
+        </tr>
+        <tr>
+          <td><strong>Invalid merge inputs</strong><br>(empty list, multi-column <code>[T, E]</code> even in 1-element list, non-terminal complete game, mixed transports, mismatched <code>decision_memory_include_own</code>, partial optional fields)</td>
+          <td>Raises explicit <code>ValueError</code> naming the mismatch before constructing a merged batch.</td>
+          <td><code>test_incompatible_worker_batches</code>, <code>test_recorded_rows_validate_each_store_before_rebasing</code></td>
+        </tr>
+        <tr>
+          <td><strong>Legacy v9 / v10 shortcut queries</strong><br>(<code>space.encoder.max_stack_objects</code>, <code>library_shape</code>)</td>
+          <td>Returns <code>0</code> and <code>V11_LAYOUT["known_library"]["shape"]</code> with <code>DeprecationWarning</code> naming <code>0.3.0</code>; uninitialized <code>ObservationSpace.__new__</code> raises <code>AttributeError</code>.</td>
+          <td><code>test_deprecated_encoder_shortcuts</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>4. Choices Made for Review (Numbered Questions)</h2>
+  <p>Each choice below is built into <code>HEAD</code> and reversible. Reply with e.g. <code>1b</code> or <code>4b</code> if you want to flip any of them.</p>
+
+  <ol class="question-list">
+    <li>
+      <strong><code>ObservationBatch</code> pickle hook: sealed internal function vs public constructor?</strong>
+      <ul class="options">
+        <li class="chosen">1a. (Built) Keep <code>ObservationBatch</code> with no public <code>#[new]</code>; <code>__reduce__</code> calls <code>managym._managym._restore_observation_batch</code> with full layout/capacity validation. Preserves the sealed native-certificate contract and keeps 0.2.6's public stub unchanged.</li>
+        <li>1b. Expose public <code>ObservationBatch(layout, batch_size, tables)</code> in <code>managym/__init__.pyi</code>.</li>
+      </ul>
+    </li>
+    <li>
+      <strong><code>ObservationSpace.__reduce__</code> from <code>self.config</code> in 0.2.6?</strong>
+      <ul class="options">
+        <li class="chosen">2a. (Built) Reconstruct from <code>self.config</code> (627 KB &rarr; 633 B per worker batch); backward-compatible with old pickles and safetensors checkpoints.</li>
+        <li>2b. Revert to default 627 KB pickling for 0.2.6.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Where do the 20 deprecated <code>ObservationEncoder</code> shortcuts live?</strong>
+      <ul class="options">
+        <li class="chosen">3a. (Built) Warned <code>ObservationSpace.__getattr__</code> under <code>REMOVAL_RELEASE = "0.3.0"</code>, keeping <code>space.encoder is space</code> and covering <code>ObservationEncoder(config).max_actions</code>.</li>
+        <li>3b. Separate proxy object returned from <code>ObservationSpace.encoder</code> (breaks <code>space.encoder is space</code>).</li>
+      </ul>
+    </li>
+    <li>
+      <strong><code>RolloutBatch.concatenate</code> shape scope?</strong>
+      <ul class="options">
+        <li class="chosen">4a. (Built) Packed <code>[rows, 1]</code> batches only (complete-game and explicit-trajectory snapshot batches), validated even for 1-element lists.</li>
+        <li>4b. Also concatenate multi-column <code>[time, trajectory]</code> batches along axis 1.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Error granularity on sealed <code>_restore_observation_batch</code>?</strong>
+      <ul class="options">
+        <li class="chosen">5a. (Built) Single <code>invalid packed observation table {key}</code> message across per-table invariant failures (only reachable via corrupt pickles).</li>
+        <li>5b. Distinct messages per invariant (batch-size mismatch vs non-monotonic offset vs capacity overflow vs byte length).</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h2>5. Outside This Work (Separate Outcomes)</h2>
+  <div class="card">
+    <p><strong>Removing <code>RecordedObservations.memory</code> duplication (<code>0.3.0</code>):</strong> Once dense observation transport is removed in <code>0.3.0</code>, <code>ObservationSelection.memory</code> becomes the sole prefix owner on <code>RecordedObservations</code> and <code>same_prefix</code> disappears.</p>
+    <p><strong>Compacting other-seat rows inside <code>collect_pair()[0]</code>:</strong> <code>_build_complete_batch</code> shares one <code>RecordedSpans</code> across both learners, so one learner's batch retains both seats' recorded rows (~2&times; IPC and RAM). Separate optimization Task.</p>
+    <p><strong>Updating <code>RyanSaxe/jace</code> after <code>0.2.6</code> ships:</strong> Switching jace from dense <code>_merge_recorded</code> + <code>pack_batch_for_ipc</code> to <code>RolloutBatch.concatenate</code> lives in the jace repository.</p>
+    <p><strong>Baseline u1952 pilot discrepancy:</strong> Documented in <code>scratch/plan.md</code> as reproducible on unpatched base <code>183f6daf59</code>; unrelated to transport.</p>
+  </div>
+</main>
+</body>
+</html>
