@@ -18,6 +18,9 @@ impl Game {
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
         self.state.priority_mut().sba_done = false;
+        // What led here (combat damage, a turn-based action, a resolution)
+        // is a whole state before the first state-based check.
+        self.presentation_cut();
         let cleanup = self.state.turn.current_step_kind() == StepKind::Cleanup;
 
         loop {

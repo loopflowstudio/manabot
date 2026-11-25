@@ -86,9 +86,10 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
     keep = game._keep_step_board
 
     def recording(events: list[dict[str, Any]]) -> None:
-        before = len(game._step_boards)
+        # The list is capped (oldest dropped), so new boards are found by identity.
+        before = {id(board) for board in game._step_boards}
         keep(events)
-        kept.extend(game._step_boards[before:])
+        kept.extend(board for board in game._step_boards if id(board) not in before)
 
     game._keep_step_board = recording  # type: ignore[method-assign]
     rebuilt_any = differed = 0

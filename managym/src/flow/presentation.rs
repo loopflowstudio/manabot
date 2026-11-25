@@ -11,13 +11,16 @@
 //! what `recent_events` would tell it, plus the notes, causes and rules.
 //!
 //! Causes: while a stack object resolves, and through the stabilization after
-//! it, every fact follows from that resolution; a trigger follows from the
-//! event that triggered it; anything else is a root. The resolution cause
-//! ends when stabilization reaches priority (`sba_done`).
+//! it, every fact follows from that resolution; outside a resolution, a death
+//! to lethal damage follows from the last damage dealt to that permanent
+//! (combat damage, say); a trigger follows from the event that triggered it;
+//! anything else is a root. The resolution cause and the damage record end
+//! when stabilization reaches priority (`sba_done`).
 //!
 //! Positions: the sink keeps a copy of the game (a *position*) each time the
 //! game reaches a whole state after at least one new fact: an action finished
-//! (and before the next one starts), a stack object finished resolving, a
+//! (and before the next one starts), a stack object finished resolving,
+//! stabilization began (after combat damage or a turn-based action), a
 //! state-based batch was performed, a round of triggers reached the stack.
 //! Each fact names the position cut after it, so a person can see the board
 //! as it was after each told line; facts after the last cut are on the board
@@ -30,7 +33,7 @@ use serde::Serialize;
 use crate::{
     agent::observation::Observation,
     flow::{
-        event::{GameEvent, ObjectEventRef},
+        event::{DamageTarget, GameEvent, ObjectEventRef},
         game::Game,
         trigger::TriggerId,
     },
@@ -67,6 +70,12 @@ pub enum Rule {
 #[derive(Clone, Debug)]
 enum Note {
     Event(GameEvent),
+    /// Combat damage (CR 510.2): the rules' `DamageDealt` and the
+    /// `CombatDamageDealt` the observation tells it by, one fact.
+    CombatDamage {
+        dealt: GameEvent,
+        told: GameEvent,
+    },
     /// An activated ability was put on the stack (CR 602.2).
     Activated {
         source: ObjectId,
@@ -104,6 +113,8 @@ pub struct PresentationSink {
     trigger_causes: Vec<(TriggerId, FactId)>,
     /// State-based reasons for the batch being performed.
     rules: Vec<(ObjectEventRef, Rule)>,
+    /// The last damage fact dealt to each permanent since priority.
+    damaged: Vec<(ObjectEventRef, FactId)>,
     /// Positions cut since the last take, oldest first.
     positions: Vec<Game>,
     /// Some fact has no position yet.
@@ -112,9 +123,15 @@ pub struct PresentationSink {
 
 impl PresentationSink {
     fn push(&mut self, rule: Option<Rule>, note: Note) -> FactId {
+        self.push_caused(None, rule, note)
+    }
+
+    /// Push a fact whose cause, absent a trigger's or a resolution's, is
+    /// `fallback`.
+    fn push_caused(&mut self, fallback: Option<FactId>, rule: Option<Rule>, note: Note) -> FactId {
         let id = self.next_id;
         self.next_id += 1;
-        let cause = self.next_cause.take().or(self.resolution);
+        let cause = self.next_cause.take().or(self.resolution).or(fallback);
         self.facts.push(Fact {
             id,
             cause,
@@ -126,16 +143,30 @@ impl PresentationSink {
         id
     }
 
-    fn event_rule(&self, event: &GameEvent) -> Option<Rule> {
+    /// The rule behind a state-based death, and for lethal damage the
+    /// damage fact that dealt it.
+    fn event_rule(&self, event: &GameEvent) -> (Option<Rule>, Option<FactId>) {
         let GameEvent::PermanentsDied { objects } = event else {
-            return None;
+            return (None, None);
         };
-        objects.iter().find_map(|object| {
+        let Some((object, rule)) = objects.iter().find_map(|object| {
             self.rules
                 .iter()
                 .find(|(died, _)| died == object)
-                .map(|(_, rule)| *rule)
-        })
+                .map(|(_, rule)| (object, *rule))
+        }) else {
+            return (None, None);
+        };
+        let damage = (rule == Rule::LethalDamage)
+            .then(|| {
+                self.damaged
+                    .iter()
+                    .rev()
+                    .find(|(damaged, _)| damaged == object)
+                    .map(|(_, fact)| *fact)
+            })
+            .flatten();
+        (Some(rule), damage)
     }
 }
 
@@ -217,9 +248,35 @@ impl Game {
     }
 
     pub(crate) fn presentation_event(&mut self, event: &GameEvent) {
-        if let Some(sink) = self.presentation.as_deref_mut() {
-            let rule = sink.event_rule(event);
-            sink.push(rule, Note::Event(event.clone()));
+        if self.presentation.is_none() {
+            return;
+        }
+        let damaged = match event {
+            GameEvent::DamageDealt {
+                target: DamageTarget::Permanent(permanent),
+                ..
+            } => self.permanent_event_ref(*permanent),
+            _ => None,
+        };
+        let sink = self.presentation.as_deref_mut().expect("checked above");
+        // Combat damage is one fact: the observation tells it by the
+        // `CombatDamageDealt` emitted right after its `DamageDealt`.
+        if let GameEvent::CombatDamageDealt { .. } = event {
+            if let Some(last) = sink.facts.last_mut() {
+                if let Note::Event(dealt @ GameEvent::DamageDealt { combat: true, .. }) = &last.note
+                {
+                    last.note = Note::CombatDamage {
+                        dealt: dealt.clone(),
+                        told: event.clone(),
+                    };
+                    return;
+                }
+            }
+        }
+        let (rule, damage) = sink.event_rule(event);
+        let id = sink.push_caused(damage, rule, Note::Event(event.clone()));
+        if let Some(object) = damaged {
+            sink.damaged.push((object, id));
         }
     }
 
@@ -263,6 +320,7 @@ impl Game {
         if let Some(sink) = self.presentation.as_deref_mut() {
             sink.resolution = None;
             sink.rules.clear();
+            sink.damaged.clear();
         }
     }
 
@@ -301,7 +359,11 @@ impl Game {
             matches!(&fact.note, Note::Event(GameEvent::PermanentsDied { objects })
                 if objects.iter().any(|object| Some(*object) == died))
         };
-        let same = |fact: &&Fact| matches!(&fact.note, Note::Event(told) if told == event);
+        let same = |fact: &&Fact| match &fact.note {
+            Note::Event(told) => told == event,
+            Note::CombatDamage { dealt, told } => dealt == event || told == event,
+            _ => false,
+        };
         let found = match died {
             Some(_) => sink.facts.iter().rev().find(death),
             None => None,
@@ -341,7 +403,7 @@ impl Game {
             .into_iter()
             .map(|fact| {
                 let (events, note) = match &fact.note {
-                    Note::Event(event) => {
+                    Note::Event(event) | Note::CombatDamage { told: event, .. } => {
                         (Observation::event_data(self, event), self.event_note(event))
                     }
                     Note::Activated {

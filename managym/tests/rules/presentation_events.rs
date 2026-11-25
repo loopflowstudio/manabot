@@ -103,3 +103,70 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
         } if player.0 == 1
     ));
 }
+
+/// Academy's presentation sink (`flow/presentation.rs`): a creature killed in
+/// combat dies to lethal damage, because of the damage dealt to it, and each
+/// of those lines has the board as it was just after it.
+#[test]
+fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
+    use managym::{
+        agent::observation::EventType,
+        flow::presentation::{PresentationFact, Rule},
+    };
+
+    let mut scenario = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        203,
+    );
+    scenario.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
+    scenario.advance_to_active_step(1, StepKind::Main);
+    scenario.play_land_and_cast_creature(1, "Forest", "Llanowar Elves");
+    scenario.advance_to_active_step(0, StepKind::DeclareAttackers);
+    scenario.game_mut().enable_presentation();
+    scenario.declare_attack();
+    scenario.advance_to_active_step(0, StepKind::DeclareBlockers);
+    scenario.declare_block();
+    scenario.advance_to_active_step(0, StepKind::CombatDamage);
+    scenario.advance_to_active_step(1, StepKind::Main);
+
+    let (facts, positions) = scenario.game_mut().take_presentation();
+    let is = |fact: &PresentationFact, kind: EventType| {
+        fact.events.first().map(|row| row.event_type) == Some(kind as i32)
+    };
+    let deaths: Vec<&PresentationFact> = facts
+        .iter()
+        .filter(|fact| is(fact, EventType::PermanentsDied))
+        .collect();
+    assert!(!deaths.is_empty(), "no death told: {facts:#?}");
+    assert!(
+        !facts.iter().any(|fact| is(fact, EventType::DamageDealt)),
+        "combat damage told twice: {facts:#?}"
+    );
+    for death in deaths {
+        assert_eq!(death.rule, Some(Rule::LethalDamage));
+        let cause = facts
+            .iter()
+            .find(|fact| Some(fact.id) == death.cause)
+            .expect("the death names a told cause");
+        // Combat damage is told once, as combat damage.
+        assert!(is(cause, EventType::CombatDamageDealt), "cause: {cause:#?}");
+        // The damage is seen before the death: the creature is still there.
+        let (Some(damage_board), Some(death_board)) = (cause.position, death.position) else {
+            panic!("combat lines keep their boards: {cause:#?} {death:#?}");
+        };
+        assert!(damage_board < death_board);
+        let elves = |board: u32| {
+            positions[board as usize]
+                .state
+                .permanents
+                .iter()
+                .flatten()
+                .count()
+        };
+        assert!(elves(damage_board) > elves(death_board));
+        assert!(positions[death_board as usize]
+            .current_action_space
+            .is_none());
+    }
+}
