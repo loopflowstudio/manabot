@@ -23,6 +23,7 @@ from manabot.model.architecture import (
 )
 from manabot.policy import admission
 from manabot.training.rollout.collection import collect, open_collector
+from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input, fact_rows, record_vocabulary
 
@@ -65,7 +66,7 @@ def test_capacity_export_and_real_legal_policy(
         agent,
         {
             k: torch.from_numpy(v[0])
-            for k, v in batch.observations().observation.items()
+            for k, v in trajectory_rows(batch).observation.items()
         },
     )
     policy, value = agent(obs)

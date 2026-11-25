@@ -18,11 +18,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
-from manabot.env.observation import (
-    ObservationSpace,
-    PolicyObservation,
-    encode_policy_batch,
-)
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -30,6 +26,7 @@ from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import PolicyObservation
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 

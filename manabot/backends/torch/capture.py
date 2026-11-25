@@ -21,10 +21,9 @@ import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
-from manabot.env.observation import PolicyObservation
 from manabot.policy.captured_observations import pack_observation
 from manabot.policy.prepare import Prepared
-from manabot.policy.spans import ObservationSelection
+from manabot.policy.spans import ObservationSelection, PolicyObservation
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops import self_play as execution
 from manabot.training.loops.self_play import SelfPlay

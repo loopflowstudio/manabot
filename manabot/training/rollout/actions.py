@@ -37,7 +37,7 @@ ACTION_FIELDS = frozenset(
 
 @dataclass
 class ActionRows:
-    observation: Mapping[str, NDArray[np.generic]]
+    observation: ObservationSelection | Mapping[str, NDArray[np.generic]]
     log_probabilities: NDArray[np.generic]
 
 
@@ -55,7 +55,7 @@ class PackedActions:
     @classmethod
     def pack(
         cls,
-        observation: Mapping[str, NDArray[np.generic]],
+        observation: ObservationSelection | Mapping[str, NDArray[np.generic]],
         log_probabilities: NDArray[np.generic],
         *,
         validator: ActionValidator,

@@ -14,7 +14,7 @@ from manabot.infra.config import RewardConfig
 from manabot.training.learning import BatchClosure
 from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import trajectory_field
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,7 +60,7 @@ def _one_seat(closure: BatchClosure) -> Collector:
         batch_closure=closure,
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    collector._env = ScriptedGames(dense_collector(collector))
+    collector._env = ScriptedGames(collector)
     return collector
 
 
@@ -88,7 +88,7 @@ def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     agent = _agent()
     collector = _one_seat("complete-games")
     batch = collect(collector, agent, 2)
-    assert batch.ordered_obs()["agent_player"].shape[1] == 1
+    assert trajectory_field(batch, "agent_player").shape[1] == 1
     assert bool(batch.next_done.all())
     # Every packed trajectory closes on a terminal row, so nothing bootstraps.
     assert bool(batch.dones[-1].all())

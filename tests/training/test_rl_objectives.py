@@ -18,6 +18,7 @@ from manabot.training.learning import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.updates.ppo import update_iteration
+from tests.fixtures.rollout_arrays import trajectory_rows
 
 
 class TinyPolicy(torch.nn.Module):
@@ -161,7 +162,7 @@ def test_nonzero_values_adjacent_episodes_and_exact_tail():
 
 def test_reference_and_filter_support_order_and_threshold():
     _, batch = fixture()
-    obs = {k: v[:, 0] for k, v in batch.observations().observation.items()}
+    obs = {k: v[:, 0] for k, v in trajectory_rows(batch).observation.items()}
     for kind, expected in [
         ("uniform", [1 / 3, 1 / 3, 1 / 3, 0]),
         ("action_type_uniform", [0.25, 0.25, 0.5, 0]),
@@ -230,7 +231,7 @@ def test_empty_filter_preserves_parameters_and_optimizer_state():
 
 def test_collection_kl_uses_stored_full_distribution() -> None:
     trainer, batch = fixture()
-    original = batch.observations().log_probabilities.copy()
+    original = trajectory_rows(batch).log_probabilities.copy()
     same = run(trainer, batch, control(learning_rate=Schedule(initial=0)))
     assert same["collection_kl"] == pytest.approx(0, abs=1e-7)
     with torch.no_grad():
@@ -241,7 +242,7 @@ def test_collection_kl_uses_stored_full_distribution() -> None:
     current = trainer.agent.logits[:3].softmax(-1).detach().numpy()
     expected = (current * (np.log(current) - original[0, 0, :3])).sum()
     assert moved["collection_kl"] == pytest.approx(expected, abs=1e-7)
-    np.testing.assert_array_equal(batch.observations().log_probabilities, original)
+    np.testing.assert_array_equal(trajectory_rows(batch).log_probabilities, original)
 
 
 def test_ema_is_iteration_clocked_and_never_overwrites_learner():

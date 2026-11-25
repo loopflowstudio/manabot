@@ -28,6 +28,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
+from tests.fixtures.rollout_arrays import projected_fields
 from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, host_inputs
 
@@ -60,7 +61,7 @@ def _observation(batch: RolloutBatch) -> dict[str, torch.Tensor]:
         key: torch.from_numpy(value).float()
         if key == "action_focus"
         else torch.from_numpy(value)
-        for key, value in rows.observation.items()
+        for key, value in projected_fields(rows.observation).items()
     }
 
 

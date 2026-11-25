@@ -4,7 +4,7 @@ Each table has one span per batch row, or two viewer-relative seat spans.
 Only outputs whose model shape includes padding need to materialize those slots.
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from functools import cached_property, lru_cache
 
@@ -12,13 +12,12 @@ import numpy as np
 
 from manabot.env.memory_store import (
     MEMORY_FIELDS,
-    CompactObservation,
-    PrefixObservation,
     RetainedMemory,
 )
 from manabot.env.observation import (
     FACT_KIND_INDEX,
     FACT_VALUE_INDEX,
+    ObservationBuffers,
     ObservationSpace,
 )
 from manabot.policy.buckets import AXES, BucketSizes, sizes_of
@@ -176,11 +175,11 @@ type BatchRow = tuple[managym.ObservationBatch, int]
 
 
 @dataclass(frozen=True, eq=False)
-class ObservationSelection(Mapping[str, np.ndarray]):
+class ObservationSelection:
     """Immutable native coordinates in consumer order, with optional interned memory.
 
-    A policy reads the selected CSR spans. Mapping access projects one logical
-    field as a read-only array. Explicit exports produce editable dense rows.
+    A policy reads the selected CSR spans. Inspection projects a single logical
+    field into configured coordinates.
     """
 
     space: ObservationSpace
@@ -221,31 +220,18 @@ class ObservationSelection(Mapping[str, np.ndarray]):
     def spans(self) -> "ObservationSpans":
         return observation_spans(self.batch, self.space, bucketed=False, objects=False)
 
-    def __iter__(self) -> Iterator[str]:
-        return (
-            k
-            for k in self.space.shapes
-            if self.memory is None or k not in MEMORY_FIELDS
+    @cached_property
+    def fields(self) -> tuple[str, ...]:
+        """Projectable fields. Interned decision memory lives on the selection."""
+        return tuple(
+            key
+            for key in self.space.shapes
+            if self.memory is None or key not in MEMORY_FIELDS
         )
-
-    def __len__(self) -> int:
-        return len(self.space.shapes) - (
-            len(MEMORY_FIELDS) if self.memory is not None else 0
-        )
-
-    def __contains__(self, key: object) -> bool:
-        return key in self.space.shapes and (
-            self.memory is None or key not in MEMORY_FIELDS
-        )
-
-    def __getitem__(self, key: str) -> np.ndarray:
-        values = self.project(key)
-        values.flags.writeable = False
-        return values
 
     def project(self, key: str) -> np.ndarray:
         """Editable logical field in configured coordinates, independent of native storage."""
-        if key not in self:
+        if key not in self.fields:
             raise KeyError(key)
         if key == "actions_valid":
             return (
@@ -263,16 +249,6 @@ class ObservationSelection(Mapping[str, np.ndarray]):
         )
         memory = self.memory.select(indexes) if self.memory is not None else None
         return ObservationSelection(self.space, coords, memory)
-
-    def export(self) -> PrefixObservation | dict[str, np.ndarray]:
-        rows = {key: self.project(key) for key in self}
-        if self.memory is None:
-            return rows
-        return PrefixObservation(rows, self.memory.prefixes, self.memory.capacities)
-
-    def materialize(self) -> CompactObservation | dict[str, np.ndarray]:
-        rows = self.export()
-        return rows.materialize() if isinstance(rows, PrefixObservation) else rows
 
     def action_columns(
         self, rows: np.ndarray, slots: np.ndarray, columns: Sequence[int]
@@ -307,6 +283,11 @@ class ObservationSelection(Mapping[str, np.ndarray]):
                 replace(spans, records=spans.records[start + skip : stop]).features()
             )
         return tuple(result)
+
+
+type PolicyObservation = (
+    managym.ObservationBatch | ObservationSelection | ObservationBuffers
+)
 
 
 @dataclass(frozen=True)

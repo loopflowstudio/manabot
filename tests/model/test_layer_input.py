@@ -43,6 +43,7 @@ from manabot.training.loops.self_play import SelfPlay
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
+from tests.fixtures.rollout_arrays import trajectory_field
 from tests.model.prepared_routes import (
     device_input,
     effect_rows,
@@ -70,7 +71,7 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
     try:
         model = ActorCritic(space, recipe.model)
         batch = collect(collector, model, 1)
-        assert batch.ordered_obs()["effect_details"].shape == (1, 1, 4096, 3)
+        assert trajectory_field(batch, "effect_details").shape == (1, 1, 4096, 3)
         assert batch.actions.size == 1
         path = tmp_path / "explicit.pt"
         save_checkpoint(

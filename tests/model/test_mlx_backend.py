@@ -114,6 +114,7 @@ from manabot.verify.choice_corpus import collect_choices
 from manabot.verify.learning_regression import inspect_policy
 from manabot.verify.representation import kellan_upgrade_root
 import managym
+from tests.fixtures.rollout_arrays import projected_fields
 
 
 def _mlx_names(torch_named: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -425,13 +426,10 @@ def test_policy_architecture_matches_torch_forward_gradients_and_step(
         behavior, lesson_match(), TorchCollectionSession(device="cpu", seed=3), 8
     )
     indexes = np.arange(rollout.actions.size)
-    rows = (
-        rollout.policy_rows(indexes)
-        if config.belief_count_buckets
-        else rollout.observations(indexes)
-    )
+    rows = rollout.observations(indexes)
     obs = rows.observation
     if not config.belief_count_buckets:
+        obs = projected_fields(obs)
         # Put an ability on the stack with a source on the acting battlefield.
         source = 2 + obs["agent_cards"].shape[1] + obs["opponent_cards"].shape[1]
         obs["agent_permanents_valid"][0, 0] = 1

@@ -92,6 +92,7 @@ from manabot.policy.readings import (
 from manabot.policy.spans import (
     ObservationSelection,
     ObservationSpans,
+    PolicyObservation,
     RowSpans,
     batch_layout,
     full_word,
@@ -1432,7 +1433,7 @@ def _events(
 
 
 def reference_distribution(
-    obs: ObservationBuffers | managym.ObservationBatch | ObservationSpans, kind: str
+    obs: PolicyObservation | ObservationSpans, kind: str
 ) -> Array:
     """Full-support KL reference [B,A], with zero mass off the legal offers."""
     if kind not in {"uniform", "action_type_uniform"}:

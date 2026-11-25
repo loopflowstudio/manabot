@@ -12,6 +12,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import STACK_DEFINITION_INDEX, encode_observation
 from manabot.training.rollout.collection import collect
 from manabot.verify.text_observation import priority_root
+from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -21,7 +22,7 @@ def _decisions(case: PolicyFixture, steps: int) -> dict[str, torch.Tensor]:
     batch = collect(case.collector, case.agent, steps)
     return {
         key: torch.from_numpy(value).flatten(0, 1).float()
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
 
 

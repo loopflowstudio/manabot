@@ -30,6 +30,7 @@ from manabot.policy.prepare import MIN_LIVE_FACT_ROWS, prepare
 from manabot.training.rollout.collection import collect
 from manabot.verify.representation import shared_effect_root
 import managym
+from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -60,7 +61,7 @@ def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     batch = collect(case.collector, case.agent, 24)
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
 
 
@@ -393,7 +394,7 @@ def test_bucketed_admission_keeps_effect_order_bounds_and_batch_strides() -> Non
 
 
 def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
-    case = _policy(bucketed_shapes=True)
+    case = _policy(input_version=9, bucketed_shapes=True)
     batch = collect(case.collector, case.agent, 1)
     row = batch.recorded.index[0]
     batch.recorded.rows["facts"][row, -1, column("facts", "valid")] = 2
@@ -403,7 +404,7 @@ def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
 
 @pytest.mark.parametrize("recorded", [True, False], ids=["mixed", "absent-table"])
 def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
-    case = _policy(bucketed_shapes=True)
+    case = _policy(input_version=9, bucketed_shapes=True)
     masks = case.obs["actions_valid"]
     legal_slots = [np.flatnonzero(mask) for mask in masks]
     # Collection measures this continuation before packing drops the masked action.
@@ -462,7 +463,7 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     batch = collect(case.collector, case.agent, 24)
     obs = {
         key: torch.from_numpy(value[:, 0]).float()
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
     # A fractional object reference in one row, which only that row needs.
     _set_fact_object(3.7)(obs)
@@ -485,7 +486,7 @@ def test_collection_records_each_rows_measured_needs() -> None:
     rows = np.arange(batch.actions.size)
     recorded = batch.recorded.gather_needs(rows)
     assert recorded is not None
-    host = batch.observations(rows).observation
+    host = projected_fields(batch.observations(rows).observation)
     assert np.array_equal(recorded, row_needs(host, case.agent.observation_space))
 
 

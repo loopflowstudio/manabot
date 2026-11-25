@@ -28,6 +28,7 @@ from manabot.env.memory_store import archive_memory, select_rows
 from manabot.policy.checkpoint import canonical_name
 from manabot.policy.decision_memory import retained_memory
 from manabot.policy.protocol import BackendPolicy
+from manabot.policy.spans import ObservationSelection
 from manabot.training.state.backend import IncidentCapture, NumericalIncident
 from manabot.training.state.optimizer import AdamState, admit_adam, admit_policy_arrays
 
@@ -173,31 +174,35 @@ def capture_incident(
                 for key, value in packed.fields.items()
             }
         )
-        recorded = batch.recorded.index[selected]
-        batch_tensors.update(
-            {
-                f"observation/{key}": torch.tensor(value)
-                for key, value in batch.recorded.gather(selected).items()
-            }
-        )
-        batch_tensors.update(
-            {
-                f"next_observation/{key}": torch.tensor(value)
-                for key, value in select_rows(
-                    batch.next_obs, slice(0, max_rows)
-                ).items()
-                if key not in MEMORY_FIELDS
-            }
-        )
-        if batch.recorded.memory_capacities is not None:
-            prefixes = [batch.recorded.memory[int(row)] for row in recorded]
+        gathered = batch.recorded.gather(selected)
+        for group, source in (
+            ("observation", gathered),
+            ("next_observation", select_rows(batch.next_obs, slice(0, max_rows))),
+        ):
+            names = (
+                source.fields
+                if isinstance(source, ObservationSelection)
+                else source.keys()
+            )
+            for key in names:
+                if group == "next_observation" and key in MEMORY_FIELDS:
+                    continue
+                value = (
+                    source.project(key)
+                    if isinstance(source, ObservationSelection)
+                    else source[key]
+                )
+                batch_tensors[f"{group}/{key}"] = torch.tensor(value)
+        memory = retained_memory(gathered)
+        if memory is not None:
+            prefixes = list(memory.prefixes)
             next_count = 0
             next_memory = retained_memory(batch.next_obs)
             if next_memory is not None:
                 next_prefixes = next_memory.prefixes[:max_rows]
                 next_count = len(next_prefixes)
                 prefixes.extend(next_prefixes)
-            archive = archive_memory(prefixes, batch.recorded.memory_capacities)
+            archive = archive_memory(prefixes, memory.capacities)
             memory_metadata = {
                 "required_bytes": archive.nbytes,
                 "capacities": list(archive.capacities),

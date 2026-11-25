@@ -30,13 +30,14 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.ppo import update_iteration
+from tests.fixtures.rollout_arrays import trajectory_field, trajectory_rows
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}
 
 
 def _naming_rows(batch: RolloutBatch) -> tuple[np.ndarray, np.ndarray]:
     """Flat rows whose chosen action was a naming group or a name."""
-    obs = batch.observations().observation["name_candidates"]
+    obs = trajectory_field(batch, "name_candidates")
     steps, envs = np.meshgrid(
         np.arange(batch.actions.shape[0]),
         np.arange(batch.actions.shape[1]),
@@ -73,7 +74,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     assert batch is not None
     groups, names = _naming_rows(batch)
     assert len(groups) and len(names), "self-play reached no naming decision"
-    obs = batch.observations().observation
+    obs = trajectory_rows(batch).observation
     # Bounded prompts at ordinary capacity: no row offers more than 64 choices.
     flat_valid = obs["actions_valid"].reshape(-1, obs["actions_valid"].shape[-1])
     assert (flat_valid[np.concatenate([groups, names])].sum(-1) <= 64).all()

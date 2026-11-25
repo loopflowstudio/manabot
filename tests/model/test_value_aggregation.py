@@ -20,6 +20,7 @@ from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import collect, open_collector
 from manabot.verify.text_observation import keep_opening_hands
 import managym
+from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.prepared_routes import dense_action_features, device_input
 
 Aggregation = Literal[
@@ -217,7 +218,7 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
     batch = collect(collector, agent, 1)
     obs = {
         key: torch.from_numpy(value[0])
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
     expected = agent.forward_distribution(device_input(agent, obs))
     changed = {key: value.clone() for key, value in obs.items()}
@@ -417,7 +418,9 @@ def test_attention_readout_shares_initialization_and_actor_path() -> None:
     batch = collect(collector, masked, 1)
     obs = {
         key: torch.from_numpy(value)
-        for key, value in batch.observations(np.array([0])).observation.items()
+        for key, value in projected_fields(
+            batch.observations(np.array([0])).observation
+        ).items()
     }
     with torch.no_grad():
         masked_logits, masked_value = masked(device_input(masked, obs))

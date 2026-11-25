@@ -54,10 +54,11 @@ from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace, PolicyObservation
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
+from manabot.policy.spans import PolicyObservation
 from manabot.sim.search.local_update import LocalUpdateTeacher
 from manabot.sim.search.local_update_receipt import (
     LocalSearchConfig,

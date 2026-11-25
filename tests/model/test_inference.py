@@ -20,6 +20,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import RewardConfig
 from manabot.policy.prepare import CatalogPrograms, Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     Collector,
@@ -27,13 +28,13 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.policy_fixture import recipe
 from tests.model.prepared_routes import device_input, program_input
 
 
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
-    rows = batch.observations()
+    rows = trajectory_rows(batch)
     result = {
         "log_probabilities": torch.from_numpy(rows.log_probabilities),
         **{
@@ -47,8 +48,8 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
         value = getattr(batch, field.name)
         if isinstance(value, np.ndarray):
             result[field.name] = torch.from_numpy(value)
-        elif isinstance(value, dict):
-            for key, array in value.items():
+        elif isinstance(value, (dict, ObservationSelection)):
+            for key, array in projected_fields(value).items():
                 result[f"{field.name}/{key}"] = torch.from_numpy(array)
         elif value is not None:
             raise TypeError(f"unexpected rollout field {field.name}")
@@ -93,9 +94,10 @@ def _policy(
         opponent_mode="self",
         numerics=TorchCollectionSession(device="cpu", seed=91, precision="float32"),
     )
-    dense_collector(collector)
     return PolicyFixture(
-        agent, collector, collection._retain_obs_rows(collector, np.arange(2))
+        agent,
+        collector,
+        projected_fields(collection._retain_obs_rows(collector, np.arange(2))),
     )
 
 
@@ -161,7 +163,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
             key: value[-8:, 0].astype(np.float32)
             if key == "action_focus"
             else value[-8:, 0]
-            for key, value in batch.observations().observation.items()
+            for key, value in trajectory_rows(batch).observation.items()
         }
     semantic = case.agent.semantic_cards
     assert semantic is not None

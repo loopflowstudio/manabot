@@ -29,6 +29,7 @@ from manabot.policy.spans import observation_spans
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
 import managym
+from tests.fixtures.rollout_arrays import projected_fields, trajectory_field
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -63,7 +64,7 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
     )
     batch = collect(collector, agent, 16)
     nonempty = np.flatnonzero(
-        batch.ordered_obs()["events_valid"].sum(axis=(-1, -2)) >= 2
+        trajectory_field(batch, "events_valid").sum(axis=(-1, -2)) >= 2
     )
     assert len(nonempty) > 2, (
         "ordinary semantic collection must retain past public events"
@@ -71,7 +72,9 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
     step = int(nonempty[-1])
     return {
         key: torch.from_numpy(value)
-        for key, value in batch.observations(np.array([step])).observation.items()
+        for key, value in projected_fields(
+            batch.observations(np.array([step])).observation
+        ).items()
     }
 
 

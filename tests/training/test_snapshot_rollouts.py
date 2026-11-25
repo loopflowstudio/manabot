@@ -23,11 +23,12 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.failures import CaptureScope, RecordedVectorEnv, capture_scope
 from manabot.env.match import Match, Reward
-from manabot.env.memory_store import MEMORY_FIELDS
+from manabot.env.memory_store import MEMORY_FIELDS, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
     encode_observation,
+    step_buffers,
 )
 from manabot.infra.config import (
     ModelConfig,
@@ -102,6 +103,7 @@ import managym
 from managym.recording import GameInputs, PlayerSetup, read_records
 from managym.statistics import read_statistics
 from scripts.inspect_batch import _report
+from tests.fixtures.rollout_arrays import projected_fields
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
 
@@ -242,7 +244,7 @@ def three_choices(
         spans += (TrajectorySpan(2, 3, 1, None if terminal else 1),)
     assert batch.trajectories == spans
     if terminal:
-        assert not batch.next_obs and batch.next_done.size == 0
+        assert batch.next_done.size == 0
         return batch, torch.empty(0)
 
     expected = []
@@ -251,16 +253,16 @@ def three_choices(
         assert span.bootstrap_index is not None
         frozen = batch.next_obs
         if retained_memory(frozen) is not None:
-            dense = frozen.materialize()
+            dense = gather_memory(frozen.memory.prefixes)
             # Compact memory pads only to the largest live prefix in this read.
             for key in MEMORY_FIELDS:
                 np.testing.assert_array_equal(
                     dense[key][span.bootstrap_index],
                     encoded[key][: dense[key].shape[1]],
                 )
-        for key in frozen:
+        for key, value in projected_fields(frozen).items():
             np.testing.assert_array_equal(
-                frozen[key][span.bootstrap_index], encoded[key], err_msg=key
+                value[span.bootstrap_index], encoded[key], err_msg=key
             )
         assert bool(encoded["actions_valid"].any()) == (
             scalar.current_agent_index() == span.seat
@@ -315,7 +317,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
     # Storage order is independent of the trajectory packing order.
     reordered = replace(
         batch,
-        next_obs={k: v[[1, 0]] for k, v in batch.next_obs.items()},
+        next_obs=batch.next_obs.select(np.array([1, 0])),
         trajectories=(TrajectorySpan(0, 2, 0, 1), TrajectorySpan(2, 3, 1, 0)),
     )
     reordered_targets = torch_targets(learner, reordered, learning)
@@ -327,7 +329,7 @@ def test_packed_cut_updates_use_the_frozen_view_of_each_seat(
         changed_rows = np.array([0, 0, 1]) == seat
         other = 1 - seat
         perturbed = replace(
-            batch, next_obs={k: v[[other, other]] for k, v in batch.next_obs.items()}
+            batch, next_obs=batch.next_obs.select(np.array([other, other]))
         )
         changed = torch_targets(learner, perturbed, learning)
         torch.testing.assert_close(
@@ -350,7 +352,7 @@ def test_mixed_ppo_discounts_each_cut_and_censors_only_its_own_span() -> None:
         batch,
         dones=np.array([[False], [False], [True]]),
         rewards=np.array([[0], [0], [-1]], np.float32),
-        next_obs={key: value[:1] for key, value in batch.next_obs.items()},
+        next_obs=batch.next_obs.select(slice(0, 1)),
         next_done=np.zeros(1, bool),
         trajectories=(TrajectorySpan(0, 2, 0, 0), TrajectorySpan(2, 3, 1)),
     )
@@ -486,18 +488,17 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
     setup = Match().to_rust()
     vector = ShardedVectorEnv(3, 42, 2)
     try:
-        vector.set_buffers(allocate_vector_buffers(space, 3), layout=space.layout)
+        vector.set_observation_layout(
+            step_buffers(3), space.config.action_overflow, layout=space.layout
+        )
         seeds = [701, 49, 33]
         vector.reset_each_into_buffers([setup] * 3, seeds=seeds)
         generations = vector.current_game_generations()
         with pytest.raises(ValueError, match="native seed must fit uint64"):
             vector.reset_each_into_buffers([setup] * 3, seeds=[800, 900, -1])
         assert vector.current_game_generations() == generations
-        frozen = space.allocate(3)
         players = [1, 0, 1]
-        reads = vector.write_observations_for_players(
-            players, frozen, layout=space.layout
-        )
+        reads, frozen = vector.observations_for_players(players)
         digests = vector.state_digests([True, False, True])
         for slot, read in enumerate(reads):
             assert (read.slot, read.player, read.seed, read.game_id) == (
@@ -509,11 +510,10 @@ def test_sharded_fixed_view_reads_use_global_stream_order() -> None:
             scalar = managym.Env(seed=seeds[slot])
             scalar.reset(setup)
             assert digests[slot] == (None if slot == 1 else scalar.state_digest())
-            encoded = encode_observation(
-                space, scalar.observation_for_player(players[slot])
+            encoded = managym.encode_observation_batch(
+                [scalar.observation_for_player(players[slot])], space.layout
             )
-            for key in frozen:
-                np.testing.assert_array_equal(frozen[key][slot], encoded[key])
+            assert frozen.gather([(frozen, slot)]).to_bytes() == encoded.to_bytes()
     finally:
         vector.close()
 
@@ -1360,10 +1360,8 @@ def test_cold_bank_matches_hot_draws_scores_evictions_and_group_draining() -> No
                             actual = batch.observations(
                                 np.array([candidate.row])
                             ).observation
-                            for key in actual:
-                                np.testing.assert_array_equal(
-                                    actual[key][0], expected[key]
-                                )
+                            for key, value in projected_fields(actual).items():
+                                np.testing.assert_array_equal(value[0], expected[key])
                         assert len(receipt.captures) > config.capacity
                     else:
                         [visit] = receipt.visited_groups

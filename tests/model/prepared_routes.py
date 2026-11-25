@@ -24,6 +24,7 @@ from manabot.policy.prepare import (
     catalog_programs,
 )
 from manabot.policy.readings import Readings, legacy_readings, read_numeric
+from manabot.policy.spans import ObservationSelection
 from manabot.verify.choice_inputs import encode
 import managym
 
@@ -128,6 +129,7 @@ def device_input(
     agent: ActorCritic,
     obs: Mapping[str, torch.Tensor | np.ndarray]
     | managym.Observation
+    | ObservationSelection
     | managym.ObservationBatch
     | Prepared[np.ndarray],
 ) -> Prepared[torch.Tensor]:
@@ -135,7 +137,11 @@ def device_input(
         return on_device(obs, device_of(agent))
     if isinstance(obs, managym.Observation):
         obs = managym.encode_observation_batch([obs], agent.observation_space.layout)
-    host = obs if isinstance(obs, managym.ObservationBatch) else host_inputs(obs)
+    host = (
+        obs
+        if isinstance(obs, (managym.ObservationBatch, ObservationSelection))
+        else host_inputs(obs)
+    )
     return on_device(
         agent.prepare(host, inference=not torch.is_grad_enabled()), device_of(agent)
     )

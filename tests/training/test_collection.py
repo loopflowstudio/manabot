@@ -1,5 +1,7 @@
 """Tests for the seat-routed net-opponent training path (exp-11 / C8)."""
 
+from collections.abc import Mapping
+
 import numpy as np
 import pytest
 import torch
@@ -33,7 +35,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
 from tests.model.prepared_routes import device_input
 
 
@@ -100,12 +102,12 @@ def test_collection_borrows_whole_groups_and_chunk_views(
 
 
 def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
-    obs = batch.observations().observation
+    obs = trajectory_rows(batch).observation
     shapes = ObservationSpace().shapes
-    assert obs.keys() == batch.next_obs.keys() == shapes.keys()
+    assert obs.keys() == set(batch.next_obs.fields) == shapes.keys()
     for key, shape in shapes.items():
         assert obs[key].shape == (num_steps, num_envs, *shape)
-        assert batch.next_obs[key].shape == (num_envs, *shape)
+        assert batch.next_obs.project(key).shape == (num_envs, *shape)
     assert batch.actions.shape == (num_steps, num_envs)
     assert batch.logprobs.shape == (num_steps, num_envs)
     assert batch.rewards.shape == (num_steps, num_envs)
@@ -113,7 +115,7 @@ def _check_batch(batch: RolloutBatch, num_steps: int, num_envs: int) -> None:
     assert batch.values.shape == (num_steps, num_envs)
     assert batch.next_done.shape == (num_envs,)
     assert obs["agent_player"].shape[:2] == (num_steps, num_envs)
-    assert batch.next_obs["agent_player"].shape[0] == num_envs
+    assert batch.next_obs.project("agent_player").shape[0] == num_envs
 
     # Terminal-only reward: nonzero rewards only on done transitions, and
     # every nonzero reward is +/- 1.
@@ -182,22 +184,21 @@ def test_update_boundary_has_no_banked_or_sampled_actions() -> None:
     assert not any(collector._streams)
     assert all(pending is None for pending in collector._pending)
     live = live_observations(collector)
-    for key in first.next_obs:
-        np.testing.assert_array_equal(first.next_obs[key], live[key])
+    for key in first.next_obs.fields:
+        np.testing.assert_array_equal(first.next_obs.project(key), live.project(key))
     collect(collector, agent, 7)
     assert collector.stats.learner_transitions == 56
 
 
 def test_paused_buffer_rows_are_unchanged_and_clear_step_flags() -> None:
     collector = _make_collector("self", num_envs=2)
-    before = {k: v[0].copy() for k, v in live_observations(collector).items()}
+    before = live_observations(collector).select(slice(0, 1)).batch.to_bytes()
     collector._buffers["terminated"][0] = 1
     collector._buffers["rewards"][0] = 7
     collector._env.step_into_buffers([-999, 0], [False, True])
     for key in ("terminated", "truncated", "rewards"):
         assert collector._buffers[key][0] == 0
-    for key, value in live_observations(collector).items():
-        np.testing.assert_array_equal(value[0], before[key])
+    assert live_observations(collector).select(slice(0, 1)).batch.to_bytes() == before
 
 
 def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
@@ -205,21 +206,19 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     agent = _make_agent()
     first = collect(collector, agent, 7)
     live = live_observations(collector)
-    assert all(
-        not np.shares_memory(data, live[key]) for key, data in first.next_obs.items()
-    )
-    first_logs = first.observations().log_probabilities
+    assert first.next_obs.batch.tables() == live.batch.tables()
+    first_logs = trajectory_rows(first).log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
         agent.value_head[-1].bias.add_(3.0)
     second = collect(collector, agent, 7)
-    rows = second.observations()
+    rows = trajectory_rows(second)
     # Nonterminal streams resume at precisely the bootstrap state, under new
     # weights. Terminal streams may route the new episode's opponent first.
     for key in rows.observation:
         np.testing.assert_array_equal(
             rows.observation[key][0, ~first.next_done],
-            first.next_obs[key][~first.next_done],
+            first.next_obs.project(key)[~first.next_done],
         )
     flat = {
         k: torch.as_tensor(v.reshape((-1,) + v.shape[2:]))
@@ -244,7 +243,7 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     assert np.all(
         np.isneginf(rows.log_probabilities[rows.observation["actions_valid"] == 0])
     )
-    np.testing.assert_array_equal(first.observations().log_probabilities, first_logs)
+    np.testing.assert_array_equal(trajectory_rows(first).log_probabilities, first_logs)
     assert collector.stats.learner_transitions == 56
 
 
@@ -262,63 +261,41 @@ def test_recorded_rows_survive_growth_and_later_appends() -> None:
     )
 
 
-def test_typed_self_play_matches_dense_actions_values_replay_and_learner_gathers() -> (
-    None
-):
+def test_repeated_rollout_indexes_preserve_offers_behavior_and_native_owners() -> None:
     model = _make_agent()
-    typed, dense = (_make_collector("self", num_envs=3, seed=24) for _ in range(2))
+    collector = _make_collector("self", num_envs=3, seed=24)
     try:
-        dense_collector(dense)
-        for collector in (typed, dense):
-            collector.execution_rows = 2
-        actual, expected = (collect(c, model, 5) for c in (typed, dense))
-        assert typed._env.state_digests() == dense._env.state_digests()
-        assert [g.actions for g in typed._env.games] == [
-            g.actions for g in dense._env.games
-        ]
-        assert not actual.action_data.fields
-        for key in ("actions", "values", "logprobs", "dones", "rewards", "next_done"):
-            np.testing.assert_allclose(
-                getattr(actual, key), getattr(expected, key), atol=1e-6
-            )
+        rollout = collect(collector, model, 5)
         indexes = np.array([9, 0, 7, 9])
-        exported = actual.action_data.unpack(indexes)
-        expected_offers = expected.action_data.unpack(indexes)
-        assert exported.observation.keys() == expected_offers.observation.keys()
-        for key in exported.observation:
-            np.testing.assert_array_equal(
-                exported.observation[key], expected_offers.observation[key]
-            )
-        left = actual.policy_rows(indexes)
-        right = expected.policy_rows(indexes)
-        assert isinstance(left.observation, ObservationSelection)
-        assert not left.observation["actions_valid"].flags.writeable
-        editable = actual.observations(indexes).observation
+        rows = rollout.observations(indexes)
+        selection = rows.observation
+        assert isinstance(selection, ObservationSelection)
+        assert not isinstance(selection, Mapping)
+        recorded = rollout.recorded
+        assert selection.coordinates == tuple(
+            recorded.rows.coordinates[i] for i in recorded.index[indexes]
+        )
+        legal = selection.project("actions_valid")
+        np.testing.assert_array_equal(legal > 0, np.isfinite(rows.log_probabilities))
+        actions = rollout.actions.ravel()[indexes]
+        np.testing.assert_allclose(
+            rows.log_probabilities[np.arange(4), actions],
+            rollout.logprobs.ravel()[indexes],
+        )
+        editable = projected_fields(selection)
         editable["actions_valid"][0, 0] = 0.25
-        assert left.observation["actions_valid"][0, 0] == 1
+        assert selection.project("actions_valid")[0, 0] == 1
         with pytest.raises(ValueError, match="invalid_action_mask"):
             model.check_observation(editable)
-        for key in right.observation:
-            np.testing.assert_array_equal(
-                left.observation[key], right.observation[key], err_msg=key
-            )
-        np.testing.assert_allclose(
-            left.log_probabilities, right.log_probabilities, atol=1e-6
-        )
-        for batch in (actual, expected):
-            admitted = AdmittedRollout(model, batch)
-            admitted.admit_rows(indexes, 2)
-            prepared, _ = admitted.rows(indexes, torch.device("cpu"))
-            with torch.no_grad():
-                logits, values = model(prepared)
-            if batch is actual:
-                actual_logits, actual_values = logits, values
-            else:
-                torch.testing.assert_close(actual_logits, logits)
-                torch.testing.assert_close(actual_values, values)
+        admitted = AdmittedRollout(model, rollout)
+        admitted.admit_rows(indexes, 2)
+        prepared, _ = admitted.rows(indexes, torch.device("cpu"))
+        with torch.no_grad():
+            logits, values = model(prepared)
+        torch.testing.assert_close(logits[0], logits[-1])
+        torch.testing.assert_close(values[0], values[-1])
     finally:
-        close_collector(typed)
-        close_collector(dense)
+        close_collector(collector)
 
 
 @pytest.mark.parametrize("version", [9, 11])

@@ -12,9 +12,9 @@ import numpy as np
 
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.policy.prepare import Prepared
+from manabot.policy.protocol import BackendPolicy
 from manabot.policy.readings import write_numeric_column
 from manabot.policy.spans import ObservationSelection
-from manabot.policy.protocol import BackendPolicy
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import RolloutBatch
 
@@ -88,7 +88,7 @@ def combat_rows(
 
 def gap_shifts(
     policy: BackendPolicy,
-    chunks: Iterable[ObservationBuffers],
+    chunks: Iterable[ObservationBuffers | ObservationSelection],
     columns: CombatColumns,
 ) -> dict[str, float | int]:
     """Pool per-decision readings across chunks, including partial final chunks."""
@@ -106,7 +106,9 @@ def gap_shifts(
 
 
 def combat_samples(
-    policy: BackendPolicy, rows: ObservationBuffers, columns: CombatColumns
+    policy: BackendPolicy,
+    rows: ObservationBuffers | ObservationSelection,
+    columns: CombatColumns,
 ) -> Iterator[tuple[str, str, np.ndarray]]:
     """Per-decision gaps and paired shifts for one execution chunk."""
     prepared = policy.prepare(rows)
@@ -205,7 +207,7 @@ def combat_probe(
         selected = combat_rows(batch.action_data, index, columns.declared, limit)
         width = execution_rows or limit
         chunks = (
-            batch.policy_rows(selected[start : start + width]).observation
+            batch.observations(selected[start : start + width]).observation
             for start in range(0, len(selected), width)
         )
         for name, value in gap_shifts(policy, chunks, columns).items():

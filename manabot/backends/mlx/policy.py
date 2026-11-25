@@ -51,11 +51,7 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     BeliefRows,
 )
-from manabot.env.observation import (
-    ObservationBuffers,
-    ObservationSpace,
-    PolicyObservation,
-)
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.buckets import (
@@ -81,6 +77,7 @@ from manabot.policy.readings import Readings
 from manabot.policy.spans import (
     ObservationSelection,
     ObservationSpans,
+    PolicyObservation,
     observation_spans,
 )
 import managym

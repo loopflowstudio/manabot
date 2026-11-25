@@ -60,6 +60,7 @@ from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 from managym.disclosure import DecklistSampling
 from managym.recording import GameRecord, read_records
 from managym.replay import walk
+from tests.fixtures.rollout_arrays import trajectory_field, trajectory_rows
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
@@ -217,7 +218,10 @@ def test_sampled_decks_agree_across_producer_counts(
     one, many = collectors
     try:
         left, right = collect(one, agent, 1), collect(many, agent, 1)
-        expected, actual = left.ordered_obs(), right.ordered_obs()
+        expected, actual = (
+            trajectory_rows(left).observation,
+            trajectory_rows(right).observation,
+        )
         for key in expected:
             np.testing.assert_array_equal(expected[key], actual[key])
         np.testing.assert_array_equal(left.actions, right.actions)
@@ -519,7 +523,7 @@ def test_closed_fixed_roots_survive_refill(decks: UniformDecks) -> None:
             pair.decklists == "closed"
             for pair in collector._env.current_player_configs()
         )
-        assert not batch.ordered_obs()["decklists"][..., 1, :, :].any()
+        assert not trajectory_field(batch, "decklists")[..., 1, :, :].any()
     finally:
         close_collector(collector)
 

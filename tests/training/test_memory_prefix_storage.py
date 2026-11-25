@@ -44,6 +44,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
+from tests.fixtures.rollout_arrays import projected_fields
 from tests.model.test_decision_memory import memory_input, policy
 
 
@@ -68,10 +69,8 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
         dense[key].fill(0)  # Later games overwrite native buffers.
     empty = store.capture(dense, 0, PrefixIdentity("game-2", 1, "root"))
     recorded = RecordedObservations(
-        {},
+        PrefixObservation({}, (before, after, fork, empty), (4, 1024, 1024, 16384)),
         np.array([0, 1, 2, 3]),
-        memory=(before, after, fork, empty),
-        memory_capacities=(4, 1024, 1024, 16384),
     )
     selected = recorded.gather(np.array([2, 0, 2, 3, 1]))
     assert isinstance(selected, PrefixObservation)
@@ -82,7 +81,6 @@ def test_memory_prefix_tail_fork_reset_and_duplicate_gather() -> None:
     np.testing.assert_array_equal(
         selected["decision_records"][:, 0, 21], [9, 20, 9, 0, 20]
     )
-    assert recorded.ordered((4, 1)) == {}
     assert "decision_records" not in recorded.rows
     archive = archive_memory(selected.memory.prefixes, (4, 1024, 1024, 16384))
     restored = gather_memory(restore_memory(archive))
@@ -188,10 +186,16 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
     original = collector()
     try:
         first = collect(original, model, 16)
-        before = first.observations(np.array([15, 0, 15])).observation.materialize()
+        before = gather_memory(
+            first.observations(np.array([15, 0, 15])).observation.memory.prefixes
+        )
         assert retained_memory(first.next_obs) is not None
-        assert not set(MEMORY_FIELDS).intersection(first.next_obs)
-        bootstrap_before = first.next_obs.materialize()
+        assert not set(MEMORY_FIELDS).intersection(first.next_obs.fields)
+        bootstrap_before = CompactObservation(
+            projected_fields(first.next_obs),
+            first.next_obs.memory.prefixes,
+            first.next_obs.memory.capacities,
+        )
         with torch.no_grad():
             expected_value = model.get_value(
                 on_device(model.prepare(bootstrap_before), "cpu")
@@ -212,7 +216,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                 learner_input, behavior = admitted.rows(
                     np.array([15, 0, 15]), torch.device("cpu")
                 )
-                assert not set(MEMORY_FIELDS).intersection(behavior.observation)
+                assert not set(MEMORY_FIELDS).intersection(behavior.observation.fields)
                 assert torch.isfinite(model.get_value(learner_input)).all()
             # Prepared input cannot keep temporary raw padded arrays alive.
             assert not gathered  # retained preparation never gathers dense history
@@ -222,7 +226,7 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
             selected = PrefixObservation(
                 {
                     key: np.repeat(value, 3, axis=0)
-                    for key, value in first.next_obs.items()
+                    for key, value in projected_fields(first.next_obs).items()
                 },
                 [prefix, Prefix(PrefixIdentity("empty", 1, "root"), None), prefix],
                 memory.capacities,
@@ -249,13 +253,14 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
                 model.get_value(selected_input), model.get_value(expected_input)
             )
         torch.testing.assert_close(actual_value, expected_value)
-        assert not set(MEMORY_FIELDS).intersection(first.next_obs)
+        assert not set(MEMORY_FIELDS).intersection(first.next_obs.fields)
         second = collect(original, model, 8)
         assert retained_memory(second.next_obs) is not None
         # The retained bootstrap survives native buffer reuse by later collection.
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
-                first.next_obs.materialize()[key], bootstrap_before[key]
+                gather_memory(first.next_obs.memory.prefixes)[key],
+                bootstrap_before[key],
             )
         with torch.no_grad():
             torch.testing.assert_close(
@@ -264,9 +269,11 @@ def test_memory_collector_retains_old_batches_and_incident_budget(
             )
         for key in MEMORY_FIELDS:
             np.testing.assert_array_equal(
-                first.observations(np.array([15, 0, 15])).observation.materialize()[
-                    key
-                ],
+                gather_memory(
+                    first.observations(
+                        np.array([15, 0, 15])
+                    ).observation.memory.prefixes
+                )[key],
                 before[key],
             )
         learner = Learner(model, "cpu", minibatch_rows=4)
@@ -347,9 +354,9 @@ def test_memory_frozen_opponent_uses_the_compact_raw_contract() -> None:
         batch = collect(collector, model, 4)
         assert batch.actions.size == 4
         assert retained_memory(batch.next_obs) is not None
-        assert not set(MEMORY_FIELDS).intersection(batch.next_obs)
-        assert len(batch.recorded.memory) == 4
-        assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows)
+        assert not set(MEMORY_FIELDS).intersection(batch.next_obs.fields)
+        assert len(batch.recorded.rows.memory.prefixes) == 4
+        assert not set(MEMORY_FIELDS).intersection(batch.recorded.rows.fields)
     finally:
         close_collector(collector)
 
@@ -657,6 +664,8 @@ def test_terminal_bootstrap_retains_empty_memory(closure: BatchClosure) -> None:
             memory = retained_memory(batch.next_obs)
             assert batch.next_done.all() and memory is not None
             assert all(prefix.counts == (0, 0, 0, 0) for prefix in memory.prefixes)
-            assert any(prefix.counts[0] > 0 for prefix in batch.recorded.memory)
+            assert any(
+                prefix.counts[0] > 0 for prefix in batch.recorded.rows.memory.prefixes
+            )
     finally:
         close_collector(collector)

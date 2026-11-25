@@ -157,7 +157,7 @@ def test_prepared_edits_match_reencoding_with_saved_readings(
     cols = combat_columns(space)
     assert cols is not None
     indexes = combat_rows(batch.action_data, cols.declare_attacker, cols.declared, 4)
-    rows = batch.policy_rows(indexes).observation
+    rows = batch.observations(indexes).observation
     model = ActorCritic(
         space,
         ModelConfig(hidden_dim=16, num_attention_heads=2),
@@ -226,7 +226,7 @@ def test_bucketed_and_live_token_policy_matches_padded_probe(
     assert combat_probe(packed, sampled, limit=4, execution_rows=2) == pytest.approx(
         combat_probe(padded, batch, limit=4), abs=1e-5
     )
-    assert max(len(call.args[0]) for call in sampled.policy_rows.call_args_list) <= 2
+    assert max(len(call.args[0]) for call in sampled.observations.call_args_list) <= 2
 
 
 def test_combat_probe_under_bfloat16_forward_precision(

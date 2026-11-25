@@ -19,6 +19,7 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
+from manabot.policy.spans import BatchRow
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     Collector,
@@ -30,7 +31,8 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from managym import SlotLoad
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import trajectory_field, trajectory_rows
+from tests.fixtures.scripted_decisions import marked_rows
 from tests.model.prepared_routes import device_input
 
 
@@ -44,21 +46,21 @@ class ScriptedGames:
 
     skip_trivial = True
 
-    def __init__(self, buffers: dict[str, np.ndarray]) -> None:
-        self.buffers = buffers
+    def __init__(self, collector: Collector) -> None:
+        self.buffers = collector._buffers
+        self.space = collector.observation_space
         self.positions = [0, 0]
         self.seats = [(0, 0, 1, 0, 1), (1, 0, 1)]
         self.steps = [0, 0]
-        self._encode()
 
-    def _encode(self) -> None:
-        for row, position in enumerate(self.positions):
-            self.buffers["agent_player"][row, 0, 0] = 10 * row + position
+    def observation_rows(self) -> list[BatchRow]:
+        return marked_rows(
+            self.space, [10 * i + p for i, p in enumerate(self.positions)]
+        )
 
     def load_slots_into_buffers(self, requests: list[SlotLoad]) -> None:
         for request in requests:
             self.positions[request.slot] = 0
-        self._encode()
 
     def current_agent_indices(self) -> list[int]:
         return [
@@ -76,7 +78,6 @@ class ScriptedGames:
             self.positions[row] += 1
             if self.positions[row] == len(self.seats[row]):
                 self.buffers["terminated"][row] = 1
-        self._encode()
 
     def get_last_info(self) -> list[dict[str, int]]:
         return [{"winner_index": 1}, {"winner_index": 1}]
@@ -110,7 +111,7 @@ def _collector(
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
     if scripted:
-        collector._env = ScriptedGames(dense_collector(collector))
+        collector._env = ScriptedGames(collector)
     return collector
 
 
@@ -121,7 +122,7 @@ def _at_update_boundary(collector: Collector) -> None:
 
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
-    rows = batch.observations()
+    rows = trajectory_rows(batch)
     obs = device_input(
         agent,
         {
@@ -150,7 +151,7 @@ def test_both_seats_keep_their_own_trajectory_and_terminal_credit(
     batch = collect(collector, agent, 1)
     assert batch.actions.shape == (8, 1)
     np.testing.assert_array_equal(
-        batch.ordered_obs()["agent_player"][:, 0, 0, 0],
+        trajectory_field(batch, "agent_player")[:, 0, 0, 0],
         [0, 1, 3, 2, 4, 11, 10, 12],
     )
     np.testing.assert_array_equal(batch.rewards[:, 0], [0, 0, -1, 0, 1, -1, 0, 1])
@@ -209,10 +210,10 @@ def test_pair_routes_own_behavior() -> None:
     _behavior_matches(a, first)
     _behavior_matches(b, second)
     np.testing.assert_array_equal(
-        a.ordered_obs()["agent_player"][:, 0, 0, 0], [0, 1, 3, 10, 12]
+        trajectory_field(a, "agent_player")[:, 0, 0, 0], [0, 1, 3, 10, 12]
     )
     np.testing.assert_array_equal(
-        b.ordered_obs()["agent_player"][:, 0, 0, 0], [2, 4, 11]
+        trajectory_field(b, "agent_player")[:, 0, 0, 0], [2, 4, 11]
     )
 
 

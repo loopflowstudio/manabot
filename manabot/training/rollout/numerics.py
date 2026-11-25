@@ -31,9 +31,9 @@ class SampledRows:
 
 
 def prepared_chunks[A](
-    observation: ObservationBuffers,
+    observation: ObservationBuffers | ObservationSelection,
     execution_rows: int | None,
-    prepare: Callable[[ObservationBuffers], Prepared[A]],
+    prepare: Callable[[ObservationBuffers | ObservationSelection], Prepared[A]],
     profiler: Profiler,
 ) -> Iterator[Prepared[A]]:
     """Prepare borrowed rows in order. The caller samples once across all chunks."""
@@ -61,13 +61,16 @@ def prepared_chunks[A](
 class CollectionScope(Protocol):
     def sample(
         self,
-        observation: ObservationBuffers,
+        observation: ObservationBuffers | ObservationSelection,
         profiler: Profiler,
         *,
         execution_rows: int | None = None,
     ) -> SampledRows: ...
     def opponent_actions(
-        self, observation: ObservationBuffers, *, execution_rows: int | None = None
+        self,
+        observation: ObservationBuffers | ObservationSelection,
+        *,
+        execution_rows: int | None = None,
     ) -> np.ndarray: ...
 
 

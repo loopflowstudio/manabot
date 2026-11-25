@@ -18,7 +18,7 @@ from etude.train.read import read_all
 import numpy as np
 from pydantic import Field
 
-from manabot.env.observation import ActionEnum, PolicyObservation, encode_policy_batch
+from manabot.env.observation import ActionEnum, encode_policy_batch
 from manabot.eval.evaluation import EvaluationResult, evaluate_local
 from manabot.eval.local import checkpoint_request
 from manabot.eval.results import EvaluationRow
@@ -27,6 +27,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.schema import Strict
 from manabot.model.world import validate_agent_setup
 from manabot.policy.protocol import BackendPolicy, PolicyLoader
+from manabot.policy.spans import PolicyObservation
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
 from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest

@@ -18,6 +18,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.decision_memory import blank_memory
 from manabot.env.match import Match, Reward
+from manabot.env.memory_store import gather_memory
 from manabot.env.observation import ObservationSpace, encode_observation
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.policy.admission import admit_native
@@ -308,11 +309,11 @@ def test_decision_memory_collects_bootstraps_and_learns_from_real_prefixes(
     try:
         batch = collect(collector, model, 16)
         assert batch.actions.size == 16
-        assert (
-            batch.observations(np.arange(batch.actions.size))
-            .observation.materialize()["decision_records"][..., 19]
-            .any()
-        )
+        assert gather_memory(
+            batch.observations(
+                np.arange(batch.actions.size)
+            ).observation.memory.prefixes
+        )["decision_records"][..., 19].any()
         assert model.decision_memory is not None
         before = {
             name: parameter.detach().clone()

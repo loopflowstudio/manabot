@@ -28,8 +28,8 @@ from manabot.backends import resolve
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import ObjectAttention
 from manabot.backends.parity import TOLERANCES, minibatch_loss, minibatches
-from manabot.env.observation import PolicyObservation
 from manabot.policy.protocol import Precision, Settings, Targets
+from manabot.policy.spans import PolicyObservation
 from manabot.training.updates.backend import UpdateBackend
 
 

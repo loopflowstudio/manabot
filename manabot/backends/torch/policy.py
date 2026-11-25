@@ -39,12 +39,7 @@ from manabot.backends.torch.semantic_cards import (
 )
 from manabot.backends.torch.shared_effects import SharedEffectEncoder
 from manabot.belief.encoding import BeliefRows
-from manabot.env.observation import (
-    FACT_KINDS,
-    ObservationBuffers,
-    ObservationSpace,
-    PolicyObservation,
-)
+from manabot.env.observation import FACT_KINDS, ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
@@ -70,6 +65,7 @@ from manabot.policy.readings import Readings, fresh_readings
 from manabot.policy.spans import (
     ObservationSelection,
     ObservationSpans,
+    PolicyObservation,
     observation_spans,
 )
 import managym

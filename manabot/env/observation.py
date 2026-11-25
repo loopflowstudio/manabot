@@ -44,7 +44,6 @@ from managym.enums import (  # noqa: F401
 
 # Host observations at policy, simulation and rollout boundaries.
 type ObservationBuffers = Mapping[str, np.ndarray]
-type PolicyObservation = ObservationBuffers | managym.ObservationBatch
 
 # Release that removes `ObservationSpace.encode`, `space.encoder` and
 # `ObservationEncoder`.
@@ -358,6 +357,15 @@ def encode_policy_batch(
 
 
 def __getattr__(name: str) -> Any:
+    if name == "PolicyObservation":
+        from manabot.policy.spans import PolicyObservation
+
+        warnings.warn(
+            f"PolicyObservation moved to manabot.policy.spans; removal in {REMOVAL_RELEASE}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return PolicyObservation
     if name == "ObservationEncoder":
         warnings.warn(
             f"ObservationEncoder is deprecated and removed in {REMOVAL_RELEASE}; "

@@ -38,7 +38,7 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
-from manabot.env.observation import PolicyObservation
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
@@ -191,7 +191,7 @@ class LocalUpdateTeacher:
 
     def _encode(
         self, engines: Sequence[managym.Env]
-    ) -> tuple[PolicyObservation, list[int]]:
+    ) -> tuple[managym.ObservationBatch | ObservationBuffers, list[int]]:
         """Encode the full frontier; search requires every legal offer to fit."""
         if self.space.one_token:
             batch = managym.encode_observation_batch(engines, self.space.layout)

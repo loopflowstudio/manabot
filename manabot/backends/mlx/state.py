@@ -264,7 +264,9 @@ def capture_incident(
         source = batch.recorded.rows
         if isinstance(source, ObservationSelection):
             selected_obs = source.select(batch.recorded.index[rows])
-        for name in source:
+        for name in (
+            source.fields if isinstance(source, ObservationSelection) else source
+        ):
             if isinstance(source, ObservationSelection):
                 size = (
                     np.prod(source.space.shapes[name])
@@ -276,7 +278,7 @@ def capture_incident(
                 shapes[f"observation/{name}"] = {"omitted": "evidence byte budget"}
                 continue
             sample = (
-                selected_obs[name]
+                selected_obs.project(name)
                 if isinstance(source, ObservationSelection)
                 else source[name][batch.recorded.index[rows]]
             )

@@ -27,6 +27,7 @@ from manabot.policy.decision_memory import (
 
 if TYPE_CHECKING:
     from manabot.policy.decision_memory import MemoryFeatures
+    from manabot.policy.spans import ObservationSelection
 
 MemoryCapacities = tuple[int, int, int, int]
 _CHUNK_ROWS = 32
@@ -369,8 +370,8 @@ class CompactObservation(PrefixObservation):
 
 
 def select_rows(
-    rows: Mapping[str, np.ndarray], indexes: np.ndarray | slice
-) -> Mapping[str, np.ndarray]:
+    rows: "Mapping[str, np.ndarray] | ObservationSelection", indexes: np.ndarray | slice
+) -> "Mapping[str, np.ndarray] | ObservationSelection":
     from manabot.policy.spans import ObservationSelection
 
     if type(rows) is ObservationSelection:
@@ -490,18 +491,33 @@ class MemoryStore:
         return tail
 
     def capture(
-        self, buffers: Mapping[str, np.ndarray], row: int, identity: PrefixIdentity
+        self,
+        buffers: "Mapping[str, np.ndarray] | ObservationSelection",
+        row: int,
+        identity: PrefixIdentity,
     ) -> Prefix:
-        for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
-            if buffers[key].dtype != np.float32 or buffers[key][row].shape != (
-                capacity,
-                MEMORY_WIDTHS[key],
+        from manabot.policy.spans import ObservationSelection
+
+        if isinstance(buffers, ObservationSelection):
+            if (
+                tuple(buffers.space.shapes[key][0] for key in MEMORY_FIELDS)
+                != self.capacities
             ):
-                raise ValueError(
-                    "decision-memory capacity mismatch or non-float32 transport"
-                )
-        selected = {key: buffers[key][row : row + 1] for key in MEMORY_FIELDS}
-        rows = live_memory(selected)[0]
+                raise ValueError("decision-memory capacity mismatch")
+            if buffers.memory is not None:
+                return Prefix(identity, buffers.memory.prefixes[row].tail)
+            rows = buffers.live_memory(row, (0, 0, 0, 0))
+        else:
+            for key, capacity in zip(MEMORY_FIELDS, self.capacities, strict=True):
+                if buffers[key].dtype != np.float32 or buffers[key][row].shape != (
+                    capacity,
+                    MEMORY_WIDTHS[key],
+                ):
+                    raise ValueError(
+                        "decision-memory capacity mismatch or non-float32 transport"
+                    )
+            selected = {key: buffers[key][row : row + 1] for key in MEMORY_FIELDS}
+            rows = live_memory(selected)[0]
         tail = None
         for blocks in record_chunks(rows, _CHUNK_ROWS):
             tail = self._append(tail, self._intern(blocks))
@@ -509,7 +525,7 @@ class MemoryStore:
 
     def capture_live_rows(
         self,
-        buffers: Mapping[str, np.ndarray],
+        buffers: "Mapping[str, np.ndarray] | ObservationSelection",
         rows: np.ndarray,
         seeds: Sequence[int],
         seats: Sequence[int],
@@ -626,7 +642,7 @@ class MemoryStore:
 
     def _capture_live_admitted(
         self,
-        buffers: Mapping[str, np.ndarray],
+        buffers: "Mapping[str, np.ndarray] | ObservationSelection",
         row: int,
         identity: PrefixIdentity,
         *,

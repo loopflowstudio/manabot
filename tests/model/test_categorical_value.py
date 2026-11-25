@@ -20,6 +20,7 @@ from manabot.model.interface import world_fields
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
+from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 
 
@@ -94,7 +95,7 @@ def test_value_interface_and_collection_likelihoods(
     batch = collect(collector, agent, 4)
     obs = {
         key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
     policy, raw_value = agent.forward_distribution(device_input(agent, obs))
     ordinary_policy, value = agent(device_input(agent, obs))
@@ -202,7 +203,7 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
     batch = collect(collector, agent, 1)
     obs = {
         key: torch.from_numpy(value[0])
-        for key, value in batch.observations().observation.items()
+        for key, value in trajectory_rows(batch).observation.items()
     }
     _, logits = agent.forward_distribution(device_input(agent, obs))
     F.cross_entropy(logits, torch.tensor([0, 2])).backward()

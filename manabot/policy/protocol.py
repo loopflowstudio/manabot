@@ -16,13 +16,11 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 import numpy as np
 
 from manabot.belief.encoding import BeliefRows
-from manabot.env.observation import (
-    ObservationSpace,
-    PolicyObservation,
-)
+from manabot.env.observation import ObservationSpace
 from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 from manabot.policy.readings import Readings
+from manabot.policy.spans import PolicyObservation
 
 if TYPE_CHECKING:
     from manabot.infra.config import ModelConfig

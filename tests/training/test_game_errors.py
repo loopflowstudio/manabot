@@ -28,6 +28,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.policy.spans import BatchRow
 from manabot.sim import match as simulation
 from manabot.sim.evaluation_records import stored_game
 from manabot.sim.registration import PlayerRegistration
@@ -54,7 +55,8 @@ from manabot.training.updates.ppo import update_iteration
 import managym
 from managym.recording import RecordedVectorEnv, read_record
 from tests.eval.arena_fixture import arena_fixture
-from tests.fixtures.dense_collector import dense_collector
+from tests.fixtures.rollout_arrays import trajectory_field
+from tests.fixtures.scripted_decisions import marked_rows
 from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
     _payment_match,
@@ -72,13 +74,14 @@ class ScriptedFailures:
 
     def __init__(
         self,
-        buffers: dict[str, np.ndarray],
+        collector: Collector,
         *,
         always: bool = False,
         failure_generation: int = 0,
         resource_limit: bool = False,
     ) -> None:
-        self.buffers = buffers
+        self.buffers = collector._buffers
+        self.space = collector.observation_space
         self.positions = [0, 0]
         self.generation = [0, 0]
         self.steps = [0, 0]
@@ -86,13 +89,17 @@ class ScriptedFailures:
         self.failure_generation = failure_generation
         self.resource_limit = resource_limit
         self.infos: list[dict[str, Any]] = [{}, {}]
-        self.encode()
 
-    def encode(self) -> None:
-        for row in (0, 1):
-            self.buffers["agent_player"][row, 0, 0] = (
-                row * 10 + self.positions[row] + 100 * self.generation[row]
-            )
+    def observation_rows(self) -> list[BatchRow]:
+        return marked_rows(
+            self.space,
+            [
+                10 * i + p + 100 * g
+                for i, (p, g) in enumerate(
+                    zip(self.positions, self.generation, strict=True)
+                )
+            ],
+        )
 
     def current_agent_indices(self) -> list[int]:
         return [-1 if position == 5 else position % 2 for position in self.positions]
@@ -130,14 +137,12 @@ class ScriptedFailures:
             if self.positions[row] == 5:
                 self.buffers["terminated"][row] = 1
                 self.infos[row] = {"winner_index": 1}
-        self.encode()
 
     def load_slots_into_buffers(self, requests: list[managym.SlotLoad]) -> None:
         for request in requests:
             row = request.slot
             self.generation[row] += 1
             self.positions[row] = 0
-        self.encode()
 
     def get_last_info(self) -> list[dict[str, Any]]:
         return self.infos
@@ -278,7 +283,6 @@ def _tolerant_collector(
         record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
         numerics=TorchCollectionSession(device="cpu", seed=0, precision="float32"),
     )
-    dense_collector(collector)
     return collector
 
 
@@ -330,10 +334,10 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     policy = GameErrorPolicy(threshold=0.25, recover_capacity=resource_limit)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats=seats)
-    scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
+    scripted = ScriptedFailures(collector, resource_limit=resource_limit)
     collector._env = scripted
     batch = collect(collector, model, 1)
-    markers = batch.ordered_obs()["agent_player"][:, 0, 0, 0]
+    markers = trajectory_field(batch, "agent_player")[:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
     assert (
@@ -382,19 +386,19 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
     policy = GameErrorPolicy(threshold=0.25, recover_capacity=True)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats="one", closure="exact-quota")
-    scripted = ScriptedFailures(collector._buffers, resource_limit=True)
+    scripted = ScriptedFailures(collector, resource_limit=True)
     collector._env = scripted
 
     # Stream 1 learns from seat 1: its game pauses at its second decision.
     first = collect(collector, model, 1)
-    assert first.observations().observation["agent_player"][0, 1, 0, 0] == 11
+    assert trajectory_field(first, "agent_player")[0, 1, 0, 0] == 11
     assert not first.next_done[1] and collector.game_error_state.crashed == 0
 
     # That decision overflows. The learned row stays learned, the pending one goes
     # and the replacement game fills the quota.
     second = collect(collector, model, 1)
     assert second.actions.shape == (1, 2)
-    assert second.observations().observation["agent_player"][0, 1, 0, 0] == 111
+    assert trajectory_field(second, "agent_player")[0, 1, 0, 0] == 111
     assert not second.dones[0, 1]
     failure = GameAttempt.model_validate(
         json.loads(ledger.path.read_text().splitlines()[-1])["attempt"]
@@ -426,7 +430,7 @@ def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> 
     policy = GameErrorPolicy(window=4, warmup=4)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
-    scripted = ScriptedFailures(collector._buffers, always=True)
+    scripted = ScriptedFailures(collector, always=True)
     collector._env = scripted
     with pytest.raises(GameErrorLimit):
         collect(collector, model, 1)
@@ -458,7 +462,6 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
 
 
 def _assert_native_failure_replay(collector: Collector) -> None:
-    before = dict(live_observations(collector))
     collector._env.step_isolated_into_buffers([0, -1, 0], [True] * 3)
     infos = collector._env.get_last_info()
     assert "game_error" not in infos[0] and "game_error" not in infos[2]
@@ -488,12 +491,14 @@ def _assert_native_failure_replay(collector: Collector) -> None:
     assert native["failed_action_index"] == row.actions[-1]
     assert native["post_error_state"] is not None
     assert replay["frame"] == row.frame_json
-    advanced = dict(live_observations(collector))
+    advanced = live_observations(collector)
     collector._env.load_slots_into_buffers([managym.SlotLoad.fresh(1)])
     assert collector._env.current_game_seeds() == [0, 4, 2]
     current = live_observations(collector)
-    for key in before:
-        np.testing.assert_array_equal(current[key][[0, 2]], advanced[key][[0, 2]])
+    np.testing.assert_equal(
+        current.select(np.array([0, 2])).batch.tables(),
+        advanced.select(np.array([0, 2])).batch.tables(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -594,10 +599,10 @@ def test_later_crash_preserves_previous_complete_games(
     )
     collector = _tolerant_collector(model, ledger)
     collector._env = ScriptedFailures(
-        collector._buffers, failure_generation=1, resource_limit=resource_limit
+        collector, failure_generation=1, resource_limit=resource_limit
     )
     batch = collect(collector, model, 7)
-    markers = set(batch.ordered_obs()["agent_player"][:, 0, 0, 0])
+    markers = set(trajectory_field(batch, "agent_player")[:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
         range(210, 215)
     )
@@ -613,7 +618,7 @@ def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> N
     policy = GameErrorPolicy(window=2, warmup=2)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
-    scripted = ScriptedFailures(collector._buffers)
+    scripted = ScriptedFailures(collector)
     collector._env = scripted
     checks = 0
 
@@ -656,7 +661,7 @@ def test_deadline_after_real_crashes_counts_only_the_crashes(tmp_path: Path) -> 
     policy = GameErrorPolicy(window=4, warmup=4)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
-    scripted = ScriptedFailures(collector._buffers, always=True)
+    scripted = ScriptedFailures(collector, always=True)
     collector._env = scripted
     checks = 0
 
@@ -695,7 +700,7 @@ def test_cancellation_settles_games_as_abandoned(tmp_path: Path) -> None:
         tmp_path / "attempts.jsonl", GameErrorPolicy(window=2, warmup=2)
     )
     collector = _tolerant_collector(model, ledger)
-    collector._env = ScriptedFailures(collector._buffers)
+    collector._env = ScriptedFailures(collector)
     checks = 0
 
     def cancel() -> None:
@@ -722,7 +727,7 @@ def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:
     policy = GameErrorPolicy(window=2, warmup=2, max_game_actions=2)
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
-    collector._env = ScriptedFailures(collector._buffers)
+    collector._env = ScriptedFailures(collector)
     with pytest.raises(GameErrorLimit):
         collect(collector, model, 1)
     assert (
@@ -748,7 +753,7 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
     model = agent()
     ledger, _ = open_ledger(tmp_path / "attempts.jsonl", GameErrorPolicy())
     collector = _tolerant_collector(model, ledger)
-    scripted = TruncatedGames(collector._buffers)
+    scripted = TruncatedGames(collector)
     collector._env = scripted
     batch = collect(collector, model, 1)
     assert collector.game_error_state.completed == collector.stats.games == 2
