@@ -904,6 +904,10 @@
             "kind": "method",
             "signature": "(self, rows, index, needs=..., memory=..., memory_capacities=...)"
           },
+          "concatenate": {
+            "kind": "classmethod",
+            "signature": "(cls, parts)"
+          },
           "gather": {
             "kind": "method",
             "signature": "(self, indexes)"
@@ -968,6 +972,10 @@
           "branch_group_id": {
             "kind": "field",
             "required": false
+          },
+          "concatenate": {
+            "kind": "classmethod",
+            "signature": "(cls, batches)"
           },
           "dones": {
             "kind": "field",
