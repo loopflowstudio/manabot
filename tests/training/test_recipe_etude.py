@@ -34,6 +34,7 @@ from manabot.training.rollout.selection_data import (
     selection_prediction,
 )
 from tests.fixtures.training_records import recording
+from tests.training.offer_positions import three_offers
 
 
 def test_elemental_records_games_for_one_update(
@@ -137,13 +138,9 @@ def test_selection_statistics_follow_the_draw_and_legal_offer_types(
     reference: Literal["uniform", "action_type_uniform"], expected_kl: float
 ) -> None:
     # The first two offers share a type. The final slot is padding.
-    encoded = {
-        "actions": np.eye(2)[[0, 0, 1, 1]][None],
-        "actions_valid": np.array([[1, 1, 1, 0]]),
-    }
     prediction = selection_prediction(
         SelectionDraw(2, -0.75, np.array([0.5, 0.25, 0.25, 0], dtype=np.float32)),
-        encoded,
+        three_offers(),
         reference,
     )
     assert (prediction.action, prediction.value, prediction.probability) == (

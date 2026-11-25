@@ -13,12 +13,16 @@ from manabot.backends.torch import rollout as learner_module
 from manabot.backends.torch.learner import Learner, update_ema
 from manabot.backends.torch.rl import selected_rows, transition_gae
 import manabot.backends.torch.rollout as torch_rollout
+from manabot.env.observation import encode_policy_batch
 from manabot.policy.prepare import reference_distribution
+from manabot.policy.spans import ObservationSelection
 from manabot.training.learning import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.updates.ppo import update_iteration
+from manabot.verify.choice_inputs import reorder_offers
 from tests.fixtures.rollout_arrays import trajectory_rows
+from tests.training.offer_positions import FOUR_OFFERS, three_offer_root
 
 
 class TinyPolicy(torch.nn.Module):
@@ -48,10 +52,7 @@ class TinyRollout:
         pass
 
     def next_observation(self, device: torch.device) -> dict[str, torch.Tensor]:
-        return {
-            key: torch.as_tensor(value, device=device)
-            for key, value in self.batch.next_obs.items()
-        }
+        return legal_input(self.batch.next_obs, device)
 
     def next_observations(
         self, device: torch.device, size: int
@@ -62,10 +63,7 @@ class TinyRollout:
         self, indexes: np.ndarray, device: torch.device
     ) -> tuple[dict[str, torch.Tensor], ActionRows]:
         rows = self.batch.observations(indexes)
-        return {
-            key: torch.as_tensor(value, device=device)
-            for key, value in rows.observation.items()
-        }, rows
+        return legal_input(rows.observation, device), rows
 
     @contextmanager
     def minibatches(
@@ -93,35 +91,33 @@ def _rule_input(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(learner_module, "AdmittedRollout", TinyRollout)
 
 
+def legal_input(
+    rows: ObservationSelection, device: torch.device | None = None
+) -> dict[str, torch.Tensor]:
+    """The only field the tiny policy reads: its legal offers."""
+    return {
+        "actions_valid": torch.as_tensor(rows.project("actions_valid"), device=device)
+    }
+
+
 def fixture() -> tuple[Learner, RolloutBatch]:
     agent = TinyPolicy()
-    obs = {
-        "actions_valid": np.tile([1, 1, 1, 0], (4, 1)).astype(np.float32),
-        "actions": np.tile(
-            [
-                [1, *([0] * 15), 1, 1],
-                [1, *([0] * 15), 0, 1],
-                [0, 1, *([0] * 14), 0, 1],
-                [0] * 18,
-            ],
-            (4, 1, 1),
-        ).astype(np.float32),
-    }
+    batch_rows = encode_policy_batch(FOUR_OFFERS, [three_offer_root()])
+    rows = ObservationSelection(FOUR_OFFERS, ((batch_rows, 0),) * 4)
     with torch.no_grad():
-        logits, values = agent({k: torch.as_tensor(v) for k, v in obs.items()})
+        logits, values = agent(legal_input(rows))
         logs = logits.log_softmax(-1).numpy()
     actions = np.array([[0], [1], [2], [0]])
     batch = RolloutBatch(
-        # This fixture has only action fields; the critic is a scalar.
-        recorded=RecordedObservations({}, np.arange(4)),
+        recorded=RecordedObservations(rows, np.arange(4)),
         actions=actions,
         logprobs=logs[np.arange(4), actions[:, 0]][:, None],
         rewards=np.array([[0], [1], [0], [-1]], dtype=np.float32),
         dones=np.array([[False], [True], [False], [True]]),
         values=values.detach().numpy().copy(),
-        next_obs={k: v[:1] for k, v in obs.items()},
+        next_obs=rows.select(slice(0, 1)),
         next_done=np.array([True]),
-        action_data=PackedActions.pack(obs, logs, validator=torch_rollout),
+        action_data=PackedActions.pack(rows, logs, validator=torch_rollout),
     )
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 
@@ -162,23 +158,22 @@ def test_nonzero_values_adjacent_episodes_and_exact_tail():
 
 def test_reference_and_filter_support_order_and_threshold():
     _, batch = fixture()
-    obs = {k: v[:, 0] for k, v in trajectory_rows(batch).observation.items()}
+    rows = batch.recorded.rows
+    root = three_offer_root()
     for kind, expected in [
         ("uniform", [1 / 3, 1 / 3, 1 / 3, 0]),
         ("action_type_uniform", [0.25, 0.25, 0.5, 0]),
     ]:
-        result = reference_distribution(obs, kind)
+        result = reference_distribution(rows, kind)
         np.testing.assert_allclose(result[0], expected, rtol=1e-6)
-        assert np.array_equal(result > 0, obs["actions_valid"] > 0)
-        permutation = np.array([2, 3, 0, 1])
-        moved = reference_distribution(
-            {k: v[:, permutation] for k, v in obs.items()}, kind
-        )
-        np.testing.assert_allclose(moved, result[:, permutation], rtol=1e-6)
+        assert np.array_equal(result > 0, rows.project("actions_valid") > 0)
+        permutation = np.array([2, 0, 1])
+        with reorder_offers(root, permutation):
+            moved = reference_distribution(
+                encode_policy_batch(FOUR_OFFERS, [root]), kind
+            )
+        np.testing.assert_allclose(moved[0, :3], result[0, permutation], rtol=1e-6)
     assert selected_rows(torch.tensor([0.1, -3, 2, 0]), 0.5, 2.5).tolist() == [1]
-    obs["actions_valid"] = np.zeros_like(obs["actions_valid"])
-    with pytest.raises(ValueError, match="legal offer"):
-        reference_distribution(obs, "uniform")
 
 
 @pytest.mark.parametrize(
@@ -332,5 +327,3 @@ def test_learning_materializes_only_selected_minibatches(
     # The generic rule reads only its selected minibatches. Player admission is
     # covered independently by test_admission, using the real policy backend.
     assert seen == [2, 2]
-    assert "actions" not in batch.recorded.rows
-    assert "actions_valid" not in batch.recorded.rows

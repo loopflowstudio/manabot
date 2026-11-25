@@ -148,13 +148,8 @@ def combat_samples(
     ):
         seat = int(side == "theirs")
         capacity = prepared.permanents.shape[2]
-        if isinstance(rows, ObservationSelection):
-            spans = rows.spans.tables[key]
-            creatures = spans.scatter(spans.records["is_creature"] > 0, capacity)
-        else:
-            creatures = (rows[key][:, :capacity, cols.is_creature] > 0) & (
-                rows[f"{key}_valid"][:, :capacity] > 0
-            )
+        spans = rows.spans.tables[key]
+        creatures = spans.scatter(spans.records["is_creature"] > 0, capacity)
         present = creatures.any(axis=1)
         if not present.any():
             continue

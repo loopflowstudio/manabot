@@ -12,7 +12,7 @@ from manabot.backends import resolve
 from manabot.backends.torch.belief import AutoregressiveBeliefSampler
 from manabot.belief.sampling_types import SamplerSchema, sampling_digest
 from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationSpace, encode_policy_batch
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.policy.prepare import Prepared
@@ -530,7 +530,12 @@ def test_batch_inputs_match_python_at_selected_capacities(
         patch.setattr(teacher.agent, "prepare", check_inputs)
         predictions = teacher.predict_batch(engines)
     with torch.inference_mode():
-        logits, values = teacher.agent(device_input(teacher.agent, tensors))
+        # An independent encoding of the same viewer observations.
+        independent = encode_policy_batch(
+            teacher.space,
+            [e.observation_for_player(e.current_agent_index()) for e in engines],
+        )
+        logits, values = teacher.agent(device_input(teacher.agent, independent))
     for i, (probabilities, value) in enumerate(predictions):
         count = int(expected[i]["actions_valid"].sum())
         np.testing.assert_array_equal(

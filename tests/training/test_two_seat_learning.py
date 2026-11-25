@@ -124,11 +124,7 @@ def _at_update_boundary(collector: Collector) -> None:
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = trajectory_rows(batch)
     obs = device_input(
-        agent,
-        {
-            key: value.reshape((-1,) + value.shape[2:])
-            for key, value in rows.observation.items()
-        },
+        agent, batch.observations(np.arange(batch.actions.size)).observation
     )
     with torch.no_grad():
         logits, values = agent(obs)

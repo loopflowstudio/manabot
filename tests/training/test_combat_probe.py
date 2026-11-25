@@ -16,6 +16,7 @@ from manabot.policy.readings import (
     fresh_readings,
     input_width,
     legacy_readings,
+    read_numeric,
 )
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.combat_probe import (
@@ -131,15 +132,18 @@ def test_no_combat_omits_metrics(
 ) -> None:
     batch, space = rollout
     packed = batch.action_data
-    noncombat = replace(
-        packed,
-        fields={
-            "actions": np.zeros(
-                (len(packed.slots), space.shapes["actions"][-1]), np.float32
-            )
-        },
-        native=None,
-    )
+    cols = combat_columns(space)
+    assert cols is not None
+    # Two-offer decisions that are neither an attack nor a block declaration.
+    two = np.flatnonzero(np.diff(packed.offsets) == 2)
+    kinds = packed.action_columns(
+        np.concatenate([packed.offsets[two], packed.offsets[two] + 1]),
+        (cols.declare_attacker, cols.declare_blocker),
+    ).reshape(2, len(two), 2)
+    [candidates] = np.nonzero((kinds == 0).all(axis=(0, 2)))
+    assert len(candidates)
+    row = packed.row(int(two[candidates[0]]))
+    noncombat = type(packed).concatenate([row] * len(np.diff(packed.offsets)))
     empty = replace(batch, action_data=noncombat)
     assert combat_probe(Mock(observation_space=space), empty) == {}
 
@@ -166,35 +170,44 @@ def test_prepared_edits_match_reencoding_with_saved_readings(
     )
     assert policy.prepare.call_count == 2
 
-    # Independent oracle edits the stored values, before the checkpoint reads them.
+    # Independent oracle: edit the stored values, then read them with the
+    # checkpoint's readings into the prepared rows they occupy.
     original = {key: rows.project(key) for key in space.shapes}
     yes = original["actions"][..., cols.declared] > 0
     no = (original["actions_valid"] > 0) & ~yes
+    prepared = model.prepare(rows)
 
-    def gaps(inputs: dict[str, np.ndarray]) -> np.ndarray:
-        logits, _ = model.evaluate(model.prepare(inputs))
+    def gaps(inputs: Prepared[np.ndarray]) -> np.ndarray:
+        logits, _ = model.evaluate(inputs)
         return logits[yes] - logits[no]
 
-    base = gaps(original)
+    base = gaps(prepared)
     assert metrics["gap"] == pytest.approx(base.mean(), abs=1e-5)
     assert metrics["saturated"] == (np.abs(base) > 9.2).mean()
-    for key, side, prefix in (
-        ("agent_permanents", cols.mine, "my"),
-        ("opponent_permanents", cols.theirs, "their"),
+    capacity = prepared.permanents.shape[2]
+    for seat, (key, side, prefix) in enumerate(
+        (
+            ("agent_permanents", cols.mine, "my"),
+            ("opponent_permanents", cols.theirs, "their"),
+        )
     ):
-        creatures = original[key][..., side.is_creature] > 0
+        creatures = original[key][:, :capacity, side.is_creature] > 0
         for power, toughness in ((0, 1), (9, 9)):
-            board = original[key].copy()
+            board = original[key][:, :capacity].copy()
             board[..., side.power][creatures] = power / side.power_scale
             board[..., side.toughness][creatures] = toughness / side.toughness_scale
             label = f"shift/{prefix}_creatures_{power}_{toughness}"
             if prefix == "their":
                 board[..., side.tapped][creatures] = power == 0
                 label += "_tapped" if power == 0 else "_untapped"
+            edited = replace(prepared, permanents=prepared.permanents.copy())
+            edited.permanents[:, seat][creatures] = read_numeric(
+                board[creatures], model.readings[key]
+            )
             present = creatures.any(axis=1)
             if present.any():
                 assert metrics[label] == pytest.approx(
-                    (gaps({**original, key: board}) - base)[present].mean(), abs=1e-5
+                    (gaps(edited) - base)[present].mean(), abs=1e-5
                 )
             else:
                 assert label not in metrics

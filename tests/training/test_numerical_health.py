@@ -33,8 +33,14 @@ from manabot.backends.torch.rl import (
 )
 import manabot.backends.torch.rollout as torch_rollout
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.env.observation import ObservationSpace, encode_policy_batch
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
+from manabot.policy.spans import ObservationSelection
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import (
@@ -50,7 +56,7 @@ from manabot.training.updates.health import (
 from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.selection import value_scale
 from manabot.verify.text_observation import priority_root
-from tests.fixtures.observation_rows import observation_arrays
+import managym
 from tests.model.prepared_routes import device_input
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -195,15 +201,25 @@ def test_forced_action_is_finite_with_exact_zero_gradient() -> None:
     assert torch.isfinite(loss).all()
 
 
+def five_offers() -> ObservationSelection:
+    """A real decision with exactly five legal offers, in a five-offer space."""
+    env = managym.Env(seed=0, skip_trivial=True)
+    env.reset(Match().to_rust())
+    for _ in range(6):
+        env.step(0)
+    obs = env.observation_for_player(env.current_agent_index())
+    assert len(obs.action_space.actions) == 5
+    space = ObservationSpace(ObservationConfig(max_actions=5))
+    return ObservationSelection(space, ((encode_policy_batch(space, [obs]), 0),))
+
+
 @pytest.mark.parametrize("gap", [87.5, 92.0, 94.75, 103.9, 104.0, 124.0])
 def test_behavior_logs_admit_subnormal_and_underflowed_alternatives(gap: float) -> None:
     # Incident 2be568a65518: the unsampled -94.75 alternative's device/host
     # exponentials differed by one subnormal spacing (5046 vs 5047).
     logits = torch.tensor([[0.0, -6.0, -15.0, -93.0, -gap]])
     logs = policy_logs(logits, torch.ones_like(logits, dtype=torch.bool)).numpy()
-    packed = PackedActions.pack(
-        {"actions_valid": np.ones_like(logs)}, logs, validator=torch_rollout
-    )
+    packed = PackedActions.pack(five_offers(), logs, validator=torch_rollout)
     packed.check(np.array([0]), logs[:, 0], validator=torch_rollout)
     health = batch_health(packed, np.ones(1), np.ones(1, dtype=bool), actor_only=False)
     weights = np.exp(logs)
@@ -339,11 +355,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         ObservationSpace(), ModelConfig(value_aggregation=aggregation)
     ).to(DEVICE)
     env = priority_root(("Lightning Bolt",), ("Mountain",))
-    observation = observation_arrays(agent.observation_space, env.scenario_refresh())
-    obs = device_input(
-        agent,
-        {key: torch.from_numpy(value[None]) for key, value in observation.items()},
-    )
+    obs = device_input(agent, env.scenario_refresh())
     optimizer = torch.optim.Adam(agent.parameters())
 
     def measure(loss: Literal["policy", "value"]) -> NumericalHealth:

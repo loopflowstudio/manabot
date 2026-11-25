@@ -17,7 +17,7 @@ from manabot.env.memory_store import (
     MemoryStore,
     Prefix,
     PrefixIdentity,
-    PrefixObservation,
+    RetainedMemory,
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -25,9 +25,10 @@ from manabot.infra.config import (
 )
 from manabot.infra.profiler import Profiler
 from manabot.policy.prepare import Prepared
+from manabot.policy.spans import ObservationSelection
 from manabot.sim.rollout import BatchedSampler
 from manabot.training.learning import DampedPolicyLearning, Learning
-from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
+from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import (
     RecordedObservations,
     RolloutBatch,
@@ -38,16 +39,18 @@ from manabot.training.updates.ppo import update_iteration
 from tests.model.test_decision_memory import memory_input, policy
 
 
-def mixed_rows() -> tuple[ObservationSpace, PrefixObservation]:
-    space, dense = memory_input()
-    store = MemoryStore((4, 1024, 1024, 16384))
-    prefix = store.capture(dense, 0, PrefixIdentity("game", 0, "root"))
+def mixed_rows() -> tuple[ObservationSpace, ObservationSelection]:
+    space, batch = memory_input()
+    capacities = (4, 1024, 1024, 16384)
+    store = MemoryStore(capacities)
+    row = ObservationSelection(space, ((batch, 0),))
+    prefix = store.capture(row, 0, PrefixIdentity("game", 0, "root"))
     empty = Prefix(PrefixIdentity("empty", 1, "root"), None)
     # Duplicated, shuffled and empty prefixes; unequal final execution chunk.
-    return space, PrefixObservation(
-        {k: np.repeat(v, 5, axis=0) for k, v in dense.items()},
-        [prefix, empty, prefix, prefix, empty],
-        (4, 1024, 1024, 16384),
+    return space, ObservationSelection(
+        space,
+        ((batch, 0),) * 5,
+        RetainedMemory((prefix, empty, prefix, prefix, empty), capacities),
     )
 
 
@@ -99,19 +102,10 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
     np.testing.assert_array_equal(frozen, frozen_chunked)
 
     packed = PackedActions.pack(
-        {k: v for k, v in rows.items() if k in ACTION_FIELDS},
-        actual.log_probabilities,
-        validator=backend.rollout,
+        rows, actual.log_probabilities, validator=backend.rollout
     )
     batch = RolloutBatch(
-        RecordedObservations(
-            PrefixObservation(
-                {k: v for k, v in rows.items() if k not in ACTION_FIELDS},
-                rows.memory.prefixes,
-                rows.memory.capacities,
-            ),
-            np.arange(5),
-        ),
+        RecordedObservations(rows, np.arange(5)),
         actual.actions[None],
         actual.logprobs[None],
         np.array([[1.0, -1.0, 0.0, -1.0, 0.0]]),
@@ -206,7 +200,7 @@ def test_memory_execution_preserves_sampling_bootstrap_and_adam(
             actual_diag["optimizer_exposures"] == expected_diag["optimizer_exposures"]
         )
     assert not gathered  # cached fragments replace dense history gathers
-    assert not set(MEMORY_FIELDS).intersection(rows)
+    assert not set(MEMORY_FIELDS).intersection(rows.fields)
 
 
 def replace_config(config: ModelConfig) -> ModelConfig:

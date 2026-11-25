@@ -29,10 +29,6 @@ from manabot.backends.parity import (
     ParityBackend,
     Report,
 )
-from manabot.env.observation import (
-    ACTION_CONTINUATION_INDEX,
-    PERMANENT_ATTACHED_INDEX,
-)
 from manabot.infra.profiler import Profiler
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
@@ -40,7 +36,6 @@ from manabot.policy.checkpoint import (
 )
 from manabot.policy.protocol import Precision
 from manabot.training.learning import DampedPolicyLearning
-from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import (
     RolloutBatch,
 )
@@ -360,66 +355,6 @@ def test_half_parity_uses_measured_dtype_tolerances() -> None:
     assert set(report.failures()) == {"forward logits", "learner loss", "full gradient"}
     report.step_parameter_max_abs = float("nan")
     assert "finite clipped Adam step" in report.failures()
-
-
-@pytest.mark.parametrize("name", sorted(BACKENDS))
-@pytest.mark.parametrize("bootstrap", [False, True])
-def test_backends_refuse_malformed_rows_before_preparing_them(
-    name: str,
-    bootstrap: bool,
-    captured: tuple[PolicyCheckpoint, RolloutBatch],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    weights, batch = captured
-    module = installed_backend(name)
-    agent = module.load(weights)[0]
-    original = RolloutBatch.observations
-    # Each corruption is otherwise a real batch. Check the raw action mask
-    # before boolean conversion and semantic joins before any indexing.
-    for key, column, value, message in (
-        ("actions_valid", None, 2, "invalid_action_mask"),
-        ("semantic_cards", None, -1, "unadmitted semantic definition"),
-        ("agent_permanents", PERMANENT_ATTACHED_INDEX, -1, "invalid permanent link"),
-        ("facts", 0, -1, "invalid fact object"),
-        ("effects", 13, -1, "effect CSR"),
-        ("name_candidates", 0, -1, "unadmitted card definition"),
-        ("actions", ACTION_CONTINUATION_INDEX, -1, "action continuation"),
-    ):
-
-        def corrupt(obs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-            obs = {k: v.copy() for k, v in obs.items()}
-            if key in ("facts", "effects"):
-                obs[key][0, 0, -1] = 1
-            if key == "effects":
-                obs[key][0, 0, 10] = 1
-            slot = (
-                int(np.flatnonzero(obs["actions_valid"][0])[0])
-                if key in ("name_candidates", "actions")
-                else 0
-            )
-            index = (0, slot) if column is None else (0, slot, column)
-            obs[key][index] = value
-            return obs
-
-        def malformed(
-            self: RolloutBatch, indexes: np.ndarray | None = None
-        ) -> ActionRows:
-            rows = original(self, indexes)
-            return replace(rows, observation=corrupt(rows.observation))
-
-        if bootstrap:
-            with pytest.raises(ValueError, match=message):
-                module.rollout.AdmittedRollout(
-                    agent, replace(batch, next_obs=corrupt(batch.next_obs))
-                ).next_observation("cpu")
-        else:
-            admitted = module.rollout.AdmittedRollout(agent, batch)
-            with monkeypatch.context() as patch:
-                patch.setattr(RolloutBatch, "observations", malformed)
-                with pytest.raises(ValueError, match=message):
-                    admitted.admit_rows(np.array([0]), 1)
-            with pytest.raises(ValueError, match="were not admitted"):
-                admitted.rows(np.array([0]), "cpu")
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))

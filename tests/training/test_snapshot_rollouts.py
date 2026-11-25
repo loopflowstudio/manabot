@@ -26,7 +26,6 @@ from manabot.env.match import Match, Reward
 from manabot.env.memory_store import MEMORY_FIELDS, gather_memory
 from manabot.env.observation import (
     ObservationSpace,
-    allocate_vector_buffers,
     step_buffers,
 )
 from manabot.infra.config import (
@@ -106,6 +105,11 @@ from tests.fixtures.observation_rows import observation_arrays
 from tests.fixtures.rollout_arrays import projected_fields
 from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
+
+
+def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+    """Caller-owned buffers for the native dense observation transport."""
+    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 @pytest.fixture(autouse=True)
@@ -249,7 +253,8 @@ def three_choices(
 
     expected = []
     for span in spans:
-        encoded = observation_arrays(space, scalar.observation_for_player(span.seat))
+        viewer = scalar.observation_for_player(span.seat)
+        encoded = observation_arrays(space, viewer)
         assert span.bootstrap_index is not None
         frozen = batch.next_obs
         if retained_memory(frozen) is not None:
@@ -267,9 +272,7 @@ def three_choices(
         assert bool(encoded["actions_valid"].any()) == (
             scalar.current_agent_index() == span.seat
         )
-        _, prediction = agent.forward_distribution(
-            device_input(agent, {key: value[None] for key, value in encoded.items()})
-        )
+        _, prediction = agent.forward_distribution(device_input(agent, viewer))
         expected.append(prediction[0])
     return batch, torch.stack(expected)
 
@@ -526,7 +529,7 @@ def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
         num_envs=1, seed=900, games_path=games, statistics_path=statistics
     )
     try:
-        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        vector.set_buffers(vector_buffers(space, 1), layout=space.layout)
         replay_prefix(vector, recipe, None)
         assert vector.state_digests() == [scalar.state_digest()]
         assert vector.current_agent_indices() == [scalar.current_agent_index()]
@@ -898,7 +901,7 @@ def test_mixed_sources_filter_eligible_rows_independently(
         sample_weight=weights,
         trajectories=tuple(TrajectorySpan(i, i + 1, 0) for i in range(12)),
         next_done=np.empty(0, bool),
-        next_obs={},
+        next_obs=batch.next_obs.select(slice(0, 0)),
     )
     learning = Learning(
         epochs=1, minibatches=1, filter_kind=kind, retained_fraction=0.4
@@ -944,7 +947,7 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
     indices = np.array([0, 1])
     rows = batch.observations(indices)
     logits, values = reference.agent(device_input(reference.agent, rows.observation))
-    valid = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+    valid = torch.tensor(rows.observation.project("actions_valid"), dtype=torch.bool)
     behavior_logs = torch.tensor(rows.log_probabilities)
     magnet = torch.tensor(reference_distribution(rows.observation, learning.reference))
     actions = torch.tensor(batch.actions[indices, 0])
@@ -1057,7 +1060,7 @@ def test_damped_minibatches_preserve_source_and_root_weights(framework: str) -> 
         logits, values = reference.agent(
             device_input(reference.agent, rows.observation)
         )
-        mask = torch.tensor(rows.observation["actions_valid"], dtype=torch.bool)
+        mask = torch.tensor(rows.observation.project("actions_valid"), dtype=torch.bool)
         behavior = torch.tensor(rows.log_probabilities)
         magnet = torch.tensor(
             reference_distribution(rows.observation, learning.reference)

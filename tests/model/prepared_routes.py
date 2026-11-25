@@ -1,6 +1,5 @@
 """Prepare standalone encoder fixtures through the policy's host routing code."""
 
-from collections.abc import Mapping
 from dataclasses import fields, is_dataclass, replace
 from typing import Any, cast
 
@@ -10,7 +9,13 @@ import torch
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic, _catalog_order
 from manabot.backends.torch.semantic_cards import SemanticCardEncoder
-from manabot.env.observation import FACT_VALID_INDEX, ObservationSpace
+from manabot.env.observation import (
+    FACT_KIND_INDEX,
+    FACT_VALID_INDEX,
+    FACT_VALUE_INDEX,
+    ObservationSpace,
+)
+from manabot.env.shared_effects import EFFECT_SPANS, EFFECT_VALID
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
     CatalogPrograms,
@@ -24,7 +29,12 @@ from manabot.policy.prepare import (
     catalog_programs,
 )
 from manabot.policy.readings import Readings, legacy_readings, read_numeric
-from manabot.policy.spans import ObservationSelection
+from manabot.policy.spans import (
+    ObservationSelection,
+    ObservationSpans,
+    RowSpans,
+    batch_layout,
+)
 from manabot.verify.choice_inputs import encode
 import managym
 
@@ -75,17 +85,57 @@ def _device(value: Any, objects: torch.Tensor) -> Any:
     return value
 
 
+def native_rows(key: str, rows: np.ndarray, valid: np.ndarray) -> RowSpans:
+    """Pack a padded `[B,N,W]` projection back into the native records it reads.
+
+    The inverse of `RowSpans.features`: split words rejoin into one field.
+    Live rows keep their order; their padded slots are not retained.
+    """
+    layout = batch_layout(ObservationSpace().layout).records[key]
+    live = rows[valid]
+    records = np.zeros(len(live), layout.dtype)
+    for name, index in layout.fields:
+        if index in layout.words:
+            word = (live[:, index].astype(np.int64) << 16) | live[:, index + 1].astype(
+                np.int64
+            )
+            records[name] = word.astype(np.uint32).view(records.dtype[name])
+        else:
+            records[name] = live[:, index]
+    offsets = np.concatenate(([0], np.cumsum(valid.sum(1)))).astype(np.int32)
+    return RowSpans(records, layout, offsets, (len(rows),))
+
+
+def _spans(tables: dict[str, RowSpans]) -> ObservationSpans:
+    divisors = batch_layout(ObservationSpace().layout).fact_divisors
+    return ObservationSpans(divisors, tables, {}, None, None)
+
+
 def fact_rows(
     facts: torch.Tensor,
     objects: torch.Tensor,
     catalog: SemanticCardEncoder | None = None,
     readings: Readings | None = None,
 ) -> FactRoutes[torch.Tensor]:
+    """Route padded fact projections, whose payloads are already scaled."""
     values = facts.detach().cpu().numpy()
     if not torch.is_grad_enabled():
         values = values[:, (values[..., FACT_VALID_INDEX] == 1).any(0)]
     valid = values[..., FACT_VALID_INDEX] == 1
-    routes = _facts(values[valid], valid, _tables(catalog, readings), objects.shape[1])
+    spans = _spans({})
+    live = values[valid].copy()
+    payload = slice(FACT_VALUE_INDEX, FACT_VALUE_INDEX + 2)
+    scaled = (
+        live[:, payload]
+        * spans.fact_divisors[live[:, FACT_KIND_INDEX].astype(np.int64), None]
+    )
+    if not np.array_equal(scaled, np.round(scaled)):
+        raise ValueError("fact payloads must be encoder-scaled integers")
+    live[:, payload] = scaled
+    integers = native_rows("facts", live[None], np.ones((1, len(live)), bool)).integers
+    routes = _facts(
+        integers, valid, _tables(catalog, readings), objects.shape[1], spans=spans
+    )
     return cast(FactRoutes[torch.Tensor], _device(routes, objects))
 
 
@@ -96,26 +146,28 @@ def effect_rows(
     objects: torch.Tensor,
     catalog: SemanticCardEncoder | None = None,
 ) -> EffectRoutes[torch.Tensor] | None:
-    values = {
-        name: value.detach().cpu().numpy()
-        for name, value in (
-            ("effects", headers),
-            ("effect_details", details),
-            ("effect_members", members),
-        )
-    }
+    """Route padded shared-effect projections through the native CSR reader."""
+    header_rows = headers.detach().cpu().numpy()
+    live = header_rows[..., EFFECT_VALID] == 1
+    tables = {"effects": native_rows("effects", header_rows, live)}
+    # Each live header owns its detail and member spans, in header order.
+    batches, slots = np.nonzero(live)
+    spans = header_rows[batches, slots][:, EFFECT_SPANS].astype(np.int64)
+    for key, value, start in (
+        ("effect_details", details, 0),
+        ("effect_members", members, 2),
+    ):
+        rows = value.detach().cpu().numpy()
+        owned = np.zeros(rows.shape[:2], bool)
+        for batch, (offset, count) in zip(
+            batches, spans[:, start : start + 2], strict=True
+        ):
+            owned[batch, offset : offset + count] = True
+        tables[key] = native_rows(key, rows, owned)
     return cast(
         EffectRoutes[torch.Tensor] | None,
-        _device(_effects(values, _tables(catalog), objects.shape[1]), objects),
+        _device(_effects(_spans(tables), _tables(catalog), objects.shape[1]), objects),
     )
-
-
-def host_inputs(obs: Mapping[str, torch.Tensor | np.ndarray]) -> dict[str, np.ndarray]:
-    """Fixture tensors re-enter the public host boundary before each preparation."""
-    return {
-        key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value
-        for key, value in obs.items()
-    }
 
 
 def fixture_tensors(raw: managym.Observation) -> dict[str, torch.Tensor]:
@@ -127,8 +179,7 @@ def fixture_tensors(raw: managym.Observation) -> dict[str, torch.Tensor]:
 
 def device_input(
     agent: ActorCritic,
-    obs: Mapping[str, torch.Tensor | np.ndarray]
-    | managym.Observation
+    obs: managym.Observation
     | ObservationSelection
     | managym.ObservationBatch
     | Prepared[np.ndarray],
@@ -137,13 +188,8 @@ def device_input(
         return on_device(obs, device_of(agent))
     if isinstance(obs, managym.Observation):
         obs = managym.encode_observation_batch([obs], agent.observation_space.layout)
-    host = (
-        obs
-        if isinstance(obs, (managym.ObservationBatch, ObservationSelection))
-        else host_inputs(obs)
-    )
     return on_device(
-        agent.prepare(host, inference=not torch.is_grad_enabled()), device_of(agent)
+        agent.prepare(obs, inference=not torch.is_grad_enabled()), device_of(agent)
     )
 
 

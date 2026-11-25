@@ -20,7 +20,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -61,6 +61,11 @@ from tests.training.game_error_fixtures import (
     _bounded_fixture_replay,
     _payment_match,
 )
+
+
+def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+    """Caller-owned buffers for the native dense observation transport."""
+    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 class ScriptedFailures:
@@ -219,7 +224,7 @@ def test_resource_limit_replay_checks_binding_and_error_class(
     match = Match(MatchConfig(hero_deck={"Forest": 12}, villain_deck={"Forest": 12}))
     space = ObservationSpace(ObservationConfig(max_permanents_per_player=1))
     with closing(RecordedVectorEnv(num_envs=1, seed=7)) as vector:
-        vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+        vector.set_buffers(vector_buffers(space, 1), layout=space.layout)
         vector.reset_all_into_buffers(match.to_rust())
         for _ in range(16):
             vector.step_isolated_into_buffers([0], recover_capacity=True)
@@ -974,7 +979,7 @@ def test_replay_resource_limit_on_a_restored_memory_boundary() -> None:
     for _ in range(4):
         source.step(0)
     vector = RecordedVectorEnv(num_envs=1, decision_memory=True)
-    vector.set_buffers(allocate_vector_buffers(space, 1), layout=space.layout)
+    vector.set_buffers(vector_buffers(space, 1), layout=space.layout)
     vector.reset_all_into_buffers(match.to_rust())
     vector.load_slots_into_buffers(
         [

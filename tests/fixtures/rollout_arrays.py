@@ -1,24 +1,18 @@
-"""Mutable array fixtures for matrix-level assertions and deliberately invalid inputs."""
+"""Padded array views of recorded rollouts for matrix-level assertions."""
 
 import numpy as np
 
-from manabot.env.observation import ObservationBuffers
 from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
 
 
-def projected_fields(
-    rows: ObservationSelection | ObservationBuffers,
-) -> dict[str, np.ndarray]:
-    if isinstance(rows, ObservationSelection):
-        return {key: rows.project(key) for key in rows.fields}
-    return dict(rows)
+def projected_fields(rows: ObservationSelection) -> dict[str, np.ndarray]:
+    return {key: rows.project(key) for key in rows.fields}
 
 
 def trajectory_field(batch: RolloutBatch, key: str) -> np.ndarray:
-    rows = batch.observations(np.arange(batch.actions.size)).observation
-    value = rows.project(key) if isinstance(rows, ObservationSelection) else rows[key]
+    value = batch.observations(np.arange(batch.actions.size)).observation.project(key)
     return value.reshape(*batch.actions.shape, *value.shape[1:])
 
 

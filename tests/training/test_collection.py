@@ -14,7 +14,7 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env import target_practice
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationBuffers, ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -25,7 +25,6 @@ from manabot.policy.prepare import Prepared
 from manabot.policy.spans import ObservationSelection
 from manabot.training.rollout.collection import (
     Collector,
-    ObservationRows,
     RolloutBatch,
     close_collector,
     collect,
@@ -34,7 +33,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
-from tests.fixtures.rollout_arrays import projected_fields, trajectory_rows
+from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 
 
@@ -76,20 +75,20 @@ def test_collection_borrows_whole_groups_and_chunk_views(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agent = _make_agent()
-    group = agent.observation_space.allocate(3)
-    group["actions_valid"][:, 0] = group["agent_player_valid"][:, 0] = 1
+    collector = _make_collector("self", num_envs=3)
+    try:
+        group = live_observations(collector)
+    finally:
+        close_collector(collector)
     session = TorchCollectionSession(device="cpu", seed=7)
     with session.scope(agent) as scope:
         prepare = scope.inference.prepare
         widths = []
 
-        def check_borrow(rows: ObservationBuffers) -> Prepared[torch.Tensor]:
-            assert all(
-                np.shares_memory(value, group[key])
-                for key, value in rows.items()
-                if value.size
-            )
-            widths.append(len(rows["actions_valid"]))
+        def check_borrow(rows: ObservationSelection) -> Prepared[torch.Tensor]:
+            # Chunks reference the group's native rows; nothing is copied.
+            assert set(rows.coordinates) <= set(group.coordinates)
+            widths.append(len(rows.coordinates))
             if widths[-1] == 3:
                 assert rows is group
             return prepare(rows)
@@ -224,7 +223,11 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
         for k, v in rows.observation.items()
     }
     with torch.no_grad():
-        logits, values = agent(device_input(agent, flat))
+        logits, values = agent(
+            device_input(
+                agent, second.observations(np.arange(second.actions.size)).observation
+            )
+        )
     np.testing.assert_allclose(
         second.values.flatten(), values.numpy().flatten(), atol=1e-5
     )
@@ -244,20 +247,6 @@ def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     )
     np.testing.assert_array_equal(trajectory_rows(first).log_probabilities, first_logs)
     assert collector.stats.learner_transitions == 56
-
-
-def test_recorded_rows_survive_growth_and_later_appends() -> None:
-    buffers = {"x": np.arange(12, dtype=np.float32).reshape(4, 3)}
-    store = ObservationRows(buffers, ["x"], 1)
-    assert store.append(np.array([2, 0])) == 0
-    first = store.arrays()["x"]
-    buffers["x"] += 100  # The native buffers are overwritten every step.
-    assert store.append(np.array([3, 1, 1])) == 2
-    np.testing.assert_array_equal(first, [[6, 7, 8], [0, 1, 2]])
-    np.testing.assert_array_equal(
-        store.arrays()["x"],
-        [[6, 7, 8], [0, 1, 2], [109, 110, 111], [103, 104, 105], [103, 104, 105]],
-    )
 
 
 def test_repeated_rollout_indexes_preserve_offers_behavior_and_native_owners() -> None:
@@ -281,11 +270,9 @@ def test_repeated_rollout_indexes_preserve_offers_behavior_and_native_owners() -
             rows.log_probabilities[np.arange(4), actions],
             rollout.logprobs.ravel()[indexes],
         )
-        editable = projected_fields(selection)
-        editable["actions_valid"][0, 0] = 0.25
+        editable = selection.project("actions_valid")
+        editable[0, 0] = 0.25
         assert selection.project("actions_valid")[0, 0] == 1
-        with pytest.raises(ValueError, match="invalid_action_mask"):
-            model.check_observation(editable)
         admitted = AdmittedRollout(model, rollout)
         admitted.admit_rows(indexes, 2)
         prepared, _ = admitted.rows(indexes, torch.device("cpu"))

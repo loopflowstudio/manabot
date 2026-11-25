@@ -20,7 +20,7 @@ from manabot.env.failures import (
     ScalarCapture,
     capture_scope,
 )
-from manabot.env.observation import ObservationSpace, allocate_vector_buffers
+from manabot.env.observation import ObservationSpace, step_buffers
 from manabot.infra.run_settings import RunSettings
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
@@ -31,6 +31,11 @@ from managym.recording import (
     read_record,
 )
 from managym.replay import replay_failure_inputs
+
+
+def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+    """Caller-owned buffers for the native dense observation transport."""
+    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 def _cursors(directory: Path) -> Iterator[Path]:
@@ -65,7 +70,7 @@ _SPACE = ObservationSpace()
 
 
 def _buffers(count: int) -> dict[str, np.ndarray]:
-    return allocate_vector_buffers(_SPACE, count)
+    return vector_buffers(_SPACE, count)
 
 
 class _ExitNative:
@@ -437,7 +442,9 @@ def test_shards_keep_independent_paths_and_owner_coordinates(
     with capture_scope(scope):
         vector = ShardedVectorEnv(4, 24, workers)
         try:
-            vector.set_buffers(_buffers(4), layout=_SPACE.layout)
+            vector.set_observation_layout(
+                step_buffers(4), "error", layout=_SPACE.layout
+            )
             vector.reset_all_into_buffers(_players())
             point["update"] = 2
             vector.step_into_buffers([0] * 4, [True, False, True, False])

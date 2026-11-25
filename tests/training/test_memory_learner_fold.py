@@ -3,20 +3,20 @@
 import gc
 import weakref
 
-import numpy as np
 import pytest
 import torch
 
 from manabot.backends.torch.arrays import on_device
-from manabot.env.decision_memory import MEMORY_FIELDS
-from manabot.env.memory_store import (
-    MemoryStore,
-    PrefixIdentity,
-    PrefixObservation,
-    gather_memory,
-)
+from manabot.env.memory_store import MemoryStore, PrefixIdentity, RetainedMemory
+from manabot.policy.spans import ObservationSelection
 from tests.model.test_decision_memory import policy
-from tests.training.test_memory_chunk_cache import chunk_input
+from tests.training.memory_chunks import (
+    capacities,
+    chunk_batch,
+    chunk_input,
+    chunk_space,
+    record,
+)
 
 
 @pytest.mark.parametrize("live", [False, True])
@@ -24,39 +24,41 @@ from tests.training.test_memory_chunk_cache import chunk_input
 def test_learner_fold_matches_stateless_policy_and_gradients(
     live: bool, summaries: int
 ) -> None:
-    space, raw = chunk_input()
-    # Reference two first appears in the second chunk. Later records mix it
-    # with reference one, exercising both local and predecessor-owned joins.
-    raw["decision_members"][0, : 32 * 4, 0] = 1
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    space = chunk_space()
+    caps = capacities(space)
+    store = MemoryStore(caps)
     identity = PrefixIdentity("game", 0, "root")
-    prefixes = []
-    for length in (0, 31, 32, 33, 65):
-        selected = {key: value.copy() for key, value in raw.items()}
-        selected["decision_records"][:, length:] = 0
-        selected["decision_members"][:, length * 4 :] = 0
-        if length <= 32:
-            selected["decision_references"][:, 1:] = 0
-            selected["decision_reference_details"][:, 8:] = 0
-        if not length:
-            for key in MEMORY_FIELDS:
-                selected[key][:] = 0
-        prefixes.append(store.capture(selected, 0, identity))
+
+    def log(length: int, **changes: int) -> list:
+        # Reference two first appears in the second chunk. Later records mix it
+        # with reference one, exercising both local and predecessor-owned joins.
+        records = [record(i, second=i >= 32, **changes) for i in range(length)]
+        return records
+
+    variants = [log(length) for length in (0, 31, 32, 33, 65)]
     # A coalesced tail and another root exercise branches, backwards reference
     # joins and nodes whose exact predecessor differs despite matching row bytes.
-    changed = {key: value.copy() for key, value in raw.items()}
-    changed["decision_records"][0, 64, 3] = 2
-    changed["decision_records"][0, 64, 9] = 65
-    prefixes.append(store.capture(changed, 0, identity))
-    changed["decision_reference_details"][0, 0, 3] += 1
-    prefixes.append(store.capture(changed, 0, PrefixIdentity("fork", 1, "fork")))
-    prefixes = [prefixes[i] for i in (4, 0, 2, 5, 4, 1, 6, 3)]
-    dense = {key: np.repeat(value, len(prefixes), axis=0) for key, value in raw.items()}
-    dense.update(gather_memory(prefixes))
-    retained = PrefixObservation(dense, prefixes, capacities)
+    coalesced = [*log(64), record(64, count=2)]
+    variants.append(coalesced)
+    forked = [*log(64, program=2), record(64, count=2, program=2)]
+    variants.append(forked)
+    batches = [chunk_batch(space, records) for records in variants]
+    prefixes = [
+        store.capture(
+            ObservationSelection(space, ((batch, 0),)),
+            0,
+            PrefixIdentity("fork", 1, "fork") if index == 6 else identity,
+        )
+        for index, batch in enumerate(batches)
+    ]
+    order = (4, 0, 2, 5, 4, 1, 6, 3)
+    prefixes = [prefixes[i] for i in order]
+    native = ObservationSelection(space, tuple((batches[i], 0) for i in order))
+    retained = ObservationSelection(
+        space, native.coordinates, RetainedMemory(tuple(prefixes), caps)
+    )
     model = policy(space, "gru", summaries, live=live, bucketed=True)
-    expected = model.prepare(retained.materialize())
+    expected = model.prepare(native)
     actual = model.prepare(retained)
     assert actual.memory is not None and actual.memory.fold is not None
     assert expected.memory is not None and expected.memory.fold is None
@@ -106,13 +108,13 @@ def test_learner_fold_matches_stateless_policy_and_gradients(
 
 
 def test_fold_empty_history_is_zero_and_transformer_stays_stateless() -> None:
-    space, raw = chunk_input()
-    for key in MEMORY_FIELDS:
-        raw[key][:] = 0
-    capacities = tuple(space.shapes[key][0] for key in MEMORY_FIELDS)
-    store = MemoryStore(capacities)
+    space, raw = chunk_input(0)
+    caps = capacities(space)
+    store = MemoryStore(caps)
     prefix = store.capture(raw, 0, PrefixIdentity("empty", 0, "root"))
-    retained = PrefixObservation(raw, [prefix], capacities)
+    retained = ObservationSelection(
+        space, raw.coordinates, RetainedMemory((prefix,), caps)
+    )
     for encoder in ("gru", "transformer"):
         model = policy(space, encoder, 1)
         prepared = on_device(model.prepare(retained), "cpu")

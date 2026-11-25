@@ -39,6 +39,11 @@ from managym.decision import Command
 from managym.recording import ScalarCapture, read_record
 
 
+def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+    """Caller-owned buffers for the native dense observation transport."""
+    return {**space.layout.allocate(n), **step_buffers(n)}
+
+
 def _model() -> ActorCritic:
     torch.set_num_threads(1)
     return ActorCritic(
@@ -153,7 +158,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
             if mode == "search":
                 pool = env.rollout_pool(1, 1, 197, 100)
                 space = ObservationSpace()
-                buffers = rollout.allocate_buffers(space, pool.num_slots)
+                buffers = vector_buffers(space, pool.num_slots)
                 pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
                 pool.encode_active()
                 with pytest.raises(managym.AgentError):
@@ -319,7 +324,7 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
         env.reset(seed=24)
         pool = env.rollout_pool(1, 1, 197, 100)
         space = ObservationSpace()
-        buffers = rollout.allocate_buffers(space, pool.num_slots)
+        buffers = vector_buffers(space, pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         assert pool.encode_active()
         with pytest.raises(managym.AgentError):

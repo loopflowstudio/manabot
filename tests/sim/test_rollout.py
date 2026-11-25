@@ -15,18 +15,23 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
+    step_buffers,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
     RandomBatchController,
-    allocate_buffers,
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
+
+
+def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
+    """Caller-owned buffers for the native dense observation transport."""
+    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 def make_env(seed: int = 3) -> tuple[Env, managym.Observation]:
@@ -53,7 +58,7 @@ class TestRolloutPool:
         assert pool.num_slots == 2 * 3 * num_actions
 
         obs_space = ObservationSpace()
-        buffers = allocate_buffers(obs_space, pool.num_slots)
+        buffers = vector_buffers(obs_space, pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots, layout=obs_space.layout)
 
         rng = np.random.default_rng(0)
@@ -81,7 +86,7 @@ class TestRolloutPool:
         pool = env._engine.rollout_pool(1, 1, 7, 2000)
         capacity = pool.num_slots + 8
         space = ObservationSpace()
-        buffers = allocate_buffers(space, capacity)
+        buffers = vector_buffers(space, capacity)
         pool.set_buffers(buffers, capacity, layout=space.layout)
         assert pool.encode_active() is not None
 
@@ -90,7 +95,7 @@ class TestRolloutPool:
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
         space = ObservationSpace()
-        buffers = allocate_buffers(space, pool.num_slots)
+        buffers = vector_buffers(space, pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
         active = pool.encode_active()
         guard = 0
@@ -106,7 +111,7 @@ class TestRolloutPool:
         space = ObservationSpace()
         dense_pool = env._engine.rollout_pool(2, 2, 42, 2000)
         batch_pool = env._engine.rollout_pool(2, 2, 42, 2000)
-        buffers = allocate_buffers(space, dense_pool.num_slots)
+        buffers = vector_buffers(space, dense_pool.num_slots)
         dense_pool.set_buffers(buffers, dense_pool.num_slots, layout=space.layout)
         batch_pool.set_observation_layout(space.layout)
 
