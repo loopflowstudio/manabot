@@ -41,3 +41,9 @@
 - Pass 6 uses Giada for the Confiscate position. Two Angels on the new
   controller's side make the pre-entry count observable, and Giada supplies
   the only white mana for two cards with the same cost.
+- Decomposition leaves `StaticKeywordGrant` and `StaticTypeGrant` beside
+  `StaticContinuous`. Folding them is the same move as D1 for 27 more card
+  sites and the stack-spell keyword reader; it is not planned in this Task.
+- D1 retires TLA card-program token names (`per_*` fields, `PowerCda::*`).
+  Assumed acceptable with `token_renames.rs` entries, as this branch already
+  did for `EntersWithPlusOneCounters`.

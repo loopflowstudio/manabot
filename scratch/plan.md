@@ -222,8 +222,108 @@ m21, ori, emn, c17 and observability. Its 363 tests passed, including the
 phased-out blocker and Confiscate departure positions. The Python text tests need
 a rebuilt extension, so they are deferred to gate.
 
-## Remaining (gate)
+## Decomposition at `aac244f66e`
 
-No unbuilt slices. Gate owns the full debug nextest suite (CI profile,
+Most of the cohort already composes: control is one `Modification::Control` in
+layer 2 for both the Aura and the resolution; hexproof-from and protection share
+`SourceQuality` and one `targeting_source(..).matches`; every "exile/shuffle
+instead of graveyard" source (printed, flashback, finality, `ExileIfWouldDie`)
+offers the same `GraveyardInstead { what, to }` candidate; the chosen creature
+type has one path (entry choice → `ChosenCreatureType` record →
+`CardPredicate.chosen_type_of_source`). Those plan no slices.
+
+Three places fuse axes or evaluate one quantity twice. Each was grown or
+introduced by this cohort, and each blocks the next card of its kind from
+being a card-file edit.
+
+| Axis | Owners today | Cards that expose it |
+|---|---|---|
+| Layer-7 quantity | `PtCount` (`Context::buff`), `PowerCda` (`Context::cda` and `Game::cda_value`), `LayerValue` (`Context::value`) | Tempest Djinn, Blanchwood Armor, Banner of Kinship; Suki, Dragonfly Swarm, Consuming Aberration |
+| Static P/T carrier | `StaticAbility::PtBuff`, `CharacteristicPower`/`CharacteristicPt`, `StaticContinuous` | Knight of Grace (continuous) beside Tempest Djinn (PtBuff) in one file |
+| Entry quantity | `EntryValue` + `entry_value`, duplicating `EffectValue::{X, GreatestPowerYouControl, BattlefieldMatching}` + `effect_value` | Wildwood Scourge, Prime Speaker Zegana, Giada, Banner |
+| Damage replacement | `ModifyDamage { creature_source, source_by, recipient, combat, transform }`, `PreventCombatDamageToOrFromSelf`, `OpponentDamagePlusCounters`; source filter is a bool plus an `Actor` while the recipient is a struct | Crystal Barricade, usg.rs:55, tla.rs:3596, fdn.rs:2033, ons.rs:50 |
+
+### Delete — do not maintain (deepest first)
+
+1. `Context::buff`, `Context::cda`, `Operation::Buff`, `Operation::Cda` (`flow/layers.rs`)
+   and `Game::cda_value` (`flow/statics.rs`).
+2. `PtCount`, `PowerCda`, `StaticPtBuff` and its hand-written `Serialize`;
+   `StaticAbility::{PtBuff, CharacteristicPower, CharacteristicPt}`; the
+   unreleased `per_you_control` / `per_source_counter` field names.
+3. `EntryValue` and `Game::entry_value` (`flow/proposed_event.rs`).
+4. `ReplacementEffect::{PreventCombatDamageToOrFromSelf, OpponentDamagePlusCounters}`,
+   `ModifyDamage.creature_source` / `source_by`, and their arms in
+   `collect_replacements`, `apply_replacement` and the description table.
+
+Each retired serialized name gets its `token_renames.rs` entry and, where a
+pinned pilot's card changes shape, a `scripts/pinned_pilot.py record --reason`.
+
+### Slices
+
+**D1 · One layer quantity on one static carrier.** `LayerValue::Count(LayerCount)`
+with `LayerCount::{YouControl(pred), Graveyard { who, predicate },
+ColorsAmong(pred), CreatureTypes { max }, SourceCounters(kind),
+CountersOn { kind, predicate }}`, evaluated only by `Context::value` (affected
+object and source both in hand). Every `PtBuff` caller (26: tla 14, fdn 4, eoe 2,
+tle 2, dom, m10, usg, zen) becomes `StaticAbility::continuous(scope, condition,
+[Modification::pump(..)])`; the six CDA callers become a
+`characteristic_defining` `SetBasePt`. Off-battlefield CDA
+(`printing.pt_cda()`) reads the same `LayerCount` through the settled-board
+reader; that second reader is inherent (layers cannot call the public view) and
+is the only one left. Dependency read summaries (`layers.rs:291-306`) move to
+one match on `LayerCount`. Directed tests stay where they are: dom, usg, fdn
+(Banner), tla (Zookeeper, Earthen Ally, Avatar Destiny, Suki, Dragonfly Swarm),
+gtc/m13/akh CDA cards. All existing counted bonuses use ±1 or 0 per count, so no
+multiplier is added.
+
+**D2 · Entry counters count with `EffectValue`.** `EntersWithCounters.count:
+EffectValue`, evaluated by `effect_value` on an `EffectFrame::new(entering
+controller, vec![])` carrying the spell's X. The entering object is not on the
+battlefield, so `BattlefieldMatching` is already "other … you control" for
+Giada and Banner. Banner's type lives on the pending entry: bind it into the
+value's predicate (`chosen_type_of_source` → the chosen subtype) before
+evaluating. Callers: the twelve `EntersWithCounters` cards. Tests: psnc, fdn
+(Banner, Mossborn), m21, gtc, chk, pjou and the Pass 6 Mauler/Confiscate
+positions.
+
+**D3 · Damage replacements are source × recipient × kind × transform.** A
+`DamageSource { by, predicate, this }` mirrors `DamageRecipient` (which gains
+`this` for "to it"); `DamageTransform::Add(EffectValue)` reads the source
+permanent's counters. `PreventCombatDamageToOrFromSelf` becomes two
+`ModifyDamage` entries (from this, to this; `combat: Some(true)`,
+`PreventAll`); `OpponentDamagePlusCounters` becomes one with `Add`. Protection
+keeps synthesizing its `PreventAll` candidate through the same arm. Callers:
+Crystal Barricade, fdn.rs:2033, ons.rs:50, usg.rs:55, tla.rs:3596 and the two
+`resolution_tests.rs` fixtures. Tests: `cr_614_replacement.rs`, fdn, usg, ons,
+tla.
+
+Order D1, D2, D3; they share no code. D1 is the widest (pinned pilots read
+TLA's counted bonuses); stop there and fix the contract first if a pilot replay
+changes behaviour rather than only token names.
+
+### Left as they are
+
+- `StaticKeywordGrant` / `StaticTypeGrant` duplicate `continuous` the same way,
+  but this cohort added no axis to them and `SpellsYouControl` keyword grants
+  are read off the stack by `spell_keywords`. Recorded in `questions.md`.
+- `Effect::DiscardHand` beside `Effect::Discard`: one is a simultaneous batch
+  with no choice, the other a decision; they share `discard_batch` and
+  `DiscardCause`.
+- Player protection (`Modification::ProtectionFromEverything`) prevents damage
+  in `damage.rs` without a replacement candidate. No ordering against it is
+  observable (prevent-all commutes with every transform present).
+
+### Review criterion
+
+Tempest Djinn, Blanchwood Armor, Banner of Kinship, Giada, Prime Speaker
+Zegana, Wildwood Scourge and Crystal Barricade are written only with
+`StaticAbility::continuous`, `LayerValue`, `EffectValue`, `EntersWithCounters`
+and `ModifyDamage`; no type in the Delete list remains; a new "+N/+N for each
+X", "enters with counters equal to X" or "prevent/increase damage from A to B"
+card needs no engine edit when X, A and B are existing predicates and values.
+
+## Remaining
+
+D1–D3, then gate: the full debug nextest suite (CI profile,
 `CARGO_BUILD_JOBS=2`, `--test-threads 2`) and the Engine Budget reference
 record with its reason.
