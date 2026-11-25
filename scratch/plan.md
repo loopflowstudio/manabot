@@ -10,6 +10,14 @@ behavior-review defects are built and verified.
 
 **Next: Gate / Integrated validation** (below).
 
+Behavior review at `6af8463ff9`: no open defects. The 16 debug failures found
+at `1278923dc6` (15 frozen semantic-kernel traces, Azula fixture) and the two
+LLM-text field failures are fixed; after the compress commits,
+`tla::fire_lord_azula*` (2 passed) and `tests/semantic/test_text_observation.py`
+(103 passed) still pass. Remaining nits, not blocking: Academy shows Retarget
+as "Choose a target for …" and `KeepPermanents` as "Choose from the revealed
+cards".
+
 ## Follow-ups outside MTG-431 (separate Tasks)
 
 - Semantic candidate-token encoding for `Decision::ChooseEntryValue` (Color and
