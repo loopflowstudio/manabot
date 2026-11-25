@@ -25,14 +25,16 @@
   import StudyPanel from '$lib/components/StudyPanel.svelte';
   import Board from '$lib/board/Board.svelte';
   import Transport from '$lib/board/Transport.svelte';
-  import { buildHistory, hasTrackHistory, legacyMoveHistory, type HistoryTurn } from '$lib/board/history';
+  import { sharedLaterCount } from '$lib/board/beats';
+  import { boardAt, stepBoards } from '$lib/board/boards';
+  import { buildHistory, cursorReading, hasTrackHistory, legacyMoveHistory, lineAtCursor, type HistoryTurn } from '$lib/board/history';
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
     bottomSeat, historyKeyAt, moveAt, offerEvidence, perspectiveOf, positionHeading, positionKeyForEvent, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { createReplayStore } from '$lib/replay.svelte';
-  import type { RecordedPosition } from '$lib/recording';
+  import { orientBoard, type RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
   import { mergePresentationLabels, presentationLabelsFromFrame, presentationLabelsFromObservation } from '$lib/presentation';
@@ -52,6 +54,9 @@
   let stripOpen = $state(true);
   let loaded = '';
   let lastHistoryKey = '';
+  /** Sub-step cursor (event seq) inside a recorded `consequences` transition's kept `boards`. */
+  let subCursor = $state<number | null>(null);
+  let pendingSubCursor: number | null = null;
 
   const current = $derived(replayStore.current);
   const index = $derived(replayStore.index);
@@ -99,7 +104,27 @@
 
   // ———————————————— What the board draws
 
-  const recorded = $derived(current && index ? recordedFrame(current, index, bottom) : null);
+  const transitionBoards = $derived.by(() => {
+    if (inStudy || !current || current.kind !== 'consequences' || !current.boards?.length) return [];
+    try {
+      return stepBoards(current.observation, current.boards);
+    } catch {
+      return [];
+    }
+  });
+  const subBoard = $derived(
+    !inStudy && subCursor !== null && current?.kind === 'consequences'
+      ? boardAt(transitionBoards, subCursor)
+      : null,
+  );
+  const recorded = $derived.by<ExperienceFrame | null>(() => {
+    if (!current || !index) return null;
+    const base = recordedFrame(current, index, bottom);
+    if (subBoard !== null) {
+      return { ...base, projection: orientBoard(subBoard, bottom, index.winner), offers: [] };
+    }
+    return base;
+  });
   // Study draws the restored decision live, then the branch it played, on the same board.
   const studyFrame = $derived.by<ExperienceFrame | null>(() => {
     const restored = studyStore.restored;
@@ -152,6 +177,24 @@
       }
     }
     return historyKeyAt(keys, positions, replayStore.selected);
+  });
+  const subLine = $derived(!studying && subCursor !== null ? lineAtCursor(history, subCursor) : null);
+  const reviewCursorLineIds = $derived(subLine ? new Set([subLine.line.id]) : undefined);
+  const reviewCursorSourceSeq = $derived(subLine?.line.sourceSeq ?? null);
+  const reviewCursorSubjects = $derived(subLine ? new Set(subLine.line.subjects) : undefined);
+  const reviewCursorBanner = $derived.by<string | null>(() => {
+    if (studying || subCursor === null || current?.kind !== 'consequences' || !index) return null;
+    const trackEvents = index.watch ? presentation.events : (index.history ?? presentation.events);
+    const reading = cursorReading(history, trackEvents, subCursor, {
+      you: saidOf(heroSeat),
+      opponent: saidOf(1 - heroSeat),
+    });
+    if (transitionBoards.length === 0) {
+      const lastSeq = current.history.at(-1)?.seq ?? null;
+      const shared = lastSeq !== null ? sharedLaterCount(history, subCursor, lastSeq) : 0;
+      if (shared > 0) return `${reading} · shared with ${shared} later ${shared === 1 ? 'line' : 'lines'}`;
+    }
+    return reading;
   });
   const marks = $derived(stripMarks(positions, heroSeat));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
@@ -219,6 +262,13 @@
     untrack(() => {
       if (current.key === lastHistoryKey) return;
       lastHistoryKey = current.key;
+      if (current.kind === 'consequences' && pendingSubCursor !== null) {
+        subCursor = pendingSubCursor;
+        pendingSubCursor = null;
+      } else {
+        subCursor = null;
+        pendingSubCursor = null;
+      }
       const batches = current.history.map((event, i) => ({ events: [event], labels: current.history_labels[i] }));
       presentation.loadPrefix(batches, `replay:${index.id}:viewer:${current.viewer}`);
     });
@@ -248,12 +298,15 @@
   });
   $effect(() => () => replayStore.cancelReads());
 
-  function seek(selected: number): void {
+  function seek(selected: number, keepPending = false): void {
     if (inStudy || !positions.length) return;
+    if (!keepPending) { subCursor = null; pendingSubCursor = null; }
     void replayStore.seek(Math.max(0, Math.min(positions.length - 1, selected)));
   }
   function next(): void {
     replayStore.pause();
+    subCursor = null;
+    pendingSubCursor = null;
     if (atLiveEdge && index?.mirror_retry) void replayStore.produce(true);
     else void replayStore.next();
   }
@@ -266,11 +319,25 @@
   }
   function togglePlaying(): void {
     if (replayStore.playing) replayStore.pause();
-    else replayStore.playing = true;
+    else { subCursor = null; replayStore.playing = true; }
   }
-  function jump(key: string): void {
+  function jump(key: string, boardSeq: number | null = null): void {
+    if (current?.kind === 'consequences' && boardSeq !== null && boardAt(transitionBoards, boardSeq) !== null) {
+      subCursor = boardSeq;
+      return;
+    }
     const at = positions.findIndex(position => position.key === key);
-    if (at >= 0) seek(at);
+    if (at < 0) return;
+    if (positions[at].kind === 'consequences' && boardSeq !== null) {
+      if (at === replayStore.selected && current?.key === key) {
+        subCursor = boardSeq;
+        return;
+      }
+      pendingSubCursor = boardSeq;
+      seek(at, true);
+      return;
+    }
+    seek(at);
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -566,6 +633,11 @@
     {history}
     onjump={locked ? undefined : jump}
     {currentMove}
+    cursorBanner={reviewCursorBanner}
+    cursorLineIds={reviewCursorLineIds}
+    cursorSourceSeq={reviewCursorSourceSeq}
+    cursorSubjects={reviewCursorSubjects}
+    onclearcursor={() => { subCursor = null; }}
     {evidence}
     bottom={bottomEdge}
     strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek } : undefined}

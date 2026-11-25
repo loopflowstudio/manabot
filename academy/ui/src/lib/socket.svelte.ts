@@ -648,12 +648,28 @@ export class GameSocketController {
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
+        const sameMatch = gameStore.protocolFrame?.match_id === message.recovery.frame.match_id;
+        const prevLastSeq = sameMatch ? (presentationPlayer.events.at(-1)?.seq ?? -1) : -1;
         this.applyRecovery(
           message.recovery,
           sessionId,
           resumeToken,
         );
-        gameStore.applyStepBoards(message.recovery.frame, message.boards ?? []);
+        const patches = message.boards ?? [];
+        // Recovery on reconnect/reload brings presentation_tail with no earlier
+        // boards; only span the frame board across freshly delivered non-pass
+        // events (never across missed pre-reconnect events).
+        const freshNonPass = message.recovery.presentation_tail.filter(
+          event => event.seq > prevLastSeq && event.kind.kind !== 'passed',
+        );
+        const isReconnect = message.recovery.reason === 'reconnect';
+        const range = (!isReconnect || patches.length > 0) && freshNonPass.length > 0
+          ? {
+              first: isReconnect && patches.length > 0 ? patches[0].first : freshNonPass[0].seq,
+              last: freshNonPass.at(-1)!.seq,
+            }
+          : null;
+        gameStore.applyStepBoards(message.recovery.frame, patches, range);
         this.reconcileCommand(message.recovery);
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
@@ -824,7 +840,11 @@ export class GameSocketController {
       presentationLabelsFromFrame(update.frame),
     );
     gameStore.applyFrame(update.frame);
-    gameStore.applyStepBoards(update.frame, update.boards ?? []);
+    const nonPass = update.presentation.filter(event => event.kind.kind !== 'passed');
+    const range = nonPass.length > 0
+      ? { first: nonPass[0].seq, last: nonPass.at(-1)!.seq }
+      : null;
+    gameStore.applyStepBoards(update.frame, update.boards ?? [], range);
     try {
       validatePresentationUpdate(
         update.presentation,

@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { PresentationEvent, PresentationLabels } from '$lib/types';
 import {
   buildHistory,
+  cursorReading,
+  flattenHistory,
   hasTrackHistory,
   isMoveEvent,
   legacyMoveHistory,
+  stepCursor,
   trackMarks,
   type HistoryNote,
 } from './history';
@@ -238,5 +241,40 @@ describe('isMoveEvent, hasTrackHistory and trackMarks', () => {
       ['you', 'Play Island'],
       ['note', [{ actor: 'auto', who: 'auto', count: 1 }, { actor: 'opponent', who: 'Heuristic', count: 1 }]],
     ]);
+  });
+
+  it('steps the cursor across selectable lines, formats the top-bar reading, and folds authority.auto passes', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 1, turn_number: 6 }),
+      ev(2, { kind: 'passed', player: 0 }, { caused_by: 'authority.auto.match.1' }),
+      ev(
+        3,
+        { kind: 'cast', object: { entity: 10, incarnation: 1 }, controller: 1, stack: 10 },
+        { labels: { objects: { '10:1': 'Lightning Strike' }, stacks: { '10': 'Lightning Strike' } } },
+      ),
+      ev(4, { kind: 'resolved', stack: 10 }, { labels: { stacks: { '10': 'Lightning Strike' } } }),
+      ev(
+        5,
+        { kind: 'damage', source: { kind: 'stack', id: 10 }, target: { kind: 'object', id: { entity: 20, incarnation: 1 } }, amount: 3 },
+        { cause: 4, labels: { objects: { '20:1': 'Earth Kingdom Jailer' }, stacks: { '10': 'Lightning Strike' } } },
+      ),
+      ev(
+        6,
+        { kind: 'died', objects: [{ entity: 20, incarnation: 1 }] },
+        { cause: 4, rule: 'lethal_damage', labels: { objects: { '20:1': 'Earth Kingdom Jailer' } } },
+      ),
+    ];
+    const turns = buildHistory(events, () => EMPTY, PLAYERS);
+    expect(turns[0].lines[0].passes).toEqual([{ actor: 'auto', who: 'auto', count: 1 }]);
+    // Selectable lines skip passes: cast (3), damage (5), died (6).
+    expect(flattenHistory(turns).map(item => item.cursor)).toEqual([3, 5, 6]);
+    expect(stepCursor(turns, null, -1)).toBe(6);
+    expect(stepCursor(turns, 6, -1)).toBe(5);
+    expect(stepCursor(turns, 5, -1)).toBe(3);
+    expect(stepCursor(turns, 3, -1)).toBe(3);
+    expect(stepCursor(turns, 3, 1)).toBe(5);
+    expect(stepCursor(turns, 6, 1)).toBeNull();
+    expect(cursorReading(turns, events, 6, { you: 'You', opponent: 'Heuristic' }))
+      .toBe("Turn 6 · Heuristic's Lightning Strike");
   });
 });

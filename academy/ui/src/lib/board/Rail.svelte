@@ -8,7 +8,7 @@
    */
   import type { Snippet } from 'svelte';
   import type { ExperienceFrame } from '$lib/types';
-  import type { HistoryTurn } from './history';
+  import type { HistoryLine, HistoryTurn } from './history';
   import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
@@ -18,6 +18,8 @@
 
   interface Props {
     view: BoardView;
+    /** Stack entries for the drawn board (may be an earlier cursor board while `view` stays live). */
+    stack?: StackItem[];
     frame: ExperienceFrame;
     live: boolean;
     /** What to do now, in plain words. */
@@ -52,19 +54,19 @@
     over?: boolean;
     /** The docked inspect pane, when inspecting docks to the rail. */
     dock?: Snippet;
-    /**
-     * The opponent's move being read out. It heads the decision block, and
-     * while it is set the decision's controls wait: listed, focusable and
-     * announced unavailable, a press on one ends the read-out (the board owns that).
-     */
-    reading?: Snippet;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
     /** The recap's heading. */
     recapTitle?: string;
-    /** Moves jump to their position when set. */
-    onjump?: (id: string) => void;
+    /** Moves jump to their position when set (Review). */
+    onjump?: (id: string, boardSeq: number | null) => void;
     currentMove?: string | null;
+    /** Select a history line to move the board cursor to it (live play). */
+    onselectline?: (line: HistoryLine) => void;
+    /** `HistoryLine.id`s matching the active cursor / walk stop. */
+    cursorLineIds?: ReadonlySet<string>;
+    /** Cast/activation seq marked when a standalone resolution line is selected. */
+    cursorSourceSeq?: number | null;
     /** A combat draft's controls, in place of the per-creature buttons. */
     draft?: Snippet;
     /** Why a confirmed combat declaration stopped before all of it was sent. */
@@ -72,12 +74,13 @@
   }
 
   let {
-    view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, history, opponentName,
-    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
-    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
+    view, stack: stackGiven, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, history, opponentName,
+    onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock,
+    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, onselectline, cursorLineIds, cursorSourceSeq = null, draft, stopped = null,
   }: Props = $props();
 
-  const readingOut = $derived(reading !== undefined);
+  const stack = $derived(stackGiven ?? view.stack);
+
   /** No choices because the opponent is deciding: the list waits for them by name instead of counting 0. */
   const waitingFor = $derived(frame.offers.length === 0 && opponentChoosing);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
@@ -116,13 +119,14 @@
     else next.add(id);
     expanded = next;
   }
-  // The list follows the newest line live, and the shown position's line in a recording.
+  // The list follows the active cursor / walk stop, the shown Review position, or the newest line live.
   $effect(() => {
     void history.length;
     void history.at(-1)?.lines.length;
     void history.at(-1)?.lines.at(-1)?.children.length;
+    const hasCursor = (cursorLineIds?.size ?? 0) > 0;
     const current = currentMove;
-    if (current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
+    if (!hasCursor && current === null && !onjump) { logEnd?.scrollIntoView({ block: 'end' }); return; }
     const row = logList?.querySelector<HTMLElement>('[aria-current="true"]');
     if (!row || !logList) return;
     const top = row.offsetTop - logList.offsetTop;
@@ -152,12 +156,12 @@
   {#if dock}<div class="block docked">{@render dock()}</div>{/if}
 
   <section use:region={{ across: !onjump }} class="block stack" aria-label="Stack">
-    <h2><span class="type-heading text-ink-2">Stack{#if view.stack.length} · {view.stack.length}{/if}</span></h2>
-    {#if view.stack.length === 0}
+    <h2><span class="type-heading text-ink-2">Stack{#if stack.length} · {stack.length}{/if}</span></h2>
+    {#if stack.length === 0}
       <p class="type-caption text-ink-3">Empty</p>
     {:else}
       <ol>
-        {#each view.stack as item, index (item.entry.id)}
+        {#each stack as item, index (item.entry.id)}
           {@const hitPlayers = item.entry.combat_damage_to_players?.map(seat => mine(seat) ? 'you' : opponentName).join(' and ')}
           {@const damageHistory = hitPlayers ? `Source dealt combat damage to ${hitPlayers} this turn` : ''}
           {@const provenance = stackProvenance(item.entry)}
@@ -206,8 +210,7 @@
     {/if}
   </section>
 
-  <section use:region={{ across: !onjump }} class="block prompt" class:reading-out={readingOut} aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
-    {#if reading}{@render reading()}{/if}
+  <section use:region={{ across: !onjump }} class="block prompt" aria-label="Decision" data-testid="action-panel" data-action-space-kind={frame.action_space}>
     <p class="type-heading whose" class:yours={live}>
       {#if thinking}<span data-testid="work-status">{thinking}{#if elapsed >= 1}<span class="elapsed">{` · ${elapsed} s`}</span>{/if}</span>{:else}{whose}{/if}
     </p>
@@ -256,20 +259,20 @@
       {:else}
       {#if view.primary}
         <button type="button" class="btn btn-primary primary" class:chosen={isChosen(view.primary)} data-testid="primary-action" data-offer-id={view.primary.offer.id} aria-label={primaryText?.description ?? view.primary.offer.label} title={primaryText?.description ?? view.primary.offer.label}
-          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(view.primary!)}>
+          disabled={!live} onclick={() => onact(view.primary!)}>
           <span>{#if isChosen(view.primary)}✓ {/if}<ManaText text={primaryText?.text ?? view.primary.offer.label} /></span>{#if recordedP(view.primary) !== undefined}<span class="p">{formatProbability(recordedP(view.primary)!)}</span>{:else if live}<kbd>Space</kbd>{/if}
         </button>
         {#if paymentNote}<p class="type-caption text-ink-3 payment-note" data-testid="payment-note">{paymentNote}</p>{/if}
       {/if}
       {#each secondary as placed (placed.offer.id)}
         <button type="button" class="btn btn-secondary secondary" class:chosen={isChosen(placed)} data-testid="prompt-action" data-offer-id={placed.offer.id}
-          disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}>
+          disabled={!live} onclick={() => onact(placed)}>
           <kbd>{placed.number}</kbd>{#if isChosen(placed)}✓ {/if}<ManaText text={placed.offer.label} />{#if recordedP(placed) !== undefined}<span class="p">{formatProbability(recordedP(placed)!)}</span>{/if}
         </button>
       {/each}
       {/if}
       {#if canPassTurn}
-        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
+        <button type="button" class="pass-turn type-caption" data-testid="pass-turn" onclick={onpassturn}
           title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
@@ -298,7 +301,7 @@
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
             aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
-            disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
+            disabled={!live} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
@@ -314,7 +317,7 @@
   </section>
   {/if}
 
-  <section use:region={{ across: !onjump }} class="block log" aria-label="History">
+  <section use:region={{ across: false }} class="block log" aria-label="History">
     <h2><span class="type-heading text-ink-2">History</span></h2>
     <ol class="turns" data-testid="game-log" bind:this={logList}>
       {#each history as turn, index (`${turn.turn}:${index}`)}
@@ -324,19 +327,34 @@
             {#each turn.lines as entry, at (entry.id)}
               {@const jumpId = entry.jumpKey ?? entry.id}
               {@const prevWho = at > 0 ? turn.lines[at - 1]?.who : ''}
+              {@const hasCursor = (cursorLineIds?.size ?? 0) > 0}
+              {@const isCurrent = hasCursor ? cursorLineIds!.has(entry.id) : (currentMove !== null && currentMove === jumpId)}
+              {@const isSource = cursorSourceSeq !== null && entry.seq === cursorSourceSeq}
+              {@const childCurrent = hasCursor
+                ? entry.children.some(child => cursorLineIds!.has(child.id))
+                : (currentMove !== null && entry.children.some(child => child.jumpKey === currentMove))}
               {#if onjump && entry.jumpKey}
-                <!-- A recording's line jumps to its position. -->
+                <!-- A recording's line jumps to its position (and per-line board when retained). -->
                 <li class="move type-caption jump" class:quiet={entry.passes !== null} class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'}
                   data-testid={entry.passes ? 'pass-run' : 'log-entry'} data-actor={entry.actor}>
-                  <button type="button" aria-current={currentMove === jumpId ? 'true' : undefined} data-move={jumpId} onclick={() => onjump(jumpId)}>
+                  <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
+                    data-move={jumpId} data-history-seq={entry.boardSeq ?? undefined} onclick={() => onjump(jumpId, entry.boardSeq)}>
                     <span class="who" class:repeat={!entry.passes && entry.who !== '' && prevWho === entry.who}>{entry.passes ? '' : entry.who}</span>
-                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{entry.segments.map(segment => segment.text).join('')}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
+                    <span class="what">{#if entry.passes}passed {entry.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}{/if}</span>
                   </button>
                 </li>
               {:else if entry.passes}
                 <li class="move type-caption quiet" data-testid="pass-run">
                   <span class="who" aria-hidden="true"></span>
                   <span class="what">passed{#each entry.passes as part, idx (part.actor)}{idx ? ',' : ''} <span data-testid="log-entry" data-actor={part.actor} class:auto={part.actor === 'auto'}>{part.who}{#if part.count > 1}&nbsp;×{part.count}{/if}</span>{/each}</span>
+                </li>
+              {:else if onselectline && entry.boardSeq !== null}
+                <li class="move type-caption jump" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
+                  <button type="button" aria-current={isCurrent ? 'true' : undefined} data-cursor-source={isSource || undefined}
+                    data-history-seq={entry.boardSeq} onclick={() => onselectline(entry)}>
+                    <span class="who" class:repeat={entry.who !== '' && prevWho === entry.who}>{entry.who}</span>
+                    <span class="what">{#each entry.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}{#if entry.count > 1}<span class="times">&nbsp;×{entry.count}</span>{/if}</span>
+                  </button>
                 </li>
               {:else}
                 <li class="move type-caption" class:auto={entry.actor === 'auto'} class:you={entry.actor === 'you'} data-testid="log-entry" data-actor={entry.actor}>
@@ -346,7 +364,7 @@
                 </li>
               {/if}
               {#if entry.children.length > 0}
-                {#if turn.busy && !expanded.has(entry.id)}
+                {#if turn.busy && !expanded.has(entry.id) && !childCurrent}
                   <li class="consequence-summary type-caption">
                     <button type="button" class="consequence-toggle" data-testid="consequence-toggle" aria-expanded="false" onclick={() => toggleExpanded(entry.id)}>
                       {entry.children.length} {entry.children.length === 1 ? 'consequence' : 'consequences'}
@@ -361,10 +379,19 @@
                     {/if}
                     <ol class="consequences">
                       {#each entry.children as child (child.id)}
+                        {@const isChildCurrent = hasCursor ? cursorLineIds!.has(child.id) : (currentMove !== null && child.jumpKey === currentMove)}
                         {#if onjump && child.jumpKey}
                           <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
-                            <button type="button" aria-current={currentMove === child.jumpKey ? 'true' : undefined} data-move={child.jumpKey} onclick={() => onjump(child.jumpKey!)}>
-                              <span class="what">{child.segments.map(segment => segment.text).join('')}</span>
+                            <button type="button" aria-current={isChildCurrent ? 'true' : undefined} data-move={child.jumpKey}
+                              data-history-seq={child.boardSeq ?? undefined} onclick={() => onjump(child.jumpKey!, child.boardSeq)}>
+                              <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
+                            </button>
+                          </li>
+                        {:else if onselectline && child.boardSeq !== null}
+                          <li class="consequence type-caption jump" data-testid="history-consequence" data-depth="1">
+                            <button type="button" aria-current={isChildCurrent ? 'true' : undefined}
+                              data-history-seq={child.boardSeq} onclick={() => onselectline(child)}>
+                              <span class="what">{#each child.segments as segment, segIdx (segIdx)}{#if segment.card}<span class="card-name" {...hover(segment.card)}>{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
                             </button>
                           </li>
                         {:else}
@@ -443,11 +470,8 @@
     width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 2px 6px; border-radius: var(--radius-sm); text-align: left;
     border: 1px solid transparent; font-size: 14px; line-height: 20px; color: var(--text); background: none;
   }
-  .row:hover:not(:disabled, [aria-disabled]) { border-color: var(--border-strong); background: var(--bg-field); }
-  .row:disabled, .row[aria-disabled] { color: var(--text-secondary); cursor: default; }
-  /* During the read-out: the decision stays in place beneath the beat, quieter. */
-  .reading-out [data-testid='decision-prompt'], .reading-out .whose { color: var(--text-tertiary); }
-  .prompt [aria-disabled] { opacity: 0.55; cursor: default; }
+  .row:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-field); }
+  .row:disabled { color: var(--text-secondary); cursor: default; }
   /* A choice's words are the game's face, and its row grows to fit them wrapped. */
   .row .label { flex: 1; min-width: 0; font: 16px/24px var(--font-serif); overflow-wrap: break-word; }
   .hidden-key { visibility: hidden; }
@@ -488,6 +512,7 @@
   .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
+  .move.jump button[data-cursor-source='true'] { background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: inset 2px 0 0 var(--border-strong); }
   .consequences-wrap, .consequence-summary { padding-left: 92px; }
   .consequences { display: grid; gap: 1px; border-left: 1px solid var(--border); padding-left: 8px; margin: 1px 0 3px; }
   .consequence { color: var(--text-secondary); line-height: 16px; }

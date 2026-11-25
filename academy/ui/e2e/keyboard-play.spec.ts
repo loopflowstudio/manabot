@@ -104,7 +104,7 @@ test('a game is played from the keyboard alone', async ({ page }) => {
   }
   const regions = stops.slice(0, stops.indexOf(stops[0], 1) > 0 ? stops.indexOf(stops[0], 1) : stops.length);
   expect(new Set(regions).size).toBe(regions.length);
-  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^Moves$/]) {
+  for (const name of [/battlefield$/, /^Your battlefield$/, /^Your hand/, /^Decision$/, /^All legal choices$/, /^History$/]) {
     expect(regions.some(region => name.test(region)), `${name} in ${regions.join(' → ')}`).toBe(true);
   }
 

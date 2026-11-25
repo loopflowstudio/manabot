@@ -1,55 +1,147 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PresentationEvent } from '$lib/types';
-import { BEAT_LIMIT, beatsFor, loadBeatPace, saveBeatPace, turnAt } from './beats';
-import type { FactKind, RecentFact } from './recent';
+import type { Observation, PresentationEvent } from '$lib/types';
+import {
+  loadBeatPace,
+  saveBeatPace,
+  scrubberStops,
+  sharedLaterCount,
+  turnAt,
+  unreadWalkStops,
+  walkStops,
+} from './beats';
+import type { StepBoard } from './boards';
+import { buildHistory } from './history';
 
-const NAMES = { you: 'You', opponent: 'Heuristic' };
-const fact = (seq: number, by: RecentFact['by'], text: string, subjects: number[] = [], kind: FactKind = 'cast'): RecentFact =>
-  ({ seq, by, kind, text, segments: [{ text, card: null }], spell: null, subjects });
+const EMPTY = { objects: {}, players: {}, stacks: {} };
+const PLAYERS = { youSeat: 0, you: 'You', opponent: 'Heuristic' };
+const obs = (label: string): Observation => ({ label }) as unknown as Observation;
 
-describe("the opponent's moves as beats", () => {
-  it('reads out what the opponent did, with its consequences, and not the person\'s own moves', () => {
-    const facts = [
-      fact(1, 'you', 'You cast Shock, targeting Ally', [7]),
-      fact(2, null, 'Shock dealt 2 to Ally', [7], 'damage'),
-      fact(3, 'opponent', 'Heuristic cast Yip Yip!, targeting Jailer', [9]),
-      fact(4, 'opponent', 'Heuristic attacked with Jailer', [9], 'attacked'),
-      fact(5, null, 'Jailer dealt 3 to you', [], 'damage'),
+function ev(
+  seq: number,
+  kind: PresentationEvent['kind'],
+  extra: Partial<PresentationEvent> = {},
+): PresentationEvent {
+  return {
+    seq,
+    from_revision: seq,
+    to_revision: seq + 1,
+    caused_by: null,
+    group: seq,
+    importance: 'normal',
+    suggested_ms: 0,
+    sound: null,
+    kind,
+    ...extra,
+  };
+}
+
+describe('walk stops over kept boards', () => {
+  it('groups lines sharing one kept board into one stop and separates cast, damage, death and trigger', () => {
+    const events: PresentationEvent[] = [
+      ev(40, { kind: 'turn_started', player: 1, turn_number: 6 }),
+      ev(41, { kind: 'cast', object: { entity: 12, incarnation: 1 }, controller: 1, stack: 12 }, {
+        labels: { objects: { '12:1': 'Lightning Strike' }, stacks: { '12': 'Lightning Strike' } },
+      }),
+      ev(42, { kind: 'targeted', source: { kind: 'stack', id: 12 }, target: { kind: 'object', id: { entity: 19, incarnation: 1 } } }, {
+        cause: 41,
+        group: 41,
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' } },
+      }),
+      ev(43, { kind: 'resolved', stack: 12 }, {
+        cause: 41,
+        group: 41,
+        labels: { stacks: { '12': 'Lightning Strike' } },
+      }),
+      ev(44, { kind: 'damage', source: { kind: 'stack', id: 12 }, target: { kind: 'object', id: { entity: 19, incarnation: 1 } }, amount: 3 }, {
+        cause: 43,
+        group: 41,
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' }, stacks: { '12': 'Lightning Strike' } },
+      }),
+      ev(45, { kind: 'died', objects: [{ entity: 19, incarnation: 1 }] }, {
+        cause: 43,
+        group: 41,
+        rule: 'lethal_damage',
+        labels: { objects: { '19:1': 'Earth Kingdom Jailer' } },
+      }),
+      ev(46, { kind: 'triggered', source: { entity: 24, incarnation: 1 }, controller: 1, stack: 24 }, {
+        cause: 45,
+        group: 41,
+        labels: { objects: { '24:1': 'Tiger-Seal' } },
+      }),
+      ev(47, { kind: 'ability_resolved', source: { entity: 24, incarnation: 1 }, stack: 24 }, {
+        cause: 46,
+        group: 41,
+        labels: { objects: { '24:1': 'Tiger-Seal' } },
+      }),
+      ev(48, { kind: 'drew', player: 1 }, {
+        cause: 47,
+        group: 41,
+      }),
     ];
-    expect(beatsFor(facts, 0, NAMES).map(beat => beat.seq)).toEqual([2, 3, 4, 5]);
-    expect(beatsFor(facts, 3, NAMES).map(beat => [beat.text, beat.subjects])).toEqual([
-      ['Heuristic attacked with Jailer', [9]], ['Jailer dealt 3 to you', []],
-    ]);
-  });
-
-  it('plays nothing for the consequences of the person\'s own move alone', () => {
-    expect(beatsFor([fact(1, 'you', 'You attacked with Ally'), fact(2, null, 'Ally dealt 2 to Heuristic', [], 'damage')], 0, NAMES)).toEqual([]);
-    expect(beatsFor([fact(3, 'opponent', 'Heuristic cast X')], 3, NAMES)).toEqual([]);
-  });
-
-  it('groups a busy turn into sentences: one per run of a player\'s moves or of one kind of consequence', () => {
-    const facts = [
-      fact(1, 'opponent', 'Heuristic played Plains', [1], 'land'),
-      fact(2, 'opponent', 'Heuristic attacked with Ally and Kyoshi Warriors', [2, 3], 'attacked'),
-      fact(3, null, 'Ally dealt 2 to you', [2], 'damage'),
-      fact(4, null, 'Kyoshi Warriors dealt 3 to you', [3], 'damage'),
-      fact(5, null, 'Ally died', [2], 'died'),
+    const boards: StepBoard[] = [
+      { first: 41, last: 42, projection: obs('cast') },
+      { first: 43, last: 44, projection: obs('damage') },
+      { first: 45, last: 45, projection: obs('died') },
+      { first: 46, last: 46, projection: obs('trigger') },
+      { first: 47, last: 48, projection: obs('resolved-and-drew') },
     ];
-    expect(beatsFor(facts, 0, NAMES).map(beat => [beat.text, beat.subjects])).toEqual([
-      ['Heuristic played Plains and attacked with Ally and Kyoshi Warriors', [1, 2, 3]],
-      ['Ally dealt 2 to you and Kyoshi Warriors dealt 3 to you', [2, 3]],
-      ['Ally died', [2]],
+    const turns = buildHistory(events, () => EMPTY, PLAYERS);
+    const stops = walkStops(turns, boards);
+
+    expect(stops.map(s => ({ seq: s.seq, moveStart: s.moveStart, caption: s.caption }))).toEqual([
+      { seq: 41, moveStart: true, caption: 'Heuristic cast Lightning Strike, targeting Earth Kingdom Jailer' },
+      { seq: 44, moveStart: false, caption: 'Lightning Strike dealt 3 to Earth Kingdom Jailer' },
+      { seq: 45, moveStart: false, caption: 'Earth Kingdom Jailer died · lethal damage' },
+      { seq: 46, moveStart: false, caption: 'Trigger · Tiger-Seal' },
+      // Ability resolved and drew share board 47..48, so they form one stop.
+      { seq: 47, moveStart: false, caption: "Tiger-Seal's trigger resolved · Heuristic drew a card" },
     ]);
-    // Four facts or fewer still read one at a time.
-    expect(beatsFor(facts.slice(0, 4), 0, NAMES)).toHaveLength(4);
+    expect(stops[2].rules).toEqual(['lethal_damage']);
+    expect(unreadWalkStops(stops, 40).map(s => s.seq)).toEqual([41, 44, 45, 46, 47]);
+    expect(unreadWalkStops(stops, 48)).toEqual([]);
   });
 
-  it('keeps a long turn to its newest beats', () => {
-    const facts = Array.from({ length: BEAT_LIMIT + 4 }, (_, i) => fact(i + 1, i % 2 ? 'opponent' : null, `move ${i + 1}`, [], i % 2 ? 'cast' : (['damage', 'died'] as const)[i % 4 / 2]));
-    const beats = beatsFor(facts, 0, NAMES);
-    expect(beats).toHaveLength(BEAT_LIMIT);
-    expect(beats[0].seq).toBe(5);
+  it('plays nothing for the person\'s own moves or an empty opponent draw step alone', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 0, turn_number: 1 }),
+      ev(2, { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 }, {
+        caused_by: 'cmd-1',
+        labels: { objects: { '10:1': 'Island' } },
+      }),
+      ev(3, { kind: 'turn_started', player: 1, turn_number: 2 }),
+      ev(4, { kind: 'drew', player: 1 }, { rule: 'draw_step' }),
+    ];
+    const turns = buildHistory(events, () => EMPTY, PLAYERS);
+    const stops = walkStops(turns, []);
+    expect(unreadWalkStops(stops, 0)).toEqual([]);
+  });
+
+  it('selects the cursor turn or the latest opponent turn for the scrubber', () => {
+    const events: PresentationEvent[] = [
+      ev(1, { kind: 'turn_started', player: 0, turn_number: 1 }),
+      ev(2, { kind: 'land_played', object: { entity: 10, incarnation: 1 }, player: 0 }, {
+        caused_by: 'cmd-1',
+        labels: { objects: { '10:1': 'Island' } },
+      }),
+      ev(3, { kind: 'turn_started', player: 1, turn_number: 2 }),
+      ev(4, { kind: 'land_played', object: { entity: 11, incarnation: 1 }, player: 1 }, {
+        labels: { objects: { '11:1': 'Plains' } },
+      }),
+      ev(5, { kind: 'turn_started', player: 0, turn_number: 3 }),
+      ev(6, { kind: 'drew', player: 0, object: { entity: 12, incarnation: 1 } }, {
+        rule: 'draw_step',
+        labels: { objects: { '12:1': 'Mountain' } },
+      }),
+    ];
+    const turns = buildHistory(events, () => EMPTY, PLAYERS);
+    const stops = walkStops(turns, []);
+    // At now (cursor null), scrubber shows Turn 2 (the opponent's latest turn).
+    expect(scrubberStops(stops, null)).toMatchObject({ turn: 2 });
+    expect(scrubberStops(stops, null).stops.map(s => s.seq)).toEqual([4]);
+    // Looking back at Turn 1 shows Turn 1's stops.
+    expect(scrubberStops(stops, 2)).toMatchObject({ turn: 1 });
+    expect(sharedLaterCount(turns, 2, 6)).toBe(2);
   });
 });
 
@@ -70,17 +162,14 @@ describe('beat pace', () => {
   });
 });
 
-describe('the turn a beat happened in', () => {
-  const event = (seq: number, kind: PresentationEvent['kind']): PresentationEvent =>
-    ({ seq, from_revision: 0, to_revision: 1, caused_by: null, group: seq, importance: 'normal', suggested_ms: 0, sound: null, kind } as PresentationEvent);
-  // One engine step: the opponent's attack and its damage, then the person's turn starts.
+describe('the turn an event happened in', () => {
   const events = [
-    event(10, { kind: 'turn_started', player: 1, turn_number: 10 }),
-    event(11, { kind: 'land_played' } as PresentationEvent['kind']),
-    event(12, { kind: 'turn_started', player: 0, turn_number: 11 }),
+    ev(10, { kind: 'turn_started', player: 1, turn_number: 10 }),
+    ev(11, { kind: 'land_played', object: { entity: 1, incarnation: 1 }, player: 1 }),
+    ev(12, { kind: 'turn_started', player: 0, turn_number: 11 }),
   ];
 
-  it('is the last turn start at or before it, so an attack read out on the next turn\'s board names its own turn', () => {
+  it('is the last turn start at or before it', () => {
     expect(turnAt(events, 11)).toBe(10);
     expect(turnAt(events, 12)).toBe(11);
     expect(turnAt(events, 40)).toBe(11);

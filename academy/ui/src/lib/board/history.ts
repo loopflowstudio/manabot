@@ -29,6 +29,7 @@ import {
   type Segment,
   type TellPlayers,
 } from './tell';
+import { possessive } from './view';
 
 export type HistoryActor = 'you' | 'opponent' | 'auto' | 'note';
 
@@ -63,6 +64,10 @@ export interface HistoryLine {
   actor: HistoryActor;
   who: string;
   segments: Segment[];
+  /** Complete sentence form worded by `tell`, for walk captions. */
+  sentence: string;
+  /** True when this line is a non-pass player move (marks heavier scrubber ticks). */
+  isMove: boolean;
   /** Indented consequences directly following this move or resolution. */
   children: HistoryLine[];
   rule: PresentationRule | null;
@@ -79,6 +84,7 @@ export interface HistoryLine {
 export interface HistoryTurn {
   turn: number | null;
   owner: string | null;
+  ownerSide: 'you' | 'opponent' | null;
   lines: HistoryLine[];
   /** Count of indented consequence lines in this turn. */
   consequences: number;
@@ -193,7 +199,7 @@ function actorForMove(
   }
   if (seat === null) return 'opponent';
   if (seat === players.youSeat) {
-    return event.caused_by === null ? 'auto' : 'you';
+    return event.caused_by === null || event.caused_by.startsWith('authority.auto.') ? 'auto' : 'you';
   }
   return 'opponent';
 }
@@ -331,12 +337,16 @@ export function buildHistory(
   const ensureTurn = (turnNum: number | null, owner: 'you' | 'opponent' | null): HistoryTurn => {
     const existing = turns.at(-1);
     if (existing && existing.turn === turnNum) {
-      if (existing.owner === null && owner !== null) existing.owner = players[owner];
+      if (existing.owner === null && owner !== null) {
+        existing.owner = players[owner];
+        existing.ownerSide = owner;
+      }
       return existing;
     }
     const created: HistoryTurn = {
       turn: turnNum,
       owner: owner ? players[owner] : null,
+      ownerSide: owner,
       lines: [],
       consequences: 0,
       busy: false,
@@ -369,6 +379,8 @@ export function buildHistory(
       actor: note.actor,
       who: whoForActor(note.actor, players),
       segments: [{ text: note.text, card: null }],
+      sentence: note.text,
+      isMove: false,
       children: [],
       rule: null,
       subjects: [],
@@ -426,6 +438,8 @@ export function buildHistory(
             actor: 'note',
             who: '',
             segments: [{ text: 'passed', card: null }],
+            sentence: `${who} passed`,
+            isMove: false,
             children: [],
             rule: null,
             subjects: [],
@@ -448,6 +462,8 @@ export function buildHistory(
         actor: 'you',
         who: players.you,
         segments: tell(event, labels, players, { form: 'move' }),
+        sentence: segmentText(tell(event, labels, players, { form: 'sentence' })),
+        isMove: false,
         children: [],
         rule: null,
         subjects: [],
@@ -481,6 +497,12 @@ export function buildHistory(
       trigger: isTrigger,
       targets,
     });
+    const sentence = segmentText(tell(event, labels, players, {
+      form: 'sentence',
+      indented: false,
+      trigger: isTrigger,
+      targets,
+    }));
 
     const sourceSeq =
       (event.kind.kind === 'resolved' || event.kind.kind === 'ability_resolved')
@@ -497,6 +519,8 @@ export function buildHistory(
       actor,
       who: whoForActor(actor, players),
       segments,
+      sentence,
+      isMove: move,
       children: [],
       rule: event.rule ?? null,
       subjects,
@@ -554,7 +578,7 @@ export function legacyMoveHistory(
     let turn = turns.at(-1);
     if (!turn || turn.turn !== entry.turn) {
       const owner = entry.turn === null ? undefined : owners.get(entry.turn);
-      turn = { turn: entry.turn, owner: owner ? players[owner] : null, lines: [], consequences: 0, busy: false };
+      turn = { turn: entry.turn, owner: owner ? players[owner] : null, ownerSide: owner ?? null, lines: [], consequences: 0, busy: false };
       turns.push(turn);
     }
     const actor = LEGACY_ACTORS[entry.actor];
@@ -576,6 +600,8 @@ export function legacyMoveHistory(
           actor: 'note',
           who: '',
           segments: [{ text: 'passed', card: null }],
+          sentence: `${who} passed`,
+          isMove: false,
           children: [],
           rule: null,
           subjects: [],
@@ -601,6 +627,8 @@ export function legacyMoveHistory(
       actor,
       who,
       segments: segmentsFromText(entry.text, names),
+      sentence: entry.text,
+      isMove: actor === 'you' || actor === 'opponent',
       children: [],
       rule: null,
       subjects: [],
@@ -647,4 +675,99 @@ export function trackMarks(
     });
   });
   return marks;
+}
+
+// ———————————————————————————————————————— One cursor over the history
+
+export interface FlatHistoryLine {
+  line: HistoryLine;
+  turn: number | null;
+  owner: string | null;
+  ownerSide: 'you' | 'opponent' | null;
+  parent: HistoryLine | null;
+  /** Cursor seq used to look up this line's board (`line.boardSeq`). */
+  cursor: number;
+}
+
+/** The turn the event `seq` happened in: the last `turn_started` at or before it, or null. */
+export function turnAt(events: readonly PresentationEvent[], seq: number): number | null {
+  let turn: number | null = null;
+  for (const event of events) {
+    if (event.seq > seq) break;
+    if (event.kind.kind === 'turn_started') turn = event.kind.turn_number;
+  }
+  return turn;
+}
+
+/** Every selectable non-pass line of `turns` in display order (parents before children). */
+export function flattenHistory(turns: readonly HistoryTurn[]): FlatHistoryLine[] {
+  const flat: FlatHistoryLine[] = [];
+  for (const turn of turns) {
+    for (const line of turn.lines) {
+      if (line.boardSeq !== null) {
+        flat.push({ line, turn: turn.turn, owner: turn.owner, ownerSide: turn.ownerSide, parent: null, cursor: line.boardSeq });
+      }
+      for (const child of line.children) {
+        if (child.boardSeq !== null) {
+          flat.push({ line: child, turn: turn.turn, owner: turn.owner, ownerSide: turn.ownerSide, parent: line, cursor: child.boardSeq });
+        }
+      }
+    }
+  }
+  return flat;
+}
+
+/** The selectable line matching `cursor` (exact `boardSeq` first, then folded `seqs`). */
+export function lineAtCursor(turns: readonly HistoryTurn[], cursor: number): FlatHistoryLine | null {
+  const flat = flattenHistory(turns);
+  return flat.find(item => item.cursor === cursor)
+    ?? flat.find(item => item.line.seqs.includes(cursor))
+    ?? null;
+}
+
+/**
+ * Step the cursor one selectable history line backward (`-1`) or forward (`1`).
+ * Stepping back from now (`null`) lands on the newest selectable line; stepping
+ * forward past the newest line returns to now (`null`).
+ */
+export function stepCursor(turns: readonly HistoryTurn[], cursor: number | null, direction: -1 | 1): number | null {
+  const flat = flattenHistory(turns);
+  if (flat.length === 0) return null;
+  if (cursor === null) return direction < 0 ? flat.at(-1)!.cursor : null;
+  let index = flat.findIndex(item => item.cursor === cursor);
+  if (index < 0) index = flat.findIndex(item => item.line.seqs.includes(cursor));
+  if (index < 0) return direction < 0 ? flat.at(-1)!.cursor : null;
+  if (direction < 0) return flat[Math.max(0, index - 1)].cursor;
+  return index + 1 < flat.length ? flat[index + 1].cursor : null;
+}
+
+/**
+ * Short top-bar reading for a historical cursor, e.g.
+ * `"Turn 6 · Heuristic's Lightning Strike"`. The caller appends `" · Esc for now"`.
+ */
+export function cursorReading(
+  turns: readonly HistoryTurn[],
+  events: readonly PresentationEvent[],
+  cursor: number,
+  players: { you: string; opponent: string },
+): string {
+  const entry = lineAtCursor(turns, cursor);
+  const turn = entry?.turn ?? turnAt(events, cursor);
+  const root = entry?.parent ?? entry?.line ?? null;
+  let detail = '';
+  if (root) {
+    const primaryCard = root.segments.find(segment => segment.card !== null)?.card ?? null;
+    if (root.actor === 'you' || root.actor === 'opponent') {
+      const owner = root.actor === 'you'
+        ? (players.you === 'You' ? 'Your' : possessive(players.you))
+        : possessive(players.opponent);
+      if (primaryCard) detail = `${owner} ${primaryCard}`;
+      else detail = root.sentence || segmentText(root.segments);
+    } else {
+      detail = segmentText(root.segments);
+    }
+  }
+  if (turn !== null && detail) return `Turn ${turn} · ${detail}`;
+  if (turn !== null) return `Turn ${turn}`;
+  return detail || 'Earlier step';
 }

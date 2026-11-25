@@ -8,7 +8,7 @@ import {
   type DeckChoice,
   type DeckSelection,
 } from './decks';
-import { stepBoards, type StepBoard } from './board/boards';
+import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
@@ -134,8 +134,8 @@ export class GameStore {
   branchProjection = $state.raw<Observation | null>(null);
   tableAnnouncement = $state('');
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
-  /** The person's board after each step that led to `frameHash`'s frame (`board/boards.ts`). */
-  stepBoards = $state.raw<{ frameHash: string; boards: StepBoard[] } | null>(null);
+  /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
+  keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
@@ -426,15 +426,24 @@ export class GameStore {
     }
   }
 
-  /** Keep the step boards that came with `frame`; boards that do not rebuild are dropped (beats then show the frame). */
-  applyStepBoards(frame: ExperienceFrame, patches: readonly StepBoardPatch[]): void {
-    let boards: StepBoard[] = [];
+  /**
+   * Merge the step boards (and frame board for `range`) that came with `frame`
+   * into the session's kept boards (capped at 512). Malformed patches are
+   * dropped without disturbing previously kept boards.
+   */
+  applyStepBoards(
+    frame: ExperienceFrame,
+    patches: readonly StepBoardPatch[],
+    range: SeqRange | null = null,
+  ): void {
+    const existing = this.keptBoards?.matchId === frame.match_id ? this.keptBoards.boards : [];
+    let next = existing;
     try {
-      boards = patches.length ? stepBoards(frame.projection, patches) : [];
+      next = mergeBoards(existing, frame.projection, patches, range);
     } catch {
-      boards = [];
+      next = existing;
     }
-    this.stepBoards = { frameHash: frame.frame_hash, boards };
+    this.keptBoards = { matchId: frame.match_id, boards: next };
   }
 
   applyFrame(
@@ -563,7 +572,7 @@ export class GameStore {
     this.submissionAccepted = false;
     this.lastCommandRejection = null;
     this.protocolFrame = null;
-    this.stepBoards = null;
+    this.keptBoards = null;
     this.observation = null;
     this.actions = [];
     this.actionSpaceKind = '';

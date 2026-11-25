@@ -1,6 +1,6 @@
 import type { SearchConfig, PendingSearch } from './search';
 import type { AddressedReplayDecision } from './replay-index';
-import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer, TraceConfig } from './types';
+import type { Observation, PresentationEvent, PresentationLabels, RecordedPlayer, StepBoardPatch, TraceConfig } from './types';
 
 export interface BotDecision {
   action: number;
@@ -83,6 +83,8 @@ export interface RecordedPosition extends Position {
   cursor: number;
   transition_start: number;
   consequences_recorded: boolean;
+  /** Per-line mid-step boards for a `consequences` position, patched back from `observation`. */
+  boards?: StepBoardPatch[];
 }
 
 /**

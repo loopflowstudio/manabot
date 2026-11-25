@@ -192,9 +192,9 @@
   // A Study branch shows its own projection with no live offers.
   const boardFrame = $derived<ExperienceFrame | null>(decisionFrame && gameStore.branchProjection
     ? { ...decisionFrame, projection: gameStore.branchProjection, offers: [], prompt: null } : decisionFrame);
-  // The boards the opponent's moves were made on, for the frame they came with.
-  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.stepBoards?.frameHash === boardFrame.frame_hash
-    ? gameStore.stepBoards.boards : []);
+  // Session-kept boards (frames and per-line boards, capped at 512) for the active match.
+  const stepBoards = $derived(!gameStore.branchProjection && boardFrame && gameStore.keptBoards?.matchId === boardFrame.match_id
+    ? gameStore.keptBoards.boards : []);
 
   $effect(() => {
     if (stopsPending !== null && (gameStore.updateSeq !== stopsPending || gameStore.connection !== 'connected')) stopsPending = null;
