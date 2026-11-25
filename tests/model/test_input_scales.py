@@ -1,6 +1,6 @@
 """What a fresh model's numeric inputs look like on sampled games.
 
-Rows are encoded natively (`observation_arrays`) from random play of Elemental
+Rows are encoded as native batches from random play of Elemental
 decks and prepared with the model's readings.
 """
 
