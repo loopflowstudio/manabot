@@ -205,11 +205,25 @@ def size_evaluations(
             }
         )
 
-    half = Fraction(clock="updates", value=0.5, trained=True)
-    jobs = [
-        against(f"{HELD_OUT}-{size}", shared.checkpoints),
-        against(f"{HALF_TRAINING}-{size}", shared.checkpoints, HALF_TRAINING_SEATINGS, half),
+    trained_updates = {
+        c.at["updates"] for c in shared.checkpoints if c.at.get("updates", 0) > 0
+    }
+    half_checkpoints = [
+        c
+        for c in shared.checkpoints
+        if c.at.get("updates", 0) > 0 and (c.at["updates"] / 2) in trained_updates
     ]
+    half = Fraction(clock="updates", value=0.5, trained=True)
+    jobs = [against(f"{HELD_OUT}-{size}", shared.checkpoints)]
+    if half_checkpoints:
+        jobs.append(
+            against(
+                f"{HALF_TRAINING}-{size}",
+                half_checkpoints,
+                HALF_TRAINING_SEATINGS,
+                half,
+            )
+        )
     if size == "w160l8":
         trained = [c for c in shared.checkpoints if c.at.get("updates", 0) > 0]
         if trained:
