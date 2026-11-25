@@ -689,6 +689,39 @@ def test_face_down_card_text_appears_only_when_present() -> None:
     assert len(changed) == 1 and "face down" in changed[0][1]
 
 
+def test_put_into_graveyard_this_turn_text_distinguishes_arrival_origin() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    decision = capture_text_decision(env)
+    assert "put into the graveyard" not in decision.text
+
+    payload = json.loads(decision.capture_json)
+    payload["observation"]["viewer_state"]["agent_cards"][0][
+        "put_into_graveyard_this_turn"
+    ] = True
+    text = render_decision(_redigest(payload)).text
+    changed = [
+        (old, new)
+        for old, new in zip(decision.text.splitlines(), text.splitlines())
+        if old != new
+    ]
+    assert len(changed) == 1
+    assert "; put into the graveyard this turn;" in changed[0][1]
+    assert "from the battlefield" not in changed[0][1]
+
+    payload["observation"]["viewer_state"]["agent_cards"][0][
+        "from_battlefield_this_turn"
+    ] = True
+    from_bf = render_decision(_redigest(payload)).text
+    changed_bf = [
+        (old, new)
+        for old, new in zip(decision.text.splitlines(), from_bf.splitlines())
+        if old != new
+    ]
+    assert len(changed_bf) == 1
+    assert "; put into the graveyard from the battlefield this turn;" in changed_bf[0][1]
+    assert "; put into the graveyard this turn;" not in changed_bf[0][1]
+
+
 def test_a_transformed_cecil_token_copy_is_named_by_its_shown_face() -> None:
     """Ember Island Production copies Cecil; the token attacks and transforms."""
     env = priority_root(
@@ -1070,6 +1103,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "cast_permission": "may be played from the card's zone by the permitted player",
         "x": "announced X",
         "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
+        "put_into_graveyard_this_turn": "put into the graveyard this turn",
         "counters": "stash counters",
     },
     managym.StackObject: {
@@ -1151,6 +1185,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "mana": "amounts by color",
         "restriction": "only for",
         "combat": "expires at end of combat or at step end",
+        "expiry": "expires at end of",
         "program": "the same class stated by rider, restriction and expiry",
     },
     managym.ContinuousEffect: {
