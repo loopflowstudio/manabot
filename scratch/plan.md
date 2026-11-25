@@ -308,61 +308,51 @@ JSON readers; `write_dense_row`; `reference_distribution` (rewritten on CSR);
 
 ## Passes
 
-**Built in the first implementation slice.** The belief player and frozen-policy
-likelihood scorer encode v11 viewer observations as native batches. Torch and MLX
-take explicit `BeliefRows`. All compact attention modes include valid belief
-rows and the global token. The demo keeps the opening hands before measuring
-its policy intervention. On the opening choice, dense and native routes both
-gave identical action logits under either belief, while the critic changed.
+Done: **0. Belief on native batches** (`993ac80296`). Belief player and
+likelihood scorer encode v11 native batches; Torch/MLX take explicit
+`BeliefRows`; compact attention keeps belief rows and the global token
+(dense and native routes gave identical logits on the demo root, questions 12).
+`encode_policy_batch` still serves v9/v10 for the two belief callers until Pass 3.
 
-**Next slice.** Implement the native byte round trip together with its first
-disk consumer (backend capture and parity), including rejection of invalid joins.
-The remaining scalar, collector, probe and transport work below is pending.
-`encode_policy_batch` still serves v9/v10 while those versions are supported.
-Replace its two belief callers with direct native encoding when they retire.
+Docs were drafted ahead of the build (`0bb2c15c12`) and already describe
+`ObservationBatch.to_bytes()`/`from_bytes()`, `admit`, v11-only; each claim must
+be backed by code before gate.
 
-**1. One Python path + validated `ObservationBatch` bytes (proves the whole design).**
-First add `ObservationBatch.to_bytes()` / `from_bytes()` in Rust (with full
-layout/CSR/join validation on load) and rebuild the extension. Then move every
-Python producer and consumer onto the single batch representation:
-- Scalar `Env` (`reset`/`step`/`step_semantic`/`scenario_refresh`) returns
-  `managym.Observation`; `TargetPracticeVector` implements
-  `set_observation_layout` + `observation_rows()`; `manabot.env.vector_env` is
-  deleted.
-- `RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`;
-  `ObservationSelection` drops `Mapping`/`.export()`/`.materialize()`;
-  `blank_memory` is replaced by `ObservationBatch.blank_decision_memory()`.
-- `admission.admit_native` is renamed to `admission.admit` with explicit
-  `belief: BeliefRows | None`; `prepare()` reads `ObservationSpans` directly
-  (fixing `used_columns`/`bucketed_columns`/`live_tokens` for belief tokens!)
-  and `reference_distribution` reads CSR `actions` directly.
-- Both backends, `training/rollout/*`, `combat_probe`, `selection_data`,
-  `capture.py`/`parity.py`, `decision_memory_probe`, `eval/agents.py`, search,
-  belief, verify (`choice_inputs`/`action_cases`/`choice_corpus`), and
-  experiments move onto the single path.
-Shows: `uv run python scripts/pinned_pilot.py verify` (v11),
-`uv run --extra dev pytest tests/model tests/eval tests/sim tests/training tests/belief tests/verify -q`,
-and `git grep -nE "encode_observation\(|set_buffers|allocate_vector_buffers|ObservationRows|BucketedObservation|PrefixObservation|CompactObservation|admit_native" -- manabot scripts experiments`
-is empty. This pass immediately validates belief attention, Torch-free eval
-children, decision-memory probes, `combat_probe`, and capture/parity replay.
+Remaining:
 
-**2. v9/v10 retired in Python and Rust.** `SUPPORTED_POLICY_INPUTS = (11,)`,
-`legacy_input.py`/`.rs`, `InputLayout`, `turn_state`, pinned v9/u1952 fixtures,
-rejection tests rewritten for `v0.2.5`. Rebuild the extension.
+**1. Native batch bytes + capture/parity (next).** Rust `ObservationBatch.to_bytes()` /
+`from_bytes()` with full layout/CSR/join validation on load (truncated, bad
+offsets, out-of-bounds joins, non-v11 layout → `ValueError`); rebuild extension;
+stubs in `managym/__init__.pyi`. First consumers: `backends/torch/capture.py`,
+`backends/parity.py`, `scripts/profile_mlx_learner.py` save/load batch bytes
+(+ `MemoryArchive`). Teaches: whether a validated byte form is cheap enough to
+replace dense `.npz` everywhere offline (decision-memory probes in Pass 2).
+Shows: rejection tests, `tests/model/test_backend_capture.py`, parity tests.
 
-**3. Native dense transport deleted.** The Rust deletion list above
-(including `ObservationLayout.allocate`); slot admission via scratch
-`PackedRows`; Rust tests (~85 sites in `cards/tests/cards/observability.rs`,
-~30 across set files, `tests/rules`, and src test modules) read rows through
-one support reader over `encode_rows` + a collecting `RowWriter` in
-`managym/tests/support/inspect.rs`; `managym/__init__.pyi`, `recording.py`,
-`replay.py`. Debug `cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`,
-`--test-threads 2`) and clippy.
+**2. One Python path.** Scalar `Env` returns `managym.Observation`;
+`TargetPracticeVector` on `observation_rows()`; delete `manabot/env/vector_env.py`;
+`RetainedMemory` replaces `PrefixObservation`/`CompactObservation`/`select_rows`;
+`ObservationSelection` drops `Mapping`; `blank_decision_memory()` native;
+`admit_native` → `admit`; `prepare()` reads spans only; `reference_distribution`
+on CSR; collectors, `combat_probe`, `selection_data`, decision-memory probes,
+`eval/agents.py`, search, verify, experiments (questions 3–10). Shows: pinned
+pilot v11 verify, `pytest tests/model tests/eval tests/sim tests/training
+tests/belief tests/verify -q`, and the Pass-1 grep in the acceptance block empty
+for `manabot scripts experiments`.
 
-**4. Docs and guards.** The docs in the table; a boundary test asserting the
-removed names are absent from `managym`, `manabot.env.observation`, and
-`manabot.env.memory_store`; 0.3.0 release-notes entry listing each removed name
-and its replacement.
+**3. v9/v10 retired (Python + Rust).** Needs the decision in questions 1 first:
+AGENTS.md says "removed once a v11 pilot is at least as strong as the best v9
+one, not before 0.3.0"; the Task brief asks for retirement now; no comparison is
+recorded (best player u1952 `59718fe34945` is v9). `SUPPORTED_POLICY_INPUTS =
+(11,)`, delete `legacy_input.py`/`.rs`, `InputLayout`, `turn_state`, v9/u1952
+pinned fixtures; rejection naming `v0.2.5`; rebuild.
+
+**4. Native dense transport deleted + docs/guards.** The Rust list in "What
+goes"; slot admission via scratch `PackedRows`; Rust tests read rows through
+one `inspect.rs` reader over `encode_rows`; `recording.py`, `replay.py`, stubs;
+debug `cargo nextest run --profile ci` (`CARGO_BUILD_JOBS=2`, `--test-threads 2`)
+and clippy. Then `AGENTS.md`, `.lf/qa/*.md`, 0.3.0 release-notes entry, and a
+boundary test asserting removed names are absent.
 
 ## Acceptance check at gate
 
