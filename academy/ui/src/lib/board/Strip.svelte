@@ -94,7 +94,7 @@
   </svg>
   {#if hover}
     <span class="dot" style:left={`${hover.left}%`} style:top={`${y(hover.mark.value!)}px`}></span>
-    <p class="readout type-caption" data-testid="strip-readout" class:flip={hover.left > 60} style:left={`${hover.left}%`}>{readout(hover.mark)}</p>
+    <p class="readout type-caption" data-testid="strip-readout" class:flip={hover.left > 60} class:low={scale !== null && (hover.mark.value ?? 0) > 0.5} style:left={`${hover.left}%`}>{readout(hover.mark)}</p>
   {/if}
   {#if onjump && selected !== null}
     <input type="range" class="seek" aria-label="Replay position" min="0" max={Math.max(0, marks.length - 1)} value={selected}
@@ -122,7 +122,9 @@
   .grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: .7; }
   .hover { stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .dot { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--info-text, var(--accent)); pointer-events: none; }
-  .readout { position: absolute; bottom: calc(100% + 4px); transform: translateX(-6px); margin: 0; padding: 2px 8px; white-space: nowrap; pointer-events: none;
+  /* Inside the plot, on the side away from the point, so it covers neither the caption nor the line. */
+  .readout.low { top: auto; bottom: 4px; }
+  .readout { position: absolute; top: 4px; transform: translateX(-6px); margin: 0; padding: 2px 8px; white-space: nowrap; pointer-events: none;
     background: var(--bg-surface, var(--bg-field)); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); z-index: 2; }
   .readout.flip { transform: translateX(calc(-100% + 6px)); }
   .turns.chart { margin-left: 40px; }

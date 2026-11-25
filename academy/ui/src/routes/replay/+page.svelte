@@ -594,7 +594,7 @@
   {/if}
 {/snippet}
 
-{#snippet menu()}
+{#snippet bar()}
   <label class="perspective type-caption">
     <span class="sr-only">Perspective</span>
     <select aria-label="Perspective" data-testid="perspective" value={String(perspective)} disabled={locked} onchange={event => setPerspective(event.currentTarget.value)}>
@@ -607,10 +607,9 @@
     <label class="type-caption reveal"><input type="checkbox" checked={current.revealed} disabled={locked || replayStore.busy}
       onchange={event => { replayStore.reveal = event.currentTarget.checked; void replayStore.seek(replayStore.selected); }} /> Show both hands</label>
   {/if}
-  <a class="type-caption text-ink-2 hover:text-ink" href={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}>Games</a>
-  <details class="game-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Menu</summary>
-    <div class="menu-panel" role="region" aria-label="Recording and tools">
+{/snippet}
+
+{#snippet gameSettings()}
       <p class="type-label text-ink-2" data-testid="recording-heading">{sourceLabel}</p>
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
@@ -688,8 +687,6 @@
         </details>
       {/if}
       {#if index?.can_feedback}<Feedback attemptId={index.id} />{/if}
-    </div>
-  </details>
 {/snippet}
 
 {#snippet result()}
@@ -745,7 +742,9 @@
     strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek, scale: analysisScale } : undefined}
     {notices}
     result={ending ? result : undefined}
-    {menu}
+    menu={{ game: gameSettings }}
+    {bar}
+    historyHref={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}
   />
 {:else}
   <main class="landing mx-auto w-full max-w-[900px] px-4 py-6">
@@ -785,15 +784,6 @@
   .reveal { display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); white-space: nowrap; }
   .result { display: grid; gap: 6px; justify-items: start; }
   .result h2 { line-height: 1.1; }
-  .game-menu { position: relative; }
-  .game-menu > summary { list-style: none; }
-  .game-menu > summary::-webkit-details-marker { display: none; }
-  .menu-panel {
-    position: absolute; right: 0; top: calc(100% + 8px); z-index: 320; width: 360px; max-height: calc(100dvh - 64px); overflow-y: auto;
-    display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;
-    background: var(--bg-surface); box-shadow: var(--shadow-raised);
-  }
-  .menu-panel > a.btn { justify-self: start; }
   .note { display: block; width: 100%; margin-top: 4px; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 4px 6px; }
   .recordings { display: grid; gap: 4px; }
   .analysis-menu { display: grid; gap: 4px; }

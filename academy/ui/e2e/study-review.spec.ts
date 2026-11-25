@@ -168,7 +168,12 @@ test('a decision made with analysis shown says so in Review and Games', async ({
   let shown = false;
   await playToEnd(page, async decision => {
     if (decision === 2) {
+      await page.getByTestId('game-menu').click();
+      await page.screenshot({ path: shot('play-settings') });
       await toggle.check();
+      // Turning it on closes Settings and says so in the bar.
+      await expect(toggle).toBeHidden();
+      await expect(page.getByTestId('chip-analysis')).toHaveText(/Analysis on/);
       await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader', { timeout: 30_000 });
       shown = true;
     } else if (shown) {
@@ -185,7 +190,8 @@ test('a decision made with analysis shown says so in Review and Games', async ({
       await plot.hover({ position: { x: 4, y: 20 } });
       await expect(page.getByTestId('strip-readout')).toHaveText(/^Turn \d+ · .+ · \d+%$/);
       await page.screenshot({ path: shot('play-live-line') });
-      await toggle.uncheck();
+      await page.getByTestId('chip-analysis').click();
+      await expect(page.getByTestId('chip-analysis')).toHaveCount(0);
       await expect(page.getByTestId('choices-heading')).not.toContainText('Analysis by');
       shown = false;
     }

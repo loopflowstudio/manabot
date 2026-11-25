@@ -28,7 +28,7 @@
 
   const NAV = $derived([
     { href: '/?setup=1', label: 'New game' },
-    { href: '/games', label: 'Games' },
+    { href: '/games', label: 'History' },
     ...(currentGame.href ? [{href:currentGame.href, label:'Current game'}] : []),
   ]);
   function isActive(href: string): boolean {

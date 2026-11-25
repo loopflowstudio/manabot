@@ -650,7 +650,7 @@ from (printed or set, counters, each effect by its source and duration, and
 whatever those do not explain as "other effects"), and its state. The
 inspection floats beside the card and closes when the pointer leaves, when you
 click or when the game moves on; a card you just clicked does not reopen it
-until the pointer leaves and returns; **Dock** in the top bar keeps it in a pane at the top of the rail
+until the pointer leaves and returns; **Pin the card preview** in Settings keeps it in a pane at the top of the rail
 instead, showing the last card you inspected. The top bar shows the turn. Along
 the bottom of the screen runs the step bar: one cell per step, a line between
 phases, the current step shaded, and in each cell the stop for your turn above
@@ -1202,7 +1202,8 @@ analysed up to its last recorded position.
 
 #### Analysis while you play
 
-**Show analysis**, at the top of the rail during your game, reads your
+**Show analysis**, in the top bar's Settings during your game (the bar then
+shows an **Analysis on** chip that turns it off), reads your
 decisions as you play. It is off at the start of every game. Turned on, it
 reads with your opponent's policy when that is a registered trained policy,
 otherwise with Academy's recommended policy; with more than one, a menu

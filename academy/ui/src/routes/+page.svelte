@@ -408,6 +408,7 @@
     if (!name || !liveAnalysis.policy) return null;
     return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} (%) from your seat · ${liveAnalysis.points.length} ${liveAnalysis.points.length === 1 ? 'decision' : 'decisions'} read`;
   });
+  const analysisOffered = $derived(inGame && !demoName && !gameStore.gameOver && pilotCanAct);
   const liveMarks = $derived(liveScale ? liveAnalysedMarks(gameStore.actionLog, liveAnalysis.points) : logMarks(gameStore.actionLog));
   $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
@@ -442,22 +443,6 @@
   {#if !inGame}<WorkStatus work={gameStore.work} connected={gameStore.connection === 'connected'} inline />{/if}
   {#if gameStore.tableUnavailable}<p role="status" class="type-caption">The previous game is no longer live. Its recording is retained; start the next game explicitly.</p>{/if}
   {#if gameStore.storageWarning}<p role="status" class="type-caption">{gameStore.storageWarning}</p>{/if}
-  {#if inGame && !demoName && !gameStore.gameOver && pilotCanAct}
-    <section class="live-analysis type-caption" aria-label="Analysis" data-testid="live-analysis">
-      <label class="switch"><input type="checkbox" role="switch" data-testid="show-analysis" checked={liveAnalysis.shown} disabled={!canShowAnalysis}
-        onchange={event => sendShowAnalysis(event.currentTarget.checked)} /> Show analysis</label>
-      {#if liveAnalysis.shown && liveAnalysis.policies && liveAnalysis.policies.length > 1}
-        <select aria-label="Analysing policy" value={liveAnalysis.policy?.sha256} disabled={!canShowAnalysis}
-          onchange={event => sendShowAnalysis(true, event.currentTarget.value)}>
-          {#each liveAnalysis.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
-        </select>
-      {:else if liveAnalysis.shown && liveAnalysis.policy}<span class="text-ink-3">by {liveAnalysis.policy.name}</span>{/if}
-      {#if liveAnalysis.pending}<span class="text-ink-3" role="status">{liveAnalysis.shown ? 'Turning off…' : 'Loading the policy…'}</span>{/if}
-      {#if liveAnalysis.unavailable}<p class="text-ink-3" data-testid="live-analysis-unavailable">{liveAnalysis.unavailable} Install a policy provider (managym.bots) to analyse.</p>{/if}
-      {#if liveAnalysis.stopped}<p class="text-ink-3" role="status">{liveAnalysis.stopped}</p>{/if}
-      {#if liveAnalysis.shown}<p class="text-ink-3">Each choice you make while it is shown is marked "analysis shown" in Review.</p>{/if}
-    </section>
-  {/if}
   {#if participantStudying}<p class="type-caption text-ink-2">Study position. {gameStore.branchProjection ? 'Alternate action played; return to the recorded decision to try another.' : 'Choosing an offer tries it in a separate branch.'}</p>{/if}
 {/snippet}
 
@@ -492,32 +477,48 @@
   </div>
 {/snippet}
 
-{#snippet menu()}
-  <a class="type-caption text-ink-2 hover:text-ink" href="/games">Games</a>
-  <details class="game-menu">
-    <summary class="btn btn-ghost btn-sm" data-testid="game-menu">Game</summary>
-    <div class="menu-panel" role="region" aria-label="Session, stops and tools">
-      <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
-      {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
-      <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
-      <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
-      <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
-        <legend class="sr-only">Pilot stop controls</legend>
-        <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
-          onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
-      </fieldset>
-      {#if gameStore.table}
-        <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
-          <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
-            announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
-            onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
-        </details>
-      {/if}
-      {#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
-        {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
-      {/if}
-    </div>
-  </details>
+{#snippet playSettings()}
+  <!-- The stop bar under the board sets each step's stop; this holds what it has no cell for: automation on or off, the stack stop and the reset. -->
+  <p data-testid="automation-status" class="type-caption text-ink-2">Priority-stop automation: {gameStore.stops.auto_pass ? `on · your turn ${gameStore.stops.my.length} / opponent ${gameStore.stops.opponent.length} · stack ${gameStore.stops.stop_on_stack ? 'on' : 'off'}` : 'off · every priority choice'}{gameStore.fastForwarding ? ' · yielding this turn' : ''}{stopsPending !== null ? ' · updating…' : ''}</p>
+  <fieldset disabled={!gameStore.hasCapability('configure_match') || participantStudying || !inputReady}>
+    <legend class="sr-only">Pilot stop controls</legend>
+    <StopsPanel stops={gameStore.stops} onToggleStop={handleToggleStop} onStopOnStackChange={handleStopOnStackChange}
+      onAutoPassChange={handleAutoPassChange} onReset={handleResetStops} />
+  </fieldset>
+{/snippet}
+
+{#snippet analysisSettings()}
+  <div class="live-analysis" data-testid="live-analysis">
+    <label class="setting"><span>Show analysis<small>What {liveAnalysis.policy ? shortName(liveAnalysis.policy.name) : 'a policy'} would choose here, and its estimate of the game. A choice you make while it is shown is marked "analysis shown" in Review.</small></span>
+      <!-- The sheet closes on the change: it covers the choices the analysis is about. -->
+      <input type="checkbox" role="switch" data-testid="show-analysis" checked={liveAnalysis.shown} disabled={!canShowAnalysis}
+        onchange={event => { sendShowAnalysis(event.currentTarget.checked); event.currentTarget.closest('details')?.removeAttribute('open'); }} /></label>
+    {#if liveAnalysis.policies && liveAnalysis.policies.length > 1}
+      <label class="setting"><span>Read by</span>
+        <select aria-label="Analysing policy" value={liveAnalysis.policy?.sha256} disabled={!canShowAnalysis}
+          onchange={event => sendShowAnalysis(true, event.currentTarget.value)}>
+          {#each liveAnalysis.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
+        </select></label>
+    {:else if liveAnalysis.policy}<p class="type-caption text-ink-3">Read by {liveAnalysis.policy.name}</p>{/if}
+    {#if liveAnalysis.pending}<p class="type-caption text-ink-3" role="status">{liveAnalysis.shown ? 'Turning off…' : 'Loading the policy…'}</p>{/if}
+    {#if liveAnalysis.unavailable}<p class="type-caption text-ink-3" data-testid="live-analysis-unavailable">{liveAnalysis.unavailable} Install a policy provider (managym.bots) to analyse.</p>{/if}
+    {#if liveAnalysis.stopped}<p class="type-caption text-ink-3" role="status">{liveAnalysis.stopped}</p>{/if}
+  </div>
+{/snippet}
+
+{#snippet gameSettings()}
+  <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+  {#if !demoName}<PlaySessionStrip onEditNext={() => openEditor('next')} onChangeOpponent={() => openEditor('next', true)} />{/if}
+  {#if gameStore.table}
+    <details><summary class="type-label cursor-pointer">Sharing and Study tools</summary>
+      <SharedTablePanel table={gameStore.table} restored={gameStore.restoredDecision} branchAttemptId={gameStore.branchAttemptId}
+        announcement={gameStore.tableAnnouncement} onTransferPilot={sendTransferPilot} onRestoreDecision={sendRestoreDecision}
+        onReturnFromBranch={sendReturnFromBranch} onReturnToLive={sendReturnToLive} />
+    </details>
+  {/if}
+  {#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
+    {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
+  {/if}
 {/snippet}
 
 <main
@@ -557,7 +558,8 @@
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
         note: gameStore.gameOver || liveScale ? null : 'Review the game once it ends to step back through these', scale: liveScale }}
       result={gameStore.gameOver ? result : undefined}
-      {menu}
+      menu={{ play: playSettings, analysis: analysisOffered ? analysisSettings : undefined, game: gameSettings }}
+      chips={liveAnalysis.shown ? [{ key: 'analysis', label: 'Analysis on', clear: () => sendShowAnalysis(false) }] : []}
       {stepBoards}
       {autoTap}
       {fullControl}
@@ -674,17 +676,6 @@
     padding: 16px 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-sheet, none); }
   .last-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
   .home-matchup { line-height: 1.35; }
-  .game-menu { position: relative; }
-  .live-analysis { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-  .live-analysis p { flex-basis: 100%; margin: 0; }
-  .live-analysis .switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-  .game-menu > summary { list-style: none; }
-  .game-menu > summary::-webkit-details-marker { display: none; }
-  .menu-panel {
-    position: absolute; right: 0; top: calc(100% + 8px); z-index: 320; width: 360px; max-height: calc(100dvh - 64px); overflow-y: auto;
-    display: grid; gap: 12px; justify-items: start; padding: 14px; border: 1px solid var(--border-strong); border-radius: 10px;
-    background: var(--bg-surface); box-shadow: var(--shadow-raised);
-  }
-  .menu-panel > :global(*) { width: 100%; }
-  .menu-panel > a { width: auto; }
+  .live-analysis { display: grid; gap: 6px; }
+  .live-analysis select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 190px; }
 </style>
