@@ -89,12 +89,12 @@ struct CanonicalTurn<'a> {
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "crate::state::game_object::exact"
     )]
-    attacks_this_turn: Vec<(ObjectId, u32)>,
+    attacks_this_turn: &'a Vec<(ObjectId, u32)>,
     #[serde(
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "crate::state::game_object::exact"
     )]
-    attacked_permanents: Vec<(ObjectId, usize, crate::flow::combat::AttackTarget)>,
+    attacked_permanents: &'a Vec<(ObjectId, usize, crate::flow::combat::AttackTarget)>,
 
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -128,26 +128,8 @@ impl<'a> From<&'a TurnState> for CanonicalTurn<'a> {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             damage_pairs: &turn.damage_pairs,
-            attacks_this_turn: turn
-                .attacks_this_turn
-                .iter()
-                .map(|(attacker, targets)| (*attacker, targets.len() as u32))
-                .collect(),
-            attacked_permanents: turn
-                .attacks_this_turn
-                .iter()
-                .flat_map(|(attacker, targets)| {
-                    targets
-                        .iter()
-                        .enumerate()
-                        .filter_map(move |(index, target)| match *target {
-                            target @ crate::flow::combat::AttackTarget::Permanent(_) => {
-                                Some((*attacker, index, target))
-                            }
-                            _ => None,
-                        })
-                })
-                .collect(),
+            attacks_this_turn: &turn.attacks_this_turn,
+            attacked_permanents: &turn.attacked_permanents,
 
             history: turn.history,
             used_trigger_grants: &turn.used_trigger_grants,

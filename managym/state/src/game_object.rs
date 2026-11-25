@@ -104,6 +104,12 @@ impl<T: ExactIds> ExactIds for Option<T> {
     }
 }
 
+impl<T: ExactIds + ?Sized> ExactIds for &T {
+    fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        (**self).serialize_exact(serializer)
+    }
+}
+
 impl<T: ExactIds> ExactIds for [T] {
     fn serialize_exact<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_seq(self.iter().map(Exact))
