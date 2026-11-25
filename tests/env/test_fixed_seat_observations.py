@@ -5,14 +5,12 @@ import pytest
 import torch
 
 from manabot.env.failures import RecordedVectorEnv
-from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
     encode_observation,
 )
-from manabot.env.vector_env import VectorEnv as TorchVectorEnv
-from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
+from manabot.infra.config import ObservationConfig
 import managym
 from managym.disclosure import DecklistDisclosure
 
@@ -52,13 +50,12 @@ def _identity(read: managym.ObservationRead) -> tuple[int, int, int]:
     return read.game_id, read.seed, read.revision
 
 
-@pytest.mark.parametrize("version", [9, 10])
 @pytest.mark.parametrize("disclosure", ["open", "closed"])
 @pytest.mark.parametrize("captured", [False, True])
 def test_fixed_seat_scalar_parity_and_unchanged_execution(
-    version: int, disclosure: DecklistDisclosure, captured: bool
+    disclosure: DecklistDisclosure, captured: bool
 ) -> None:
-    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    space = ObservationSpace()
     vector = (
         RecordedVectorEnv(num_envs=2, seed=42)
         if captured
@@ -236,31 +233,3 @@ def test_fixed_seat_done_reads_terminal_including_maximum_seed() -> None:
     while not scalar.is_game_over():
         scalar.step(0)
     _assert_rows(space, buffers, [scalar], [1])
-
-
-def test_fixed_seat_torch_wrapper_preserves_tensor_buffers_on_seed_rebuild() -> None:
-    match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
-    space = ObservationSpace()
-    vector = TorchVectorEnv(2, match, space, Reward(RewardConfig()), "cpu", seed=42)
-    consumer = ObservationSpace(ObservationConfig(max_events=5))
-    buffers = consumer.allocate(2)
-    try:
-        previous = None
-        for seed in (42, 99, 42):
-            observations, _ = vector.reset(seed=seed)
-            before = {key: value.clone() for key, value in observations.items()}
-            reads = vector.write_observations_for_players(
-                [1, 0], buffers, layout=consumer.layout
-            )
-            assert reads[0].seed == seed
-            if previous is not None:
-                assert reads[0].game_id != previous
-            previous = reads[0].game_id
-            scalars = [managym.Env(seed=seed + slot) for slot in range(2)]
-            for scalar in scalars:
-                scalar.reset(match.to_rust())
-            _assert_rows(consumer, buffers, scalars, [1, 0])
-            for key in observations:
-                assert torch.equal(observations[key], before[key])
-    finally:
-        vector.close()

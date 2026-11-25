@@ -1,14 +1,12 @@
 """Exact library facts stay viewer-scoped through transport and policy input."""
 
-import json
-
 import numpy as np
 import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace, encode_observation
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.text_observation import keep_opening_hands
 import managym
@@ -79,23 +77,6 @@ def test_library_facts_reach_text_and_the_actual_torch_policy() -> None:
     (logits[logits > -1e7].sum() + values.sum()).backward()
     gradient = policy.semantic_cards.token_embedding.weight.grad
     assert gradient is not None and gradient.abs().sum() > 0
-
-
-@pytest.mark.parametrize("version", [9, 10])
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_legacy_inputs_omit_library_positions(version: int) -> None:
-    env = _root(0)
-    source = json.loads(env.observation_for_player(0).toJSON())
-    observation = managym.Observation.from_json(json.dumps(source))
-    space = ObservationSpace(ObservationConfig(policy_input_version=version))
-    expected = encode_observation(space, observation)
-    source["agent"].pop("known_library", None)
-    source["opponent"].pop("known_library", None)
-    observation = managym.Observation.from_json(json.dumps(source))
-    assert not observation.agent.known_library
-    without = encode_observation(space, observation)
-    for key in without:
-        np.testing.assert_array_equal(expected[key], without[key], err_msg=key)
 
 
 @pytest.mark.parametrize("owner", [0, 1])

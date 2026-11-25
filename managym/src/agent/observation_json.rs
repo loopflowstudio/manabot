@@ -669,7 +669,25 @@ mod tests {
         let current = Observation::for_player(&game, PlayerId(0));
         assert!(!current.historical());
         // The same observation as a capture written before card records.
-        let mut historical = crate::agent::legacy_input::view(&current);
+        let mut historical = current.clone();
+        historical.agent_cards.extend(
+            current
+                .stack_objects
+                .iter()
+                .filter_map(|o| Some(o.spell.as_ref()?.legacy_card(o.x))),
+        );
+        historical.agent_cards.extend(
+            current
+                .agent_permanents
+                .iter()
+                .filter_map(PermanentData::legacy_card),
+        );
+        historical.opponent_cards.extend(
+            current
+                .opponent_permanents
+                .iter()
+                .filter_map(PermanentData::legacy_card),
+        );
         for permanent in historical
             .agent_permanents
             .iter_mut()
@@ -683,10 +701,6 @@ mod tests {
         assert!(historical.historical());
         let upgraded = parse(&historical.to_json()).unwrap();
         assert_eq!(upgraded.to_json(), current.to_json());
-        // The v9/v10 rows read the capture's own card lists.
-        let legacy = crate::agent::legacy_input::view(&upgraded);
-        assert_eq!(legacy.agent_cards, historical.agent_cards);
-        assert_eq!(legacy.opponent_cards, historical.opponent_cards);
         assert!(!historical.agent_permanents.is_empty() && !historical.stack_objects.is_empty());
     }
 

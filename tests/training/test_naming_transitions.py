@@ -20,7 +20,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
-    ObservationConfig,
     RewardConfig,
 )
 from manabot.training.learning import Learning
@@ -49,7 +48,7 @@ def _naming_rows(batch: RolloutBatch) -> tuple[np.ndarray, np.ndarray]:
 
 def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     torch.manual_seed(243)
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     collector = open_collector(
         space,
         Match(

@@ -67,17 +67,12 @@ def _policy(
     *,
     semantic: bool = True,
     history: bool = False,
-    input_version: int | None = None,
     bucketed_shapes: bool = False,
 ) -> PolicyFixture:
     torch.set_num_threads(1)
     torch.manual_seed(819)
     config = recipe()
     config.agent.value_aggregation = "masked_mean"
-    if input_version is not None:
-        config.observation = config.observation.model_copy(
-            update={"policy_input_version": input_version}
-        )
     if history:
         config.observation.policy_history_version = 1
         config.agent.recent_events = True

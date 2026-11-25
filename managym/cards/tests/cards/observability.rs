@@ -43,8 +43,8 @@ use managym::{
             SpellData, StackObjectData, StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
-            encode, EncodedObservation, FactKind, InputLayout, ObservationEncoderConfig, CARD_DIM,
-            FACT_DIM, PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
+            encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM,
+            PERMANENT_DIM, PLAYER_DIM, STACK_DIM, TURN_STATE_DIM,
         },
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -666,7 +666,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
         ),
         (
             "spells_cast",
-            Seen::Via("input v10 player_turn_state column 1 (PlayerData.spells_cast)"),
+            Seen::Via("player_turn_state column 1 (PlayerData.spells_cast)"),
         ),
         (
             "history",
@@ -724,11 +724,11 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
         ),
         (
             "history.life_lost",
-            Seen::Via("input v10 player_turn_state column 0; v9 refuses it once a visible card reads it"),
+            Seen::Via("player_turn_state column 0"),
         ),
         (
             "graveyard_from_battlefield",
-            Seen::Via("input v10 card_turn_state of each graveyard card row (CardData.from_battlefield_this_turn)"),
+            Seen::Via("card_turn_state of each graveyard card row (CardData.from_battlefield_this_turn)"),
         ),
         (
             "history.attacked",
@@ -1759,7 +1759,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         ),
         StaticAbility::Ward(_) => witnessed(
             "StaticAbility::Ward",
-            Seen::Card(card::WARD_COST),
+            Seen::Permanent(permanent::WARD_COST),
             "Waterfall Aerialist",
             "stx",
             "ward_asks_spell_controller_and_counters_on_decline",
@@ -2218,52 +2218,14 @@ fn permanent_row(encoded: &EncodedObservation) -> &[f32] {
     &encoded.agent_permanents[..PERMANENT_DIM]
 }
 
-/// Card-row columns of a battlefield object, as the deprecated v9/v10 card
-/// row states them; asserts that input v11's permanent row (the object's one
-/// row in `encoded`) holds every characteristic it shares with that row.
-fn card_row(
+fn battlefield_row<'a>(
     game: &Game,
     observation: &Observation,
-    encoded: &EncodedObservation,
+    encoded: &'a EncodedObservation,
     permanent: PermanentId,
-) -> Vec<f32> {
-    let legacy = encode(
-        observation,
-        &ObservationEncoderConfig {
-            layout: InputLayout::Legacy,
-            ..ObservationEncoderConfig::default()
-        },
-    )
-    .unwrap();
-    let row = legacy_card_index(game, observation, permanent);
-    let card_row = legacy.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM].to_vec();
+) -> &'a [f32] {
     let slot = permanent_slot(game, observation, permanent);
-    let permanent_row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
-    let mut shared = vec![
-        (card::POWER, permanent::POWER),
-        (card::TOUGHNESS, permanent::TOUGHNESS),
-        (card::MANA_VALUE, permanent::MANA_VALUE),
-        (card::IS_LAND, permanent::IS_LAND),
-        (card::IS_CREATURE, permanent::IS_CREATURE),
-        (card::IS_ARTIFACT, permanent::IS_ARTIFACT),
-        (card::IS_ENCHANTMENT, permanent::IS_ENCHANTMENT),
-        (card::IS_PLANESWALKER, permanent::IS_PLANESWALKER),
-        (card::IS_BATTLE, permanent::IS_BATTLE),
-        (card::IS_LEGENDARY, permanent::IS_LEGENDARY),
-        (card::IS_TOKEN, permanent::IS_TOKEN),
-        (card::IS_ALLY, permanent::IS_ALLY),
-        (card::IS_LESSON, permanent::IS_LESSON),
-        (card::HAS_WARD, permanent::HAS_WARD),
-        (card::WARD_COST, permanent::WARD_COST),
-    ];
-    shared.extend(Keyword::ALL.into_iter().map(keyword_columns));
-    for (card_column, permanent_column) in shared {
-        assert_eq!(
-            card_row[card_column], permanent_row[permanent_column],
-            "card column {card_column} and permanent column {permanent_column}"
-        );
-    }
-    card_row
+    &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM]
 }
 
 /// The permanent's slot among the agent's permanents.
@@ -2273,17 +2235,6 @@ fn permanent_slot(game: &Game, observation: &Observation, permanent: PermanentId
         .agent_permanents
         .iter()
         .position(|row| row.id == id)
-        .unwrap()
-}
-
-/// The battlefield card row's slot in the deprecated v9/v10 card list.
-fn legacy_card_index(game: &Game, observation: &Observation, permanent: PermanentId) -> usize {
-    let object = game.state.permanents[permanent].as_ref().unwrap().object;
-    let id = game.state[object].id.0 as i32;
-    managym::agent::legacy_input::view(observation)
-        .agent_cards
-        .iter()
-        .position(|object| object.id == id)
         .unwrap()
 }
 
@@ -2771,7 +2722,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
 // (b) Directed: each mechanic moves its named column or token.
 
 #[test]
-fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens() {
+fn printed_and_granted_keywords_set_their_permanent_columns_and_tokens() {
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
     let bare = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
@@ -2780,7 +2731,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
     }));
     for keyword in Keyword::ALL {
         let name = keyword.name();
-        let (card_column, permanent_column) = keyword_columns(keyword);
+        let (_, permanent_column) = keyword_columns(keyword);
         let keywords = Keywords::of(&[keyword]);
 
         let mut granted = base_game.clone();
@@ -2805,10 +2756,10 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         let (obs, after) = observe(&printed, 0);
         assert!(
             changed(
-                &card_row(&base_game, &base_obs, &base, ogre),
-                &card_row(&printed, &obs, &after, ogre),
+                battlefield_row(&base_game, &base_obs, &base, ogre),
+                battlefield_row(&printed, &obs, &after, ogre),
             )
-            .contains(&card_column),
+            .contains(&permanent_column),
             "{name}"
         );
 
@@ -3203,7 +3154,17 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 /// power and toughness its toughness column.
 #[test]
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
-    let (base_game, ogre) = ogre_game();
+    let (mut base_game, ogre) = ogre_game();
+    base_game
+        .scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
+        .unwrap();
+    let hand = *base_game
+        .state
+        .zones
+        .zone_objects(ZoneType::Hand, PlayerId(0))
+        .iter()
+        .find(|&&id| base_game.state[id].name == "Gray Ogre")
+        .unwrap();
     let (base_obs, base) = observe(&base_game, 0);
     let object = base_game.state.permanents[ogre].as_ref().unwrap().object;
     let edits = static_witnesses()
@@ -3223,12 +3184,18 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let mut checked = 0;
     for (row, edit) in edits {
         let mut game = base_game.clone();
-        edit(&mut game.state[object]);
+        edit(
+            &mut game.state[if matches!(row.seen, Seen::Card(_)) {
+                hand
+            } else {
+                object
+            }],
+        );
         let (obs, after) = observe(&game, 0);
         let moved = match row.seen {
             Seen::Card(column) => changed(
-                &card_row(&base_game, &base_obs, &base, ogre),
-                &card_row(&game, &obs, &after, ogre),
+                &listed_card_row(&base_obs, base_game.state[hand].id.0 as i32).unwrap(),
+                &listed_card_row(&obs, base_game.state[hand].id.0 as i32).unwrap(),
             )
             .contains(&column),
             Seen::Permanent(column) => {
@@ -3367,9 +3334,9 @@ enum Buffer {
     Relation,
     Action,
     Facts,
-    /// Input v10 `player_turn_state`: one row per seat.
+    /// `player_turn_state`: one row per seat.
     PlayerTurnState,
-    /// Input v10 `card_turn_state`: one value per card row.
+    /// `card_turn_state`: one value per card row.
     CardTurnState,
     /// Input v11 `stack`: one row per spell or ability.
     Stack,
@@ -3883,9 +3850,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         focus => [Rows("action_focus")],
         declared => [column(Action, action::DECLARED)],
         mode_index => [column(Action, action::MODE), column(Action, action::X)],
-        name_definition => [Rows("name_candidates columns 0-1 (v9)")],
-        name_index => [Rows("name_candidates columns 0-1 (v9)")],
-        name_group => [Rows("name_candidates columns 2-3 (v9)")],
+        name_definition => [Rows("name_candidates columns 0-1")],
+        name_index => [Rows("name_candidates columns 0-1")],
+        name_group => [Rows("name_candidates columns 2-3")],
         ability_index => [column(Action, action::ABILITY)],
         continuation_index => [column(Action, action::CONTINUATION)],
         pays_directly => [column(Action, action::PAYS_DIRECTLY)],
@@ -4174,18 +4141,24 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
 }
 
 /// A `Nonlegendary` record outside a copy (CR 205.4): the legend rule
-/// spares the permanent and card column 39 clears, both from
+/// spares the permanent and its legendary flag clears, both from
 /// `Characteristics::is_legendary`.
 #[test]
-fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
+fn a_nonlegendary_record_clears_the_legend_rule_and_legendary_flag_together() {
     let mut s = ur_lessons_setup();
     let first = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     let (observation, encoded) = observe(s.game(), 0);
-    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 1.0);
+    assert_eq!(
+        battlefield_row(s.game(), &observation, &encoded, first)[permanent::IS_LEGENDARY],
+        1.0
+    );
     until_end_of_turn(&mut s, first, Modification::Nonlegendary);
     assert!(!s.game().characteristics(first).is_legendary);
     let (observation, encoded) = observe(s.game(), 0);
-    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 0.0);
+    assert_eq!(
+        battlefield_row(s.game(), &observation, &encoded, first)[permanent::IS_LEGENDARY],
+        0.0
+    );
     let second = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     s.pass_priority();
     assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
@@ -4536,19 +4509,14 @@ fn tile_beside(toph: TophState) -> (Scenario, PermanentId) {
     (s, tile)
 }
 
-/// A granted land type reaches the card row's land column (layer 4 types)
-/// in every version; v5 also marks the permanent as granted rather than
-/// printed. Removing Toph's abilities in layer 6 cannot undo the type effect
+/// A granted land type sets both the permanent's land flag and its granted-land flag. Removing Toph's abilities in layer 6 cannot undo the type effect
 /// that already applied in layer 4 (CR 613.6).
 #[test]
-fn a_toph_granted_land_shows_in_its_card_row_and_the_granted_column() {
+fn a_toph_granted_land_sets_the_permanents_land_and_granted_flags() {
     let (plain, tile) = tile_beside(TophState::Absent);
     let (granted, _) = tile_beside(TophState::Present);
     let (abilityless, _) = tile_beside(TophState::Abilityless);
-    let land = |s: &Scenario| {
-        let observation = Observation::for_player(s.game(), PlayerId(0));
-        card_row(s.game(), &observation, &encoded(s, 0), tile)[11]
-    };
+    let land = |s: &Scenario| permanent_value(s, 0, tile, permanent::IS_LAND);
     let granted_land = |s: &Scenario| permanent_value(s, 0, tile, permanent::GRANTED_LAND);
     assert_eq!(
         (land(&plain), land(&granted), land(&abilityless)),
@@ -4672,7 +4640,7 @@ fn set_name_and_set_creature_types_reach_independent_fact_rows() {
 }
 
 /// Card and permanent keyword columns are checked by
-/// `printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens`;
+/// `printed_and_granted_keywords_set_their_permanent_columns_and_tokens`;
 /// this checks the v5 relation block for keywords granted to a stack object.
 #[test]
 fn every_keyword_reaches_its_relation_column() {
@@ -6256,42 +6224,29 @@ fn merchant_counted_tap_cost_reaches_learning_tokens() {
 }
 
 #[test]
-fn input_v10_carries_turn_state_that_v9_refuses() {
+fn turn_state_records_life_spells_graveyard_entries_and_restricted_mana() {
     use crate::support::{
         game::force_new_card_in_hand,
         inspect::card_of,
         play::{cast, settle},
     };
-    use managym::agent::observation_encoder::ObservationEncodeError;
-    let v9 = ObservationEncoderConfig {
-        layout: InputLayout::Legacy,
-        turn_state: false,
-        ..ObservationEncoderConfig::default()
-    };
-    // Input v11, the fresh default, carries v10's turn state.
-    let v10 = ObservationEncoderConfig::default();
-    let refusal = |s: &Scenario| match encode(&Observation::for_player(s.game(), PlayerId(0)), &v9)
-    {
-        Err(ObservationEncodeError::RequiresInputV10(state)) => Some(state),
-        Ok(_) => None,
-        Err(error) => panic!("{error}"),
-    };
     let encoded = |s: &Scenario| {
-        encode(&Observation::for_player(s.game(), PlayerId(0)), &v10).expect("v10 encodes")
+        encode(
+            &Observation::for_player(s.game(), PlayerId(0)),
+            &ObservationEncoderConfig::default(),
+        )
+        .unwrap()
     };
 
-    // Life lost is refused only once a visible card reads it.
+    // Life and spells are counted per seat.
     let mut s = five_color_setup(&["Bloodchief Ascension", "Lightning Strike"]);
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     settle(&mut s);
-    assert_eq!(refusal(&s), None);
     s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
-    assert_eq!(refusal(&s), Some("life lost this turn"));
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[turn_state::LIFE_LOST], 0.0);
     assert_eq!(row[TURN_STATE_DIM + turn_state::LIFE_LOST], 3.0 / 20.0);
-    // Spells cast this turn, per seat; v9 does not refuse it.
     assert_eq!(row[turn_state::SPELLS_CAST], 0.1);
     assert_eq!(row[TURN_STATE_DIM + turn_state::SPELLS_CAST], 0.0);
 
@@ -6303,12 +6258,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(refusal(&s), None);
     force_new_card_in_hand(&mut s, 0, "Brought Back");
-    assert_eq!(
-        refusal(&s),
-        Some("a card put into a graveyard from the battlefield this turn")
-    );
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let slot = observation
         .agent_cards
@@ -6322,16 +6272,11 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     // Powerstone mana in a pool (its production is exercised by the
     // castability test in `tests/cards/bro.rs`).
     let mut s = five_color_setup(&["Gray Ogre"]);
-    assert_eq!(refusal(&s), None);
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
         managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
     )
     .into();
-    assert_eq!(
-        refusal(&s),
-        Some("mana that can't be spent to cast nonartifact spells")
-    );
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
 }
@@ -6373,22 +6318,22 @@ fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
     let tla_id = game.create_token(tla.key, PlayerId(0), false).unwrap();
     let vehicle = game.create_token(zeppelin.key, PlayerId(0), false).unwrap();
     let (observation, encoded) = observe(&game, 0);
-    let plain_row = card_row(&game, &observation, &encoded, plain_id);
-    let tla_row = card_row(&game, &observation, &encoded, tla_id);
+    let plain_row = battlefield_row(&game, &observation, &encoded, plain_id);
+    let tla_row = battlefield_row(&game, &observation, &encoded, tla_id);
     // Shared printed names still bind distinct catalog rows and programs.
     let definition = |permanent| {
         let slot = permanent_slot(&game, &observation, permanent);
         encoded.agent_permanents[slot * PERMANENT_DIM + permanent::DEFINITION]
     };
     assert_ne!(definition(plain_id), definition(tla_id));
-    assert_eq!(plain_row[card::FLYING], 0.0);
-    assert_eq!(tla_row[card::FLYING], 0.0);
-    let vehicle_row = card_row(&game, &observation, &encoded, vehicle);
-    assert_eq!(vehicle_row[card::FLYING], 1.0);
-    assert_eq!(vehicle_row[card::IS_CREATURE], 0.0);
-    assert_eq!(vehicle_row[card::IS_ARTIFACT], 1.0);
-    assert_eq!(vehicle_row[card::POWER], 0.5);
-    assert_eq!(vehicle_row[card::TOUGHNESS], 0.5);
+    assert_eq!(plain_row[permanent::FLYING], 0.0);
+    assert_eq!(tla_row[permanent::FLYING], 0.0);
+    let vehicle_row = battlefield_row(&game, &observation, &encoded, vehicle);
+    assert_eq!(vehicle_row[permanent::FLYING], 1.0);
+    assert_eq!(vehicle_row[permanent::IS_CREATURE], 0.0);
+    assert_eq!(vehicle_row[permanent::IS_ARTIFACT], 1.0);
+    assert_eq!(vehicle_row[permanent::POWER], 0.5);
+    assert_eq!(vehicle_row[permanent::TOUGHNESS], 0.5);
 }
 
 #[test]

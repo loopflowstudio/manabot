@@ -13,7 +13,6 @@ from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ACTION_CONTINUATION_INDEX,
-    RELATION_ELIGIBILITY_INDEX,
     ObservationSpace,
     allocate_vector_buffers,
     encode_observation,
@@ -178,12 +177,10 @@ def _without_active_effects(viewer_state: dict[str, JsonValue]) -> dict[str, Jso
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_retained_eligibility_separates_portable_text_and_policy_input() -> None:
-    torch.manual_seed(608)
-    # The receipt retains v9 relation rows, whose object joins index v9 rows.
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    agent = ActorCritic(space, ModelConfig(hidden_dim=16))
-    encoded: list[dict[str, np.ndarray]] = []
+def test_retained_eligibility_renders_as_text_and_refuses_incomplete_policy_input() -> (
+    None
+):
+    layout = managym.ObservationLayout()
     texts: list[str] = []
     for record in _eligibility_evidence():
         capture_json = json.dumps(record.capture)
@@ -194,41 +191,13 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
             json.dumps(_without_active_effects(capture.observation.viewer_state)),
             continuation_json=json.dumps(record.capture["frames"]),
         )
-        tensors = encode_observation(space, observation)
-        rows = tensors["relations"]
-        # The receipt retains the columns through eligibility; X and granted
-        # keywords follow them and are empty in these positions.
-        retained = RELATION_ELIGIBILITY_INDEX + 1
-        np.testing.assert_array_equal(
-            rows[:, :retained], np.array(record.relations).reshape(64, retained)
-        )
-        assert not rows[:, retained:].any()
-        selected = rows[(rows[:, 0] == 2) & (rows[:, 3] == 5)]
-        np.testing.assert_array_equal(selected[:, 22], [1, 2])
-        np.testing.assert_array_equal(selected[:, 29], [1, 2])
-        np.testing.assert_array_equal(
-            selected[:, RELATION_ELIGIBILITY_INDEX], [1 if record.legal else 2, 1]
-        )
-        assert not rows[rows[:, 3] != 5, RELATION_ELIGIBILITY_INDEX].any()
+        # These historical captures lack the identities v11 requires.
+        with pytest.raises(ValueError, match="requires permanent and spell identities"):
+            managym.encode_observation_batch([observation], layout)
         text = render_decision(capture_json).text
         assert f"Legal when resolution began: {'yes' if record.legal else 'no'}" in text
         texts.append(text)
-        encoded.append(tensors)
-    for start in (0, 2):
-        left, right = encoded[start : start + 2]
-        assert texts[start] != texts[start + 1]
-        for key in left:
-            if key != "relations":
-                np.testing.assert_array_equal(left[key], right[key], err_msg=key)
-        np.testing.assert_array_equal(
-            left["relations"][:, :RELATION_ELIGIBILITY_INDEX],
-            right["relations"][:, :RELATION_ELIGIBILITY_INDEX],
-        )
-        batch = {
-            key: torch.from_numpy(np.stack([left[key], right[key]])) for key in left
-        }
-        _, value = agent(device_input(agent, batch))
-        assert not torch.equal(value[0], value[1])
+    assert texts[0] != texts[1] and texts[2] != texts[3]
 
 
 def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed() -> (
@@ -356,7 +325,7 @@ def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_exported_observation_keeps_complete_policy_input_with_continuation() -> None:
-    space = ObservationSpace(ObservationConfig(policy_input_version=10))
+    space = ObservationSpace()
     for env in collision_branches():
         actor = env.current_agent_index()
         assert actor is not None

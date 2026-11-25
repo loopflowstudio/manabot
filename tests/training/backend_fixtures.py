@@ -13,7 +13,7 @@ from manabot.backends.torch.collection import (
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
 from manabot.policy.protocol import BackendPolicy, Precision
 from manabot.training.rollout.collection import (
@@ -76,8 +76,7 @@ def legacy_capture(
     *, seed: int, num_envs: int, decisions: int
 ) -> tuple[PolicyCheckpoint, RolloutBatch]:
     torch.manual_seed(seed)
-    with pytest.warns(DeprecationWarning):
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     agent = ActorCritic(
         space,
         ModelConfig(

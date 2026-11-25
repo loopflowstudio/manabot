@@ -151,8 +151,6 @@ def history_config(config: ModelConfig, observation_space: ObservationSpace) -> 
         )
     if config.decision_memory != "none" and not config.catalog_records():
         raise ValueError("decision memory requires a catalog world")
-    if config.decision_memory != "none" and not observation_space.one_token:
-        raise ValueError("decision memory requires policy input v11")
     if config.recent_events and (
         config.world is None or observation_space.config.policy_history_version != 1
     ):
@@ -215,26 +213,25 @@ def admit(
     )
     check_memory_contract(obs, spec)
     lookup = spec.tables.definition_rows
-    if spec.space.one_token and any(key not in obs for key in ("stack", "stack_valid")):
+    if any(key not in obs for key in ("stack", "stack_valid")):
         raise ValueError("policy input v11 requires stack and stack_valid")
-    if spec.space.one_token:
-        if "known_library" not in obs:
-            raise ValueError("policy input v11 requires known_library")
-        library = obs["known_library"]
-        shape = spec.space.shapes["known_library"]
-        if library.shape != (len(legal), *shape):
-            raise ValueError("known_library must match the declared observation shape")
-        positions = library[..., column("known_library", "position")]
-        known = library[..., column("known_library", "definition")]
-        if not (
-            np.isfinite(positions)
-            & (positions == np.floor(positions))
-            & (positions >= 0)
-            & ((known == 0) == (positions == 0))
-        ).all():
-            raise ValueError(
-                "known_library requires whole positive positions or zero padding"
-            )
+    if "known_library" not in obs:
+        raise ValueError("policy input v11 requires known_library")
+    library = obs["known_library"]
+    shape = spec.space.shapes["known_library"]
+    if library.shape != (len(legal), *shape):
+        raise ValueError("known_library must match the declared observation shape")
+    positions = library[..., column("known_library", "position")]
+    known = library[..., column("known_library", "definition")]
+    if not (
+        np.isfinite(positions)
+        & (positions == np.floor(positions))
+        & (positions >= 0)
+        & ((known == 0) == (positions == 0))
+    ).all():
+        raise ValueError(
+            "known_library requires whole positive positions or zero padding"
+        )
 
     raw = obs
     if measured is not None:
@@ -260,8 +257,7 @@ def admit(
         )
         if "known_library" in obs:
             ids.append(obs["known_library"][..., column("known_library", "definition")])
-    if spec.space.one_token:
-        ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
+    ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
     if "decision_records" in obs:
         ids.append(
             obs["decision_references"][..., column("decision_references", "definition")]
@@ -275,17 +271,16 @@ def admit(
         validate_memory_vocabulary(obs, spec.tables)
     for values in ids:
         definition_ids(values, size, lookup)
-    keys = (*OBJECT_KEYS, "stack") if spec.space.one_token else OBJECT_KEYS
+    keys = (*OBJECT_KEYS, "stack")
     objects = sum(raw[k].shape[1] for k in keys)
     validity = np.concatenate([raw[k + "_valid"] for k in keys], 1)
     beliefs(belief, spec.model, len(legal))
     permanent_links(obs, objects)
-    if spec.space.one_token:
-        sources = obs["stack"][..., STACK_SOURCE_INDEX]
-        if not (
-            (sources == np.floor(sources)) & (sources >= 0) & (sources <= objects)
-        ).all():
-            raise ValueError("invalid stack source object reference")
+    sources = obs["stack"][..., STACK_SOURCE_INDEX]
+    if not (
+        (sources == np.floor(sources)) & (sources >= 0) & (sources <= objects)
+    ).all():
+        raise ValueError("invalid stack source object reference")
     catalog = None
     if spec.model.catalog_records():
         assert lookup is not None

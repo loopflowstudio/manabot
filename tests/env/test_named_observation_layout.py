@@ -14,7 +14,6 @@ import pytest
 
 from manabot.env import observation
 from manabot.env.decision_memory import MEMORY_WIDTHS
-from manabot.env.legacy_input import LEGACY_PERMANENT_DIM
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
@@ -42,20 +41,14 @@ def test_column_constants_are_read_from_the_native_layout() -> None:
     )
     assert observation.FACT_DIM == len(layout["facts"]["columns"])
     assert observation.RELATION_ROWS == layout["relations"]["shape"][0]
-    assert LEGACY_PERMANENT_DIM == len(
-        managym.observation_layout(legacy=True)["agent_permanents"]["columns"]
-    )
     for key, shape in SHARED_EFFECT_SHAPES.items():
         assert tuple(layout[key]["shape"]) == shape, key
     memory = managym.observation_layout(decision_memory=True)
     assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
 
 
-@pytest.mark.parametrize("version", [9, 10, 11])
-def test_axis_extents_use_the_configured_layout(version: int) -> None:
-    layout = managym.ObservationLayout(
-        policy_input_version=version, max_stack_objects=32 if version == 11 else 0
-    )
+def test_axis_extents_use_the_configured_layout() -> None:
+    layout = managym.ObservationLayout()
     obs = layout.allocate(3)
     # Reverse the row and column strides and broadcast the batch stride.
     deck = obs["decklists"][:, :, ::-1, ::-1]
@@ -67,7 +60,7 @@ def test_axis_extents_use_the_configured_layout(version: int) -> None:
     obs["action_focus"][:, 3, 0] = 31  # beyond every mask prefix
     obs["actions"][2, 4, 0] = 1  # extends action rows, never eligible focus
     extents = layout.axis_extents(obs)
-    assert extents is not None and ("stack" in extents) == (version == 11)
+    assert extents is not None and "stack" in extents
     np.testing.assert_array_equal(
         extents["cards"], np.array([0, 10, 0], np.int64), strict=True
     )
@@ -77,9 +70,8 @@ def test_axis_extents_use_the_configured_layout(version: int) -> None:
     assert empty is not None and all(value.shape == (0,) for value in empty.values())
 
 
-@pytest.mark.parametrize("version", [9, 10, 11])
-def test_axis_buffers_locate_each_measured_row_dimension(version: int) -> None:
-    layout = managym.ObservationLayout(policy_input_version=version)
+def test_axis_buffers_locate_each_measured_row_dimension() -> None:
+    layout = managym.ObservationLayout()
     buffers = layout.axis_buffers
     rows = layout.allocate(1)
     extents = layout.axis_extents(rows)
@@ -151,27 +143,22 @@ def test_encoder_names_warn_and_name_their_removal(
 
 
 @pytest.mark.parametrize(
-    "history,input_version,memory",
+    "history,memory",
     [
-        (0, 9, False),
-        (1, 9, False),
-        (1, 10, False),
-        (0, 11, False),
-        (1, 11, False),
-        (1, 11, True),
+        (0, False),
+        (1, False),
+        (1, True),
     ],
-    ids=["raw", "v9", "v10", "v11-raw", "v11", "v11-memory"],
+    ids=["v11-raw", "v11", "v11-memory"],
 )
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_space_shapes_are_the_native_layout_at_its_capacities(
     board: tuple[managym.Env, managym.Observation],
     history: Literal[0, 1],
-    input_version: Literal[9, 10, 11],
     memory: bool,
 ) -> None:
     _, obs = board
     config = ObservationConfig(
-        policy_input_version=input_version,
         policy_history_version=history,
         max_cards_per_player=64,
         max_permanents_per_player=44,
@@ -190,8 +177,6 @@ def test_space_shapes_are_the_native_layout_at_its_capacities(
     space = ObservationSpace(config)
     layout = managym.observation_layout(
         policy_history=history == 1,
-        turn_state=input_version >= 10,
-        legacy=input_version < 11,
         decision_memory=memory,
     )
     encoded = encode_observation(space, obs)
@@ -241,32 +226,8 @@ def test_named_layout_describes_tagged_rows_and_history() -> None:
     assert history.keys() == raw.keys()
     assert raw["agent_permanents"]["columns"]["valid"]["index"] == 50
     assert raw["stack"]["columns"]["source"]["kind"] == "reference"
-    legacy = managym.observation_layout(legacy=True)
-    assert 11 not in legacy["relations"]["row_kinds"]
-    assert legacy["agent_permanents"]["columns"]["valid"]["index"] == 37
-    assert raw.keys() - legacy.keys() == {"stack", "stack_valid", "known_library"}
     assert not raw["action_focus"]["columns"]
     assert raw["action_focus"]["element"]["kind"] == "reference"
-
-
-def test_named_layout_names_v10_turn_state() -> None:
-    v9 = managym.observation_layout(policy_history=True, turn_state=False, legacy=True)
-    v10 = managym.observation_layout(policy_history=True, legacy=True)
-    assert v10.keys() - v9.keys() == {"player_turn_state", "card_turn_state"}
-    player = v10["player_turn_state"]
-    assert player["shape"] == [2, 8]
-    assert list(player["columns"]) == [
-        "life_lost",
-        "spells_cast",
-        *(
-            f"nonartifact_mana_{color}"
-            for color in ("white", "blue", "black", "red", "green", "colorless")
-        ),
-    ]
-    assert player["columns"]["life_lost"]["encoding"] == "Life lost this turn / 20"
-    card = v10["card_turn_state"]
-    assert card["shape"] == [2, None] and not card["columns"]
-    assert card["element"]["kind"] == "flag"
 
 
 def test_named_layout_reads_effect_programs_by_name() -> None:

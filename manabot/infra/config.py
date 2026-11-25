@@ -15,7 +15,6 @@ from pydantic import (
     model_validator,
 )
 
-from manabot.env.legacy_input import warn_deprecated_input
 from managym import (
     WORLD_SETUP,
     Deck,
@@ -30,16 +29,9 @@ from managym.disclosure import DecklistDisclosure
 # The policy input a fresh configuration selects. Input v11 gives each game
 # thing one object row (cards outside the battlefield and stack, permanents
 # with their characteristics, a stack segment) and carries v10's turn state.
-# Inputs v9 and v10 (v9 plus turn state) are deprecated and read only by
-# checkpoints trained on them (`manabot.env.legacy_input`, removed in 0.3.0);
-# earlier inputs run from the revision that recorded them.
-PolicyInputVersion = Literal[9, 10, 11]
+PolicyInputVersion = Literal[11]
 POLICY_INPUT_VERSION: PolicyInputVersion = 11
-SUPPORTED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10, 11)
-DEPRECATED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10)
-# What a saved regime's observation settings mean when they omit the version:
-# the fresh default when they were written.
-SAVED_POLICY_INPUT_VERSION: PolicyInputVersion = 9
+SUPPORTED_POLICY_INPUTS = (POLICY_INPUT_VERSION,)
 # The last revision whose encoders, bindings and model accept inputs v1-v8.
 LAST_MULTI_INPUT_REVISION = "ac601834d"
 # How the critic summarizes the final object board; see ActorCritic._value_from_objects.
@@ -80,7 +72,7 @@ class UnsupportedPolicyInput(ValueError):
         super().__init__(
             f"the checkpoint was written for policy input v{version} and must "
             "be run from the revision that recorded it; this revision supports "
-            f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
+            f"policy input v{POLICY_INPUT_VERSION}. v0.2.5 is the last release supporting v9-v10, "
             f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
         )
 
@@ -132,15 +124,13 @@ class ObservationConfig(BaseConfig):
         default=0, exclude_if=lambda value: value == 0
     )
 
-    @field_validator("policy_input_version", mode="before")
-    @classmethod
-    def reject_other_inputs(cls, value: object) -> object:
-        """Name the recording revision instead of a bare literal mismatch."""
-        if value not in SUPPORTED_POLICY_INPUTS:
-            raise UnsupportedPolicyInput(value)
-        if value in DEPRECATED_POLICY_INPUTS:
-            warn_deprecated_input(value)
-        return value
+    def __init__(self, **data: Any) -> None:
+        # Pydantic wraps ValueError from field validators. Direct callers also
+        # need to distinguish an unsupported policy from malformed settings.
+        version = data.get("policy_input_version", POLICY_INPUT_VERSION)
+        if version not in SUPPORTED_POLICY_INPUTS:
+            raise UnsupportedPolicyInput(version)
+        super().__init__(**data)
 
     @classmethod
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
@@ -149,10 +139,7 @@ class ObservationConfig(BaseConfig):
         A missing version means the input-v1 contract, never today's default.
         Raises `UnsupportedPolicyInput` before any other field is validated.
         """
-        version = payload.get("policy_input_version", 1)
-        if version not in SUPPORTED_POLICY_INPUTS:
-            raise UnsupportedPolicyInput(version)
-        return cls(**payload)
+        return cls(**{"policy_input_version": 1, **payload})
 
 
 class MatchConfig(BaseConfig):

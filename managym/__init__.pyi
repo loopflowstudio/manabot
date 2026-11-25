@@ -111,18 +111,12 @@ class ObservationLayout:
 def observation_layout(
     *,
     policy_history: bool = False,
-    turn_state: bool = True,
-    legacy: bool = False,
     decision_memory: bool = False,
 ) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
-    Keys match `encode_observation_into` and the vector env buffers; a None extent
-    is a caller-selected capacity. `policy_history` selects the public history
-    rows of `events` instead of raw events; `turn_state` adds
-    `player_turn_state` and `card_turn_state` (inputs v10 and v11); `legacy`
-    selects the deprecated v9/v10 object rows (removed in 0.3.0) instead of
-    input v11's one-token rows and `stack`. Seats are viewer-relative.
+    Variable extents are caller-selected capacities. Seats are viewer-relative.
+    `policy_history` selects public history in the events table.
     No game or buffer is created.
     """
 
@@ -1350,8 +1344,6 @@ class Observation:
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
-    # Deprecated input v9/v10 card rows (removed in 0.3.0).
-    def legacy_card_lists(self) -> tuple[list[Card], list[Card]]: ...
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
 
@@ -1484,10 +1476,6 @@ def encode_observations_into(
     capacity (every legal action must fit) raises `ObservationCapacity`,
     leaving earlier rows written.
     """
-    ...
-
-def input_v10_state(obs: Observation) -> str | None:
-    """The state only policy input v10 holds that `obs` needs, if any."""
     ...
 
 def unrepresentable_state(obs: Observation) -> str | None:

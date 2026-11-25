@@ -50,7 +50,7 @@ type ObservationBuffers = Mapping[str, np.ndarray]
 REMOVAL_RELEASE = "0.3.0"
 
 # Input v11 with public history and decision memory: every array a v11
-# reader can meet. Legacy v9/v10 rows are `observation_layout(legacy=True)`.
+# reader can meet.
 V11_LAYOUT = managym.observation_layout(policy_history=True, decision_memory=True)
 
 
@@ -192,8 +192,7 @@ class ObservationSpace(gym.spaces.Space):
 
     `shapes` and `dtypes` come from the configured native `layout`.
     Construction refuses a configuration whose decision-memory
-    capacities are incomplete or that asks for memory under a deprecated
-    input. The space writes nothing; `encode_observation` does.
+    capacities are incomplete. The space writes nothing; `encode_observation` does.
     """
 
     def __init__(self, config: ObservationConfig | None = None) -> None:
@@ -217,8 +216,6 @@ class ObservationSpace(gym.spaces.Space):
         )
         self.shapes = self.layout.shapes
         self.axis_buffers = self.layout.axis_buffers
-        self.one_token = "stack" in self.shapes
-        self.turn_state = "player_turn_state" in self.shapes
         # Checkpoints record str() of each NumPy scalar type.
         self.dtypes = {
             key: np.dtype(dtype).type for key, dtype in self.layout.dtypes.items()
@@ -337,23 +334,12 @@ def encode_policy_batch(
     observations: Sequence[managym.Observation],
     *,
     blank_decision_memory: bool = False,
-) -> managym.ObservationBatch | dict[str, np.ndarray]:
+) -> managym.ObservationBatch:
     """Encode viewer projections in order using the checkpoint's capacity and overflow policy."""
-    if space.one_token:
-        batch = managym.encode_observation_batch(
-            observations, space.layout, space.config.action_overflow
-        )
-        return batch.blank_decision_memory() if blank_decision_memory else batch
-    # v9/v10 only, removed with the legacy encoder in 0.3.0.
-    buffers = space.allocate(len(observations))
-    for index, observation in enumerate(observations):
-        managym.encode_observation_into(
-            observation,
-            space.layout,
-            {key: rows[index] for key, rows in buffers.items()},
-            space.config.action_overflow,
-        )
-    return buffers
+    batch = managym.encode_observation_batch(
+        observations, space.layout, space.config.action_overflow
+    )
+    return batch.blank_decision_memory() if blank_decision_memory else batch
 
 
 def __getattr__(name: str) -> Any:

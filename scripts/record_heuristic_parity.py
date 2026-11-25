@@ -2,7 +2,7 @@
 
 Run with ``uv run --extra dev python scripts/record_heuristic_parity.py``.
 The reference bytes come unchanged from their original commit. The adapter
-restores its pre-v11 card-list view using the native legacy projection; source
+restores its pre-v11 card-list view from the viewer’s spell and permanent records; source
 payments, which did not exist in that contract, explicitly choose PayCost.
 """
 
@@ -29,7 +29,22 @@ REFERENCE = "757bb6257ef07cf2536ad7f7ec24f0f7309628c6:manabot/sim/heuristic.py"
 class _ObservationAdapter:
     def __init__(self, raw: managym.Observation) -> None:
         self._raw = raw
-        self.agent_cards, self.opponent_cards = raw.legacy_card_lists()
+        self.agent_cards, self.opponent_cards = raw.agent_cards, raw.opponent_cards
+        for obj in raw.stack_objects:
+            if (card := obj.card) is not None:
+                cards = (
+                    self.agent_cards
+                    if card.owner_id == raw.agent.id
+                    else self.opponent_cards
+                )
+                cards.append(card)
+        for cards, permanents in (
+            (self.agent_cards, raw.agent_permanents),
+            (self.opponent_cards, raw.opponent_permanents),
+        ):
+            cards.extend(
+                card for permanent in permanents if (card := permanent.card) is not None
+            )
 
     def __getattr__(self, name: str) -> Any:
         # The frozen Python reference consumes the historical native interface.
@@ -71,7 +86,7 @@ def main() -> None:
             "engine_revision": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
-            "observation_adapter": "Observation.legacy_card_lists restores pre-v11 card lists",
+            "observation_adapter": "Viewer spell and permanent records restore pre-v11 card lists",
             "payment_policy": "PayCost at source-only payments; unchanged Python reference elsewhere",
             "world": managym.world_identity(),
             "max_decisions": original["max_decisions"],

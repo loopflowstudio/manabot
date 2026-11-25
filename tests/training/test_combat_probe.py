@@ -9,7 +9,7 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Prepared
 from manabot.policy.readings import (
     Reading,
@@ -126,7 +126,7 @@ def test_played_combat_distinguishes_lock_from_board_dependence(
             assert aware[key] * sign > 0
 
 
-def test_no_combat_or_legacy_layout_omits_metrics(
+def test_no_combat_omits_metrics(
     rollout: tuple[RolloutBatch, ObservationSpace],
 ) -> None:
     batch, space = rollout
@@ -142,10 +142,6 @@ def test_no_combat_or_legacy_layout_omits_metrics(
     )
     empty = replace(batch, action_data=noncombat)
     assert combat_probe(Mock(observation_space=space), empty) == {}
-    for version in (9, 10):
-        with pytest.warns(DeprecationWarning):
-            legacy = ObservationSpace(ObservationConfig(policy_input_version=version))
-        assert combat_probe(Mock(observation_space=legacy), batch) == {}
 
 
 @pytest.mark.parametrize("historical", [False, True])

@@ -6,7 +6,6 @@ from typing import Literal
 
 import numpy as np
 import pytest
-import torch
 
 from manabot import managym
 from manabot.env.env import Env
@@ -17,7 +16,6 @@ from manabot.env.observation import (
     allocate_vector_buffers,
     encode_observation,
 )
-from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
@@ -193,36 +191,6 @@ def test_hand_snapshots_after_done_describe_the_terminal_game() -> None:
     while not scalar.is_game_over():
         scalar.step(0)
     assert after.cards == scalar.hand_snapshot(1).cards == _hand(scalar, 1)
-
-
-def test_torch_hand_snapshots_track_native_rebuilds() -> None:
-    match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
-    vector = TorchVectorEnv(
-        2, match, ObservationSpace(), Reward(RewardConfig()), "cpu", seed=42
-    )
-    try:
-        observations, _ = vector.reset()
-        before = {key: value.clone() for key, value in observations.items()}
-        assert vector.current_agent_indices() == [0, 0]
-        first = vector.hand_snapshots([1, 0])
-        assert first[0].cards == {"Island": 7}
-        assert repr(first[0]) == (
-            f"HandSnapshot(player=1, game_id={first[0].game_id}, "
-            f'seed=42, revision={first[0].revision}, cards={{"Island": 7}})'
-        )
-        for key in observations:
-            assert torch.equal(observations[key], before[key])
-        assert "hand_snapshots" not in observations
-        vector.step(torch.zeros(2, dtype=torch.int64))
-        assert vector.hand_snapshots([1, 0])[0].game_id == first[0].game_id
-        for seed in (99, 42):
-            vector.reset(seed=seed)
-            current = vector.hand_snapshots([1, 0])
-            assert current[0].game_id != first[0].game_id
-            assert current[0].seed == seed
-            assert current[0].cards == first[0].cards
-    finally:
-        vector.close()
 
 
 def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> None:

@@ -33,7 +33,7 @@ from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     tmp_path: Path, legacy_file: bool
 ) -> None:
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, world="world"))
     path = tmp_path / "pilot"
     save_checkpoint(agent, space, path, player_configs=None)
@@ -143,7 +143,18 @@ def test_writer_programs_names_and_player_columns_survive_catalog_growth(
     prepared = loaded.prepare(batch)
     np.testing.assert_array_equal(
         prepared.agent_player,
-        read_numeric(batch["agent_player"][..., :-1], loaded.readings["agent_player"]),
+        np.concatenate(
+            (
+                read_numeric(
+                    batch["agent_player"][..., :-1], loaded.readings["agent_player"]
+                ),
+                read_numeric(
+                    batch["player_turn_state"][:, :1],
+                    loaded.readings["player_turn_state"],
+                ),
+            ),
+            axis=-1,
+        ),
     )
     assert np.isfinite(loaded.evaluate(prepared)[0]).all()
 

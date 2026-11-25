@@ -840,15 +840,13 @@ pub(super) fn input_buffer_config(
             Ok(0)
         }
     };
-    let stack = buffers.contains("stack")?;
+    if !buffers.contains("stack")? {
+        return Err(PyValueError::new_err(
+            "policy input v11 requires stack rows; v0.2.5 is the last release supporting v9-v10",
+        ));
+    }
     Ok(ObservationEncoderConfig {
-        layout: if stack {
-            crate::agent::observation_encoder::InputLayout::OneToken
-        } else {
-            crate::agent::observation_encoder::InputLayout::Legacy
-        },
-        turn_state: stack || buffers.contains("player_turn_state")?,
-        max_stack_objects: optional_rows("stack")?,
+        max_stack_objects: shape("stack")?[0],
         max_cards_per_player: shape("agent_cards")?[0],
         max_permanents_per_player: shape("agent_permanents")?[0],
         max_actions: shape("actions")?[0],

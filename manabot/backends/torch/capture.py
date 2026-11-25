@@ -36,8 +36,6 @@ def capture(out: Path, settings: SelfPlay, run: TrainingRun) -> None:
     """Record one real damped update; restore hooks even when execution fails."""
     if not isinstance(settings.learning, DampedPolicyLearning):
         raise ValueError("backend capture requires damped-policy learning")
-    if settings.observation.policy_input_version != 11:
-        raise ValueError("backend capture requires policy input v11")
     out.mkdir(parents=True, exist_ok=False)
     (out / "collection").mkdir()
     (out / "learner").mkdir()

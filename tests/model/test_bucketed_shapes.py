@@ -1,7 +1,6 @@
 """Bucketed shapes agree with the default path on admitted inputs."""
 
 from collections.abc import Callable
-from dataclasses import asdict, replace
 
 import numpy as np
 import pytest
@@ -9,7 +8,6 @@ import torch
 
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError
-from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.observation import (
     FACT_OBJECT_INDEX,
     FACT_VALID_INDEX,
@@ -391,51 +389,6 @@ def test_bucketed_admission_keeps_effect_order_bounds_and_batch_strides() -> Non
             with pytest.raises(ValueError, match=f"^{message}$"):
                 model.check_observation(obs)
         obs[key][idx] = saved
-
-
-def test_learner_rechecks_edited_padding_beyond_recorded_extents() -> None:
-    case = _policy(input_version=9, bucketed_shapes=True)
-    batch = collect(case.collector, case.agent, 1)
-    row = batch.recorded.index[0]
-    batch.recorded.rows["facts"][row, -1, column("facts", "valid")] = 2
-    with pytest.raises(ValueError, match="^fact validity must be binary$"):
-        AdmittedRollout(case.agent, batch).admit_rows(np.array([0]), 1)
-
-
-@pytest.mark.parametrize("recorded", [True, False], ids=["mixed", "absent-table"])
-def test_learner_preserves_each_rows_relation_floor(recorded: bool) -> None:
-    case = _policy(input_version=9, bucketed_shapes=True)
-    masks = case.obs["actions_valid"]
-    legal_slots = [np.flatnonzero(mask) for mask in masks]
-    # Collection measures this continuation before packing drops the masked action.
-    masked_slot = np.flatnonzero(masks[0] == 0)[0]
-    case.obs["actions"][0, masked_slot, column("actions", "continuation")] = 64
-    batch = collect(case.collector, case.agent, 1)
-    needs = batch.recorded.needs
-    assert needs is not None
-    positions = [
-        int(np.flatnonzero(batch.recorded.index == row).item()) for row in (0, 1)
-    ]
-    assert needs[0, AXES.index("relations")] == 64
-    if recorded:
-        needs[1] = -1
-    else:
-        batch.recorded = replace(batch.recorded, needs=None)
-
-    indexes = np.array(positions)
-    separate = AdmittedRollout(case.agent, batch)
-    grouped = AdmittedRollout(case.agent, batch)
-    separate.admit_rows(indexes, 1)
-    grouped.admit_rows(indexes, 2)
-
-    for row, (position, slots) in enumerate(zip(positions, legal_slots, strict=True)):
-        selection = np.array([position])
-        single, _ = separate.prepare_rows(selection)
-        together, _ = grouped.prepare_rows(selection)
-        expected_relations = 64 if recorded and row == 0 else 8
-        assert single.relation_features.shape[1] == expected_relations
-        np.testing.assert_array_equal(single.legal_slots, slots)
-        np.testing.assert_equal(asdict(single), asdict(together))
 
 
 def test_reference_to_padding_object_is_kept() -> None:

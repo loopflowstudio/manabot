@@ -50,23 +50,11 @@ def test_memory_exposure_retains_game_disclosure_and_own_flag(
     )
 
 
-def test_decision_memory_metadata_and_legacy_admission() -> None:
+def test_decision_memory_metadata() -> None:
     layout = managym.observation_layout(decision_memory=True)
     assert len(layout["decision_records"]["columns"]) == 74
     assert len(layout["decision_reference_details"]["columns"]) == 6
     assert "decision_records" not in managym.observation_layout()
-    with pytest.raises(ValueError, match="v11"):
-        managym.observation_layout(decision_memory=True, legacy=True)
-    with pytest.raises(ValueError, match="v11"):
-        ObservationSpace(
-            ObservationConfig(
-                policy_input_version=9,
-                max_decision_records=1,
-                max_decision_reference_details=1,
-                max_decision_references=1024,
-                max_decision_members=16384,
-            )
-        )
 
 
 @pytest.mark.parametrize("disclosure", ["open", "closed"])

@@ -2,18 +2,14 @@
 
 import numpy as np
 import pytest
-import torch
 
 from manabot import managym
 from manabot.env.failures import RecordedVectorEnv
-from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
     allocate_vector_buffers,
     step_buffers,
 )
-from manabot.env.vector_env import VectorEnv as TorchVectorEnv
-from manabot.infra.config import MatchConfig, RewardConfig
 from managym.recording import GameRecord
 from managym.replay import replay_failure_inputs
 
@@ -40,10 +36,6 @@ def _captured(
     buffers = step_buffers(1)
     vector.set_observation_layout(buffers, layout=space.layout)
     return vector, buffers
-
-
-def _seeds(vector: TorchVectorEnv) -> list[int]:
-    return [snapshot.seed for snapshot in vector.hand_snapshots([0, 0])]
 
 
 @pytest.mark.parametrize(
@@ -199,65 +191,6 @@ def test_same_seed_reset_starts_a_new_prefix(policy: str) -> None:
         vector.reset_seeds_into_buffers([42])
         assert vector.current_game_generations()[0] != generation
         assert (vector.games[0].seed, vector.games[0].actions) == (42, [])
-    finally:
-        vector.close()
-
-
-@pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
-def test_torch_reset_with_a_seed_restarts_and_without_continues(
-    policy: str,
-) -> None:
-    match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
-    with pytest.warns(DeprecationWarning, match=r"vector_env.VectorEnv.*0\.3\.0"):
-        vector = TorchVectorEnv(
-            2,
-            match,
-            ObservationSpace(),
-            Reward(RewardConfig()),
-            "cpu",
-            seed=42,
-            player_policies=("agent", policy),
-        )
-    try:
-        first, _ = vector.reset(seed=42)
-        first = {key: value.clone() for key, value in first.items()}
-        assert _seeds(vector) == [42, 43]
-        vector.step(torch.zeros(2, dtype=torch.int64))
-        again, _ = vector.reset(seed=42)
-        assert _seeds(vector) == [42, 43]
-        for key, value in first.items():
-            assert torch.equal(again[key], value), key
-        vector.reset()
-        assert _seeds(vector) == [44, 45]
-    finally:
-        vector.close()
-
-
-def test_torch_terminal_step_keeps_outcome_and_returns_next_opening() -> None:
-    match = Match(MatchConfig(hero_deck={"Mountain": 8}, villain_deck={"Island": 8}))
-    space = ObservationSpace()
-    vector = TorchVectorEnv(
-        1, match, space, Reward(RewardConfig(managym=True)), "cpu", seed=42
-    )
-    scalar = managym.Env(seed=42)
-    scalar.reset(match.to_rust())
-    try:
-        vector.reset()
-        for _ in range(120):
-            _, expected_reward, done, truncated, info = scalar.step(0)
-            obs, rewards, ends, cuts, _ = vector.step(torch.zeros(1, dtype=torch.int64))
-            assert (rewards.item(), ends.item(), cuts.item()) == (
-                expected_reward,
-                done,
-                truncated,
-            )
-            if done:
-                assert vector.get_last_info()["winner_index"][0] == info["winner_index"]
-                assert vector.hand_snapshots([0])[0].seed == 43
-                assert obs["actions_valid"][0].any()
-                break
-        else:
-            pytest.fail("tiny deck did not finish")
     finally:
         vector.close()
 

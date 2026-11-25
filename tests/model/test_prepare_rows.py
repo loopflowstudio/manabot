@@ -46,14 +46,8 @@ from tests.model.prepared_routes import device_input
 
 
 @lru_cache(maxsize=3)
-def _observations(
-    version: int, history: bool
-) -> tuple[ObservationSpace, dict[str, np.ndarray]]:
-    space = ObservationSpace(
-        ObservationConfig(
-            policy_input_version=version, policy_history_version=int(history)
-        )
-    )
+def _observations(history: bool) -> tuple[ObservationSpace, dict[str, np.ndarray]]:
+    space = ObservationSpace(ObservationConfig(policy_history_version=int(history)))
     env = managym.Env(seed=11)
     env.reset(Match().to_rust())
     rows: list[dict[str, np.ndarray]] = []
@@ -96,12 +90,11 @@ def original_object_slots(
         "two_layers",
         "hashed",
         "no_world",
-        "v10",
     ],
 )
 @pytest.mark.parametrize("bucketed", [False, True])
 def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
-    space, obs = _observations(10 if kind == "v10" else 9, kind == "history")
+    space, obs = _observations(kind == "history")
     config = ModelConfig(
         hidden_dim=8,
         num_attention_heads=2,
@@ -173,8 +166,11 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     np.testing.assert_array_equal(
         prepared.live_offsets, np.r_[0, (prepared.validity != 0).sum(1).cumsum()]
     )
-    ownership = agent._is_agent_template[:, slots]
-    np.testing.assert_array_equal(prepared.is_agent, ownership.expand(3, -1).numpy())
+    fixed_owners = agent._is_agent_template.expand(len(obs["stack"]), -1).numpy()
+    owners = np.concatenate(
+        (fixed_owners, obs["stack"][..., column("stack", "is_mine")] > 0), axis=1
+    )
+    np.testing.assert_array_equal(prepared.is_agent, owners[:, slots])
     compact = prepare(
         measured or obs,
         tables,
@@ -186,13 +182,12 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         if bucketed
         else (trimmed["facts"][..., FACT_VALID_INDEX] == 1).any(0).sum()
     )
-    if kind == "v10":
-        turn_state = read_numeric(
-            trimmed["player_turn_state"][:, :1], agent.readings["player_turn_state"]
-        )
-        np.testing.assert_array_equal(
-            prepared.agent_player[..., -turn_state.shape[-1] :], turn_state
-        )
+    turn_state = read_numeric(
+        trimmed["player_turn_state"][:, :1], agent.readings["player_turn_state"]
+    )
+    np.testing.assert_array_equal(
+        prepared.agent_player[..., -turn_state.shape[-1] :], turn_state
+    )
     if not tables.catalog_records:
         facts = np.where(
             (trimmed["facts"][..., FACT_VALID_INDEX] == 1)[..., None],
@@ -251,7 +246,7 @@ def test_compact_attention_places_live_objects_and_masks_shorter_boards() -> Non
 
 
 def test_padded_numeric_features_match_dense_readings_at_each_slot() -> None:
-    space, original = _observations(11, False)
+    space, original = _observations(False)
     obs = {key: rows.copy() for key, rows in original.items()}
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
 
@@ -488,7 +483,7 @@ def test_effect_routes_preserve_memberships_and_padding(catalog: bool) -> None:
 
 
 def test_program_integers_stay_raw_and_sequences_keep_their_boundaries() -> None:
-    space, original = _observations(9, False)
+    space, original = _observations(False)
     obs = {key: value.copy() for key, value in original.items()}
     obs["facts"][:] = 0
     signed = [-2147483648, 70000, -71]
@@ -522,8 +517,8 @@ def test_program_integers_stay_raw_and_sequences_keep_their_boundaries() -> None
     )
 
 
-def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
-    space, original = _observations(10, False)
+def test_object_buckets_keep_turn_rows_aligned() -> None:
+    space, original = _observations(False)
     obs = {key: value.copy() for key, value in original.items()}
     agent = ActorCritic(
         space,
@@ -548,12 +543,12 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
 
 
 @pytest.mark.parametrize("catalog", [False, True])
-def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
+def test_masked_mean_forward_and_gradients_survive_object_buckets(
     catalog: bool,
 ) -> None:
     """Turn-state rows stay attached to cards when object padding is removed."""
     torch.set_num_threads(1)
-    space, original = _observations(10, False)
+    space, original = _observations(False)
     obs = {key: torch.from_numpy(value.copy()) for key, value in original.items()}
     obs["player_turn_state"][:, 0, 0] = 1
     obs["card_turn_state"][:, 0, 0] = 2
@@ -699,7 +694,7 @@ def test_bucketed_columns_add_only_empty_columns_on_native_and_dense_rows() -> N
 
 
 def test_torch_learners_and_dense_attention_prepare_no_columns() -> None:
-    space, obs = _observations(11, False)
+    space, obs = _observations(False)
     config = ModelConfig(hidden_dim=8, num_attention_heads=2)
     agent = ActorCritic(space, config)
     assert agent.prepare(obs).attention_columns is None
@@ -741,7 +736,7 @@ def test_bucketed_columns_keep_logits_and_values(kind: str, device: str) -> None
         space, native, belief = belief_batch()
         obs = observation_spans(native, space, bucketed=False, objects=False)
     else:
-        space, obs = _observations(11, False)
+        space, obs = _observations(False)
     aggregations = ("masked_mean", "value_token", "attention_readout")
     config = ModelConfig(
         hidden_dim=16,

@@ -154,18 +154,16 @@ fn encoded_to_dict<'py>(
         &encoded.effect_members,
         &[shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
     )?;
-    if config.turn_state {
-        put(
-            "player_turn_state",
-            &encoded.player_turn_state,
-            &[2, config.turn_state_dim()],
-        )?;
-        put(
-            "card_turn_state",
-            &encoded.card_turn_state,
-            &[2, config.max_cards_per_player],
-        )?;
-    }
+    put(
+        "player_turn_state",
+        &encoded.player_turn_state,
+        &[2, config.turn_state_dim()],
+    )?;
+    put(
+        "card_turn_state",
+        &encoded.card_turn_state,
+        &[2, config.max_cards_per_player],
+    )?;
     put("facts", &encoded.facts, &[config.max_facts, enc::FACT_DIM])?;
     put(
         "relations",
@@ -192,18 +190,16 @@ fn encoded_to_dict<'py>(
         &encoded.opponent_permanents,
         &permanents,
     )?;
-    if config.layout == enc::InputLayout::OneToken {
-        put(
-            "stack",
-            &encoded.stack,
-            &[config.max_stack_objects, enc::STACK_DIM],
-        )?;
-        put(
-            "stack_valid",
-            &encoded.stack_valid,
-            &[config.max_stack_objects],
-        )?;
-    }
+    put(
+        "stack",
+        &encoded.stack,
+        &[config.max_stack_objects, enc::STACK_DIM],
+    )?;
+    put(
+        "stack_valid",
+        &encoded.stack_valid,
+        &[config.max_stack_objects],
+    )?;
     put(
         "actions",
         &encoded.actions,
@@ -3289,20 +3285,6 @@ impl PyObservation {
         serde_json::to_string(&self.continuation).expect("continuation serializes")
     }
 
-    /// Deprecated input v9/v10 card rows (removed in 0.3.0): the observation's
-    /// cards with battlefield objects and stack spells listed as cards again.
-    fn legacy_card_lists(&self) -> (Vec<PyCard>, Vec<PyCard>) {
-        let legacy = crate::agent::legacy_input::view(&Observation::from(self.clone()));
-        (
-            legacy.agent_cards.into_iter().map(PyCard::from).collect(),
-            legacy
-                .opponent_cards
-                .into_iter()
-                .map(PyCard::from)
-                .collect(),
-        )
-    }
-
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
     }
@@ -5193,14 +5175,6 @@ fn policy_action_count(count: usize, capacity: usize, action_overflow: &str) -> 
         .map_err(map_encode_err)
 }
 
-/// The state only policy input v10 holds that `obs` needs, if any (see
-/// `observation_encoder::input_v10_state`); a v9 encoder refuses it.
-#[cfg(feature = "python")]
-#[pyfunction]
-fn input_v10_state(obs: PyObservation) -> Option<&'static str> {
-    crate::agent::observation_encoder::input_v10_state(&Observation::from(obs))
-}
-
 /// State in `obs` the policy input cannot represent, if any (see
 /// `observation_encoder::unrepresentable_state`); every encoder refuses it.
 #[cfg(feature = "python")]
@@ -5596,7 +5570,6 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
     m.add_function(wrap_pyfunction!(encode_observation_into, m)?)?;
-    m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
     m.add_function(wrap_pyfunction!(unrepresentable_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;

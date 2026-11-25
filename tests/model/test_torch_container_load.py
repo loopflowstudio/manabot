@@ -88,7 +88,7 @@ def test_a_file_that_is_neither_format_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "configuration",
-    ["hashed", "no-world", "v10", "history", "categorical", "film", "no-attention"],
+    ["hashed", "no-world", "history", "categorical", "film", "no-attention"],
 )
 def test_container_preserves_general_policy_and_metadata(
     tmp_path: Path, configuration: str
@@ -100,8 +100,6 @@ def test_container_preserves_general_policy_and_metadata(
         model.record_vocabulary = "hashed"
     elif configuration == "no-world":
         model.world = None
-    elif configuration == "v10":
-        observation.policy_input_version = 10
     elif configuration == "history":
         observation.policy_history_version = 1
         model.recent_events = True

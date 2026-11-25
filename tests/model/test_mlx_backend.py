@@ -282,7 +282,7 @@ def test_fresh_backends_export_the_same_input_contract(
 
 
 def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     agent = ActorCritic(
         space,
         ModelConfig(
@@ -1563,7 +1563,7 @@ def test_omitted_precision_follows_the_width_rule(
     from the threshold width, with float32 masters and outputs."""
 
     assert default_precision(width) == expected
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     agent = ActorCritic(
         space,
         ModelConfig(

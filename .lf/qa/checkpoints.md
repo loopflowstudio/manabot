@@ -8,15 +8,15 @@ Read when the change touches checkpoint loading, input readings or files an earl
   --no-open --port <unused>` (bare `academy`; `watch` requires `--player`);
   `GET /api/opponents` lists each entry's `available` and `reason`, and the
   Seat 2 bot select's "Registered policy" shows them as disabled options.
-  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v9
+  An unexplained-key copy: set `semantic_cards.record_token_keys[0]` in a v11
   `.pt` state dict to `(3 << 32) | 12345`. In the browser, select
   `[data-testid=opponent-select]` → `policy`, then the
   `[data-testid=checkpoint-select]` option, and press "Start game" (the setup
   form has no "New Game" button); the end dialog offers "Rematch".
   `uv run python -m manabot.backends.convert` must accept both a
   PyTorch zip and a container saved under a `.pt` name (`save_checkpoint`
-  always writes a container); convert the pinned pilots and u1952, then load
-  each `.safetensors`.
+  always writes a container); convert a v11 PyTorch zip and load its `.safetensors`. A v9 or
+  v10 checkpoint must report v0.2.5 as its last supporting release.
   `manabot sim` cannot seat `heuristic` as villain; seat the checkpoint twice.
   Write returning-user checkpoints on `main` as in "Files a returning user
   wrote". For a column append, cover both `deck_world` and `checkpoint_world`

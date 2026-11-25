@@ -1048,7 +1048,6 @@ fn config(obs: &Observation) -> ObservationEncoderConfig {
         max_actions: obs.action_space.actions.len().max(512),
         max_facts: 4096,
         max_events: obs.recent_events.len().max(32),
-        turn_state: true,
         ..Default::default()
     }
 }

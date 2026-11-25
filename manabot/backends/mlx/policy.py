@@ -234,19 +234,15 @@ def zero_projection(width: int) -> nn.Linear:
 
 
 class SemanticCards(nn.Module):
-    def __init__(
-        self, dims: Dimensions, *, library: bool = False, stream_norm: bool = False
-    ) -> None:
+    def __init__(self, dims: Dimensions, *, stream_norm: bool = False) -> None:
         super().__init__()
         self.token_embedding = padding_embedding(dims.token_rows, dims.hidden)
         self.encoder = PackedGRU(dims.hidden, dims.hidden)
         self.decklist_projection = nn.Linear(4 * dims.hidden, dims.hidden)
-        if library:
-            self.library_projection = nn.Linear(dims.hidden, dims.hidden, bias=False)
+        self.library_projection = nn.Linear(dims.hidden, dims.hidden, bias=False)
         if stream_norm:
             self.hand_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
-            if library:
-                self.library_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
+            self.library_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
             self.decklist_norm = nn.LayerNorm(dims.hidden, eps=1e-5)
 
 
@@ -348,7 +344,6 @@ class MLXActorCritic(nn.Module):
         self.config = config
         self.bucketed_shapes = bucketed_shapes
         self.live_tokens = live_tokens
-        self.stack_tokens = space.one_token
         self.value_semantic: Literal["signed_outcome", "win_logit"] | None = (
             "signed_outcome" if config.value_kind == "categorical_wdl" else None
         )
@@ -359,9 +354,7 @@ class MLXActorCritic(nn.Module):
                 managym.CARD_DEFINITION_COUNT + 1, hidden
             )
         else:
-            self.semantic_cards = SemanticCards(
-                dims, library=space.one_token, stream_norm=config.stream_norm
-            )
+            self.semantic_cards = SemanticCards(dims, stream_norm=config.stream_norm)
         self.player_embedding = Projection(dims.player, hidden)
         self.card_embedding = Projection(dims.card, hidden)
         self.perm_embedding = Projection(dims.permanent, hidden)
@@ -417,14 +410,11 @@ class MLXActorCritic(nn.Module):
         if config.recent_events:
             self.recent_events = RecentEventEncoder(hidden)
         self.continuation = Continuation(dims)
-        if space.one_token:
-            self.stack_embedding = Projection(dims.stack, hidden)
-            self.stack_source = zero_projection(hidden)
+        self.stack_embedding = Projection(dims.stack, hidden)
+        self.stack_source = zero_projection(hidden)
         if config.stream_norm:
             self.final_norm = nn.LayerNorm(hidden, eps=1e-5)
-            streams = ["player", "card", "permanent", "definition", "context"]
-            if space.one_token:
-                streams.append("stack")
+            streams = ["player", "card", "permanent", "definition", "context", "stack"]
             self.stream_norms = {
                 name: nn.LayerNorm(hidden, eps=1e-5) for name in streams
             }
@@ -943,17 +933,16 @@ class MLXActorCritic(nn.Module):
             known = self._masked_norm(
                 getattr(cards, "hand_norm", None), known, batch.known_counts
             )
-            if "library_projection" in cards:
-                library_pooled = (
-                    defs(batch.library_rows)
-                    * self._floating(batch.library_weights)[..., None]
-                    / attenuation
-                ).sum(2)
-                known = known + self._masked_norm(
-                    getattr(cards, "library_norm", None),
-                    cards.library_projection(library_pooled),
-                    batch.library_weights,
-                )
+            library_pooled = (
+                defs(batch.library_rows)
+                * self._floating(batch.library_weights)[..., None]
+                / attenuation
+            ).sum(2)
+            known = known + self._masked_norm(
+                getattr(cards, "library_norm", None),
+                cards.library_projection(library_pooled),
+                batch.library_weights,
+            )
             pooled = mx.einsum(
                 "bsrh,bsrc->bsch",
                 defs(batch.deck_rows),
@@ -987,12 +976,11 @@ class MLXActorCritic(nn.Module):
             permanents[:, 0],
             permanents[:, 1],
         ]
-        if self.stack_tokens:
-            assert batch.stack is not None and batch.stack_rows is not None
-            parts.append(
-                self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
-                + defs(batch.stack_rows)
-            )
+        assert batch.stack is not None and batch.stack_rows is not None
+        parts.append(
+            self._stream("stack", self.stack_embedding(self._floating(batch.stack)))
+            + defs(batch.stack_rows)
+        )
         if (belief := batch.belief) is not None:
             rows = (
                 self.belief_card_embedding(mx.array(belief.cards))
@@ -1007,8 +995,7 @@ class MLXActorCritic(nn.Module):
         objects = mx.concatenate(parts, axis=1)
         count = objects.shape[1]
         objects = self._links(batch, objects)
-        if self.stack_tokens:
-            objects = self._join_stack_sources(batch, objects)
+        objects = self._join_stack_sources(batch, objects)
         objects = self._facts(batch, objects, tokens, definitions)
         objects = self._effects(batch, objects, tokens, definitions)
 

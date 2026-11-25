@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -23,17 +22,8 @@ from manabot.verify.text_observation import keep_opening_hands
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "tests/fixtures/pinned_pilot"
-PILOTS = {"v9": "pilot.pt", "v11": "pilot.safetensors"}
-BEST_PLAYER = "MANABOT_U1952_CHECKPOINT"
+PILOT = ROOT / "tests/fixtures/pinned_pilot/v11/pilot.safetensors"
 RECORD = 'uv run python scripts/pinned_pilot.py record --reason "<why>"'
-
-
-def pilot_path(name: str) -> Path | None:
-    """A committed pilot, or the optional local best player when its variable is set."""
-    if name in PILOTS:
-        return FIXTURES / name / PILOTS[name]
-    return Path(os.environ[BEST_PLAYER]) if BEST_PLAYER in os.environ else None
 
 
 class Decision(BaseModel):
@@ -158,25 +148,18 @@ def record(reason: str) -> None:
     revision = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
     ).strip()
-    updates: dict[Path, Recording] = {}
-    for name in (*PILOTS, "u1952"):
-        path = pilot_path(name)
-        if path is None:
-            continue
-        target = FIXTURES / name / "game.json"
-        previous = Recording.model_validate_json(target.read_bytes())
-        digest = file_sha256(path)
-        if digest != previous.checkpoint_sha256:
-            raise ValueError(f"record cannot replace the pinned weights for {name}")
-        seed, decks = previous.game.seed, previous.game.decks
-        updates[target] = Recording(
-            checkpoint_sha256=digest,
-            revision=revision,
-            reason=reason,
-            game=play(path, seed, decks),
-        )
-    for target, recording in updates.items():
-        atomic_json(target, recording.model_dump(mode="json"))
+    target = PILOT.with_name("game.json")
+    previous = Recording.model_validate_json(target.read_bytes())
+    digest = file_sha256(PILOT)
+    if digest != previous.checkpoint_sha256:
+        raise ValueError("record cannot replace the pinned v11 weights")
+    recording = Recording(
+        checkpoint_sha256=digest,
+        revision=revision,
+        reason=reason,
+        game=play(PILOT, previous.game.seed, previous.game.decks),
+    )
+    atomic_json(target, recording.model_dump(mode="json"))
 
 
 def names_at(revision: str) -> None:

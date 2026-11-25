@@ -573,7 +573,7 @@ try:
     ObservationConfig(policy_input_version=10)
 except UnsupportedPolicyInput as error:
     print(error)
-# policy input v10 is unsupported; v0.2.5 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8
+# The error names v0.2.5 for v9-v10 and ac601834d for v1-v8.
 ```
 
 Load saved configurations through `ObservationConfig.from_checkpoint` (where an

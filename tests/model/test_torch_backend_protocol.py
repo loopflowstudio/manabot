@@ -11,7 +11,7 @@ from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace, encode_observation
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import Settings, Targets
@@ -51,8 +51,7 @@ def _targets(obs: dict[str, np.ndarray], logits: np.ndarray) -> Targets:
 
 
 def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
-    # Framework backends implement input v9 only.
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     torch.manual_seed(0)
     model = ActorCritic(
         space,

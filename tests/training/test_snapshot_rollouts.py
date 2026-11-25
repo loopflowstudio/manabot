@@ -402,8 +402,7 @@ def test_packed_terminal_spans_need_no_bootstrap_input(
 
 
 def scalar_backend_agent() -> ActorCritic:
-    with pytest.warns(DeprecationWarning):
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     return ActorCritic(
         space,
         ModelConfig(

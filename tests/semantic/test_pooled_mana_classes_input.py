@@ -68,15 +68,14 @@ def test_pooled_mana_classes_encode_as_a_program_on_their_player() -> None:
 
 
 def _assert_encodes(env: managym.Env, obs: managym.Observation) -> None:
-    """Both legacy inputs encode ``obs``; the acting view matches the batch path."""
-    for version in (9, 10):
-        space = ObservationSpace(ObservationConfig(policy_input_version=version))
-        reference = encode_observation(space, obs)
-        if obs.agent.player_index == env.current_agent_index():
-            buffers = space.allocate(1)
-            managym.encode_observations_into([env], space.layout, buffers, 1)
-            for key, value in reference.items():
-                np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
+    """The acting view and its engine encode identical packed tables."""
+    layout = managym.ObservationLayout()
+    reference = managym.encode_observation_batch([obs], layout)
+    if obs.agent.player_index == env.current_agent_index():
+        assert (
+            managym.encode_observation_batch([env], layout).tables()
+            == reference.tables()
+        )
 
 
 def test_animal_attendant_mana_and_cast_receipt_reach_input_and_text() -> None:

@@ -2,7 +2,7 @@
 // PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
 #![allow(clippy::useless_conversion)]
 use crate::agent::{
-    observation_encoder::{InputLayout, ObservationEncoderConfig},
+    observation_encoder::ObservationEncoderConfig,
     observation_layout::{self as native_layout, ValueLayout},
 };
 use native_layout::ArrayLayout;
@@ -29,33 +29,16 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 
 /// Column names, value encodings and fixed extents of each encoded array.
 ///
-/// Keys are the encoder's array names; `policy_history` selects the public
-/// history rows of `events`; `turn_state` adds the `player_turn_state` and
-/// `card_turn_state` arrays (inputs v10 and v11); `legacy` selects the
-/// deprecated v9/v10 object rows (removed in 0.3.0) instead of input v11's
-/// one-token rows and `stack`. A `None` extent is a caller-selected capacity.
-/// Seats are viewer-relative. No game or buffer is created.
+/// Variable axes have a caller-selected capacity; seats are viewer-relative.
 #[pyfunction]
-#[pyo3(signature = (*, policy_history=false, turn_state=true, legacy=false, decision_memory=false))]
+#[pyo3(signature = (*, policy_history=false, decision_memory=false))]
 fn observation_layout(
     py: Python<'_>,
     policy_history: bool,
-    turn_state: bool,
-    legacy: bool,
     decision_memory: bool,
 ) -> PyResult<PyObject> {
-    let layout = if legacy {
-        InputLayout::Legacy
-    } else {
-        InputLayout::OneToken
-    };
-    let mut arrays = native_layout::observation_layout(policy_history, turn_state, layout);
+    let mut arrays = native_layout::observation_layout(policy_history);
     if decision_memory {
-        if legacy {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "decision memory requires v11",
-            ));
-        }
         arrays.extend(native_layout::decision_memory_layout());
     }
     arrays_dict(py, &arrays)
@@ -126,18 +109,10 @@ impl ObservationLayout {
         max_decision_reference_details: usize,
         max_decision_members: usize,
     ) -> PyResult<Self> {
-        let layout = match policy_input_version {
-            9 | 10 => InputLayout::Legacy,
-            11 => InputLayout::OneToken,
-            _ => {
-                return Err(PyValueError::new_err(
-                    "supported policy input versions are 9, 10 and 11",
-                ))
-            }
-        };
+        if policy_input_version != 11 {
+            return Err(PyValueError::new_err(format!("unsupported policy input v{policy_input_version}; v0.2.5 is the last release supporting v9-v10, and ac601834d is the last revision supporting v1-v8")));
+        }
         Self::from_config(ObservationEncoderConfig {
-            layout,
-            turn_state: policy_input_version >= 10,
             policy_history,
             max_cards_per_player,
             max_permanents_per_player,
@@ -158,16 +133,7 @@ impl ObservationLayout {
     fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(PyObject, PyObject)> {
         let c = self.config;
         let kwargs = PyDict::new_bound(py);
-        kwargs.set_item(
-            "policy_input_version",
-            if c.layout == InputLayout::OneToken {
-                11
-            } else if c.turn_state {
-                10
-            } else {
-                9
-            },
-        )?;
+        kwargs.set_item("policy_input_version", 11)?;
         kwargs.set_item("policy_history", c.policy_history)?;
         kwargs.set_item("max_cards_per_player", c.max_cards_per_player)?;
         kwargs.set_item("max_permanents_per_player", c.max_permanents_per_player)?;
@@ -267,9 +233,7 @@ impl ObservationLayout {
     fn csr_fields(&self) -> BTreeMap<&str, Vec<(&str, &str, usize)>> {
         self.arrays
             .iter()
-            .filter(|(key, _)| {
-                self.config.layout == InputLayout::OneToken && !key.ends_with("_valid")
-            })
+            .filter(|(key, _)| !key.ends_with("_valid"))
             .map(|(key, array)| {
                 (
                     key.as_str(),

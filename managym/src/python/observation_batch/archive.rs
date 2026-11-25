@@ -4,7 +4,7 @@
 use super::{FrozenTable, ObservationBatch, ObservationLayout};
 use crate::agent::{
     continuation::RELATION_ROWS,
-    observation_encoder::{FactKind, InputLayout, ObservationEncoderConfig},
+    observation_encoder::{FactKind, ObservationEncoderConfig},
     observation_extents::{joins, Join},
     observation_layout::{
         action, decision_member, decision_record, decision_reference, decision_reference_detail,
@@ -25,8 +25,17 @@ use std::{
 struct Header {
     format: String,
     batch_size: usize,
-    config: ObservationEncoderConfig,
+    config: SavedConfig,
     schema: String,
+}
+
+// These wire fields identify v11 in existing format-1 archives.
+#[derive(Serialize, Deserialize)]
+struct SavedConfig {
+    layout: String,
+    turn_state: bool,
+    #[serde(flatten)]
+    encoder: ObservationEncoderConfig,
 }
 
 const FORMAT: &str = if cfg!(target_endian = "little") {
@@ -65,7 +74,11 @@ pub(super) fn encode<'py>(
     let layout = batch.layout.borrow(py);
     let mut bytes = serde_json::to_vec(&Header {
         format: FORMAT.into(),
-        config: layout.config,
+        config: SavedConfig {
+            layout: "OneToken".into(),
+            turn_state: true,
+            encoder: layout.config,
+        },
         batch_size: batch.batch_size,
         schema: schema(&layout),
     })
@@ -217,10 +230,10 @@ pub(super) fn decode(py: Python<'_>, bytes: &[u8]) -> PyResult<ObservationBatch>
         "incompatible observation batch format or byte order",
     )?;
     require(
-        header.config.layout == InputLayout::OneToken && header.config.turn_state,
-        "observation batch requires policy input v11 (v0.2.5 supports v9-v10)",
+        header.config.layout == "OneToken" && header.config.turn_state,
+        "observation batch requires policy input v11; v0.2.5 is the last release supporting v9-v10",
     )?;
-    let layout = ObservationLayout::from_config(header.config)?;
+    let layout = ObservationLayout::from_config(header.config.encoder)?;
     require(
         header.schema == schema(&layout),
         "incompatible packed observation layout",

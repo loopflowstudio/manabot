@@ -3,11 +3,10 @@
 Assumptions taken in `plan.md` (kickoff + concept review, headless); each is
 reversible before merge.
 
-1. **Strength condition.** AGENTS.md conditions v9/v10 removal on "a v11 pilot
-   at least as strong as the best v9 one". No such result is recorded; the best
-   player (frontier Small u1952, run `59718fe34945`) is v9. The first implementation slice preserves both versions.
-   Removing dense preparation needs a qualifying comparison or an explicit
-   change to the condition.
+1. **Strength condition resolved.** Jack Heart, Task comment
+   `9cbbc4d9-f4cb-4065-8398-54442d78d980`: “waive the AGENTS.md
+   strength-comparison gate and retire policy inputs v9 and v10 now for
+   0.3.0 without running a strength comparison.”
 2. **Offline `ObservationBatch` persistence.** Added validated
    `ObservationBatch.to_bytes()` / `from_bytes()` in Rust so `capture.py`,
    `parity.py`, and `decision_memory_probe.py` persist and reload native batches
@@ -64,20 +63,20 @@ reversible before merge.
     batch bytes bind the packed layout and producer byte order. Historical
     dense captures replay at the revision that wrote them.
 
-14. **Pass 2 compatibility.** Keep the existing dense path for v9/v10 until
-    the strength decision in item 1. Their native layouts reject even an empty
-    batch with “observation batches require policy input v11”. Keep packed
-    v11 migrations independently reviewable in the meantime.
+14. **Pass 2 compatibility resolved.** V9/v10 configuration and native layout
+    admission are retired together. The packed archive reader preserves the
+    existing v11 format header.
 
-15. **Published Torch vector wrapper.** Remove it in the 0.3.0 retirement.
-    The API documented in `docs/engine.md` includes tensor reuse, automatic
-    slot refill and terminal reward shaping. `RecordedVectorEnv` parks a
-    finished game until the caller refills it. Keep the deprecation warning
-    and wrapper contract tests through 0.2.x. Training, diagnostics and
-    benchmarks now use the recorded vector directly.
+15. **Published Torch vector wrapper resolved.** Removed its automatic-refill,
+    tensor-reuse and reward-shaping wrapper with the v9/v10 retirement.
+    Terminal slots in the native and recorded vectors are explicitly refilled.
 
 16. **Local-search benchmark default.** Compare compact and full evidence on
     the installed runtime. The previous default, reference `841b1c50c`, imports
     the removed `manabot.belief.sampling` module. The November 9 measurement
     is reproducible with its original benchmark checkout `cb75f2166b`. Current
     source-compatible revisions can still be compared with `--reference`.
+
+17. **Historical eligibility evidence.** The retained v4 fixture lacks permanent
+    and spell identities. Preserve its text check and assert native v11 refusal.
+    The constructed Rust position checks the live target-eligibility columns.

@@ -6,8 +6,7 @@ mod archive;
 use super::bindings::{map_agent_err, map_encode_err, PyEnv, PyObservation};
 use super::layout_bindings::ObservationLayout;
 use crate::agent::{
-    observation::Observation,
-    observation_encoder::{InputLayout, ObservationEncoderConfig},
+    observation::Observation, observation_encoder::ObservationEncoderConfig,
     observation_rows::PackedRows,
 };
 use pyo3::{
@@ -180,11 +179,6 @@ pub(super) fn config(
     layout: &ObservationLayout,
     overflow: &str,
 ) -> PyResult<ObservationEncoderConfig> {
-    if layout.config.layout != InputLayout::OneToken {
-        return Err(PyValueError::new_err(
-            "observation batches require policy input v11",
-        ));
-    }
     Ok(ObservationEncoderConfig {
         action_overflow: overflow.parse().map_err(PyValueError::new_err)?,
         ..layout.config

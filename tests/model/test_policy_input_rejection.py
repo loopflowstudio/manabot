@@ -1,14 +1,8 @@
-"""Checkpoints and replays of another policy input are rejected, never loaded.
-
-This revision encodes, binds and models policy inputs v9 (the fresh default)
-and v10. A saved configuration naming another version, or omitting it (the
-input-v1 contract), names the revision that can run it.
-"""
+"""Configuration, checkpoint, Academy and replay admission share the version boundary."""
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
 import pytest
 
 from manabot.backends.torch.checkpoint import (
@@ -30,6 +24,7 @@ from manabot.infra.config import (
 from manabot.model.catalog import inspect_checkpoint
 from manabot.sim.replay import replay_environment
 from manabot.sim.table_bots import CheckpointVillain
+import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 SETUP = "ur-lessons-vs-gw-allies"
@@ -60,6 +55,7 @@ def _saved(path: Path, version: int | None) -> dict[str, Any]:
 def _assert_names_the_recording_revision(message: str, version: int) -> None:
     assert f"written for policy input v{version}" in message
     assert "run from the revision that recorded it" in message
+    assert "v0.2.5 is the last release supporting v9-v10" in message
     assert LAST_MULTI_INPUT_REVISION == "ac601834d"
     assert (
         f"{LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8" in message
@@ -72,17 +68,9 @@ def test_v11_is_the_fresh_default_and_every_input_is_serialized() -> None:
     dumped = config.model_dump()
     assert dumped["policy_input_version"] == 11 and dumped["max_facts"] == 512
     assert ObservationConfig.from_checkpoint(dumped) == config
-    for version in (9, 10):
-        # The deprecated v9/v10 rows still load, and warn.
-        with pytest.warns(DeprecationWarning, match="no earlier than 0.3.0") as caught:
-            legacy = ObservationConfig(policy_input_version=version)
-        assert caught[0].filename == __file__  # The caller, not pydantic.
-        assert legacy.model_dump()["policy_input_version"] == version
-        with pytest.warns(DeprecationWarning):
-            assert ObservationConfig.from_checkpoint(legacy.model_dump()) == legacy
 
 
-@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 12])
+@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 9, 10, 12])
 def test_saved_configuration_of_another_input_is_rejected(version: int) -> None:
     payload = {**ObservationConfig().model_dump(), "policy_input_version": version}
     with pytest.raises(UnsupportedPolicyInput) as raised:
@@ -90,7 +78,9 @@ def test_saved_configuration_of_another_input_is_rejected(version: int) -> None:
     assert raised.value.version == version
     _assert_names_the_recording_revision(str(raised.value), version)
     # Direct construction (a regime file) reports the same reason.
-    with pytest.raises(ValidationError, match="run from the revision that recorded it"):
+    with pytest.raises(
+        UnsupportedPolicyInput, match="run from the revision that recorded it"
+    ):
         ObservationConfig(**payload)
 
 
@@ -104,7 +94,7 @@ def test_saved_configuration_without_a_version_is_input_v1() -> None:
         ObservationConfig.from_checkpoint({})
 
 
-@pytest.mark.parametrize("version", [7, None])
+@pytest.mark.parametrize("version", [7, 9, 10, None])
 def test_checkpoint_of_another_input_is_rejected_before_loading(
     tmp_path: Path, version: int | None
 ) -> None:
@@ -123,18 +113,25 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
         CheckpointVillain(str(path), player_configs=_match().to_rust())
 
 
-def test_replay_of_another_input_is_rejected() -> None:
+@pytest.mark.parametrize("version", [6, 9, 10])
+def test_replay_of_another_input_is_rejected(version: int) -> None:
     game = {
         "seat_players": ["a", "b"],
         "deal_seed": 1,
         "observation_hypers": {
             **ObservationConfig().model_dump(),
-            "policy_input_version": 6,
+            "policy_input_version": version,
         },
     }
     with pytest.raises(UnsupportedPolicyInput) as raised:
         replay_environment(game)
-    _assert_names_the_recording_revision(str(raised.value), 6)
+    _assert_names_the_recording_revision(str(raised.value), version)
     del game["observation_hypers"]
     with pytest.raises(UnsupportedPolicyInput):
         replay_environment(game)
+
+
+@pytest.mark.parametrize("version", [9, 10])
+def test_native_layout_rejects_retired_versions(version: int) -> None:
+    with pytest.raises(ValueError, match=rf"policy input v{version}.*v0.2.5"):
+        managym.ObservationLayout(policy_input_version=version)

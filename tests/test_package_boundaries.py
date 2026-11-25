@@ -389,7 +389,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
     (
         "manabot/backends/parity.py",
         "manabot/belief/population.py",
-        "manabot/env/vector_env.py",
         "manabot/eval/evaluate.py",
         "manabot/eval/agent_loader.py",
         "manabot/experiment/numerics.py",

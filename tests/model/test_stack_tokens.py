@@ -1,17 +1,10 @@
-"""Input v11 stack rows reach the policy, and v9 checkpoints keep their rows.
+"""Stack rows carry spells and abilities into each policy forward."""
 
-Input v11 appends one stack row per spell or ability after the permanents.
-Bucketed shapes and live tokens must agree with the plain forward on batches
-that hold stack rows, and the deprecated v9 layout (no stack) must still run.
-"""
-
-import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import STACK_DEFINITION_INDEX, encode_observation
+from manabot.env.observation import STACK_DEFINITION_INDEX
 from manabot.training.rollout.collection import collect
-from manabot.verify.text_observation import priority_root
 from tests.fixtures.rollout_arrays import trajectory_rows
 from tests.model.prepared_routes import device_input
 from tests.model.test_inference import PolicyFixture, _policy
@@ -41,31 +34,12 @@ def _variants(case: PolicyFixture) -> list[ActorCritic]:
     return models
 
 
-@pytest.mark.parametrize("input_version", [11, 9])
-def test_bucketed_and_live_forwards_match_plain(input_version: int) -> None:
+def test_bucketed_and_live_forwards_match_plain() -> None:
     torch.manual_seed(344)
-    case = _policy(input_version=input_version)
-    if input_version == 9:
-        # Legacy compatibility uses a representable board. Full games may
-        # acquire positional library facts that this frozen layout cannot hold.
-        env = priority_root(("Lightning Bolt",), ("Mountain", "Gray Ogre"))
-        observation = env.observation_for_player(env.current_agent_index())
-        obs = {
-            key: torch.from_numpy(value[None]).float()
-            for key, value in encode_observation(
-                case.agent.observation_space, observation
-            ).items()
-        }
-    else:
-        obs = _decisions(case, 48)
-    if input_version == 11:
-        assert case.agent.stack_tokens
-        assert obs["stack_valid"].any(), "fixture should put a spell on the stack"
-        assert (
-            obs["stack"][..., STACK_DEFINITION_INDEX][obs["stack_valid"] > 0] > 0
-        ).all()
-    else:
-        assert not case.agent.stack_tokens and "stack" not in obs
+    case = _policy()
+    obs = _decisions(case, 48)
+    assert obs["stack_valid"].any(), "fixture should put a spell on the stack"
+    assert (obs["stack"][..., STACK_DEFINITION_INDEX][obs["stack_valid"] > 0] > 0).all()
     outputs = []
     with torch.no_grad():
         for model in _variants(case):
@@ -91,13 +65,3 @@ def test_stack_rows_change_the_policy() -> None:
         _, values = model.forward_distribution(device_input(model, obs))
         _, without = model.forward_distribution(device_input(model, erased))
     assert not torch.allclose(values[rows], without[rows])
-
-
-def test_v11_model_refuses_v9_weights_by_shape() -> None:
-    v9 = _policy(input_version=9).agent
-    v11 = _policy().agent
-    assert v9.perm_embedding.projection[0].in_features < (
-        v11.perm_embedding.projection[0].in_features
-    )
-    with pytest.raises(RuntimeError, match="size mismatch|Missing key"):
-        v11.load_state_dict(v9.state_dict())

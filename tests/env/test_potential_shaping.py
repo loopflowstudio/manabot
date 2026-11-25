@@ -5,7 +5,7 @@ Tests for potential-based reward shaping (Ng, Harada & Russell 1999):
 shaping of the form gamma * Phi(s') - Phi(s) with Phi(terminal) = 0.
 
 Covers:
-- sign conventions of the hero-perspective potential Phi (both reward paths),
+- sign conventions of the hero-perspective potential Phi,
 - terminal handling (Phi(terminal) treated as 0),
 - the telescoping property: with gamma = 1 the total shaped episode return
   equals the unshaped episode return plus -Phi(s_0), and Phi(s_0) = 0 for a
@@ -15,11 +15,7 @@ Covers:
 from collections.abc import Sequence
 from types import SimpleNamespace
 
-import torch
-
-from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
-from manabot.env.vector_env import VectorEnv
+from manabot.env.match import Reward
 from manabot.infra.config import RewardConfig
 import managym
 
@@ -27,196 +23,6 @@ BATTLEFIELD = int(managym.ZoneEnum.BATTLEFIELD)
 HAND = int(managym.ZoneEnum.HAND)
 
 
-def make_vector_env(reward_config: RewardConfig, seed: int = 0) -> VectorEnv:
-    return VectorEnv(
-        num_envs=2,
-        match=Match(),
-        observation_space=ObservationSpace(),
-        reward=Reward(reward_config),
-        device="cpu",
-        seed=seed,
-        player_policies=("agent", "random"),
-    )
-
-
-def first_valid_actions(obs: dict[str, torch.Tensor]) -> torch.Tensor:
-    """Deterministic policy: first valid action index per env."""
-    return obs["actions_valid"].float().argmax(dim=1).long()
-
-
-# -----------------------------------------------------------------------------
-# VectorEnv path
-# -----------------------------------------------------------------------------
-class TestVectorEnvPotential:
-    def _blank_tensors(self, env: VectorEnv) -> tuple[torch.Tensor, torch.Tensor]:
-        """Blank board rows (input v11 permanents) and player rows."""
-        shapes = env.observation_space.shapes
-        board = torch.zeros((env.num_envs, *shapes["agent_permanents"]))
-        players = torch.zeros((env.num_envs, *shapes["agent_player"]))
-        return board, players
-
-    def _add_card(
-        self,
-        cards: torch.Tensor,
-        env_index: int,
-        slot: int,
-        *,
-        zone: int,
-        is_land: bool = False,
-        is_creature: bool = False,
-        env_ref: VectorEnv | None = None,
-    ) -> None:
-        assert env_ref is not None
-        # Input v11 board rows are permanents; a card elsewhere has no row.
-        if zone != BATTLEFIELD:
-            return
-        if is_land:
-            cards[env_index, slot, env_ref._land_index] = 1.0
-        if is_creature:
-            cards[env_index, slot, env_ref._creature_index] = 1.0
-        cards[env_index, slot, env_ref._valid_index] = 1.0
-
-    def test_potential_sign_conventions(self):
-        config = RewardConfig(
-            potential_enabled=True,
-            potential_land_weight=0.03,
-            potential_creature_weight=0.06,
-            potential_life_weight=0.2,
-        )
-        env = make_vector_env(config)
-        env.reset()
-
-        agent_cards, agent_player = self._blank_tensors(env)
-        opponent_cards, opponent_player = self._blank_tensors(env)
-
-        # Equal life (20/20 encoded as 1.0), empty boards -> Phi = 0.
-        agent_player[:, 0, 0] = 1.0
-        opponent_player[:, 0, 0] = 1.0
-        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
-        assert torch.allclose(phi, torch.zeros_like(phi))
-
-        # Hero battlefield land -> +land_weight.
-        self._add_card(agent_cards, 0, 0, zone=BATTLEFIELD, is_land=True, env_ref=env)
-        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
-        assert abs(phi[0].item() - 0.03) < 1e-6
-        assert phi[1].item() == 0.0
-
-        # Villain battlefield creature -> -creature_weight (subtracts).
-        self._add_card(
-            opponent_cards, 0, 0, zone=BATTLEFIELD, is_creature=True, env_ref=env
-        )
-        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
-        assert abs(phi[0].item() - (0.03 - 0.06)) < 1e-6
-
-        # Cards outside the battlefield do not count.
-        self._add_card(agent_cards, 1, 1, zone=HAND, is_creature=True, env_ref=env)
-        phi_after = env._potential(
-            agent_cards, opponent_cards, agent_player, opponent_player
-        )
-        assert torch.allclose(phi, phi_after)
-
-        # Hero life advantage -> positive life term: hero 20, villain 10
-        # gives potential_life_weight * (20 - 10)/20 = 0.2 * 0.5 = 0.1.
-        opponent_player[1, 0, 0] = 0.5
-        phi = env._potential(agent_cards, opponent_cards, agent_player, opponent_player)
-        assert abs(phi[1].item() - 0.1) < 1e-6
-
-    def test_disabled_by_default(self):
-        env = make_vector_env(RewardConfig())
-        env.reset()
-        assert env._compute_potential_shaping() is None
-
-    def test_telescoping_episode_returns_match_unshaped(self):
-        """With gamma = 1 and Phi(terminal) = 0, shaping telescopes to
-        -Phi(s_0), which is 0 for the symmetric start — so per-episode
-        shaped and unshaped returns must be identical."""
-
-        base = RewardConfig()
-        shaped = RewardConfig(potential_enabled=True, potential_gamma=1.0)
-
-        episode_sums: dict[str, list[float]] = {"base": [], "shaped": []}
-        step_rewards: dict[str, list[torch.Tensor]] = {"base": [], "shaped": []}
-        dones: dict[str, list[torch.Tensor]] = {"base": [], "shaped": []}
-
-        for name, config in (("base", base), ("shaped", shaped)):
-            env = make_vector_env(config, seed=123)
-            obs, _ = env.reset()
-            running = torch.zeros(env.num_envs)
-            for _ in range(3000):
-                actions = first_valid_actions(obs)
-                obs, reward, terminated, truncated, _ = env.step(actions)
-                step_rewards[name].append(reward.clone())
-                done = terminated | truncated
-                dones[name].append(done.clone())
-                running += reward
-                for i in range(env.num_envs):
-                    if done[i]:
-                        episode_sums[name].append(float(running[i]))
-                        running[i] = 0.0
-                if len(episode_sums[name]) >= 4:
-                    break
-            env.close()
-
-        assert len(episode_sums["base"]) >= 4
-        assert len(episode_sums["shaped"]) >= 4
-
-        # Identical seeds + deterministic policy -> identical trajectories.
-        n = min(len(dones["base"]), len(dones["shaped"]))
-        for t in range(n):
-            assert torch.equal(dones["base"][t], dones["shaped"][t]), (
-                "trajectories diverged; telescoping comparison invalid"
-            )
-
-        # Per-step rewards differ (dense signal is present)...
-        deltas = [
-            (step_rewards["shaped"][t] - step_rewards["base"][t]).abs().max()
-            for t in range(n)
-        ]
-        assert max(float(d) for d in deltas) > 1e-4
-
-        # ...but per-episode sums are identical: the potential telescopes out.
-        k = min(len(episode_sums["base"]), len(episode_sums["shaped"]))
-        for a, b in zip(episode_sums["base"][:k], episode_sums["shaped"][:k]):
-            assert abs(a - b) < 1e-3, (a, b)
-
-    def test_terminal_step_carries_minus_prev_phi(self):
-        """On a done step the shaping must be exactly -Phi(s_prev): the
-        buffers hold the next episode's reset obs, and Phi(terminal) = 0."""
-
-        env = make_vector_env(
-            RewardConfig(potential_enabled=True, potential_gamma=1.0), seed=7
-        )
-        obs, _ = env.reset()
-        for _ in range(3000):
-            actions = first_valid_actions(obs)
-            prev_obs = {
-                key: env._obs_tensors[key].clone() for key in env._prev_obs_keys
-            }
-            obs, reward, terminated, truncated, _ = env.step(actions)
-            done = terminated | truncated
-            if bool(done.any()):
-                prev_phi = env._potential(
-                    prev_obs[env._board_keys[0]],
-                    prev_obs[env._board_keys[1]],
-                    prev_obs["agent_player"],
-                    prev_obs["opponent_player"],
-                )
-                shaping = env._compute_potential_shaping()
-                for i in range(env.num_envs):
-                    if done[i]:
-                        assert abs(float(shaping[i]) - (-float(prev_phi[i]))) < 1e-6
-                        # Terminal reward is win/lose plus that correction.
-                        assert (
-                            abs(abs(float(reward[i]) + float(prev_phi[i])) - 1.0) < 1e-6
-                        )
-                env.close()
-                return
-        raise AssertionError("no episode terminated within the step budget")
-
-
-# -----------------------------------------------------------------------------
-# Single-env Match.Reward path
-# -----------------------------------------------------------------------------
 def _stub_card(
     *, zone: int, is_land: bool = False, is_creature: bool = False
 ) -> SimpleNamespace:
@@ -336,27 +142,3 @@ class TestSingleEnvRewardPotential:
         s0 = _stub_obs()
         s1 = _stub_obs(agent_cards=[_stub_card(zone=BATTLEFIELD, is_land=True)])
         assert reward.compute(0.0, s0, s1) == 0.0
-
-
-def test_terminal_draw_remains_neutral_before_potential_correction() -> None:
-    env = make_vector_env(
-        RewardConfig(
-            win_reward=7,
-            lose_reward=-3,
-            potential_enabled=True,
-            potential_land_weight=0,
-            potential_creature_weight=0,
-            potential_life_weight=1,
-        )
-    )
-    obs, _ = env.reset()
-    env._prev_obs = {key: value.clone() for key, value in obs.items()}
-    env._prev_obs["agent_player"][:, 0, 0] = 1
-    env._prev_obs["opponent_player"][:, 0, 0] = 0.5
-    env._reward_tensor[:] = torch.tensor([0.0, 1.0])
-    env._terminated_tensor.fill_(True)
-    env._truncated_tensor.fill_(False)
-    env._apply_reward_policy()
-    # Draw=0, win=7, each with -Phi(s)=-.5; reset Phi never enters.
-    torch.testing.assert_close(env._reward_tensor, torch.tensor([-0.5, 6.5]))
-    env.close()

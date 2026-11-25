@@ -23,7 +23,6 @@ import time
 from typing import Callable, Sequence
 
 import numpy as np
-from numpy.typing import NDArray
 
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
@@ -38,7 +37,6 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
-from manabot.env.observation import ObservationBuffers
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
@@ -116,7 +114,6 @@ class LocalUpdateTeacher:
         self.space = self.likelihood.obs_space
         # Native frontier encoding reuses these teacher-owned buffers across
         # forwards, so one teacher serves one search at a time.
-        self._frontier_buffers: dict[str, NDArray[np.generic]] = {}
         self.config = config
         if file_sha256(checkpoint) != sha256:
             raise ValueError("checkpoint changed during local-search admission")
@@ -191,28 +188,13 @@ class LocalUpdateTeacher:
 
     def _encode(
         self, engines: Sequence[managym.Env]
-    ) -> tuple[managym.ObservationBatch | ObservationBuffers, list[int]]:
+    ) -> tuple[managym.ObservationBatch, list[int]]:
         """Encode the full frontier; search requires every legal offer to fit."""
-        if self.space.one_token:
-            batch = managym.encode_observation_batch(engines, self.space.layout)
-            counts = batch.action_counts
-            if 0 in counts:
-                raise ValueError("policy cannot represent complete legal offers")
-            return batch, counts
-        capacity = len(self._frontier_buffers.get("actions_valid", ()))
-        if len(engines) > capacity:
-            capacity = len(engines)
-            self._frontier_buffers = self.space.allocate(capacity)
-        counts = managym.encode_observations_into(
-            engines, self.space.layout, self._frontier_buffers, capacity
-        )
-        encodings = {
-            key: value[: len(engines)] for key, value in self._frontier_buffers.items()
-        }
-        for index, count in enumerate(counts):
-            if count == 0 or int(encodings["actions_valid"][index].sum()) != count:
-                raise ValueError("policy cannot represent complete legal offers")
-        return encodings, counts
+        batch = managym.encode_observation_batch(engines, self.space.layout)
+        counts = batch.action_counts
+        if 0 in counts:
+            raise ValueError("policy cannot represent complete legal offers")
+        return batch, counts
 
     def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
         """Advance one Command per live branch, then one forward for the frontier.

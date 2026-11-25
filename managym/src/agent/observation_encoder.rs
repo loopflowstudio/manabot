@@ -2,8 +2,7 @@
 //! selects dense compatibility buffers or immutable typed CSR records.
 
 use super::observation_layout::{
-    action, action_columns, card, decklist, event, fact, name, permanent, player, relation, stack,
-    turn_state,
+    action, card, decklist, event, fact, name, permanent, player, relation, stack, turn_state,
 };
 use super::observation_rows::{Cell, RowWriter, Table};
 use Cell::{Integer, Scalar, Word};
@@ -155,24 +154,8 @@ pub const NAME_DIM: usize = name::WIDTH;
 /// remaining-sideboard counts (`PlayerData` decklist maps).
 pub const DECKLIST_DIM: usize = decklist::WIDTH;
 
-// Input v10 adds turn state v9 has no place for, in two buffers whose
-// presence selects it. `player_turn_state` has one row per seat (agent
-// first), columns named by `observation_layout::turn_state`.
-// `card_turn_state` aligns with the seats' card rows like `semantic_cards`:
-// 1 for a graveyard card put there from the battlefield this turn.
+/// Columns in each seat's turn history row.
 pub const TURN_STATE_DIM: usize = turn_state::WIDTH;
-
-/// Which object rows the encoder writes.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InputLayout {
-    /// Policy input v11: one row per game thing. Card rows hold cards outside
-    /// the battlefield and stack; a permanent row holds its characteristics;
-    /// the `stack` segment holds every spell and ability. Battlefield object
-    /// and spell ids index their permanent and stack rows.
-    OneToken,
-    /// Deprecated policy inputs v9 and v10 (`legacy_input`), removed in 0.3.0.
-    Legacy,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
@@ -181,7 +164,6 @@ pub struct ObservationEncoderConfig {
     pub max_permanents_per_player: usize,
     /// Stack rows (input v11); overflow is a Capacity error.
     pub max_stack_objects: usize,
-    pub layout: InputLayout,
     pub max_actions: usize,
     pub action_overflow: ActionOverflow,
     pub max_focus_objects: usize,
@@ -191,9 +173,6 @@ pub struct ObservationEncoderConfig {
     pub max_decision_references: usize,
     pub max_decision_members: usize,
     pub policy_history: bool,
-    /// Write `player_turn_state` and `card_turn_state` (inputs v10 and v11).
-    /// Without them, an observation that needs that state is refused.
-    pub turn_state: bool,
 }
 
 impl Default for ObservationEncoderConfig {
@@ -202,7 +181,6 @@ impl Default for ObservationEncoderConfig {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
             max_stack_objects: 32,
-            layout: InputLayout::OneToken,
             max_actions: 512,
             action_overflow: ActionOverflow::Error,
             max_focus_objects: 2,
@@ -212,7 +190,6 @@ impl Default for ObservationEncoderConfig {
             max_decision_references: 0,
             max_decision_members: 0,
             policy_history: false,
-            turn_state: true,
             max_facts: 512,
         }
     }
@@ -221,11 +198,7 @@ impl Default for ObservationEncoderConfig {
 impl ObservationEncoderConfig {
     /// Two seats, each with a definition and position per retained fact.
     pub fn known_library_len(&self) -> usize {
-        if self.layout == InputLayout::OneToken {
-            4 * crate::state::knowledge::KNOWN_LIBRARY_ROWS
-        } else {
-            0
-        }
+        4 * crate::state::knowledge::KNOWN_LIBRARY_ROWS
     }
 
     /// Candidate rows share the action axis, but never consume object capacity.
@@ -238,10 +211,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn relation_dim(&self) -> usize {
-        match self.layout {
-            InputLayout::Legacy => super::legacy_input::RELATION_DIM,
-            InputLayout::OneToken => super::continuation::RELATION_DIM,
-        }
+        super::continuation::RELATION_DIM
     }
 
     /// Two seats of decklist rows.
@@ -261,27 +231,19 @@ impl ObservationEncoderConfig {
         super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
     }
 
-    /// Columns in one seat's v10/v11 player turn state row.
+    /// Columns in one seat's turn state row.
     pub fn turn_state_dim(&self) -> usize {
-        super::observation_layout::turn_state_columns(self.layout).len()
+        turn_state::WIDTH
     }
 
-    /// Two seat rows of v10/v11 player turn state; empty for v9.
+    /// Turn state, with the viewer first.
     pub fn player_turn_state_len(&self) -> usize {
-        if self.turn_state {
-            2 * self.turn_state_dim()
-        } else {
-            0
-        }
+        2 * self.turn_state_dim()
     }
 
-    /// Two seats of v10 card turn state; empty for v9.
+    /// Turn-state flags aligned with each seat’s card rows.
     pub fn card_turn_state_len(&self) -> usize {
-        if self.turn_state {
-            2 * self.max_cards_per_player
-        } else {
-            0
-        }
+        2 * self.max_cards_per_player
     }
 
     pub fn facts_len(&self) -> usize {
@@ -293,27 +255,19 @@ impl ObservationEncoderConfig {
     }
 
     pub fn player_dim(&self) -> usize {
-        self.layout.player_columns().len()
+        player::WIDTH
     }
 
-    /// Permanent row width: v11's, or the deprecated v9/v10 rows'.
     pub fn permanent_dim(&self) -> usize {
-        match self.layout {
-            InputLayout::OneToken => PERMANENT_DIM,
-            InputLayout::Legacy => super::legacy_input::PERMANENT_DIM,
-        }
+        PERMANENT_DIM
     }
 
     pub fn permanents_len(&self) -> usize {
         self.max_permanents_per_player * self.permanent_dim()
     }
 
-    /// Stack rows the layout writes; none for v9/v10.
     pub fn stack_rows(&self) -> usize {
-        match self.layout {
-            InputLayout::OneToken => self.max_stack_objects,
-            InputLayout::Legacy => 0,
-        }
+        self.max_stack_objects
     }
 
     pub fn stack_len(&self) -> usize {
@@ -321,7 +275,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn action_dim(&self) -> usize {
-        action_columns(self.layout).len()
+        action::WIDTH
     }
 
     pub fn actions_len(&self) -> usize {
@@ -480,8 +434,6 @@ pub enum ObservationEncodeError {
         expected: usize,
         actual: usize,
     },
-    /// A v9 observation that needs state only input v10 holds.
-    RequiresInputV10(&'static str),
     /// State the policy input has no columns or rows for; encoding it would
     /// hide a distinction the game makes.
     Unrepresentable(String),
@@ -493,18 +445,13 @@ impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
-            Self::RequiresInputV10(state) => write!(
-                f,
-                "policy input v10 required: this observation needs {state}, which v9 cannot hold"
-            ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Unrepresentable(state) => {
                 write!(f, "the policy input cannot represent {state}")
             }
             Self::HistoricalObservation => write!(
                 f,
-                "policy input v11 requires permanent and spell identities; \
-                 this historical observation encodes only as input v9/v10"
+                "policy input v11 requires permanent and spell identities in this historical observation"
             ),
             Self::Capacity {
                 field,
@@ -786,24 +733,8 @@ pub fn encode_rows(
     out: &mut impl RowWriter,
     cursor: Option<&mut super::decision_memory::MemoryEncoding>,
 ) -> Result<(), ObservationEncodeError> {
-    // Deprecated v9/v10 rows read the card lists they were trained on.
-    let legacy;
-    let obs = match config.layout {
-        InputLayout::Legacy => {
-            legacy = super::legacy_input::view(obs);
-            &legacy
-        }
-        InputLayout::OneToken => {
-            if obs.historical() {
-                return Err(ObservationEncodeError::HistoricalObservation);
-            }
-            obs
-        }
-    };
-    if !config.turn_state {
-        if let Some(state) = input_v10_state(obs) {
-            return Err(ObservationEncodeError::RequiresInputV10(state));
-        }
+    if obs.historical() {
+        return Err(ObservationEncodeError::HistoricalObservation);
     }
     if let Some(state) = unrepresentable_state(obs) {
         return Err(ObservationEncodeError::Unrepresentable(state));
@@ -829,15 +760,7 @@ pub fn encode_rows(
             obs.opponent_permanents.len(),
             config.max_permanents_per_player,
         ),
-        (
-            "stack",
-            if config.layout == InputLayout::OneToken {
-                obs.stack_objects.len()
-            } else {
-                0
-            },
-            config.stack_rows(),
-        ),
+        ("stack", obs.stack_objects.len(), config.stack_rows()),
         (
             "actions",
             policy_action_count(
@@ -900,14 +823,13 @@ pub fn encode_rows(
         || config.max_decision_references != 0
         || config.max_decision_members != 0
     {
-        if config.layout != InputLayout::OneToken
-            || [
-                config.max_decision_records,
-                config.max_decision_reference_details,
-                config.max_decision_references,
-                config.max_decision_members,
-            ]
-            .contains(&0)
+        if [
+            config.max_decision_records,
+            config.max_decision_reference_details,
+            config.max_decision_references,
+            config.max_decision_members,
+        ]
+        .contains(&0)
         {
             return Err(ObservationEncodeError::InvalidShared(
                 "decision memory requires v11 and all companion capacities",
@@ -988,23 +910,19 @@ pub fn encode_rows(
         for (i, permanent) in permanents.iter().enumerate() {
             let index = (permanent_start + seat * config.max_permanents_per_player + i) as i32;
             objects.insert(permanent.id, index);
-            if config.layout == InputLayout::OneToken {
-                if let Some(id) = permanent.object_id {
-                    objects.insert(id, index);
-                }
+            if let Some(id) = permanent.object_id {
+                objects.insert(id, index);
             }
         }
     }
     for (i, card) in obs.agent_sideboard.iter().enumerate() {
         objects.insert(card.candidate_id, (2 + obs.agent_cards.len() + i) as i32);
     }
-    if config.layout == InputLayout::OneToken {
-        for (i, object) in obs.stack_objects.iter().enumerate() {
-            let index = (stack_start + i) as i32;
-            objects.insert(object.stack_object_id, index);
-            if let Some(spell) = &object.spell {
-                objects.insert(spell.object_id, index);
-            }
+    for (i, object) in obs.stack_objects.iter().enumerate() {
+        let index = (stack_start + i) as i32;
+        objects.insert(object.stack_object_id, index);
+        if let Some(spell) = &object.spell {
+            objects.insert(spell.object_id, index);
         }
     }
     let link = |id: Option<i32>| {
@@ -1029,17 +947,9 @@ pub fn encode_rows(
         let mut row = [Cell::ZERO; PLAYER_DIM];
         encode_player_features(player, &obs.turn, &mut row);
         row[player::DECKLISTS_OPEN] = flag(!obs.decklists_closed);
-        // The deprecated v9/v10 rows end before the first-strike step flag.
-        out.write(player_table, 0, 0, &row[..config.player_dim()])?;
-        if config.turn_state {
-            let row = turn_state_row(player, config.layout);
-            out.write(
-                Table::PlayerTurnState,
-                0,
-                seat,
-                &row[..config.turn_state_dim()],
-            )?;
-        }
+        out.write(player_table, 0, 0, &row)?;
+        let row = turn_state_row(player);
+        out.write(Table::PlayerTurnState, 0, seat, &row)?;
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
             encode_card_features(card, mine, &context, &mut row);
@@ -1050,14 +960,12 @@ pub fn encode_rows(
                 slot,
                 &[Integer(i64::from(card.registry_key) + 1)],
             )?;
-            if config.turn_state {
-                out.write(
-                    Table::CardTurnState,
-                    seat,
-                    slot,
-                    &[flag(card.from_battlefield_this_turn)],
-                )?;
-            }
+            out.write(
+                Table::CardTurnState,
+                seat,
+                slot,
+                &[flag(card.from_battlefield_this_turn)],
+            )?;
         }
         if seat == 0 {
             for (i, card) in obs.agent_sideboard.iter().enumerate() {
@@ -1073,25 +981,20 @@ pub fn encode_rows(
                     slot,
                     &[Integer(i64::from(card.registry_key) + 1)],
                 )?;
-                if config.turn_state {
-                    out.write(Table::CardTurnState, seat, slot, &[Cell::ZERO])?;
-                }
+                out.write(Table::CardTurnState, seat, slot, &[Cell::ZERO])?;
             }
         }
         for (slot, permanent) in permanents.iter().enumerate() {
             let mut row = [Cell::ZERO; PERMANENT_DIM];
-            let row = &mut row[..config.permanent_dim()];
-            encode_permanent_features(permanent, mine, config.layout, row);
-            if config.layout == InputLayout::OneToken {
-                [
-                    row[permanent::COMBAT_DAMAGE_TO_ME],
-                    row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
-                ] = combat_damage_flags(&permanent.combat_damage_to_players);
-            }
+            encode_permanent_features(permanent, mine, &mut row);
+            [
+                row[permanent::COMBAT_DAMAGE_TO_ME],
+                row[permanent::COMBAT_DAMAGE_TO_OPPONENT],
+            ] = combat_damage_flags(&permanent.combat_damage_to_players);
             row[permanent::ATTACHED_TO] = link(permanent.attached_to);
             row[permanent::BLOCKING] = link(permanent.blocking);
             row[permanent::TIMESTAMP] = Integer(ranks[&permanent.timestamp()]);
-            out.write(permanent_table, 0, slot, row)?;
+            out.write(permanent_table, 0, slot, &row)?;
         }
         check_capacity(
             "known hand",
@@ -1106,23 +1009,21 @@ pub fn encode_rows(
                 &[Integer(i64::from(*definition) + 1), Integer(*count as i64)],
             )?;
         }
-        if config.layout == InputLayout::OneToken {
-            check_capacity(
-                "known library",
-                player.known_library.len(),
-                crate::state::knowledge::KNOWN_LIBRARY_ROWS,
+        check_capacity(
+            "known library",
+            player.known_library.len(),
+            crate::state::knowledge::KNOWN_LIBRARY_ROWS,
+        )?;
+        for (i, (position, definition)) in player.known_library.iter().enumerate() {
+            out.write(
+                Table::KnownLibrary,
+                seat,
+                i,
+                &[
+                    Integer(i64::from(*definition) + 1),
+                    Integer(*position as i64 + 1),
+                ],
             )?;
-            for (i, (position, definition)) in player.known_library.iter().enumerate() {
-                out.write(
-                    Table::KnownLibrary,
-                    seat,
-                    i,
-                    &[
-                        Integer(i64::from(*definition) + 1),
-                        Integer(*position as i64 + 1),
-                    ],
-                )?;
-            }
         }
         let deck = decklist_rows(player);
         check_capacity(
@@ -1134,19 +1035,17 @@ pub fn encode_rows(
             out.write(Table::Decklists, seat, i, row)?;
         }
     }
-    if config.layout == InputLayout::OneToken {
-        for (slot, object) in obs.stack_objects.iter().enumerate() {
-            let mut row = [Cell::ZERO; STACK_DIM];
-            encode_stack_features(object, obs.agent.id, &mut row);
-            [
-                row[stack::COMBAT_DAMAGE_TO_ME],
-                row[stack::COMBAT_DAMAGE_TO_OPPONENT],
-            ] = combat_damage_flags(&object.combat_damage_to_players);
-            row[stack::SOURCE] = link(object.source_permanent_id);
-            out.write(Table::Stack, 0, slot, &row)?;
-        }
+    for (slot, object) in obs.stack_objects.iter().enumerate() {
+        let mut row = [Cell::ZERO; STACK_DIM];
+        encode_stack_features(object, obs.agent.id, &mut row);
+        [
+            row[stack::COMBAT_DAMAGE_TO_ME],
+            row[stack::COMBAT_DAMAGE_TO_OPPONENT],
+        ] = combat_damage_flags(&object.combat_damage_to_players);
+        row[stack::SOURCE] = link(object.source_permanent_id);
+        out.write(Table::Stack, 0, slot, &row)?;
     }
-    encode_facts(obs, config.layout, &objects, &ranks, config.max_facts, out)?;
+    encode_facts(obs, &objects, &ranks, config.max_facts, out)?;
     super::shared_effects::encode(
         obs,
         &objects,
@@ -1162,38 +1061,29 @@ pub fn encode_rows(
         out,
     )?;
 
-    if config.layout == InputLayout::OneToken {
-        let mut next = continuation_rows;
-        for source in obs.agent_permanents.iter().chain(&obs.opponent_permanents) {
-            for &target in &source.damaged_permanents {
-                check_capacity(
-                    "damage relations",
-                    next + 1,
-                    super::continuation::RELATION_ROWS,
-                )?;
-                let mut row = [Cell::ZERO; relation::WIDTH];
-                // A standalone pair owns its pooling group, separate from pending work.
-                row[relation::FRAME] =
-                    Integer((obs.continuation.len() + next - continuation_rows + 1) as i64);
-                row[relation::KIND] = Integer(11);
-                row[relation::SOURCE] = link(Some(source.id));
-                row[relation::REFERENCE] = link(Some(target));
-                row[relation::VALID] = Integer(1);
-                out.write(Table::Relations, 0, next, &row)?;
-                next += 1;
-            }
+    let mut next = continuation_rows;
+    for source in obs.agent_permanents.iter().chain(&obs.opponent_permanents) {
+        for &target in &source.damaged_permanents {
+            check_capacity(
+                "damage relations",
+                next + 1,
+                super::continuation::RELATION_ROWS,
+            )?;
+            let mut row = [Cell::ZERO; relation::WIDTH];
+            // A standalone pair owns its pooling group, separate from pending work.
+            row[relation::FRAME] =
+                Integer((obs.continuation.len() + next - continuation_rows + 1) as i64);
+            row[relation::KIND] = Integer(11);
+            row[relation::SOURCE] = link(Some(source.id));
+            row[relation::REFERENCE] = link(Some(target));
+            row[relation::VALID] = Integer(1);
+            out.write(Table::Relations, 0, next, &row)?;
+            next += 1;
         }
     }
     encode_actions(obs, config, out, &objects)?;
     if config.policy_history {
-        let rows = match config.layout {
-            InputLayout::OneToken => {
-                super::policy_history::encode(obs, config.max_events, &objects)
-            }
-            InputLayout::Legacy => {
-                super::legacy_input::history(obs, config.max_events, config.max_cards_per_player)
-            }
-        };
+        let rows = super::policy_history::encode(obs, config.max_events, &objects);
         for (i, row) in rows.into_iter().enumerate() {
             out.write(Table::Events, 0, i, &row.map(Integer))?;
         }
@@ -1219,19 +1109,16 @@ pub(super) fn check_capacity(
     }
 }
 
-fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE_DIM] {
+fn turn_state_row(player: &PlayerData) -> [Cell; TURN_STATE_DIM] {
     let mut row = [Cell::ZERO; TURN_STATE_DIM];
-    if layout == InputLayout::OneToken {
-        let history = &player.turn_history;
-        row[turn_state::LIFE_GAINS] = Integer(i64::from(history.life_gains));
-        row[turn_state::LIFE_GAINED] = Integer(i64::from(history.life_gained));
-        row[turn_state::MANA_SPENT_CASTING] = Integer(i64::from(history.mana_spent_casting));
-        row[turn_state::CREATURES_DIED] = Integer(i64::from(history.creatures_died));
-        row[turn_state::PERMANENTS_LEFT] = Integer(i64::from(history.permanents_left));
-        row[turn_state::NONLAND_PERMANENTS_LEFT] =
-            Integer(i64::from(history.nonland_permanents_left));
-        row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
-    }
+    let history = &player.turn_history;
+    row[turn_state::LIFE_GAINS] = Integer(i64::from(history.life_gains));
+    row[turn_state::LIFE_GAINED] = Integer(i64::from(history.life_gained));
+    row[turn_state::MANA_SPENT_CASTING] = Integer(i64::from(history.mana_spent_casting));
+    row[turn_state::CREATURES_DIED] = Integer(i64::from(history.creatures_died));
+    row[turn_state::PERMANENTS_LEFT] = Integer(i64::from(history.permanents_left));
+    row[turn_state::NONLAND_PERMANENTS_LEFT] = Integer(i64::from(history.nonland_permanents_left));
+    row[turn_state::WARPED_THIS_TURN] = flag(history.warped_this_turn);
     row[turn_state::LIFE_LOST] = Scalar(player.turn_history.life_lost as f32 / 20.0);
     row[turn_state::SPELLS_CAST] = Scalar(player.spells_cast as f32 / 10.0);
     for class in player
@@ -1245,68 +1132,6 @@ fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE
         }
     }
     row
-}
-
-/// Which v10-only state a definition's rules read, found by walking its
-/// serialized value for the rules terms that ask for it.
-#[derive(Clone, Copy, Debug, Default)]
-struct TurnStateReads {
-    life_lost: bool,
-    from_battlefield: bool,
-}
-
-impl TurnStateReads {
-    fn of(definition: &crate::state::card::ObjectDefinition) -> Self {
-        fn walk(value: &serde_json::Value, reads: &mut TurnStateReads) {
-            match value {
-                serde_json::Value::Object(map) => {
-                    for (key, value) in map {
-                        match key.as_str() {
-                            "OpponentLostLifeThisTurnAtLeast" | "LifeLostThisTurn" => {
-                                reads.life_lost = true
-                            }
-                            "from_battlefield_this_turn" if *value == true => {
-                                reads.from_battlefield = true
-                            }
-                            _ => {}
-                        }
-                        walk(value, reads);
-                    }
-                }
-                serde_json::Value::Array(values) => {
-                    values.iter().for_each(|value| walk(value, reads))
-                }
-                _ => {}
-            }
-        }
-        let mut reads = Self::default();
-        if let Ok(value) = serde_json::to_value(definition) {
-            walk(&value, &mut reads);
-        }
-        reads
-    }
-}
-
-/// Per definition of the world's pack, by `CardDefId`; computed once.
-fn turn_state_reads(registry_key: i32) -> TurnStateReads {
-    static READS: std::sync::OnceLock<Vec<TurnStateReads>> = std::sync::OnceLock::new();
-    let reads = READS.get_or_init(|| {
-        let pack = crate::cards::content_pack::default_content_pack();
-        let mut reads = Vec::new();
-        for (id, definition) in pack.definition_entries() {
-            let index = id.0 as usize;
-            if reads.len() <= index {
-                reads.resize(index + 1, TurnStateReads::default());
-            }
-            reads[index] = TurnStateReads::of(definition);
-        }
-        reads
-    });
-    usize::try_from(registry_key)
-        .ok()
-        .and_then(|key| reads.get(key))
-        .copied()
-        .unwrap_or_default()
 }
 
 /// The subtypes with restricted-mana columns, in column order. A class
@@ -1340,53 +1165,6 @@ pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
         .map(RestrictedManaData::restriction)
         .find(|restriction| !representable(restriction))
         .map(|restriction| format!("mana restricted to {}", restriction.describe()))
-}
-
-/// The v10-only state this observation needs, if any: a definition visible
-/// to the viewer reads it and it is present. V9 refuses such an observation
-/// before writing a buffer rather than hide state a visible card reads.
-pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
-    let players = [&obs.agent, &obs.opponent];
-    let cards = || obs.agent_cards.iter().chain(&obs.opponent_cards);
-    let visible_reads = || {
-        cards()
-            .map(|card| card.registry_key)
-            .chain(
-                obs.agent_permanents
-                    .iter()
-                    .chain(&obs.opponent_permanents)
-                    .map(|permanent| permanent.registry_key),
-            )
-            .chain(
-                obs.stack_objects
-                    .iter()
-                    .map(|object| object.source_card_registry_key),
-            )
-            .map(turn_state_reads)
-    };
-    if players
-        .iter()
-        .any(|player| player.turn_history.life_lost > 0)
-        && visible_reads().any(|reads| reads.life_lost)
-    {
-        return Some("life lost this turn");
-    }
-    if cards().any(|card| card.from_battlefield_this_turn)
-        && visible_reads().any(|reads| reads.from_battlefield)
-    {
-        return Some("a card put into a graveyard from the battlefield this turn");
-    }
-    // Only a Powerstone-like source produces it, so its presence alone is
-    // the need.
-    if players.iter().any(|player| {
-        player
-            .restricted_mana
-            .iter()
-            .any(|class| class.except_nonartifact_spells && class.mana.iter().any(|n| *n > 0))
-    }) {
-        return Some("mana that can't be spent to cast nonartifact spells");
-    }
-    None
 }
 
 /// One row per definition in the union of a known player's main deck and
@@ -1562,12 +1340,7 @@ fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, o
     out[card::VALID] = Integer(1);
 }
 
-fn encode_permanent_features(
-    permanent: &PermanentData,
-    is_mine: Cell,
-    layout: InputLayout,
-    out: &mut [Cell],
-) {
+fn encode_permanent_features(permanent: &PermanentData, is_mine: Cell, out: &mut [Cell]) {
     out[permanent::IS_MINE] = is_mine;
     out[permanent::TAPPED] = flag(permanent.tapped);
     out[permanent::DAMAGE] = Scalar(permanent.damage as f32 / 10.0);
@@ -1607,31 +1380,26 @@ fn encode_permanent_features(
     out[permanent::GRANTED_LAND] = flag(permanent.is_granted_land);
     out[permanent::ABILITIES_LOST] = flag(permanent.abilities_lost);
     out[permanent::DEALT_DAMAGE_THIS_TURN] = flag(permanent.dealt_damage_this_turn);
-    // Input v11: the characteristics only a card row held in v9/v10.
-    if layout == InputLayout::OneToken {
-        let card = &permanent.characteristics;
-        out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
-        out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
-        out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
-        out[permanent::IS_LAND] = flag(card.card_types.is_land);
-        out[permanent::IS_CREATURE] = flag(card.card_types.is_creature);
-        out[permanent::IS_ARTIFACT] = flag(card.card_types.is_artifact);
-        out[permanent::IS_ENCHANTMENT] = flag(card.card_types.is_enchantment);
-        out[permanent::IS_PLANESWALKER] = flag(card.card_types.is_planeswalker);
-        out[permanent::IS_BATTLE] = flag(card.card_types.is_battle);
-        out[permanent::IS_LEGENDARY] = flag(card.is_legendary);
-        out[permanent::IS_TOKEN] = flag(permanent.is_token);
-        out[permanent::IS_ALLY] = flag(card.is_ally);
-        out[permanent::IS_LESSON] = flag(card.is_lesson);
-        out[permanent::HAS_WARD] =
-            flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
-        out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
-        out[permanent::VALID] = Integer(1);
-        out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
-        out[permanent::FACE_DOWN] = flag(permanent.face_down);
-    } else {
-        out[super::legacy_input::PERMANENT_VALID] = Integer(1);
-    }
+    let card = &permanent.characteristics;
+    out[permanent::ATTACKED_THIS_TURN] = flag(permanent.attacked_this_turn);
+    out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
+    out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
+    out[permanent::IS_LAND] = flag(card.card_types.is_land);
+    out[permanent::IS_CREATURE] = flag(card.card_types.is_creature);
+    out[permanent::IS_ARTIFACT] = flag(card.card_types.is_artifact);
+    out[permanent::IS_ENCHANTMENT] = flag(card.card_types.is_enchantment);
+    out[permanent::IS_PLANESWALKER] = flag(card.card_types.is_planeswalker);
+    out[permanent::IS_BATTLE] = flag(card.card_types.is_battle);
+    out[permanent::IS_LEGENDARY] = flag(card.is_legendary);
+    out[permanent::IS_TOKEN] = flag(permanent.is_token);
+    out[permanent::IS_ALLY] = flag(card.is_ally);
+    out[permanent::IS_LESSON] = flag(card.is_lesson);
+    out[permanent::HAS_WARD] =
+        flag(card.ward_cost > 0 || !card.ward_program.is_empty() || card.ward_life > 0);
+    out[permanent::WARD_COST] = Scalar(card.ward_cost as f32 / 10.0);
+    out[permanent::VALID] = Integer(1);
+    out[permanent::FIRST_STRIKE_PARTICIPANT] = flag(permanent.first_strike_participant);
+    out[permanent::FACE_DOWN] = flag(permanent.face_down);
 }
 
 /// Stack rows, top first, each indexed by its stack object id; a spell's card
@@ -1720,7 +1488,7 @@ struct Fact {
 /// The facts `PlayerData`, `CardData` and `PermanentData` state as open
 /// vocabularies, in object order (agent, opponent, agent cards, opponent
 /// cards, agent permanents, opponent permanents).
-fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
+fn facts(obs: &Observation) -> Vec<Fact> {
     let mut out = Vec::new();
     let mut push = |object: i32, kind: FactKind, id: i32, value: i64| {
         out.push(Fact {
@@ -1743,16 +1511,14 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         }
     }
     // Counters on a visible card off the battlefield ("with a stash counter").
-    if layout == InputLayout::OneToken {
-        for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
-            for (kind, count) in &card.counters {
-                push(
-                    card.id,
-                    FactKind::Counter,
-                    name_value(&format!("CounterKind::{kind}")),
-                    i64::from(*count),
-                );
-            }
+    for card in obs.agent_cards.iter().chain(&obs.opponent_cards) {
+        for (kind, count) in &card.counters {
+            push(
+                card.id,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                i64::from(*count),
+            );
         }
     }
     let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
@@ -1809,15 +1575,13 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
         if permanent.transforms > 0 {
             push(object, FactKind::Transforms, 0, permanent.transforms as i64);
         }
-        if layout == InputLayout::OneToken {
-            for &(index, count) in &permanent.ability_resolutions {
-                push(
-                    object,
-                    FactKind::AbilityResolution,
-                    index as i32,
-                    i64::from(count),
-                );
-            }
+        for &(index, count) in &permanent.ability_resolutions {
+            push(
+                object,
+                FactKind::AbilityResolution,
+                index as i32,
+                i64::from(count),
+            );
         }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1);
@@ -1832,7 +1596,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
     };
     for (index, frame) in obs.continuation.iter().enumerate() {
         let controller = frame_controller(frame);
-        if layout == InputLayout::OneToken && frame.triggering_amount > 0 {
+        if frame.triggering_amount > 0 {
             push(
                 controller,
                 FactKind::TriggeringAmount,
@@ -1915,9 +1679,7 @@ fn facts(obs: &Observation, layout: InputLayout) -> Vec<Fact> {
             });
         }
     }
-    if layout == InputLayout::OneToken {
-        permission_facts(obs, &mut out);
-    }
+    permission_facts(obs, &mut out);
     // Spend effects and combat expiry: one program per pooled class on its player.
     for player in [&obs.agent, &obs.opponent] {
         for class in &player.pooled_mana_classes {
@@ -2170,13 +1932,12 @@ fn timestamp_ranks(obs: &Observation) -> BTreeMap<i32, i64> {
 
 fn encode_facts(
     obs: &Observation,
-    layout: InputLayout,
     object_to_index: &HashMap<i32, i32>,
     ranks: &BTreeMap<i32, i64>,
     capacity: usize,
     out: &mut impl RowWriter,
 ) -> Result<(), ObservationEncodeError> {
-    let facts = facts(obs, layout);
+    let facts = facts(obs);
     if facts.len() > capacity {
         return Err(ObservationEncodeError::Capacity {
             field: "facts",
@@ -2950,41 +2711,6 @@ mod tests {
         // No card row holds either object.
         assert_eq!(encoded.agent_cards_valid.iter().sum::<f32>(), 1.0);
         assert_eq!(encoded.opponent_cards_valid.iter().sum::<f32>(), 1.0);
-    }
-
-    #[test]
-    fn the_legacy_layout_lists_battlefield_objects_and_spells_as_cards() {
-        use super::InputLayout;
-        let obs = sample_observation();
-        let config = ObservationEncoderConfig {
-            layout: InputLayout::Legacy,
-            turn_state: false,
-            ..ObservationEncoderConfig::default()
-        };
-        let encoded = encode(&obs, &config).unwrap();
-        assert_eq!(&encoded.agent_cards_valid[..3], &[1.0, 1.0, 0.0]);
-        assert_eq!(
-            encoded.agent_permanents.len(),
-            config.max_permanents_per_player * super::super::legacy_input::PERMANENT_DIM
-        );
-        assert!(encoded.stack.is_empty());
-        // The battlefield card row keeps its own object index.
-        let focus = encode(
-            &Observation {
-                action_space: ActionSpaceData {
-                    actions: vec![ActionOption {
-                        focus: vec![112],
-                        ..obs.action_space.actions[0].clone()
-                    }],
-                    ..obs.action_space.clone()
-                },
-                ..obs.clone()
-            },
-            &config,
-        )
-        .unwrap()
-        .action_focus[0];
-        assert_eq!(focus, 3);
     }
 
     #[test]

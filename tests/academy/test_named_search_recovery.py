@@ -20,7 +20,7 @@ from manabot.env.observation import (
     allocate_vector_buffers,
     encode_observation,
 )
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
@@ -131,7 +131,7 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
                     torch.set_num_threads(1)
                     torch.manual_seed(243)
-                    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+                    space = ObservationSpace()
                     vector = managym.VectorEnv(num_envs=1, seed=165)
                     vector.reset_all(game.trace.config.to_rust())
                     for event in game.trace.events:

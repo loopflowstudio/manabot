@@ -389,19 +389,19 @@ from `v0.2.5`. A change that would alter what a stored player computes fails,
 and the failure names the layer:
 
 ```text
-FAILED test_pinned_pilot.py::test_recorded_game[v11]
+FAILED test_pinned_pilot.py::test_recorded_game
   the loader refused pilot.safetensors: unexplained record_name key 5779523629;
   classify it in managym/src/cards/token_renames.rs
 ```
 
 ```text
-FAILED test_pinned_pilot.py::test_recorded_game[v11]
+FAILED test_pinned_pilot.py::test_recorded_game
   the game replays; policy changed at decision 14
   (maximum probability difference 0.031, chosen-action rank 1 -> 2).
 ```
 
 ```text
-FAILED test_pinned_pilot.py::test_recorded_game[v11]
+FAILED test_pinned_pilot.py::test_recorded_game
   decision 22: the legal actions changed.
 ```
 

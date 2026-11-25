@@ -18,7 +18,6 @@ from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
-    ObservationConfig,
     RewardConfig,
 )
 from manabot.infra.profiler import Profiler
@@ -298,10 +297,8 @@ def test_repeated_rollout_indexes_preserve_offers_behavior_and_native_owners() -
         close_collector(collector)
 
 
-@pytest.mark.parametrize("version", [9, 11])
 def test_target_practice_constructs_only_requested_games(
     monkeypatch: pytest.MonkeyPatch,
-    version: int,
 ) -> None:
     seeds: list[int] = []
     fail_seed: int | None = None
@@ -314,7 +311,7 @@ def test_target_practice_constructs_only_requested_games(
         return construct(match, space, seed, seat)
 
     monkeypatch.setattr(target_practice, "target_root", root)
-    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    space = ObservationSpace()
     match = Match(
         MatchConfig(
             hero_deck={"Mountain": 12, "Igneous Inspiration": 1},
@@ -335,11 +332,9 @@ def test_target_practice_constructs_only_requested_games(
     )
 
     def parked_action_counts() -> list[int]:
-        if space.one_token:
-            return [
-                batch.action_counts[i] for batch, i in collector._env.observation_rows()
-            ]
-        return collector._buffers["actions_valid"].sum(axis=1).tolist()
+        return [
+            batch.action_counts[i] for batch, i in collector._env.observation_rows()
+        ]
 
     try:
         for batch_index in range(2):

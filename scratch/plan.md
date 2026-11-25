@@ -28,7 +28,7 @@ the dict-masquerading wrappers built to bridge them (`ObservationSelection` as a
   they prepare: `managym.encode_observation_batch([obs], space.layout, overflow)`.
 - Training, Academy, evaluation, search, belief, probes, and backend parity
   behave as before on v11. `tests/model/test_pinned_pilot.py` still replays
-  `v11/pilot.safetensors` bit-for-bit, proving v11 numerics did not move.
+  `v11/pilot.safetensors` with its recorded action ranks and probability tolerance.
 
 ## Experience and data model across layers
 
@@ -158,10 +158,7 @@ dense dictionary:
 6. **The executed frontier and batched baseline used v9.** Their fresh
    recipes now select v11. Frontier evaluation still checks the saved
    checkpoint's capacities and admits the historical v9 layout.
-7. **The AGENTS.md removal condition is not on record.** The best recorded player
-   (frontier Small u1952, `59718fe34945`) is v9. The planned retirement targets
-   0.3.0. The strength comparison or an explicit change to that condition
-   remains outstanding for the dense preparation and version retirement.
+7. **The removal condition was waived.** See questions 1 for the decision.
 
 ## Choices made for review
 
@@ -366,25 +363,33 @@ The current default local-search comparison and a saved-reference round trip
 both ran on one world at seed 42. The historical comparison needs the original
 benchmark checkout (questions 16).
 
+Done: **3. Policy input v11 only.** Jack Heart waived the strength comparison
+in Task comment `9cbbc4d9-f4cb-4065-8398-54442d78d980`. Configuration,
+checkpoint, replay, Academy catalog, native layout and archived batch
+admission reject v9/v10 with the v0.2.5 recovery release. Removed the Rust
+and Python legacy input modules, layout selectors, outdated pilots, and Torch
+vector wrapper. Torch and MLX always include the stack and both turn tables.
+The archived v9 frontier evaluation is reproducible at `14a168309f`.
+
+On macOS CPython 3.13 the v11 fixture replayed all 71 decisions. The 235
+probabilities matched exactly against the pre-retirement Python sources at
+`a9b519e647` using the installed pre-retirement engine from the MTG-435
+checkout. Against the committed recording the maximum absolute difference was
+9.24e-7. The documented recording check is 1e-5 and unchanged chosen-action
+rank. A byte-identical cross-platform recording is not its contract.
+Historical v4 eligibility captures lack v11 object identities. The text
+reader preserves them, the batch encoder refuses them, and the native
+constructed position checks the live eligibility rows.
+
 Remaining:
 
-**Dependency correction.** The build tested `encode_observation_batch([],
-layout)` on all three accepted layouts. Versions 9 and 10 both raise
-`ValueError: observation batches require policy input v11`; 11 returns an
-empty batch. Removing dense admission or making `prepare` accept spans only
-would disable the v9 player **during Pass 2**, before the previously planned
-Pass 3 gate. Move the final deletion of dense preparation, collector fallback
-and validators, the `admit_native` rename, and the zero-match acceptance grep
-to the version retirement. Porting the deprecated fork to CSR would extend
-the very layout the repository says to freeze. The pinned v9 and v11 games
-test compatibility, not their relative strength.
-
-**3. v9/v10 retired (Python + Rust).** Needs the decision in questions 1 first:
-AGENTS.md says "removed once a v11 pilot is at least as strong as the best v9
-one, not before 0.3.0"; the Task brief asks for retirement now; no comparison is
-recorded (best player u1952 `59718fe34945` is v9). `SUPPORTED_POLICY_INPUTS =
-(11,)`, delete `legacy_input.py`/`.rs`, `InputLayout`, `turn_state`, v9/u1952
-pinned fixtures and the deprecated Torch vector wrapper; rejection naming `v0.2.5`; rebuild.
+**3b. Dense Python preparation and rollout retirement.** The version gate is
+resolved. Delete dense admission and preparation together, rename `admit_native`
+to `admit`, and move the dense preparer tests that exercise surviving behavior
+to packed batches. Delete the dense collector fallback and its retention,
+minibatch, and memory facades. Public dense scalar/vector entry points still
+exist at the end of pass 3. Keep v11 archive format-1 admission and saved
+checkpoint readings.
 
 **4. Native dense transport deleted + docs/guards.** The Rust list in "What
 goes"; slot admission via scratch `PackedRows`; Rust tests read rows through
@@ -424,6 +429,7 @@ recipe on CPU.
   with `v0.2.5`, and nothing in `managym` or `manabot` can encode one.
 - A person training, evaluating, searching, running belief models, capturing
   backend parity, or playing in Academy on v11 sees no regression; the v11
-  pinned pilot replays its recorded probabilities bit-for-bit.
+  pinned pilot replays its recorded action ranks and probabilities within 1e-5,
+  with identical probabilities before and after retirement on the same machine.
 - The names in "What goes" are absent from the tree outside frozen evidence and
   release notes, and no test or doc teaches them.

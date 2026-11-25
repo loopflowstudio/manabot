@@ -1045,11 +1045,7 @@ def _registration(
         ), None
     path = player.checkpoint.path
     checkpoint = read_container(path)
-    # The executed frontier used v9 with these same capacities.
-    if checkpoint.space.config not in (
-        observation,
-        observation.model_copy(update={"policy_input_version": 9}),
-    ):
+    if checkpoint.space.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")
     return registration(
         player, name=name, match=setup, content_suite=matchup.content_suite, role=role

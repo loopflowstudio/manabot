@@ -1071,9 +1071,7 @@ def open_collector(
                 raise ValueError(
                     "snapshot self-play requires native trivial-decision skipping"
                 )
-        packed = observation_space.one_token and callable(
-            getattr(env, "observation_rows", None)
-        )
+        packed = callable(getattr(env, "observation_rows", None))
         buffers = (
             step_buffers(num_envs)
             if packed
@@ -2595,7 +2593,7 @@ def frozen_bootstraps(
     """Keep the frozen observations referenced by surviving trajectories."""
     if frozen is None:
         return (
-            ObservationSelection(space, ()) if space.one_token else {},
+            ObservationSelection(space, ()),
             tuple(spans),
             0,
         )

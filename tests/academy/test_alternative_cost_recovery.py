@@ -19,7 +19,6 @@ from manabot.env.observation import (
     allocate_vector_buffers,
     encode_observation,
 )
-from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 from managym.academy import server, trace as trace_store
@@ -126,7 +125,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
         )
         assert game.env is not None and game.trace is not None and game.obs is not None
         hand = len([c for c in game.obs.agent_cards if c.zone == managym.ZoneEnum.HAND])
-        space = ObservationSpace(ObservationConfig(policy_input_version=9))
+        space = ObservationSpace()
         vector = managym.VectorEnv(num_envs=1, seed=seed)
         buffers = allocate_vector_buffers(space, 1)
         vector.set_buffers(buffers, layout=space.layout)

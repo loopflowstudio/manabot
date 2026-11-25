@@ -5,7 +5,6 @@ pub mod decision_memory;
 pub(crate) mod effect_execution;
 pub mod env;
 pub mod heuristic;
-pub mod legacy_input;
 pub mod observation;
 pub mod observation_encoder;
 #[cfg(feature = "python")]

@@ -13,36 +13,9 @@ use std::collections::BTreeMap;
 
 use super::{
     continuation::MAX_DECISION_CODE,
-    observation_encoder::{FactKind, InputLayout},
+    observation_encoder::FactKind,
     shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
 };
-
-impl InputLayout {
-    pub fn player_columns(self) -> &'static [Column] {
-        match self {
-            Self::OneToken => player::COLUMNS,
-            Self::Legacy => &player::COLUMNS[..player::STEP_FIRST_STRIKE_COMBAT_DAMAGE],
-        }
-    }
-}
-
-/// A permanent row's columns: input v11 writes every `permanent` column; the
-/// deprecated v9/v10 rows end at `dealt_damage_this_turn`, then validity
-/// (`legacy_input`).
-pub fn permanent_columns(layout: InputLayout) -> Vec<Column> {
-    match layout {
-        InputLayout::OneToken => permanent::COLUMNS.to_vec(),
-        InputLayout::Legacy => {
-            let mut columns = permanent::COLUMNS[..super::legacy_input::PERMANENT_VALID].to_vec();
-            columns.push(Column {
-                name: "valid",
-                index: super::legacy_input::PERMANENT_VALID,
-                value: ValueLayout::FLAG,
-            });
-            columns
-        }
-    }
-}
 
 /// What a column's stored value is: the closed set every consumer chooses its
 /// treatment from. `scale` is the divisor the encoder already applied (1 when
@@ -290,14 +263,7 @@ columns! { player {
     74: STEP_FIRST_STRIKE_COMBAT_DAMAGE => ("step_first_strike_combat_damage", ValueLayout::FLAG),
 } }
 
-// Input v10 player turn state, one row per seat (agent first).
-pub fn turn_state_columns(layout: InputLayout) -> &'static [Column] {
-    match layout {
-        InputLayout::Legacy => &turn_state::COLUMNS[..turn_state::LIFE_GAINS],
-        InputLayout::OneToken => turn_state::COLUMNS,
-    }
-}
-
+// One turn-state row per seat, viewer first.
 columns! { turn_state {
     0: LIFE_LOST => ("life_lost", ValueLayout::new(ValueKind::Count { scale: 20 }, "Life lost this turn / 20", "nonnegative; no fixed bound")),
     1: SPELLS_CAST => ("spells_cast", ValueLayout::new(ValueKind::Count { scale: 10 }, "Spells cast this turn / 10", "nonnegative; no fixed bound")),
@@ -523,13 +489,6 @@ columns! { action {
     28: SPELL_PROFILE => ("spell_profile", ValueLayout::new(ValueKind::Category {size:4}, "Printed spell this offer casts (spell_profile_code): 1 Adventure, 2 Omen, 3 back face", "0 front face or no spell; 1..3")),
     29: PLAY_ROUTE => ("play_route", ValueLayout::new(ValueKind::Category {size:10}, "Permission this play uses (play_route_code): 1 hand, 2 free from hand, 3 library top, 4 printed flashback, 5 granted flashback, 6 grant, 7 graveyard type, 8 exile counter, 9 printed graveyard", "0 ordinary hand play or not a play; 1..9")),
 } }
-
-pub fn action_columns(layout: InputLayout) -> &'static [Column] {
-    match layout {
-        InputLayout::OneToken => action::COLUMNS,
-        InputLayout::Legacy => &action::COLUMNS[..action::PAYS_DIRECTLY],
-    }
-}
 
 columns! { name {
     0: NAME => ("name", ValueLayout::new(ValueKind::Reference, "naming_catalog row + 1; 0 absent", "nonnegative integers; 0 absent")),
@@ -970,11 +929,8 @@ pub fn configured_arrays(
     if config.policy_history && config.max_events > crate::agent::policy_history::HISTORY_LIMIT {
         return Err(String::from("public history v1 requires 1..32 rows"));
     }
-    let mut arrays = observation_layout(config.policy_history, config.turn_state, config.layout);
+    let mut arrays = observation_layout(config.policy_history);
     if config.max_decision_records > 0 {
-        if config.layout == InputLayout::Legacy {
-            return Err(String::from("decision memory requires policy input v11"));
-        }
         arrays.extend(decision_memory_layout());
     }
     for array in arrays.values_mut() {
@@ -1005,23 +961,14 @@ pub fn configured_arrays(
     Ok(arrays)
 }
 
-/// Every array `encode` writes, keyed by its buffer name, without allocating
-/// game buffers. `policy_history` selects the public history rows of `events`;
-/// `turn_state` adds the turn-state buffers, as
-/// `ObservationEncoderConfig::turn_state` does; `layout` selects input v11's
-/// one-token rows or the deprecated v9/v10 rows.
-pub fn observation_layout(
-    policy_history: bool,
-    turn_state: bool,
-    layout_kind: InputLayout,
-) -> BTreeMap<String, ArrayLayout> {
-    let permanent_columns = permanent_columns(layout_kind);
+/// Logical array names, axes and column readings of the policy input.
+pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout> {
     let mut layout = BTreeMap::new();
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
-            ("player", "player", Some(1), layout_kind.player_columns()),
+            ("player", "player", Some(1), player::COLUMNS),
             ("cards", "card", None, card::COLUMNS),
-            ("permanents", "permanent", None, &permanent_columns[..]),
+            ("permanents", "permanent", None, permanent::COLUMNS),
         ] {
             layout.insert(
                 format!("{side}_{suffix}"),
@@ -1033,19 +980,17 @@ pub fn observation_layout(
             );
         }
     }
-    if layout_kind == InputLayout::OneToken {
-        layout.insert(
-            "stack".into(),
-            ArrayLayout::features(&["stack"], &[None], stack::COLUMNS),
-        );
-        layout.insert(
-            "stack_valid".into(),
-            ArrayLayout::elements(&["stack"], &[None], "float32", ValueLayout::FLAG),
-        );
-    }
+    layout.insert(
+        "stack".into(),
+        ArrayLayout::features(&["stack"], &[None], stack::COLUMNS),
+    );
+    layout.insert(
+        "stack_valid".into(),
+        ArrayLayout::elements(&["stack"], &[None], "float32", ValueLayout::FLAG),
+    );
     layout.insert(
         "actions".into(),
-        ArrayLayout::features(&["action"], &[None], action_columns(layout_kind)),
+        ArrayLayout::features(&["action"], &[None], action::COLUMNS),
     );
     layout.insert(
         "events".into(),
@@ -1074,16 +1019,14 @@ pub fn observation_layout(
             ValueLayout::DEFINITION,
         ),
     );
-    if layout_kind == InputLayout::OneToken {
-        layout.insert(
-            "known_library".into(),
-            ArrayLayout::features(
-                &["viewer_relative_seat", "known_position"],
-                &[Some(2), Some(crate::state::knowledge::KNOWN_LIBRARY_ROWS)],
-                known_library::COLUMNS,
-            ),
-        );
-    }
+    layout.insert(
+        "known_library".into(),
+        ArrayLayout::features(
+            &["viewer_relative_seat", "known_position"],
+            &[Some(2), Some(crate::state::knowledge::KNOWN_LIBRARY_ROWS)],
+            known_library::COLUMNS,
+        ),
+    );
     layout.insert(
         "known_hand".into(),
         ArrayLayout::features(
@@ -1098,10 +1041,7 @@ pub fn observation_layout(
     let mut relations = ArrayLayout::features(
         &["relation"],
         &[Some(super::continuation::RELATION_ROWS)],
-        match layout_kind {
-            InputLayout::Legacy => &relation::COLUMNS[..super::legacy_input::RELATION_DIM],
-            InputLayout::OneToken => relation::COLUMNS,
-        },
+        relation::COLUMNS,
     );
     relations.row_kinds = BTreeMap::from([
         (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
@@ -1115,14 +1055,12 @@ pub fn observation_layout(
         (9, "Delayed frequency: decision is 1 once or 2 each match; this_turn is expiry"),
         (10, "Effect execution reference: ordinal is the one-based slot in the continuation program; reference_definition/reference/reference_player identify its visible subject"),
     ]);
-    if layout_kind == InputLayout::OneToken {
-        relations.row_kinds.insert(
-            11,
-            "Damage this turn: source and reference are the two permanent rows",
-        );
-        relations.columns[relation::KIND].value.kind = ValueKind::Category { size: 11 };
-        relations.columns[relation::KIND].value.range = "1..11; 0 padding";
-    }
+    relations.row_kinds.insert(
+        11,
+        "Damage this turn: source and reference are the two permanent rows",
+    );
+    relations.columns[relation::KIND].value.kind = ValueKind::Category { size: 11 };
+    relations.columns[relation::KIND].value.range = "1..11; 0 padding";
     layout.insert("relations".into(), relations);
     layout.insert(
         "decklists".into(),
@@ -1133,26 +1071,18 @@ pub fn observation_layout(
         ),
     );
     let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
-    let kinds = FactKind::ALL.into_iter().filter(|kind| {
-        layout_kind == InputLayout::OneToken
-            || !matches!(
-                kind,
-                FactKind::AbilityResolution | FactKind::TriggeringAmount
-            )
-    });
+    let kinds = FactKind::ALL.into_iter();
     facts.row_kinds = kinds
         .clone()
         .map(|kind| (kind as u8, fact_row_kind(kind).1))
         .collect();
-    if layout_kind == InputLayout::OneToken {
-        facts.columns[fact::KIND].value = ValueLayout::new(
-            ValueKind::Category {
-                size: u16::from(*facts.row_kinds.last_key_value().unwrap().0),
-            },
-            "FactKind; see row_kinds",
-            "registered row kinds; 0 padding",
-        );
-    }
+    facts.columns[fact::KIND].value = ValueLayout::new(
+        ValueKind::Category {
+            size: u16::from(*facts.row_kinds.last_key_value().unwrap().0),
+        },
+        "FactKind; see row_kinds",
+        "registered row kinds; 0 padding",
+    );
     facts.row_kind_names = kinds
         .map(|kind| (fact_row_kind(kind).0, kind as u8))
         .collect();
@@ -1182,16 +1112,11 @@ pub fn observation_layout(
         "name_candidates".into(),
         ArrayLayout::features(&["action"], &[None], name::COLUMNS),
     );
-    if turn_state {
-        layout.insert(
-            "player_turn_state".into(),
-            ArrayLayout::features(
-                &["viewer_relative_seat"],
-                &[Some(2)],
-                turn_state_columns(layout_kind),
-            ),
-        );
-        layout.insert(
+    layout.insert(
+        "player_turn_state".into(),
+        ArrayLayout::features(&["viewer_relative_seat"], &[Some(2)], turn_state::COLUMNS),
+    );
+    layout.insert(
             "card_turn_state".into(),
             ArrayLayout::elements(
                 &["viewer_relative_seat", "card"],
@@ -1204,7 +1129,6 @@ pub fn observation_layout(
                 ),
             ),
         );
-    }
     layout
 }
 
@@ -1218,25 +1142,12 @@ mod tests {
 
     #[test]
     fn named_layout_matches_every_encoder_width() {
-        for (policy_history, turn_state, layout_kind) in [
-            (false, false, InputLayout::Legacy),
-            (true, false, InputLayout::Legacy),
-            (true, true, InputLayout::Legacy),
-            (false, true, InputLayout::OneToken),
-            (true, true, InputLayout::OneToken),
-        ] {
+        for policy_history in [false, true] {
             let config = ObservationEncoderConfig {
                 policy_history,
-                turn_state,
-                layout: layout_kind,
                 ..Default::default()
             };
-            let layout = observation_layout(policy_history, turn_state, layout_kind);
-            assert_eq!(layout.contains_key("player_turn_state"), turn_state);
-            assert_eq!(layout.contains_key("card_turn_state"), turn_state);
-            let one_token = layout_kind == InputLayout::OneToken;
-            assert_eq!(layout.contains_key("stack"), one_token);
-            assert_eq!(layout.contains_key("stack_valid"), one_token);
+            let layout = observation_layout(policy_history);
             for array in layout.values() {
                 assert_eq!(array.axes.len(), array.shape.len());
                 let names: std::collections::BTreeSet<_> =
@@ -1249,32 +1160,16 @@ mod tests {
             }
             // Numeric ABI: changing a width is a layout change that checkpoints see.
             for (key, width, abi) in [
-                (
-                    "agent_player",
-                    config.player_dim(),
-                    if one_token { 75 } else { 74 },
-                ),
+                ("agent_player", config.player_dim(), 75),
                 ("agent_cards", card::WIDTH, 56),
-                (
-                    "agent_permanents",
-                    config.permanent_dim(),
-                    if one_token { 57 } else { 38 },
-                ),
-                (
-                    "actions",
-                    config.action_dim(),
-                    if one_token { 30 } else { 22 },
-                ),
+                ("agent_permanents", config.permanent_dim(), 57),
+                ("actions", config.action_dim(), 30),
                 (
                     "events",
                     config.event_dim(),
                     if policy_history { 12 } else { 7 },
                 ),
-                (
-                    "relations",
-                    config.relation_dim(),
-                    if one_token { 50 } else { 49 },
-                ),
+                ("relations", config.relation_dim(), 50),
                 ("facts", FACT_DIM, 12),
                 ("effects", effect::WIDTH, 18),
                 ("effect_details", detail::WIDTH, 3),
@@ -1286,35 +1181,26 @@ mod tests {
                 assert_eq!(layout[key].columns.len(), width, "{key}");
                 assert_eq!(width, abi, "{key}");
             }
-            if one_token {
-                assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
-                assert_eq!(stack::WIDTH, 47);
-                assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
-                assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
-            }
+            assert_eq!(layout["stack"].columns.len(), stack::WIDTH);
+            assert_eq!(stack::WIDTH, 47);
+            assert_eq!(config.stack_len(), config.max_stack_objects * stack::WIDTH);
+            assert_eq!(stack::VALID - stack::FLYING, KEYWORD_COUNT);
             assert_eq!(
                 config.cards_len(),
                 config.max_cards_per_player * layout["agent_cards"].columns.len()
             );
-            if turn_state {
-                assert_eq!(
-                    config.player_turn_state_len(),
-                    2 * layout["player_turn_state"].columns.len()
-                );
-            }
+            assert_eq!(
+                config.player_turn_state_len(),
+                2 * layout["player_turn_state"].columns.len()
+            );
             assert_eq!(
                 config.relations_len(),
                 super::super::continuation::RELATION_ROWS * config.relation_dim()
             );
             assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
             assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-            let permanent_valid = if one_token {
-                permanent::VALID
-            } else {
-                super::super::legacy_input::PERMANENT_VALID
-            };
             assert_eq!(
-                layout["agent_permanents"].columns[permanent_valid].name,
+                layout["agent_permanents"].columns[permanent::VALID].name,
                 "valid"
             );
             for key in ["agent_cards", "facts", "effects"] {

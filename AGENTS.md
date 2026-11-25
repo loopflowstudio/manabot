@@ -191,7 +191,7 @@ dense observation transport and dict admission graph (`VectorEnv.set_buffers`,
 `RolloutPool.set_buffers`, `encode_observation_into`, `encode_observations_into`,
 `ObservationLayout.axis_extents`, `ObservationLayout.object_references`,
 `EncodedObservation`, dense `ObservationRows`, dense admission/bucketing)
-is scheduled for removal in 0.3.0 alongside v9/v10.
+is scheduled for removal in 0.3.0.
 
 Execution row limits bound prefix materialization before preparation, independently
 of stream counts and logical optimizer minibatches. Accumulate actor and critic
@@ -319,7 +319,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   warning alias until 0.3.0. Matchup ids keep `w17` as the plain string
   `manabot.sim.matchup.SUITE_PREFIX`, and frozen experiment files write the
   literal, so retained tournaments find their records. Add no new label.
-- Main carries policy input v11, the fresh default
+- From 0.3.0 onward, v11 is the only supported policy input
   (`ObservationConfig.policy_input_version`, always serialized): one row per
   game thing. Card rows hold cards outside the battlefield and stack;
   permanents own one effective `CharacteristicsData` projection plus object
@@ -328,16 +328,11 @@ change already touches it; do not rewrite a module only for style. Rust in
   getters derive from those records (removed in 0.3.0); the `stack`
   buffer holds every spell and ability. A battlefield object's or spell's card
   id indexes its permanent or stack row, so focus, relations and history name
-  one row. V11 carries v10's `player_turn_state` and `card_turn_state`; a
-  turn-state-free encoder refuses an observation that needs them
-  (`managym.input_v10_state`) before writing buffers. Inputs v9 and v10 are a
-  deprecated fork for earlier checkpoints (`agent/legacy_input.rs`,
-  `manabot/env/legacy_input.py`, `InputLayout::Legacy`; removed once a v11 pilot is at least as strong as
-  the best v9 one, not before 0.3.0); never extend it. A checkpoint,
-  replay or saved configuration bound to any other version, or omitting it,
-  raises `UnsupportedPolicyInput`, which names the revision to run it from
-  (`ac601834d` is the last revision supporting v1-v8). Add no other version
-  branch.
+  one row. Both `player_turn_state` and `card_turn_state` are part of v11.
+  Checkpoints, replays and saved configurations must record v11. An omitted
+  version in saved input means v1. Raise `UnsupportedPolicyInput` naming
+  `v0.2.5` as the last release supporting v9-v10 and `ac601834d` as the
+  last revision supporting v1-v8.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`

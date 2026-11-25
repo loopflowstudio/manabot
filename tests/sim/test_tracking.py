@@ -1,6 +1,5 @@
 """Simulation consumes retained Etude checkpoints and records evaluation facts."""
 
-from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -135,17 +134,16 @@ def test_dashboard_delivery_failure_retries_without_duplicate_rows(
 
 
 def test_simulation_encodes_with_the_models_policy_input() -> None:
-    def model(version: int) -> ModelPlayer:
-        with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
-            space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    def model(max_actions: int) -> ModelPlayer:
+        space = ObservationSpace(ObservationConfig(max_actions=max_actions))
         agent = SimpleNamespace(observation_space=space, device_type="cpu")
         return ModelPlayer("model", cast(BackendPolicy, agent))
 
-    v10 = model(10)
-    assert sim._shared_observation_config(v10, v10).policy_input_version == 10
+    player = model(64)
+    assert sim._shared_observation_config(player, player).max_actions == 64
     assert sim._shared_observation_config(RandomPlayer("r"), RandomPlayer("r")) is None
     with pytest.raises(ValueError, match="different observation ABIs"):
-        sim._shared_observation_config(v10, model(11))
+        sim._shared_observation_config(player, model(128))
 
 
 @pytest.mark.parametrize("failure", ["policy", "environment"])
@@ -212,8 +210,6 @@ def test_game_reaching_step_limit_records_timeout() -> None:
             return 0
 
     player = cast(sim.Player, Player())
-    record = sim._simulate_game(
-        cast(sim.Env, LimitedEnv()), player, player, 1
-    )
+    record = sim._simulate_game(cast(sim.Env, LimitedEnv()), player, player, 1)
     assert record.outcome == sim.GameOutcome.TIMEOUT
     assert record.steps == 1

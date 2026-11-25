@@ -184,19 +184,15 @@ class Dimensions:
         fact_kinds: int = FACT_KINDS,
     ) -> "Dimensions":
         """Use the policy's input readings and its actual embedding sizes."""
-        player = columns.numeric_width("agent_player")
-        card = columns.numeric_width("agent_cards")
-        if space.turn_state:
-            player += columns.numeric_width("player_turn_state")
-            card += 1
         return cls(
             hidden=model.hidden_dim,
             heads=model.num_attention_heads,
             layers=model.attention_layers,
             feedforward=model.attention_feedforward_dim
             or model.num_attention_heads * model.hidden_dim,
-            player=player,
-            card=card,
+            player=columns.numeric_width("agent_player")
+            + columns.numeric_width("player_turn_state"),
+            card=columns.numeric_width("agent_cards") + 1,
             permanent=columns.numeric_width("agent_permanents"),
             action=columns.numeric_width("actions"),
             focus=space.config.max_focus_objects,
@@ -207,7 +203,7 @@ class Dimensions:
             token_rows=token_rows,
             name_rows=name_rows,
             links=len(columns.link_columns),
-            stack=columns.numeric_width("stack") if space.one_token else 0,
+            stack=columns.numeric_width("stack"),
         )
 
 

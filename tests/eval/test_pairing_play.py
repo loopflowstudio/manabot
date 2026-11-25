@@ -83,13 +83,12 @@ def fixture_checkpoint(
     )
 
 
-@pytest.mark.parametrize("version", [9, 11])
-def test_frontier_registers_recorded_and_fresh_checkpoint_inputs(
-    tmp_path: Path, cpu_threads: None, version: Literal[9, 11]
+def test_frontier_registers_its_checkpoint_layout(
+    tmp_path: Path, cpu_threads: None
 ) -> None:
     fresh = tla_frontier.settings(tla_frontier.FrontierConfig(size="w64")).observation
     assert fresh.policy_input_version == 11
-    space = ObservationSpace(fresh.model_copy(update={"policy_input_version": version}))
+    space = ObservationSpace(fresh)
     protocol = tla_frontier.PROTOCOL
     matchup = tla_frontier.deck_matchup(
         tla_frontier.corpus(), protocol, protocol.pairs[0]

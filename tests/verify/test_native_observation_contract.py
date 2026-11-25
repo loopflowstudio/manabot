@@ -9,7 +9,6 @@ capacities are respected or refused with `managym.ObservationCapacity`.
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import nullcontext
 import json
 
 import numpy as np
@@ -40,7 +39,6 @@ from manabot.env.observation import (
     RELATION_X_INDEX,
     ObservationConfig,
     ObservationSpace,
-    ZoneEnum,
     allocate_vector_buffers,
     column,
     encode_observation,
@@ -578,7 +576,7 @@ def test_transform_fact_and_retained_schedule_relations() -> None:
 
 
 def test_saved_action_capacity_is_retained_only_for_the_current_input() -> None:
-    saved = {"policy_input_version": 9, "max_actions": 128}
+    saved = {"policy_input_version": 11, "max_actions": 128}
     assert ObservationConfig.from_checkpoint(saved).max_actions == 128
     # A configuration that names no input is the first one, never today's.
     with pytest.raises(UnsupportedPolicyInput):
@@ -706,10 +704,7 @@ def test_merchant_food_tap_count_is_the_payment_frame_mode() -> None:
         submit_response(env, decision, decision.actions[0].reference)
 
 
-@pytest.mark.parametrize(("version", "width"), [(9, 22), (10, 22), (11, 30)])
-def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
-    version: int, width: int
-) -> None:
+def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps() -> None:
     """Both taps share TAP_FOR_COST; the native flag names which pays directly."""
     env = priority_root(
         ("Appeal to Eirdu",),
@@ -736,26 +731,23 @@ def test_one_creature_tapped_for_mana_or_to_convoke_renders_both_taps(
     actor = env.current_agent_index()
     assert actor is not None
     obs = env.observation_for_player(actor)
-    with pytest.warns(DeprecationWarning) if version < 11 else nullcontext():
-        config = ObservationConfig(policy_input_version=version)
-    space = ObservationSpace(config)
+    space = ObservationSpace()
     reference = encode_observation(space, obs)
     batch = space.allocate(1)
     assert managym.encode_observations_into([env], space.layout, batch, 1) == [5]
     for key, value in reference.items():
         np.testing.assert_array_equal(batch[key][0], value, err_msg=key)
     actions = reference["actions"]
-    assert actions.shape[1] == width
+    assert actions.shape[1] == 30
     np.testing.assert_array_equal(
         reference["action_focus"][0], reference["action_focus"][4]
     )
     np.testing.assert_array_equal(
         actions[0, :ACTION_PAYS_DIRECTLY_INDEX], actions[4, :ACTION_PAYS_DIRECTLY_INDEX]
     )
-    if version == 11:
-        np.testing.assert_array_equal(
-            actions[:5, ACTION_PAYS_DIRECTLY_INDEX], [0, 1, 1, 1, 1]
-        )
+    np.testing.assert_array_equal(
+        actions[:5, ACTION_PAYS_DIRECTLY_INDEX], [0, 1, 1, 1, 1]
+    )
 
     root = env.state_digest()
     for index, committed in (
@@ -872,9 +864,7 @@ def test_scout_s_warning_record_and_minus_counters_reach_text_and_facts() -> Non
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_v9_card_rows_also_list_stack_spells_and_battlefield_objects() -> None:
-    """Deprecated v9 card rows hold each side's v11 cards, then its stack
-    spells, then its battlefield objects; v11 lists each thing once."""
+def test_stack_spells_are_separate_from_card_rows() -> None:
     env = priority_root(("Lightning Bolt",), ("Mountain", "Gray Ogre"))
     obs = env.scenario_refresh()
     bolt = next(
@@ -900,15 +890,6 @@ def test_v9_card_rows_also_list_stack_spells_and_battlefield_objects() -> None:
         )
     assert len(obs.stack_objects) == 1
     v11 = encode_observation(ObservationSpace(), obs)
-    v9 = encode_observation(
-        ObservationSpace(ObservationConfig(policy_input_version=9)), obs
-    )
     cards = len(obs.agent_cards)
-    permanents = len(obs.agent_permanents)
     assert int(v11["agent_cards_valid"].sum()) == cards
     assert int(v11["stack_valid"].sum()) == 1
-    assert "stack" not in v9
-    assert int(v9["agent_cards_valid"].sum()) == cards + 1 + permanents
-    zone = v9["agent_cards"][:, :7].argmax(axis=1)
-    assert zone[cards] == ZoneEnum.STACK
-    assert (zone[cards + 1 : cards + 1 + permanents] == ZoneEnum.BATTLEFIELD).all()
