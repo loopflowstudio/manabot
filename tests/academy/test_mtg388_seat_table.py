@@ -193,3 +193,89 @@ def test_top_level_managym_opponents_cli_and_serve_discover_false(
         assert [o["name"] for o in opps] == ["zero"]
         launched = academy.new_game(opponent="zero", order="draw")
         assert "/?launch=" in launched.url
+
+
+def test_file_policy_loader_supports_future_annotations_and_dataclass(
+    tmp_path: Path,
+) -> None:
+    bot_file = tmp_path / "typed_bot.py"
+    bot_file.write_text(
+        "from __future__ import annotations\n"
+        "from dataclasses import dataclass\n"
+        "\n"
+        "@dataclass(frozen=True, slots=True)\n"
+        "class _State:\n"
+        "    choice: int\n"
+        "\n"
+        "STATE = _State(choice=0)\n"
+        "\n"
+        "def choose(obs) -> int:\n"
+        "    return STATE.choice\n",
+        encoding="utf-8",
+    )
+    loaded = load_python_policy(f"{bot_file}:choose")
+    assert loaded.describe().name == "typed_bot:choose"
+    session = loaded.load(seat=0, seed=1)
+    session.close()
+
+
+def test_launch_player_accepts_policy_spec_json_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+
+    class _FakePolicy:
+        def __init__(self, tag: str) -> None:
+            self._tag = tag
+
+        def describe(self) -> PolicyDescriptor:
+            return PolicyDescriptor(
+                name=f"Fake {self._tag}",
+                provider="fake",
+                runner="fake-runner-v1",
+                artifacts={"ckpt": self._tag},
+            )
+
+        def admit(self, setup: list[managym.PlayerConfig]) -> None:
+            del setup
+
+        def load(self, *, seat: int, seed: int):  # type: ignore[no-untyped-def]
+            return as_policy(lambda obs: 0).load(seat=seat, seed=seed)
+
+    class _FakeProvider:
+        def policy(self, spec: launch.PolicySpec) -> Policy:
+            return _FakePolicy(str(spec.artifact or "default"))
+
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+
+    spec_a = tmp_path / "run_a" / "iter-0001.policy.json"
+    spec_b = tmp_path / "run_b" / "iter-0001.policy.json"
+    spec_a.parent.mkdir()
+    spec_b.parent.mkdir()
+    spec_a.write_text(
+        json.dumps({"provider": "fake", "artifact": "a" * 64}), encoding="utf-8"
+    )
+    spec_b.write_text(
+        json.dumps({"provider": "fake", "artifact": "b" * 64}), encoding="utf-8"
+    )
+
+    with launch.serve(
+        port=0,
+        traces_dir=tmp_path,
+        discover=False,
+    ) as academy:
+        set_policy_registry(PolicyRegistry(providers={"fake": _FakeProvider()}))
+        launched = academy.new_game(opponent=str(spec_a), order="play")
+        assert "/?launch=" in launched.url
+
+        # Two distinct specs sharing a filename must both register without alias collision.
+        watched = academy.watch(players=(str(spec_a), str(spec_b)))
+        assert "watch=1" in watched.url
+
+        with pytest.raises(launch.AcademyLaunchError) as exc_info:
+            academy.new_game(opponent=str(tmp_path / "missing.policy.json"))
+        assert exc_info.value.code == "opponent.unavailable"
