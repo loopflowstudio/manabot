@@ -1771,6 +1771,7 @@ impl Game {
                 for (ability_index, ability) in self.state[object].abilities.iter().enumerate() {
                     let Ability::Triggered {
                         condition: TriggerCondition::InGraveyard { condition },
+                        intervening_if,
                         ..
                     } = ability
                     else {
@@ -1782,13 +1783,20 @@ impl Game {
                         continue;
                     };
                     let key = (object, self.state[object].definition_id, ability_index);
+                    let source_present = !matches!(
+                        event,
+                        GameEvent::CardMoved { object_id, .. } if *object_id == object
+                    );
                     if !(once
                         && self
                             .state
                             .turn
                             .ability_triggers_this_turn
                             .contains_key(&key))
-                        && self.trigger_condition_fires(leaf, object, owner, false, event)
+                        && self.trigger_condition_fires(leaf, object, owner, source_present, event)
+                        && intervening_if.as_ref().is_none_or(|condition| {
+                            self.check_intervening_if(condition, owner, Some(object), None)
+                        })
                     {
                         fired.push((object, ability_index, owner, once.then_some(key)));
                     }

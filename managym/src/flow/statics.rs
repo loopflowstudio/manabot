@@ -615,24 +615,25 @@ impl Game {
         chosen: Option<&crate::state::permanent::EntryChoice>,
     ) -> bool {
         let ordinary;
-        let predicate = if predicate.from_battlefield_this_turn {
-            if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard)
-                || !self
-                    .state
-                    .turn
-                    .graveyard_from_battlefield
-                    .contains(&object_id)
-            {
-                return false;
-            }
-            ordinary = CardPredicate {
-                from_battlefield_this_turn: false,
-                ..predicate.clone()
+        let predicate =
+            if predicate.from_battlefield_this_turn || predicate.put_into_graveyard_this_turn {
+                if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard)
+                    || (predicate.from_battlefield_this_turn
+                        && !self.state.turn.in_graveyard_from_battlefield(object_id))
+                    || (predicate.put_into_graveyard_this_turn
+                        && !self.state.turn.in_graveyard_this_turn(object_id))
+                {
+                    return false;
+                }
+                ordinary = CardPredicate {
+                    from_battlefield_this_turn: false,
+                    put_into_graveyard_this_turn: false,
+                    ..predicate.clone()
+                };
+                &ordinary
+            } else {
+                predicate
             };
-            &ordinary
-        } else {
-            predicate
-        };
         let object = &self.state[object_id];
         predicate.matches_printing_with_choice(
             object,
@@ -767,14 +768,18 @@ impl Game {
         entry: &ZoneEntry,
         predicate: &CardPredicate,
     ) -> bool {
-        if predicate.from_battlefield_this_turn {
+        if predicate.from_battlefield_this_turn || predicate.put_into_graveyard_this_turn {
             return self.state.zones.zone_of(object) == Some(ZoneType::Graveyard)
-                && self.state.turn.graveyard_from_battlefield.contains(&object)
+                && (!predicate.from_battlefield_this_turn
+                    || self.state.turn.in_graveyard_from_battlefield(object))
+                && (!predicate.put_into_graveyard_this_turn
+                    || self.state.turn.in_graveyard_this_turn(object))
                 && self.entry_matches_predicate(
                     object,
                     entry,
                     &CardPredicate {
                         from_battlefield_this_turn: false,
+                        put_into_graveyard_this_turn: false,
                         ..predicate.clone()
                     },
                 );

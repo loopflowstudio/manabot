@@ -294,8 +294,16 @@ impl ObservationEncoderConfig {
         self.max_facts * FACT_DIM
     }
 
+    /// Card row width: v11's, or the deprecated v9/v10 rows'.
+    pub fn card_dim(&self) -> usize {
+        match self.layout {
+            InputLayout::OneToken => CARD_DIM,
+            InputLayout::Legacy => super::legacy_input::CARD_DIM,
+        }
+    }
+
     pub fn cards_len(&self) -> usize {
-        self.max_cards_per_player * CARD_DIM
+        self.max_cards_per_player * self.card_dim()
     }
 
     pub fn player_dim(&self) -> usize {
@@ -1048,8 +1056,9 @@ pub fn encode_rows(
         }
         for (slot, card) in cards.iter().enumerate() {
             let mut row = [Cell::ZERO; CARD_DIM];
-            encode_card_features(card, mine, &context, &mut row);
-            out.write(card_table, 0, slot, &row)?;
+            let row = &mut row[..config.card_dim()];
+            encode_card_features(card, mine, &context, config.layout, row);
+            out.write(card_table, 0, slot, row)?;
             out.write(
                 Table::SemanticCards,
                 seat,
@@ -1069,10 +1078,11 @@ pub fn encode_rows(
             for (i, card) in obs.agent_sideboard.iter().enumerate() {
                 let slot = cards.len() + i;
                 let mut row = [Cell::ZERO; CARD_DIM];
+                let row = &mut row[..config.card_dim()];
                 for column in [card::IS_MINE, card::OUTSIDE, card::VALID] {
                     row[column] = Integer(1);
                 }
-                out.write(card_table, 0, slot, &row)?;
+                out.write(card_table, 0, slot, row)?;
                 out.write(
                     Table::SemanticCards,
                     seat,
@@ -1259,6 +1269,7 @@ fn turn_state_row(player: &PlayerData, layout: InputLayout) -> [Cell; TURN_STATE
 struct TurnStateReads {
     life_lost: bool,
     from_battlefield: bool,
+    put_into_graveyard: bool,
 }
 
 impl TurnStateReads {
@@ -1273,6 +1284,9 @@ impl TurnStateReads {
                             }
                             "from_battlefield_this_turn" if *value == true => {
                                 reads.from_battlefield = true
+                            }
+                            "put_into_graveyard_this_turn" if *value == true => {
+                                reads.put_into_graveyard = true
                             }
                             _ => {}
                         }
@@ -1381,6 +1395,11 @@ pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
         && visible_reads().any(|reads| reads.from_battlefield)
     {
         return Some("a card put into a graveyard from the battlefield this turn");
+    }
+    if cards().any(|card| card.put_into_graveyard_this_turn)
+        && visible_reads().any(|reads| reads.put_into_graveyard)
+    {
+        return Some("a card put into a graveyard this turn");
     }
     // Only a Powerstone-like source produces it, so its presence alone is
     // the need.
@@ -1500,7 +1519,13 @@ struct CardContext {
     turn_number: u32,
 }
 
-fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, out: &mut [Cell]) {
+fn encode_card_features(
+    card: &CardData,
+    is_mine: Cell,
+    context: &CardContext,
+    layout: InputLayout,
+    out: &mut [Cell],
+) {
     let zone_index = (card.zone as i32 & 0xFF) as usize;
     if zone_index < ZONE_DIM {
         out[card::ZONE_LIBRARY + zone_index] = Integer(1);
@@ -1566,6 +1591,9 @@ fn encode_card_features(card: &CardData, is_mine: Cell, context: &CardContext, o
         out[card::X] = Scalar(x as f32 / 10.0);
     }
     out[card::VALID] = Integer(1);
+    if layout == InputLayout::OneToken {
+        out[card::PUT_INTO_GRAVEYARD_THIS_TURN] = flag(card.put_into_graveyard_this_turn);
+    }
 }
 
 fn encode_permanent_features(
@@ -2383,7 +2411,7 @@ mod tests {
     };
 
     use super::{
-        action, encode, encode_into, fact, permanent, EncodedObservationMut,
+        action, card, encode, encode_into, fact, permanent, EncodedObservationMut,
         ObservationEncodeError, ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM,
         FACT_DIM, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
     };
@@ -2784,6 +2812,7 @@ mod tests {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: Default::default(),
         }
     }
@@ -2839,8 +2868,8 @@ mod tests {
 
         // Validity flags for populated card/permanent slots: the battlefield
         // object is its permanent row only.
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM * 2 - 1], 0.0);
+        assert_eq!(encoded.agent_cards[card::VALID], 1.0);
+        assert_eq!(encoded.agent_cards[card::VALID + CARD_DIM], 0.0);
         assert_eq!(encoded.agent_permanents[permanent::VALID], 1.0);
         assert_eq!(
             encoded.agent_permanents[permanent::VALID + PERMANENT_DIM],
@@ -3055,7 +3084,7 @@ mod tests {
         let row = (obs.agent_cards.len() + last) * CARD_DIM;
         assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
         assert_eq!(encoded.agent_cards[row + 37], 1.0);
-        assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[row + card::VALID], 1.0);
         for undersized in [
             ObservationEncoderConfig {
                 max_actions: 32,

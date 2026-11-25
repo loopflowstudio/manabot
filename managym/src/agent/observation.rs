@@ -364,8 +364,11 @@ pub struct CardData {
     /// when its mana cost has X.
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
-    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    /// (`TurnState::graveyard_arrivals`); policy input v10.
     pub from_battlefield_this_turn: bool,
+    /// A graveyard card that was put there from any zone this turn
+    /// (`TurnState::graveyard_arrivals`); policy input v11.
+    pub put_into_graveyard_this_turn: bool,
     /// Counters on it off the battlefield ("with a stash counter on it"),
     /// by `CounterKind` name.
     pub counters: BTreeMap<String, i32>,
@@ -1920,9 +1923,15 @@ impl Observation {
                 .collect(),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
-                && game.state.live(object_id).is_some_and(|object| {
-                    game.state.turn.graveyard_from_battlefield.contains(&object)
-                }),
+                && game
+                    .state
+                    .live(object_id)
+                    .is_some_and(|object| game.state.turn.in_graveyard_from_battlefield(object)),
+            put_into_graveyard_this_turn: zone == ZoneType::Graveyard
+                && game
+                    .state
+                    .live(object_id)
+                    .is_some_and(|object| game.state.turn.in_graveyard_this_turn(object)),
             counters: game
                 .state
                 .object_counters

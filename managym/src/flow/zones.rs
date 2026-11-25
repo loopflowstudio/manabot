@@ -1015,8 +1015,10 @@ impl Game {
                 .entry(entered_definition)
                 .or_default() += 1;
         }
-        if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
-            self.state.turn.graveyard_from_battlefield.push(object_id);
+        if to_zone == ZoneType::Graveyard {
+            self.state
+                .turn
+                .record_graveyard_arrival(object_id, old_zone == Some(ZoneType::Battlefield));
         }
         if to_zone == ZoneType::Exile && !entry.counters.is_empty() {
             self.state
@@ -1112,7 +1114,9 @@ impl Game {
                     .insert_top(None, Some(definition));
             }
             if to_zone == ZoneType::Graveyard {
-                self.state.turn.graveyard_from_battlefield.push(arrival);
+                self.state
+                    .turn
+                    .record_graveyard_arrival(arrival, old_zone == Some(ZoneType::Battlefield));
             }
             self.capture_object_move(arrival, old_zone, Some(to_zone), event_controller);
             arrival

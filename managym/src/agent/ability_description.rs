@@ -728,6 +728,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         attacking,
         tapped,
         from_battlefield_this_turn,
+        put_into_graveyard_this_turn,
         subtypes_any,
         colors_any,
         not_subtypes,
@@ -852,6 +853,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if *from_battlefield_this_turn {
         terms.push("put into a graveyard from the battlefield this turn".into());
+    }
+    if *put_into_graveyard_this_turn {
+        terms.push("put into a graveyard this turn".into());
     }
     if *attacking {
         terms.insert(0, "attacking".into());
@@ -1061,6 +1065,7 @@ fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> S
                     Some(Except::Moved) => " except the cards just moved",
                     Some(Except::This) => " except this card",
                     Some(Except::Target) => " except the target",
+                    Some(Except::CreatedThisWay) => " except the tokens just created",
                     None => "",
                 }
             )

@@ -9114,3 +9114,572 @@ fn strongbox_raider_raid_exile_two_choose_one_through_next_turn() {
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Hill Giant").len(), 1);
 }
+
+#[test]
+fn zimone_paradox_sculptor_adds_combat_counters_and_doubles_each_counter_kind() {
+    use crate::support::{
+        game::{clear_summoning_sickness, set_counters},
+        inspect::{counters, counters_of},
+        play::{activate, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{
+            game_object::Target,
+            permanent::CounterKind::{Page, PlusOnePlusOne},
+            player::ManaPayment,
+        },
+    };
+
+    let mut s = five_color_setup(&["Zimone, Paradox Sculptor", "Gray Ogre", "Mazemind Tome"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let zimone = s.force_permanent_on_battlefield(0, "Zimone, Paradox Sculptor");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let tome = s.force_permanent_on_battlefield(0, "Mazemind Tome");
+    clear_summoning_sickness(&mut s, zimone);
+    set_counters(&mut s, ogre, PlusOnePlusOne, 1);
+    set_counters(&mut s, tome, Page, 1);
+
+    // Beginning of combat trigger puts +1/+1 counters on up to two creatures.
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(zimone)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, zimone), 1);
+    assert_eq!(counters(&s, ogre), 2);
+
+    // Activated ability doubles every kind of counter on up to two creatures/artifacts.
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.set_player_mana_pool(0, "GU");
+    activate(&mut s, zimone, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(tome)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ogre, PlusOnePlusOne), 4);
+    assert_eq!(counters_of(&s, tome, Page), 2);
+    assert_eq!(counters(&s, zimone), 1);
+}
+
+#[test]
+fn soul_shackled_zombie_exiles_from_one_graveyard_and_drains_only_if_creature_exiled() {
+    use crate::support::{
+        game::plant_in_graveyard,
+        inspect::{now, offered_targets, zone_of},
+        play::{cast, choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, player::ManaPayment},
+    };
+
+    // Exiling only a noncreature does not drain.
+    let mut s = five_color_setup(&["Soul-Shackled Zombie", "Gray Ogre", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let our_creature = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let their_bolt = plant_in_graveyard(&mut s, 1, "Lightning Bolt");
+    cast(&mut s, "Soul-Shackled Zombie");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::GraveyardCard(now(&s, their_bolt))));
+    // Second target must share the same graveyard.
+    assert!(!offered_targets(&s).contains(&Target::GraveyardCard(now(&s, our_creature))));
+    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(zone_of(&s, their_bolt), Some(ZoneType::Exile));
+    assert_eq!((s.life(0), s.life(1)), (20, 20));
+
+    // Exiling a creature card drains for 2.
+    let mut s = five_color_setup(&["Soul-Shackled Zombie", "Gray Ogre", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let their_creature = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    let their_bolt = plant_in_graveyard(&mut s, 1, "Lightning Bolt");
+    cast(&mut s, "Soul-Shackled Zombie");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::GraveyardCard(now(&s, their_creature))));
+    assert!(s.choose_target(Target::GraveyardCard(now(&s, their_bolt))));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, their_creature), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, their_bolt), Some(ZoneType::Exile));
+    assert_eq!((s.life(0), s.life(1)), (22, 18));
+}
+
+#[test]
+fn squad_rallier_looks_at_four_and_reveals_power_two_or_less_creature() {
+    use crate::support::{
+        game::pin_top,
+        inspect::{offered_cards, zone_of},
+        play::{activate, pass_until, select_card},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::player::ManaPayment};
+
+    let mut s = five_color_setup(&["Squad Rallier", "Gray Ogre", "Hill Giant", "Lightning Bolt"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let rallier = s.force_permanent_on_battlefield(0, "Squad Rallier");
+    let top = pin_top(
+        &mut s,
+        &["Gray Ogre", "Hill Giant", "Lightning Bolt", "Plains"],
+    );
+    activate(&mut s, rallier, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let offered = offered_cards(&s);
+    assert_eq!(offered, vec![top[0]]);
+    select_card(&mut s, top[0]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Hand));
+    for &rest in &top[1..] {
+        assert_eq!(zone_of(&s, rest), Some(ZoneType::Library));
+    }
+}
+
+#[test]
+fn cephalid_inkmage_surveils_three_and_gains_unblockable_at_threshold() {
+    use crate::support::{
+        game::{pin_top, plant_in_graveyard},
+        inspect::{permanent_named, zone_of},
+        play::{cast, choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::player::ManaPayment,
+    };
+
+    let mut s = five_color_setup(&["Cephalid Inkmage", "Gray Ogre", "Hill Giant", "Island"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let top = pin_top(&mut s, &["Gray Ogre", "Hill Giant", "Island"]);
+    cast(&mut s, "Cephalid Inkmage");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    // Surveil 3: put the first card into the graveyard, keep the other two on top and order them.
+    crate::support::play::select_card(&mut s, top[0]);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    // Order the two kept cards on top of library (put top[2] on top, top[1] below).
+    crate::support::play::select_card(&mut s, top[2]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Graveyard));
+    assert_eq!(crate::support::inspect::library_top(&s, 0), top[2]);
+    let inkmage = permanent_named(&s, "Cephalid Inkmage");
+    crate::support::game::clear_summoning_sickness(&mut s, inkmage);
+
+    // Below threshold: opponent's creature is offered as a blocker.
+    let mut below = s.clone();
+    below.advance_to_active_step(0, StepKind::DeclareAttackers);
+    crate::support::play::attack_with(&mut below, inkmage);
+    pass_until(&mut below, ActionSpaceKind::DeclareBlocker);
+    assert!(below.action_space().actions.iter().any(|a| matches!(
+        a,
+        Action::DeclareBlocker { blocker: b, attacker: Some(atk), .. } if *b == blocker && *atk == inkmage
+    )));
+
+    // At threshold (7 cards in graveyard): cannot be blocked.
+    for name in ["Plains", "Plains", "Swamp", "Swamp", "Mountain", "Forest"] {
+        plant_in_graveyard(&mut s, 0, name);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    crate::support::play::attack_with(&mut s, inkmage);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.life(1), 18);
+}
+
+#[test]
+fn inspiration_from_beyond_mills_three_returns_instant_or_sorcery_and_flashes_back() {
+    use crate::support::{
+        game::pin_top,
+        inspect::{can_cast, now, offered_cards, zone_of},
+        play::{cast, cast_card, pass_until, select_card},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::player::ManaPayment};
+
+    let mut s = five_color_setup(&[
+        "Inspiration from Beyond",
+        "Lightning Bolt",
+        "Giant Growth",
+        "Gray Ogre",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let top = pin_top(&mut s, &["Lightning Bolt", "Gray Ogre", "Island"]);
+    let spell = cast(&mut s, "Inspiration from Beyond");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let bolt = now(&s, top[0]);
+    assert_eq!(offered_cards(&s), vec![bolt]);
+    select_card(&mut s, bolt);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, bolt), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Graveyard));
+
+    // Flashback from graveyard exiles Inspiration from Beyond after resolution.
+    let second = pin_top(&mut s, &["Giant Growth", "Island", "Island"]);
+    let grave_spell = now(&s, spell);
+    s.set_player_mana_pool(0, "5UU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, grave_spell));
+    cast_card(&mut s, grave_spell);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let growth = now(&s, second[0]);
+    select_card(&mut s, growth);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, growth), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, spell), Some(ZoneType::Exile));
+}
+
+#[test]
+fn sylvan_scavenging_end_step_counters_or_creates_raccoon_with_ferocious() {
+    use crate::support::{
+        inspect::counters,
+        play::{choose_mode, pass_until},
+    };
+    use managym::{
+        agent::action::ActionSpaceKind,
+        state::{game_object::Target, mana::Color},
+    };
+
+    // Mode 0: +1/+1 counter on target creature you control.
+    let mut s = five_color_setup(&["Sylvan Scavenging", "Gray Ogre", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(0, "Sylvan Scavenging");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::End);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 1);
+
+    // Mode 1 without power 4+: creates nothing.
+    let mut s = five_color_setup(&["Sylvan Scavenging", "Gray Ogre", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(0, "Sylvan Scavenging");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::End);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(0, "Raccoon").is_empty());
+
+    // Mode 1 with power 4+: creates a 3/3 green Raccoon token.
+    let mut s = five_color_setup(&["Sylvan Scavenging", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(0, "Sylvan Scavenging");
+    s.force_permanent_on_battlefield(0, "Craw Wurm");
+    s.advance_to_active_step(0, StepKind::End);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    crate::assert_creature_tokens(&s, "Raccoon", 1, (3, 3), &[Color::Green], &[]);
+}
+
+#[test]
+fn arbiter_of_woe_requires_creature_sacrifice_to_cast_and_triggers_on_entry() {
+    use crate::support::{
+        game::move_to_hand,
+        inspect::{can_cast, card_of, hand, zone_of},
+        play::{cast_card, pass_until, select_card},
+    };
+    use managym::{agent::action::ActionSpaceKind, state::player::ManaPayment};
+
+    let mut s = five_color_setup(&["Arbiter of Woe", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let arbiter = move_to_hand(&mut s, "Arbiter of Woe");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        !can_cast(&s, arbiter),
+        "cannot cast without a creature to sacrifice"
+    );
+
+    let fodder = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let fodder_card = card_of(&s, fodder);
+    let opp_card = crate::support::game::force_new_card_in_hand(&mut s, 1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, arbiter));
+    let before_hand = hand(&s, 0).len();
+    cast_card(&mut s, arbiter);
+    if s.action_space().kind == ActionSpaceKind::LookAndSelect {
+        select_card(&mut s, fodder_card);
+    }
+    assert_eq!(zone_of(&s, fodder_card), Some(ZoneType::Graveyard));
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    select_card(&mut s, opp_card);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, opp_card), Some(ZoneType::Graveyard));
+    assert_eq!((s.life(0), s.life(1)), (22, 18));
+    assert_eq!(hand(&s, 0).len(), before_hand);
+    assert_eq!(s.battlefield_permanents_named(0, "Arbiter of Woe").len(), 1);
+}
+
+#[test]
+fn vampire_gourmand_optional_other_sacrifice_draws_and_prevents_blocking() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, hand, offered_cards, zone_of},
+        play::{attack_with, pass_until, select_card},
+    };
+    use managym::agent::action::ActionSpaceKind;
+
+    let mut s = five_color_setup(&["Vampire Gourmand", "Gray Ogre"]);
+    let gourmand = s.force_permanent_on_battlefield(0, "Vampire Gourmand");
+    let gourmand_card = card_of(&s, gourmand);
+    let fodder = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let fodder_card = card_of(&s, fodder);
+    clear_summoning_sickness(&mut s, gourmand);
+    let before = hand(&s, 0).len();
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, gourmand);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert!(!offered_cards(&s).contains(&gourmand_card));
+    select_card(&mut s, fodder_card);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, fodder_card), Some(ZoneType::Graveyard));
+    assert_eq!(hand(&s, 0).len(), before + 1);
+    assert!(s.game().cant_be_blocked(gourmand));
+}
+
+#[test]
+fn perforating_artist_raid_offers_discard_or_nonland_sacrifice_or_loses_three() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{card_of, offered_cards, zone_of},
+        play::{attack_with, choose, pass_until, select_card},
+    };
+    use managym::agent::action::{Action, ActionSpaceKind};
+
+    let mut s = five_color_setup(&["Perforating Artist", "Gray Ogre"]);
+    let artist = s.force_permanent_on_battlefield(0, "Perforating Artist");
+    clear_summoning_sickness(&mut s, artist);
+    let opp_ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let opp_ogre_card = card_of(&s, opp_ogre);
+    let opp_land = s.force_permanent_on_battlefield(1, "Swamp");
+    let opp_land_card = card_of(&s, opp_land);
+    let opp_hand = crate::support::game::force_new_card_in_hand(&mut s, 1, "Gray Ogre");
+
+    // Without attacking, end step does not trigger.
+    let mut no_raid = s.clone();
+    no_raid.advance_to_active_step(0, StepKind::End);
+    settle(&mut no_raid);
+    assert_eq!(no_raid.life(1), 20);
+
+    // Attack to enable Raid, then advance to end step.
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, artist);
+    s.advance_to_active_step(0, StepKind::End);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+
+    // Choice 1: discard a card -> keeps permanents and stays at 17 (after 3 combat damage).
+    let mut discard = s.clone();
+    select_card(&mut discard, opp_hand);
+    settle(&mut discard);
+    assert_eq!(zone_of(&discard, opp_hand), Some(ZoneType::Graveyard));
+    assert_eq!(
+        zone_of(&discard, opp_ogre_card),
+        Some(ZoneType::Battlefield)
+    );
+    assert_eq!(discard.life(1), 17);
+
+    // Decline discard -> offered nonland permanent sacrifice (never lands).
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert!(offered_cards(&s).contains(&opp_ogre_card));
+    assert!(!offered_cards(&s).contains(&opp_land_card));
+
+    // Choice 2: sacrifice nonland permanent -> stays at 17 life.
+    let mut sac = s.clone();
+    select_card(&mut sac, opp_ogre_card);
+    settle(&mut sac);
+    assert_eq!(zone_of(&sac, opp_ogre_card), Some(ZoneType::Graveyard));
+    assert_eq!(sac.life(1), 17);
+
+    // Choice 3: decline both -> loses 3 more life (14).
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(s.life(1), 14);
+}
+
+#[test]
+fn arcane_epiphany_costs_one_less_with_a_wizard_and_draws_three() {
+    use crate::support::{
+        inspect::{hand, top_spell},
+        play::cast,
+    };
+    use managym::state::player::ManaPayment;
+
+    for with_wizard in [false, true] {
+        let mut s = five_color_setup(&["Arcane Epiphany", "Cephalid Inkmage"]);
+        s.game_mut().mana_payment[0] = ManaPayment::Auto;
+        if with_wizard {
+            s.force_permanent_on_battlefield(0, "Cephalid Inkmage");
+        }
+        let before = hand(&s, 0).len();
+        cast(&mut s, "Arcane Epiphany");
+        assert_eq!(top_spell(&s).spent.total(), if with_wizard { 4 } else { 5 });
+        settle(&mut s);
+        assert_eq!(hand(&s, 0).len(), before + 3);
+    }
+}
+
+#[test]
+fn koma_world_eater_cant_be_countered_has_ward_four_and_creates_four_coils() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::{now, permanent_named},
+        play::{attack_with, cast, cast_card, choose, pass_until},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{game_object::Target, mana::Color, player::ManaPayment},
+    };
+
+    // Uncounterable on the stack.
+    let mut s = five_color_setup(&["Koma, World-Eater", "Counterspell", "Unsummon"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.game_mut().mana_payment[1] = ManaPayment::Auto;
+    let counter = crate::support::game::force_new_card_in_hand(&mut s, 1, "Counterspell");
+    let koma_spell = cast(&mut s, "Koma, World-Eater");
+    s.pass_priority();
+    cast_card(&mut s, counter);
+    assert!(s.choose_target(Target::StackSpell(now(&s, koma_spell))));
+    settle(&mut s);
+    let koma = permanent_named(&s, "Koma, World-Eater");
+
+    // Ward {4}: declining counters opponent's targeting spell.
+    let unsummon = crate::support::game::force_new_card_in_hand(&mut s, 1, "Unsummon");
+    s.pass_priority();
+    cast_card(&mut s, unsummon);
+    assert!(s.choose_target(Target::Permanent(koma)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert!(s.game().state.permanents[koma].is_some());
+
+    // Combat damage to a player creates four 3/3 blue Serpent tokens named Koma's Coil.
+    clear_summoning_sickness(&mut s, koma);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, koma);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    settle(&mut s);
+    assert_eq!(s.life(1), 12);
+    let coils = s.battlefield_permanents_named(0, "Koma's Coil");
+    assert_eq!(coils.len(), 4);
+    for coil in coils {
+        let view = s.game().characteristics(coil);
+        assert_eq!(view.pt(), (3, 3));
+        assert!(view.has_subtype("Serpent"));
+        assert!(view.colors.contains(&Color::Blue));
+    }
+}
+
+#[test]
+fn abyssal_harvester_exiles_this_turns_graveyard_creature_copies_as_nightmare_and_exiles_older_nightmares(
+) {
+    use crate::support::{
+        game::{clear_summoning_sickness, move_card, pin_top, plant_in_graveyard},
+        inspect::{card_of, now, offered_targets, permanent_of, zone_of},
+        play::{activate, cast, pass_until},
+    };
+    use managym::{
+        agent::{
+            action::ActionSpaceKind,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncoderConfig, CARD_DIM},
+            observation_layout::card as card_col,
+        },
+        state::{game_object::Target, player::ManaPayment},
+    };
+
+    // 1. Milled this turn is legal and observed; a prior-turn graveyard creature is not.
+    let mut s = five_color_setup(&[
+        "Abyssal Harvester",
+        "Billowing Shriekmass",
+        "Gray Ogre",
+        "Hill Giant",
+        "Aang, at the Crossroads",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let harvester = s.force_permanent_on_battlefield(0, "Abyssal Harvester");
+    clear_summoning_sickness(&mut s, harvester);
+    let old_creature = plant_in_graveyard(&mut s, 0, "Hill Giant");
+    // Advance to the next turn so Hill Giant was NOT put into the graveyard this turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "4B");
+
+    // Mill Gray Ogre into the graveyard this turn via Billowing Shriekmass.
+    let milled = pin_top(&mut s, &["Gray Ogre", "Swamp", "Swamp"]);
+    cast(&mut s, "Billowing Shriekmass");
+    settle(&mut s);
+    let fresh_ogre = now(&s, milled[0]);
+    assert_eq!(zone_of(&s, fresh_ogre), Some(ZoneType::Graveyard));
+
+    // Check observation + v11 card column for put_into_graveyard_this_turn.
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    let fresh_obs = obs
+        .agent_cards
+        .iter()
+        .position(|c| c.name == "Gray Ogre" && c.zone == ZoneType::Graveyard)
+        .expect("milled ogre in obs");
+    let old_obs = obs
+        .agent_cards
+        .iter()
+        .position(|c| c.name == "Hill Giant" && c.zone == ZoneType::Graveyard)
+        .expect("old giant in obs");
+    assert!(obs.agent_cards[fresh_obs].put_into_graveyard_this_turn);
+    assert!(!obs.agent_cards[fresh_obs].from_battlefield_this_turn);
+    assert!(!obs.agent_cards[old_obs].put_into_graveyard_this_turn);
+    let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+    assert_eq!(
+        encoded.agent_cards[fresh_obs * CARD_DIM + card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
+        1.0
+    );
+    assert_eq!(
+        encoded.agent_cards[old_obs * CARD_DIM + card_col::PUT_INTO_GRAVEYARD_THIS_TURN],
+        0.0
+    );
+
+    // Activate Harvester: only fresh_ogre is offered, never old_creature.
+    activate(&mut s, harvester, 0);
+    let offers = offered_targets(&s);
+    assert!(offers.contains(&Target::GraveyardCard(fresh_ogre)));
+    assert!(!offers.contains(&Target::GraveyardCard(now(&s, old_creature))));
+    assert!(s.choose_target(Target::GraveyardCard(fresh_ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, fresh_ogre), Some(ZoneType::Exile));
+    let first_copy = s.battlefield_permanents_named(0, "Gray Ogre")[0];
+    let first_view = s.game().characteristics(first_copy);
+    assert!(!s.game().state[card_of(&s, first_copy)].is_card());
+    assert!(first_view.has_subtype("Nightmare"));
+    assert!(first_view.has_subtype("Ogre"));
+    assert_eq!(first_view.pt(), (2, 2));
+
+    // 2. Next turn: a transformed DFC dies -> exiled & copied as its front face with Nightmare;
+    // the older Nightmare token is exiled while the new Nightmare token survives.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let aang = s.force_permanent_on_battlefield(1, "Aang, at the Crossroads");
+    s.game_mut().transform_permanent(aang);
+    assert_eq!(s.game().characteristics(aang).name, "Aang, Destined Savior");
+    let aang_card = card_of(&s, aang);
+    move_card(&mut s, aang_card, ZoneType::Graveyard);
+    let dead_aang = now(&s, aang_card);
+    s.game_mut().scenario_refresh_priority().unwrap();
+
+    activate(&mut s, harvester, 0);
+    assert!(offered_targets(&s).contains(&Target::GraveyardCard(dead_aang)));
+    assert!(s.choose_target(Target::GraveyardCard(dead_aang)));
+    // Aang's ETB look-and-select trigger resolves after the copy enters.
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    crate::support::play::choose(&mut s, |a| {
+        matches!(a, managym::agent::action::Action::Decline { .. })
+    });
+    settle(&mut s);
+
+    // Old Nightmare token is exiled; new Nightmare copy survives as front face + Nightmare.
+    assert!(s.game().state.permanents[first_copy].is_none());
+    let new_copies = s.battlefield_permanents_named(0, "Aang, at the Crossroads");
+    assert_eq!(new_copies.len(), 1);
+    let copy_view = s.game().characteristics(new_copies[0]);
+    assert!(!s.game().state[card_of(&s, new_copies[0])].is_card());
+    assert!(copy_view.has_subtype("Nightmare"));
+    assert!(copy_view.has_subtype("Avatar"));
+    assert_eq!(copy_view.pt(), (3, 3));
+    assert_eq!(zone_of(&s, dead_aang), Some(ZoneType::Exile));
+    let _ = permanent_of(&s, dead_aang);
+}

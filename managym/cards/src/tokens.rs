@@ -69,6 +69,8 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         red_white_spirit(),
         rat(),
         phyrexian_goblin_1_1_r(),
+        raccoon_3_3_g(),
+        cat_beast_2_2_w(),
     ]
 }
 
@@ -846,6 +848,32 @@ fn phyrexian_goblin_1_1_r() -> TokenDefinition {
             1,
             1,
             [Color::Red],
+        ),
+    )
+}
+
+fn raccoon_3_3_g() -> TokenDefinition {
+    token(
+        "token.raccoon_3_3_g",
+        "af257e8b-9bed-4c6b-9510-11fe950fa80e",
+        creature(
+            face("Raccoon", [CardType::Creature], &["Raccoon"], ""),
+            3,
+            3,
+            [Color::Green],
+        ),
+    )
+}
+
+fn cat_beast_2_2_w() -> TokenDefinition {
+    token(
+        "token.cat_beast_2_2_w",
+        "e2c91781-acf9-4cff-be1a-85148ad2a683",
+        creature(
+            face("Cat Beast", [CardType::Creature], &["Cat", "Beast"], ""),
+            2,
+            2,
+            [Color::White],
         ),
     )
 }

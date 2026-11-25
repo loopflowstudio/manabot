@@ -1,18 +1,77 @@
 //! Ravnica Allegiance.
 use managym_state::{
     ability::{
-        Ability, Actor, Aggregate, Effect, EffectValue, ObjectProperty, ObjectSelector, Per,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Aggregate, Effect, EffectValue, LibraryEnd, ObjectProperty, ObjectSelector,
+        PaymentCost, Per, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
+    card::{
+        BlockRestriction, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility,
+    },
     effect::Modification,
     mana::ManaCost,
     permanent::CounterKind,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![archway_angel(), gateway_sneak(), biogenic_upgrade()]
+    vec![
+        archway_angel(),
+        biogenic_upgrade(),
+        gate_colossus(),
+        gateway_sneak(),
+    ]
+}
+
+fn gate_colossus() -> CardDefinition {
+    let text_box = "Affinity for Gates (This spell costs {1} less to cast for each Gate you control.)\nThis creature can't be blocked by creatures with power 2 or less.\nWhenever a Gate you control enters, you may put this card from your graveyard on top of your library.";
+    CardDefinition {
+        key: "rna.gate_colossus",
+        scryfall_id: "99767e2f-a558-4d63-b9b6-923d15b433e1",
+        printed: PrintedCharacteristics {
+            name: "Gate Colossus".into(),
+            mana_cost: Some(ManaCost::parse("{8}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Construct".into()],
+            power: Some(8),
+            toughness: Some(8),
+            statics: vec![
+                StaticAbility::CostsLessPerPermanent(CardPredicate::subtype("Gate")),
+                StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(CardPredicate {
+                    max_power: Some(2),
+                    ..CardPredicate::creature()
+                })),
+            ],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::InGraveyard {
+                    condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::you_control(CardPredicate::subtype("Gate")),
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![Effect::Move {
+                        unrevealed: false,
+                        face_down: false,
+                        library_end: Some(LibraryEnd::Top),
+                        what: ObjectSelector::This,
+                        to: ZoneType::Library,
+                        tapped: false,
+                        transformed: false,
+                        under: None,
+                        with_counter: None,
+                        linked: None,
+                    }],
+                    if_declined: vec![],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 fn gateway_sneak() -> CardDefinition {

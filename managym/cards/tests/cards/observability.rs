@@ -593,6 +593,7 @@ fn except_token(except: Except) -> &'static str {
         Except::This => "Except::This",
         Except::Moved => "Except::Moved",
         Except::Target => "Except::Target",
+        Except::CreatedThisWay => "Except::CreatedThisWay",
     }
 }
 
@@ -632,7 +633,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
         lands_played: _,
         spells_cast: _,
         history,
-        graveyard_from_battlefield: _,
+        graveyard_arrivals: _,
         ability_triggers_this_turn: _,
         used_trigger_grants: _,
         attacks_this_turn: _,
@@ -740,8 +741,8 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 34] {
             Seen::Via("input v10 player_turn_state column 0; v9 refuses it once a visible card reads it"),
         ),
         (
-            "graveyard_from_battlefield",
-            Seen::Via("input v10 card_turn_state of each graveyard card row (CardData.from_battlefield_this_turn)"),
+            "graveyard_arrivals",
+            Seen::Via("input v10 card_turn_state (from_battlefield_this_turn) and input v11 card column put_into_graveyard_this_turn"),
         ),
         (
             "history.attacked",
@@ -2252,16 +2253,14 @@ fn card_row(
     encoded: &EncodedObservation,
     permanent: PermanentId,
 ) -> Vec<f32> {
-    let legacy = encode(
-        observation,
-        &ObservationEncoderConfig {
-            layout: InputLayout::Legacy,
-            ..ObservationEncoderConfig::default()
-        },
-    )
-    .unwrap();
+    let legacy_config = ObservationEncoderConfig {
+        layout: InputLayout::Legacy,
+        ..ObservationEncoderConfig::default()
+    };
+    let legacy = encode(observation, &legacy_config).unwrap();
     let row = legacy_card_index(game, observation, permanent);
-    let card_row = legacy.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM].to_vec();
+    let legacy_card_dim = legacy_config.card_dim();
+    let card_row = legacy.agent_cards[row * legacy_card_dim..(row + 1) * legacy_card_dim].to_vec();
     let slot = permanent_slot(game, observation, permanent);
     let permanent_row = &encoded.agent_permanents[slot * PERMANENT_DIM..(slot + 1) * PERMANENT_DIM];
     let mut shared = vec![
@@ -2725,6 +2724,7 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         Some(Except::This),
         Some(Except::Target),
         Some(Except::Moved),
+        Some(Except::CreatedThisWay),
     ];
     for (scope, except) in scopes.into_iter().zip(excepts.into_iter().cycle()) {
         let affected = ObjectSelector::Each {
@@ -3666,6 +3666,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         cast_permissions => [Rows("cast permission below"), FactOccurrence(FactKind::EffectProgram)],
         x => [Columns(Card, card::HAS_X, 2), Columns(Stack, stack::HAS_X, 2)],
         from_battlefield_this_turn => [column(CardTurnState, 0)],
+        put_into_graveyard_this_turn => [column(Card, card::PUT_INTO_GRAVEYARD_THIS_TURN)],
         counters => [FactOccurrence(FactKind::Counter)],
     }));
     fields.extend(encoding!(CastPermissionData {

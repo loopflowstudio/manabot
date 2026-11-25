@@ -3032,14 +3032,14 @@ impl Game {
             Some(Except::Target) => self
                 .present_primary_target(frame)
                 .and_then(|target| self.target_object(target)),
-            Some(Except::Moved) | None => None,
+            Some(Except::Moved | Except::CreatedThisWay) | None => None,
         };
-        let moved = if except == Some(Except::Moved) {
-            frame.moved.as_slice()
-        } else {
-            &[]
+        let list = match except {
+            Some(Except::Moved) => frame.moved.as_slice(),
+            Some(Except::CreatedThisWay) => frame.created.as_slice(),
+            _ => &[],
         };
-        one.into_iter().chain(moved.iter().copied())
+        one.into_iter().chain(list.iter().copied())
     }
 
     /// A battlefield permanent's mana value (CR 202.3): that of its card;

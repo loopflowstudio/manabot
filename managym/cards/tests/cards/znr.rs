@@ -217,3 +217,39 @@ fn gnarlid_colony_kicker_counters_and_trample() {
         assert!(!keywords(&s, bare).has(Keyword::Trample));
     }
 }
+
+#[test]
+fn felidar_retreat_landfall_creates_cat_beast_or_counters_and_vigilance() {
+    use crate::support::{
+        inspect::{counters, keywords, library_card},
+        play::{choose_mode, move_and_settle},
+    };
+    use managym::state::{mana::Color, zone::ZoneType};
+
+    let mut s = five_color_setup(&["Felidar Retreat"]);
+    s.force_permanent_on_battlefield(0, "Felidar Retreat");
+    let first_land = library_card(&s, 0, "Plains");
+    crate::support::game::move_card(&mut s, first_land, ZoneType::Battlefield);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    let tokens = s.battlefield_permanents_named(0, "Cat Beast");
+    assert_eq!(tokens.len(), 1);
+    let token = tokens[0];
+    let view = s.game().characteristics(token);
+    assert_eq!(view.pt(), (2, 2));
+    assert!(view.has_subtype("Cat") && view.has_subtype("Beast"));
+    assert!(view.colors.contains(&Color::White));
+    let second_land = library_card(&s, 0, "Plains");
+    crate::support::game::move_card(&mut s, second_land, ZoneType::Battlefield);
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(counters(&s, token), 1);
+    assert!(keywords(&s, token).has(Keyword::Vigilance));
+
+    // Opponent's land does not trigger.
+    let their_land = library_card(&s, 1, "Plains");
+    move_and_settle(&mut s, their_land, ZoneType::Battlefield);
+    assert_eq!(counters(&s, token), 1);
+}

@@ -182,7 +182,7 @@ fn encoded_to_dict<'py>(
         &encoded.opponent_player,
         &[1, config.player_dim()],
     )?;
-    let cards = [config.max_cards_per_player, enc::CARD_DIM];
+    let cards = [config.max_cards_per_player, config.card_dim()];
     put("agent_cards", &encoded.agent_cards, &cards)?;
     put("opponent_cards", &encoded.opponent_cards, &cards)?;
     let permanents = [config.max_permanents_per_player, config.permanent_dim()];
@@ -2029,6 +2029,14 @@ impl PyCard {
     #[setter]
     fn set_from_battlefield_this_turn(&mut self, value: bool) {
         self.data.from_battlefield_this_turn = value;
+    }
+    #[getter]
+    fn put_into_graveyard_this_turn(&self) -> bool {
+        self.data.put_into_graveyard_this_turn
+    }
+    #[setter]
+    fn set_put_into_graveyard_this_turn(&mut self, value: bool) {
+        self.data.put_into_graveyard_this_turn = value;
     }
     /// Counters on the card off the battlefield, by kind name.
     #[getter]

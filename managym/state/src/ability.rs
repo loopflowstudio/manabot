@@ -1309,6 +1309,9 @@ pub enum Except {
     Moved,
     /// "all other": the clause's chosen target (Avatar's Wrath).
     Target,
+    /// Exact objects from the preceding token creation ("all other Nightmare
+    /// tokens you control").
+    CreatedThisWay,
 }
 
 impl ObjectSelector {
@@ -2810,6 +2813,14 @@ impl Effect {
             on,
             kind,
             amount: amount.into(),
+        }
+    }
+
+    /// "Double the number of each kind of counter on [on]."
+    pub fn double_counters(on: ObjectSelector) -> Self {
+        Effect::PutCountersFrom {
+            from: on.clone(),
+            on,
         }
     }
 

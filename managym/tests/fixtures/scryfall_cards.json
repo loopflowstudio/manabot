@@ -193,6 +193,18 @@
       "R"
     ]
   },
+  "Abyssal Harvester": {
+    "name": "Abyssal Harvester",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Creature — Demon Warlock",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{T}: Exile target creature card from a graveyard that was put there this turn. Create a token that's a copy of it, except it's a Nightmare in addition to its other types. Then exile all other Nightmare tokens you control.",
+    "colors": [
+      "B"
+    ]
+  },
   "Accumulate Wisdom": {
     "name": "Accumulate Wisdom",
     "mana_cost": "{1}{U}",
@@ -650,6 +662,32 @@
     "oracle_text": "Other Cats you control get +1/+1.\nWhenever Arahbo or another nontoken Cat you control enters, create a 1/1 white Cat creature token.",
     "colors": [
       "W"
+    ]
+  },
+  "Arbiter of Woe": {
+    "name": "Arbiter of Woe",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Creature — Demon",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nFlying\nWhen this creature enters, each opponent discards a card and loses 2 life. You draw a card and gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Arcane Epiphany": {
+    "name": "Arcane Epiphany",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {1} less to cast if you control a Wizard.\nDraw three cards.",
+    "colors": [
+      "U"
     ]
   },
   "Arcanis the Omnipotent": {
@@ -2105,6 +2143,21 @@
       "B"
     ]
   },
+  "Cephalid Inkmage": {
+    "name": "Cephalid Inkmage",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Octopus Wizard",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Surveil",
+      "Threshold"
+    ],
+    "oracle_text": "When this creature enters, surveil 3. (Look at the top three cards of your library, then put any number of them into your graveyard and the rest on top of your library in any order.)\nThreshold — This creature can't be blocked as long as there are seven or more cards in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
   "Charming Prince": {
     "name": "Charming Prince",
     "mana_cost": "{1}{W}",
@@ -2791,6 +2844,16 @@
       "R"
     ]
   },
+  "Demolition Field": {
+    "name": "Demolition Field",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Destroy target nonbasic land an opponent controls. That land's controller may search their library for a basic land card, put it onto the battlefield, then shuffle. You may search your library for a basic land card, put it onto the battlefield, then shuffle.",
+    "colors": []
+  },
   "Demonic Pact": {
     "name": "Demonic Pact",
     "mana_cost": "{2}{B}{B}",
@@ -2799,6 +2862,20 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "At the beginning of your upkeep, choose one that hasn't been chosen —\n• This enchantment deals 4 damage to any target and you gain 4 life.\n• Target opponent discards two cards.\n• Draw two cards.\n• You lose the game.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Desecration Demon": {
+    "name": "Desecration Demon",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Creature — Demon",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nAt the beginning of each combat, any opponent may sacrifice a creature of their choice. If a player does, tap this creature and put a +1/+1 counter on it.",
     "colors": [
       "B"
     ]
@@ -3065,6 +3142,20 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "Create two 1/1 red Goblin creature tokens.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Dragon Mage": {
+    "name": "Dragon Mage",
+    "mana_cost": "{5}{R}{R}",
+    "type_line": "Creature — Dragon Wizard",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature deals combat damage to a player, each player discards their hand, then draws seven cards.",
     "colors": [
       "R"
     ]
@@ -4126,6 +4217,20 @@
       "W"
     ]
   },
+  "Felidar Retreat": {
+    "name": "Felidar Retreat",
+    "mana_cost": "{3}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, choose one —\n• Create a 2/2 white Cat Beast creature token.\n• Put a +1/+1 counter on each creature you control. Those creatures gain vigilance until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
   "Felidar Savior": {
     "name": "Felidar Savior",
     "mana_cost": "{3}{W}",
@@ -4255,6 +4360,18 @@
     "oracle_text": "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.",
     "colors": [
       "R"
+    ]
+  },
+  "Finale of Revelation": {
+    "name": "Finale of Revelation",
+    "mana_cost": "{X}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw X cards. If X is 10 or more, instead shuffle your graveyard into your library, draw X cards, untap up to five lands, and you have no maximum hand size for the rest of the game.\nExile Finale of Revelation.",
+    "colors": [
+      "U"
     ]
   },
   "Fire Elemental": {
@@ -4578,6 +4695,22 @@
       "R"
     ]
   },
+  "Flamewake Phoenix": {
+    "name": "Flamewake Phoenix",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Phoenix",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Ferocious",
+      "Haste"
+    ],
+    "oracle_text": "Flying, haste\nThis creature attacks each combat if able.\nFerocious — At the beginning of combat on your turn, if you control a creature with power 4 or greater, you may pay {R}. If you do, return this card from your graveyard to the battlefield.",
+    "colors": [
+      "R"
+    ]
+  },
   "Flashfreeze": {
     "name": "Flashfreeze",
     "mana_cost": "{1}{U}",
@@ -4767,6 +4900,18 @@
     "oracle_text": "({T}: Add {G}.)",
     "colors": []
   },
+  "Frenzied Goblin": {
+    "name": "Frenzied Goblin",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Berserker",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, you may pay {R}. If you do, target creature can't block this turn.",
+    "colors": [
+      "R"
+    ]
+  },
   "Frog-Squirrels": {
     "name": "Frog-Squirrels",
     "mana_cost": "{1}{G}",
@@ -4831,6 +4976,18 @@
       "B",
       "R"
     ]
+  },
+  "Gate Colossus": {
+    "name": "Gate Colossus",
+    "mana_cost": "{8}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Affinity"
+    ],
+    "oracle_text": "Affinity for Gates (This spell costs {1} less to cast for each Gate you control.)\nThis creature can't be blocked by creatures with power 2 or less.\nWhenever a Gate you control enters, you may put this card from your graveyard on top of your library.",
+    "colors": []
   },
   "Gatekeeper of Malakir": {
     "name": "Gatekeeper of Malakir",
@@ -5355,6 +5512,20 @@
     "toughness": "3",
     "keywords": [],
     "oracle_text": "Each land and Ally you control has \"{T}: Add one mana of any color.\"",
+    "colors": [
+      "G"
+    ]
+  },
+  "Grow from the Ashes": {
+    "name": "Grow from the Ashes",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card, put it onto the battlefield, then shuffle. If this spell was kicked, instead search your library for two basic land cards, put them onto the battlefield, then shuffle.",
     "colors": [
       "G"
     ]
@@ -6112,6 +6283,21 @@
       "W"
     ]
   },
+  "Inspiration from Beyond": {
+    "name": "Inspiration from Beyond",
+    "mana_cost": "{2}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback",
+      "Mill"
+    ],
+    "oracle_text": "Mill three cards, then return an instant or sorcery card from your graveyard to your hand.\nFlashback {5}{U}{U} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Inspiring Call": {
     "name": "Inspiring Call",
     "mana_cost": "{2}{G}",
@@ -6713,6 +6899,22 @@
     "toughness": "6",
     "keywords": [],
     "oracle_text": "This spell can't be countered.\nAt the beginning of each upkeep, create a 3/3 blue Serpent creature token named Koma's Coil.\nSacrifice another Serpent: Choose one —\n• Tap target permanent. Its activated abilities can't be activated this turn.\n• Koma gains indestructible until end of turn.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Koma, World-Eater": {
+    "name": "Koma, World-Eater",
+    "mana_cost": "{3}{G}{G}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "8",
+    "toughness": "12",
+    "keywords": [
+      "Trample",
+      "Ward"
+    ],
+    "oracle_text": "This spell can't be countered.\nTrample, ward {4}\nWhenever Koma deals combat damage to a player, create four 3/3 blue Serpent creature tokens named Koma's Coil.",
     "colors": [
       "G",
       "U"
@@ -8248,6 +8450,22 @@
       "G"
     ]
   },
+  "Perforating Artist": {
+    "name": "Perforating Artist",
+    "mana_cost": "{1}{B}{R}",
+    "type_line": "Creature — Devil",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Raid",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nRaid — At the beginning of your end step, if you attacked this turn, each opponent loses 3 life unless that player sacrifices a nonland permanent of their choice or discards a card.",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
   "Phoenix Fleet Airship": {
     "name": "Phoenix Fleet Airship",
     "mana_cost": "{2}{B}{B}",
@@ -8525,6 +8743,20 @@
     "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, create a 1/1 white Cat creature token.",
     "colors": [
       "W"
+    ]
+  },
+  "Primal Might": {
+    "name": "Primal Might",
+    "mana_cost": "{X}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Fight"
+    ],
+    "oracle_text": "Target creature you control gets +X/+X until end of turn. Then it fights up to one target creature you don't control. (Each deals damage equal to its power to the other.)",
+    "colors": [
+      "G"
     ]
   },
   "Primeval Bounty": {
@@ -10036,6 +10268,18 @@
       "U"
     ]
   },
+  "Slagstorm": {
+    "name": "Slagstorm",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Slagstorm deals 3 damage to each creature.\n• Slagstorm deals 3 damage to each player.",
+    "colors": [
+      "R"
+    ]
+  },
   "Sledding Otter-Penguin": {
     "name": "Sledding Otter-Penguin",
     "mana_cost": "{2}{W}",
@@ -10239,6 +10483,18 @@
     "oracle_text": "When this artifact enters, exile target card from a graveyard.\n{T}, Sacrifice this artifact: Exile each opponent's graveyard.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
     "colors": []
   },
+  "Soul-Shackled Zombie": {
+    "name": "Soul-Shackled Zombie",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Zombie",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, exile up to two target cards from a single graveyard. If at least one creature card was exiled this way, each opponent loses 2 life and you gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Soulstone Sanctuary": {
     "name": "Soulstone Sanctuary",
     "mana_cost": "",
@@ -10399,6 +10655,30 @@
     "oracle_text": "Landfall — Whenever a land you control enters, this creature deals 1 damage to each opponent.",
     "colors": [
       "R"
+    ]
+  },
+  "Springbloom Druid": {
+    "name": "Springbloom Druid",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, you may sacrifice a land. If you do, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Squad Rallier": {
+    "name": "Squad Rallier",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Human Scout",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{2}{W}: Look at the top four cards of your library. You may reveal a creature card with power 2 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "colors": [
+      "W"
     ]
   },
   "Stab": {
@@ -10824,6 +11104,18 @@
     "keywords": [],
     "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {U} or {R}.",
     "colors": []
+  },
+  "Sylvan Scavenging": {
+    "name": "Sylvan Scavenging",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of your end step, choose one —\n• Put a +1/+1 counter on target creature you control.\n• Create a 3/3 green Raccoon creature token if you control a creature with power 4 or greater.",
+    "colors": [
+      "G"
+    ]
   },
   "Syr Alin, the Lion's Claw": {
     "name": "Syr Alin, the Lion's Claw",
@@ -12161,6 +12453,18 @@
       "W"
     ]
   },
+  "Vampire Gourmand": {
+    "name": "Vampire Gourmand",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Vampire",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, you may sacrifice another creature. If you do, draw a card and this creature can't be blocked this turn.",
+    "colors": [
+      "B"
+    ]
+  },
   "Vampire Interloper": {
     "name": "Vampire Interloper",
     "mana_cost": "{1}{B}",
@@ -13031,6 +13335,21 @@
     "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
     "colors": [
       "R"
+    ]
+  },
+  "Zimone, Paradox Sculptor": {
+    "name": "Zimone, Paradox Sculptor",
+    "mana_cost": "{2}{G}{U}",
+    "type_line": "Legendary Creature — Human Wizard",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [
+      "Double"
+    ],
+    "oracle_text": "At the beginning of combat on your turn, put a +1/+1 counter on each of up to two target creatures you control.\n{G}{U}, {T}: Double the number of each kind of counter on up to two target creatures and/or artifacts you control.",
+    "colors": [
+      "G",
+      "U"
     ]
   },
   "Zombify": {

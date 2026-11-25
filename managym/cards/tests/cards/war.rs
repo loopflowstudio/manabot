@@ -79,3 +79,61 @@ fn foundations_stack_copy_bolt_bend_changes_one_target_at_its_actual_cost() {
         assert_eq!((s.life(0), s.life(1)), (20, 17));
     }
 }
+
+#[test]
+fn finale_of_revelation_draws_x_and_at_ten_shuffles_untaps_up_to_five_and_exiles() {
+    use crate::support::{
+        game::{force_lands, plant_in_graveyard},
+        inspect::{card_of, hand, zone_of},
+        play::{cast, choose, choose_mode, pass_until, select_card, settle},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::{player::ManaPayment, zone::ZoneType},
+    };
+
+    // X = 2: draw 2, exile Finale, graveyard untouched.
+    let mut s = five_color_setup(&["Finale of Revelation", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let dead = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let before = hand(&s, 0).len();
+    let finale = cast(&mut s, "Finale of Revelation");
+    choose_mode(&mut s, 2);
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 2);
+    assert_eq!(zone_of(&s, dead), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, finale), Some(ZoneType::Exile));
+    assert!(!s
+        .game()
+        .has_no_maximum_hand_size_effect(managym::state::game_object::PlayerId(0)));
+
+    // X = 10: shuffle graveyard, draw 10, untap up to 5 lands, no max hand size, exile Finale.
+    let mut s = five_color_setup(&["Finale of Revelation", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    s.set_player_mana_pool(0, "10UU");
+    let dead = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    force_lands(&mut s, 0, "Island", 6);
+    let lands = s.battlefield_permanents_named(0, "Island");
+    for &land in &lands {
+        s.game_mut().state.permanents[land].as_mut().unwrap().tapped = true;
+    }
+    let before = hand(&s, 0).len();
+    let finale = cast(&mut s, "Finale of Revelation");
+    choose_mode(&mut s, 10);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    for &land in &lands[..5] {
+        let card = card_of(&s, land);
+        select_card(&mut s, card);
+    }
+    if s.action_space().kind == ActionSpaceKind::LookAndSelect {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(hand(&s, 0).len(), before + 10);
+    assert_ne!(zone_of(&s, dead), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, finale), Some(ZoneType::Exile));
+    assert_eq!(s.untapped_permanents_named(0, "Island"), 5);
+    assert!(s
+        .game()
+        .has_no_maximum_hand_size_effect(managym::state::game_object::PlayerId(0)));
+}

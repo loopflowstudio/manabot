@@ -182,3 +182,52 @@ fn biogenic_upgrade_copy_keeps_the_division_when_retargeted() {
     settle(&mut s);
     assert_eq!([a, b, c].map(|id| counters(&s, id)), [4, 6, 4]);
 }
+
+#[test]
+fn gate_colossus_affinity_evasion_and_graveyard_gate_trigger() {
+    use crate::support::{
+        game::{force_lands, plant_in_graveyard},
+        inspect::{library_top, now, top_spell, zone_of},
+        play::{cast, choose, settle},
+    };
+    use managym::state::{player::ManaPayment, zone::ZoneType};
+
+    // Affinity for Gates + evasion against power <= 2.
+    let mut s = five_color_setup(&[
+        "Gate Colossus",
+        "Azorius Guildgate",
+        "Gray Ogre",
+        "Hill Giant",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    force_lands(&mut s, 0, "Azorius Guildgate", 2);
+    cast(&mut s, "Gate Colossus");
+    assert_eq!(top_spell(&s).spent.total(), 6);
+    settle(&mut s);
+
+    let colossus = s.battlefield_permanents_named(0, "Gate Colossus")[0];
+    let small = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let big = s.force_permanent_on_battlefield(1, "Hill Giant");
+    clear_summoning_sickness(&mut s, colossus);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, colossus);
+    pass_until(&mut s, ActionSpaceKind::DeclareBlocker);
+    let can_block = |blocker| {
+        s.action_space().actions.iter().any(|a| {
+            matches!(a, Action::DeclareBlocker { blocker: b, attacker: Some(atk), .. } if *b == blocker && *atk == colossus)
+        })
+    };
+    assert!(!can_block(small));
+    assert!(can_block(big));
+
+    // Graveyard trigger on Gate entry puts Gate Colossus on top of library.
+    let mut s = five_color_setup(&["Gate Colossus", "Azorius Guildgate"]);
+    let colossus = plant_in_graveyard(&mut s, 0, "Gate Colossus");
+    crate::support::game::enters_battlefield_with_triggers(&mut s, 0, "Azorius Guildgate");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, colossus), Some(ZoneType::Library));
+    assert_eq!(library_top(&s, 0), now(&s, colossus));
+}

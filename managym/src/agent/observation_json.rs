@@ -223,6 +223,9 @@ impl Serialize for CardJson<'_> {
         map.serialize_entry("name", &value.name)?;
         map.serialize_entry("owner_id", &value.owner_id)?;
         map.serialize_entry("power", &value.power)?;
+        if value.put_into_graveyard_this_turn {
+            map.serialize_entry("put_into_graveyard_this_turn", &true)?;
+        }
         map.serialize_entry("registry_key", &value.registry_key)?;
         map.serialize_entry("text_box", &value.text_box)?;
         map.serialize_entry("toughness", &value.toughness)?;
@@ -787,9 +790,13 @@ pub(super) struct WireCardData {
     #[serde(default)]
     pub x: Option<i32>,
     /// A graveyard card that was put there from the battlefield this turn
-    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    /// (`TurnState::graveyard_arrivals`); policy input v10.
     #[serde(default)]
     pub from_battlefield_this_turn: bool,
+    /// A graveyard card that was put there from any zone this turn
+    /// (`TurnState::graveyard_arrivals`); policy input v11.
+    #[serde(default)]
+    pub put_into_graveyard_this_turn: bool,
     /// Counters on the card off the battlefield, by kind name.
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
@@ -983,6 +990,7 @@ impl From<WireCardData> for CardData {
                 .collect(),
             x: w.x,
             from_battlefield_this_turn: w.from_battlefield_this_turn,
+            put_into_graveyard_this_turn: w.put_into_graveyard_this_turn,
             counters: w.counters,
             characteristics: CharacteristicsData {
                 name: w.name,
@@ -1076,6 +1084,7 @@ impl PermanentData {
             cast_permissions: vec![],
             x: None,
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         })
@@ -1192,6 +1201,7 @@ impl SpellData {
             cast_permissions: vec![],
             x: self.has_announced_x.then_some(x),
             from_battlefield_this_turn: false,
+            put_into_graveyard_this_turn: false,
             counters: BTreeMap::new(),
             characteristics: self.characteristics.clone(),
         }

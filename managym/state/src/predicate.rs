@@ -68,6 +68,10 @@ pub struct CardPredicate {
     /// and `Game::card_matches_predicate` answers it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub from_battlefield_this_turn: bool,
+    /// "card in a graveyard that was put there this turn" from any zone
+    /// (Abyssal Harvester): game history, answered by `Game::card_matches_predicate`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub put_into_graveyard_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     /// Has at least one of these colors ("white or blue"), as its
@@ -258,6 +262,7 @@ impl CardPredicate {
             || self.attacking
             || self.tapped
             || self.from_battlefield_this_turn
+            || self.put_into_graveyard_this_turn
             || self.keyword.is_some_and(|k| !object.keywords.has(k))
             || (self.not_flying && object.keywords.has(Keyword::Flying))
             || self

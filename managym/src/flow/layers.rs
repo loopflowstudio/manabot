@@ -1718,6 +1718,7 @@ impl CharacteristicView<'_> {
     ) -> bool {
         // A permanent is on the battlefield, never a graveyard card.
         !p.from_battlefield_this_turn
+            && !p.put_into_graveyard_this_turn
             && p.accepts_name(self.name)
             && (!p.namesake || source.map(|s| s.0) == Some(self.name))
             && p.matches_choice(
