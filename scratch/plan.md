@@ -6,9 +6,19 @@ definitions.
 
 Every one of the 56 scoped ledger rows is `implemented`; Abyssal Harvester's
 `blocked_by` is cleared. Slice 11's four concept defects, Slice 12's three
-behavior-review defects, and Performance Slices 13–16 are built and verified.
+behavior-review defects, Performance Slices 13–16, and Academy's holistic
+Curator of Destinies pile-partition UI (`cfa110e6d8`) are built and verified.
 
-**Next: Gate / Integrated validation** (below).
+**Next: Slice 17 — Mana architecture & feasibility projection refinements (plus PR #605 CI fix), then `pr-publish` → `demo`.**
+
+### Planned Slice 17 — Adapt three mana ideas from `phase-rs` (keep grouped `ManaPool` and exact DFS witness solver)
+
+Do **not** replace our grouped `[u8; 6]`-per-`ManaClass` `ManaPool` with per-unit `ManaUnit` storage, and do **not** replace our exact DFS witness solver with heuristic auto-tap. Adapt these three targeted improvements into `managym/state/src/mana.rs` and `managym/src/flow/mana.rs`, preserving all digests, learning tokens, checkpoint compatibility, and `bench_steps`/`bench_search` gains:
+
+1. **Feasibility-only `ProjectedClass` stripping:** In pure feasibility searches (`witness` / `can_pay` — never `ManaSpend` or live pool mutation), strip `expiry` and `effect` (`SpendEffect`) from `ProjectedClass` when they cannot affect payability, collapsing mixed Ventmaw / Firebending / ordinary / spend-effect pools into fewer search states. Verify with the debug search oracle and `bench_states` (`ventmaw-pools`, `entry-choices`, `changeling-anthems`).
+2. **Class-level `Drop | Keep | Recolor(Color)` step-end emptying:** Refactor `clear_mana_pools` (`managym/src/flow/mana.rs`) into a small per-class emptying disposition pass (`Drop | Keep | Recolor(Color)`) over `ManaPool` that subsumes the special-case `keeps_red_mana` / expiry branching cleanly while preserving identical Firebending, Savage Ventmaw, and Ozai semantics (and zero new `Player` fields).
+3. **Unified 6-bit `ManaTypeSet(u8)` pip mask & `CostPermissionContext` bundle:** Replace ad-hoc hybrid/single-pip branching in `ManaCost` / `flow/mana.rs` where a 6-bit `ManaTypeSet(u8)` pip mask and a small `Copy` payment-permission bundle simplify legality/payment code and eliminate parallel branches — keeping `ManaCost` serialization, learning tokens (`tests/model/test_pinned_pilot.py`), and `bench_steps`/`bench_search` retired instructions ≤ current `04a8f55e6d`.
+4. **PR #605 CI fix before `pr-publish`:** Fix `tests/env/test_named_observation_layout.py::test_named_layout_describes_tagged_rows_and_history` (extra set items `{17, 18, 19}` in CI `Integration (model)`), and check why the 4 Playwright tests in `Academy UI` (`choice-navigation.spec.ts` ×2, `decision-surface.spec.ts` ×2) timed out on `getByTestId('game')`.
 
 ## Performance outcome (Slices 13–16 + compress, Apple M4 Max, contended host)
 
