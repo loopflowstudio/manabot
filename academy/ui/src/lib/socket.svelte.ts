@@ -582,7 +582,7 @@ export class GameSocketController {
     }
 
     if (message.type === 'analysis_state' || message.type === 'analysis') {
-      gameStore.liveAnalysis = nextLiveAnalysis(gameStore.liveAnalysis, message);
+      gameStore.liveAnalysis = nextLiveAnalysis(gameStore.liveAnalysis, message, gameStore.actionLog.length);
       return;
     }
 

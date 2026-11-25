@@ -23,11 +23,12 @@
   import { presentationPlayer } from '$lib/presentation.svelte';
   import { sanitizeDeckSelection, DECK_CHOICES } from '$lib/decks';
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
+  import { scoreName } from '$lib/analysis';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
   import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { loadAutoTap, saveAutoTap, type FullControlMode } from '$lib/board/auto-tap';
-  import { analysedEvidence, logMarks } from '$lib/board/replay';
+  import { analysedEvidence, liveAnalysedMarks, logMarks } from '$lib/board/replay';
   import { spentOnce } from '$lib/board/phases';
   import {
     connect,
@@ -396,11 +397,19 @@
   // The game so far as a strip of decisions, folded unless opened. Live play
   // shows no past position yet: positions open in Review once the game ends.
   let stripOpen = $state(false);
-  const liveMarks = $derived(logMarks(gameStore.actionLog));
   // A policy's reading of your decision, shown beside its offers while you
   // show analysis: its probability and estimate on each, nothing selected.
   // A reading for another revision (a decision already made) is not drawn.
   const liveAnalysis = $derived(gameStore.liveAnalysis);
+  // With analysis read this game, the strip carries the policy's line from
+  // your seat, on Review's fixed 0–100 axis, and opens whenever it is shown.
+  const liveScale = $derived.by(() => {
+    const name = scoreName(liveAnalysis.points.find(point => point.semantic !== null)?.semantic ?? null);
+    if (!name || !liveAnalysis.policy) return null;
+    return `${shortName(liveAnalysis.policy.name)}'s ${name.toLowerCase()} from your seat · ${liveAnalysis.points.length} decisions read`;
+  });
+  const liveMarks = $derived(liveScale ? liveAnalysedMarks(logMarks(gameStore.actionLog), liveAnalysis.points) : logMarks(gameStore.actionLog));
+  $effect(() => { if (liveAnalysis.shown) stripOpen = true; });
   const liveEvidence = $derived(liveAnalysis.shown && liveAnalysis.reading && decisionFrame && !participantStudying
     && liveAnalysis.reading.revision === decisionFrame.revision && decisionFrame.offers.length
     ? analysedEvidence(decisionFrame, liveAnalysis.reading.decision, null, liveAnalysis.policy?.name ?? 'The policy') : null);
@@ -546,7 +555,7 @@
       onpassturn={handlePassTurn}
       {notices}
       strip={{ marks: liveMarks, selected: null, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen),
-        note: gameStore.gameOver ? null : 'Positions open in Review after the game' }}
+        note: gameStore.gameOver ? null : 'Positions open in Review after the game', scale: liveScale }}
       result={gameStore.gameOver ? result : undefined}
       {menu}
       {stepBoards}

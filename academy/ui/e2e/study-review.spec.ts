@@ -169,6 +169,12 @@ test('a decision made with analysis shown says so in Review and Games', async ({
       await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader', { timeout: 30_000 });
       shown = true;
     } else if (shown) {
+      // Shown analysis draws the game's line under the board, open, on Review's 0–100 axis.
+      await expect(page.getByTestId('choices-heading')).toContainText('Analysis by Reader', { timeout: 30_000 });
+      await expect(page.getByTestId('strip-caption')).toContainText("Reader's expected score from your seat · 2 decisions read");
+      await expect(page.getByTestId('strip-midline')).toHaveCount(1);
+      expect(Number(await page.getByTestId('strip-value').getAttribute('data-points'))).toBe(2);
+      await page.screenshot({ path: shot('play-live-line') });
       await toggle.uncheck();
       await expect(page.getByTestId('choices-heading')).not.toContainText('Analysis by');
       shown = false;

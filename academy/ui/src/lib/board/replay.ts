@@ -23,7 +23,7 @@
  * from a spectator reveal.
  */
 import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
-import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark } from '$lib/analysis';
+import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark, type LivePoint } from '$lib/analysis';
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
@@ -401,6 +401,27 @@ export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
     value: null,
     label: `Turn ${entry.turn ?? '?'} · ${entry.text}`,
   }));
+}
+
+/**
+ * Live play's strip with the policy's line on it: each reading is a point of
+ * its own, placed where the action log stood when it was read, so a decision
+ * that logs nothing (a priority pass) still has its point. Logged moves keep
+ * their ticks; only the points carry values.
+ */
+export function liveAnalysedMarks(marks: readonly StripMark[], points: readonly LivePoint[]): StripMark[] {
+  const out: StripMark[] = [];
+  let next = 0;
+  const point = (live: LivePoint): StripMark => {
+    const turn = out.at(-1)?.turn ?? marks[0]?.turn ?? null;
+    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score, label: `Turn ${turn ?? '?'} · Your decision, read` };
+  };
+  marks.forEach((mark, index) => {
+    while (next < points.length && points[next].at <= index) out.push(point(points[next++]));
+    out.push({ ...mark, value: null });
+  });
+  while (next < points.length) out.push(point(points[next++]));
+  return out.map((mark, at) => ({ ...mark, at, turnStart: at === 0 || mark.turn !== out[at - 1].turn }));
 }
 
 /**

@@ -83,21 +83,41 @@ export interface LiveAnalysis {
   stopped: string | null;
   /** The latest reading, for the decision published at its revision. */
   reading: { revision: number; decision: AnalysedDecision } | null;
+  /**
+   * The game's line so far: the policy's score at each of your decisions read
+   * this game, in order. It survives turning analysis off and on, and starts
+   * again with another policy, whose scores are another line.
+   */
+  points: LivePoint[];
 }
 
-export const LIVE_ANALYSIS_OFF: LiveAnalysis = { shown: false, pending: false, policy: null, policies: null, unavailable: null, stopped: null, reading: null };
+/**
+ * One point of the live line: your decision at trace `event`, read when the
+ * action log held `at` entries, so the move that settles it is the next of
+ * yours from there.
+ */
+export interface LivePoint { event: number; at: number; score: number | null; semantic: string | null }
 
-/** The next live analysis after a server message. A reading arriving after the person turned it off is dropped. */
-export function nextLiveAnalysis(current: LiveAnalysis, message: LiveAnalysisState | LiveAnalysisMessage): LiveAnalysis {
+export const LIVE_ANALYSIS_OFF: LiveAnalysis = { shown: false, pending: false, policy: null, policies: null, unavailable: null, stopped: null, reading: null, points: [] };
+
+/**
+ * The next live analysis after a server message. A reading arriving after the
+ * person turned it off is dropped. `logLength` is the action log's length when
+ * the message arrives, which places a reading's point on the game's line.
+ */
+export function nextLiveAnalysis(current: LiveAnalysis, message: LiveAnalysisState | LiveAnalysisMessage, logLength = 0): LiveAnalysis {
   if (message.type === 'analysis_state') {
-    return { ...LIVE_ANALYSIS_OFF, shown: message.shown, policy: message.policy, policies: message.policies, unavailable: message.unavailable };
+    const samePolicy = message.policy === null || message.policy.sha256 === current.policy?.sha256;
+    return { ...LIVE_ANALYSIS_OFF, shown: message.shown, policy: message.policy ?? current.policy, policies: message.policies, unavailable: message.unavailable, points: samePolicy ? current.points : [] };
   }
   if (!current.shown || current.pending) return current;
   if ('stopped' in message) return { ...current, stopped: message.stopped, reading: null };
+  const point = { event: message.event, at: logLength, score: score(message.annotation.value, message.semantic), semantic: message.semantic };
   return {
     ...current,
     stopped: null,
     reading: { revision: message.revision, decision: { event: message.event, played: -1, annotation: message.annotation, semantic: message.semantic, after: message.after } },
+    points: [...current.points.filter(earlier => earlier.event !== message.event), point],
   };
 }
 
@@ -107,7 +127,7 @@ export function nextLiveAnalysis(current: LiveAnalysis, message: LiveAnalysisSta
  */
 export function followShown(current: LiveAnalysis, policy: AnalysisPolicy | null): LiveAnalysis {
   if (current.pending) return current;
-  if (policy === null) return current.shown ? { ...LIVE_ANALYSIS_OFF, policies: current.policies } : current;
+  if (policy === null) return current.shown ? { ...LIVE_ANALYSIS_OFF, policy: current.policy, policies: current.policies, points: current.points } : current;
   return current.shown && current.policy?.sha256 === policy.sha256 ? current : { ...current, shown: true, policy };
 }
 

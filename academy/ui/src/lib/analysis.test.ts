@@ -51,6 +51,20 @@ describe('analysis while you play', () => {
   it('says why an analysis stopped, and follows frames: on with its policy after a reload, off in a new game', () => {
     expect(nextLiveAnalysis(on, { type: 'analysis', policy: reader, stopped: 'The policy failed at step 3.' }).stopped).toBe('The policy failed at step 3.');
     expect(followShown(LIVE_ANALYSIS_OFF, reader)).toMatchObject({ shown: true, policy: reader });
-    expect(followShown(on, null)).toMatchObject({ shown: false, policy: null, policies: [reader] });
+    expect(followShown(on, null)).toMatchObject({ shown: false, policy: reader, policies: [reader] });
+  });
+
+  it('draws the game\'s line from each reading, kept through off and on, and new for another policy', () => {
+    const first = nextLiveAnalysis(on, reading, 3);
+    const second = nextLiveAnalysis(first, { ...reading, event: 7, revision: 12, annotation: { probabilities: [1], value: -0.5 } }, 6);
+    expect(second.points).toEqual([
+      { event: 4, at: 3, score: 0.6, semantic: 'signed_outcome' },
+      { event: 7, at: 6, score: 0.25, semantic: 'signed_outcome' },
+    ]);
+    expect(nextLiveAnalysis(second, { ...reading, annotation: { probabilities: [1], value: 0 } }, 3).points.map(point => point.score)).toEqual([0.25, 0.5]);
+    const off = nextLiveAnalysis(second, { type: 'analysis_state', shown: false, policy: null, policies: [reader], unavailable: null });
+    expect(nextLiveAnalysis(off, { type: 'analysis_state', shown: true, policy: reader, policies: [reader], unavailable: null }).points).toHaveLength(2);
+    const other = { sha256: 'o'.repeat(64), name: 'Other' };
+    expect(nextLiveAnalysis(second, { type: 'analysis_state', shown: true, policy: other, policies: [reader, other], unavailable: null }).points).toEqual([]);
   });
 });

@@ -6,7 +6,7 @@ import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
 import { markText } from '$lib/analysis';
-import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { analysedEvidence, analysedMarks, analysisShownMoves, bottomSeat, entryPosition, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, liveAnalysedMarks, logMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -249,5 +249,25 @@ describe('an analysis read beside your choices', () => {
     expect([mark.agreed, mark.of]).toEqual([1, 2]);
     expect(markText(mark)).toBe('1 of 2 same');
     expect(mark.yours).toBe(1 / offers);
+  });
+});
+
+describe('liveAnalysedMarks', () => {
+  const log = [
+    { id: 'a', actor: 'villain' as const, turn: 1, text: 'Opponent plays Island' },
+    { id: 'b', actor: 'hero' as const, turn: 1, text: 'You play Mountain' },
+    { id: 'c', actor: 'auto' as const, turn: 2, text: 'Untap' },
+    { id: 'd', actor: 'hero' as const, turn: 2, text: 'You cast Shock' },
+  ];
+
+  it('places each reading where the log stood, a pass that logs nothing included', () => {
+    const marks = liveAnalysedMarks(logMarks(log), [
+      { event: 2, at: 1, score: 0.6, semantic: 'signed_outcome' },
+      { event: 3, at: 1, score: 0.55, semantic: 'signed_outcome' },
+      { event: 8, at: 4, score: 0.3, semantic: 'signed_outcome' },
+    ]);
+    expect(marks.map(mark => [mark.key, mark.value])).toEqual([['a', null], ['read-2', 0.6], ['read-3', 0.55], ['b', null], ['c', null], ['d', null], ['read-8', 0.3]]);
+    expect(marks.map(mark => mark.at)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(marks.at(-1)).toMatchObject({ side: 'you', decision: true, turn: 2, label: 'Turn 2 · Your decision, read' });
   });
 });

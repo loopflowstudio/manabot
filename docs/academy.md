@@ -1210,6 +1210,11 @@ heading reads **Analysis by** the policy, and each option on its card and row
 carries the policy's probability and its estimate after it. Nothing is
 chosen, raised or reordered for you, and no key plays the policy's choice.
 
+Turning it on also opens the strip under the board, which draws the policy's
+estimate from your seat at each decision it has read this game, on Review's
+fixed 0–100 axis. The line keeps its points when you turn analysis off and on
+again, and starts over if you switch to another policy.
+
 Academy first replays the game so far with the policy in your seat, which takes
 a few seconds, then reads each new decision once its board is on the table.
 The board never waits for a reading: it arrives in its own message after the
