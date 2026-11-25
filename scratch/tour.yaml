@@ -1,7 +1,21 @@
-at: 832c7434810f3a553b77cf5b11ce294766794f33
+at: 83cdd93faa6b6ea82c2e335a319b1ee45731cbc1
 first:
   - path: docs/engine.md
-    why: Simultaneous entry choices and battlefield copy behavior
+    why: What each viewer sees during a split and what a divided spell retains
+  - path: managym/cards/src/fdn.rs
+    why: Curator defines the inspection on entry
+  - path: managym/cards/src/rna.rs
+    why: Biogenic separates cast-time division from two counter instructions
+  - path: managym/src/flow/play.rs
+    why: Choose the division after targets and before paying
+  - path: managym/src/flow/knowledge.rs
+    why: Preserve face-up witnesses during hidden-world sampling
+  - path: managym/src/agent/effect_execution.rs
+    why: Project pile membership and target shares for the current viewer
+  - path: managym/cards/tests/cards/fdn.rs
+    why: Both pile choices at every split size and after restoring
+  - path: managym/cards/tests/cards/rna.rs
+    why: Lost shares and a copy’s retargeted distribution
   - path: managym/state/src/permanent.rs
     why: The answer belongs to one battlefield incarnation
   - path: managym/state/src/card.rs
@@ -13,7 +27,7 @@ first:
   - path: managym/src/flow/proposed_event.rs
     why: Order entrants, retain answers and commit them together
   - path: managym/src/flow/decision.rs
-    why: Grouped choices and what follows a name
+    why: Private partition, public pile choice and entry choices
   - path: managym/state/src/subtype.rs
     why: All legal creature types
   - path: managym/src/flow/layers.rs
@@ -35,7 +49,7 @@ first:
   - path: managym/cards/tests/cards/neo.rs
     why: Check mana restrictions and suppressed land choices
   - path: tests/semantic/test_text_observation.py
-    why: Play and replay Haven through text and Academy
+    why: Reconnect at the pile choice and replay an announced target share
   - path: managym/README.md
     why: What players can choose for each copy
   - path: managym/cards/src/grn.rs
@@ -49,7 +63,7 @@ first:
   - path: managym/state/src/stack_object.rs
     why: The choices preserved when a spell leaves
   - path: managym/src/flow/resolution.rs
-    why: Count earlier casts and resume each remaining copy
+    why: Read each legal target’s share and resolve counter changes together
   - path: managym/src/flow/retarget.rs
     why: Create copies and announce their final targets
   - path: managym/cards/tests/cards/grn.rs
