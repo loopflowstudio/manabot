@@ -17216,8 +17216,7 @@ fn permanent_details_follow_public_board_and_layer_six_grants() {
     let cadets = s.force_permanent_on_battlefield(0, "Fire Nation Cadets");
     let sire = s.force_permanent_on_battlefield(1, "Sire of Seven Deaths");
     s.force_permanent_on_battlefield(1, "Sokka, Tenacious Tactician");
-    let token =
-        |s: &mut Scenario, key: &str| s.game_mut().create_token(key, PlayerId(1), false).unwrap();
+    let token = |s: &mut Scenario, key: &str| s.game_mut().create_token(key, PlayerId(1)).unwrap();
     let ally = token(&mut s, "token.ally");
     let soldier = token(&mut s, "token.soldier");
     let vanilla = token(&mut s, "token.soldier_1_1_w");

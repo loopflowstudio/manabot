@@ -537,6 +537,9 @@ impl Game {
             }
         }
         for ability in &card_ref.statics {
+            if !self.static_ability_functions(object, ability) {
+                continue;
+            }
             let count = match ability {
                 StaticAbility::CostsLessPerPermanent(predicate) => {
                     self.count_battlefield_matching(player, predicate)
@@ -594,41 +597,42 @@ impl Game {
         // stash, an exact grant's permission, or a static ability.
         let mut any_mana = matches!(cast.route, Some(PlayRoute::ExileCounter(_)))
             || cast.grant(self, object).is_some_and(|grant| grant.any_mana);
-        for (source, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
-            for ability in &view.static_abilities {
-                if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
-                    any_mana |= cast.matches_spell(self, object, predicate);
-                    continue;
-                }
-                if let StaticAbility::SpellsFromOutsideHandCostLess(amount) = ability {
-                    if self.casting_zone(object) != ZoneType::Hand {
-                        cost = cost.reduced_generic(*amount);
-                    }
-                    continue;
-                }
-                if let StaticAbility::SpellsCostLessMana(reduction) = ability {
-                    cost = cost.reduced_by(reduction);
-                    continue;
-                }
-                let StaticAbility::SpellsCostLess(reduction) = ability else {
-                    continue;
-                };
-                if reduction.first_on_own_turn
-                    && (self.active_player() != player
-                        || self.state.turn.spells_cast[player.0].iter().any(|cast| {
-                            self.recorded_cast_matches_predicate(*cast, &reduction.predicate)
-                        }))
-                {
-                    continue;
-                }
-                if cast.matches_spell(self, object, &reduction.predicate)
-                    && self.check_static_condition(&reduction.condition, player)
-                {
-                    let generic = self.static_value(&reduction.generic, source, player);
-                    cost = cost.reduced_generic(u8::try_from(generic.max(0)).unwrap_or(u8::MAX));
-                }
+        self.for_each_functioning_static(Some(player), |_, source, _, _, ability| {
+            if let StaticAbility::SpendAnyManaToCast(predicate) = ability {
+                any_mana |= cast.matches_spell(self, object, predicate);
+                return;
             }
-        }
+            if let StaticAbility::SpellsFromOutsideHandCostLess(amount) = ability {
+                if self.casting_zone(object) != ZoneType::Hand {
+                    cost = cost.reduced_generic(*amount);
+                }
+                return;
+            }
+            if let StaticAbility::SpellsCostLessMana(reduction) = ability {
+                cost = cost.reduced_by(reduction);
+                return;
+            }
+            let StaticAbility::SpellsCostLess(reduction) = ability else {
+                return;
+            };
+            if reduction.first_on_own_turn
+                && (self.active_player() != player
+                    || self.state.turn.spells_cast[player.0].iter().any(|cast| {
+                        self.recorded_cast_matches_predicate(*cast, &reduction.predicate)
+                    }))
+            {
+                return;
+            }
+            if cast.matches_spell(self, object, &reduction.predicate)
+                && self.check_static_condition(&reduction.condition, player)
+            {
+                let generic = source.map_or_else(
+                    || self.controller_value(&reduction.generic, player),
+                    |source| self.static_value(&reduction.generic, source, player),
+                );
+                cost = cost.reduced_generic(u8::try_from(generic.max(0)).unwrap_or(u8::MAX));
+            }
+        });
         Some(if any_mana {
             cost.pay_with_any_mana()
         } else {
@@ -1041,15 +1045,13 @@ impl Game {
             .additional_costs
             .iter()
             .for_each(&mut grant);
-        for (_, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
-            for ability in &view.static_abilities {
-                if let StaticAbility::SpellsHave { predicate, cost } = ability {
-                    if cast.matches_spell(self, object, predicate) {
-                        grant(cost);
-                    }
+        self.for_each_functioning_static(Some(player), |_, _, _, _, ability| {
+            if let StaticAbility::SpellsHave { predicate, cost } = ability {
+                if cast.matches_spell(self, object, predicate) {
+                    grant(cost);
                 }
             }
-        }
+        });
         help
     }
 
@@ -2264,6 +2266,10 @@ impl Game {
         self.state
             .record_activation(permanent_id, ability_index, &ability);
 
+        debug_assert!(
+            ability.granted_by.is_none() || ability.provenance.is_granted(),
+            "attached ability grant must carry Granted provenance"
+        );
         let id = self.state.id_gen_mut().next_id();
         Ok(ActivatedAbilityOnStack {
             target_req_indices: Vec::new(),
@@ -2284,6 +2290,7 @@ impl Game {
             x,
             loyalty_change: ability.loyalty.map(|cost| cost.counter_change(x)),
             granted_by: ability.granted_by,
+            provenance: ability.provenance,
             paid: PaymentReceipt::default(),
         })
     }
@@ -2324,6 +2331,7 @@ impl Game {
             x: 0,
             loyalty_change: None,
             granted_by: None,
+            provenance: crate::state::ability::AbilityProvenance::Characteristic,
             paid: PaymentReceipt::default(),
         })
     }

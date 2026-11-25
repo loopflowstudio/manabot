@@ -116,6 +116,7 @@ fn stack(
                 x: 0,
                 loyalty_change: None,
                 granted_by: None,
+                provenance: crate::state::ability::AbilityProvenance::Characteristic,
                 paid: Default::default(),
             })
         }
@@ -141,6 +142,7 @@ fn stack(
             player: None,
             chosen_modes: Vec::new(),
             inline_effects: Some(effects),
+            provenance: crate::state::ability::AbilityProvenance::Characteristic,
             x: 0,
             spent: Default::default(),
         }),
@@ -725,6 +727,7 @@ fn counter_spell_cannot_affect_an_ability() {
             what: ObjectSelector::Target(TargetSpec::Spell),
             exile: false,
         }]),
+        provenance: crate::state::ability::AbilityProvenance::Characteristic,
         x: 0,
         spent: Default::default(),
     }));
@@ -2901,6 +2904,7 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
     let returned_ref = game.state.now(returned);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        characteristic_set: None,
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3051,6 +3055,7 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let returned_ref = game.state.now(returned);
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        characteristic_set: None,
         exiled_object: returned_ref,
         returns: true,
     });
@@ -3473,6 +3478,7 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     // a source departure whose consequent entry asks a replacement question.
     game.state.exile_links.push(ExileLink {
         source: source_ref,
+        characteristic_set: None,
         exiled_object: returned_ref,
         returns: true,
     });

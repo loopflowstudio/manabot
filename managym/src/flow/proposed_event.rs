@@ -577,8 +577,7 @@ impl EventBatch {
 pub(crate) enum EventBinding {
     None,
     Moved {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        linked: Option<(ObjectId, bool)>,
+        linked: Option<(crate::state::ability::LinkedAbilitySource, bool)>,
         shuffle: bool,
         library_end: Option<crate::state::ability::LibraryEnd>,
         reveal: bool,
@@ -959,7 +958,7 @@ impl Game {
         }
         self.commit_lifelink_gains(results.iter().filter_map(|result| result.lifelink));
         if let EventBinding::Moved {
-            linked: Some((source, returns)),
+            linked: Some((linked_source, returns)),
             ..
         } = batch.binding
         {
@@ -967,7 +966,7 @@ impl Game {
                 if self.state.zones.zone_of(object) != Some(ZoneType::Exile) {
                     continue;
                 }
-                if returns && self.lookup_current_permanent(source).is_err() {
+                if returns && self.lookup_current_permanent(linked_source.creator).is_err() {
                     followups.push(self.zone_move_proposal(
                         object,
                         ZoneType::Battlefield,
@@ -977,7 +976,8 @@ impl Game {
                     self.state
                         .exile_links
                         .push(crate::flow::trigger::ExileLink {
-                            source,
+                            source: linked_source.creator,
+                            characteristic_set: linked_source.characteristic_set,
                             exiled_object: object,
                             returns,
                         });
@@ -1314,21 +1314,9 @@ impl Game {
                     return Vec::new();
                 };
                 let mut out = Vec::new();
-                let ids: Vec<PermanentId> = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|seat| self.iter_battlefield_permanents(seat))
-                    .collect();
-                for (id, view) in self.layer_views(ids.into_iter()) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    let source_controller = permanent.controller;
-                    for (definition_index, effect) in self.state[permanent.object]
-                        .replacement_effects
-                        .iter()
-                        .enumerate()
-                    {
+                self.for_each_functioning_replacement(
+                    super::functioning_abilities::ReplacementSourceOrder::BySeat,
+                    |source, source_controller, definition_index, effect| {
                         if let ReplacementEffect::ExileIfWouldDie {
                             controlled_by,
                             predicate,
@@ -1338,14 +1326,14 @@ impl Game {
                                 && self.permanent_matches_predicate(dying_id, predicate)
                             {
                                 out.push(ReplacementCandidate::printed(
-                                    self.permanent_object(id).expect("battlefield"),
+                                    source,
                                     definition_index,
                                     effect.clone(),
                                 ));
                             }
                         }
-                    }
-                }
+                    },
+                );
                 // Resolved "if it would die this turn, exile it instead" effects
                 // on the dying permanent (CR 614.1a, 616.1).
                 let exile_on_death = ReplacementEffect::ExileIfWouldDie {
@@ -1405,25 +1393,18 @@ impl Game {
                 controller, count, ..
             } if *count > 0 => {
                 let mut out = Vec::new();
-                for (id, view) in self.layer_views(self.iter_battlefield_permanents(*controller)) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                    for (definition_index, effect) in self.state[permanent.object]
-                        .replacement_effects
-                        .iter()
-                        .enumerate()
-                    {
+                self.for_each_functioning_replacement(
+                    super::functioning_abilities::ReplacementSourceOrder::ControlledBy(*controller),
+                    |source, _, definition_index, effect| {
                         if matches!(effect, ReplacementEffect::MultiplyTokens { .. }) {
                             out.push(ReplacementCandidate::printed(
-                                self.permanent_object(id).expect("battlefield"),
+                                source,
                                 definition_index,
                                 effect.clone(),
                             ));
                         }
-                    }
-                }
+                    },
+                );
                 out
             }
 
@@ -1440,31 +1421,12 @@ impl Game {
                 let source_controller = source_facts.map(|(controller, _)| controller);
                 let mut out = Vec::new();
                 // Preserve permanent-slot order while sharing one immutable
-                // board read across the replacement scan.
-                let ids =
-                    self.state
-                        .permanents
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, permanent)| {
-                            permanent.as_ref().map(|_| PermanentId(index))
-                        });
-                for (id, view) in self.layer_views(ids.into_iter()) {
-                    if view.abilities_lost {
-                        continue;
-                    }
-                    let Some(source) = self.permanent_object(id) else {
-                        continue;
-                    };
-                    let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-
-                    let source_side = source_controller == Some(permanent.controller)
-                        && permanent.controller != affected_controller;
-                    for (definition_index, effect) in self.state[permanent.object]
-                        .replacement_effects
-                        .iter()
-                        .enumerate()
-                    {
+                // board read across the replacement scan (CR 702.26b, CR 114.4).
+                self.for_each_functioning_replacement(
+                    super::functioning_abilities::ReplacementSourceOrder::SlotOrder,
+                    |source, controller, definition_index, effect| {
+                        let source_side = source_controller == Some(controller)
+                            && controller != affected_controller;
                         let applies = match effect {
                             ReplacementEffect::PreventCombatDamageToOrFromSelf => {
                                 *combat
@@ -1479,11 +1441,10 @@ impl Game {
                             } => {
                                 (!*creature_source
                                     || source_facts.is_some_and(|(_, creature)| creature))
-                                    && recipient_by
-                                        .includes(permanent.controller, affected_controller)
+                                    && recipient_by.includes(controller, affected_controller)
                                     && (*source_by == Actor::AnyPlayer
                                         || source_controller.is_some_and(|p| {
-                                            source_by.includes(permanent.controller, p)
+                                            source_by.includes(controller, p)
                                         }))
                             }
                             ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
@@ -1496,8 +1457,8 @@ impl Game {
                                 effect.clone(),
                             ));
                         }
-                    }
-                }
+                    },
+                );
                 // A resolved shield on the damaged permanent ("prevent all
                 // combat damage that would be dealt to it this turn") is an
                 // effect record, not one of its abilities, so losing all
@@ -1588,26 +1549,18 @@ impl Game {
                         },
                     ));
                 }
-                // Keep own replacements before battlefield grants. Borrow the
-                // shared characteristics; discovering one entry rule must not
-                // clone every static ability's program on each recheck.
-                let ids = [PlayerId(0), PlayerId(1)]
-                    .into_iter()
-                    .flat_map(|player| self.iter_battlefield_permanents(player));
-                for (id, view) in self.layer_views(ids.into_iter()) {
-                    let Some(source) = self.permanent_object(id) else {
-                        continue;
-                    };
-                    for (definition_index, ability) in view.static_abilities.iter().enumerate() {
+                // Keep own replacements before battlefield/command-zone grants.
+                self.for_each_functioning_static(
+                    None,
+                    |source, _, controller, definition_index, ability| {
                         let predicate = match ability {
                             StaticAbility::EntersTapped(predicate) => predicate,
                             StaticAbility::OpponentsEnterTapped(predicate)
-                                if self.state.permanents[id].as_ref().unwrap().controller
-                                    != entering_controller =>
+                                if controller != entering_controller =>
                             {
                                 predicate
                             }
-                            _ => continue,
+                            _ => return,
                         };
                         if self.entry_matches_predicate(*object_id, entry, predicate) {
                             entries.push(ReplacementCandidate::printed_static(
@@ -1616,8 +1569,8 @@ impl Game {
                                 ReplacementEffect::EntersTapped,
                             ));
                         }
-                    }
-                }
+                    },
+                );
                 entries
             }
             _ => Vec::new(),
@@ -1646,16 +1599,9 @@ impl Game {
             _ => None,
         };
         if let Some((object_id, controller)) = recipient {
-            for (id, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-                if view.abilities_lost {
-                    continue;
-                }
-                let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                for (definition_index, effect) in self.state[permanent.object]
-                    .replacement_effects
-                    .iter()
-                    .enumerate()
-                {
+            self.for_each_functioning_replacement(
+                super::functioning_abilities::ReplacementSourceOrder::ControlledBy(controller),
+                |source, _, definition_index, effect| {
                     let ReplacementEffect::ModifyCounters {
                         kind,
                         predicate,
@@ -1663,7 +1609,7 @@ impl Game {
                         ..
                     } = effect
                     else {
-                        continue;
+                        return;
                     };
                     let matches_object = match event {
                         ProposedEvent::CounterChange { target, .. } => self
@@ -1697,13 +1643,13 @@ impl Game {
                         };
                     if matches_object && matches_kind && matches_cause {
                         candidates.push(ReplacementCandidate::printed(
-                            self.permanent_object(id).expect("battlefield"),
+                            source,
                             definition_index,
                             effect.clone(),
                         ));
                     }
-                }
-            }
+                },
+            );
         }
         candidates
     }

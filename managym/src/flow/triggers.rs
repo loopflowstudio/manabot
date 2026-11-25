@@ -770,6 +770,7 @@ impl Game {
             spent: trigger.spent,
             chosen_modes: trigger.chosen_modes,
             inline_effects: trigger.inline_effects,
+            provenance: trigger.provenance,
         }));
         self.emit(GameEvent::AbilityTriggered {
             source_object: trigger.source_identity.object(),
@@ -1132,8 +1133,13 @@ impl Game {
         {
             let controller = source.controller;
             let source_object = source.object;
-            let (ability_index, granted, program) = match ability {
-                TriggerAbility::Printed(index) => (index, None, false),
+            let (ability_index, granted, program, provenance) = match ability {
+                TriggerAbility::Printed(index) => (
+                    index,
+                    None,
+                    false,
+                    crate::state::ability::AbilityProvenance::Characteristic,
+                ),
                 TriggerAbility::Granted(grant) => {
                     let Ability::Triggered {
                         intervening_if,
@@ -1149,7 +1155,7 @@ impl Game {
                         }],
                         None => effects.clone(),
                     };
-                    (0, Some(inline), grant.program)
+                    (0, Some(inline), grant.program, grant.provenance)
                 }
             };
             let attacker = match event {
@@ -1180,6 +1186,7 @@ impl Game {
                 player,
                 attacker,
                 inline_effects: granted,
+                provenance,
                 program,
                 ..PendingTrigger::new(
                     id,
@@ -1468,27 +1475,19 @@ impl Game {
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
     fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
-        self.static_sources()
-            .filter(|(_, controller, _)| *controller == source.controller)
-            .map(|(_, _, grantor)| {
-                grantor
-                    .static_abilities
-                    .iter()
-                    .filter_map(|ability| match ability {
-                        crate::state::card::StaticAbility::TriggersAdditionalTime(predicate) => {
-                            Some(predicate)
-                        }
-                        _ => None,
-                    })
-                    .filter(|predicate| {
-                        source.lki.as_ref().map_or_else(
-                            || self.object_matches_predicate(source.object, predicate),
-                            |lki| super::layers::matches_departure(lki, predicate),
-                        )
-                    })
-                    .count()
-            })
-            .sum()
+        let mut extra = 0usize;
+        self.for_each_functioning_static(Some(source.controller), |_, _, _, _, ability| {
+            if let crate::state::card::StaticAbility::TriggersAdditionalTime(predicate) = ability {
+                let matches = source.lki.as_ref().map_or_else(
+                    || self.object_matches_predicate(source.object, predicate),
+                    |lki| super::layers::matches_departure(lki, predicate),
+                );
+                if matches {
+                    extra += 1;
+                }
+            }
+        });
+        extra
     }
 
     /// Wait for a delayed triggered ability's event (CR 603.7).
@@ -1752,6 +1751,7 @@ impl Game {
             .filter(|ability| {
                 let Ability::Triggered { condition, .. } = ability;
                 *condition == TriggerCondition::YouCastThis
+                    && self.trigger_condition_functions(object, condition)
             })
             .map(|ability| ability.effects().to_vec())
             .collect();
@@ -1799,12 +1799,15 @@ impl Game {
             {
                 for (ability_index, ability) in self.state[object].abilities.iter().enumerate() {
                     let Ability::Triggered {
-                        condition: TriggerCondition::InGraveyard { condition },
+                        condition: full @ TriggerCondition::InGraveyard { condition },
                         ..
                     } = ability
                     else {
                         continue;
                     };
+                    if !self.trigger_condition_functions(object, full) {
+                        continue;
+                    }
                     let Some((leaf, once)) =
                         self.match_trigger_wrappers(condition, event, object, owner)
                     else {
@@ -1937,34 +1940,39 @@ impl Game {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.trigger_indexes += 1);
         let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views(
-                (0..self.state.permanents.len())
-                    .map(PermanentId)
-                    .filter(|&id| !self.is_phased_out(id)),
-            )
+            .layer_views(self.functioning_permanents())
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
+                let object = permanent.object;
                 TriggerSourceEntry {
-                    object: permanent.object,
+                    object,
                     command_controller: None,
                     kinds: view.triggered_abilities.iter().fold(
                         EventKinds::NONE,
                         |kinds, grant| {
                             let Ability::Triggered { condition, .. } = &grant.ability;
-                            kinds | condition_event_kinds(condition)
+                            if self.trigger_condition_functions(object, condition) {
+                                kinds | condition_event_kinds(condition)
+                            } else {
+                                kinds
+                            }
                         },
                     ),
                 }
             })
             .collect();
-        sources.extend(self.emblems().map(|(controller, object)| {
+        sources.extend(self.functioning_command_objects().map(|(controller, object)| {
             let kinds =
                 self.state[object]
                     .abilities
                     .iter()
                     .fold(EventKinds::NONE, |kinds, ability| {
                         let Ability::Triggered { condition, .. } = ability;
-                        kinds | condition_event_kinds(condition)
+                        if self.trigger_condition_functions(object, condition) {
+                            kinds | condition_event_kinds(condition)
+                        } else {
+                            kinds
+                        }
                     });
             TriggerSourceEntry {
                 object,

@@ -1036,8 +1036,8 @@ impl<'a> Projection<'a> {
                 reveal,
             } => {
                 self.field("bind moved", &(shuffle, library_end, reveal));
-                if let Some((source, returns)) = linked {
-                    self.object("linked source", *source);
+                if let Some((linked_source, returns)) = linked {
+                    self.object("linked source", linked_source.creator);
                     self.field("linked return", returns);
                 }
             }
@@ -1778,7 +1778,7 @@ pub(crate) fn project_decision(
                     out.object_id("cast from library", *object_id)
                 }
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
-                    out.object("exiled with", *source);
+                    out.object("exiled with", source.creator);
                     out.field("cast predicate", predicate);
                 }
             }

@@ -297,51 +297,81 @@ impl Game {
         let mut land_plays_each_player = 0;
         let mut play_permissions: [StaticPlayPermissions; 2] = Default::default();
         let mut dynamic_activations = false;
+        let apply_play_static =
+            |ability: &StaticAbility,
+             object_id: ObjectId,
+             public_id: crate::state::game_object::PublicId,
+             permissions: &mut StaticPlayPermissions,
+             land_plays_each_player: &mut u32,
+             dynamic_activations: &mut bool| match ability {
+                StaticAbility::AdditionalLandPlayEachPlayer => *land_plays_each_player += 1,
+                StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
+                StaticAbility::PlayUnownedExiledWithCounter(kind) => {
+                    if !permissions.exile_counter_plays.contains(kind) {
+                        permissions.exile_counter_plays.push(*kind)
+                    }
+                }
+                StaticAbility::PlayGraveyardByPermanentType => permissions
+                    .graveyard_type_sources
+                    .push((object_id, public_id)),
+                StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
+                StaticAbility::CastFromHandWithoutManaCost => permissions.free_from_hand = true,
+                StaticAbility::OpponentsCastOnlyFromHand => permissions.opponents_hand_only = true,
+                StaticAbility::GraveyardSpellsHaveFlashback => {
+                    permissions.graveyard_flashback = true
+                }
+                StaticAbility::CastFromLibraryTop(predicate) => {
+                    permissions.library_spells.push(predicate.clone())
+                }
+                StaticAbility::CastSpellsAsThoughFlash(predicate) => {
+                    permissions.flash_spells.push(predicate.clone())
+                }
+                StaticAbility::ActivatedAbilitiesCostLess { .. } => {
+                    *dynamic_activations = true;
+                }
+                _ => {}
+            };
         for (id, object) in context.objects {
             dynamic_activations = dynamic_activations || object.view.has_dynamic_activations();
-            if !object.view.static_abilities.is_empty() && !self.is_phased_out(id) {
+            if !object.view.static_abilities.is_empty() && self.permanent_abilities_function(id) {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 let controller = permanent.controller;
                 let permissions = &mut play_permissions[controller.0];
                 for ability in &object.view.static_abilities {
-                    match ability {
-                        StaticAbility::Restriction(rule) => {
-                            restrictions.push((id, controller, rule.clone()))
-                        }
-                        StaticAbility::AdditionalLandPlayEachPlayer => land_plays_each_player += 1,
-                        StaticAbility::AdditionalLandPlay => permissions.extra_land_plays += 1,
-                        StaticAbility::PlayUnownedExiledWithCounter(kind) => {
-                            if !permissions.exile_counter_plays.contains(kind) {
-                                permissions.exile_counter_plays.push(*kind)
-                            }
-                        }
-                        StaticAbility::PlayGraveyardByPermanentType => permissions
-                            .graveyard_type_sources
-                            .push((permanent.object, permanent.id)),
-                        StaticAbility::LookAtLibraryTop => permissions.look_at_top = true,
-                        StaticAbility::CastFromHandWithoutManaCost => {
-                            permissions.free_from_hand = true
-                        }
-                        StaticAbility::OpponentsCastOnlyFromHand => {
-                            permissions.opponents_hand_only = true
-                        }
-                        StaticAbility::GraveyardSpellsHaveFlashback => {
-                            permissions.graveyard_flashback = true
-                        }
-                        StaticAbility::CastFromLibraryTop(predicate) => {
-                            permissions.library_spells.push(predicate.clone())
-                        }
-                        StaticAbility::CastSpellsAsThoughFlash(predicate) => {
-                            permissions.flash_spells.push(predicate.clone())
-                        }
-                        StaticAbility::ActivatedAbilitiesCostLess { .. } => {
-                            dynamic_activations = true;
-                        }
-                        _ => {}
+                    if !self.static_ability_functions(permanent.object, ability) {
+                        continue;
+                    }
+                    if let StaticAbility::Restriction(rule) = ability {
+                        restrictions.push((id, controller, rule.clone()));
+                    } else {
+                        apply_play_static(
+                            ability,
+                            permanent.object,
+                            permanent.id,
+                            permissions,
+                            &mut land_plays_each_player,
+                            &mut dynamic_activations,
+                        );
                     }
                 }
             }
             objects[id.0] = Some(object.view.clone());
+        }
+        for (controller, object) in self.functioning_command_objects() {
+            let permissions = &mut play_permissions[controller.0];
+            let record = &self.state[object];
+            for ability in &record.statics {
+                if self.static_ability_functions(object, ability) {
+                    apply_play_static(
+                        ability,
+                        object,
+                        record.id,
+                        permissions,
+                        &mut land_plays_each_player,
+                        &mut dynamic_activations,
+                    );
+                }
+            }
         }
         for permissions in &mut play_permissions {
             permissions.extra_land_plays += land_plays_each_player;
@@ -514,15 +544,13 @@ impl Game {
         view: &Characteristics,
     ) -> u8 {
         let mut total = 0u8;
-        for (_, source) in self.layer_views(self.iter_battlefield_permanents(controller)) {
-            for ability in &source.static_abilities {
-                if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
-                    if matches_view(self, id, predicate, view, None) {
-                        total = total.saturating_add(*generic);
-                    }
+        self.for_each_functioning_static(Some(controller), |_, _, _, _, ability| {
+            if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
+                if matches_view(self, id, predicate, view, None) {
+                    total = total.saturating_add(*generic);
                 }
             }
-        }
+        });
         total
     }
     pub(super) fn layer_state_condition(
@@ -556,7 +584,12 @@ impl Game {
             .object(object_id)
             .unwrap_or_else(|_| self.state.entry_object(object_id));
         let printed = (object.power.unwrap_or(0), object.toughness.unwrap_or(0));
-        let Some((cda, sets_toughness)) = object.pt_cda() else {
+        let Some((cda, sets_toughness)) = object.pt_cda().filter(|_| {
+            self.object_ability_functions(
+                object_id,
+                crate::flow::functioning_abilities::FunctionZones::AllZones,
+            )
+        }) else {
             return printed;
         };
         let controller = self
@@ -817,42 +850,26 @@ impl Game {
         }
     }
 
-    pub(crate) fn static_sources(
-        &self,
-    ) -> impl Iterator<Item = (PermanentId, PlayerId, Arc<Characteristics>)> + '_ {
-        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
-            .filter(|(_, view)| !view.static_abilities.is_empty())
-            .map(|(id, view)| {
-                (
-                    id,
-                    self.state.permanents[id].as_ref().unwrap().controller,
-                    view,
-                )
-            })
-    }
     pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
         let mut keywords = self.state[object].keywords;
         // Mana spent on the spell can give it a keyword (CR 106.6).
         if let Some(spell) = self.spell_on_stack(object) {
             keywords = keywords.union(spell.spent.keywords_gained());
         }
-        for (_, owner, view) in self.static_sources() {
-            for ability in &view.static_abilities {
-                if let StaticAbility::KeywordGrant(grant) = ability {
-                    if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
-                        if owner == controller
-                            && self.object_matches_predicate(object, predicate)
-                            && grant
-                                .condition
-                                .as_ref()
-                                .is_none_or(|c| self.check_static_condition(c, controller))
-                        {
-                            keywords = keywords.union(grant.keywords);
-                        }
+        self.for_each_functioning_static(Some(controller), |_, _, _, _, ability| {
+            if let StaticAbility::KeywordGrant(grant) = ability {
+                if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
+                    if self.object_matches_predicate(object, predicate)
+                        && grant
+                            .condition
+                            .as_ref()
+                            .is_none_or(|c| self.check_static_condition(c, controller))
+                    {
+                        keywords = keywords.union(grant.keywords);
                     }
                 }
             }
-        }
+        });
         keywords
     }
     pub(crate) fn static_scope_applies(
@@ -1017,9 +1034,12 @@ impl Game {
                 .iter()
                 .any(|predicate| cast.matches_spell(self, object, predicate))
             || (spell.types.is_creature() && self.has_next_creature_cast_flash(player))
-            || spell
-                .flash_if()
-                .is_some_and(|condition| self.check_static_condition(condition, player))
+            || spell.flash_if().is_some_and(|condition| {
+                self.object_ability_functions(
+                    object,
+                    crate::flow::functioning_abilities::FunctionZones::Casting,
+                ) && self.check_static_condition(condition, player)
+            })
     }
 
     /// Answer a game-state condition for `controller` ("you"): statics and

@@ -473,10 +473,8 @@ impl Game {
             StepKind::Cleanup => {
                 let player = self.active_player();
                 let unlimited = self.has_no_maximum_hand_size_effect(player)
-                    || self.battlefield_permanents(player).iter().any(|id| {
-                        self.characteristics(*id)
-                            .static_abilities
-                            .contains(&StaticAbility::NoMaximumHandSize)
+                    || self.has_functioning_static(Some(player), |ability| {
+                        matches!(ability, StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited && self.state.zones.size(ZoneType::Hand, player) > 7 {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {

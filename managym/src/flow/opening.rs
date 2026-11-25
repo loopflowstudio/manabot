@@ -121,10 +121,11 @@ impl Game {
             .zone_objects(ZoneType::Hand, player)
             .iter()
             .copied()
-            .filter(|id| {
-                self.state[*id]
-                    .statics
-                    .contains(&crate::state::card::StaticAbility::BeginOnBattlefield)
+            .filter(|&id| {
+                self.state[id].statics.iter().any(|ability| {
+                    matches!(ability, crate::state::card::StaticAbility::BeginOnBattlefield)
+                        && self.static_ability_functions(id, ability)
+                })
             })
     }
 

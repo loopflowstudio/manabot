@@ -218,12 +218,8 @@ impl Game {
             return 0;
         }
         if delta > 0
-            && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
-                self.layer_views(self.iter_battlefield_permanents(owner))
-                    .any(|(_, view)| {
-                        view.static_abilities
-                            .contains(&StaticAbility::PlayersCantGainLife)
-                    })
+            && self.has_functioning_static(None, |ability| {
+                matches!(ability, StaticAbility::PlayersCantGainLife)
             })
         {
             return 0;

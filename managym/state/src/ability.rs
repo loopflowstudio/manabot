@@ -3365,6 +3365,79 @@ pub enum AbilityOrigin {
     Object(ObjectId),
 }
 
+/// CR 607.1 / 607.5: whether an ability comes from its object's own printed or
+/// Layer-1 copiable characteristic set, or was granted by a Layer-6 continuous
+/// effect. Layer-6 granted abilities never pair with printed linked abilities.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum AbilityProvenance {
+    /// Printed on the object's face or copied onto it in Layer 1.
+    #[default]
+    Characteristic,
+    /// Granted by a Layer-6 continuous effect.
+    Granted,
+}
+
+impl AbilityProvenance {
+    pub fn is_characteristic(&self) -> bool {
+        *self == Self::Characteristic
+    }
+
+    pub fn is_granted(&self) -> bool {
+        *self == Self::Granted
+    }
+
+    pub fn from_origin(origin: AbilityOrigin) -> Self {
+        match origin {
+            AbilityOrigin::Own => Self::Characteristic,
+            AbilityOrigin::Effect(_)
+            | AbilityOrigin::Counter
+            | AbilityOrigin::Permanent(_)
+            | AbilityOrigin::Object(_) => Self::Granted,
+        }
+    }
+}
+
+/// CR 607.1a/d, 607.5: the exact creating object and characteristic set
+/// latched onto a linked exile record or emblem.
+///
+/// Characteristic abilities latch `characteristic_set: Some(def_id)`. Layer-6
+/// granted abilities latch `characteristic_set: None` and fail closed on
+/// linked reads so they never pair with a permanent's printed linked abilities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct LinkedAbilitySource {
+    #[serde(serialize_with = "crate::game_object::exact")]
+    pub creator: ObjectId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub characteristic_set: Option<crate::card::CardDefId>,
+}
+
+impl LinkedAbilitySource {
+    pub const fn characteristic(
+        creator: ObjectId,
+        characteristic_set: crate::card::CardDefId,
+    ) -> Self {
+        Self {
+            creator,
+            characteristic_set: Some(characteristic_set),
+        }
+    }
+
+    pub const fn granted(creator: ObjectId) -> Self {
+        Self {
+            creator,
+            characteristic_set: None,
+        }
+    }
+
+    /// CR 607.1a/d, 607.5: two abilities pair only when both belong to the
+    /// same object's characteristic set. Any granted side (`None`) fails closed.
+    pub fn pairs_with(self, other: Self) -> bool {
+        self.creator == other.creator
+            && self.characteristic_set.is_some()
+            && self.characteristic_set == other.characteristic_set
+    }
+}
+
 /// Effective triggered ability with the provenance needed after its source leaves.
 /// Catalog grants have retained input joins; a continuous-effect program does not.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -3372,6 +3445,10 @@ pub struct EffectiveTrigger {
     /// Battlefield inspection uses the live origin before this trigger leaves play.
     #[serde(skip)]
     pub origin: AbilityOrigin,
+    /// CR 607.5: whether this trigger came from its source's characteristic
+    /// set or was granted in Layer 6.
+    #[serde(skip)]
+    pub provenance: AbilityProvenance,
     /// Grant timestamp, static ability slot and inherited ability slot for a once-per-turn clock.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clock: Option<GrantClock>,

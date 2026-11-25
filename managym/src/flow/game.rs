@@ -210,12 +210,16 @@ impl GameState {
         self.zones.latest().zip(self.objects.iter())
     }
 
-    /// Cards still in the exile appearances produced by this source's moves.
-    pub(crate) fn exiled_with(&self, source: ObjectId) -> impl Iterator<Item = ObjectId> + '_ {
+    /// Cards still in the exile appearances linked to `source` (CR 607.1a/d, 607.5).
+    /// Fails closed when `source.characteristic_set` is `None` (Layer-6 granted ability).
+    pub(crate) fn exiled_with(
+        &self,
+        source: crate::state::ability::LinkedAbilitySource,
+    ) -> impl Iterator<Item = ObjectId> + '_ {
         self.exile_links
             .iter()
             .filter(move |link| {
-                link.source == source
+                link.linked_source().pairs_with(source)
                     && self.zones.zone_of(link.exiled_object) == Some(ZoneType::Exile)
             })
             .map(|link| link.exiled_object)

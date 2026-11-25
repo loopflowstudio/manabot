@@ -419,32 +419,49 @@ impl Game {
             .find_map(|object| self.lookup_current_permanent(object).ok())
     }
 
-    pub(crate) fn create_emblem(&mut self, key: &str, controller: PlayerId) {
+    #[cfg(test)]
+    pub(crate) fn create_emblem(&mut self, key: &str, controller: PlayerId) -> ObjectId {
+        self.create_emblem_from(key, controller, None)
+    }
+
+    pub(crate) fn create_emblem_from(
+        &mut self,
+        key: &str,
+        controller: PlayerId,
+        source: Option<crate::state::ability::LinkedAbilitySource>,
+    ) -> ObjectId {
         let id = self.state.id_gen_mut().next_id();
-        let emblem = default_content_pack()
+        let mut emblem = default_content_pack()
             .instantiate_emblem(key, controller, id)
             .expect("registered emblem");
+        if let Some(source) = source {
+            emblem.set_emblem_source(source);
+        }
         let object = self.add_object(emblem);
         self.state
             .place_object(object, controller, ZoneType::Command);
         self.capture_object_move(object, None, Some(ZoneType::Command), controller);
+        object
     }
 
     /// CR 114.4. Only emblems in the command zone contribute these abilities.
     pub(crate) fn emblems(&self) -> impl Iterator<Item = (PlayerId, ObjectId)> + '_ {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|controller| {
-                self.state
-                    .zones
-                    .zone_objects(ZoneType::Command, controller)
-                    .iter()
-                    .copied()
-                    .filter(|&object| {
-                        self.state[object].kind() == crate::state::game_object::ObjectKind::Emblem
-                    })
-                    .map(move |object| (controller, object))
+        self.functioning_command_objects()
+    }
+
+    /// Emblems in the command zone paired with `source` under CR 607.1a/d, 607.5.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn emblems_linked_to(
+        &self,
+        source: crate::state::ability::LinkedAbilitySource,
+    ) -> impl Iterator<Item = ObjectId> + '_ {
+        self.functioning_command_objects()
+            .filter(move |&(_, object)| {
+                self.state[object]
+                    .emblem_source()
+                    .is_some_and(|emblem_source| emblem_source.pairs_with(source))
             })
+            .map(|(_, object)| object)
     }
 
     pub(crate) fn prepare_token(&mut self, key: &str, controller: PlayerId) -> Option<ObjectId> {

@@ -3442,15 +3442,18 @@ impl Game {
         }
     }
 
-    /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
+    /// Whether `player` controls a permanent or emblem replacing mana loss (CR 614.1a).
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
-        self.iter_battlefield_permanents(player).any(|id| {
-            self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state[permanent.object]
-                    .replacement_effects
-                    .contains(&ReplacementEffect::UnspentManaBecomesRed)
-            }) && !self.characteristics(id).abilities_lost
-        })
+        let mut found = false;
+        self.for_each_functioning_replacement(
+            crate::flow::functioning_abilities::ReplacementSourceOrder::ControlledBy(player),
+            |_, _, _, effect| {
+                if matches!(effect, ReplacementEffect::UnspentManaBecomesRed) {
+                    found = true;
+                }
+            },
+        );
+        found
     }
 }
 

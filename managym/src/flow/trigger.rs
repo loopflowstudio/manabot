@@ -96,6 +96,9 @@ pub struct PendingTrigger {
     /// their effects inline instead of referencing `Object::abilities`
     /// (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
+    /// CR 607.5: whether this trigger came from its source's characteristic
+    /// set or was granted in Layer 6.
+    pub provenance: crate::state::ability::AbilityProvenance,
 }
 
 /// A delayed triggered ability (CR 603.7) waiting for its event. It fires
@@ -188,6 +191,11 @@ pub enum DelayedTriggerEvent {
 pub struct ExileLink {
     #[serde(serialize_with = "crate::state::game_object::exact")]
     pub source: ObjectId,
+    /// CR 607.1a/d, 607.5: the characteristic set latched when the link was
+    /// created (`None` when created by a Layer-6 granted ability, which fails
+    /// closed against printed linked abilities).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub characteristic_set: Option<crate::state::card::CardDefId>,
     /// The appearance found by the exiling effect (CR 400.7j), not any
     /// later appearance of the same physical card.
     /// V16 recorded a row here, so its bytes keep the slot alone.
@@ -196,6 +204,15 @@ pub struct ExileLink {
     /// The card returns as the source leaves the battlefield.
     #[serde(skip_serializing_if = "is_true")]
     pub returns: bool,
+}
+
+impl ExileLink {
+    pub fn linked_source(&self) -> crate::state::ability::LinkedAbilitySource {
+        crate::state::ability::LinkedAbilitySource {
+            creator: self.source,
+            characteristic_set: self.characteristic_set,
+        }
+    }
 }
 
 fn is_true(value: &bool) -> bool {
@@ -218,6 +235,7 @@ impl PendingTrigger {
             source_lki: None,
             ordering_class: TriggerOrderingClass::Ordinary,
             inline_effects: None,
+            provenance: crate::state::ability::AbilityProvenance::Characteristic,
             program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
@@ -310,6 +328,9 @@ impl serde::Serialize for PendingTrigger {
             map.serialize_entry("modes_chosen", &true)?;
         }
         map.serialize_entry("inline_effects", &self.inline_effects)?;
+        if !self.provenance.is_characteristic() {
+            map.serialize_entry("provenance", &self.provenance)?;
+        }
         map.end()
     }
 }

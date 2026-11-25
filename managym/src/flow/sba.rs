@@ -52,11 +52,9 @@ impl Game {
     }
 
     pub(crate) fn protected_from_loss(&self, player: PlayerId) -> bool {
-        self.layer_views(self.iter_battlefield_permanents(player))
-            .any(|(_, view)| {
-                view.static_abilities
-                    .contains(&StaticAbility::CantLoseAndOpponentsCantWin)
-            })
+        self.has_functioning_static(Some(player), |ability| {
+            matches!(ability, StaticAbility::CantLoseAndOpponentsCantWin)
+        })
     }
 
     pub fn lose_game(&mut self, player: PlayerId) {

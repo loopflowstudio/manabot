@@ -227,6 +227,10 @@ pub struct EffectFrame {
     pub ability: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ability_face: Option<crate::state::card::CardDefId>,
+    /// CR 607.5: whether the resolving ability belongs to its source's
+    /// characteristic set or was granted in Layer 6.
+    #[serde(skip_serializing_if = "crate::state::ability::AbilityProvenance::is_characteristic")]
+    pub ability_provenance: crate::state::ability::AbilityProvenance,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub completion: FrameCompletion,
@@ -296,6 +300,7 @@ impl EffectFrame {
             grantor: None,
             ability: None,
             ability_face: None,
+            ability_provenance: crate::state::ability::AbilityProvenance::Characteristic,
             queue: effects.into(),
             completion: FrameCompletion::Priority,
         }
@@ -324,6 +329,7 @@ impl EffectFrame {
             grantor: self.grantor,
             ability: self.ability,
             ability_face: self.ability_face,
+            ability_provenance: self.ability_provenance,
             ..Self::new(self.controller, effects)
         }
     }
@@ -415,10 +421,9 @@ pub enum ResolutionCastOffer {
         object: ObjectId,
     },
     /// Cards matching `predicate` the deciding player owns that are exiled
-    /// with the exact `source` (Boiling Rock Rioter).
+    /// with the exact linked `source` (Boiling Rock Rioter, CR 607).
     ExiledWith {
-        #[serde(serialize_with = "crate::state::game_object::exact")]
-        source: ObjectId,
+        source: crate::state::ability::LinkedAbilitySource,
         predicate: CardPredicate,
     },
     /// Exact appearances exiled together, cast in the chooser's order.

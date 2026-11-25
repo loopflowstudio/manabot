@@ -495,15 +495,14 @@ impl Game {
         if self.spell_on_stack(object).is_none() {
             return;
         }
-        if self.state[object]
-            .statics
-            .iter()
-            .any(|ability| matches!(ability, StaticAbility::CantBeCountered))
-            || self
-                .state
-                .effects
-                .on(object)
-                .any(|effect| effect.modification == Modification::CantBeCountered)
+        if self.state[object].statics.iter().any(|ability| {
+            matches!(ability, StaticAbility::CantBeCountered)
+                && self.static_ability_functions(object, ability)
+        }) || self
+            .state
+            .effects
+            .on(object)
+            .any(|effect| effect.modification == Modification::CantBeCountered)
         {
             return;
         }
@@ -512,6 +511,40 @@ impl Game {
             object_id: object,
             by,
         });
+    }
+
+    /// CR 607.1a/d, 607.5: latch `{ creator, characteristic_set }` onto a linked
+    /// exile record or emblem. Characteristic abilities latch their object's
+    /// characteristic set; Layer-6 granted abilities latch `characteristic_set: None`.
+    pub(crate) fn latch_linked_ability_source(
+        &self,
+        frame: &EffectFrame,
+    ) -> Option<crate::state::ability::LinkedAbilitySource> {
+        let creator = frame.source_ref()?;
+        if frame.ability_provenance.is_granted() {
+            return Some(crate::state::ability::LinkedAbilitySource::granted(creator));
+        }
+        let characteristic_set = frame
+            .ability_face
+            .or_else(|| self.observed_source_definition(creator))
+            .unwrap_or_else(|| self.state.source_base(creator).0);
+        Some(crate::state::ability::LinkedAbilitySource::characteristic(
+            creator,
+            characteristic_set,
+        ))
+    }
+
+    /// CR 607.1a/d, 607.5: linked-ability identity for reading linked records.
+    /// Layer-6 granted abilities fail closed (`None`) instead of pairing with
+    /// the permanent's printed linked abilities.
+    pub(crate) fn frame_linked_ability_source(
+        &self,
+        frame: &EffectFrame,
+    ) -> Option<crate::state::ability::LinkedAbilitySource> {
+        if frame.ability_provenance.is_granted() {
+            return None;
+        }
+        self.latch_linked_ability_source(frame)
     }
 
     /// The face an ability on the stack came from: the card as it stands
@@ -569,6 +602,7 @@ impl Game {
             targets,
             attached: ability.attached,
             grantor: ability.granted_by.map(|grant| grant.grantor),
+            ability_provenance: ability.provenance,
             ..EffectFrame::new(
                 ability.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -620,6 +654,7 @@ impl Game {
             triggering_player: triggered.player,
             ability,
             ability_face: ability.map(|_| triggered.source_definition_id),
+            ability_provenance: triggered.provenance,
             ..EffectFrame::new(
                 triggered.controller,
                 crate::state::ability::bind_effect_clauses(effects),
@@ -1088,7 +1123,8 @@ impl Game {
                 frame.batch = Some(self.event_batch(
                     EventBinding::Moved {
                         linked: linked.and_then(|linked| {
-                            source.map(|source| (source, linked == LinkedExile::UntilSourceLeaves))
+                            self.latch_linked_ability_source(frame)
+                                .map(|source| (source, linked == LinkedExile::UntilSourceLeaves))
                         }),
                         shuffle: *to == ZoneType::Library && library_end.is_none(),
                         library_end: *library_end,
@@ -2131,7 +2167,8 @@ impl Game {
                 None
             }
             Effect::CreateEmblem { key } => {
-                self.create_emblem(key, frame.controller);
+                let source = self.latch_linked_ability_source(frame);
+                self.create_emblem_from(key, frame.controller, source);
                 None
             }
             Effect::CreateToken {
@@ -2209,7 +2246,7 @@ impl Game {
                 })
             }
             Effect::ChooseExiledWithSource { predicate } => {
-                let source = frame.source_ref()?;
+                let source = self.frame_linked_ability_source(frame)?;
                 let modes: Vec<Vec<Effect>> = self
                     .state
                     .exiled_with(source)
@@ -2587,11 +2624,12 @@ impl Game {
                 None
             }
             Effect::CastExiledWithSource { predicate } => {
+                let source = self.frame_linked_ability_source(frame)?;
                 let decision = Decision::CastDuringResolution {
                     player: frame.controller,
                     paid: true,
                     offer: ResolutionCastOffer::ExiledWith {
-                        source: frame.source_ref()?,
+                        source,
                         predicate: predicate.clone(),
                     },
                     spends: None,
@@ -2732,8 +2770,8 @@ impl Game {
                 out.reverse();
                 out
             }
-            ObjectSelector::ExiledWithSource => frame
-                .source_ref()
+            ObjectSelector::ExiledWithSource => self
+                .frame_linked_ability_source(frame)
                 .map_or_else(Vec::new, |source| self.state.exiled_with(source).collect()),
             ObjectSelector::Attached => permanent(self.frame_attached(frame)),
             ObjectSelector::CreatedThisWay => frame

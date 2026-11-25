@@ -545,7 +545,7 @@ impl<'a> Context<'a> {
             known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
             // A phased-out permanent's static abilities apply to nothing
             // (CR 702.26b); its own view still takes the records on it.
-            if !game.is_phased_out(id) {
+            if game.permanent_abilities_function(id) {
                 for node in &seed.nodes {
                     push_node(&mut context.reads, &mut nodes, node.clone());
                 }
@@ -587,9 +587,12 @@ impl<'a> Context<'a> {
                 ));
             }
         }
-        for (_, source) in game.emblems() {
+        for (_, source) in game.functioning_command_objects() {
             let emblem = &game.state[source];
             for (index, ability) in emblem.statics.iter().enumerate() {
+                if !game.static_ability_functions(source, ability) {
+                    continue;
+                }
                 let entry = StaticEntry {
                     origin: AbilityOrigin::Object(source),
                     key: vec![usize::MAX, index, source.slot()],
@@ -697,6 +700,7 @@ impl<'a> Context<'a> {
                     .cloned()
                     .map(|ability| EffectiveTrigger {
                         origin: AbilityOrigin::Own,
+                        provenance: crate::state::ability::AbilityProvenance::Characteristic,
                         clock: None,
                         ability,
                         program: false,
@@ -781,15 +785,16 @@ impl<'a> Context<'a> {
         // Occurrence provenance preserves duplicate grants, including statics
         // discovered during layer 6 that start applying in a later layer.
         for (&id, object) in &self.objects {
-            if self.game.is_phased_out(id) {
+            if !self.game.permanent_abilities_function(id) {
                 continue;
             }
+            let source = self.game.live_permanent(id).object;
             for entry in &object.statics {
+                if !self.game.static_ability_functions(source, &entry.ability) {
+                    continue;
+                }
                 if known.insert(entry.key.clone()) {
-                    if let Some(node) = self.node(
-                        NodeSource::permanent(self.game.live_permanent(id).object, id),
-                        entry,
-                    ) {
+                    if let Some(node) = self.node(NodeSource::permanent(source, id), entry) {
                         push_node(&mut self.reads, nodes, node);
                     }
                 }
@@ -1418,6 +1423,7 @@ impl<'a> Context<'a> {
                     grantor: source.object,
                     index,
                 });
+                granted.provenance = crate::state::ability::AbilityProvenance::Granted;
                 add(
                     Layer::Ability,
                     Modification::GrantActivated(Box::new(granted)),
@@ -1490,12 +1496,20 @@ impl<'a> Context<'a> {
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
-                        view.activated_abilities
-                            .extend(definition.activated_abilities.clone());
+                        view.activated_abilities.extend(
+                            definition.activated_abilities.iter().cloned().map(
+                                |mut ability| {
+                                    ability.provenance =
+                                        crate::state::ability::AbilityProvenance::Granted;
+                                    ability
+                                },
+                            ),
+                        );
                         view.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
                                     origin,
+                                    provenance: crate::state::ability::AbilityProvenance::Granted,
                                     clock: clock(&ability, index),
                                     ability,
                                     program: false,
@@ -1507,6 +1521,7 @@ impl<'a> Context<'a> {
                 Operation::CatalogTrigger(ability) => {
                     view.triggered_abilities.push(EffectiveTrigger {
                         origin,
+                        provenance: crate::state::ability::AbilityProvenance::Granted,
                         clock: clock(ability, 0),
                         ability: (**ability).clone(),
                         program: false,
@@ -1612,17 +1627,21 @@ impl<'a> Context<'a> {
                         view.firebending = view.firebending.saturating_add(*n);
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
+                            provenance: crate::state::ability::AbilityProvenance::Granted,
                             clock: None,
                             ability: Ability::firebending(*n),
                             program: true,
                         });
                     }
                     Modification::GrantActivated(ability) => {
-                        view.activated_abilities.push((**ability).clone())
+                        let mut granted = (**ability).clone();
+                        granted.provenance = crate::state::ability::AbilityProvenance::Granted;
+                        view.activated_abilities.push(granted);
                     }
                     Modification::GrantTriggered(ability) => {
                         view.triggered_abilities.push(EffectiveTrigger {
                             origin,
+                            provenance: crate::state::ability::AbilityProvenance::Granted,
                             clock: clock(ability, 0),
                             ability: (**ability).clone(),
                             program: true,
@@ -1633,6 +1652,7 @@ impl<'a> Context<'a> {
                             view.ward = Some(cost.clone());
                             view.triggered_abilities.push(EffectiveTrigger {
                                 origin,
+                                provenance: crate::state::ability::AbilityProvenance::Granted,
                                 clock: None,
                                 ability: Ability::ward(cost.clone()),
                                 program: true,
