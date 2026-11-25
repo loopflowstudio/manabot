@@ -1882,7 +1882,9 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         }
     }
 
-    // SpendEffect and ManaExpiry are preserved and never collapsed together.
+    // In pure feasibility search (`PaymentSearch`), unrestricted classes
+    // differing only in `SpendEffect` or `ManaExpiry` collapse together;
+    // `SourceClassCache` (for player-visible offers) keeps them distinct.
     let mut rider_sources = vec![
         source(
             0,
@@ -1917,8 +1919,69 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         sources: Arc::new(std::mem::take(&mut rider_sources)),
         life: 20,
     };
-    let mut rider_search = PaymentSearch::new(&[pay("U")]);
-    assert!(rider_search.groups(&rider_model).is_empty());
+    let obligations = [pay("U")];
+    let mut rider_search = PaymentSearch::new(&obligations);
+    assert_eq!(
+        rider_search.groups_for(&rider_model, &obligations),
+        vec![vec![0, 1, 2]]
+    );
+
+    let mut exact_cache = super::SourceClassCache::<usize>::new(&rider_model, &obligations, &[]);
+    for i in 0..3 {
+        assert!(exact_cache.get(i, 0).is_none());
+        exact_cache.insert(i, 0, i);
+    }
+}
+
+#[test]
+fn feasibility_projection_collapses_mixed_expiry_and_spend_effects_with_witness_parity() {
+    use crate::state::card::Keyword;
+    use crate::state::mana::{ManaClass, ManaExpiry};
+    use crate::state::predicate::CardPredicate;
+
+    let mut mixed_pool = Mana::parse("R");
+    mixed_pool.add(&Mana::parse("RRRGGG").with_expiry(ManaExpiry::EndOfTurn));
+    mixed_pool.add(&Mana::parse("R").with_expiry(ManaExpiry::EndOfCombat));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::CopySpell {
+            spell: Arc::new(CardPredicate::default()),
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::SpellGainsKeyword {
+            spell: Arc::new(CardPredicate::default()),
+            keyword: Keyword::Haste,
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+    mixed_pool.add(&Mana::of_class(
+        ManaClass::from(SpendEffect::CreatureEntersWithPlusOneCounter {
+            without_subtype: "Human".into(),
+        }),
+        [0, 0, 0, 1, 0, 0],
+    ));
+
+    let prism = || {
+        let mut ability = tapping_ability(["W", "U", "B", "R", "G"].map(Mana::parse).to_vec());
+        ability.cost = ManaCost::parse("1");
+        ability
+    };
+    let model = PaymentModel {
+        cache: None,
+        sources: Arc::new((0..4).map(|i| source(i, None, vec![prism()])).collect()),
+        life: 20,
+    };
+
+    // Unpayable multi-blue cost after spending through Prism filters: exact
+    // witness parity with identity DFS, and feasibility projection keeps the
+    // state space tiny despite 6 distinct {R} classes in the pool.
+    for cost in ["2UUUUU", "4UUU", "1UUU"] {
+        let obligations = vec![pay("1"), pay(cost)];
+        let mut state = search_state(&model, obligations);
+        state.pool = mixed_pool.clone();
+        bounded_search(&model, state, SourcePolicy::All, 120, true);
+    }
 }
 
 #[test]

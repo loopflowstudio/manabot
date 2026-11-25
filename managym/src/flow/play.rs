@@ -839,7 +839,12 @@ impl Game {
         let help = self.spell_help(player, object, cast, &cost);
         if help != Help::default() {
             let pool = self.pooled_mana(player);
-            self.payable_with_help(player, &pool, &cost, help, help.waterbend, None)
+            self.payable_with_help(
+                player,
+                &pool,
+                &cost,
+                crate::flow::payment::CostPermissionContext::from_help(help),
+            )
         } else {
             self.can_pay_with_mana_abilities(player, &cost, None)
         }

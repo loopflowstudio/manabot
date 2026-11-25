@@ -236,6 +236,46 @@ impl Help {
     }
 }
 
+/// Copyable permission bundle for paying one mana cost with non-mana help:
+/// which help rules apply, how much generic remains payable by waterbend taps,
+/// and an optional permanent already tapped by the operation itself.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CostPermissionContext {
+    pub help: Help,
+    pub waterbend: u8,
+    pub reserved_tap: Option<PermanentId>,
+}
+
+impl CostPermissionContext {
+    pub fn from_help(help: Help) -> Self {
+        Self {
+            help,
+            waterbend: help.waterbend,
+            reserved_tap: None,
+        }
+    }
+
+    pub fn for_receipt(help: Help, cost: &ManaCost, receipt: &PaymentReceipt) -> Self {
+        Self {
+            help,
+            waterbend: help.waterbend_left(cost, receipt),
+            reserved_tap: None,
+        }
+    }
+
+    pub fn with_reserved_tap(mut self, reserved_tap: Option<PermanentId>) -> Self {
+        self.reserved_tap = reserved_tap;
+        self
+    }
+
+    pub fn after_tap(mut self, payment: TapPayment) -> Self {
+        if payment.toward == Toward::Waterbend {
+            self.waterbend = self.waterbend.saturating_sub(1);
+        }
+        self
+    }
+}
+
 /// What one direct tap of an artifact or creature pays of a mana cost: one
 /// pip of `color`, or {1} for `Color::Generic`, under `toward` (convoke,
 /// improvise or waterbend), which the receipt keeps.
@@ -321,6 +361,12 @@ impl Payment {
     /// How the mana owed may be paid without mana, as announced.
     pub fn help(&self) -> Help {
         self.mana_component().1
+    }
+
+    /// The copyable help/waterbend permission bundle for the mana still owed.
+    pub(crate) fn mana_permissions(&self) -> CostPermissionContext {
+        let (cost, help) = self.mana_component();
+        CostPermissionContext::for_receipt(help, cost, &self.receipt)
     }
 
     /// Whether the cost being paid is a waterbend cost, however it is paid.
@@ -1175,16 +1221,15 @@ impl Game {
     pub(crate) fn commit_produced_mana(&mut self, player: PlayerId, start: usize) {
         let mut index = start;
         loop {
-            let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
+            let Some((payer, payment, CostComponent::Mana { cost, .. })) = self.paying() else {
                 return;
             };
-            let waterbend = payment.mana().1;
+            let permissions = payment.mana_permissions();
             let pool = &self.state.players[player.0].mana_pool;
             if payer != player || index >= pool.unit_count() || cost.mana_value == 0 {
                 return;
             }
             let unit = pool.unit(index);
-            let help = *help;
             let rest = if unit.spendable_units(cost) == 0 {
                 None
             } else {
@@ -1192,7 +1237,7 @@ impl Game {
                 left.spend(&unit);
                 cost.paid_with(pool.unit_color(index))
                     .into_iter()
-                    .find(|rest| self.payable_with_help(player, &left, rest, help, waterbend, None))
+                    .find(|rest| self.payable_with_help(player, &left, rest, permissions))
                     // Pooled mana of another class or color could pay this
                     // pip instead, with other consequences (a rider applied
                     // or kept, a restriction used up, the colors spent and
@@ -1515,18 +1560,13 @@ impl Game {
         {
             return Vec::new();
         }
-        let (cost, waterbend) = payment.mana();
-        let also_tapped = self.payment_tapped_source(&payment.operation);
-        self.help_taps(
-            player,
-            cost,
-            payment.help(),
-            waterbend,
-            &[tapped],
-            also_tapped,
-        )
-        .pop()
-        .map_or_else(Vec::new, |(_, options)| options)
+        let (cost, _) = payment.mana();
+        let permissions = payment
+            .mana_permissions()
+            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
+        self.help_taps(player, cost, permissions, &[tapped])
+            .pop()
+            .map_or_else(Vec::new, |(_, options)| options)
     }
 
     /// The taps and exiles that may pay part of the pending mana cost by
@@ -1538,15 +1578,15 @@ impl Game {
         if payer != player {
             return Vec::new();
         }
-        let (_, waterbend) = payment.mana();
+        let permissions = payment
+            .mana_permissions()
+            .with_reserved_tap(self.payment_tapped_source(&payment.operation));
         let mut actions: Vec<Action> = self
             .help_taps(
                 player,
                 cost,
-                *help,
-                waterbend,
+                permissions,
                 &self.help_tap_candidates(player, &payment.operation),
-                self.payment_tapped_source(&payment.operation),
             )
             .into_iter()
             .map(|(permanent, _)| Action::WaterbendTap { player, permanent })
@@ -1629,11 +1669,11 @@ impl Game {
         help: Help,
         receipt: &mut PaymentReceipt,
     ) -> Result<(), AgentError> {
-        let waterbend = help.waterbend_left(cost, receipt);
+        let permissions = CostPermissionContext::for_receipt(help, cost, receipt);
         let paid = self
             .waterbend_candidates(player)
             .contains(&tapped)
-            .then(|| self.help_taps(player, cost, help, waterbend, &[tapped], None))
+            .then(|| self.help_taps(player, cost, permissions, &[tapped]))
             .and_then(|mut found| found.pop())
             .and_then(|(_, options)| options.first().copied());
         let (Some(paid), Some(object)) = (paid, self.permanent_object(tapped)) else {

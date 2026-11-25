@@ -32,7 +32,7 @@ use crate::{
             SuspendedResolution, TappedForMana,
         },
         game::{ActivationSource, Game, PendingChoice},
-        payment::{CostComponent, Help, Operation, Payment},
+        payment::{CostComponent, CostPermissionContext, Help, Operation, Payment},
         proposed_event::{CounterProvenance, EventCause, ProposedEvent},
         statics::Characteristics,
         turn::StepKind,
@@ -45,8 +45,8 @@ use crate::{
         },
         game_object::{ObjectId, PermanentId, PlayerId},
         mana::{
-            Color, Mana, ManaClass, ManaCost, ManaExpiry, ManaPool, ManaRestriction,
-            ManaSpendChoice, SpellSnapshot, SpendEffect, SpendOrder, SpendingContext,
+            Color, EmptyDisposition, Mana, ManaClass, ManaCost, ManaExpiry, ManaRestriction,
+            ManaSpendChoice, ManaTypeSet, SpellSnapshot, SpendOrder, SpendingContext,
         },
         payment::{How, ManaOrigin, PaymentReceipt, SpentMana},
         zone::ZoneType,
@@ -155,30 +155,45 @@ impl PurposeMask {
             Self::Wide(words)
         }
     }
+
+    fn is_all(&self, count: usize) -> bool {
+        match self {
+            Self::Inline(bits) => {
+                let all = if count >= 64 {
+                    u64::MAX
+                } else {
+                    (1_u64 << count) - 1
+                };
+                *bits == all
+            }
+            Self::Wide(words) => {
+                let full = count / 64;
+                let rem = count % 64;
+                words[..full].iter().all(|&word| word == u64::MAX)
+                    && (rem == 0 || words[full] == (1_u64 << rem) - 1)
+            }
+        }
+    }
 }
 
-/// A `ManaClass` with its `ManaRestriction` projected onto one query's
-/// reachable `SpendingContext`s, preserving `ManaExpiry` and `SpendEffect`.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ProjectedClass {
-    expiry: ManaExpiry,
-    restriction: Option<PurposeMask>,
-    effect: Option<SpendEffect>,
-}
-
-/// Non-ordinary classes on a `ProjectedMana`. Inline single-class storage
-/// avoids per-mode `Box` allocations for uniform restricted sources such as
-/// `Secluded Courtyard` and `Hermitic Herbalist`.
+/// Non-ordinary restricted classes on a feasibility-only `ProjectedMana`.
+/// `ManaExpiry` and `SpendEffect` are stripped in feasibility search, so
+/// unrestricted classes merge directly into `ProjectedMana.mana`. Inline
+/// single-class storage avoids per-mode `Box` allocations for uniform
+/// restricted sources such as `Secluded Courtyard` and `Hermitic Herbalist`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 enum ProjectedClasses {
     #[default]
     None,
-    One(ProjectedClass, [u8; 6]),
-    Many(Box<[(ProjectedClass, [u8; 6])]>),
+    One(PurposeMask, [u8; 6]),
+    Many(Box<[(PurposeMask, [u8; 6])]>),
 }
 
-/// Canonical `Mana` projected onto reachable spending purposes. Classes whose
-/// restrictions evaluate identically across every reachable purpose merge.
+/// Canonical `Mana` projected onto reachable spending purposes for pure
+/// feasibility search (`PaymentSearch`). Unrestricted non-ordinary classes
+/// (differing only in `ManaExpiry` or `SpendEffect`) and restrictions that
+/// admit every reachable purpose merge into `mana`; remaining restrictions
+/// merge by `PurposeMask`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 struct ProjectedMana {
     mana: [u8; 6],
@@ -302,15 +317,7 @@ impl PurposeProjection {
         mask
     }
 
-    fn project_class(&mut self, class: &ManaClass) -> ProjectedClass {
-        ProjectedClass {
-            expiry: class.expiry,
-            restriction: class.restriction.as_ref().map(|r| self.mask(r)),
-            effect: class.effect.clone(),
-        }
-    }
-
-    fn classes_equivalent(&mut self, a: &ManaClass, b: &ManaClass) -> bool {
+    fn exact_classes_equivalent(&mut self, a: &ManaClass, b: &ManaClass) -> bool {
         a.expiry == b.expiry
             && a.effect == b.effect
             && match (&a.restriction, &b.restriction) {
@@ -333,7 +340,9 @@ impl PurposeProjection {
             .then_some(class)
     }
 
-    fn mana_equivalent(&mut self, a: &Mana, b: &Mana) -> bool {
+    /// Exact equivalence preserving `ManaExpiry` and `SpendEffect` (for
+    /// player-visible `SourceClassCache` queries).
+    fn exact_mana_equivalent(&mut self, a: &Mana, b: &Mana) -> bool {
         if a == b {
             return true;
         }
@@ -341,12 +350,50 @@ impl PurposeProjection {
             return false;
         }
         if let ([(ca, aa)], [(cb, ab)]) = (a.classes(), b.classes()) {
-            return aa == ab && self.classes_equivalent(ca, cb);
+            return aa == ab && self.exact_classes_equivalent(ca, cb);
         }
-        self.project_mana(a) == self.project_mana(b)
+        fn exact_buckets<'a>(
+            proj: &mut PurposeProjection,
+            mana: &'a Mana,
+        ) -> Vec<(
+            (
+                ManaExpiry,
+                Option<PurposeMask>,
+                Option<&'a crate::state::mana::SpendEffect>,
+            ),
+            [u8; 6],
+        )> {
+            let mut out: Vec<(
+                (
+                    ManaExpiry,
+                    Option<PurposeMask>,
+                    Option<&'a crate::state::mana::SpendEffect>,
+                ),
+                [u8; 6],
+            )> = Vec::with_capacity(mana.classes().len());
+            for (class, amounts) in mana.classes() {
+                let key = (
+                    class.expiry,
+                    class.restriction.as_ref().map(|r| proj.mask(r)),
+                    class.effect.as_ref(),
+                );
+                match out.binary_search_by(|(existing, _)| existing.cmp(&key)) {
+                    Ok(index) => {
+                        for (slot, &more) in out[index].1.iter_mut().zip(amounts) {
+                            *slot = slot.saturating_add(more);
+                        }
+                    }
+                    Err(index) => out.insert(index, (key, *amounts)),
+                }
+            }
+            out
+        }
+        let left = exact_buckets(self, a);
+        let right = exact_buckets(self, b);
+        left == right
     }
 
-    fn choices_equivalent(&mut self, a: &ManaChoices, b: &ManaChoices) -> bool {
+    fn exact_choices_equivalent(&mut self, a: &ManaChoices, b: &ManaChoices) -> bool {
         if a == b {
             return true;
         }
@@ -358,46 +405,83 @@ impl PurposeProjection {
                 .iter()
                 .zip(b.iter())
                 .all(|(x, y)| x.mana == y.mana && x.classes()[0].1 == y.classes()[0].1)
-                && self.classes_equivalent(ca, cb);
+                && self.exact_classes_equivalent(ca, cb);
         }
-        self.project_choices(a) == self.project_choices(b)
+        a.iter()
+            .zip(b.iter())
+            .all(|(x, y)| self.exact_mana_equivalent(x, y))
     }
 
     fn project_mana(&mut self, mana: &Mana) -> ProjectedMana {
-        match mana.classes() {
-            [] => ProjectedMana {
-                mana: mana.mana,
+        let mut plain = mana.mana;
+        let raw_classes = mana.classes();
+        if raw_classes.is_empty() {
+            return ProjectedMana {
+                mana: plain,
                 classes: ProjectedClasses::None,
-            },
-            [(class, amounts)] => ProjectedMana {
-                mana: mana.mana,
-                classes: ProjectedClasses::One(self.project_class(class), *amounts),
-            },
-            raw_classes => {
-                let mut classes: Vec<(ProjectedClass, [u8; 6])> =
-                    Vec::with_capacity(raw_classes.len());
-                for (class, amounts) in raw_classes {
-                    let projected = self.project_class(class);
-                    match classes.binary_search_by(|(existing, _)| existing.cmp(&projected)) {
-                        Ok(index) => {
-                            for (slot, &more) in classes[index].1.iter_mut().zip(amounts) {
-                                *slot = slot.saturating_add(more);
-                            }
-                        }
-                        Err(index) => classes.insert(index, (projected, *amounts)),
+            };
+        }
+        let purpose_count = self.purposes.len();
+        if let [(class, amounts)] = raw_classes {
+            let Some(restriction) = &class.restriction else {
+                for (slot, &more) in plain.iter_mut().zip(amounts) {
+                    *slot = slot.saturating_add(more);
+                }
+                return ProjectedMana {
+                    mana: plain,
+                    classes: ProjectedClasses::None,
+                };
+            };
+            let mask = self.mask(restriction);
+            if mask.is_all(purpose_count) {
+                for (slot, &more) in plain.iter_mut().zip(amounts) {
+                    *slot = slot.saturating_add(more);
+                }
+                return ProjectedMana {
+                    mana: plain,
+                    classes: ProjectedClasses::None,
+                };
+            }
+            return ProjectedMana {
+                mana: plain,
+                classes: ProjectedClasses::One(mask, *amounts),
+            };
+        }
+        let mut classes: Vec<(PurposeMask, [u8; 6])> = Vec::new();
+        for (class, amounts) in raw_classes {
+            let Some(restriction) = &class.restriction else {
+                for (slot, &more) in plain.iter_mut().zip(amounts) {
+                    *slot = slot.saturating_add(more);
+                }
+                continue;
+            };
+            let mask = self.mask(restriction);
+            if mask.is_all(purpose_count) {
+                for (slot, &more) in plain.iter_mut().zip(amounts) {
+                    *slot = slot.saturating_add(more);
+                }
+                continue;
+            }
+            match classes.binary_search_by(|(existing, _)| existing.cmp(&mask)) {
+                Ok(index) => {
+                    for (slot, &more) in classes[index].1.iter_mut().zip(amounts) {
+                        *slot = slot.saturating_add(more);
                     }
                 }
-                let classes = if classes.len() == 1 {
-                    let (class, amounts) = classes.pop().unwrap();
-                    ProjectedClasses::One(class, amounts)
-                } else {
-                    ProjectedClasses::Many(classes.into_boxed_slice())
-                };
-                ProjectedMana {
-                    mana: mana.mana,
-                    classes,
-                }
+                Err(index) => classes.insert(index, (mask, *amounts)),
             }
+        }
+        let classes = match classes.len() {
+            0 => ProjectedClasses::None,
+            1 => {
+                let (mask, amounts) = classes.pop().unwrap();
+                ProjectedClasses::One(mask, amounts)
+            }
+            _ => ProjectedClasses::Many(classes.into_boxed_slice()),
+        };
+        ProjectedMana {
+            mana: plain,
+            classes,
         }
     }
 
@@ -406,13 +490,34 @@ impl PurposeProjection {
             return cached.clone();
         }
         let modes: Vec<ProjectedMana> = if let Some(uniform) = Self::uniform_class(raw) {
-            let projected = self.project_class(uniform);
-            raw.iter()
-                .map(|m| ProjectedMana {
-                    mana: m.mana,
-                    classes: ProjectedClasses::One(projected.clone(), m.classes()[0].1),
-                })
-                .collect()
+            let purpose_count = self.purposes.len();
+            let projected_mask = uniform
+                .restriction
+                .as_ref()
+                .map(|r| self.mask(r))
+                .filter(|mask| !mask.is_all(purpose_count));
+            match projected_mask {
+                Some(mask) => raw
+                    .iter()
+                    .map(|m| ProjectedMana {
+                        mana: m.mana,
+                        classes: ProjectedClasses::One(mask.clone(), m.classes()[0].1),
+                    })
+                    .collect(),
+                None => raw
+                    .iter()
+                    .map(|m| {
+                        let mut plain = m.mana;
+                        for (slot, &more) in plain.iter_mut().zip(&m.classes()[0].1) {
+                            *slot = slot.saturating_add(more);
+                        }
+                        ProjectedMana {
+                            mana: plain,
+                            classes: ProjectedClasses::None,
+                        }
+                    })
+                    .collect(),
+            }
         } else {
             raw.iter().map(|m| self.project_mana(m)).collect()
         };
@@ -428,14 +533,17 @@ impl PurposeProjection {
     }
 
     /// Whether two sources have identical behavior, lazily constructing or
-    /// borrowing a `PurposeProjection` only when restricted outputs actually
-    /// differ in raw representation (excluding `untapped`, which search
-    /// canonicalizes in `PaymentResources`).
+    /// borrowing a `PurposeProjection` only when non-ordinary outputs differ
+    /// in raw representation (excluding `untapped`, which search canonicalizes
+    /// in `PaymentResources`). When `exact_riders` is true (`SourceClassCache`),
+    /// `ManaExpiry` and `SpendEffect` must match; when false (`PaymentSearch`),
+    /// feasibility projection strips them.
     fn sources_equivalent<'a>(
         projection: impl FnOnce() -> Option<&'a mut PurposeProjection>,
         a: &ManaSource,
         b: &ManaSource,
         candidates: &[&Arc<Vec<PermanentId>>],
+        exact_riders: bool,
     ) -> bool {
         if a.waterbend != b.waterbend
             || a.keyword != b.keyword
@@ -451,7 +559,11 @@ impl PurposeProjection {
             let (Some(af), Some(bf)) = (&a.fixed, &b.fixed) else {
                 return false;
             };
-            if af.mana != bf.mana || (!mana_has_restriction(af) && !mana_has_restriction(bf)) {
+            if exact_riders {
+                if af.mana != bf.mana || (!mana_has_restriction(af) && !mana_has_restriction(bf)) {
+                    return false;
+                }
+            } else if !mana_has_classes(af) && !mana_has_classes(bf) {
                 return false;
             }
             fixed_pair = Some((af, bf));
@@ -470,9 +582,12 @@ impl PurposeProjection {
                 return false;
             }
             if x.outputs != y.outputs {
-                if !x.outputs.iter().any(mana_has_restriction)
-                    && !y.outputs.iter().any(mana_has_restriction)
-                {
+                let check = if exact_riders {
+                    mana_has_restriction
+                } else {
+                    mana_has_classes
+                };
+                if !x.outputs.iter().any(check) && !y.outputs.iter().any(check) {
                     return false;
                 }
                 need_ability_proj = true;
@@ -485,14 +600,26 @@ impl PurposeProjection {
             return false;
         };
         if let Some((af, bf)) = fixed_pair {
-            if !proj.mana_equivalent(af, bf) {
+            let same = if exact_riders {
+                proj.exact_mana_equivalent(af, bf)
+            } else {
+                proj.project_mana(af) == proj.project_mana(bf)
+            };
+            if !same {
                 return false;
             }
         }
         if need_ability_proj {
             for (x, y) in a.abilities.iter().zip(&b.abilities) {
-                if x.outputs != y.outputs && !proj.choices_equivalent(&x.outputs, &y.outputs) {
-                    return false;
+                if x.outputs != y.outputs {
+                    let same = if exact_riders {
+                        proj.exact_choices_equivalent(&x.outputs, &y.outputs)
+                    } else {
+                        proj.project_choices(&x.outputs) == proj.project_choices(&y.outputs)
+                    };
+                    if !same {
+                        return false;
+                    }
                 }
             }
         }
@@ -502,7 +629,7 @@ impl PurposeProjection {
 
 /// Memoizes a per-source answer across purpose-equivalent sources, lazily
 /// building a `PurposeProjection` only when restricted outputs differ in raw
-/// representation.
+/// representation (keeping `ManaExpiry` and `SpendEffect` exact).
 struct SourceClassCache<'a, V> {
     model: &'a PaymentModel<'a>,
     obligations: &'a [Obligation],
@@ -552,6 +679,7 @@ impl<'a, V: Copy> SourceClassCache<'a, V> {
                         rep,
                         source,
                         &self.candidates,
+                        true,
                     )
             })
             .map(|(_, _, value)| *value)
@@ -568,21 +696,25 @@ fn mana_has_restriction(mana: &Mana) -> bool {
         .any(|(class, _)| class.restriction.is_some())
 }
 
-fn obligation_has_restriction(obligation: &Obligation) -> bool {
-    matches!(obligation, Obligation::Output { choices, .. } if choices.iter().any(mana_has_restriction))
+fn mana_has_classes(mana: &Mana) -> bool {
+    !mana.classes().is_empty()
 }
 
-fn state_has_restriction(state: &PaymentSearchState) -> bool {
-    mana_has_restriction(&state.pool) || state.obligations.iter().any(obligation_has_restriction)
+fn obligation_has_classes(obligation: &Obligation) -> bool {
+    matches!(obligation, Obligation::Output { choices, .. } if choices.iter().any(mana_has_classes))
 }
 
-fn model_has_restriction(model: &PaymentModel) -> bool {
+fn state_has_classes(state: &PaymentSearchState) -> bool {
+    mana_has_classes(&state.pool) || state.obligations.iter().any(obligation_has_classes)
+}
+
+fn model_has_classes(model: &PaymentModel) -> bool {
     model.sources.iter().any(|source| {
-        source.fixed.as_ref().is_some_and(mana_has_restriction)
+        source.fixed.as_ref().is_some_and(mana_has_classes)
             || source
                 .abilities
                 .iter()
-                .any(|ability| ability.outputs.iter().any(mana_has_restriction))
+                .any(|ability| ability.outputs.iter().any(mana_has_classes))
     })
 }
 
@@ -1087,11 +1219,13 @@ impl SearchEquivalence {
         permuted
     }
 
-    /// Insert `state` into `projected_visited` when projection is active and
-    /// `state` carries restrictions. Returns `Some(fresh)` if routed to
-    /// `projected_visited`, or `None` when `state` belongs in exact `visited`.
+    /// Insert `state` into `projected_visited` when feasibility projection is
+    /// active (any non-ordinary `ManaClass` present in the query). Routes every
+    /// state while active so unrestricted classed mana collapses with ordinary
+    /// mana into one table; returns `None` when projection is inactive so
+    /// ordinary-only searches stay in exact `visited`.
     fn insert_projected(&mut self, state: &PaymentSearchState) -> Option<bool> {
-        if self.projection.is_none() || !state_has_restriction(state) {
+        if self.projection.is_none() {
             return None;
         }
         let resources = self
@@ -1243,8 +1377,7 @@ impl PaymentSearch {
 
     #[cfg(test)]
     fn groups_for(&mut self, model: &PaymentModel, obligations: &[Obligation]) -> Vec<Vec<usize>> {
-        let project =
-            model_has_restriction(model) || obligations.iter().any(obligation_has_restriction);
+        let project = model_has_classes(model) || obligations.iter().any(obligation_has_classes);
         let eq = self.classify_sources(model, obligations, project);
         let groups = eq.groups.clone();
         self.equivalence = Some(Box::new(eq));
@@ -1287,6 +1420,7 @@ impl PaymentSearch {
                     source,
                     other,
                     &candidates,
+                    false,
                 )
             });
             if let Some((representative, group)) = equivalent {
@@ -1403,10 +1537,10 @@ impl PaymentSearch {
             // A visited identity state failed or is being expanded, and so is
             // every state interchangeable with it: its canonical key is one
             // the grouped search would hold too.
-            let has_restrictions = model_has_restriction(model)
-                || state_has_restriction(&state)
-                || self.visited.iter().any(|s| state_has_restriction(s));
-            let eq = self.classify_sources(model, &state.obligations, has_restrictions);
+            let has_classes = model_has_classes(model)
+                || state_has_classes(&state)
+                || self.visited.iter().any(|s| state_has_classes(s));
+            let eq = self.classify_sources(model, &state.obligations, has_classes);
             self.equivalence = Some(Box::new(eq));
             self.rekey_visited();
         }
@@ -1907,28 +2041,73 @@ impl PaymentModel<'_> {
                 // Pool the whole current cost before spending starts;
                 // production cannot interleave with its unit choices. If the
                 // pool cannot cover it, no first unit can leave a payable rest.
+                // In pure feasibility search, classes sharing a `ManaRestriction`
+                // (differing only in `expiry`/`SpendEffect`) leave identically
+                // feasible pools, so each `(restriction, color)` is tried once.
                 if pooled {
-                    for choice in state.pool.spending_choices(cost) {
-                        let mut pool = state.pool.clone();
-                        pool.spend(&choice.unit);
-                        if !pool.can_pay(&choice.remaining) {
-                            continue;
-                        }
-                        let mut next = PaymentSearchState {
-                            pool,
-                            resources: state.resources.clone(),
-                            obligations: state.obligations.clone(),
-                            life: state.life,
-                            prefix: state.prefix,
-                        };
-                        next.obligations[0] = Obligation::Pay {
-                            cost: choice.remaining,
-                            taps: *taps,
-                        };
-                        // The zero-cost arm owns completion and the Spend boundary,
-                        // including when this was the last unit of a nonzero cost.
-                        if let Some(path) = self.witness(next, policy, visited) {
-                            return Some(path);
+                    if let Some((allowed, remaining)) = cost.pop_next_pip() {
+                        let mut seen_unrestricted = ManaTypeSet::EMPTY;
+                        let mut seen_restricted: Vec<(&ManaRestriction, ManaTypeSet)> = Vec::new();
+                        for (class_index, restriction, amounts) in
+                            std::iter::once((None, None, &state.pool.mana)).chain(
+                                state
+                                    .pool
+                                    .classes()
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, (class, _))| class.allows(&cost.purpose))
+                                    .map(|(idx, (class, amounts))| {
+                                        (Some(idx), class.restriction.as_ref(), amounts)
+                                    }),
+                            )
+                        {
+                            for color in allowed.iter() {
+                                if amounts[color] == 0 {
+                                    continue;
+                                }
+                                let bit = ManaTypeSet::bit(color);
+                                match restriction {
+                                    None => {
+                                        if seen_unrestricted.contains(color) {
+                                            continue;
+                                        }
+                                        seen_unrestricted.insert(bit);
+                                    }
+                                    Some(r) => {
+                                        if let Some((_, seen)) =
+                                            seen_restricted.iter_mut().find(|(prev, _)| *prev == r)
+                                        {
+                                            if seen.contains(color) {
+                                                continue;
+                                            }
+                                            seen.insert(bit);
+                                        } else {
+                                            seen_restricted.push((r, bit));
+                                        }
+                                    }
+                                }
+                                let mut pool = state.pool.clone();
+                                pool.spend_one(class_index, color);
+                                if !pool.can_pay(&remaining) {
+                                    continue;
+                                }
+                                let mut next = PaymentSearchState {
+                                    pool,
+                                    resources: state.resources.clone(),
+                                    obligations: state.obligations.clone(),
+                                    life: state.life,
+                                    prefix: state.prefix,
+                                };
+                                next.obligations[0] = Obligation::Pay {
+                                    cost: remaining.clone(),
+                                    taps: *taps,
+                                };
+                                // The zero-cost arm owns completion and the Spend boundary,
+                                // including when this was the last unit of a nonzero cost.
+                                if let Some(path) = self.witness(next, policy, visited) {
+                                    return Some(path);
+                                }
+                            }
                         }
                     }
                 }
@@ -2088,8 +2267,8 @@ impl PaymentModel<'_> {
         }
         const KINDS: usize = 6;
         let mut pips = [0_u64; KINDS];
-        let mut hybrid: Vec<u8> = Vec::new();
-        let mut owed_kinds = 0_u8;
+        let mut hybrid: Vec<ManaTypeSet> = Vec::new();
+        let mut owed_kinds = ManaTypeSet::EMPTY;
         let mut pays = 0;
         for obligation in &state.obligations {
             let Obligation::Pay { cost, .. } = obligation else {
@@ -2099,17 +2278,17 @@ impl PaymentModel<'_> {
             for (kind, owed) in pips.iter_mut().enumerate() {
                 *owed += u64::from(cost.cost[kind]);
                 if cost.cost[kind] > 0 {
-                    owed_kinds |= 1 << kind;
+                    owed_kinds.insert(ManaTypeSet::bit(kind));
                 }
             }
-            for [left, right] in &cost.hybrid {
-                let pip = 1 << (*left as usize) | 1 << (*right as usize);
-                owed_kinds |= pip;
+            for pair in &cost.hybrid {
+                let pip = ManaTypeSet::hybrid(*pair);
+                owed_kinds.insert(pip);
                 hybrid.push(pip);
             }
         }
         // One color owed by one cost is already bounded by its own check.
-        if owed_kinds == 0 || (owed_kinds.count_ones() < 2 && pays < 2) {
+        if owed_kinds.is_empty() || (owed_kinds.len() < 2 && pays < 2) {
             return true;
         }
         // Each group is one exclusive choice: the supply of S is the pool
@@ -2167,16 +2346,14 @@ impl PaymentModel<'_> {
             }
         }
         let pool = search.usable_for(purpose_indices, &state.pool);
-        let within = |amounts: &[u64; KINDS], set: u8| -> u64 {
-            (0..KINDS)
-                .filter(|kind| set & (1 << kind) != 0)
+        let within = |amounts: &[u64; KINDS], set: ManaTypeSet| -> u64 {
+            set.iter()
                 .fold(0_u64, |sum, kind| sum.saturating_add(amounts[kind]))
         };
         // Every non-empty subset of the owed kinds, largest first.
-        let mut set = owed_kinds;
-        while set != 0 {
-            let owed =
-                within(&pips, set) + hybrid.iter().filter(|pip| **pip & !set == 0).count() as u64;
+        for set in owed_kinds.nonempty_subsets() {
+            let owed = within(&pips, set)
+                + hybrid.iter().filter(|pip| pip.is_subset_of(set)).count() as u64;
             let mut supply = within(&pool, set);
             let mut start = 0;
             for &end in &groups {
@@ -2195,7 +2372,6 @@ impl PaymentModel<'_> {
             if supply < owed {
                 return false;
             }
-            set = (set - 1) & owed_kinds;
         }
         true
     }
@@ -3244,12 +3420,11 @@ impl Game {
         }
         match self.paying() {
             Some((payer, payment, CostComponent::Mana { .. })) if payer == player => {
-                let (recorded, waterbend) = payment.mana();
+                let (recorded, _) = payment.mana();
                 result.extend(self.help_obligations(
                     player,
                     owed.unwrap_or(recorded),
-                    payment.help(),
-                    waterbend,
+                    payment.mana_permissions(),
                 ));
             }
             _ => {}
@@ -3807,14 +3982,14 @@ impl Game {
         let Some(model) = self.announced_model(player, &payment.operation) else {
             return false;
         };
-        let (owed, waterbend) = payment.mana();
+        let (owed, _) = payment.mana();
         let mut obligations = vec![Obligation::Tap {
             candidates: self
                 .tap_component_candidates(player, &payment.operation, tap, toward)
                 .into(),
             remaining: tap.count,
         }];
-        obligations.extend(self.help_obligations(player, owed, payment.help(), waterbend));
+        obligations.extend(self.help_obligations(player, owed, payment.mana_permissions()));
         let pool = self.pooled_mana(player);
         match selected {
             Some(permanent) => model.plan_after_tap(pool, obligations, permanent).is_some(),
@@ -3844,10 +4019,10 @@ impl Game {
             operation,
             receipt: Default::default(),
         };
-        let (cost, waterbend) = payment.mana();
+        let (cost, _) = payment.mana();
         model.payable(
             self.pooled_mana(player),
-            self.help_obligations(player, cost, payment.help(), waterbend),
+            self.help_obligations(player, cost, payment.mana_permissions()),
             SourcePolicy::All,
         )
     }
@@ -4786,8 +4961,9 @@ impl Game {
         total
     }
 
-    /// CR 106.4 — pools empty as each step/phase ends, respecting classes
-    /// whose expiry lasts until end of combat (firebending) or end of turn.
+    /// CR 106.4 — pools empty as each step/phase ends, applying a single
+    /// per-unit disposition (`Drop | Keep | Recolor(Color)`) across classes
+    /// whose expiry ends here while leaving later-expiring classes intact.
     pub(crate) fn clear_mana_pools(&mut self, step: StepKind) {
         let combat_expires = matches!(step, StepKind::EndOfCombat | StepKind::Cleanup);
         let expires = |expiry: ManaExpiry| match expiry {
@@ -4799,51 +4975,26 @@ impl Game {
             if self.state.players[player.0].mana_pool.total() == 0 {
                 continue;
             }
-            let pool = std::mem::take(self.state.mana_pool_mut(player));
-            // Separate combat-expiring mana only when combat actually ends,
-            // keeping `combat_expired` accounting distinct without rebuilding
-            // the pool twice on ordinary steps.
-            let (rest, combat_expiring) =
-                if combat_expires && pool.expiry_total(ManaExpiry::EndOfCombat) > 0 {
-                    pool.split_expiring(|expiry| expiry == ManaExpiry::EndOfCombat)
-                } else {
-                    (pool, ManaPool::default())
-                };
-            let (mut surviving, regular_expiring) = rest.split_expiring(expires);
-            let regular_before = regular_expiring.total();
-            if regular_before > 0 {
-                let kept = self.unspent_mana_retained(player, regular_expiring);
-                if let Some(capture) = self.mana_capture(player) {
-                    let remaining_non_combat = surviving.total()
-                        - surviving.expiry_total(ManaExpiry::EndOfCombat)
-                        + kept.total();
-                    capture.remove(regular_before - kept.total(), remaining_non_combat, true);
+            let becomes_red = self.unspent_mana_becomes_red(player);
+            let keeps_red = !becomes_red && self.keeps_unspent_mana(player, Color::Red);
+            let summary = self
+                .state
+                .mana_pool_mut(player)
+                .empty_expiring(expires, |color| {
+                    if becomes_red {
+                        EmptyDisposition::Recolor(Color::Red)
+                    } else if keeps_red && color == Color::Red {
+                        EmptyDisposition::Keep
+                    } else {
+                        EmptyDisposition::Drop
+                    }
+                });
+            if let Some(capture) = self.mana_capture(player) {
+                if summary.regular_expired > 0 {
+                    capture.remove(summary.regular_lost, summary.remaining_non_combat, true);
                 }
-                surviving.absorb(kept);
+                capture.combat_expired += u64::from(summary.combat_lost);
             }
-            let combat_before = combat_expiring.total();
-            if combat_before > 0 {
-                let kept = self.unspent_mana_retained(player, combat_expiring);
-                if let Some(capture) = self.mana_capture(player) {
-                    capture.combat_expired += u64::from(combat_before - kept.total());
-                }
-                surviving.absorb(kept);
-            }
-            *self.state.mana_pool_mut(player) = surviving;
-        }
-    }
-
-    /// What survives of `player`'s unspent `pool` as it would empty: all of
-    /// it as red under Ozai (CR 614.1a), its red mana while they keep red
-    /// mana this turn, otherwise nothing.
-    fn unspent_mana_retained(&self, player: PlayerId, mut pool: ManaPool) -> ManaPool {
-        if self.unspent_mana_becomes_red(player) {
-            pool.become_red();
-            pool
-        } else if self.keeps_unspent_mana(player, Color::Red) {
-            pool.red_only()
-        } else {
-            ManaPool::default()
         }
     }
 

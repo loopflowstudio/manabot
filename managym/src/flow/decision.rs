@@ -1915,13 +1915,15 @@ impl Game {
                     Some(CostComponent::Mana { cost, help }) => (cost, *help),
                     _ => unreachable!("unexpected resolution payment component"),
                 };
-                let waterbend = help.waterbend_left(cost, &payment.receipt);
+                let permissions = crate::flow::payment::CostPermissionContext::for_receipt(
+                    help,
+                    cost,
+                    &payment.receipt,
+                );
                 if self.automatic_mana_payment(player) && payment.can_decline() {
                     let mut actions = Vec::new();
                     let pool = self.pooled_mana(player);
-                    if tail_payable
-                        && self.payable_with_help(player, &pool, cost, help, waterbend, None)
-                    {
+                    if tail_payable && self.payable_with_help(player, &pool, cost, permissions) {
                         actions.push(Action::PayCost { player });
                     }
                     actions.push(Action::Decline { player });
@@ -1938,10 +1940,8 @@ impl Game {
                         self.help_taps(
                             player,
                             cost,
-                            help,
-                            waterbend,
+                            permissions,
                             &self.waterbend_candidates(player),
-                            None,
                         )
                         .into_iter()
                         .map(|(permanent, _)| Action::WaterbendTap { player, permanent }),
