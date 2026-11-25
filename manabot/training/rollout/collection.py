@@ -1284,6 +1284,10 @@ def _refresh_roots(collector: Collector, rows: np.ndarray) -> None:
         collector._game_settings[row] = (
             GameSetting(None, "decklists", match.config.decklists),
             GameSetting(None, "skip_trivial", skip_trivial),
+            GameSetting(0, "mana_payment", match.config.mana_payment[0]),
+            GameSetting(1, "mana_payment", match.config.mana_payment[1]),
+            GameSetting(0, "mana_floats", match.config.mana_floats[0]),
+            GameSetting(1, "mana_floats", match.config.mana_floats[1]),
         )
 
 

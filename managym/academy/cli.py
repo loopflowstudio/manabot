@@ -1,15 +1,12 @@
-"""`managym academy` command line: prepare a game or replay, then serve Academy.
+"""`managym` command line: `managym play`, `managym watch`, `managym replay`, `managym opponents`.
 
-`app` is the `managym` Typer application; `main` and `academy` run it, or
-its `academy` group, from an argument list and return the exit status. Commands parse and
-report only; `managym.academy.launch.serve` owns the server, preparation and
-every error code. Typer belongs to the `academy` extra, so `managym.cli`
-imports this module lazily and reports a missing extra itself.
-
-The shared options (`--host`, `--port`, `--traces-dir`, `--no-open`) are
-accepted before or after `play`/`replay`: the group callback records the
-values given before the verb and each command lets its own values win.
+Top-level commands and the `managym academy` alias share the exact same option
+definitions and server launch lifecycle. `managym.academy.launch.serve` owns
+the server, preparation and every error code. Typer belongs to the `academy`
+extra, so `managym.cli` imports this module lazily.
 """
+
+from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,16 +16,27 @@ from pathlib import Path
 from pydantic import TypeAdapter
 import typer
 
+from managym.academy.deck_pools import (
+    ensure_default_deck_pools,
+    is_pool_key,
+    resolve_deck_pool,
+)
 from managym.academy.launch import (
     _DECK_SUFFIXES,
     _TRACE_SUFFIXES,
     Academy,
     AcademyLaunchError,
+    TurnOrder,
     _path_or_name,
     serve,
 )
+from managym.academy.opponent import (
+    default_opponent_id,
+    opponent_catalog,
+    policy_settings_fit,
+)
 from managym.disclosure import DecklistDisclosure
-from managym.policy import PolicySpec
+from managym.policy import PolicySpec, is_python_policy_ref
 from managym.search import SearchConfig
 
 DEFAULT_URL = "http://127.0.0.1:8000"
@@ -39,7 +47,7 @@ _Prepare = Callable[[Academy], str]
 """Returns the address READY reports and the browser opens."""
 
 app = typer.Typer(
-    help="managym engine tools",
+    help="managym engine & Academy tools (`managym play`, `managym watch`, `managym replay`, `managym opponents`)",
     no_args_is_help=True,
     add_completion=False,
     pretty_exceptions_show_locals=False,
@@ -62,6 +70,7 @@ class _Shared:
     traces_dir: Path | None = None
     no_open: bool | None = None
     policies: list[Path] | None = None
+    discover: bool | None = None
 
     def over(self, earlier: "_Shared") -> "_Shared":
         return _Shared(
@@ -72,6 +81,7 @@ class _Shared:
             else earlier.traces_dir,
             no_open=self.no_open if self.no_open is not None else earlier.no_open,
             policies=[*(earlier.policies or []), *(self.policies or [])],
+            discover=self.discover if self.discover is not None else earlier.discover,
         )
 
 
@@ -88,6 +98,11 @@ _POLICIES = typer.Option(
     help="Saved policy specification JSON (repeatable; alias is its file stem)",
 )
 _NO_OPEN = typer.Option(None, "--no-open", help="Do not open a browser window")
+_NO_DISCOVER = typer.Option(
+    None,
+    "--no-discover",
+    help="Skip ambient policy provider discovery (use only explicit policies)",
+)
 
 
 def _earlier(ctx: typer.Context) -> _Shared:
@@ -102,33 +117,65 @@ def _academy(
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
+    no_discover: bool | None = _NO_DISCOVER,
 ) -> None:
-    shared = _Shared(host, port, traces_dir, no_open, policies)
+    shared = _Shared(
+        host,
+        port,
+        traces_dir,
+        no_open,
+        policies,
+        False if no_discover else None,
+    )
     if ctx.invoked_subcommand is None:
         _run(shared, lambda running: running.url)
     ctx.obj = shared
 
 
-@academy_app.command(help="Start in a chosen game")
-def play(
+def _resolve_cli_deck(raw: str | None, fallback_named: str) -> str | Path:
+    from managym.academy import server
+
+    if raw is None:
+        return (
+            "pool:held-out"
+            if resolve_deck_pool("pool:held-out") is not None
+            else fallback_named
+        )
+    if raw in ("trophies", "trophies:held-out"):
+        return "pool:held-out"
+    if raw == "trophies:train":
+        return "pool:train"
+    if is_pool_key(raw) or resolve_deck_pool(raw) is not None:
+        return raw
+    return _path_or_name(raw, _DECK_SUFFIXES, server.NAMED_DECKS)
+
+
+def _play_cmd(
     ctx: typer.Context,
-    deck: str = typer.Option(
-        "ur_lessons", help="Your deck: a bundled deck name or a decklist file"
+    deck: str | None = typer.Option(
+        None,
+        help="Your deck: bundled name, deck pool (pool:held-out), or decklist file (default: held-out TLA trophies if available, else ur_lessons)",
     ),
-    opponent_deck: str = typer.Option(
-        "gw_allies", help="The opponent's deck, named the same way"
+    opponent_deck: str | None = typer.Option(
+        None,
+        help="Opponent deck, named the same way (default: held-out TLA trophies if available, else gw_allies)",
     ),
-    opponent: str = typer.Option(
-        "search",
-        help="search, random, passive, registered policy name or ID",
+    opponent: str | None = typer.Option(
+        None,
+        help="Catalog id, alias (manabot, heuristic, search-64), ./bot.py:func, or policy JSON (default: hosted policy -> heuristic -> search-64)",
+    ),
+    order: TurnOrder = typer.Option(
+        "random",
+        help="Your turn order: play, random, or draw",
     ),
     sims: int = typer.Option(64, help="Random playouts per legal action for search"),
     seed: int | None = typer.Option(
         None,
         help="Deal seed; the same seed and decks give the same deal (default random)",
     ),
-    decklists: DecklistDisclosure = typer.Option(
-        "open", help="Whether each player knows the other's list"
+    decklists: DecklistDisclosure | None = typer.Option(
+        None,
+        help="Whether each player knows the other's list (open or closed)",
     ),
     search_json: str | None = typer.Option(
         None,
@@ -140,9 +187,8 @@ def play(
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
+    no_discover: bool | None = _NO_DISCOVER,
 ) -> None:
-    from managym.academy import server
-
     def prepare(running: Academy) -> str:
         try:
             search = (
@@ -154,31 +200,79 @@ def play(
             raise AcademyLaunchError(
                 "setup.invalid", f"Invalid Search spec: {exc}"
             ) from exc
+        explicit_named = deck is not None or opponent_deck is not None
+        chosen_opp = opponent if opponent is not None else default_opponent_id()
+        if chosen_opp == "search" and sims:
+            opp_arg: str | Path = chosen_opp
+        elif isinstance(chosen_opp, str) and is_python_policy_ref(chosen_opp):
+            opp_arg = chosen_opp
+        else:
+            opp_arg = chosen_opp
+        chosen_deck = _resolve_cli_deck(deck, "ur_lessons")
+        chosen_opp_deck = _resolve_cli_deck(opponent_deck, "gw_allies")
+        is_search_builtin = isinstance(opp_arg, str) and (
+            opp_arg == "search" or opp_arg.startswith("search-")
+        )
+        if decklists is not None:
+            chosen_disclosure: DecklistDisclosure = decklists
+        elif (
+            not explicit_named
+            and (is_pool_key(chosen_deck) or is_pool_key(chosen_opp_deck))
+            and not is_search_builtin
+        ):
+            chosen_disclosure = "closed"
+        elif (
+            is_pool_key(chosen_deck) or is_pool_key(chosen_opp_deck)
+        ) and not is_search_builtin:
+            chosen_disclosure = "closed"
+        else:
+            chosen_disclosure = "open"
+        if isinstance(opp_arg, str):
+            fit = policy_settings_fit(opp_arg, {"decklists": chosen_disclosure})
+            if fit is not None and fit.warnings:
+                typer.echo(f"NOTE {opp_arg}: {fit.summary()}", err=True)
         return running.new_game(
-            deck=_path_or_name(deck, _DECK_SUFFIXES, server.NAMED_DECKS),
-            opponent_deck=_path_or_name(
-                opponent_deck, _DECK_SUFFIXES, server.NAMED_DECKS
-            ),
-            opponent=opponent,
+            deck=chosen_deck,
+            opponent_deck=chosen_opp_deck,
+            opponent=opp_arg,
             sims=sims,
             seed=seed,
-            decklists=decklists,
+            decklists=chosen_disclosure,
             search=search,
+            order=order,
         ).url
 
     _run(
-        _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),
+        _Shared(
+            host,
+            port,
+            traces_dir,
+            no_open,
+            policies,
+            False if no_discover else None,
+        ).over(_earlier(ctx)),
         prepare,
     )
 
 
-@academy_app.command(help="Choose two players in Watch setup")
-def watch(
+def _watch_cmd(
     ctx: typer.Context,
-    player: list[str] = typer.Option(
-        ...,
+    player: list[str] | None = typer.Option(
+        None,
         "--player",
-        help="Seat player (exactly twice): random, search-N or registered policy",
+        help="Seat player (repeatable twice): catalog id, ./bot.py:func, or search-N",
+    ),
+    bot1: str | None = typer.Option(
+        None, "--bot1", help="Seat 1 bot (alternative to --player)"
+    ),
+    bot2: str | None = typer.Option(
+        None, "--bot2", help="Seat 2 bot (alternative to --player)"
+    ),
+    deck: str | None = typer.Option(None, help="Seat 1 deck or deck pool"),
+    opponent_deck: str | None = typer.Option(None, help="Seat 2 deck or deck pool"),
+    seed: int | None = typer.Option(None, help="Deal seed (default random)"),
+    decklists: DecklistDisclosure | None = typer.Option(
+        None, help="Open or closed decklists"
     ),
     search_json: str | None = typer.Option(
         None,
@@ -190,11 +284,32 @@ def watch(
     traces_dir: Path | None = _TRACES_DIR,
     no_open: bool | None = _NO_OPEN,
     policies: list[Path] | None = _POLICIES,
+    no_discover: bool | None = _NO_DISCOVER,
 ) -> None:
-    if len(player) != 2:
+    seats: list[str] = []
+    if bot1 is not None or bot2 is not None:
+        if player:
+            _report(
+                AcademyLaunchError(
+                    "setup.invalid", "Use either --bot1/--bot2 or --player, not both."
+                )
+            )
+            raise typer.Exit(2)
+        if bot1 is None or bot2 is None:
+            _report(
+                AcademyLaunchError(
+                    "setup.invalid", "watch requires both --bot1 and --bot2."
+                )
+            )
+            raise typer.Exit(2)
+        seats = [bot1, bot2]
+    elif player and len(player) == 2:
+        seats = list(player)
+    else:
         _report(
             AcademyLaunchError(
-                "setup.invalid", "watch requires exactly two --player values."
+                "setup.invalid",
+                "watch requires either --bot1 and --bot2 or exactly two --player values.",
             )
         )
         raise typer.Exit(2)
@@ -212,19 +327,47 @@ def watch(
             raise AcademyLaunchError(
                 "setup.invalid", f"Invalid Search spec: {exc}"
             ) from exc
+        decks_pair = None
+        if deck is not None or opponent_deck is not None:
+            decks_pair = (
+                _resolve_cli_deck(deck, "ur_lessons"),
+                _resolve_cli_deck(opponent_deck, "gw_allies"),
+            )
+        elif resolve_deck_pool("pool:held-out") is not None:
+            decks_pair = ("pool:held-out", "pool:held-out")
+        chosen_disclosure: DecklistDisclosure = (
+            decklists
+            if decklists is not None
+            else (
+                "closed"
+                if decks_pair is not None
+                and (is_pool_key(decks_pair[0]) or is_pool_key(decks_pair[1]))
+                and not any(s == "search" or s.startswith("search-") for s in seats)
+                else "open"
+            )
+        )
         return running.watch(
-            players=(player[0], player[1]),
+            players=(seats[0], seats[1]),
             search=searches,
+            decks=decks_pair,
+            seed=seed,
+            decklists=chosen_disclosure,
         ).url
 
     _run(
-        _Shared(host, port, traces_dir, no_open, policies).over(_earlier(ctx)),
+        _Shared(
+            host,
+            port,
+            traces_dir,
+            no_open,
+            policies,
+            False if no_discover else None,
+        ).over(_earlier(ctx)),
         prepare,
     )
 
 
-@academy_app.command(help="Open a game file or recording")
-def replay(
+def _replay_cmd(
     ctx: typer.Context,
     source: str = typer.Argument(
         help="A file or directory of recorded games, an evaluation trace, or a recording id from Games"
@@ -248,9 +391,45 @@ def replay(
     )
 
 
+def _opponents_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Print catalog as JSON"),
+) -> None:
+    """List every available and refused opponent without starting a server."""
+    catalog = opponent_catalog()
+    if as_json:
+        typer.echo(json.dumps(catalog, indent=2, sort_keys=True))
+        raise typer.Exit(0)
+    typer.echo(f"Default opponent: {catalog['default_opponent']}")
+    rows: list[tuple[str, str, str, str]] = []
+    for entry in catalog["opponents"]:
+        ident = (entry.get("aliases") or [entry["sha256"][:12]])[0]
+        status = "ready" if entry["available"] else f"unavailable: {entry['reason']}"
+        rows.append((ident, entry["name"], entry["group"], status))
+    for builtin in catalog["builtins"]:
+        rows.append((builtin["id"], builtin["name"], builtin["group"], "ready"))
+    id_w = max((len(r[0]) for r in rows), default=8)
+    name_w = max((len(r[1]) for r in rows), default=8)
+    grp_w = max((len(r[2]) for r in rows), default=8)
+    typer.echo(f"{'id':<{id_w}}  {'name':<{name_w}}  {'group':<{grp_w}}  status")
+    for ident, name, group, status in rows:
+        typer.echo(f"{ident:<{id_w}}  {name:<{name_w}}  {group:<{grp_w}}  {status}")
+    raise typer.Exit(0)
+
+
+# Register directly on top-level `managym` AND under `managym academy` alias.
+for _target in (app, academy_app):
+    _target.command("play", help="Start in a chosen game")(_play_cmd)
+    _target.command("watch", help="Choose two bots in Watch setup")(_watch_cmd)
+    _target.command("replay", help="Open a game file or recording")(_replay_cmd)
+    _target.command("opponents", help="List available and refused opponents")(
+        _opponents_cmd
+    )
+
+
 def _run(shared: _Shared, prepare: _Prepare) -> None:
     """Serve, prepare the target, report READY, open it and wait for Ctrl-C."""
     try:
+        pools = ensure_default_deck_pools()
         with serve(
             host=shared.host or "127.0.0.1",
             port=8000 if shared.port is None else shared.port,
@@ -258,6 +437,8 @@ def _run(shared: _Shared, prepare: _Prepare) -> None:
             policies={
                 path.stem: PolicySpec.read(path) for path in shared.policies or []
             },
+            deck_pools=pools or None,
+            discover=True if shared.discover is None else shared.discover,
         ) as running:
             target = prepare(running)
             ready = {

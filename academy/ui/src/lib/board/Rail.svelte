@@ -262,7 +262,7 @@
       {/if}
       {#if canPassTurn}
         <button type="button" class="pass-turn type-caption" data-testid="pass-turn" aria-disabled={readingOut || undefined} onclick={onpassturn}
-          title="Pass every priority window until the turn ends">Pass turn <kbd>F6</kbd></button>
+          title="Pass every priority window until the turn ends (Shift+Enter or F6)">Pass turn <kbd>⇧↵</kbd></button>
       {/if}
       <!-- The engine's own words stay one click away, under the answers. -->
       {#if detail && frame.prompt && !interrupted}

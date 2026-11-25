@@ -6,6 +6,7 @@ existing tables and traces; new records bind the complete runtime descriptor.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -15,8 +16,56 @@ from managym.search import (
     descriptor_search_unavailable,
     search_descriptor,
 )
+from managym.settings_fit import (
+    SettingsFitReport,
+    compare_settings,
+    distributions_from_counts,
+)
 
 from . import advice
+
+BUILTIN_OPPONENTS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "search-256",
+        "name": "Search 256",
+        "kind": "search",
+        "group": "Search",
+        "summary": "256 random playouts per legal action",
+        "requires_open_decklists": True,
+    },
+    {
+        "id": "search-64",
+        "name": "Search 64",
+        "kind": "search",
+        "group": "Search",
+        "summary": "64 random playouts per legal action",
+        "requires_open_decklists": True,
+    },
+    {
+        "id": "search-16",
+        "name": "Search 16",
+        "kind": "search",
+        "group": "Search",
+        "summary": "16 random playouts per legal action",
+        "requires_open_decklists": True,
+    },
+    {
+        "id": "random",
+        "name": "Random",
+        "kind": "scripted",
+        "group": "Scripted",
+        "summary": "Uniform over legal actions",
+        "requires_open_decklists": False,
+    },
+    {
+        "id": "passive",
+        "name": "Passive",
+        "kind": "scripted",
+        "group": "Scripted",
+        "summary": "Passes when possible",
+        "requires_open_decklists": False,
+    },
+)
 
 _registry: PolicyRegistry | None = None
 
@@ -40,11 +89,13 @@ class Opponent:
 
     @property
     def name(self) -> str:
+        name_parts = {
+            part.strip().casefold() for part in self.descriptor.name.split("·")
+        }
         aliases = sorted(
             alias
             for alias, key in policy_registry().aliases.items()
-            if key == self.descriptor.id
-            and alias.casefold() != self.descriptor.name.casefold()
+            if key == self.descriptor.id and alias.casefold() not in name_parts
         )
         return " · ".join((self.descriptor.name, *aliases))
 
@@ -91,17 +142,57 @@ def opponent_kind(policy: dict[str, Any]) -> str:
     return f"checkpoint {world}" if world else "checkpoint"
 
 
+def default_opponent_id() -> str:
+    """Preferred default opponent: recommended hosted policy -> heuristic -> search-64."""
+    registry = policy_registry()
+    descriptors = registry.descriptors()
+    for descriptor in descriptors:
+        if descriptor.recommended and descriptor.incompatibility is None:
+            return descriptor.alias or f"policy:{descriptor.id}"
+    if "heuristic" in registry.aliases:
+        try:
+            if registry.descriptor("heuristic").incompatibility is None:
+                return "heuristic"
+        except ValueError:
+            pass
+    return "search-64"
+
+
+def policy_settings_fit(
+    key: str,
+    planned: Mapping[str, str],
+    *,
+    seat: int | None = None,
+) -> SettingsFitReport | None:
+    """Informational MTG-399 settings comparison for a registered policy."""
+    try:
+        descriptor = policy_registry().descriptor(key.removeprefix("policy:"))
+    except ValueError:
+        return None
+    if not descriptor.artifacts and descriptor.trained_settings is None:
+        return None
+    trained = distributions_from_counts(descriptor.trained_settings, seat=seat)
+    return compare_settings(trained, planned)
+
+
 def opponent_catalog() -> dict[str, Any]:
     entries = []
     error = None
     provider_names: list[str] = []
+    default_id = "search-64"
     try:
         registry = policy_registry()
         provider_names = sorted(registry.providers)
         error = "; ".join(registry.discovery_errors) or None
+        default_id = default_opponent_id()
         for descriptor in registry.descriptors():
             record = descriptor.record()
             search_reason = descriptor_search_unavailable(descriptor)
+            aliases = sorted(
+                alias
+                for alias, target in registry.aliases.items()
+                if target == descriptor.id
+            )
             entries.append(
                 {
                     "sha256": descriptor.id,
@@ -114,6 +205,10 @@ def opponent_catalog() -> dict[str, Any]:
                     "reason": descriptor.incompatibility,
                     "supports_search": search_reason is None,
                     "search_reason": search_reason,
+                    "recommended": descriptor.recommended,
+                    "summary": descriptor.summary,
+                    "trained_settings": descriptor.trained_settings,
+                    "aliases": aliases,
                     "policy": record,
                 }
             )
@@ -121,6 +216,8 @@ def opponent_catalog() -> dict[str, Any]:
         error = f"Policies could not be listed: {exc}"
     return {
         "opponents": entries,
+        "builtins": list(BUILTIN_OPPONENTS),
+        "default_opponent": default_id,
         "catalog_error": error,
         "advice_available": advice.FIXTURE_PATH.is_file(),
         "extension": ", ".join(provider_names) or None,

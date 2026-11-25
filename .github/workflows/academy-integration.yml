@@ -53,7 +53,7 @@ jobs:
       - name: Elemental local play contracts
         run: |
           uv run pytest -q \
-            tests/academy/test_elemental_play_launcher.py \
+            tests/academy/test_mtg388_seat_table.py \
             tests/academy/test_named_search_recovery.py \
             tests/academy/test_manifest_recovery.py \
             tests/academy/test_schedule_recovery.py \

@@ -12,12 +12,19 @@ from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 import hashlib
+import importlib
 from importlib.metadata import entry_points
+import importlib.util
+import inspect
 import json
 import math
+import os
 from pathlib import Path
+import random
+import sys
 from typing import Protocol, TypeAlias
 import uuid
+import warnings
 
 import managym
 from managym.bots import BotDecision
@@ -86,6 +93,9 @@ class PolicyDescriptor:
     recurrent: bool = False
     search_reason: str | None = None
     base_policy: PolicyDescriptor | None = None
+    recommended: bool = False
+    summary: str | None = None
+    trained_settings: dict[str, JSONValue] | None = None
 
     @property
     def id(self) -> str:
@@ -101,8 +111,15 @@ class PolicyDescriptor:
         )
 
     def record(self) -> dict[str, JSONValue]:
+        payload = asdict(self)
+        if not self.recommended:
+            payload.pop("recommended", None)
+        if self.summary is None:
+            payload.pop("summary", None)
+        if self.trained_settings is None:
+            payload.pop("trained_settings", None)
         return {
-            **asdict(self),
+            **payload,
             "details": [asdict(detail) for detail in self.details],
             "base_policy": self.base_policy.record() if self.base_policy else None,
             "id": self.id,
@@ -162,22 +179,239 @@ class SearchPolicySession(PolicySession, Protocol):
     def fork(self, *, seed: int) -> SearchPolicySession: ...
 
 
-class PolicyFactory(Protocol):
+class Policy(Protocol):
     def describe(self) -> PolicyDescriptor: ...
     def admit(self, setup: Sequence[managym.PlayerConfig]) -> None: ...
     def load(self, *, seat: int, seed: int) -> PolicySession: ...
 
 
+PolicyCallable: TypeAlias = Callable[
+    [managym.Observation], int | Sequence[float] | PolicyDecision
+]
+
+
+def _is_policy_object(value: object) -> bool:
+    return (
+        not isinstance(value, type)
+        and callable(getattr(value, "describe", None))
+        and callable(getattr(value, "admit", None))
+        and callable(getattr(value, "load", None))
+    )
+
+
+def _callable_runner_identity(
+    fn: Callable[..., object], *, source_path: Path | None = None
+) -> str:
+    digest = hashlib.sha256()
+    module = getattr(fn, "__module__", "") or ""
+    qualname = getattr(fn, "__qualname__", None) or getattr(fn, "__name__", "callable")
+    digest.update(f"{module}:{qualname}".encode())
+    if source_path is not None and source_path.is_file():
+        digest.update(source_path.read_bytes())
+    else:
+        try:
+            digest.update(inspect.getsource(fn).encode())
+        except (OSError, TypeError):
+            code = getattr(fn, "__code__", None)
+            if code is not None:
+                digest.update(code.co_code)
+                digest.update(repr(code.co_consts).encode())
+            else:
+                digest.update(f"id:{id(fn)}".encode())
+    return f"python:{module}.{qualname}:{digest.hexdigest()[:16]}"
+
+
+class _CallableSession:
+    def __init__(self, fn: PolicyCallable, *, seed: int) -> None:
+        self._fn = fn
+        self._rng = random.Random(seed)
+
+    def observe(self, view: PolicyView) -> None:
+        del view
+
+    def choose(self, view: PolicyView) -> PolicyDecision:
+        result = self._fn(view.observation)
+        if isinstance(result, PolicyDecision):
+            return result
+        n = len(view.choices)
+        if isinstance(result, bool):
+            raise ValueError("Policy callable must return an action index, not bool.")
+        if isinstance(result, int) or hasattr(result, "__index__"):
+            index = int(result.__index__())  # type: ignore[union-attr]
+            if not 0 <= index < n:
+                raise ValueError(
+                    f"Policy callable returned action index {index} outside 0..{n - 1}."
+                )
+            return PolicyDecision(view.choices[index], view.binding)
+        if isinstance(result, Sequence) or hasattr(result, "tolist"):
+            raw = result.tolist() if hasattr(result, "tolist") else list(result)
+            if not isinstance(raw, list) or len(raw) != n:
+                raise ValueError(
+                    f"Policy callable returned {len(raw) if isinstance(raw, list) else type(raw).__name__} values for {n} legal actions."
+                )
+            probs = tuple(float(x) for x in raw)
+            if any(not math.isfinite(p) or p < 0 for p in probs) or not math.isclose(
+                sum(probs), 1.0, abs_tol=1e-4
+            ):
+                raise ValueError(
+                    "Policy callable probabilities must be finite, nonnegative, and sum to 1."
+                )
+            total = sum(probs)
+            norm = tuple(p / total for p in probs)
+            pick = self._rng.choices(range(n), weights=norm, k=1)[0]
+            return PolicyDecision(view.choices[pick], view.binding, probabilities=norm)
+        raise ValueError(
+            "Policy callable must return an int action index, probability sequence, or PolicyDecision."
+        )
+
+    def close(self) -> None:
+        pass
+
+
+@dataclass(frozen=True)
+class CallablePolicy:
+    """Wrap a plain ``(obs) -> int | probs | PolicyDecision`` function as a ``Policy``."""
+
+    fn: PolicyCallable
+    name: str | None = None
+    group: str = "Custom"
+    alias: str | None = None
+    source_path: Path | None = None
+
+    def describe(self) -> PolicyDescriptor:
+        raw_name = self.name or getattr(self.fn, "__name__", None) or "custom"
+        label = "custom" if raw_name == "<lambda>" else raw_name
+        runner = _callable_runner_identity(self.fn, source_path=self.source_path)
+        details = (
+            (PolicyDetail("Source", str(self.source_path)),)
+            if self.source_path is not None
+            else ()
+        )
+        return PolicyDescriptor(
+            name=label,
+            provider="python",
+            runner=runner,
+            group=self.group,
+            alias=self.alias,
+            details=details,
+        )
+
+    def admit(self, setup: Sequence[managym.PlayerConfig]) -> None:
+        del setup
+
+    def load(self, *, seat: int, seed: int) -> PolicySession:
+        del seat
+        return _CallableSession(self.fn, seed=seed)
+
+
+def as_policy(
+    value: Policy | PolicyCallable,
+    *,
+    name: str | None = None,
+    alias: str | None = None,
+    source_path: Path | None = None,
+) -> Policy:
+    """Return ``value`` as a ``Policy``, wrapping a plain callable automatically."""
+    if _is_policy_object(value):
+        return value  # type: ignore[return-value]
+    if callable(value):
+        return CallablePolicy(
+            value,  # type: ignore[arg-type]
+            name=name,
+            alias=alias,
+            source_path=source_path,
+        )
+    raise ValueError(
+        "Expected a Policy object or a callable taking an Observation and returning an action index."
+    )
+
+
+def is_python_policy_ref(value: str) -> bool:
+    """True for ``path/to/bot.py[:attr]`` or ``pkg.mod:attr`` policy references."""
+    if value.startswith("policy:"):
+        return False
+    target = value.split(":", 1)[0]
+    if target.endswith(".py"):
+        return True
+    if ":" in value:
+        # Exclude Windows-style drive letters or scheme prefixes; require an attr name.
+        attr = value.split(":", 1)[1]
+        if not attr or "/" in attr:
+            return False
+        return (
+            "/" in target
+            or os.sep in target
+            or "." in target
+            or Path(target).expanduser().is_file()
+        )
+    return False
+
+
+def load_python_policy(ref: str, *, name: str | None = None) -> Policy:
+    """Load a ``Policy`` or callable from ``./bot.py[:attr]`` or ``pkg.mod:attr``."""
+    target, sep, attr = ref.partition(":")
+    source_path: Path | None = None
+    path = Path(target).expanduser()
+    if target.endswith(".py") or "/" in target or os.sep in target or path.is_file():
+        resolved = path.resolve()
+        if not resolved.is_file():
+            raise ValueError(f"Policy file does not exist: {target}")
+        source_path = resolved
+        digest = hashlib.sha256(str(resolved).encode()).hexdigest()[:12]
+        mod_name = f"_managym_user_policy_{resolved.stem}_{digest}"
+        spec = importlib.util.spec_from_file_location(mod_name, resolved)
+        if spec is None or spec.loader is None:
+            raise ValueError(f"Could not import Python policy file: {target}")
+        module = importlib.util.module_from_spec(spec)
+        parent_dir = str(resolved.parent)
+        added = parent_dir not in sys.path
+        if added:
+            sys.path.insert(0, parent_dir)
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if added and parent_dir in sys.path:
+                sys.path.remove(parent_dir)
+        default_name = resolved.stem
+    else:
+        if not sep or not attr:
+            raise ValueError(
+                f"Expected 'path/to/bot.py[:func]' or 'package.module:func', got {ref!r}."
+            )
+        module = importlib.import_module(target)
+        default_name = attr
+
+    if sep and attr:
+        if not hasattr(module, attr):
+            raise ValueError(f"{target!r} has no attribute {attr!r}.")
+        obj = getattr(module, attr)
+        label = name or (f"{default_name}:{attr}" if source_path else attr)
+    else:
+        for candidate in ("policy", "choose"):
+            if hasattr(module, candidate):
+                obj = getattr(module, candidate)
+                label = name or default_name
+                break
+        else:
+            raise ValueError(
+                f"{target!r} defines neither 'policy' nor 'choose'; specify '{target}:name'."
+            )
+
+    if isinstance(obj, type) and all(
+        callable(getattr(obj, m, None)) for m in ("describe", "admit", "load")
+    ):
+        obj = obj()
+    return as_policy(obj, name=label, source_path=source_path)
+
+
 class PolicyProvider(Protocol):
-    def policy(self, spec: PolicySpec) -> PolicyFactory: ...
+    def policy(self, spec: PolicySpec) -> Policy: ...
 
 
 class DiscoveringPolicyProvider(PolicyProvider, Protocol):
     """Optional discovery: None reads ambient config; explicit configs are additive."""
 
-    def discover(
-        self, config: dict[str, JSONValue] | None
-    ) -> Sequence[PolicyFactory]: ...
+    def discover(self, config: dict[str, JSONValue] | None) -> Sequence[Policy]: ...
 
 
 @dataclass(frozen=True)
@@ -204,7 +438,7 @@ class PolicyRegistry:
             if providers is not None
             else {ep.name: ep.load() for ep in entry_points(group="managym.bots")}
         )
-        self._factories: dict[str, PolicyFactory] = {}
+        self._factories: dict[str, Policy] = {}
         self._descriptors: dict[str, PolicyDescriptor] = {}
         self.aliases: dict[str, str] = {}
         self._active_sessions: set[int] = set()
@@ -212,16 +446,21 @@ class PolicyRegistry:
         self._discovered = False
 
     def register(
-        self, policy: PolicyFactory | PolicySpec, *, name: str | None = None
+        self,
+        policy: Policy | PolicyCallable | PolicySpec,
+        *,
+        name: str | None = None,
     ) -> str:
         from_spec = isinstance(policy, PolicySpec)
         if isinstance(policy, PolicySpec):
-            policy = self._provider(policy.provider).policy(policy)
-        return self._register_factory(policy, name=name, from_provider=from_spec)
+            resolved = self._provider(policy.provider).policy(policy)
+        else:
+            resolved = as_policy(policy, name=name)
+        return self._register_factory(resolved, name=name, from_provider=from_spec)
 
     def _register_factory(
         self,
-        policy: PolicyFactory,
+        policy: Policy,
         *,
         name: str | None = None,
         from_provider: bool = False,
@@ -470,3 +709,14 @@ class PolicyRunner:
             finally:
                 if self._release is not None:
                     self._release()
+
+
+def __getattr__(name: str) -> object:
+    if name == "PolicyFactory":
+        warnings.warn(
+            "managym.policy.PolicyFactory is deprecated; use managym.policy.Policy; removal in 0.3.0",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Policy
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

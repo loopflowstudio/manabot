@@ -122,7 +122,8 @@ export function primaryLabel(frame: ExperienceFrame, view: BoardView, preview: P
     const full = payLabel(frame.projection.decision_context?.mana_cost ?? null, paymentPlan(preview, frame), preview);
     // The button says the price on one line; the lands it taps are drawn on
     // the board and named in its accessible name.
-    return full ? { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Pay '.length)}` } : { text: offer, description: offer };
+    if (full) return { text: full.split(' · ')[0], description: `${offer}: ${full.slice('Auto pay '.length)}` };
+    return { text: offer === 'Pay the cost' ? 'Auto pay' : offer, description: offer };
   }
   const top = view.stack[0] ? stackName(view.stack[0].entry) : null;
   // A card name is never cut: when it does not fit beside the verb, the

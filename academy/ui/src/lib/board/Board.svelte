@@ -36,6 +36,9 @@
   import { primaryLabel, promptHint, promptLine } from './prompt';
   import { nameBook, recentView, boardLines, turnOwners, visibleNames, type RecentView } from './recent';
   import Plate from './Plate.svelte';
+  import DeckTracker from './DeckTracker.svelte';
+  import { buildOpponentTracker, buildSelfTracker, loadTrackerCardFaces, type TrackerCardFace } from './deck-tracker';
+  import { autoTapNote, autoTapOffer, nextFullControl, type FullControlMode } from './auto-tap';
   import Rail from './Rail.svelte';
   import BoardCard from './BoardCard.svelte';
   import { phaseTrack, type OnceStops } from './phases';
@@ -103,6 +106,12 @@
     combatPreview?: CombatFetcher;
     /** The person's board after each step that led to this frame: each beat is shown on its own. */
     stepBoards?: readonly StepBoard[];
+    /** Arena-style client Auto-tap: auto-submits mandatory pure-mana payments when Full Control is off. */
+    autoTap?: boolean;
+    fullControl?: FullControlMode;
+    ontoggleautotap?: () => void;
+    onfullcontrol?: (mode: FullControlMode) => void;
+    onautotap?: (offer: InteractionOffer, note: string) => void;
   }
 
   let {
@@ -110,6 +119,7 @@
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
     since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
+    autoTap = false, fullControl = 'off', ontoggleautotap, onfullcontrol, onautotap,
   }: Props = $props();
 
   // Cards read the recorded policy for their own offers.
@@ -713,7 +723,9 @@
           { key: 'Enter', does: 'Act on the focused card or choice' },
           { key: 'Tab', does: 'Next region: fields, hand, stack, choices, moves' },
           { key: '← → ↑ ↓', does: 'Move within a region' },
-          { key: 'F6', does: 'Pass turn: pass every priority window until it ends' },
+          { key: 'Shift Enter', does: 'Pass turn: pass every priority window until it ends (also F6)' },
+          { key: 'Ctrl', does: 'Pause Auto-tap for the next payment (Full Control)' },
+          { key: 'Shift Ctrl', does: 'Hold Full Control across turns' },
         ]),
     { key: 'Esc', does: recording ? 'Close a menu or preview' : "Close a menu or preview; skip the opponent's moves" },
     { key: 'Inspect', does: 'Focus a card, or rest the pointer on it', plain: true },
@@ -721,6 +733,61 @@
   ]);
   let keysOpen = $state(false);
   let keysButton = $state<HTMLButtonElement | null>(null);
+  let myDeckOpen = $state(false);
+  let oppDeckOpen = $state(false);
+  let lastAutoTappedHash = '';
+  let wasPayingInOnce = false;
+  let ctrlPending = false;
+  let ctrlShift = false;
+
+  $effect(() => {
+    if (recording || !live || readingOut || result || drafting || !onautotap) return;
+    if (fullControl === 'once') {
+      if (frame.action_space === 'PAY_OR_NOT') {
+        wasPayingInOnce = true;
+      } else if (wasPayingInOnce) {
+        wasPayingInOnce = false;
+        onfullcontrol?.('off');
+      }
+      return;
+    }
+    wasPayingInOnce = false;
+    const candidate = autoTapOffer(frame, view, { autoTap, fullControl });
+    if (!candidate || frame.frame_hash === lastAutoTappedHash) return;
+    lastAutoTappedHash = frame.frame_hash;
+    onautotap(candidate.offer, autoTapNote(frame));
+  });
+  let trackerFaces = $state.raw<Record<string, TrackerCardFace>>({});
+  const trackerDefNames = $derived(boardProjection.definition_names ?? {});
+  const selfTracker = $derived(buildSelfTracker(boardProjection.agent, trackerFaces, trackerDefNames));
+  const oppTracker = $derived(buildOpponentTracker(boardProjection.opponent, trackerFaces, trackerDefNames));
+  const anyTrackerOpen = $derived(myDeckOpen || oppDeckOpen);
+
+  function toggleBothTrackers(): void {
+    const next = !anyTrackerOpen;
+    myDeckOpen = next && selfTracker !== null;
+    oppDeckOpen = next;
+  }
+
+  $effect(() => {
+    if (!myDeckOpen && !oppDeckOpen) return;
+    const defNames = trackerDefNames;
+    const resolveKeys = (counts: Record<string, number> | undefined): string[] =>
+      Object.keys(counts ?? {}).map(key => defNames[key] ?? key);
+    const names = [
+      ...resolveKeys(boardProjection.agent.main_counts),
+      ...resolveKeys(boardProjection.agent.sideboard_counts),
+      ...resolveKeys(boardProjection.opponent.main_counts),
+      ...resolveKeys(boardProjection.opponent.sideboard_counts),
+      ...boardProjection.opponent.battlefield.map(p => p.name ?? ''),
+      ...boardProjection.opponent.graveyard.map(c => c.name ?? ''),
+      ...boardProjection.opponent.exile.map(c => c.name ?? ''),
+      ...boardProjection.opponent.hand.map(c => c.name ?? ''),
+    ].filter(Boolean);
+    if (!names.length) return;
+    void loadTrackerCardFaces(names).then(faces => { trackerFaces = faces; });
+  });
+
   function closeKeys(): void {
     if (!keysOpen) return;
     keysOpen = false;
@@ -757,6 +824,23 @@
   const MOVES_FOCUS = new Set(['Tab', 'Shift', '?', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
   let skippedKey: string | null = null;
   function onKeydown(event: KeyboardEvent): void {
+    if (!recording && onfullcontrol && !typing(event.target)) {
+      if (event.key === 'Control' && !event.metaKey && !event.altKey) {
+        if (!event.repeat) {
+          ctrlPending = true;
+          ctrlShift = event.shiftKey;
+        }
+        return;
+      }
+      if (event.key === 'Shift' && ctrlPending) {
+        ctrlShift = true;
+        return;
+      }
+      if (ctrlPending) {
+        // Another key was pressed with Ctrl (e.g. Ctrl+C / Ctrl+R): not bare Ctrl.
+        ctrlPending = false;
+      }
+    }
     if (event.key === 'Tab' && !recording && !event.metaKey && !event.ctrlKey && !event.altKey) { wrapTab(event); return; }
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event.target)) return;
     if (!event.repeat) skippedKey = null;
@@ -771,10 +855,11 @@
     }
     if (event.key === '?') { event.preventDefault(); keysOpen = !keysOpen; return; }
     if (event.key === 'Escape' && keysOpen) { closeKeys(); return; }
+    if (event.key === 'Escape' && anyTrackerOpen) { myDeckOpen = false; oppDeckOpen = false; return; }
     if (event.key === 'Escape' && running) { stopSending(); return; }
     if (event.key === 'Escape' && armed !== null) { armed = null; return; }
     if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
-    if (event.key === 'F6') { event.preventDefault(); passTurn(); return; }
+    if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
@@ -788,9 +873,18 @@
       act(view.primary);
     }
   }
+
+  function onKeyup(event: KeyboardEvent): void {
+    if (event.key === 'Control' && ctrlPending && !recording && onfullcontrol) {
+      const shift = ctrlShift || event.shiftKey;
+      ctrlPending = false;
+      ctrlShift = false;
+      onfullcontrol(nextFullControl(fullControl, shift));
+    }
+  }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointermove={onPointerMove}
+<svelte:window onkeydown={onKeydown} onkeyup={onKeyup} onblur={() => { ctrlPending = false; ctrlShift = false; }} onpointermove={onPointerMove}
   onpointerdown={event => { if (keysOpen && !(event.target instanceof Element && event.target.closest('.keys, .keys-hint'))) keysOpen = false; }} />
 
 <div class="game" data-testid="game" data-action-space={frame.action_space} data-live={live} data-thinking={thinking !== null}
@@ -811,6 +905,17 @@
       {/if}
       <button type="button" class="keys-hint type-caption" data-testid="keys-hint" aria-haspopup="dialog" aria-expanded={keysOpen}
         aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" bind:this={keysButton} onclick={() => (keysOpen = !keysOpen)}><kbd>?</kbd></button>
+      {#if !recording && ontoggleautotap}
+        <button type="button" class="inspect-toggle type-caption" data-testid="auto-tap-toggle"
+          aria-pressed={fullControl !== 'off' ? false : autoTap}
+          data-full-control={fullControl}
+          aria-label={fullControl === 'hold' ? 'Full Control (hold) — click to resume Auto-tap' : fullControl === 'once' ? 'Full Control (next payment) — click to resume Auto-tap' : autoTap ? 'Auto-tap is on — press Ctrl to pause once, Shift+Ctrl to hold' : 'Auto-tap is off — click to turn on'}
+          title={fullControl === 'hold' ? 'Full Control (hold) · Shift+Ctrl or click to resume Auto-tap' : fullControl === 'once' ? 'Full Control (next payment) · Ctrl or click to resume Auto-tap' : autoTap ? 'Auto-tap ON · Ctrl pauses once · Shift+Ctrl holds Full Control' : 'Auto-tap OFF · click to auto-tap mandatory mana payments'}
+          onclick={ontoggleautotap}>{fullControl === 'hold' ? 'Full control · hold' : fullControl === 'once' ? 'Full control' : autoTap ? 'Auto-tap' : 'Manual tap'}</button>
+      {/if}
+      <button type="button" class="inspect-toggle type-caption" data-testid="deck-tracker-toggle" aria-pressed={anyTrackerOpen}
+        aria-label="Toggle decklist trackers" title="Show or hide Untapped-style deck trackers for both seats"
+        onclick={toggleBothTrackers}>Decks</button>
       <button type="button" class="inspect-toggle type-caption" data-testid="inspect-toggle" aria-pressed={inspectMode === 'dock'}
         aria-label="Dock inspected cards on the rail" title={inspectMode === 'dock' ? 'Inspected cards show in a pane on the rail; press to show them beside the card' : 'Inspected cards show beside the card; press to dock them on the rail'}
         onclick={toggleInspect}>Dock</button>
@@ -822,7 +927,8 @@
     data-board={beatBoard ? 'step' : 'frame'}>
     <section use:region={{ across: connection !== null }} class="half opponent" aria-label={`${possessive(said)} battlefield`}>
       <Plate player={boardProjection.opponent} name={said} caption={[decidesBy(opponent.name), opponent.deck].filter(Boolean).join(' · ') || null} offers={board.opponent.offers} {live} damage={damage.players.get(boardProjection.opponent.player_index) ?? 0}
-        choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)} />
+        choosing={opponentChoosing} side="opponent" onactivate={element => activate(said, board.opponent.offers, element)} onzone={(zone, cards, element) => openZone(`${said} · ${zone}`, cards, element)}
+        ondeck={() => { oppDeckOpen = !oppDeckOpen; }} deckOpen={oppDeckOpen} />
       <div class="rows" bind:clientWidth={theirRows.width} bind:clientHeight={theirRows.height} style:grid-template-rows={rowsStyle(theirSplit, theirRows, false)}>
         <div class="row support"><Field piles={board.opponent.support} label={`${possessive(said)} lands and other permanents`} limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
         <div class="row creatures"><Field piles={board.opponent.creatures} label={`${possessive(said)} creatures`} limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} toward="down" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -830,7 +936,8 @@
     </section>
     <section use:region={{ across: connection !== null }} class="half you" aria-label="Your battlefield">
       <Plate player={boardProjection.agent} name={you.name} caption={you.deck} offers={board.you.offers} {live} damage={damage.players.get(boardProjection.agent.player_index) ?? 0}
-        side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)} />
+        side="you" onactivate={element => activate(you.name, board.you.offers, element)} onzone={(zone, cards, element) => openZone(`Your ${zone.toLowerCase()}`, cards, element)}
+        ondeck={selfTracker ? () => { myDeckOpen = !myDeckOpen; } : undefined} deckOpen={myDeckOpen} />
       <div class="rows" bind:clientWidth={yourRows.width} bind:clientHeight={yourRows.height} style:grid-template-rows={rowsStyle(yourSplit, yourRows, true)}>
         <div class="row creatures"><Field piles={board.you.creatures} label="Your creatures" limits={CREATURES} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
         <div class="row support"><Field piles={board.you.support} label="Your lands and other permanents" limits={SUPPORT} {live} asked={drafting ? new Set<number>() : board.asked} draft={draftMarks} touched={recent.touched} beat={beatSubjects} damage={damage.objects} planned={payPlanned?.sources ?? null} {unpiled} {targeted} {acting} toward="up" names={boardNames} onactivate={onPermanent} onpreview={previewPermanent} /></div>
@@ -958,6 +1065,14 @@
     {/each}
     <button type="button" role="menuitem" class="cancel" onclick={closeMenu}><kbd>Esc</kbd>Cancel</button>
   </div>
+{/if}
+
+{#if myDeckOpen && selfTracker}
+  <DeckTracker title={you.deck ?? 'Your deck'} view={selfTracker} faces={trackerFaces} side="you" onclose={() => { myDeckOpen = false; }} />
+{/if}
+
+{#if oppDeckOpen}
+  <DeckTracker title={oppTracker.mode === 'opponent-open' ? (opponent.deck ?? `${said}'s deck`) : `${said} · seen`} view={oppTracker} faces={trackerFaces} side="opponent" onclose={() => { oppDeckOpen = false; }} />
 {/if}
 
 {#if keysOpen}
