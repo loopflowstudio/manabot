@@ -14,7 +14,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::{CardDefId, PrintedCharacteristics, Restriction, StaticAbility},
+        card::{CardDefId, PrintedCharacteristics, StaticAbility},
         effect::CopyException,
         game_object::{
             CardId, Object, ObjectId, ObjectLki, PermanentId, PlayerId, PublicId, Target,
@@ -281,9 +281,7 @@ impl Game {
     /// from untapping during it.
     pub(crate) fn untap_all_permanents(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            if self.has_restriction(permanent_id, Restriction::DoesntUntap)
-                || self.doesnt_untap(permanent_id)
-            {
+            if self.doesnt_untap(permanent_id) {
                 continue;
             }
             self.untap_permanent(permanent_id);

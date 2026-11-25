@@ -135,10 +135,10 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   dialog moves focus and scrolls the table, so screenshot it as it is.
   For a demo with specific cards, check that art for an uncached card loads
   through the same launch the person will use. Hover a card name to read
-  `[data-testid=card-rules-text]`. During an active decision, move the pointer
-  between offers and tab through them. Keep the prompt, committed facts and
-  hints distinct, and check that changing a preview leaves the action buttons
-  in place. For a multi-step payment, make a contribution and check that the
+  `[data-testid=card-rules-text]`. During an active decision, hover cards and
+  offers and tab through them. Keep the prompt, committed facts and hints
+  distinct, and check that changing a preview leaves adjacent panels and action
+  buttons in place. For a multi-step payment, make a contribution and check that the
   panel shows what committed, what remains payable and what is still floating.
 - Live network recovery: browser offline emulation may leave an existing
   WebSocket connected. To prove recovery, put a local TCP forwarder between the
@@ -285,3 +285,49 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   header's "New game" (selects, then "Start game") and click
   `[data-testid=action-option]:not([disabled])`; stop a `Popen` server with
   `os.killpg(pid, SIGINT)`.
+- Study (Review analysis, Show analysis, Games record) as a returning user:
+  games only count as "mine" (and only the participant may start an
+  analysis) in the same browser profile and origin, so drive every game with
+  Playwright `launchPersistentContext(<.runs dir>)` and keep one port for
+  the old and new builds. For games written by an older build, `git worktree
+  add --detach /private/tmp/<x> <base>`, build its SPA there, and run it with
+  this checkout's `.venv/bin/python` from `/tmp` (cwd on `sys.path` otherwise
+  loads this checkout) with `PYTHONPATH=/private/tmp/<x>` and
+  `ACADEMY_FRONTEND_BUILD` pointing at its build; when the Rust diff is only
+  additive, this checkout's `.so` serves (the main checkout's may be stale).
+  Start the CLI as `python -c 'from managym.cli import main; main()' academy
+  ...` (`-m managym.cli` exits silently); stop a `nohup … &` server with
+  SIGTERM. Enable live overlays and charts mid-game, not only from turn 1, and
+  check that axes, `%` units and hover readouts are legible. A real checkpoint
+  from `etude train manabot/recipes/local.py`
+  analysed a 130-event game in about 5–60 s depending on load.
+  The Bolt-deck acceptance spec never meets long option names or a stack
+  item; check Review's rail at a Lessons v Allies decision (Learn has nine
+  options) and with **See its line** open, which passes no `onjump`.
+  `playwright.study.config.ts` (`study.spec.ts`) fails at setup on this
+  branch's base protocol ("Study source omitted its participant
+  credential") and runs in no CI job; do not read its failure as a
+  regression without reverting the change first.
+- Battlefield badges in a real game (`managym academy play` with imported
+  `--deck`/`--opponent-deck` files and `--opponent passive`): drive it with a
+  Node Playwright script copied into `academy/ui` (move it out afterwards).
+  Hand cards also carry `data-testid=board-card`, so scope by aria-label.
+  In Play, clicking a permanent with one offer commits it (Fire Nation
+  Cadets' pump), so open Inspect by hovering and waiting about one second,
+  then read `[data-testid=inspect-card]`. Read the turn from
+  `getByText(/^Turn \d+/)`. Each new context replays the same seeded deal, so
+  use a different `--seed` or deck to reach other cards. After game over,
+  "Review this game" opens the replay at position 1. Press End, then the
+  "Previous" button, to reach the final board. With
+  `UV_PROJECT_ENVIRONMENT` and `--only-group play-runtime`, managym is not
+  installed, so uncached card art returns 500 (`PackageNotFoundError` in
+  `card_art.py`). Use a cached card, or install the wheel, when art matters.
+  Start several launch servers from Python `subprocess.Popen(...,
+  start_new_session=True)`; macOS has no `setsid`. Attacking cards are
+  rotated, so `getBoundingClientRect` overlap checks between chips and `.pt`
+  report false overlaps on them; confirm those in a screenshot. Watch with
+  `--player random` twice shows no `.policy` pill; the pill case is covered by
+  `e2e/card-badges.spec.ts` ("recorded Watch badges") or a trained policy.
+  Useful real-game cards: Watery Grasp and Path to Redemption (Auras that name
+  themselves as a restriction source), Tiger-Dillo (own conditional
+  restriction), Sokka with Ty Lee (granted Menace/Prowess named in Inspect).

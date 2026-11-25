@@ -21,7 +21,7 @@ from managym.academy.append_json import encode_list, splice
 from managym.academy.step_boards import WireStepBoard
 from managym.bots import BotDecision
 from managym.disclosure import DecklistDisclosure
-from managym.experience_projection import redact_observation
+from managym.experience_projection import describe_actions, redact_observation
 from managym.replay import ReplayStop
 from managym.search import SearchConfig
 
@@ -213,12 +213,50 @@ class TraceEvent:
     bot_decision: BotDecision | None = None
     # Authority-private analysis view; never included in ordinary trace reads.
     analysis_observation: dict[str, Any] | None = None
+    # When the step was committed, UTC ISO 8601. None in traces that predate it.
+    committed_at: str | None = None
+    # The person committed this decision with a policy's live reading of it
+    # shown (`LiveAnalysis`). Stored only when true; absent reads as false.
+    analysis_shown: bool = False
+    # How an imported record re-dealt the position before this step
+    # (`BRANCHING_INTERVENTIONS` kinds, in order); never its seeds or viewers.
+    branched: list[str] | None = None
+
+
+# Record interventions that branch the recorded position from the game it came
+# from: hidden cards re-dealt, libraries reshuffled, randomness reseeded.
+BRANCHING_INTERVENTIONS = ("determinize", "shuffle_libraries", "reseed")
+
+
+def academy_actions(obs: managym.Observation, human_seat: int) -> list[dict[str, Any]]:
+    """Relabel player targets by role without changing card names or native offers."""
+    actions = describe_actions(obs)
+    labels = {
+        int(player.id): "Hero" if int(player.player_index) == human_seat else "Villain"
+        for player in (obs.agent, obs.opponent)
+    }
+    for row in actions:
+        focus = row["focus"]
+        if row["type"] == "CHOOSE_TARGET" and len(focus) == 1 and focus[0] in labels:
+            if row["description"] in {"Target Hero", "Target Villain"}:
+                row["description"] = f"Target {labels[focus[0]]}"
+    return actions
 
 
 @dataclass(frozen=True)
 class RecordingImport:
     stop: ReplayStop
     build_differs: bool
+
+
+@dataclass(frozen=True)
+class PlayedFrom:
+    """A game played on from another: its first `event` steps are that game's
+    (`trace_id`), replayed through the Command path, and the person chooses
+    from that decision on."""
+
+    trace_id: str
+    event: int
 
 
 @dataclass
@@ -234,6 +272,7 @@ class Trace:
     # applied. Legacy traces omit it.
     canonical_replay: dict[str, Any] | None = None
     recording_import: RecordingImport | None = None
+    played_from: PlayedFrom | None = None
 
     def to_record(self) -> dict[str, Any]:
         """Borrow JSON payloads for immediate, read-only persistence.
@@ -248,6 +287,10 @@ class Trace:
             record.pop("recording_import")
         else:
             record["recording_import"] = asdict(self.recording_import)
+        if self.played_from is None:
+            record.pop("played_from")
+        else:
+            record["played_from"] = asdict(self.played_from)
         record["config"] = self.config.to_record()
         record["mana_payment"] = list(
             self.config.by_seat(self.config.mana_payment, "manual")
@@ -283,7 +326,9 @@ class Trace:
 
 
 def event_record(event: TraceEvent) -> dict[str, Any]:
-    """One event as its stored record (borrowed, like `Trace.to_record`)."""
+    """One event as its stored record (borrowed, like `Trace.to_record`).
+    `analysis_shown` is written only when true, so a game played without
+    analysis keeps its row."""
     record = {
         **{item.name: getattr(event, item.name) for item in fields(event)},
         "bot_decision": (
@@ -292,6 +337,8 @@ def event_record(event: TraceEvent) -> dict[str, Any]:
     }
     if not event.boards:
         record.pop("boards", None)
+    if not event.analysis_shown:
+        del record["analysis_shown"]
     return record
 
 
@@ -312,7 +359,11 @@ def load_trace(trace_id: str, trace_dir: Path | None = None) -> dict[str, Any]:
     recorded = AttemptStore(target_dir / "play.sqlite").load(trace_id)
     if recorded is not None:
         return recorded
-    path = _trace_path(trace_id, target_dir)
+    return load_legacy_trace(trace_id, target_dir)
+
+
+def load_legacy_trace(trace_id: str, trace_dir: Path) -> dict[str, Any]:
+    path = _trace_path(trace_id, trace_dir)
     if not path.exists():
         raise FileNotFoundError(f"Trace not found: {trace_id}")
     with path.open("r", encoding="utf-8") as handle:

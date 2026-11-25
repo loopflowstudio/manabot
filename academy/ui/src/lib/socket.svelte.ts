@@ -7,6 +7,8 @@ import { browser } from '$app/environment';
 import { sanitizeDeckSelection } from './decks';
 import { playerToken, rememberRecordCredential } from './records';
 import { policyChoice, gameStore } from './game.svelte';
+import { followShown, nextLiveAnalysis } from './analysis';
+import { isMoveEvent } from './board/history';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -59,6 +61,8 @@ interface InterruptedSnapshot {
 type PendingCommand = Extract<SharedTableRequest, { type: 'command' }>;
 const VALID_SERVER_TYPES = new Set([
   'work_status',
+  'analysis_state',
+  'analysis',
   'observation',
   'game_over',
   'command_outcome',
@@ -274,6 +278,7 @@ export class GameSocketController {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
+      if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
       if (this.intentionallyClosed) {
         gameStore.setConnection('disconnected');
         return;
@@ -286,6 +291,7 @@ export class GameSocketController {
 
   disconnect(): void {
     this.intentionallyClosed = true;
+    if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -418,6 +424,17 @@ export class GameSocketController {
       stops: { my: [...stops.my], opponent: [...stops.opponent] },
       stop_on_stack: stops.stop_on_stack,
       auto_pass: stops.auto_pass,
+    });
+  }
+
+  /** Show or hide a policy's live reading of your decisions; `policy` by id, else the server's default. */
+  sendShowAnalysis(shown: boolean, policy: string | null = null): void {
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: true };
+    this.send({
+      type: 'show_analysis',
+      ...(gameStore.table ? { grant_revision: gameStore.table.access.grant_revision } : {}),
+      shown,
+      policy,
     });
   }
 
@@ -564,6 +581,15 @@ export class GameSocketController {
       gameStore.applyTable(message.table);
     }
 
+    if (message.type === 'analysis_state' || message.type === 'analysis') {
+      gameStore.liveAnalysis = nextLiveAnalysis(
+        gameStore.liveAnalysis,
+        message,
+        presentationPlayer.events.filter(isMoveEvent).length,
+      );
+      return;
+    }
+
     if (message.type === 'table_snapshot') {
       if ('session_interrupted' in message && message.session_interrupted) {
         this.interrupt('The previous live session is unavailable. Choose New game explicitly to play again.');
@@ -693,7 +719,8 @@ export class GameSocketController {
         this.persistResumeState(message.session_id, message.resume_token);
       }
       // A first/replacement recovery resets match state. Its runner metadata
-      // belongs to the recovered frame and must survive that reset.
+      // and live-analysis flag belong to the recovered frame and must survive that reset.
+      if (message.type === 'observation') gameStore.liveAnalysis = followShown(gameStore.liveAnalysis, message.analysis?.policy ?? null);
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
       this.flushQueue();
@@ -731,6 +758,7 @@ export class GameSocketController {
     gameStore.endFastForward();
     gameStore.endCommand();
     gameStore.newGamePending = false;
+    if (gameStore.liveAnalysis.pending) gameStore.liveAnalysis = { ...gameStore.liveAnalysis, pending: false };
     if (message.session_ended) {
       // The server stopped this game; resuming or redealing its launch would hide why.
       this.interrupt(message.message);
@@ -1003,6 +1031,10 @@ export function sendAction(offerId: number): boolean {
   return controller.sendAction(offerId);
 }
 
+
+export function sendShowAnalysis(shown: boolean, policy: string | null = null): void {
+  controller.sendShowAnalysis(shown, policy);
+}
 
 export function sendSetStops(): void {
   controller.sendSetStops();

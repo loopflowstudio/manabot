@@ -952,6 +952,21 @@ impl Env {
         Ok(game.player_control_views())
     }
 
+    pub fn permanent_details(
+        &self,
+        viewer: usize,
+    ) -> Result<std::collections::BTreeMap<u32, crate::experience::PermanentDetails>, AgentError>
+    {
+        if viewer >= 2 {
+            return Err(AgentError("viewer out of bounds".into()));
+        }
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .permanent_details(PlayerId(viewer)))
+    }
+
     pub fn decision_context(
         &self,
         viewer: usize,

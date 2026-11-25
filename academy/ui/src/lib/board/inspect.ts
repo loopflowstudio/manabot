@@ -1,15 +1,4 @@
-/**
- * What inspecting a permanent explains beyond its printed face: where its
- * power and toughness come from, and which keywords it has and why.
- *
- * Both read only the frame's projection (effective P/T, effective keywords,
- * counters, the continuous-effect records) and the printed face. The
- * projection's keyword list is the authority on which keywords a permanent
- * has; the effect records and the printed face only say why. Nothing here is
- * inferred beyond that: what the named parts do not explain is reported as
- * "other effects", and a keyword neither printed nor recorded as "another
- * ability" (a static grant from another permanent).
- */
+/** Power/toughness provenance and rules text shared by Academy’s inspection surfaces. */
 import type { CardFace } from '$lib/card-faces.svelte';
 import type { CardState, ContinuousEffect, PermanentState } from '$lib/types';
 
@@ -33,17 +22,7 @@ const DURATIONS: Record<string, string> = {
   WhileYouControlSource: 'while its source is controlled',
 };
 
-/** Effect records that are a status rather than a change to a characteristic. */
-const STATUSES: Record<string, string> = { Saddled: 'Saddled' };
-
-/** The statuses a permanent's effect records give it: "Saddled until end of turn". */
-export function statusesOf(permanent: PermanentState): string[] {
-  return [...(permanent.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp)
-    .filter(effect => effect.modification in STATUSES)
-    .map(effect => [STATUSES[effect.modification], DURATIONS[effect.duration]].filter(Boolean).join(' '));
-}
-
-function effectLabel(effect: ContinuousEffect): string {
+export function effectLabel(effect: ContinuousEffect): string {
   const duration = DURATIONS[effect.duration];
   return [effect.source ?? 'An effect', duration].filter(Boolean).join(', ');
 }
@@ -61,7 +40,7 @@ export function ptProvenance(permanent: PermanentState, face: CardFace | null): 
     parts.push({ label: permanent.copy_of ? `Printed (copy of ${permanent.copy_of.name})` : 'Printed', power: face.power, toughness: face.toughness, base: true });
   }
   const counters = permanent.plus1_counters;
-  if (counters) parts.push({ label: `${counters} +1/+1 counter${counters === 1 ? '' : 's'}`, power: counters, toughness: counters, base: false });
+  if (counters) parts.push({ label: counterTerm('+1/+1', counters), power: counters, toughness: counters, base: false });
   for (const effect of effects) {
     if (effect.modification !== 'ModifyPt') continue;
     parts.push({ label: effectLabel(effect), power: effect.power ?? 0, toughness: effect.toughness ?? 0, base: false });
@@ -72,32 +51,6 @@ export function ptProvenance(permanent: PermanentState, face: CardFace | null): 
     if (power || toughness) parts.push({ label: 'Other effects', power, toughness, base: false });
   }
   return { power: permanent.power, toughness: permanent.toughness, parts };
-}
-
-export interface KeywordFact {
-  keyword: string;
-  /** Why it has it: null when printed, else the granting effect or "Another ability". */
-  source: string | null;
-}
-
-export const OTHER_GRANT = 'Another ability';
-
-/**
- * The keywords a permanent has, from the projection's effective list, each
- * with its reason: printed, the effect record that granted it, or another
- * ability. A permanent the projection lists no keywords for has none.
- */
-export function keywordsOf(permanent: PermanentState, face: CardFace | null): KeywordFact[] {
-  const printed = new Set(permanent.abilities_lost ? [] : face?.keywords ?? []);
-  const granted = new Map<string, string>();
-  for (const effect of [...(permanent.effects ?? [])].sort((a, b) => a.timestamp - b.timestamp)) {
-    if (effect.modification !== 'AddKeywords') continue;
-    for (const keyword of effect.keywords ?? []) if (!granted.has(keyword)) granted.set(keyword, effectLabel(effect));
-  }
-  return (permanent.keywords ?? []).map(keyword => ({
-    keyword,
-    source: printed.has(keyword) ? null : granted.get(keyword) ?? OTHER_GRANT,
-  }));
 }
 
 /** "+2/+0", "−1/−1": a P/T change as printed in rules text. */
@@ -112,9 +65,13 @@ export function labelText(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+export function counterTerm(kind: string, count: number): string {
+  return `${count} ${kind.replace(/_/g, ' ')} counter${count === 1 ? '' : 's'}`;
+}
+
 /** "2 stun counters", "1 stash counter": counters by kind, positive counts only. */
 export function counterTerms(counters: Record<string, number> | undefined): string[] {
-  return Object.entries(counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => `${n} ${kind.replace(/_/g, ' ')} counter${n === 1 ? '' : 's'}`);
+  return Object.entries(counters ?? {}).filter(([, n]) => n > 0).map(([kind, n]) => counterTerm(kind, n));
 }
 
 /** Play permissions from the inspected card's viewer projection. */

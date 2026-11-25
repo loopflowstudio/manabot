@@ -11,6 +11,7 @@ import {
 import { mergeBoards, type SeqRange, type StepBoard } from './board/boards';
 import type { HistoryNote } from './board/history';
 import { findKeptDeck, isKeptDeckChoice } from './kept-decks';
+import { LIVE_ANALYSIS_OFF, type LiveAnalysis } from './analysis';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredOnce, loadStoredStops, saveStoredOnce, saveStoredStops, sanitizeStops } from './stops';
 import { nextStopState, pruneOnce, stopLabel, withStopState, type OnceStops } from './board/phases';
@@ -142,6 +143,8 @@ export class GameStore {
   protocolFrame = $state.raw<ExperienceFrame | null>(null);
   /** Session-kept boards for `matchId` (frames and per-line boards, capped at 512). */
   keptBoards = $state.raw<{ matchId: string; boards: StepBoard[] } | null>(null);
+  /** A policy's live reading of your decisions, while you show it; off at the start of every game. */
+  liveAnalysis = $state.raw<LiveAnalysis>(LIVE_ANALYSIS_OFF);
   lastCommandRejection = $state<CommandRejection | null>(null);
   observation = $state.raw<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
@@ -611,6 +614,7 @@ export class GameStore {
 
   private resetMatchState(): void {
     this.interruptedIdentity = null;
+    this.liveAnalysis = LIVE_ANALYSIS_OFF;
     this.searchRetry = null;
     this.work = null;
     this.submissionAccepted = false;

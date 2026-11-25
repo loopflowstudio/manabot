@@ -22,9 +22,11 @@
  * stays the acting viewer's recorded track: labels come from the index, never
  * from a spectator reveal.
  */
-import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
+import { orientBoard, type BotDecision, type BranchKind, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
+import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark, type LivePoint } from '$lib/analysis';
 import type { ExperienceFrame, GameLogEntry, PresentationEvent } from '$lib/types';
 import { mergeBoards, type StepBoard } from './boards';
+import type { HistoryTurn } from './history';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
 
@@ -93,6 +95,12 @@ export interface OfferEvidence {
   search: SearchRow[] | null;
   /** Search and belief provenance: worlds, belief model, seed and receipt. */
   provenance: string[];
+  /** From an analysis: each offer's estimate after it, 0–1 from your seat, by offer id. */
+  estimate: ReadonlyMap<number, number>;
+  /** From an analysis: the policy's first choice, by offer id. */
+  first: number | null;
+  /** What the choice list is headed: "Analysis by Reader" for an analysis, else null. */
+  heading: string | null;
 }
 
 export interface SearchRow {
@@ -145,7 +153,30 @@ export function offerEvidence(frame: ExperienceFrame, outputs: BotDecision | nul
     provenance.push('Uniform belief (physical deal): hidden cards are sampled with copy counts and public knowledge.');
     provenance.push(`Seed ${m.seed}`, `Receipt SHA-256 ${m.receipt_sha256}`);
   }
-  return { probability, chosen, summary, search, provenance };
+  return { probability, chosen, summary, search, provenance, estimate: new Map(), first: null, heading: null };
+}
+
+/**
+ * An analysis of your choice, aligned with its frame's offers: the policy's
+ * probability and its estimate after each offer, and which it would have
+ * chosen. Stated as what the policy reads, never as a verdict on yours.
+ */
+export function analysedEvidence(frame: ExperienceFrame, decision: AnalysedDecision, chosen: number | null, policy: string): OfferEvidence {
+  const probability = new Map<number, number>();
+  const estimate = new Map<number, number>();
+  frame.offers.forEach((offer, i) => {
+    const p = decision.annotation.probabilities?.[i];
+    if (typeof p === 'number') probability.set(offer.id, p);
+    const after = decision.after[i];
+    if (typeof after === 'number') estimate.set(offer.id, after);
+  });
+  const first = firstChoice(decision);
+  const firstId = first === null ? null : frame.offers[first]?.id ?? null;
+  const summary: string[] = [];
+  const here = score(decision.annotation.value, decision.semantic);
+  if (here !== null) summary.push(`${policy}'s estimate here: ${Math.round(here * 100)}`);
+  else if (decision.annotation.value !== null) summary.push(`${policy}'s value here: ${decision.annotation.value.toFixed(3)} · ${decision.semantic ?? 'undeclared'}`);
+  return { probability, chosen, summary, search: null, provenance: [], estimate, first: firstId, heading: `Analysis by ${policy}` };
 }
 
 // ———————————————————————————————————————— Move list and strip
@@ -161,6 +192,18 @@ export function offerEvidence(frame: ExperienceFrame, outputs: BotDecision | nul
  * game names its chosen offer. `heroSeat` is the seat
  * named as "you"; `seatName` names the players the narration calls "Seat N".
  */
+const BRANCHES: Record<BranchKind, string> = {
+  determinize: 'hidden cards re-dealt',
+  shuffle_libraries: 'libraries reshuffled',
+  reseed: 'randomness reseeded',
+};
+const BRANCH_ENTRY = 'branch:';
+
+/** The position a log entry jumps to: a branch note jumps to the choice it precedes. */
+export function entryPosition(id: string): string {
+  return id.startsWith(BRANCH_ENTRY) ? id.slice(BRANCH_ENTRY.length) : id;
+}
+
 export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatName?: (seat: 0 | 1) => string): GameLogEntry[] {
   const entries: GameLogEntry[] = [];
   // The first of the person's own steps in this step of the turn whose move
@@ -168,6 +211,15 @@ export function replayLog(positions: readonly Position[], heroSeat: 0 | 1, seatN
   let begun: Position | null = null;
   positions.forEach((position, i) => {
     if (position.kind === 'state') return;
+    // A neutral note where an imported record branched from its source game.
+    if (position.kind === 'choice' && position.branched?.length) {
+      entries.push({
+        id: BRANCH_ENTRY + position.key,
+        actor: 'system',
+        turn: position.turn,
+        text: `Branch · ${position.branched.map(kind => BRANCHES[kind]).join(', ')}`,
+      });
+    }
     if (position.kind === 'consequences' && positions[i - 1]?.kind === 'choice') return;
     if (position.kind === 'consequences' && position.label === null) return;
     // The recorded person's own choice reads as its narrated move, as the
@@ -215,6 +267,32 @@ export function nameSeats(text: string, seatName: (seat: 0 | 1) => string, yours
   });
 }
 
+/** Walk back past announcing steps (`label === null` consequences of the same actor, turn and step) to the choice where a move began. */
+function moveStartKey(positions: readonly Position[], choiceIndex: number): string {
+  let at = choiceIndex;
+  const anchor = positions[at];
+  while (at >= 2) {
+    const prevAfter = positions[at - 1];
+    const prevChoice = positions[at - 2];
+    if (
+      prevAfter.kind === 'consequences'
+      && prevAfter.label === null
+      && prevAfter.actor === anchor.actor
+      && prevAfter.turn === anchor.turn
+      && prevAfter.step === anchor.step
+      && prevChoice.kind === 'choice'
+      && prevChoice.actor === anchor.actor
+      && prevChoice.turn === anchor.turn
+      && prevChoice.step === anchor.step
+    ) {
+      at -= 2;
+    } else {
+      break;
+    }
+  }
+  return positions[at].key;
+}
+
 /** The position key a track event jumps to in Review. */
 export function positionKeyForEvent(
   positions: readonly Position[],
@@ -223,9 +301,12 @@ export function positionKeyForEvent(
 ): string | null {
   let fallback: string | null = null;
   const preferred = isMove ? 'choice' : 'consequences';
-  for (const position of positions) {
+  for (let i = 0; i < positions.length; i++) {
+    const position = positions[i];
     if (position.revision !== event.from_revision) continue;
-    if (position.kind === preferred) return position.key;
+    if (position.kind === preferred) {
+      return preferred === 'choice' ? moveStartKey(positions, i) : position.key;
+    }
     if (fallback === null) fallback = position.key;
   }
   return fallback;
@@ -317,8 +398,10 @@ export interface StripMark {
   /** A recorded decision, and whose: the seat named "you" in the move list, or the other. */
   decision: boolean;
   side: 'you' | 'opponent' | null;
-  /** The chooser's recorded value, when retained. */
+  /** The chooser's recorded value, when retained; with an analysis, your 0–1 score. */
   value: number | null;
+  /** An analysed decision where you chose otherwise than the policy. */
+  differs?: boolean;
   label: string;
 }
 
@@ -333,6 +416,8 @@ export interface StripLine {
   onjump?: (at: number) => void;
   /** Why positions cannot be opened, when they cannot. */
   note?: string | null;
+  /** With an analysis: the line's caption; values are then 0–1 scores on a fixed 0–100 axis. */
+  scale?: string | null;
 }
 
 /** Every position as a mark on one line: decisions stand out, turns are ticked. */
@@ -349,6 +434,61 @@ export function stripMarks(positions: readonly Position[], heroSeat: 0 | 1): Str
   }));
 }
 
+/**
+ * The strip read against an analysis: your analysed decisions carry the
+ * policy's score at them and whether you chose otherwise; every other value
+ * is dropped, as it is on another scale.
+ */
+export function analysedMarks(marks: readonly StripMark[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): StripMark[] {
+  return marks.map(mark => {
+    const position = positions[mark.at];
+    const decision = position.kind === 'choice' && position.event !== undefined ? decisions.get(position.event) : undefined;
+    if (!decision) return { ...mark, value: null, differs: false };
+    const first = firstChoice(decision);
+    return { ...mark, value: score(decision.annotation.value, decision.semantic), differs: first !== null && decision.played !== first };
+  });
+}
+
+/**
+ * Each of your analysed moves' mark, by move id: every analysed decision from
+ * the position a move jumps to up to the next move counts toward it, so a
+ * cast's target and payment choices are marked with the cast.
+ */
+export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+  const marks = new Map<string, DecisionMark>();
+  for (const [move, choice] of yourMoveChoices(entries, positions)) {
+    const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
+    const mark = decision ? decisionMark(decision) : null;
+    if (!mark) continue;
+    const marked = marks.get(move);
+    marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
+  }
+  return marks;
+}
+
+/**
+ * Your moves chosen with a live analysis shown, by log entry id: a move is
+ * marked when any of your choices from its entry up to the next entry was
+ * committed with the analysis shown. A stored fact about the game, shown
+ * whether or not an analysis is open.
+ */
+export function analysisShownMoves(entries: readonly GameLogEntry[], positions: readonly Position[]): Set<string> {
+  return new Set(yourMoveChoices(entries, positions).filter(([, choice]) => choice.analysis_shown).map(([move]) => move));
+}
+
+/** Each of your choice positions with the id of the move entry it belongs to: the last entry at or before it. */
+function yourMoveChoices(entries: readonly GameLogEntry[], positions: readonly Position[]): [string, Position][] {
+  const ids = new Set(entries.map(entry => entry.id));
+  const yours = new Set(entries.filter(entry => entry.actor === 'hero').map(entry => entry.id));
+  const choices: [string, Position][] = [];
+  let move: string | null = null;
+  for (const position of positions) {
+    if (ids.has(position.key)) move = position.key;
+    if (move !== null && yours.has(move) && position.kind === 'choice') choices.push([move, position]);
+  }
+  return choices;
+}
+
 /** Turn starts far enough apart to number without overlap, as indices into `marks`. */
 export function labelledTurns(marks: readonly StripMark[], minGap: number): StripMark[] {
   const span = Math.max(1, marks.length - 1);
@@ -359,6 +499,126 @@ export function labelledTurns(marks: readonly StripMark[], minGap: number): Stri
     if (!last || (mark.at - last.at) / span >= minGap) shown.push(mark);
   }
   return shown;
+}
+
+function historyYourMoveChoices(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+): [string, Position][] {
+  const indexByKey = new Map(positions.map((position, index) => [position.key, index]));
+  const lineAt = new Map<number, { id: string; actor: HistoryTurn['lines'][number]['actor'] }>();
+  let firstHero: string | null = null;
+  for (const turn of turns) {
+    for (const line of turn.lines) {
+      if (line.passes !== null || !line.jumpKey) continue;
+      const at = indexByKey.get(line.jumpKey);
+      if (at === undefined) continue;
+      if (line.actor === 'you' && firstHero === null) firstHero = line.id;
+      const existing = lineAt.get(at);
+      if (!existing || (existing.actor !== 'you' && line.actor === 'you')) {
+        lineAt.set(at, { id: line.id, actor: line.actor });
+      }
+    }
+  }
+  const choices: [string, Position][] = [];
+  let lastHero: string | null = null;
+  positions.forEach((position, at) => {
+    const line = lineAt.get(at);
+    if (line?.actor === 'you') lastHero = line.id;
+    if (position.kind !== 'choice' || position.actor !== heroSeat) return;
+    const owner = lastHero ?? firstHero;
+    if (owner !== null) choices.push([owner, position]);
+  });
+  return choices;
+}
+
+/** Each of your analysed moves' mark, keyed by top-level `HistoryLine.id`. */
+export function historyMoveMarks(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+  decisions: ReadonlyMap<number, AnalysedDecision>,
+): Map<string, DecisionMark> {
+  const marks = new Map<string, DecisionMark>();
+  for (const [move, choice] of historyYourMoveChoices(turns, positions, heroSeat)) {
+    const decision = choice.event === undefined ? undefined : decisions.get(choice.event);
+    const mark = decision ? decisionMark(decision) : null;
+    if (!mark) continue;
+    const marked = marks.get(move);
+    marks.set(move, marked ? { ...marked, agreed: marked.agreed + mark.agreed, of: marked.of + mark.of } : mark);
+  }
+  return marks;
+}
+
+/** Your moves chosen with a live analysis shown, keyed by top-level `HistoryLine.id`. */
+export function historyAnalysisShown(
+  turns: readonly HistoryTurn[],
+  positions: readonly Position[],
+  heroSeat: 0 | 1,
+): Set<string> {
+  return new Set(
+    historyYourMoveChoices(turns, positions, heroSeat)
+      .filter(([, choice]) => choice.analysis_shown)
+      .map(([move]) => move),
+  );
+}
+
+/**
+ * A live game's moves as strip marks, from its log: the person's and the
+ * opponent's decisions, automation as plain positions. Live marks carry no
+ * value and no position to jump to.
+ */
+export function logMarks(entries: readonly GameLogEntry[]): StripMark[] {
+  return entries.map((entry, at) => ({
+    at,
+    key: entry.id,
+    turn: entry.turn,
+    turnStart: at === 0 || entry.turn !== entries[at - 1].turn,
+    decision: entry.actor === 'hero' || entry.actor === 'villain',
+    side: entry.actor === 'hero' ? 'you' : entry.actor === 'villain' ? 'opponent' : null,
+    value: null,
+    label: `Turn ${entry.turn ?? '?'} · ${entry.text}`,
+  }));
+}
+
+/**
+ * Overlay a policy's live readings onto any sequence of live strip marks
+ * (`trackMarks` or `logMarks`). Each reading becomes a point of its own, so a
+ * decision that emits no move still carries its score.
+ */
+export function withLiveAnalysisPoints(marks: readonly StripMark[], points: readonly LivePoint[]): StripMark[] {
+  const moveText = (mark: StripMark): string => mark.label.replace(/^Turn [^·]+ · /, '');
+  const placed = points.map(live => {
+    if (live.at !== null) return { live, at: live.at };
+    const turnStart = marks.findIndex(mark => mark.turn !== null && mark.turn >= (live.turn ?? 0));
+    return { live, at: turnStart === -1 ? marks.length : turnStart };
+  }).sort((a, b) => a.at - b.at || a.live.event - b.live.event);
+  const point = ({ live, at }: (typeof placed)[number]): StripMark => {
+    const last = marks[at - 1];
+    const turn = live.turn ?? last?.turn ?? marks[0]?.turn ?? null;
+    const where = live.label ?? (last ? `after ${moveText(last)}` : 'before the first move');
+    return { at: 0, key: `read-${live.event}`, turn, turnStart: false, decision: true, side: 'you', value: live.score, label: `Turn ${turn ?? '?'} · ${where}` };
+  };
+  const out: StripMark[] = [];
+  let next = 0;
+  marks.forEach((mark, index) => {
+    while (next < placed.length && placed[next].at <= index) out.push(point(placed[next++]));
+    out.push({ ...mark, value: null });
+  });
+  while (next < placed.length) out.push(point(placed[next++]));
+  return out.map((mark, at) => ({ ...mark, at, turnStart: at === 0 || mark.turn !== out[at - 1].turn }));
+}
+
+/**
+ * Live play's strip with the policy's line on it: each reading is a point of
+ * its own, so a decision that logs nothing (a priority pass) still has one.
+ * A decision read as you faced it sits where the action log stood then and is
+ * named by the move before it; one read after the fact sits at the start of
+ * its turn and is named by the move you chose. Logged moves carry no value.
+ */
+export function liveAnalysedMarks(entries: readonly GameLogEntry[], points: readonly LivePoint[]): StripMark[] {
+  return withLiveAnalysisPoints(logMarks(entries), points);
 }
 
 /**
