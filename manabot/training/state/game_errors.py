@@ -39,6 +39,15 @@ from managym.replay import (
     run_bounded_replay,
 )
 
+__all__ = [
+    "GameErrorPolicy",
+    "GameAttempt",
+    "GameErrorState",
+    "GameErrorLimit",
+    "GameOutcome",
+    "settle",
+]
+
 GameOutcome = Literal[
     "completed",
     "engine_error",

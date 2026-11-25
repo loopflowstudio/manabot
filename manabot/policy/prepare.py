@@ -93,6 +93,11 @@ from manabot.policy.spans import (
 )
 import managym
 
+__all__ = [
+    "Prepared",
+    "reference_distribution",
+]
+
 Array = np.ndarray
 
 

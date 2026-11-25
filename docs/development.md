@@ -221,6 +221,19 @@ Check changed Python modules and type stubs with
 `uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
 compatibility stub is part of the public package surface.
 
+**Published library API.** After changing any of the fifteen published `manabot`
+modules ([Library API](../manabot/README.md#library-api)) or
+`managym/__init__.pyi`, verify the public contract and external consumer path:
+
+```bash
+uv run python scripts/public_api.py check
+uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py -q
+```
+
+For non-breaking additions on the current `0.Y.x` line, update
+`tests/public_api.json` with `uv run python scripts/public_api.py record`. See
+[Patch-clean main](#patch-clean-main) for breaking changes and minor rollovers.
+
 **Policy backends.** Shared damped-update or backend changes need
 `uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_prepare_rows.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
 The installed-backend tests run the real update, force gradient clipping,
@@ -359,8 +372,8 @@ neither skipped nor succeeded.
 | Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
 | Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
-| Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
-| `manabot/infra/` | Python unit, integration |
+| `manabot/README.md` (published API table), other `manabot/`, training/eval/sim tests, `tests/test_public_api_contract.py`, `tests/public_api.json`, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
+| `manabot/infra/`, `tests/infra/test_external_consumer.py` | Python unit, integration |
 | `engine-budget.yml`, `managym/examples/bench_*.rs`, `managym/examples/curated/`, `managym/perf/` | Engine budget (`engine-budget.yml` also Python workflow regressions; `bench_search.rs` also Rust digest tests; `scripts/engine_budget.py` also Python unit) |
 | `website/`, `tests/infra/`, rules audit | Python unit |
 | Docs, Markdown, `.lf/`, `paper/`, `scratch/`, other workflows | Detection and aggregate only |
@@ -890,6 +903,47 @@ and retry. Development groups are not installed as part of a downstream package.
 Experiment recipes (`etude train experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
+
+### Patch-clean main
+
+During a `0.Y.x` release cycle, `main` stays patch-compatible with `0.Y.0` so a
+`0.Y.(Z+1)` patch release can be cut directly from `main` at any time:
+
+- **Additions** (a new published module, symbol, method, attribute, optional
+  parameter/field, enum member, or marking an existing symbol deprecated) are
+  patch-compatible. Update the checked-in contract snapshot with
+  `uv run python scripts/public_api.py record`.
+- **Renames and replacements** keep the old API working on `0.Y.x` behind a
+  `DeprecationWarning` shim targeting `0.(Y+1).0` (decorated with
+  `@typing_extensions.deprecated` where applicable) and tag the whole deletable
+  compatibility graph with that version.
+- **Next-minor removals** wait in their own PRs and merge together immediately
+  before cutting `0.(Y+1).0`. Do not merge un-shimmed removals of published APIs
+  onto `main` while it is still on `0.Y.x`.
+
+`scripts/public_api.py` and `tests/test_public_api_contract.py` enforce this
+against [`tests/public_api.json`](../tests/public_api.json) for both
+`managym/__init__.pyi` and `manabot`'s published modules
+([Library API](../manabot/README.md#library-api)):
+
+```bash
+uv run python scripts/public_api.py check
+# Example failure when a published parameter is renamed on 0.2.x:
+#   BREAKING manabot.training.rollout.collection.open_collector: parameter num_envs removed
+#   BREAKING manabot.training.rollout.collection.open_collector: required parameter envs added
+#
+#   main is on the 0.2.x patch line (pyproject.toml: 0.2.5).
+#   Restore the published API or keep a DeprecationWarning alias targeting 0.3.0.
+#   Only for an unavoidable break: uv run python scripts/public_api.py record --allow-break --reason '<why>'
+```
+
+Plain `scripts/public_api.py record` accepts only non-breaking additions while
+`pyproject.toml` stays on the contract's `line` (for example `0.2`), and refuses
+both `BREAKING` changes and `DEPRECATED_REMOVED` drops. Once `pyproject.toml`
+advances to the next minor line (for example `0.3.0`), plain `record` accepts
+dropping entries that were already `deprecated: true` on `0.2.x`, advances
+`line`, and clears prior `breaks`, while still refusing non-deprecated breaks
+unless `--allow-break --reason "<why>"` is passed explicitly.
 
 ### Build and verify
 

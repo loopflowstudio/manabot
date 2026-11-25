@@ -7,7 +7,9 @@ Per-stream record views share host features with learner chunk assembly; raw
 chunk certificates remain the authority and no neural state enters these views.
 """
 
-from collections.abc import Iterator, Sequence
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field, fields
 from hashlib import sha256
 import sys
@@ -24,6 +26,14 @@ from manabot.policy.decision_memory import (
     live_memory,
     record_chunks,
 )
+
+__all__ = [
+    "MemoryArchive",
+    "MemoryCapacities",
+    "Prefix",
+    "archive_memory",
+    "restore_memory",
+]
 
 if TYPE_CHECKING:
     from manabot.policy.decision_memory import MemoryFeatures
@@ -48,6 +58,9 @@ class Chunk:
 
     key: str
     rows: tuple[np.ndarray, ...]
+
+    def __reduce__(self) -> tuple[type, tuple[str, tuple[np.ndarray, ...]]]:
+        return Chunk, (self.key, self.rows)
 
     def __post_init__(self) -> None:
         if len(self.rows) != 4 or not 0 < len(self.rows[0]) <= _CHUNK_ROWS:
@@ -111,7 +124,10 @@ class Tail:
     chunk: Chunk
     cursor: MemoryCursor = field(init=False)
     # Cache only the current vocabulary on this node; no cross-game owner.
-    features: ChunkFeatures
+    features: ChunkFeatures = field(default_factory=ChunkFeatures)
+
+    def __reduce__(self) -> tuple[type, tuple[str, Tail | None, Chunk]]:
+        return Tail, (self.key, self.previous, self.chunk)
 
     def __post_init__(self) -> None:
         key = sha256(
@@ -143,6 +159,13 @@ class Prefix:
         default_factory=lambda: RecordVersion(), compare=False
     )
 
+    def __reduce__(
+        self,
+    ) -> tuple[Callable[..., Prefix], tuple[PrefixIdentity, tuple[Tail, ...]]]:
+        # Memoize each predecessor first. Even a long game uses bounded pickle stack depth.
+        chain = tuple(self.tail.chunks()) if self.tail else ()
+        return restore_prefix, (self.identity, chain)
+
     @property
     def counts(self) -> tuple[int, ...]:
         c = self.tail.cursor if self.tail else MemoryCursor()
@@ -155,6 +178,15 @@ class Prefix:
     @property
     def detail_count(self) -> int:
         return self.counts[1]
+
+
+def restore_prefix(identity: PrefixIdentity, chain: tuple[Tail, ...]) -> Prefix:
+    previous = None
+    for node in chain:
+        if not isinstance(node, Tail) or node.previous is not previous:
+            raise ValueError("disconnected decision-memory prefix")
+        previous = node
+    return Prefix(identity, previous)
 
 
 @dataclass(eq=False, slots=True, weakref_slot=True)
@@ -325,6 +357,12 @@ class RetainedMemory:
         ):
             raise ValueError("decision-memory prefix exceeds configured capacity")
 
+    def __reduce__(
+        self,
+    ) -> tuple[type[RetainedMemory], tuple[tuple[Prefix, ...], MemoryCapacities]]:
+        # Restore through the constructor so loaded prefixes meet their capacities.
+        return RetainedMemory, (self.prefixes, self.capacities)
+
     def select(self, indexes: np.ndarray | slice) -> "RetainedMemory":
         prefixes = (
             self.prefixes[indexes]
@@ -427,7 +465,7 @@ class MemoryStore:
             if tail.previous is not previous or tail.chunk is not chunk:
                 raise ValueError("decision-memory prefix hash collision")
             return tail
-        tail = Tail(key, previous, chunk, ChunkFeatures())
+        tail = Tail(key, previous, chunk)
         self._tails[key] = tail
         return tail
 

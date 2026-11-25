@@ -41,6 +41,15 @@ from managym.enums import (  # noqa: F401
     ZoneEnum,
 )
 
+__all__ = [
+    "ObservationSpace",
+    "column",
+    "columns",
+    "column_names",
+    "width",
+    "encode_policy_batch",
+]
+
 # Release that removes the `PolicyObservation` alias here.
 REMOVAL_RELEASE = "0.3.0"
 
@@ -223,6 +232,9 @@ class ObservationSpace(gym.spaces.Space):
                 for name, shape in self.shapes.items()
             }
         )
+
+    def __reduce__(self) -> tuple[type, tuple[ObservationConfig]]:
+        return ObservationSpace, (self.config,)
 
     def sample(self, mask: Any = None) -> dict[str, np.ndarray]:
         return self.spaces.sample()

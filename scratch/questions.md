@@ -92,3 +92,23 @@ reversible before merge.
     naming the defect. Needs its own bug Task (native memory token emission
     or `agent/record_vocabulary.rs`), and the retained-prefix featurizer
     should then refuse unknown tokens too.
+
+19. **Sync onto main at `d09f43c286` (2026-11-24).** Main brought MTG-437
+    (0.2.6 jace transport: pickling, `RolloutBatch.concatenate`, encoder
+    shortcuts) and the published-API contract. Resolution: kept main's
+    `packed_seat_axis` name and `ObservationLayout.packed` (always built, v11
+    only); kept both native pickle (memo-shared buffers, structural checks) and
+    this branch's `to_bytes`/`from_bytes` archive (full join validation) —
+    merging them into one format is a follow-up choice. Ported
+    `ObservationSelection.concatenate` / `RecordedObservations.concatenate` to
+    `RetainedMemory`, gave `RetainedMemory.__reduce__` so unpickling reruns the
+    capacity check, dropped the encoder shortcuts and their test, and ported
+    `tests/training/test_rollout_transport.py` to native-only rows (dense
+    merge and `native and dense` cases deleted).
+    **Open:** `scripts/public_api.py check` fails: the snapshot records the
+    0.2.x surface this branch removes (`PackedActions.native/fields/unpack`,
+    `RecordedObservations.memory*`, `RolloutBatch.policy_rows/ordered_obs`,
+    `managym.input_v10_state`, `observation_layout(legacy=, turn_state=)`,
+    deprecated encoder aliases). Per patch-clean main this PR is a held
+    0.3.0 removal; recording it (`record --allow-break --reason`) or adding
+    0.3.0-deprecated aliases for the non-deprecated breaks is undecided.

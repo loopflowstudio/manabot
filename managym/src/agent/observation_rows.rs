@@ -228,7 +228,7 @@ impl PackedRows {
                 .iter()
                 .filter(|(key, _)| !key.ends_with("_valid"))
                 .map(|(key, array)| {
-                    let seat_axis = array.seat_axis(key);
+                    let seat_axis = array.packed_seat_axis(key);
                     (
                         key.clone(),
                         PackedTable {

@@ -6,6 +6,10 @@ from manabot.backends.torch.policy import PolicyInference
 from manabot.env.observation import ObservationSpace, encode_policy_batch
 import managym
 
+__all__ = [
+    "evaluate_observation",
+]
+
 
 def evaluate_observation(
     scope: PolicyInference, space: ObservationSpace, observation: managym.Observation

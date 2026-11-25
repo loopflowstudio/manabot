@@ -75,18 +75,60 @@ fn arrays_dict(py: Python<'_>, arrays: &BTreeMap<String, ArrayLayout>) -> PyResu
     Ok(out.into())
 }
 
+/// Physical row boundaries for a configured CSR table.
+#[derive(Clone, Copy)]
+pub struct PackedTableLayout {
+    pub seat_axis: bool,
+    pub capacity: usize,
+    pub stride: usize,
+}
+
+impl PackedTableLayout {
+    fn new(key: &str, array: &ArrayLayout) -> PyResult<Self> {
+        let seat_axis = array.packed_seat_axis(key);
+        let axis = usize::from(seat_axis);
+        let capacity = array.shape[axis].expect("resolved capacity");
+        let fields = array.packed_fields(key);
+        let stride = if array.element.is_some() {
+            array.shape[axis + 1..]
+                .iter()
+                .try_fold(fields[0].storage.bytes(), |bytes, extent| {
+                    bytes.checked_mul(extent.expect("resolved extent"))
+                })
+                .ok_or_else(|| PyValueError::new_err("packed row stride exceeds address space"))?
+        } else {
+            fields.iter().map(|field| field.storage.bytes()).sum()
+        };
+        Ok(Self {
+            seat_axis,
+            capacity,
+            stride,
+        })
+    }
+}
+
 /// Resolved policy input, shared by allocation and native buffer validation.
 #[pyclass(frozen, module = "managym")]
 #[derive(Clone)]
 pub struct ObservationLayout {
     pub config: ObservationEncoderConfig,
     pub arrays: BTreeMap<String, ArrayLayout>,
+    pub packed: BTreeMap<String, PackedTableLayout>,
 }
 
 impl ObservationLayout {
     pub fn from_config(config: ObservationEncoderConfig) -> PyResult<Self> {
         let arrays = native_layout::configured_arrays(&config).map_err(PyValueError::new_err)?;
-        Ok(Self { config, arrays })
+        let packed = arrays
+            .iter()
+            .filter(|(key, _)| !key.ends_with("_valid"))
+            .map(|(key, array)| Ok((key.clone(), PackedTableLayout::new(key, array)?)))
+            .collect::<PyResult<_>>()?;
+        Ok(Self {
+            config,
+            arrays,
+            packed,
+        })
     }
 }
 
@@ -129,9 +171,10 @@ impl ObservationLayout {
         })
     }
 
-    // Spaces travel with policies through deepcopy, pickle and spawned workers.
-    fn __getnewargs_ex__(&self, py: Python<'_>) -> PyResult<(PyObject, PyObject)> {
-        let c = self.config;
+    // Spaces travel with policies through deepcopy, pickle (all protocols) and spawned workers.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
+        let c = slf.borrow().config;
         let kwargs = PyDict::new_bound(py);
         kwargs.set_item("policy_input_version", 11)?;
         kwargs.set_item("policy_history", c.policy_history)?;
@@ -149,7 +192,8 @@ impl ObservationLayout {
             c.max_decision_reference_details,
         )?;
         kwargs.set_item("max_decision_members", c.max_decision_members)?;
-        Ok((PyTuple::empty_bound(py).into(), kwargs.into()))
+        let new = py.import_bound("copyreg")?.getattr("__newobj_ex__")?;
+        Ok((new, (slf.get_type(), PyTuple::empty_bound(py), kwargs)).into_py(py))
     }
 
     /// Buffers on each variable axis and their row dimensions before batching.

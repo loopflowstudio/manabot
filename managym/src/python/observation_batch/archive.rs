@@ -129,7 +129,7 @@ impl<'a> Table<'a> {
         array: &ArrayLayout,
         batch_size: usize,
     ) -> PyResult<Self> {
-        let seat_axis = array.seat_axis(key);
+        let seat_axis = array.packed_seat_axis(key);
         let groups = if seat_axis { 2 } else { 1 };
         let capacity = array.shape[usize::from(seat_axis)].unwrap();
         let fields = array.packed_fields(key);

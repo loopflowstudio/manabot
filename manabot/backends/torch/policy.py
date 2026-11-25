@@ -67,6 +67,11 @@ from manabot.policy.spans import (
 )
 import managym
 
+__all__ = [
+    "ActorCritic",
+    "PolicyInference",
+]
+
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefEncodingSchema
 

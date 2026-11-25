@@ -24,6 +24,10 @@ from manabot.training.learning import Precision
 from manabot.training.rollout.numerics import SampledRows, prepared_chunks
 from manabot.training.rollout.selection_data import SelectionDraw
 
+__all__ = [
+    "CollectionSession",
+]
+
 
 class CollectionSession:
     packing_mask = staticmethod(packing_mask)

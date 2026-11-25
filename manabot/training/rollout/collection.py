@@ -107,6 +107,15 @@ from manabot.training.state.game_errors import (
 from managym import WORLD_SETUP, Deck, GameSetup, PlayerConfig, SlotLoad
 from managym.recording import DecisionAnnotation
 
+__all__ = [
+    "open_collector",
+    "collect",
+    "close_collector",
+    "Collector",
+    "RolloutBatch",
+    "RecordedObservations",
+]
+
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
 # -----------------------------------------------------------------------------
@@ -221,6 +230,47 @@ class RecordedObservations:
     # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
     needs: np.ndarray | None = None
 
+    @classmethod
+    def concatenate(cls, parts: Sequence[RecordedObservations]) -> RecordedObservations:
+        """Append recording stores and translate learner indexes into the joined store."""
+        if not parts:
+            raise ValueError("cannot concatenate empty recorded observations")
+        counts = [len(part.rows.coordinates) for part in parts]
+        for part, count in zip(parts, counts, strict=True):
+            index = part.index
+            if (
+                index.ndim != 1
+                or index.dtype.kind not in "iu"
+                or (index < 0).any()
+                or (index >= count).any()
+            ):
+                raise ValueError("recorded index must select rows within its own store")
+            if part.needs is not None and part.needs.shape != (count, len(AXES)):
+                raise ValueError(
+                    "recorded bucket needs must match observation rows and axes"
+                )
+        rows = ObservationSelection.concatenate([part.rows for part in parts])
+        if len(parts) == 1:
+            return parts[0]
+        offsets = np.cumsum([0, *counts[:-1]], dtype=np.int64)
+        indexes = np.concatenate(
+            [
+                part.index.astype(np.int64, copy=False) + offset
+                for part, offset in zip(parts, offsets, strict=True)
+            ]
+        )
+        needs = None
+        if any(part.needs is not None for part in parts):
+            needs = np.concatenate(
+                [
+                    part.needs
+                    if part.needs is not None
+                    else np.full((count, len(AXES)), -1, np.int64)
+                    for part, count in zip(parts, counts, strict=True)
+                ]
+            )
+        return cls(rows, indexes, needs)
+
     def gather(self, indexes: np.ndarray) -> ObservationSelection:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
         return self.rows.select(self.index[indexes])
@@ -279,6 +329,123 @@ class RolloutBatch:
     def __post_init__(self) -> None:
         validate_rollout_metadata(self)
 
+    @classmethod
+    def concatenate(cls, batches: Sequence[RolloutBatch]) -> RolloutBatch:
+        """Merge packed worker batches in order, preserving each trajectory's bootstrap."""
+        if not batches:
+            raise ValueError("cannot concatenate empty rollout batches")
+        explicit = batches[0].trajectories is not None
+        for batch in batches:
+            shape = batch.actions.shape
+            if (
+                len(shape) != 2
+                or shape[1] != 1
+                or not shape[0]
+                or batch.dones.shape != shape
+            ):
+                raise ValueError(
+                    "rollout concatenation requires packed [rows, 1] actions and dones"
+                )
+            if (batch.trajectories is not None) != explicit:
+                raise ValueError("cannot mix complete-game and explicit trajectories")
+            if (
+                batch.recorded.index.shape != (shape[0],)
+                or len(batch.action_data.offsets) != shape[0] + 1
+            ):
+                raise ValueError(
+                    "recorded indexes and packed actions must cover the learner rows"
+                )
+            if any(
+                value.shape != shape
+                for value in (batch.logprobs, batch.rewards, batch.values)
+            ):
+                raise ValueError(
+                    "behavior logs, rewards and values must match packed actions"
+                )
+            validate_rollout_metadata(batch)
+            if not explicit and (
+                not batch.dones[-1, 0]
+                or batch.next_done.shape != (1,)
+                or not batch.next_done.all()
+            ):
+                raise ValueError(
+                    "complete-game batches must end on a terminal row with next_done true"
+                )
+
+        recorded = RecordedObservations.concatenate(
+            [batch.recorded for batch in batches]
+        )
+        if len(batches) == 1:
+            return batches[0]
+        optional: dict[str, np.ndarray | None] = {}
+        for name in (
+            "outcome_probabilities",
+            "assignments",
+            "target_residuals",
+            "episode_source",
+            "snapshot_id",
+            "branch_group_id",
+            "is_root_decision",
+            "sample_weight",
+        ):
+            values = [getattr(batch, name) for batch in batches]
+            present = [value for value in values if value is not None]
+            if present and len(present) != len(values):
+                raise ValueError(f"workers differ on the presence of {name}")
+            optional[name] = np.concatenate(present) if present else None
+
+        groups = optional["branch_group_id"]
+        if groups is not None:
+            offset_worker_groups(groups, batches)
+
+        if explicit:
+            spans: list[TrajectorySpan] = []
+            bootstraps: list[ObservationSelection] = []
+            row_offset = bootstrap_offset = 0
+            for batch in batches:
+                assert batch.trajectories is not None
+                for span in batch.trajectories:
+                    spans.append(
+                        replace(
+                            span,
+                            start=span.start + row_offset,
+                            stop=span.stop + row_offset,
+                            bootstrap_index=None
+                            if span.bootstrap_index is None
+                            else span.bootstrap_index + bootstrap_offset,
+                        )
+                    )
+                if len(batch.next_done):
+                    bootstraps.append(batch.next_obs)
+                row_offset += len(batch.actions)
+                bootstrap_offset += len(batch.next_done)
+            trajectories: tuple[TrajectorySpan, ...] | None = tuple(spans)
+            next_obs = (
+                ObservationSelection.concatenate(bootstraps)
+                if bootstraps
+                else batches[0].next_obs
+            )
+            next_done = np.concatenate([batch.next_done for batch in batches])
+        else:
+            trajectories = None
+            next_obs = batches[-1].next_obs
+            next_done = batches[-1].next_done
+        return cls(
+            recorded=recorded,
+            actions=np.concatenate([batch.actions for batch in batches]),
+            logprobs=np.concatenate([batch.logprobs for batch in batches]),
+            rewards=np.concatenate([batch.rewards for batch in batches]),
+            dones=np.concatenate([batch.dones for batch in batches]),
+            values=np.concatenate([batch.values for batch in batches]),
+            action_data=PackedActions.concatenate(
+                [batch.action_data for batch in batches]
+            ),
+            next_obs=next_obs,
+            next_done=next_done,
+            trajectories=trajectories,
+            **optional,
+        )
+
     def bootstrap_indexes(self) -> np.ndarray | None:
         """Frozen observation index at each explicit cut, -1 on every other row."""
         if self.trajectories is None:
@@ -328,6 +495,20 @@ class RolloutBatch:
         return ActionRows(
             self.recorded.gather(indexes), self.action_data.unpack_logs(indexes)
         )
+
+
+def offset_worker_groups(groups: np.ndarray, batches: Sequence[RolloutBatch]) -> None:
+    """Shift worker-local group ids in the joined array in place, preserving absent ids."""
+    offset = next_group = 0
+    for batch in batches:
+        local = groups[offset : offset + len(batch.actions)]
+        offset += len(local)
+        largest = int(local.max())
+        if largest >= 0:
+            if next_group + largest > np.iinfo(np.int64).max:
+                raise ValueError("merged branch_group_id exceeds int64")
+            local[local >= 0] += next_group
+            next_group += largest + 1
 
 
 def validate_rollout_metadata(batch: RolloutBatch) -> None:
