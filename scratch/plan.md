@@ -10,9 +10,9 @@ The sibling is MTG-437. This change touches no Rust and adds no library behavior
 
 ## User-visible outcome
 
-- **A library consumer** (jace is the live one) can tell directly from `manabot/README.md` or from `__all__` inside the installed `manabot` package which symbols are promised across `0.Y.x`. Every published `manabot` module defines `__all__`, and no internal module carries a misleading `__all__`.
-- **A contributor** who removes or reshapes a published symbol, parameter, field, attribute, or enum value gets a failing test that names the exact break, states the patch-clean `0.Y.x` rule first (restore or keep a `@deprecated` alias until `0.(Y+1).0`), and refuses to record breaks silently. Internal RL hot-path optimizations to opaque handles (`Prepared`, `Collector`, `Prefix`, `MemoryArchive`) do not trigger false breaks.
-- **A reviewer** sees every published API change as a readable diff of `tests/public_api.json`, sees every `0.3.0`-deprecated shim tracked explicitly so minor rollover only drops already-deprecated entries cleanly, and sees any break-glass override recorded with its reason.
+- **A library consumer** (jace is the live one) can tell directly from `manabot/README.md` or from `__all__` inside the installed `manabot` package which symbols are promised across `0.Y.x`, with each symbol published from its one defining module. Every published `manabot` module defines `__all__`, and no internal module carries a misleading `__all__`.
+- **A contributor** who removes or reshapes a published symbol, parameter, field, attribute, or enum value gets a failing test that names the exact break, states the patch-clean `0.Y.x` rule first (restore or keep a `@deprecated` alias until `0.(Y+1).0`), and refuses to record breaks silently. Internal RL hot-path optimizations to opaque handles (`Prepared`, `Collector`, `Prefix`, `MemoryArchive`) and internal Pydantic validator refactors do not trigger false breaks.
+- **A reviewer** sees every published API change as a readable diff of `tests/public_api.json`, sees every `0.3.0`-deprecated shim tracked explicitly so minor rollover only drops already-deprecated entries cleanly, sees any break-glass override recorded with its reason, and gets CI coverage whenever `manabot/README.md` edits the Library API table.
 
 ## Demo
 
@@ -24,10 +24,8 @@ uv run python scripts/public_api.py check
 #   BREAKING manabot.training.rollout.collection.open_collector: required parameter envs added
 #
 #   main is on the 0.2.x patch line (pyproject.toml: 0.2.5).
-#   Do not break published APIs on 0.2.x: restore the old API or keep a
-#   DeprecationWarning alias targeting 0.3.0.
-#   Only if a break on 0.2.x is unavoidable:
-#     uv run python scripts/public_api.py record --allow-break --reason '<why>'
+#   Restore the published API or keep a DeprecationWarning alias targeting 0.3.0.
+#   Only for an unavoidable break: uv run python scripts/public_api.py record --allow-break --reason '<why>'
 uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py -q
 ```
 
@@ -37,20 +35,26 @@ uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_ext
 
 ## Design in brief
 
-The published surface, contract format and classification rules live in `manabot/README.md#library-api`, `scripts/public_api.py` (docstring, `PUBLIC_MODULES`, `OPAQUE_TYPES`) and `docs/development.md#patch-clean-main`. Choices made for review are in `scratch/questions.md` (opaque handles, removed internal `__all__`, narrow exports, shape-not-types, managym submodules deferred). Findings that still explain the approach:
+The published surface, contract format and classification rules live in `manabot/README.md#library-api`, `scripts/public_api.py` (docstring, `PUBLIC_MODULES`, `OPAQUE_TYPES`) and `docs/development.md#patch-clean-main`. Choices made for review are in `scratch/questions.md` and `scratch/concept-review.html`. Key invariants:
 
 - Annotation text differs across CPython 3.12/3.13 and NumPy, so the contract records parameter/field names, kinds and required-ness only.
 - 53 of managym's 128 public callables have no runtime signature (PyO3), so managym's contract reads `managym/__init__.pyi` with `ast`.
-- `getattr` does not trigger method/decorator deprecations, so deprecation is read from `@deprecated` (stub AST and `__deprecated__`) plus module `__getattr__` warnings.
+- `getattr` does not trigger method/decorator deprecations, so deprecation is read from `@deprecated` (stub AST and `__deprecated__`), stub docstrings/comments (`Deprecated` docstring or inline/immediately-preceding `# Deprecated`), and module `__getattr__` warnings.
+- Pydantic `@field_validator`, `@model_validator`, `@field_serializer`, and `@model_serializer` callbacks (`cls.__pydantic_decorators__`) are internal hooks, not public methods; real methods and all fields on published `BaseModel` classes remain recorded.
+- Each published `manabot` symbol is exported from its defining module only (no duplicate re-exports across `PUBLIC_MODULES`).
+- `manabot/README.md` is a test-parsed contract input (`test_readme_lists_the_published_exports`), so `.github/ci/select-tests.sh` selects `integration` when it changes.
 
 ## Status
 
-1. Export lists, contract recorder and compatibility tests: `d70731a562`. Snapshot matched CPython 3.13 and isolated 3.12; `check` and plain `record` refused a removed export, a renamed required parameter and a removed config field.
+1. Export lists, contract recorder and compatibility tests: `d70731a562`, compressed in `06f2634d42`, QA'd in `bb824541f4`.
 2. External CPU learner and README example fix: `c205dfb579` (0.72 s test body).
-3. CI selection and integration wiring: `c205dfb579`; ruff clean on 30 files.
-4. Base merge `938c24dae1` touched only wave files; `scripts/public_api.py check` still matches (2026-11-24).
-
-No implementation slices remain. Next: gate (acceptance check above, package-boundary suite, CI).
+3. CI selection and integration wiring: `c205dfb579`.
+4. **Remaining slice (from post-implementation concept review, `scratch/concept-review.html`):**
+   - **Exclude Pydantic decorator hooks in `scripts/public_api.py:python_class`:** for `BaseModel` subclasses, collect function names from `cls.__pydantic_decorators__` (`field_validators`, `model_validators`, `field_serializers`, `model_serializers`) and skip them when extracting methods. Drops 10 internal hooks (`validate_world`, `validate_sources`, `validate_sideboard_counts`, `reject_compound_decisions`, `reject_pooled_token_stream`, `validate_value_architecture`, `reject_other_inputs`, `valid_population`, `resource_limit_has_input_contract`, `bounded_warmup`) while keeping all real methods and fields. Add a regression assertion in `tests/test_public_api_contract.py`.
+   - **Remove duplicate `PackedActions` re-export from `manabot.training.rollout.collection`:** remove `"PackedActions"` from `manabot/training/rollout/collection.py`'s `__all__` and from `manabot.training.rollout.collection`'s row in `manabot/README.md#library-api` (`PackedActions` stays published from its defining module `manabot.training.rollout.actions`).
+   - **Unify `# Deprecated` comment detection in `scripts/public_api.py`:** check inline `# Deprecated` or immediately preceding `# Deprecated` line (`lines[node.lineno - 2].lstrip().startswith("# Deprecated")`) uniformly across stub declarations (`FunctionDef`, `ClassDef`, `AnnAssign`, `Assign`) instead of only `Assign`. Marks `managym.PlayerConfig.disclosure` and `managym.Observation.legacy_card_lists` as `deprecated: true` without touching `managym/__init__.pyi`.
+   - **Route `manabot/README.md` to `integration` in `.github/ci/select-tests.sh`:** add `manabot/README.md) select_jobs integration ;;` before `*/README.md`, add `("manabot/README.md", {"integration"})` to `tests/infra/test_ci_selection.py`, and list `manabot/README.md` in the `docs/development.md` CI selection table.
+   - **Regenerate `tests/public_api.json` cleanly** (starting from a fresh extraction of the tightened baseline, since MTG-436 has not merged yet — `breaks` must remain `[]` and `line` must remain `"0.2"`), run `uv run python scripts/public_api.py check`, ruff, and `uv run --extra dev pytest tests/test_public_api_contract.py tests/infra/test_external_consumer.py tests/test_package_boundaries.py tests/infra/test_ci_selection.py -q`.
 
 ## Coordination with MTG-437
 
@@ -58,4 +62,4 @@ MTG-437 adds `concatenate` and `max_actions` to published classes. Whichever Tas
 
 ## Exclusions
 
-`ObservationBatch` pickling and `concatenate`/`max_actions` (MTG-437); removing 0.3.0-deprecated APIs (MTG-435); managym Python submodules (follow-up Task); MLX backend, recipes, loops and CLI (internal).
+`ObservationBatch` pickling and `concatenate`/`max_actions` (MTG-437); removing 0.3.0-deprecated APIs (MTG-435); managym Python submodules (follow-up Task); per-attribute deprecation markers for `Card`/`Permanent` flat characteristic aliases in `managym/__init__.pyi`; MLX backend, recipes, loops and CLI (internal).
