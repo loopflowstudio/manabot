@@ -424,12 +424,23 @@
 
   $effect(() => {
     const revision = frame.revision;
+    const sending = partitionRunning;
+    if (!sending) return;
+    const answerable = live && !pending;
     untrack(() => {
-      const sending = partitionRunning;
-      if (!sending || revision === sending.sentAt) return;
+      if (revision === sending.sentAt) {
+        if (!answerable) return;
+        partitionRunning = null;
+        if (sending.at > 0) {
+          partitionFaceUp = [];
+          stopNote = `Stopped after ${sending.at} of ${sending.steps.length}. The next choice was not accepted. Split any remaining cards from here.`;
+        }
+        return;
+      }
       const next = sending.at + 1;
       if (next >= sending.steps.length) { partitionRunning = null; partitionFaceUp = []; return; }
-      const offer = live ? partitionOffer(frame, sending.steps[next]) : null;
+      if (!answerable) return;
+      const offer = partitionOffer(frame, sending.steps[next]);
       if (!offer) {
         partitionRunning = null;
         partitionFaceUp = [];
@@ -1252,8 +1263,8 @@
     if (event.key === 'Escape') { closeMenu(); zoneAt = null; hovered = null; stopDwell(); return; }
     if (event.key === 'F6' || (event.key === 'Enter' && event.shiftKey)) { event.preventDefault(); passTurn(); return; }
     if (/^[1-9]$/.test(event.key)) {
-      // A combat draft declares the whole combat; its per-creature offers are not numbered shortcuts.
-      if (!menuAt && joint) return;
+      // A joint combat or pile-partition draft owns the whole decision; its folded per-item offers are not numbered shortcuts.
+      if (!menuAt && (joint || partitioning || partitionRunning)) return;
       const placed = (menuAt?.offers ?? view.list).find(candidate => candidate.number === Number(event.key)) ?? null;
       if (placed && live) { event.preventDefault(); act(placed); }
       return;
@@ -1423,46 +1434,49 @@
             <button type="button" class="fold type-caption" data-testid="partition-fold" onclick={() => (partitionFolded = true)}>Look at the board</button>
           </header>
           <div class="partition-piles">
-            <div class="partition-pile" data-testid="partition-pile-up" role="group" aria-label={`Face-up pile, ${partitionUpCards.length} ${partitionUpCards.length === 1 ? 'card' : 'cards'}`}>
-              <p class="partition-pile-head">
-                <span class="type-label text-ink">Face-up · {partitionUpCards.length}</span>
-                <span class="type-caption text-ink-3">Opponent sees these</span>
-              </p>
-              {#if partitionUpCards.length}
-                <div class="partition-cards">
-                  {#each partitionUpCards as card (card.id)}
-                    <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile="face_up">
-                      <BoardCard name={card.name} width={104} {card} live={partitioning} draft="in"
-                        note="in the face-up pile; press to move to the face-down pile"
-                        onactivate={() => togglePartitionCard(card.id)}
-                        onpreview={element => previewCard(element ? card : null, element)} />
-                    </div>
-                  {/each}
-                </div>
-              {:else}
-                <p class="partition-empty type-caption text-ink-3">Empty — click a card below to put it face-up</p>
-              {/if}
-            </div>
-            <div class="partition-pile" data-testid="partition-pile-down" role="group" aria-label={`Face-down pile, ${partitionDownCards.length} ${partitionDownCards.length === 1 ? 'card' : 'cards'}`}>
-              <p class="partition-pile-head">
-                <span class="type-label text-ink">Face-down · {partitionDownCards.length}</span>
-                <span class="type-caption text-ink-3">Hidden — opponent sees count only</span>
-              </p>
-              {#if partitionDownCards.length}
-                <div class="partition-cards">
-                  {#each partitionDownCards as card (card.id)}
-                    <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile="face_down">
-                      <BoardCard name={card.name} width={104} {card} live={partitioning} draft="can"
-                        note="in the face-down pile; press to move to the face-up pile"
-                        onactivate={() => togglePartitionCard(card.id)}
-                        onpreview={element => previewCard(element ? card : null, element)} />
-                    </div>
-                  {/each}
-                </div>
-              {:else}
-                <p class="partition-empty type-caption text-ink-3">Empty — all remaining cards are face-up</p>
-              {/if}
-            </div>
+            {#each [
+              {
+                key: 'face_up',
+                testId: 'partition-pile-up',
+                title: 'Face-up',
+                hint: 'Opponent sees these',
+                cards: partitionUpCards,
+                draft: 'in' as const,
+                note: 'in the face-up pile; press to move to the face-down pile',
+                empty: 'Empty — click a card below to put it face-up',
+              },
+              {
+                key: 'face_down',
+                testId: 'partition-pile-down',
+                title: 'Face-down',
+                hint: 'Hidden — opponent sees count only',
+                cards: partitionDownCards,
+                draft: 'can' as const,
+                note: 'in the face-down pile; press to move to the face-up pile',
+                empty: 'Empty — all remaining cards are face-up',
+              },
+            ] as pile (pile.key)}
+              <div class="partition-pile" data-testid={pile.testId} role="group" aria-label={`${pile.title} pile, ${pile.cards.length} ${pile.cards.length === 1 ? 'card' : 'cards'}`}>
+                <p class="partition-pile-head">
+                  <span class="type-label text-ink">{pile.title} · {pile.cards.length}</span>
+                  <span class="type-caption text-ink-3">{pile.hint}</span>
+                </p>
+                {#if pile.cards.length}
+                  <div class="partition-cards">
+                    {#each pile.cards as card (card.id)}
+                      <div class="partition-card-slot" data-testid="partition-card" data-object-id={card.id} data-pile={pile.key}>
+                        <BoardCard name={card.name} width={104} {card} live={partitioning} draft={pile.draft}
+                          note={pile.note}
+                          onactivate={() => togglePartitionCard(card.id)}
+                          onpreview={element => previewCard(element ? card : null, element)} />
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="partition-empty type-caption text-ink-3">{pile.empty}</p>
+                {/if}
+              </div>
+            {/each}
           </div>
           {#if partition.committed.length}
             <p class="partition-committed type-caption text-ink-3" data-testid="partition-committed">

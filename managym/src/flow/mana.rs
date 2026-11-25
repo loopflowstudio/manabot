@@ -317,14 +317,13 @@ impl PurposeProjection {
         mask
     }
 
-    fn exact_classes_equivalent(&mut self, a: &ManaClass, b: &ManaClass) -> bool {
-        a.expiry == b.expiry
-            && a.effect == b.effect
-            && match (&a.restriction, &b.restriction) {
-                (None, None) => true,
-                (Some(ra), Some(rb)) => ra == rb || self.mask(ra) == self.mask(rb),
-                _ => false,
-            }
+    /// The restriction's bitset when it actually excludes at least one
+    /// reachable spending purpose; `None` when `class` can spend everywhere
+    /// in this query and therefore merges into ordinary `ProjectedMana.mana`.
+    fn effective_mask(&mut self, class: &ManaClass) -> Option<PurposeMask> {
+        let restriction = class.restriction.as_ref()?;
+        let mask = self.mask(restriction);
+        (!mask.is_all(self.purposes.len())).then_some(mask)
     }
 
     /// The single shared `ManaClass` when every mode carries exactly one class
@@ -340,78 +339,6 @@ impl PurposeProjection {
             .then_some(class)
     }
 
-    /// Exact equivalence preserving `ManaExpiry` and `SpendEffect` (for
-    /// player-visible `SourceClassCache` queries).
-    fn exact_mana_equivalent(&mut self, a: &Mana, b: &Mana) -> bool {
-        if a == b {
-            return true;
-        }
-        if a.mana != b.mana {
-            return false;
-        }
-        if let ([(ca, aa)], [(cb, ab)]) = (a.classes(), b.classes()) {
-            return aa == ab && self.exact_classes_equivalent(ca, cb);
-        }
-        fn exact_buckets<'a>(
-            proj: &mut PurposeProjection,
-            mana: &'a Mana,
-        ) -> Vec<(
-            (
-                ManaExpiry,
-                Option<PurposeMask>,
-                Option<&'a crate::state::mana::SpendEffect>,
-            ),
-            [u8; 6],
-        )> {
-            let mut out: Vec<(
-                (
-                    ManaExpiry,
-                    Option<PurposeMask>,
-                    Option<&'a crate::state::mana::SpendEffect>,
-                ),
-                [u8; 6],
-            )> = Vec::with_capacity(mana.classes().len());
-            for (class, amounts) in mana.classes() {
-                let key = (
-                    class.expiry,
-                    class.restriction.as_ref().map(|r| proj.mask(r)),
-                    class.effect.as_ref(),
-                );
-                match out.binary_search_by(|(existing, _)| existing.cmp(&key)) {
-                    Ok(index) => {
-                        for (slot, &more) in out[index].1.iter_mut().zip(amounts) {
-                            *slot = slot.saturating_add(more);
-                        }
-                    }
-                    Err(index) => out.insert(index, (key, *amounts)),
-                }
-            }
-            out
-        }
-        let left = exact_buckets(self, a);
-        let right = exact_buckets(self, b);
-        left == right
-    }
-
-    fn exact_choices_equivalent(&mut self, a: &ManaChoices, b: &ManaChoices) -> bool {
-        if a == b {
-            return true;
-        }
-        if a.len() != b.len() {
-            return false;
-        }
-        if let (Some(ca), Some(cb)) = (Self::uniform_class(a), Self::uniform_class(b)) {
-            return a
-                .iter()
-                .zip(b.iter())
-                .all(|(x, y)| x.mana == y.mana && x.classes()[0].1 == y.classes()[0].1)
-                && self.exact_classes_equivalent(ca, cb);
-        }
-        a.iter()
-            .zip(b.iter())
-            .all(|(x, y)| self.exact_mana_equivalent(x, y))
-    }
-
     fn project_mana(&mut self, mana: &Mana) -> ProjectedMana {
         let mut plain = mana.mana;
         let raw_classes = mana.classes();
@@ -421,53 +348,27 @@ impl PurposeProjection {
                 classes: ProjectedClasses::None,
             };
         }
-        let purpose_count = self.purposes.len();
         if let [(class, amounts)] = raw_classes {
-            let Some(restriction) = &class.restriction else {
-                for (slot, &more) in plain.iter_mut().zip(amounts) {
-                    *slot = slot.saturating_add(more);
+            let classes = match self.effective_mask(class) {
+                Some(mask) => ProjectedClasses::One(mask, *amounts),
+                None => {
+                    add_amounts(&mut plain, amounts);
+                    ProjectedClasses::None
                 }
-                return ProjectedMana {
-                    mana: plain,
-                    classes: ProjectedClasses::None,
-                };
             };
-            let mask = self.mask(restriction);
-            if mask.is_all(purpose_count) {
-                for (slot, &more) in plain.iter_mut().zip(amounts) {
-                    *slot = slot.saturating_add(more);
-                }
-                return ProjectedMana {
-                    mana: plain,
-                    classes: ProjectedClasses::None,
-                };
-            }
             return ProjectedMana {
                 mana: plain,
-                classes: ProjectedClasses::One(mask, *amounts),
+                classes,
             };
         }
         let mut classes: Vec<(PurposeMask, [u8; 6])> = Vec::new();
         for (class, amounts) in raw_classes {
-            let Some(restriction) = &class.restriction else {
-                for (slot, &more) in plain.iter_mut().zip(amounts) {
-                    *slot = slot.saturating_add(more);
-                }
+            let Some(mask) = self.effective_mask(class) else {
+                add_amounts(&mut plain, amounts);
                 continue;
             };
-            let mask = self.mask(restriction);
-            if mask.is_all(purpose_count) {
-                for (slot, &more) in plain.iter_mut().zip(amounts) {
-                    *slot = slot.saturating_add(more);
-                }
-                continue;
-            }
             match classes.binary_search_by(|(existing, _)| existing.cmp(&mask)) {
-                Ok(index) => {
-                    for (slot, &more) in classes[index].1.iter_mut().zip(amounts) {
-                        *slot = slot.saturating_add(more);
-                    }
-                }
+                Ok(index) => add_amounts(&mut classes[index].1, amounts),
                 Err(index) => classes.insert(index, (mask, *amounts)),
             }
         }
@@ -490,13 +391,7 @@ impl PurposeProjection {
             return cached.clone();
         }
         let modes: Vec<ProjectedMana> = if let Some(uniform) = Self::uniform_class(raw) {
-            let purpose_count = self.purposes.len();
-            let projected_mask = uniform
-                .restriction
-                .as_ref()
-                .map(|r| self.mask(r))
-                .filter(|mask| !mask.is_all(purpose_count));
-            match projected_mask {
+            match self.effective_mask(uniform) {
                 Some(mask) => raw
                     .iter()
                     .map(|m| ProjectedMana {
@@ -508,9 +403,7 @@ impl PurposeProjection {
                     .iter()
                     .map(|m| {
                         let mut plain = m.mana;
-                        for (slot, &more) in plain.iter_mut().zip(&m.classes()[0].1) {
-                            *slot = slot.saturating_add(more);
-                        }
+                        add_amounts(&mut plain, &m.classes()[0].1);
                         ProjectedMana {
                             mana: plain,
                             classes: ProjectedClasses::None,
@@ -532,18 +425,17 @@ impl PurposeProjection {
         interned
     }
 
-    /// Whether two sources have identical behavior, lazily constructing or
-    /// borrowing a `PurposeProjection` only when non-ordinary outputs differ
-    /// in raw representation (excluding `untapped`, which search canonicalizes
-    /// in `PaymentResources`). When `exact_riders` is true (`SourceClassCache`),
-    /// `ManaExpiry` and `SpendEffect` must match; when false (`PaymentSearch`),
-    /// feasibility projection strips them.
+    /// Whether two sources have identical feasibility behavior, lazily
+    /// constructing or borrowing a `PurposeProjection` only when non-ordinary
+    /// outputs differ in raw representation (excluding `untapped`, which
+    /// search canonicalizes in `PaymentResources`). `ManaExpiry` and
+    /// `SpendEffect` never affect payment feasibility, so both `PaymentSearch`
+    /// and `SourceClassCache` project through this single check.
     fn sources_equivalent<'a>(
         projection: impl FnOnce() -> Option<&'a mut PurposeProjection>,
         a: &ManaSource,
         b: &ManaSource,
         candidates: &[&Arc<Vec<PermanentId>>],
-        exact_riders: bool,
     ) -> bool {
         if a.waterbend != b.waterbend
             || a.keyword != b.keyword
@@ -559,11 +451,7 @@ impl PurposeProjection {
             let (Some(af), Some(bf)) = (&a.fixed, &b.fixed) else {
                 return false;
             };
-            if exact_riders {
-                if af.mana != bf.mana || (!mana_has_restriction(af) && !mana_has_restriction(bf)) {
-                    return false;
-                }
-            } else if !mana_has_classes(af) && !mana_has_classes(bf) {
+            if !mana_has_classes(af) && !mana_has_classes(bf) {
                 return false;
             }
             fixed_pair = Some((af, bf));
@@ -582,12 +470,9 @@ impl PurposeProjection {
                 return false;
             }
             if x.outputs != y.outputs {
-                let check = if exact_riders {
-                    mana_has_restriction
-                } else {
-                    mana_has_classes
-                };
-                if !x.outputs.iter().any(check) && !y.outputs.iter().any(check) {
+                if !x.outputs.iter().any(mana_has_classes)
+                    && !y.outputs.iter().any(mana_has_classes)
+                {
                     return false;
                 }
                 need_ability_proj = true;
@@ -600,26 +485,16 @@ impl PurposeProjection {
             return false;
         };
         if let Some((af, bf)) = fixed_pair {
-            let same = if exact_riders {
-                proj.exact_mana_equivalent(af, bf)
-            } else {
-                proj.project_mana(af) == proj.project_mana(bf)
-            };
-            if !same {
+            if proj.project_mana(af) != proj.project_mana(bf) {
                 return false;
             }
         }
         if need_ability_proj {
             for (x, y) in a.abilities.iter().zip(&b.abilities) {
-                if x.outputs != y.outputs {
-                    let same = if exact_riders {
-                        proj.exact_choices_equivalent(&x.outputs, &y.outputs)
-                    } else {
-                        proj.project_choices(&x.outputs) == proj.project_choices(&y.outputs)
-                    };
-                    if !same {
-                        return false;
-                    }
+                if x.outputs != y.outputs
+                    && proj.project_choices(&x.outputs) != proj.project_choices(&y.outputs)
+                {
+                    return false;
                 }
             }
         }
@@ -627,9 +502,9 @@ impl PurposeProjection {
     }
 }
 
-/// Memoizes a per-source answer across purpose-equivalent sources, lazily
-/// building a `PurposeProjection` only when restricted outputs differ in raw
-/// representation (keeping `ManaExpiry` and `SpendEffect` exact).
+/// Memoizes a per-source feasibility answer across purpose-equivalent sources,
+/// lazily building a `PurposeProjection` only when non-ordinary outputs differ
+/// in raw representation. Callers still emit each source's own action.
 struct SourceClassCache<'a, V> {
     model: &'a PaymentModel<'a>,
     obligations: &'a [Obligation],
@@ -679,7 +554,6 @@ impl<'a, V: Copy> SourceClassCache<'a, V> {
                         rep,
                         source,
                         &self.candidates,
-                        true,
                     )
             })
             .map(|(_, _, value)| *value)
@@ -690,10 +564,10 @@ impl<'a, V: Copy> SourceClassCache<'a, V> {
     }
 }
 
-fn mana_has_restriction(mana: &Mana) -> bool {
-    mana.classes()
-        .iter()
-        .any(|(class, _)| class.restriction.is_some())
+fn add_amounts(dst: &mut [u8; 6], src: &[u8; 6]) {
+    for (slot, &more) in dst.iter_mut().zip(src) {
+        *slot = slot.saturating_add(more);
+    }
 }
 
 fn mana_has_classes(mana: &Mana) -> bool {
@@ -1156,9 +1030,9 @@ impl PaymentSearchState {
 /// grows past `PaymentSearch::GROWTH`, keeping ordinary small searches small
 /// on the stack and free of extra table setup/teardown.
 ///
-/// Because `ProjectedClass::restriction` keeps `None` disjoint from
-/// `Some(PurposeMask)`, restriction-free states stay in `PaymentSearch::visited`
-/// and never collide with restricted states in `projected_visited`.
+/// While `projection` is `Some` (any non-ordinary `ManaClass` present), every
+/// visited state routes into `projected_visited` so unrestricted classed mana
+/// collapses with ordinary mana; otherwise states stay in `PaymentSearch::visited`.
 struct SearchEquivalence {
     groups: Vec<Vec<usize>>,
     /// Equivalence group index per source (`u32::MAX` for singletons).
@@ -1420,7 +1294,6 @@ impl PaymentSearch {
                     source,
                     other,
                     &candidates,
-                    false,
                 )
             });
             if let Some((representative, group)) = equivalent {
@@ -2065,27 +1938,23 @@ impl PaymentModel<'_> {
                                 if amounts[color] == 0 {
                                     continue;
                                 }
-                                let bit = ManaTypeSet::bit(color);
-                                match restriction {
-                                    None => {
-                                        if seen_unrestricted.contains(color) {
-                                            continue;
+                                let seen = match restriction {
+                                    None => &mut seen_unrestricted,
+                                    Some(r) => match seen_restricted
+                                        .iter()
+                                        .position(|(prev, _)| *prev == r)
+                                    {
+                                        Some(i) => &mut seen_restricted[i].1,
+                                        None => {
+                                            seen_restricted.push((r, ManaTypeSet::EMPTY));
+                                            &mut seen_restricted.last_mut().unwrap().1
                                         }
-                                        seen_unrestricted.insert(bit);
-                                    }
-                                    Some(r) => {
-                                        if let Some((_, seen)) =
-                                            seen_restricted.iter_mut().find(|(prev, _)| *prev == r)
-                                        {
-                                            if seen.contains(color) {
-                                                continue;
-                                            }
-                                            seen.insert(bit);
-                                        } else {
-                                            seen_restricted.push((r, bit));
-                                        }
-                                    }
+                                    },
+                                };
+                                if seen.contains(color) {
+                                    continue;
                                 }
+                                seen.insert(ManaTypeSet::bit(color));
                                 let mut pool = state.pool.clone();
                                 pool.spend_one(class_index, color);
                                 if !pool.can_pay(&remaining) {
@@ -2695,43 +2564,39 @@ impl PaymentModel<'_> {
         payment: &DirectPayment,
         skip: impl Fn(usize) -> bool,
     ) -> bool {
-        if payment.split.is_none() && pool.can_pay(payment.cost) {
+        let has_split = payment.split.is_some();
+        if !has_split && pool.can_pay(payment.cost) {
             return true;
         }
         let mut base = pool.clone();
         let mut spare_taps = 0_u32;
-        if payment.split.is_none() {
-            let mut added = false;
-            for (index, source) in self.sources.iter().enumerate() {
-                if !skip(index) && source.untapped {
-                    if let Some(output) = &source.fixed {
-                        base.add(output);
-                        added = true;
-                    }
-                }
+        let mut added = false;
+        for (index, source) in self.sources.iter().enumerate() {
+            if !source.untapped || skip(index) {
+                continue;
             }
-            if added && base.can_pay(payment.cost) {
-                return true;
+            if let Some(output) = &source.fixed {
+                base.add(output);
+                added = true;
             }
-        } else {
-            for (index, tap) in self.direct_taps(payment).enumerate() {
-                if skip(index) {
-                    continue;
-                }
-                if let Some(output) = tap.output {
-                    base.add(output);
-                }
-                spare_taps += u32::from(tap.spare());
+            if has_split
+                && source.pays_by_tap(payment.taps)
+                && source
+                    .fixed
+                    .as_ref()
+                    .is_none_or(|output| output.usable_total(payment.cost) == 0)
+            {
+                spare_taps += 1;
             }
         }
         let covers = |total: &Mana| -> bool {
             total.can_pay(payment.cost)
-                && (payment.split.is_none()
+                && (!has_split
                     || u32::from(total.usable_total(payment.cost))
                         .checked_sub(payment.cost.mana_value.into())
                         .is_some_and(|slack| slack + spare_taps >= payment.split_generic()))
         };
-        if payment.split.is_some() && covers(&base) {
+        if (has_split || added) && covers(&base) {
             return true;
         }
         choices.iter().any(|choice| {

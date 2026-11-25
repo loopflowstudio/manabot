@@ -71,7 +71,6 @@ pub struct ManaTypeSet(u8);
 
 impl ManaTypeSet {
     pub const EMPTY: Self = Self(0);
-    pub const COLORS: Self = Self(0b0001_1111);
     pub const ANY: Self = Self(0b0011_1111);
 
     #[inline]
@@ -118,11 +117,6 @@ impl ManaTypeSet {
     #[inline]
     pub const fn is_subset_of(self, other: Self) -> bool {
         self.0 & !other.0 == 0
-    }
-
-    #[inline]
-    pub const fn bits(self) -> u8 {
-        self.0
     }
 
     /// Iterate set mana-type indices (`0..6`) in ascending W/U/B/R/G/C order.
@@ -1643,7 +1637,9 @@ impl ManaPool {
         surviving.extend(combat_kept);
         self.mana = new_mana;
         self.units = surviving;
-        self.drop_uncounted_units();
+        if self.units.len() > usize::from(self.mana.total()) {
+            self.drop_uncounted_units();
+        }
         summary.remaining_non_combat =
             self.mana.total() - self.mana.expiry_total(ManaExpiry::EndOfCombat);
         self.check();

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { CardState, ExperienceFrame, InteractionOffer } from '$lib/types';
 import {
-  isPartitionPiles, loadPartitionDraft, partitionContext, partitionOffer, partitionSteps,
+  loadPartitionDraft, partitionContext, partitionOffer, partitionSteps,
   partitionWords, savePartitionDraft, swapPiles, toggleCardPile,
 } from './partition';
 
@@ -93,18 +93,15 @@ function partitionFrame(cursor = 0, cards: CardState[] = FIVE_CARDS): Experience
 describe('partitionContext', () => {
   it('reads all inspected cards in engine order and splits committed vs remaining at the cursor', () => {
     const start = partitionFrame(0);
-    expect(isPartitionPiles(start)).toBe(true);
     const ctx0 = partitionContext(start)!;
     expect(ctx0.sourceName).toBe('Curator of Destinies');
     expect(ctx0.committed).toEqual([]);
     expect(ctx0.remaining.map(c => c.id)).toEqual([4, 5, 3, 13, 14]);
-    expect(ctx0.currentId).toBe(4);
 
     const mid = partitionFrame(2);
     const ctx2 = partitionContext(mid)!;
     expect(ctx2.committed.map(c => c.id)).toEqual([4, 5]);
     expect(ctx2.remaining.map(c => c.id)).toEqual([3, 13, 14]);
-    expect(ctx2.currentId).toBe(3);
   });
 
   it('ignores opponent-owned inspected cards and returns null for non-partition stages', () => {
@@ -113,7 +110,6 @@ describe('partitionContext', () => {
 
     const other = partitionFrame(0);
     other.projection.decision_context!.stage = 'choose_pile';
-    expect(isPartitionPiles(other)).toBe(false);
     expect(partitionContext(other)).toBeNull();
   });
 });
@@ -131,11 +127,11 @@ describe('drafting and steps', () => {
 
     const steps = partitionSteps(FIVE_CARDS, [4, 3]);
     expect(steps).toEqual([
-      { cardId: 4, cardName: 'Gray Ogre', pile: 'face_up' },
-      { cardId: 5, cardName: 'Hill Giant', pile: 'face_down' },
-      { cardId: 3, cardName: 'Forest', pile: 'face_up' },
-      { cardId: 13, cardName: 'Plains', pile: 'face_down' },
-      { cardId: 14, cardName: 'Swamp', pile: 'face_down' },
+      { cardId: 4, pile: 'face_up' },
+      { cardId: 5, pile: 'face_down' },
+      { cardId: 3, pile: 'face_up' },
+      { cardId: 13, pile: 'face_down' },
+      { cardId: 14, pile: 'face_down' },
     ]);
   });
 
@@ -159,13 +155,13 @@ describe('drafting and steps', () => {
 describe('partitionOffer', () => {
   it('matches the exact card and pile offer and rejects any other card or stage', () => {
     const f0 = partitionFrame(0);
-    expect(partitionOffer(f0, { cardId: 4, cardName: 'Gray Ogre', pile: 'face_up' })?.id).toBe(0);
-    expect(partitionOffer(f0, { cardId: 4, cardName: 'Gray Ogre', pile: 'face_down' })?.id).toBe(1);
-    expect(partitionOffer(f0, { cardId: 5, cardName: 'Hill Giant', pile: 'face_up' })).toBeNull();
+    expect(partitionOffer(f0, { cardId: 4, pile: 'face_up' })?.id).toBe(0);
+    expect(partitionOffer(f0, { cardId: 4, pile: 'face_down' })?.id).toBe(1);
+    expect(partitionOffer(f0, { cardId: 5, pile: 'face_up' })).toBeNull();
 
     const wrongStage = partitionFrame(0);
     wrongStage.action_space = 'PRIORITY';
-    expect(partitionOffer(wrongStage, { cardId: 4, cardName: 'Gray Ogre', pile: 'face_up' })).toBeNull();
+    expect(partitionOffer(wrongStage, { cardId: 4, pile: 'face_up' })).toBeNull();
   });
 });
 

@@ -1882,9 +1882,10 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         }
     }
 
-    // In pure feasibility search (`PaymentSearch`), unrestricted classes
-    // differing only in `SpendEffect` or `ManaExpiry` collapse together;
-    // `SourceClassCache` (for player-visible offers) keeps them distinct.
+    // Both `PaymentSearch` and `SourceClassCache` project pure feasibility, so
+    // unrestricted classes differing only in `SpendEffect` or `ManaExpiry`
+    // collapse together while every source still emits its own player-visible
+    // offer.
     let mut rider_sources = vec![
         source(
             0,
@@ -1926,11 +1927,11 @@ fn purpose_projected_groups_collapse_identically_usable_restrictions_and_preserv
         vec![vec![0, 1, 2]]
     );
 
-    let mut exact_cache = super::SourceClassCache::<usize>::new(&rider_model, &obligations, &[]);
-    for i in 0..3 {
-        assert!(exact_cache.get(i, 0).is_none());
-        exact_cache.insert(i, 0, i);
-    }
+    let mut class_cache = super::SourceClassCache::<usize>::new(&rider_model, &obligations, &[]);
+    assert!(class_cache.get(0, 0).is_none());
+    class_cache.insert(0, 0, 42);
+    assert_eq!(class_cache.get(1, 0), Some(42));
+    assert_eq!(class_cache.get(2, 0), Some(42));
 }
 
 #[test]

@@ -14,19 +14,15 @@ export type PileSide = 'face_up' | 'face_down';
 
 export interface PartitionStep {
   cardId: number;
-  cardName: string;
   pile: PileSide;
 }
 
 export interface PartitionContext {
   sourceName: string;
-  /** Every inspected card for this partition, in the engine's decision order. */
-  cards: CardState[];
   /** Cards already committed to the engine (before the current cursor). */
   committed: CardState[];
   /** Undecided cards starting at the current cursor, in engine ask order. */
   remaining: CardState[];
-  currentId: number;
 }
 
 export interface PartitionWords {
@@ -56,10 +52,6 @@ function pileOffers(frame: ExperienceFrame): { faceUp: InteractionOffer; faceDow
   return { faceUp, faceDown, cardId: upId };
 }
 
-export function isPartitionPiles(frame: ExperienceFrame): boolean {
-  return pileOffers(frame) !== null;
-}
-
 /**
  * Derive the holistic partition state from one authority frame, or null when
  * the frame is not a valid `partition_piles` decision with inspected cards.
@@ -75,10 +67,8 @@ export function partitionContext(frame: ExperienceFrame): PartitionContext | nul
   if (cursor < 0) return null;
   return {
     sourceName: frame.projection.decision_context?.source?.label ?? 'Split into two piles',
-    cards,
     committed: cards.slice(0, cursor),
     remaining: cards.slice(cursor),
-    currentId: offers.cardId,
   };
 }
 
@@ -98,7 +88,6 @@ export function partitionSteps(remaining: readonly CardState[], faceUp: readonly
   const up = new Set(faceUp);
   return remaining.map(card => ({
     cardId: card.id,
-    cardName: card.name,
     pile: up.has(card.id) ? 'face_up' : 'face_down',
   }));
 }
