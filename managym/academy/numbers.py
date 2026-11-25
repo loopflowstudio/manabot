@@ -81,13 +81,16 @@ def game_numbers(attempt: RetainedAttempt) -> GameNumbers | None:
     return GameNumbers(
         complete=stop.status == "complete",
         turns=totals[0].turns,
-        seats=(_seat(behaviour[0], totals[0]), _seat(behaviour[1], totals[1])),
+        seats=(
+            seat_numbers(behaviour[0], totals[0]),
+            seat_numbers(behaviour[1], totals[1]),
+        ),
         analysis_shown=sum(1 for event in events if event.get("analysis_shown")),
         played_from=(trace.get("played_from") or {}).get("event"),
     )
 
 
-def _seat(behaviour: BehaviourRow, totals: TotalsRow) -> SeatNumbers:
+def seat_numbers(behaviour: BehaviourRow, totals: TotalsRow) -> SeatNumbers:
     return SeatNumbers(
         seat=totals.seat,
         lands_played=behaviour.lands_played,

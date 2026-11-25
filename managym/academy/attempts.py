@@ -127,7 +127,7 @@ class AttemptStore:
                     visibility TEXT NOT NULL DEFAULT 'shared',
                     origin TEXT NOT NULL DEFAULT 'unknown',
                     num_events INTEGER NOT NULL DEFAULT 0,
-                    -- The game's numbers (`summary.GameNumbers`), saved once it
+                    -- The game's numbers (`numbers.GameNumbers`), saved once it
                     -- is no longer being played; NULL until first computed.
                     numbers_json TEXT
                 );

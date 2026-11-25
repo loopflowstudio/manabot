@@ -100,12 +100,12 @@ def open_walk(attempt: RetainedAttempt) -> RecordWalker:
         raise AnalysisStop(f"This game cannot be re-executed here: {error}") from None
 
 
-def seat_decisions(
-    walker: RecordWalker, trace: dict[str, Any], seat: int
+def recorded_steps(
+    walker: RecordWalker, trace: dict[str, Any]
 ) -> Iterator[tuple[int, managym.Env, managym.Observation]]:
-    """Walk `trace`'s events, giving each analysed decision of `seat` as
-    `(event, env, observation)` before its action is applied. Once exhausted,
-    `walker.env` is at the position after the last event.
+    """Walk `trace`'s events, giving each as `(event, env, observation)` before
+    its action is applied. Once exhausted, `walker.env` is at the position after
+    the last event.
 
     Raises AnalysisStop where the game stops re-executing as recorded (another
     seat acts, the action differs). The walk checks each step's acting seat and
@@ -113,18 +113,37 @@ def seat_decisions(
     (`ReplayedViews`); here a forward pass is the cost.
     """
     human = trace["config"].get("human_seat", 0)
-    wanted = set(analysed_events(trace, seat))
     steps = iter(walker)
     for index, event in enumerate(trace["events"]):
         if not step_matches(walker.observation, event, human):
             raise AnalysisStop(f"Step {index + 1} re-executed differently.")
-        if index in wanted:
-            yield index, walker.env, walker.observation
+        yield index, walker.env, walker.observation
         if next(steps, None) is None:
             stop = walker.stop
             raise AnalysisStop(
                 f"Step {index + 1} re-executed differently: {stop.reason if stop else 'stopped'}"
             )
+
+
+def seat_decisions(
+    walker: RecordWalker, trace: dict[str, Any], seat: int
+) -> Iterator[tuple[int, managym.Env, managym.Observation]]:
+    """`recorded_steps` at `seat`'s analysed decisions only."""
+    wanted = set(analysed_events(trace, seat))
+    return (step for step in recorded_steps(walker, trace) if step[0] in wanted)
+
+
+def ask(
+    runner: PolicyRunner,
+    env: managym.Env,
+    observation: managym.Observation,
+    event: int,
+) -> None:
+    """Ask `runner` at `event`; AnalysisStop if it fails."""
+    try:
+        runner(env, observation)
+    except (ValueError, managym.AgentError) as error:
+        raise AnalysisStop(f"The policy failed at step {event + 1}: {error}")
 
 
 def read_decision(
@@ -138,10 +157,7 @@ def read_decision(
 ) -> tuple[DecisionAnnotation, str | None, list[float | None]]:
     """The policy's reading of `seat`'s decision at `env`: its annotation, value
     semantic and estimate after each offer. Raises AnalysisStop if it fails."""
-    try:
-        runner(env, observation)
-    except (ValueError, managym.AgentError) as error:
-        raise AnalysisStop(f"The policy failed at step {event + 1}: {error}")
+    ask(runner, env, observation, event)
     decision = runner.last_decision
     assert decision is not None
     if not decision.probabilities:
@@ -168,7 +184,9 @@ def analyse_game(
     Raises AnalysisStop where the game stops re-executing or the policy fails.
     """
     events = attempt.trace["events"]
-    for index, env, observation in seat_decisions(open_walk(attempt), attempt.trace, seat):
+    for index, env, observation in seat_decisions(
+        open_walk(attempt), attempt.trace, seat
+    ):
         annotation, semantic, after = read_decision(
             env, observation, index, seat, runner, seed=seed
         )
@@ -338,8 +356,8 @@ def analysis_choices(
     if config.watch_players is not None:
         return AnalysisChoices([], None, "A watched game has no seat of yours.")
     try:
-        walk(record_of(attempt))
-    except (KeyError, TypeError, ValueError, managym.AgentError):
+        open_walk(attempt)
+    except AnalysisStop:
         return AnalysisChoices(
             [],
             None,
@@ -477,10 +495,7 @@ class LiveAnalysis:
             for index, env, observation in seat_decisions(
                 walker, attempt.trace, self._seat
             ):
-                try:
-                    runner(env, observation)
-                except (ValueError, managym.AgentError) as error:
-                    raise AnalysisStop(f"The policy failed at step {index + 1}: {error}")
+                ask(runner, env, observation, index)
             env = walker.env
             position = len(attempt.trace["events"])
             read: tuple[int, dict[str, Any]] | None = None
@@ -573,7 +588,6 @@ def agent_line(
     first = first_choice(decision.annotation.probabilities)
     if first is None:
         raise AnalysisStop("This decision has no probabilities to follow.")
-    events = attempt.trace["events"]
     human = attempt.trace["config"].get("human_seat", 0)
     complete = attempt.trace["end_reason"] == "game_over"
     replayed = [
@@ -581,24 +595,17 @@ def agent_line(
         for policy in (runner, opponent)
         if isinstance(policy, PolicyRunner) and policy.base_descriptor.recurrent
     ]
-    walker = open_walk(attempt)
-    steps = iter(walker)
-    for index in range(decision.event):
-        observation = walker.observation
-        if not step_matches(observation, events[index], human):
-            raise AnalysisStop(f"Step {index + 1} re-executed differently.")
+    for index, walked, observation in recorded_steps(open_walk(attempt), attempt.trace):
+        if index == decision.event:
+            break
         for policy in replayed:
             if policy.seat == int(observation.agent.player_index):
-                policy(walker.env, observation)
-        if next(steps, None) is None:
-            raise AnalysisStop(f"Step {index + 1} re-executed differently.")
-    observation = walker.observation
-    if (
-        not step_matches(observation, events[decision.event], human)
-        or int(observation.agent.player_index) != seat
-    ):
+                policy(walked, observation)
+    else:
+        raise AnalysisStop(f"Step {decision.event + 1} was not recorded.")
+    if int(observation.agent.player_index) != seat:
         raise AnalysisStop(f"Step {decision.event + 1} re-executed differently.")
-    env = walker.env.clone_env()
+    env = walked.clone_env()
     start = int(observation.turn.turn_number)
     moves: list[LineStep] = []
     action = first
