@@ -856,11 +856,13 @@ impl Object {
         self.kind == ObjectKind::Card
     }
 
-    /// Its mana cost for mana value: a transformed permanent's is its front
-    /// face's (CR 712.8e).
+    /// Mana value uses the front face of a nonmodal double-faced permanent
+    /// (CR 712.8e). A modal permanent uses its showing face.
     pub fn mana_value_cost(&self) -> Option<&ManaCost> {
         match self.form_faces() {
-            Some(faces) if faces.back_up => faces.front.1.mana_cost.as_ref(),
+            Some(faces) if faces.back_up && !faces.front.1.modal_back => {
+                faces.front.1.mana_cost.as_ref()
+            }
             _ => self.mana_cost.as_ref(),
         }
     }
@@ -891,11 +893,6 @@ impl Object {
     pub fn turn_face_down(&mut self, definition: Arc<PrintedCharacteristics>) {
         self.show_over_backing(CardDefId::ANONYMOUS, definition);
         self.form.as_deref_mut().expect("backed form").face_down = true;
-    }
-
-    /// A modal back uses its own characteristics and restores the front on departure.
-    pub fn show_modal_back(&mut self, back: CardDefId, definition: Arc<PrintedCharacteristics>) {
-        self.show_over_backing(back, definition);
     }
 
     /// Show an inset spell while keeping the underlying card for its next move.

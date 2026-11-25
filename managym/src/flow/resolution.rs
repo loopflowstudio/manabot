@@ -635,21 +635,17 @@ impl Game {
     }
 
     /// The permanent the resolving ability's Aura or Equipment is attached
-    /// to: the exact object captured as an activated ability was activated,
-    /// or else (a triggered ability) the source's current attachment, read
-    /// from the source's last known information once it has left. Never the
-    /// triggering event's object.
+    /// to as it resolves (CR 608.2h). Once the source leaves, read its
+    /// last attachment, falling back to the attachment paid as a cost.
     pub(crate) fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
-        let attached = match frame.attached {
-            Some(object) => object,
-            None => {
-                let source = frame.source_ref()?;
-                match self.lookup_current_permanent(source) {
-                    Ok(source) => return self.attached_permanent(source),
-                    Err(_) => self.object_lki(source)?.attached_to?,
-                }
-            }
-        };
+        let source = frame.source_ref()?;
+        if let Ok(permanent) = self.lookup_current_permanent(source) {
+            return self.attached_permanent(permanent);
+        }
+        let attached = match self.object_lki(source) {
+            Some(lki) => lki.attached_to,
+            None => frame.attached,
+        }?;
         self.lookup_current_permanent(attached).ok()
     }
 

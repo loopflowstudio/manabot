@@ -5411,6 +5411,9 @@ fn fiendish_panda_gains_one_counter_per_lifelink_source_in_combat() {
             |a| matches!(a, Action::DeclareBlocker { attacker: Some(id), .. } if *id == split),
         );
     }
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    // Assign the first strike among the two Ogres, with enough to kill both.
+    crate::support::play::choose_mode(&mut s, 2);
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     assert_eq!(s.life(0), 34);
     assert_eq!(s.life(1), 10);

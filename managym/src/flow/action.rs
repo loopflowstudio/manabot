@@ -388,7 +388,12 @@ impl Game {
                     .source_definition
                     .and_then(|definition| default_content_pack().definition(definition))
                     .map_or_else(
-                        || self.observed_object_name(candidate.source()),
+                        || {
+                            self.spell_on_stack(candidate.source()).map_or_else(
+                                || self.observed_object_name(candidate.source()),
+                                |spell| self.state[spell.object].name.clone(),
+                            )
+                        },
                         |definition| definition.name.clone(),
                     );
                 Some(format!("{name}: {}", candidate.description()))
@@ -1700,7 +1705,7 @@ mod identity_tests {
                 route: Some(PlayRoute::Hand),
             })
             .is_ok());
-        assert!(game.state[game.state.object_of(card)].backing().is_some());
+        assert!(game.state[game.state.object_of(card)].is_transformed());
     }
 
     /// A resolution cast (CR 608.2g) is authorized by the resolving

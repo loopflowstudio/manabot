@@ -635,6 +635,7 @@ fn a_face_down_permanent_bounced_to_hand_names_no_card() {
         s.game_mut().take_observation_events();
         move_card(&mut s, object, ZoneType::Hand);
         let events = s.game_mut().take_observation_events();
+        s.game_mut().scenario_refresh_priority().unwrap();
         let rows = Observation::new(s.game(), &events).recent_events;
         let moved = rows
             .iter()

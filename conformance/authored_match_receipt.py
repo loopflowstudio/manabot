@@ -19,9 +19,9 @@ ROOT = Path(__file__).parents[1]
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json"
 )
-CASTING_RECEIPT_PATH = (
+AUTHORITY_RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-casting.json"
+    / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0-battlefield-forms.json"
 )
 FIXED_TIME = "2026-11-24T00:00:00+00:00"
 MATCH_SEED = 0
@@ -442,7 +442,7 @@ def generate_authored_match_receipt() -> dict[str, Any]:
 
 
 def write_or_check_authored_match_receipt(
-    path: Path = CASTING_RECEIPT_PATH,
+    path: Path = AUTHORITY_RECEIPT_PATH,
     *,
     check: bool,
 ) -> None:

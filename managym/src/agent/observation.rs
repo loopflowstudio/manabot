@@ -1656,7 +1656,9 @@ impl Observation {
     ) {
         let object = &game.state[permanent.object];
         let pdat = PermanentData {
-            front_mana_value: (object.is_transformed()
+            front_mana_value: (object
+                .form_faces()
+                .is_some_and(|faces| faces.back_up && !faces.front.1.modal_back)
                 || game.state.zones.melded_card(permanent.object).is_some())
             .then(|| game.object_mana_value(permanent.object)),
             colors: (characteristics.colors != object.colors()).then(|| {

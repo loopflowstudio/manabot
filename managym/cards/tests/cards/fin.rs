@@ -9,8 +9,8 @@ use crate::support::{
         zone_of,
     },
     play::{
-        attack_with, attack_with_group, cast, cast_card, command, resolve_everything, resolve_top,
-        settle, spend_colorless,
+        attack_with, attack_with_group, cast, cast_card, choose_mode, command, resolve_everything,
+        resolve_top, settle, spend_colorless,
     },
 };
 use managym::{
@@ -357,7 +357,8 @@ fn cecil_trampling_over_a_lethal_blocker_leaves_one_damage_trigger() {
     attack_with(&mut s, cecil);
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
     s.declare_block();
-    s.advance_to_active_step(0, StepKind::CombatDamage);
+    crate::support::play::pass_until(&mut s, managym::agent::action::ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
     assert_eq!(s.life(1), 19);
     assert!(s.game().state.permanents[cecil].is_none());
     assert_eq!(s.game().state.stack_objects.len(), 1);

@@ -181,18 +181,25 @@ The post-build review ([concept-review.html](concept-review.html), at `876e2f49a
 
 Post-build concept review ([concept-review.html](concept-review.html), at `ee62307d00`): **nothing to change.** `EntryFace` is the single owner of what an entry shows, and `ObjectForm` of what a permanent shows afterwards. `Permanent.manifested` (alias provenance, still true after turn-up) and the exile-only `ZoneEntry.face_down` are different facts from orientation. A face-down exile card is a grant property while a face-down permanent is an object-form property; unifying them would be a separate foretell Task, not MTG-420.
 
-## Then: `gate`
+## Gate (2026-11-24)
 
-CI at `39da9aef8d` (before the entry-face commits) failed these jobs. The head run over `586ffa1984` (CI `45507286694`) was cancelled by later pushes; the head run is CI `45507668192` over `2b121dfa1b`. Start gate from this list, rechecking each against that run:
+CI [45521684292](https://github.com/loopflowstudio/manabot/actions/runs/45521684292)
+at `4a341a82b9` passed Engine Budget (15,431.4 vs 16,966.5 steps/s, search
+163.656 vs 155.755 s, equal digests). Rust, Academy UI, Protocol v1,
+Academy Integration and model integration failed.
 
-- **Rust Tests**: `historical_captures_move_battlefield_and_spell_rows_onto_their_records` (known base failure); `cr_712_modal_faces::spell_land_back_face_is_played_back_face_up_once` (fixed by `03a71493ac`); semantic conformance `frozen_case_inventory_…`, `compatibility_names_and_content_allocations_are_metamorphic`, `frozen_elemental_161`–`164`, `frozen_elemental_world_gr_vs_ug`/`ug_vs_gr` (frozen evidence to re-record). The nine local cards-crate failures in `questions.md` did not show in the failed log; check whether CI reached the cards crate.
-- **Protocol v1 Conformance** and **Academy UI**: `src/lib/protocol-conformance.test.ts`, `LegacyPermanentView fields` expects 34 fields, Rust emits 33 (or the reverse): the TypeScript legacy permanent view and the projection disagree after the merge.
-- **Academy Integration**: `tests/academy/test_authored_match_parity.py::test_checked_authored_match_parity_receipt`, `state_before` digest moved (retained parity receipt; re-record if the move is this branch's state change).
-- **Integration (model)**: `tests/model/test_record_coverage.py::test_every_id_random_games_emit_has_a_catalog_row` (program tokens `(1, 0x02728fa8)`, `(1, 0x12067587)` missing from `agent/record_vocabulary.rs`, game 16 Ba Sing Se / Clone decks); `tests/model/test_recent_events.py::test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset` (`assert 0 > 2`); `tests/semantic/test_text_observation.py::test_esper_origins_text_follows_the_spell_onto_its_saga_face` (expects `"; cast from graveyard."`, text now continues `"cast from graveyard; cast with flashback"` — main's casting authority adds the flashback clause).
+- Debug nextest passed the nine failing card cases, the historical-capture
+  fixture, modal-face rules, runtime program vocabulary, canonical replay, and
+  allocation parity (23 tests). A second targeted run passed the 15 checks
+  against the new semantic corpus.
+- The rebuilt cp313 extension passed the manifest privacy and text checks,
+  Academy recovery, seeded snapshot round trips, the checked-in pinned pilots,
+  catalog coverage, and Esper Origins text (12 passed; optional u1952 skipped).
+- TypeScript protocol conformance passed all five tests. The authored-match
+  replay verified 174 Commands, 175 checkpoints per surface, 1,050 viewer
+  comparisons and the two stale-address rejections.
+- Academy and model CI now include the manifest recovery, text and two-root tests.
+  New fixtures retain the prior casting evidence alongside the battlefield-form
+  recordings. CI on the gate commit will verify the full matrix and Engine Budget.
 
-Then:
-
-- Read Engine Budget on the head run (passed at `0784a13607`, 2.4 points above the floor; covers both entry-face changes).
-- Rerun vector/recording consumers and canonical replay over the merged tree.
-- Recheck the base failures in `questions.md` (eight Python tests, Academy numpy import, `experience.py` format drift) against the new base.
-- Delete `scratch/` in the pre-land commit.
+Delete `scratch/` in the pre-land commit.

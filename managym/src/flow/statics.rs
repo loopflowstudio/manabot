@@ -723,8 +723,11 @@ impl Game {
                 self.state.card_of(object).expect("melded primary card"),
                 partner,
             ),
+            EntryFace::ModalBack | EntryFace::Transformed if row.retained_base().1.modal_back => {
+                face.mana_cost.as_ref().map_or(0, |cost| cost.mana_value)
+            }
             EntryFace::Front | EntryFace::Transformed | EntryFace::ModalBack => {
-                row.mana_value_cost().map_or(0, |c| c.mana_value)
+                row.mana_value_cost().map_or(0, |cost| cost.mana_value)
             }
         };
         predicate.matches_printing(face, row.kind(), mana_value, power, &[])

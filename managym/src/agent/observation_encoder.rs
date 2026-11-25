@@ -1545,7 +1545,7 @@ fn encode_permanent_features(
     if layout == InputLayout::OneToken {
         let card = &permanent.characteristics;
         out[permanent::ENTERED_THIS_TURN] = flag(permanent.entered_this_turn);
-        out[permanent::MANA_VALUE] = Scalar(card.mana_cost.mana_value as f32 / 10.0);
+        out[permanent::MANA_VALUE] = Scalar(f32::from(permanent.mana_value()) / 10.0);
         out[permanent::IS_LAND] = flag(card.card_types.is_land);
         out[permanent::IS_CREATURE] = flag(card.card_types.is_creature);
         out[permanent::IS_ARTIFACT] = flag(card.card_types.is_artifact);

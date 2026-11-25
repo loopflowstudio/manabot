@@ -920,7 +920,9 @@ card’s identity (`key` and a required `scryfall_id`). Double-faced cards
 register their `back_face` alongside the front. A front with `modal_back`
 offers either printed face when the play permission allows it. Casting Photon
 uses Photon’s cost and abilities, then the permanent enters back face up.
-Moving the permanent to the graveyard restores Monica Rambeau.
+Monica's activated ability turns the same permanent over to Photon. The
+modal permanent uses the mana value of the face it shows. Moving it to the
+graveyard restores Monica Rambeau.
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules

@@ -388,7 +388,7 @@ impl ContentPack {
     }
 
     /// The raw faces `object` transforms between (CR 712.9, 712.10): a
-    /// transforming double-faced card's or a transforming token's (CR 707.8a).
+    /// double-faced card's (including modal) or a transforming token's (CR 707.8a).
     /// A copy of one face on any other backing, a melded permanent and a
     /// face-down permanent have none. Physical backing decides, never the
     /// catalog row of the face it shows.
@@ -399,7 +399,7 @@ impl ContentPack {
         }
     }
 
-    /// The front-face-up faces of the catalog transforming card `front`
+    /// The front-face-up faces of the catalog double-faced card `front`
     /// showing `printed`: what an object with no battlefield form, live or
     /// departed, transforms between.
     fn catalog_faces(
@@ -407,9 +407,6 @@ impl ContentPack {
         front: CardDefId,
         printed: Arc<PrintedCharacteristics>,
     ) -> Option<TransformingFaces> {
-        if printed.modal_back {
-            return None;
-        }
         let (back, row) = self.back_face_row(front)?;
         Some(TransformingFaces {
             front: (front, printed),

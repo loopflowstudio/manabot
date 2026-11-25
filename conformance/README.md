@@ -3,7 +3,7 @@
 Current-world (w17) corpora with executable consumers:
 
 - `semantic-kernel-w17-v6/` — seeded cases (`manifest.json`) whose regenerated
-  traces must match `evidence-casting-v1.json`'s per-case `trace_sha256`, plus property and
+  traces must match `evidence-battlefield-forms-v1.json`'s per-case `trace_sha256`, plus property and
   Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
   A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v6/`;
   inspect it with `cargo run --manifest-path managym/Cargo.toml --bin
@@ -17,6 +17,10 @@ Current-world (w17) corpora with executable consumers:
   (`scripts/verify-authored-match-parity`).
 - `public-commitment-parity-w17-v2/` — Academy public-commitment parity
   (`scripts/verify-public-commitment-parity`).
+
+The battlefield form and departure-snapshot changes are recorded in
+`evidence-battlefield-forms-v1.json` and in the authored-match authority and
+parity receipts ending in `-battlefield-forms.json`.
 
 The shared casting catalog binds `evidence-casting-v1.json` and the
 authored-match authority and parity receipts ending in `-casting.json`.

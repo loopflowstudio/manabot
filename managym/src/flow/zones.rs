@@ -702,7 +702,7 @@ impl Game {
                         }
                 ) => {}
             Some(ZoneType::Library) => {
-                self.reposition_library_object(owner, first, usize::MAX);
+                self.place_library_arrival(owner, first, usize::MAX);
                 self.remember_library_objects(owner, &[first, second]);
             }
             // Exile appends appearances in timestamp order (earliest first).
@@ -741,11 +741,26 @@ impl Game {
         } else {
             0
         };
-        self.reposition_library_object(owner, first, index);
+        self.place_library_arrival(owner, first, index);
         if let Some(second) = second {
-            self.reposition_library_object(owner, second, index);
+            self.place_library_arrival(owner, second, index);
             self.remember_library_objects(owner, &[first, second]);
         }
+    }
+
+    /// Reposition an arrival both players could follow from its zone move.
+    fn place_library_arrival(&mut self, owner: PlayerId, object: ObjectId, index: usize) {
+        let from = self
+            .library_from_top(owner)
+            .position(|card| card == object)
+            .expect("arrival in library");
+        let last = self.state.zones.size(ZoneType::Library, owner) - 1;
+        let to = last.saturating_sub(index);
+        self.state.known_library_mut(owner).move_position(from, to);
+        self.state
+            .zones
+            .reposition(ZoneType::Library, owner, object, index);
+        self.assert_library_knowledge();
     }
 
     /// Return the object this move made (CR 400.7j), even if a consequent
@@ -937,7 +952,7 @@ impl Game {
             .state
             .mint_appearance(object_id, holder, to_zone, entry.entry_copy);
         match entry.profile {
-            crate::state::card::SpellProfile::BackFace => self.show_modal_back(object_id),
+            crate::state::card::SpellProfile::BackFace => self.show_back_face(object_id),
             profile => self.state[object_id].show_inset(profile),
         }
         if let Some(player) = entry.adventure_player {
@@ -980,7 +995,12 @@ impl Game {
         if to_zone == ZoneType::Battlefield {
             match entry.face {
                 EntryFace::Front => {}
-                EntryFace::ModalBack => self.show_modal_back(object_id),
+                EntryFace::ModalBack => {
+                    // A resolving spell copy already holds its selected face.
+                    if !self.state[object_id].is_transformed() {
+                        self.show_back_face(object_id);
+                    }
+                }
                 EntryFace::Transformed => {
                     self.turn_over(object_id, FormTransition::Transform);
                 }
@@ -1081,16 +1101,14 @@ impl Game {
         self.emit(GameEvent::Bent { player, kind });
     }
 
-    /// Turn a modal double-faced card's back face up (CR 712.11). Callers
-    /// reach this only for a back face that was offered, so it must exist.
-    fn show_modal_back(&mut self, object: ObjectId) {
-        let front = &self.state[object];
-        let (back, row) = front
-            .modal_back
-            .then(|| default_content_pack().back_face_row(front.definition_id))
-            .flatten()
+    /// Show the back face chosen for cast or play. Its eligibility was
+    /// checked by the casting authority.
+    fn show_back_face(&mut self, object: ObjectId) {
+        let faces = default_content_pack()
+            .transforming_faces(&self.state[object])
             .expect("offered back face");
-        self.state[object].show_modal_back(back, row.printed.clone());
+        debug_assert!(!faces.back_up);
+        self.state[object].show_transforming_face(faces.turned_over());
     }
 
     /// Transform a double-faced permanent (CR 701.27a): it turns over and

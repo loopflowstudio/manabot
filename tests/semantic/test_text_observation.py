@@ -536,7 +536,8 @@ def test_esper_origins_text_follows_the_spell_onto_its_saga_face() -> None:
         if not from_graveyard:
             _choose(env, "Pay the offered cost")
         stack, _ = _stack_and_continuation(env)
-        assert ("; cast from graveyard." in stack) == from_graveyard
+        assert ("; cast from graveyard" in stack) == from_graveyard
+        assert ("; cast with flashback" in stack) == from_graveyard
         _choose(env, "Pass priority")
         _choose(env, "Pass priority")
         _choose(env, "Decline / finish")

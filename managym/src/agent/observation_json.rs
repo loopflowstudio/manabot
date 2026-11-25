@@ -631,10 +631,23 @@ mod tests {
             111,
             false,
         );
-        let objects: Vec<_> = game.state.zones.latest().collect();
-        game.move_object(objects[0], ZoneType::Battlefield);
-        game.move_object(objects[40], ZoneType::Battlefield);
-        game.push_spell_to_stack(objects[1], PlayerId(0), vec![], vec![], Default::default());
+        let first = PlayerId(0);
+        for player in [first, PlayerId(1)] {
+            let land = game
+                .state
+                .zone_cards(ZoneType::Library, player)
+                .map(|card| game.state.object_of(card))
+                .find(|object| game.state[*object].types.is_land())
+                .expect("a land in each deck");
+            game.move_object(land, ZoneType::Battlefield);
+        }
+        let spell = game
+            .state
+            .zone_cards(ZoneType::Library, first)
+            .map(|card| game.state.object_of(card))
+            .find(|object| game.state[*object].name == "Lightning Bolt")
+            .expect("a spell in the deck");
+        game.push_spell_to_stack(spell, first, vec![], vec![], Default::default());
         let current = Observation::for_player(&game, PlayerId(0));
         assert!(!current.historical());
         // The same observation as a capture written before card records.

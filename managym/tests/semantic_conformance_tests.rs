@@ -54,7 +54,7 @@ fn manifest() -> Manifest {
 
 fn evidence() -> Evidence {
     serde_json::from_slice(include_bytes!(
-        "../../conformance/semantic-kernel-w17-v6/evidence-casting-v1.json"
+        "../../conformance/semantic-kernel-w17-v6/evidence-battlefield-forms-v1.json"
     ))
     .expect("pinned evidence")
 }
@@ -158,7 +158,7 @@ fn seeded_semantic_tapes_are_deterministic_and_isolated() {
 }
 
 #[test]
-fn compatibility_names_and_content_allocations_are_metamorphic() {
+fn content_allocations_are_metamorphic() {
     verify_metamorphic(Orientation::GwAlliesVsUrLessons, 0x5eee, 0xc0df, 96)
         .expect("metamorphic trace");
 }

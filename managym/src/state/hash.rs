@@ -327,7 +327,7 @@ impl GameState {
     ///
     /// Canonicalization uses fixed struct field order, semantic vector order,
     /// and sorted entries from ordered maps. It never observes allocations,
-    /// copied card definitions, compatibility card names, or formatting output.
+    /// definition allocation identity or formatting output.
     pub fn deterministic_hash(&self) -> MatchStateHash {
         self.deterministic_hash_over(default_content_pack())
     }

@@ -177,6 +177,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "ZoneSelection",
         "CounterProvenance",
         "CastChoices",
+        "CopyEffect",
         "EffectiveTrigger",
         "ManaSpent",
         "Help",
