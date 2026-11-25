@@ -52,8 +52,37 @@ MTG-431 the committed revision and paths once they land (`questions.md`).
 New set files register in `cards/src/lib.rs`. New cards shift definition ids:
 refresh Academy fixtures (`uv run python scripts/refresh_academy_fixtures.py`) and
 the state-hash pin in `cards/tests/cards/lea.rs` once per slice that adds cards.
-Append each printing to `managym/tests/fixtures/scryfall_cards.json`. Ids are in
-`/tmp/mtg432/first.txt` for this run; refetch with `curl` if it is gone.
+Append each printing to `managym/tests/fixtures/scryfall_cards.json`. First-printing Scryfall ids (name, set | id):
+
+- Dreadwing Scavenger, fdn | e24d838b-ab48-410a-9a50-dbfea5da089b
+- Elenda, Saint of Dusk, fdn | 24955f5f-093c-4d33-b0c1-911cd36032ce
+- Blanchwood Armor, usg | 9b5f3776-74f4-4626-833b-e1b0921d3cbc
+- Dwynen, Gilt-Leaf Daen, ori | 91c143a9-c642-425a-a469-a9d158e43c21
+- Garruk's Uprising, m21 | 71a4860a-8bb6-45c0-b00a-b4a42da33ab9
+- Crossway Troublemakers, voc | 431711c5-c04f-4d34-97c9-5199cfbf9da9
+- New Horizons, xln | 15b12c75-1248-4c81-90cf-28e341a885cf
+- Knight of Grace, dom | 7bbbddc0-f8b3-4255-bd82-d50f829ca009
+- Knight of Malice, dom | b45266f0-eb4f-4a06-bc64-8c2d774b4cc5
+- Harmless Offering, emn | f8f3cc4f-7943-4025-b332-b40653b13014
+- Taurean Mauler, mor | d50b5df1-b658-4df0-900e-79c44599b93e
+- Confiscate, usg | 7cba6d4a-58d0-42d6-b49b-65c72b86007f
+- Sphinx of the Final Word, ogw | 866f92a3-2738-4e0f-adda-3ff9227dc17a
+- Tempest Djinn, dom | 3acc883b-3aea-4d0b-ae0f-00d4a08c47c1
+- Crystal Barricade, fdn | 905d3e02-ea06-45e7-9adb-c8e7583323a2
+- Mossborn Hydra, fdn | 7054a0d7-396f-40b4-ab24-db591c3b08f0
+- Banner of Kinship, fdn | a14c16c0-4053-46b0-8fa6-be8b4a7a1c8a
+- Giada, Font of Hope, psnc | 8ced9f9b-2d20-41ed-90ff-5b37959a0b3b
+- Wildwood Scourge, m21 | 46ff0b33-d153-4b0e-ac48-7e5ed70dea09
+- Progenitus, con | bcc764b0-3046-4bde-b424-c0f4e1a6169b
+- Myojin of Night's Reach, chk | 13a295b0-535e-4c2d-879d-62603d1f2f1b
+- Heroes' Bane, pjou | f4fed10c-74f8-49af-8daa-b9c081f549f8
+- Dryad Militant, prtr | d88f8449-748f-4843-b4a2-480f6ebd384d
+- Prime Speaker Zegana, gtc | f30dfb8e-f540-45ab-a4e8-63425099646a
+- Wilt-Leaf Liege, shm | e6a2881f-e771-47d7-a39e-692054ee727f
+- Darksteel Colossus, dst | cbc27b24-f085-48b0-8757-cd11fbf25b91
+- Angel of Vitality, m20 | e2f39777-b80a-4618-9310-a9e5b91bb2a2
+- Joraga Invocation, ori | 65c89431-0881-4aa6-ac15-d4c13b075273
+- Vampire Soulcaller, fdn | 2d076293-3b45-4878-8f67-978927cc1f68
 
 ## Slices, riskiest first
 
