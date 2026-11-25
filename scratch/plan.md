@@ -180,7 +180,13 @@ Passes 1–5 implement slices 1–8.
   | Angel of Vitality | 4 | 52.0 | 43.9 | 75.0 |
   | Angel of Vitality | 8 | 25.5 | 62.7 | 83.7 |
 
-- Pass 6 covers the cross-slice synergies and ledger rows. The full debug
+- **Pass 6 (next, last)**: one integrated directed test per synergy listed
+  below, and the cohort's FDN ledger rows in
+  `.lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl`. Rows still
+  marked pending include Crystal Barricade (prevention now built), Mossborn
+  Hydra, Banner of Kinship, Giada and Wildwood Scourge. Each row becomes
+  `source definition found` with its directed fixture, but only if the ledger is
+  this step's to edit. Otherwise, propose the rows in `scratch/`. The full debug
   nextest suite and Engine Budget reference belong to gate.
 
 ## Cross-slice validation (integrated)
