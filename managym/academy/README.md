@@ -56,6 +56,9 @@ pending choice with the same legal offers and permitted information.
 - **`recording.py`**: positions over retained recordings; `record_of(attempt)`
   builds the engine's `GameRecord` from a played game's stored seed, setups
   and actions, so a played game is re-executed like any other record.
+- **`analysis.py`**: a policy's reading of one seat of a played game
+  (`analyse_game`), saved per decision in the `analyses` and
+  `analysed_decisions` tables beside the game, never in its trace.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
@@ -327,6 +330,31 @@ nothing that seat did not see. The opponent's view, for **Show both hands**,
 exists only for an authoritatively complete game (`end_reason == "game_over"`).
 Each `TraceEvent` records `committed_at`, its commit time in UTC; nothing
 shows it yet.
+
+### Analysis lifecycle
+
+`POST /api/traces/{id}/analyses {"policy": <Policy ID>}` (participant only)
+loads a fresh `PolicyRunner` in the person's seat and walks the game on a
+daemon thread; `GET` lists the game's analyses with their decisions so far,
+the eligible policies, the default (the opponent's own policy) and why none
+may run. Eligible means registered, admitted for the game's decks, with an
+artifact and no Search composition: Search plays out from the walk's real
+hidden cards. A game still being played is refused (`analysis_game_active`);
+one analysis runs per game per process (`analysis_running`).
+
+At each of the seat's deliberate decisions (automation is skipped) the runner
+is called on the walk's observation and Env, its `BotDecision` kept as a
+`DecisionAnnotation` plus the value semantic, its sampled action discarded.
+The walk checks each step's actor and action description, not whole boards.
+Each offer's estimate after it is read through the session's history-free
+`evaluate` at the next decision on a clone: the seat's own value when it
+chooses next, else the opponent's negated, in a world `determinize`d from the
+seat's perspective. Closed decklists cannot be re-dealt, so those estimates
+are absent. A manabot value belongs to the chooser, so no value is read from
+a seat that is not choosing.
+
+A runner error or divergence stops the analysis with its reason; saved
+decisions stay. A `running` row whose process is gone reads as stopped.
 
 
 ## Elemental roster

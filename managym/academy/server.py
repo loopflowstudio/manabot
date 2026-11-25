@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+import threading
 from typing import Any, Callable, Literal, TypedDict
 import warnings
 
@@ -79,6 +80,7 @@ from managym.search import (
 )
 
 from . import trace as trace_store, villain as villain_module
+from .analysis import AnalysisChoices, analysed_events, analysis_choices, run_analysis
 from .advice import (
     AdviceRequest,
     AdvisorUnavailable,
@@ -91,6 +93,7 @@ from .attempts import (
     CLOSED_RECORD_ENDINGS,
     AttemptStore,
     RecordedPlayer,
+    RetainedAttempt,
     decode_cursor,
     page_cursor,
     participant_id,
@@ -3815,7 +3818,8 @@ async def authorize_record(
         # Each reader applies the recording's permitted information projection.
         # Feedback and every mutation remain participant-only.
         public_read = request.method == "GET" and (
-            len(parts) == 4 or parts[4] in {"decisions", "recording", "positions"}
+            len(parts) == 4
+            or parts[4] in {"decisions", "recording", "positions", "analyses"}
         )
         if access is not None and not (
             access["mine"] or (public_read and access["replay"])
@@ -4252,6 +4256,89 @@ def get_recording_position(
         return position
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+# ———————————————— Analyses: a policy's reading of your decisions
+
+# Games with an analysis running in this process; one per game at a time.
+_ANALYSING: set[str] = set()
+_ANALYSING_LOCK = threading.Lock()
+
+
+def _analysed_attempt(trace_id: str) -> tuple[AttemptStore, RetainedAttempt]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    attempt = store.load_attempt(trace_id)
+    if attempt is None:
+        raise HTTPException(404, "recording_not_found")
+    return store, attempt
+
+
+@app.get("/api/traces/{trace_id}/analyses")
+def get_analyses(trace_id: str) -> dict[str, Any]:
+    store, attempt = _analysed_attempt(trace_id)
+    try:
+        choices = analysis_choices(attempt, policy_registry())
+    except (ImportError, OSError, ValueError) as exc:
+        choices = AnalysisChoices([], None, f"Policies could not be listed: {exc}")
+    return {
+        "analyses": store.analyses(trace_id),
+        "policies": choices.policies,
+        "default": choices.default,
+        "unavailable": choices.unavailable,
+        "events": analysed_events(
+            attempt, attempt.trace["config"].get("human_seat", 0)
+        ),
+    }
+
+
+class AnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    policy: str
+
+
+@app.post("/api/traces/{trace_id}/analyses")
+def start_analysis(trace_id: str, request: AnalysisRequest) -> dict[str, Any]:
+    """Analyse your seat of a game that is no longer being played."""
+    store, attempt = _analysed_attempt(trace_id)
+    if attempt.trace["end_reason"] == "active":
+        raise HTTPException(409, "analysis_game_active")
+    registry = policy_registry()
+    try:
+        descriptor = registry.descriptor(request.policy)
+    except ValueError as exc:
+        raise HTTPException(404, "analysis_policy_unavailable") from exc
+    if descriptor.base_policy is not None:
+        raise HTTPException(409, "analysis_by_search_refused")
+    choices = analysis_choices(attempt, registry)
+    if choices.unavailable or all(
+        policy["sha256"] != descriptor.id for policy in choices.policies
+    ):
+        raise HTTPException(409, choices.unavailable or "analysis_policy_unavailable")
+    config = GameConfig(**attempt.trace["config"])
+    seat = config.human_seat
+    with _ANALYSING_LOCK:
+        if trace_id in _ANALYSING:
+            raise HTTPException(409, "analysis_running")
+        try:
+            runner = registry.load(
+                descriptor.id, config.to_rust(), seat=seat, seed=int(config.seed or 0)
+            )
+        except (ImportError, OSError, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        _ANALYSING.add(trace_id)
+    analysis = store.start_analysis(
+        trace_id, seat, descriptor.record(), len(analysed_events(attempt, seat))
+    )
+
+    def run() -> None:
+        try:
+            run_analysis(store, analysis, attempt, seat, runner)
+        finally:
+            with _ANALYSING_LOCK:
+                _ANALYSING.discard(trace_id)
+
+    threading.Thread(target=run, name=f"analysis-{analysis}", daemon=True).start()
+    return {"id": analysis}
 
 
 @app.get("/api/traces/{trace_id}/decisions")

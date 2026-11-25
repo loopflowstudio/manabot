@@ -23,6 +23,7 @@
  * from a spectator reveal.
  */
 import { orientBoard, type BotDecision, type Position, type RecordedPosition, type RecordingIndex } from '$lib/recording';
+import { decisionMark, firstChoice, score, type AnalysedDecision, type DecisionMark } from '$lib/analysis';
 import type { ExperienceFrame, GameLogEntry } from '$lib/types';
 import { possessive } from './view';
 import { PROTOCOL_VERSION } from '$lib/types';
@@ -92,6 +93,12 @@ export interface OfferEvidence {
   search: SearchRow[] | null;
   /** Search and belief provenance: worlds, belief model, seed and receipt. */
   provenance: string[];
+  /** From an analysis: each offer's estimate after it, 0–1 from your seat, by offer id. */
+  estimate: ReadonlyMap<number, number>;
+  /** From an analysis: the policy's first choice, by offer id. */
+  first: number | null;
+  /** What the choice list is headed: "Analysis by Reader" for an analysis, else null. */
+  heading: string | null;
 }
 
 export interface SearchRow {
@@ -144,7 +151,32 @@ export function offerEvidence(frame: ExperienceFrame, outputs: BotDecision | nul
     provenance.push('Uniform belief (physical deal): hidden cards are sampled with copy counts and public knowledge.');
     provenance.push(`Seed ${m.seed}`, `Receipt SHA-256 ${m.receipt_sha256}`);
   }
-  return { probability, chosen, summary, search, provenance };
+  return { probability, chosen, summary, search, provenance, estimate: new Map(), first: null, heading: null };
+}
+
+/**
+ * An analysis of your choice, aligned with its frame's offers: the policy's
+ * probability and its estimate after each offer, and which it would have
+ * chosen. Stated as what the policy reads, never as a verdict on yours.
+ */
+export function analysedEvidence(frame: ExperienceFrame, decision: AnalysedDecision, chosen: number | null, policy: string): OfferEvidence {
+  const probability = new Map<number, number>();
+  const estimate = new Map<number, number>();
+  frame.offers.forEach((offer, i) => {
+    const p = decision.annotation.probabilities?.[i];
+    if (typeof p === 'number') probability.set(offer.id, p);
+    const after = decision.after[i];
+    if (typeof after === 'number') estimate.set(offer.id, after);
+  });
+  const first = firstChoice(decision);
+  const firstId = first === null ? null : frame.offers[first]?.id ?? null;
+  const summary: string[] = [];
+  const here = score(decision.annotation.value, decision.semantic);
+  if (here !== null) summary.push(`${policy}'s estimate here: ${Math.round(here * 100)}`);
+  else if (decision.annotation.value !== null) summary.push(`${policy}'s value here: ${decision.annotation.value.toFixed(3)} · ${decision.semantic ?? 'undeclared'}`);
+  if (firstId !== null) summary.push(firstId === chosen ? `You chose as ${policy} would.` : `${policy} would choose ${frame.offers[first!].label}.`);
+  if (estimate.size) summary.push('Estimates after each choice read the next decision, in a world re-dealt from what you knew.');
+  return { probability, chosen, summary, search: null, provenance: [], estimate, first: firstId, heading: `Analysis by ${policy}` };
 }
 
 // ———————————————————————————————————————— Move list and strip
@@ -231,8 +263,10 @@ export interface StripMark {
   /** A recorded decision, and whose: the seat named "you" in the move list, or the other. */
   decision: boolean;
   side: 'you' | 'opponent' | null;
-  /** The chooser's recorded value, when retained. */
+  /** The chooser's recorded value, when retained; with an analysis, your 0–1 score. */
   value: number | null;
+  /** An analysed decision where you chose otherwise than the policy. */
+  differs?: boolean;
   label: string;
 }
 
@@ -247,6 +281,8 @@ export interface StripLine {
   onjump?: (at: number) => void;
   /** Why positions cannot be opened, when they cannot. */
   note?: string | null;
+  /** With an analysis: the line's caption; values are then 0–1 scores on a fixed 0–100 axis. */
+  scale?: string | null;
 }
 
 /** Every position as a mark on one line: decisions stand out, turns are ticked. */
@@ -261,6 +297,39 @@ export function stripMarks(positions: readonly Position[], heroSeat: 0 | 1): Str
     value: position.value ?? null,
     label: `Turn ${position.turn ?? '?'} · ${position.label ?? (position.kind === 'state' ? 'Final position' : position.kind === 'choice' ? 'Choice' : 'Consequences')}`,
   }));
+}
+
+/**
+ * The strip read against an analysis: your analysed decisions carry the
+ * policy's score at them and whether you chose otherwise; every other value
+ * is dropped, as it is on another scale.
+ */
+export function analysedMarks(marks: readonly StripMark[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): StripMark[] {
+  return marks.map(mark => {
+    const position = positions[mark.at];
+    const decision = position.kind === 'choice' && position.event !== undefined ? decisions.get(position.event) : undefined;
+    if (!decision) return { ...mark, value: null, differs: false };
+    const first = firstChoice(decision);
+    return { ...mark, value: score(decision.annotation.value, decision.semantic), differs: first !== null && decision.played !== first };
+  });
+}
+
+/**
+ * Each of your analysed moves' mark, by move id: the position key a move
+ * jumps to, which is the decision where the move began.
+ */
+export function moveMarks(entries: readonly GameLogEntry[], positions: readonly Position[], decisions: ReadonlyMap<number, AnalysedDecision>): Map<string, DecisionMark> {
+  const marks = new Map<string, DecisionMark>();
+  const at = new Map(positions.map((position, i) => [position.key, i]));
+  for (const entry of entries) {
+    if (entry.actor !== 'hero') continue;
+    const position = positions[at.get(entry.id) ?? -1];
+    if (position?.event === undefined) continue;
+    const decision = decisions.get(position.event);
+    const mark = decision ? decisionMark(decision) : null;
+    if (mark) marks.set(entry.id, mark);
+  }
+  return marks;
 }
 
 /** Turn starts far enough apart to number without overlap, as indices into `marks`. */

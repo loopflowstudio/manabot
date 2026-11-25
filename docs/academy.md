@@ -1105,6 +1105,53 @@ selected board stays put. A pending Search timeout is retained across reload
 and shown with its message. At the live edge, **Retry search** explicitly
 retries that decision; browsing saved positions never retries it.
 
+#### Analysis
+
+An analysis reads a game you played against a policy: at each of your
+decisions with more than one legal action, what that policy would have done
+in your seat. Academy replays the game with the policy in your seat; it sees
+only what your seat saw, and the game follows the moves you made. Opening
+Review of your own game starts an analysis by your opponent's policy when it
+is a registered trained policy and the game has none yet. Review is usable at
+once; **Analysing 34 of 81** counts up while the marks fill in.
+
+At one of your choices the heading reads **Analysis by** the policy, and every
+legal option carries its probability and the policy's estimate after it, 0 to
+100 from your seat. Your choice is labelled **you** and the policy's first
+choice **its choice**. An estimate after an option reads the policy at the
+next decision: your own when you choose next, otherwise the opponent's in a
+world re-dealt from what you knew, never the real hidden cards. With closed
+decklists nothing can be re-dealt, so options after which the opponent
+chooses have no estimate.
+
+Each of your moves in the rail reads **same** when you chose as the policy
+would and **differs** otherwise, with a small track of the two estimates on
+one 0–100 scale: the filled dot after your choice, the ring after its own.
+These are the policy's readings, not grades; a policy weaker than you will
+often differ for good reason.
+
+With an analysis, the **Decisions** strip draws the policy's estimate at each
+of your decisions on a fixed 0–100 axis with a rule at 50. Its caption names
+the measure: **Expected score** for a policy whose values are signed outcomes
+(a draw counts half), **Win chance** for one whose values are win logits.
+Dots mark where you and the policy chose differently.
+
+**Analyse with…** in **Menu** runs any other registered trained policy; each
+run is saved beside the game, and **Shown** switches between them. Analyses
+are never part of the game's recording or its exports. Readers of a shared
+finished game see its saved analyses; only you can start one.
+
+| You see | Why | What to do |
+|---|---|---|
+| **No analysis yet · Analyse with… in the Menu** | Your opponent was Random, Passive, Heuristic or Search. | Choose a policy under **Analyse with…**. |
+| **No analysis: no registered policy can read this game** | This server has no trained policy for these decks. | [Register a policy](#trained-opponents-and-other-bots), then restart Academy. |
+| **Analysis stopped after 12 of 81 decisions**, with a reason | The policy failed there, the game stopped replaying as recorded, or Academy restarted. Earlier decisions keep their readings. | **Analyse again**. |
+| A line naming another build | The game was recorded by another world or card set and cannot be replayed here. | Open it with that build. |
+
+A policy with Search is not offered: Search plays out from the real hidden
+cards. One analysis runs per game at a time; a stopped or interrupted game is
+analysed up to its last recorded position.
+
 #### Continue a live Watch
 
 Open **Watch** (`/replay?watch=1`), select both seats, decks and a seed, then

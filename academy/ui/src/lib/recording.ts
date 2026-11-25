@@ -30,6 +30,8 @@ export interface BotDecision {
 export interface Position {
   key: string;
   kind: 'choice' | 'consequences' | 'state';
+  /** The trace event a choice decides or a consequence follows; the final state's is the event count. */
+  event?: number;
   turn: number | null;
   phase: string | null;
   step: string | null;

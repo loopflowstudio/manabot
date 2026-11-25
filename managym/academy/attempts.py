@@ -172,6 +172,23 @@ class AttemptStore:
                     attempt_id TEXT NOT NULL REFERENCES attempts(id),
                     PRIMARY KEY(owner,request_id)
                 );
+                -- A policy's reading of one seat of a game (`analysis.py`): never
+                -- part of the trace, any frame or any export.
+                CREATE TABLE IF NOT EXISTS analyses (
+                    id TEXT PRIMARY KEY,
+                    attempt_id TEXT NOT NULL REFERENCES attempts(id),
+                    seat INTEGER NOT NULL CHECK(seat IN (0, 1)),
+                    policy_json TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('running', 'complete', 'stopped')),
+                    reason TEXT, total INTEGER NOT NULL,
+                    process_id TEXT NOT NULL, created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS analyses_attempt ON analyses(attempt_id, created_at);
+                CREATE TABLE IF NOT EXISTS analysed_decisions (
+                    analysis_id TEXT NOT NULL REFERENCES analyses(id),
+                    event INTEGER NOT NULL, evidence_json TEXT NOT NULL,
+                    PRIMARY KEY(analysis_id, event)
+                );
             """)
             self._migrate(db)
             db.execute(
@@ -810,6 +827,82 @@ class AttemptStore:
                     }
                 )
         return summaries
+
+    # ———————————————— Analyses
+
+    def start_analysis(
+        self, attempt: str, seat: int, policy: dict[str, Any], total: int
+    ) -> str:
+        """A new running analysis of `seat`, owned by this process."""
+        identifier = secrets.token_hex(8)
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO analyses VALUES(?,?,?,?,'running',NULL,?,?,?)",
+                (
+                    identifier,
+                    attempt,
+                    seat,
+                    json.dumps(policy, sort_keys=True),
+                    total,
+                    PROCESS_ID,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        return identifier
+
+    def add_analysed_decision(self, analysis: str, event: int, evidence: str) -> None:
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO analysed_decisions VALUES(?,?,?)",
+                (analysis, event, evidence),
+            )
+
+    def end_analysis(self, analysis: str, reason: str | None) -> None:
+        """Complete without a reason, else stopped with it."""
+        with self.connect() as db:
+            db.execute(
+                "UPDATE analyses SET status=?, reason=? WHERE id=?",
+                ("stopped" if reason else "complete", reason, analysis),
+            )
+
+    def analyses(self, attempt: str) -> list[dict[str, Any]]:
+        """Every analysis of a game, oldest first, with its decisions so far.
+
+        A running analysis another process started stopped with that process.
+        """
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM analyses WHERE attempt_id=? ORDER BY created_at, id",
+                (attempt,),
+            ).fetchall()
+            decisions = {
+                row["id"]: [
+                    json.loads(evidence)
+                    for (evidence,) in db.execute(
+                        "SELECT evidence_json FROM analysed_decisions WHERE analysis_id=? ORDER BY event",
+                        (row["id"],),
+                    )
+                ]
+                for row in rows
+            }
+        result = []
+        for row in rows:
+            orphaned = row["status"] == "running" and row["process_id"] != PROCESS_ID
+            result.append(
+                {
+                    "id": row["id"],
+                    "seat": row["seat"],
+                    "policy": json.loads(row["policy_json"]),
+                    "status": "stopped" if orphaned else row["status"],
+                    "reason": "Academy stopped before this analysis finished."
+                    if orphaned
+                    else row["reason"],
+                    "total": row["total"],
+                    "created_at": row["created_at"],
+                    "decisions": decisions[row["id"]],
+                }
+            )
+        return result
 
     def feedback(
         self,

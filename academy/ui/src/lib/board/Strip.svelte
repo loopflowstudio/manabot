@@ -17,15 +17,19 @@
     onjump?: (at: number) => void;
     /** Why marks cannot be opened, when they cannot. */
     note?: string | null;
+    /** With an analysis: the caption, and values are 0–1 scores on a fixed 0–100 axis. */
+    scale?: string | null;
   }
 
-  let { marks, selected, onjump, note = null }: Props = $props();
+  let { marks, selected, onjump, note = null, scale = null }: Props = $props();
 
   const HEIGHT = 44;
   const decisions = $derived(marks.filter(mark => mark.decision));
   const values = $derived(decisions.map(mark => mark.value).filter((value): value is number => value !== null));
-  // Values keep their own scale: probabilities on [0, 1], signed values on [-1, 1], else their range.
+  // An analysis's scores sit on a fixed 0–100 axis. Recorded values keep their
+  // own scale: probabilities on [0, 1], signed values on [-1, 1], else their range.
   const range = $derived.by(() => {
+    if (scale !== null) return { low: 0, high: 1 };
     if (!values.length) return null;
     const low = Math.min(...values), high = Math.max(...values);
     if (low >= 0 && high <= 1) return { low: 0, high: 1 };
@@ -42,19 +46,23 @@
 </script>
 
 <section class="strip" aria-label="Decisions" data-testid="decision-strip" data-open="true">
-  {#if values.length || note}
-    <p class="caption type-caption text-ink-3">{#if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
+  {#if values.length || note || scale !== null}
+    <p class="caption type-caption text-ink-3" data-testid="strip-caption">{#if scale !== null}{scale}{:else if values.length}Value recorded at {values.length} of {decisions.length} decisions{/if}{#if note}<span class="note">{note}</span>{/if}</p>
   {/if}
   <div class="lane" class:jumps={!!onjump}>
   <svg class="line" viewBox={`0 0 1000 ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
     {#if range && range.low < 0}<line class="zero" x1="0" x2="1000" y1={y(0)} y2={y(0)} />{/if}
+    {#if scale !== null}<line class="zero" data-testid="strip-midline" x1="0" x2="1000" y1={y(0.5)} y2={y(0.5)} />{/if}
     {#each marks as mark (mark.key)}
       {#if mark.turnStart}<line class="turn" x1={x(mark.at)} x2={x(mark.at)} y1="0" y2={HEIGHT} />{/if}
       {#if mark.decision && mark.value === null}
         <line class="tick" class:theirs={mark.side === 'opponent'} x1={x(mark.at)} x2={x(mark.at)} y1={mark.side === 'opponent' ? 6 : HEIGHT / 2} y2={mark.side === 'opponent' ? HEIGHT / 2 : HEIGHT - 6}><title>{mark.label}</title></line>
       {/if}
     {/each}
-    <polyline class="value" points={line('you')} />
+    <polyline class="value" points={line('you')} data-testid="strip-value" data-points={decisions.filter(mark => mark.side === 'you' && mark.value !== null).length} />
+    {#each decisions as mark (mark.key)}
+      {#if mark.differs && mark.value !== null}<circle class="differs" cx={x(mark.at)} cy={y(mark.value)} r="2.5"><title>{mark.label} · chose otherwise</title></circle>{/if}
+    {/each}
     <polyline class="value theirs" points={line('opponent')} />
     {#if selected !== null && marks[selected]}<line class="here" x1={x(selected)} x2={x(selected)} y1="0" y2={HEIGHT} />{/if}
   </svg>
@@ -87,6 +95,8 @@
   .tick.theirs { stroke: var(--text-tertiary); }
   .value { fill: none; stroke: var(--info-text, var(--accent)); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .value.theirs { stroke: var(--text-tertiary); }
+  /* Where you and the policy chose differently: a neutral fact, not a fault. */
+  .differs { fill: var(--text-secondary); vector-effect: non-scaling-stroke; }
   .here { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
   .turns { position: relative; height: 16px; }
   .turns span { position: absolute; transform: translateX(2px); font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); }

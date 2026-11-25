@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { BotDecision, Position, RecordedPosition } from '$lib/recording';
 import type { ExperienceFrame } from '$lib/types';
 import { moveList } from './moves';
-import { bottomSeat, moveAt, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
+import { analysedEvidence, analysedMarks, bottomSeat, moveAt, moveMarks, nameSeats, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks } from './replay';
 import { boardView } from './view';
 
 const PLAYERS = { you: 'You', opponent: 'Heuristic' };
@@ -168,5 +168,40 @@ describe('a position says what it is', () => {
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 1)).toBe('Game over · Heuristic wins');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, 0)).toBe('Game over · You win');
     expect(positionHeading({ kind: 'state', actor: null, automatic: false }, names, true, null)).toBe('Game over · Draw');
+  });
+});
+
+describe('an analysis read beside your choices', () => {
+  const offers = frame.offers.length;
+  // The policy prefers the last offer; you played the second.
+  const probabilities = frame.offers.map((_, i) => (i === offers - 1 ? 0.6 : 0.4 / (offers - 1)));
+  const decision = { event: 3, played: 1, annotation: { probabilities, value: 0.2 }, semantic: 'signed_outcome', after: frame.offers.map((_, i) => i / offers) };
+
+  it('rates every option with its probability and its estimate after it, naming its choice and yours', () => {
+    const evidence = analysedEvidence(frame, decision, frame.offers[1].id, 'Reader');
+    expect(evidence.heading).toBe('Analysis by Reader');
+    expect([...evidence.probability.values()]).toEqual(probabilities);
+    expect(evidence.estimate.get(frame.offers[2].id)).toBeCloseTo(2 / offers);
+    expect(evidence.first).toBe(frame.offers[offers - 1].id);
+    expect(evidence.chosen).toBe(frame.offers[1].id);
+    expect(evidence.summary).toContain("Reader's estimate here: 60");
+    // Neutral words: what the policy would do, never a verdict on yours.
+    expect(evidence.summary.join(' ')).not.toMatch(/mistake|blunder|inaccura|best|loss/i);
+  });
+
+  it('draws your analysed decisions on a 0–1 score and marks where you chose otherwise', () => {
+    const positions = [position('choice', { actor: 0, event: 3 }), position('consequences', { actor: 0, event: 3 }), position('choice', { actor: 1, event: 4, value: 0.9 })];
+    const marks = analysedMarks(stripMarks(positions, 0), positions, new Map([[3, decision]]));
+    expect(marks.map(mark => mark.value)).toEqual([0.6, null, null]);
+    expect(marks[0].differs).toBe(true);
+  });
+
+  it('marks each of your moves same or differs, with both estimates', () => {
+    const positions = [position('choice', { actor: 0, event: 3 }), position('choice', { actor: 0, event: 5 })];
+    const same = { ...decision, event: 5, played: offers - 1 };
+    const entries = positions.map(p => ({ id: p.key, actor: 'hero' as const, turn: 1, text: 'Move' }));
+    const marks = moveMarks(entries, positions, new Map([[3, decision], [5, same]]));
+    expect(marks.get(positions[0].key)).toEqual({ same: false, yours: 1 / offers, its: (offers - 1) / offers });
+    expect(marks.get(positions[1].key)?.same).toBe(true);
   });
 });

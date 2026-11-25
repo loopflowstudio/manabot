@@ -12,6 +12,7 @@
   import { committed, type PrimaryLabel } from './prompt';
   import type { RecentView } from './recent';
   import { formatProbability, type OfferEvidence } from './replay';
+  import { formatScore, type DecisionMark } from '$lib/analysis';
   import ManaText from './ManaText.svelte';
   import Thumb from './Thumb.svelte';
   import { stackName, stackProvenance, type PlacedOffer, type StackItem, type BoardView } from './view';
@@ -60,6 +61,8 @@
     reading?: Snippet;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
+    /** An analysis's mark on each of your moves, by move id. */
+    moveMarks?: ReadonlyMap<string, DecisionMark>;
     /** The recap's heading. */
     recapTitle?: string;
     /** Moves jump to their position when set. */
@@ -74,7 +77,7 @@
   let {
     view, frame, live, line, hint, primaryText, status, whose, thinking, opponentChoosing, workStarted, interrupted, canPassTurn, recent, moves, opponentName,
     onact, onpassturn, onstack, onpreviewname, onpointoffer, paymentNote, notices, over = false, dock, reading,
-    evidence = null, recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
+    evidence = null, moveMarks = new Map(), recapTitle = 'Since your last move', onjump, currentMove = null, draft, stopped = null,
   }: Props = $props();
 
   const readingOut = $derived(reading !== undefined);
@@ -82,6 +85,10 @@
   const waitingFor = $derived(frame.offers.length === 0 && opponentChoosing);
   const recordedP = (placed: PlacedOffer): number | undefined => evidence?.probability.get(placed.offer.id);
   const isChosen = (placed: PlacedOffer): boolean => evidence?.chosen === placed.offer.id;
+  const estimateOf = (placed: PlacedOffer): number | undefined => evidence?.estimate.get(placed.offer.id);
+  const isFirst = (placed: PlacedOffer): boolean => evidence?.first === placed.offer.id;
+  /** "you", "its choice", both or neither: who chose an analysed offer. */
+  const choosers = (placed: PlacedOffer): string => [isChosen(placed) ? 'you' : '', isFirst(placed) ? 'its choice' : ''].filter(Boolean).join(' · ');
 
   const context = $derived(frame.projection.decision_context);
   const paid = $derived(committed(frame));
@@ -280,7 +287,7 @@
   {#if !over || frame.offers.length}
   <section use:region={{ across: !onjump }} class="block choices" aria-label="All legal choices">
     <h2 class="heading type-heading text-ink-2">
-      <span>{interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices'}</span>
+      <span data-testid="choices-heading">{evidence?.heading ?? (interrupted || (!live && evidence) ? 'Recorded choices' : 'All legal choices')}</span>
       {#if !waitingFor}<span class="count" data-testid="legal-choice-count">{frame.offers.length}<span class="sr-only"> {interrupted ? 'recorded' : 'legal'} choices</span></span>{/if}
     </h2>
     {#if waitingFor}<p class="type-caption text-ink-3" data-testid="choices-waiting">Waiting for {opponentName}</p>{/if}
@@ -289,12 +296,13 @@
         <li>
           <button type="button" class="row" class:chosen={isChosen(placed)} data-testid="action-option" data-offer-id={placed.offer.id}
             data-action-type={placed.offer.action_type} data-action-description={placed.offer.label} data-chosen={isChosen(placed) || undefined}
-            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, recorded policy ${formatProbability(recordedP(placed)!)}` : ''}${isChosen(placed) ? ', chosen' : ''}`}
+            aria-label={`${placed.offer.label}${recordedP(placed) !== undefined ? `, ${evidence?.heading ? 'policy' : 'recorded policy'} ${formatProbability(recordedP(placed)!)}` : ''}${estimateOf(placed) !== undefined ? `, estimate after ${formatScore(estimateOf(placed)!)}` : ''}${evidence?.heading ? (choosers(placed) ? `, ${choosers(placed)}` : '') : isChosen(placed) ? ', chosen' : ''}`}
             disabled={!live} aria-disabled={readingOut || undefined} onclick={() => onact(placed)}
             onmouseenter={() => onpointoffer(placed)} onmouseleave={() => onpointoffer(null)}
             onfocus={() => onpointoffer(placed)} onblur={() => onpointoffer(null)}>
             <kbd class:hidden-key={placed.number > 9}>{placed.number}</kbd>
-            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} /></span>
+            <span class="label">{#if isChosen(placed)}<span class="check" aria-hidden="true">✓ </span>{/if}<ManaText text={placed.offer.label} />{#if evidence?.heading && choosers(placed)}<span class="who-chose type-caption" aria-hidden="true" data-testid="offer-choosers">{choosers(placed)}</span>{/if}</span>
+            {#if estimateOf(placed) !== undefined}<span class="estimate" aria-hidden="true" data-testid="offer-estimate" title="Estimate after this choice, 0–100 from your seat">{formatScore(estimateOf(placed)!)}</span>{/if}
             {#if recordedP(placed) !== undefined}
               <span class="p" aria-hidden="true" style:--p={recordedP(placed)}>{formatProbability(recordedP(placed)!)}</span>
             {/if}
@@ -321,6 +329,15 @@
                   <button type="button" aria-current={currentMove === move.id ? 'true' : undefined} data-move={move.id} onclick={() => onjump(move.id)}>
                     <span class="who" class:repeat={!move.passes && turn.moves[at - 1]?.who === move.who}>{move.passes ? '' : move.who}</span>
                     <span class="what">{#if move.passes}passed {move.passes.map(part => `${part.who}${part.count > 1 ? ` ×${part.count}` : ''}`).join(', ')}{:else}{move.segments.map(segment => segment.text).join('')}{#if move.count > 1}<span class="times">&nbsp;×{move.count}</span>{/if}{/if}</span>
+                    {#if moveMarks.get(move.id)}{@const mark = moveMarks.get(move.id)!}
+                      <span class="mark type-caption" data-testid="move-mark" data-same={mark.same}>{mark.same ? 'same' : 'differs'}</span>
+                      <svg class="track" viewBox="0 0 40 8" aria-hidden="true" data-testid="move-track">
+                        <line x1="0" x2="40" y1="4" y2="4" />
+                        {#if mark.its !== null}<circle class="its" cx={2 + mark.its * 36} cy="4" r="2.5" />{/if}
+                        {#if mark.yours !== null}<circle class="yours" cx={2 + mark.yours * 36} cy="4" r="2" />{/if}
+                      </svg>
+                      <span class="sr-only">{mark.same ? 'Same as the policy' : 'Differs from the policy'}{mark.yours !== null ? `, estimate after yours ${formatScore(mark.yours)}` : ''}{mark.its !== null && !mark.same ? `, after its choice ${formatScore(mark.its)}` : ''}</span>
+                    {/if}
                   </button>
                 </li>
               {:else if move.passes}
@@ -443,6 +460,15 @@
   .primary.chosen { outline: 2px solid var(--text); outline-offset: 2px; }
   .primary .p { color: inherit; background: none; }
   .move.jump { padding-left: 0; }
+  /* An analysis's reading of your move: neutral ink, never a grade. */
+  .mark { flex: none; font-family: var(--font-sans); color: var(--text-tertiary); }
+  .mark[data-same='false'] { color: var(--text-secondary); }
+  .track { flex: none; width: 40px; height: 8px; align-self: center; }
+  .track line { stroke: var(--border); stroke-width: 1; }
+  .track .its { fill: none; stroke: var(--text-tertiary); stroke-width: 1; }
+  .track .yours { fill: var(--text-secondary); }
+  .who-chose { margin-left: 6px; font-family: var(--font-sans); color: var(--text-tertiary); }
+  .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
   .move.jump button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 0 4px 0 26px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }

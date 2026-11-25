@@ -41,6 +41,7 @@
   import { phaseTrack, type OnceStops } from './phases';
   import StopBar from './StopBar.svelte';
   import Strip from './Strip.svelte';
+  import type { DecisionMark } from '$lib/analysis';
   import { decidesBy, shortName } from '$lib/opponent-name';
   import { CARD_RATIO, handFan, handStrip, inspectableCards, pileShapes, possessive, splitHalf, boardView, type HalfSplit, type PermanentItem, type PlacedOffer, type RowLimits, type StackItem, type TrayItem } from './view';
 
@@ -86,6 +87,8 @@
     currentMove?: string | null;
     /** The recorded policy at a recorded choice. */
     evidence?: OfferEvidence | null;
+    /** An analysis's mark on each of your moves, by move id. */
+    moveMarks?: ReadonlyMap<string, DecisionMark>;
     /** The recap's heading, when it is not the person's last move. */
     recapTitle?: string;
     /** What the shown position is, when the caller knows (a recording): "After Heuristic's move". */
@@ -108,7 +111,7 @@
   let {
     frame, live, status, you, opponent, stops, onceStops, oncyclestop, connection = null, connectionLabel = '', log, canPassTurn,
     presentation, thinking, opponentChoosing, workStarted, interrupted, payment = null, onpreview = () => {}, onact, onpassturn = () => {},
-    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, recapTitle, heading = null, bottom, strip, notices, result, menu,
+    since: sinceGiven, moves: movesGiven, onjump, currentMove = null, evidence = null, moveMarks, recapTitle, heading = null, bottom, strip, notices, result, menu,
     beatPace = 'quick', combatPreview, stepBoards = [],
   }: Props = $props();
 
@@ -889,7 +892,7 @@
     <Rail {view} {frame} {live} {line} {hint} {primaryText} {status} {whose} {thinking} {opponentChoosing} {workStarted} {interrupted} {canPassTurn} {recent} {moves}
       opponentName={said} onact={act} onpassturn={passTurn} {paymentNote} onpointoffer={placed => (pointed = placed)}
       onstack={onStack} onpreviewname={previewName} {notices} over={finished} dock={inspectMode === 'dock' ? dock : undefined}
-      {evidence} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
+      {evidence} {moveMarks} {recapTitle} {onjump} {currentMove} reading={readingOut ? reading : undefined}
       draft={drafting || running ? combatControls : undefined} stopped={stopNote} />
   </div>
 
@@ -940,7 +943,7 @@
   {#if bottom || strip?.open}
     <div class="bottom">
       {@render bottom?.()}
-      {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} />{/if}
+      {#if strip?.open}<Strip marks={strip.marks} selected={strip.selected} onjump={strip.onjump} note={strip.note} scale={strip.scale} />{/if}
     </div>
   {/if}
   <nav class="stops-slot" aria-label={`Turn ${turnNumber}, ${yourTurn ? 'yours' : "opponent's"}: steps and stops`}>

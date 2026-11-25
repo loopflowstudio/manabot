@@ -29,8 +29,9 @@
   import { gameResult } from '$lib/board/result';
   import { shortName } from '$lib/opponent-name';
   import {
-    bottomSeat, moveAt, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
+    analysedEvidence, analysedMarks, bottomSeat, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
+  import { analysisStatus, byEvent, scoreName, type AnalysisList } from '$lib/analysis';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
@@ -110,13 +111,32 @@
   const frame = $derived(studyFrame ?? recorded);
   const studying = $derived(studyFrame !== null);
   const viewerSeat = $derived(studying ? (studyFrame!.projection.agent.player_index === 1 ? 1 : 0) : bottom);
-  const evidence = $derived(!studying && current?.decision && recorded ? offerEvidence(recorded, current.outputs, current.decision.offer_id) : null);
+  // ———————————————— Analysis: a policy's reading of your decisions
+
+  let analyses = $state.raw<AnalysisList | null>(null);
+  let analysisChoice = $state<string | null>(null);
+  let analyseWith = $state('');
+  let analysisError = $state('');
+  let analysisPoll: ReturnType<typeof setTimeout> | undefined;
+  const analysis = $derived(analyses?.analyses.find(item => item.id === analysisChoice) ?? analyses?.analyses.at(-1) ?? null);
+  const analysed = $derived(byEvent(analysis));
+  const analysisName = $derived(analysis ? shortName(analysis.policy.name) : '');
+  const analysisScale = $derived.by(() => {
+    const name = scoreName(analysis?.decisions[0]?.semantic ?? null);
+    if (!analysis || !name) return null;
+    return `${analysisName}'s ${name.toLowerCase()} from your seat · ${analysis.decisions.length} of ${analysis.total} decisions`;
+  });
+  const analysedHere = $derived(current?.kind === 'choice' && current.event !== undefined ? analysed.get(current.event) ?? null : null);
+  const evidence = $derived(!studying && current?.decision && recorded
+    ? analysedHere ? analysedEvidence(recorded, analysedHere, current.decision.offer_id, analysisName) : offerEvidence(recorded, current.outputs, current.decision.offer_id)
+    : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
   const entries = $derived(replayLog(positions, heroSeat, saidOf));
   const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
-  const marks = $derived(stripMarks(positions, heroSeat));
+  const marks = $derived(analysis ? analysedMarks(stripMarks(positions, heroSeat), positions, analysed) : stripMarks(positions, heroSeat));
+  const marksByMove = $derived(moveMarks(entries, positions, analysed));
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
@@ -168,7 +188,40 @@
     const near = params.get('near') ?? (saved.near === undefined ? null : String(saved.near));
     perspective = perspectiveOf(near, replayStore.index ?? { players: [] });
     if (!currentGame.href || replayStore.index?.can_produce) rememberCurrentGame(`/replay?trace=${encodeURIComponent(id)}`);
+    await loadAnalyses(id, true);
   }
+
+  /**
+   * Reads this game's analyses, following one that is running. Your own game,
+   * once nobody is playing it, opens its default analysis if it has none.
+   */
+  async function loadAnalyses(id: string, startDefault = false): Promise<void> {
+    clearTimeout(analysisPoll);
+    const index = replayStore.index;
+    if (!index || index.id !== id || index.watch) { analyses = null; return; }
+    try {
+      let list = await replayStore.api<AnalysisList>(`/api/traces/${encodeURIComponent(id)}/analyses`);
+      if (startDefault && !list.analyses.length && list.default && index.can_feedback && index.status !== 'waiting') {
+        await replayStore.api(`/api/traces/${encodeURIComponent(id)}/analyses`, { policy: list.default });
+        list = await replayStore.api<AnalysisList>(`/api/traces/${encodeURIComponent(id)}/analyses`);
+      }
+      if (replayStore.index?.id !== id) return;
+      analyses = list; analysisError = '';
+      if (!analyseWith) analyseWith = list.default ?? list.policies[0]?.sha256 ?? '';
+      if (list.analyses.some(item => item.status === 'running')) analysisPoll = setTimeout(() => void loadAnalyses(id), 1000);
+    } catch (reason) { analysisError = reason instanceof Error ? reason.message : String(reason); }
+  }
+
+  async function analyse(policy: string): Promise<void> {
+    const id = index?.id;
+    if (!id || !policy) return;
+    try {
+      const started = await replayStore.api<{ id: string }>(`/api/traces/${encodeURIComponent(id)}/analyses`, { policy });
+      analysisChoice = started.id;
+      await loadAnalyses(id);
+    } catch (reason) { analysisError = reason instanceof Error ? reason.message : String(reason); }
+  }
+  $effect(() => () => clearTimeout(analysisPoll));
 
   // The presentation track up to this position: the acting viewer's recorded history.
   $effect(() => {
@@ -399,6 +452,11 @@
   {#if index?.mirror_retry && !replayStore.error}<p role="alert" class="notice">{index.mirror_retry.message}</p>{/if}
   {#if replayStore.error}<p role="alert" class="notice error">{replayStore.error}</p>{/if}
   {#if index?.record_stop?.reason}<p class="type-caption text-ink-2">{index.record_stop.reason}</p>{/if}
+  {#if analysisError}<p role="alert" class="notice error">{analysisError}</p>{/if}
+  {#if analysis && analysisStatus(analysis)}<p class="type-caption text-ink-2" role="status" data-testid="analysis-status">{analysisStatus(analysis)}</p>{/if}
+  {#if analyses && !analysis && !index?.watch}
+    <p class="type-caption text-ink-3" data-testid="analysis-absent">{analyses.unavailable ?? (analyses.policies.length ? 'No analysis yet · Analyse with… in the Menu' : 'No analysis: no registered policy can read this game. Install a policy provider (managym.bots) to analyse it.')}</p>
+  {/if}
   {#if replayStore.producing && index}
     <section aria-label="Live frontier work" class="type-caption text-ink-2">
       <p>{atLiveEdge ? 'Producing the next decision.' : 'Reading a saved position; bot work belongs to the frontier.'}</p>
@@ -445,6 +503,28 @@
       <p role="status" class="type-caption text-ink-2" data-testid="recording-status">{status}</p>
       <p class="type-caption text-ink-3" data-testid="replay-perspective">{perspectiveText}</p>
       <a class="btn btn-secondary btn-sm" href="/?setup=1">New game</a>
+      {#if analyses && !index?.watch}
+        <section class="analysis-menu type-caption" aria-label="Analysis" data-testid="analysis-menu">
+          <p class="type-label text-ink-2">Analysis</p>
+          {#if analyses.analyses.length > 1}
+            <label>Shown
+              <select aria-label="Shown analysis" value={analysis?.id} onchange={event => (analysisChoice = event.currentTarget.value)}>
+                {#each analyses.analyses as item, at (item.id)}<option value={item.id}>{at + 1}. {item.policy.name} · {item.status}</option>{/each}
+              </select>
+            </label>
+          {:else if analysis}<p class="text-ink-2">By {analysis.policy.name}</p>{/if}
+          {#if analyses.unavailable}<p class="text-ink-3">{analyses.unavailable}</p>
+          {:else if analyses.policies.length && index?.can_feedback}
+            <div class="analyse-with">
+              <select aria-label="Policy to analyse with" bind:value={analyseWith} disabled={analyses.analyses.some(item => item.status === 'running')}>
+                {#each analyses.policies as policy (policy.sha256)}<option value={policy.sha256}>{policy.name}</option>{/each}
+              </select>
+              <button class="btn btn-secondary btn-sm" data-testid="analyse-with" disabled={!analyseWith || analyses.analyses.some(item => item.status === 'running') || index?.status === 'waiting'}
+                onclick={() => void analyse(analyseWith)}>{analysis?.status === 'stopped' && analysis.policy.id === analyseWith ? 'Analyse again' : 'Analyse with…'}</button>
+            </div>
+          {/if}
+        </section>
+      {/if}
       {#each [0, 1] as seat (seat)}
         {@const who = identity(seat)}
         {@const runtime = who.runtime ?? who.provenance?.policy}
@@ -527,8 +607,9 @@
     onjump={locked ? undefined : jump}
     {currentMove}
     {evidence}
+    moveMarks={marksByMove}
     bottom={bottomEdge}
-    strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek } : undefined}
+    strip={index ? { marks, selected: replayStore.selected, open: stripOpen, ontoggle: () => (stripOpen = !stripOpen), onjump: locked ? undefined : seek, scale: analysisScale } : undefined}
     {notices}
     result={ending ? result : undefined}
     {menu}
@@ -583,6 +664,9 @@
   .menu-panel > a.btn { justify-self: start; }
   .note { display: block; width: 100%; margin-top: 4px; min-height: 60px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 4px 6px; }
   .recordings { display: grid; gap: 4px; }
+  .analysis-menu { display: grid; gap: 4px; }
+  .analysis-menu select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 220px; }
+  .analyse-with { display: flex; gap: 6px; align-items: center; }
   .player-status summary { cursor: pointer; }
   .identity { padding: 4px 0 0 12px; overflow-wrap: anywhere; color: var(--text-secondary); }
 </style>

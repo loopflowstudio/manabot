@@ -451,6 +451,9 @@ class Recording:
         return {
             "key": position.key,
             "kind": position.kind,
+            # The trace event a choice decides or a consequence follows; joins
+            # an analysis (`analysis.AnalysedDecision.event`).
+            "event": position.event_index,
             "turn": turn.get("turn_number"),
             "phase": turn.get("phase"),
             "step": turn.get("step"),
