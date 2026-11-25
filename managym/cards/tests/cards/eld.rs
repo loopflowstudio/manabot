@@ -373,3 +373,78 @@ fn charming_prince_can_blink_its_owners_stolen_creature_until_the_next_end_step(
     assert_ne!(returned, ogre);
     assert_eq!(permanent(&s, returned).controller, PlayerId(0));
 }
+
+/// Run Away Together needs two creatures with different controllers: with
+/// only one player's creatures it cannot be cast, and the second target
+/// is offered only among the other player's creatures. A control change in
+/// response leaves both under one controller, so both targets are illegal
+/// and neither returns. A target that leaves in response is compared by
+/// its last known controller, so the other still returns.
+#[test]
+fn run_away_together_returns_two_creatures_controlled_by_different_players() {
+    use crate::support::{
+        game::{move_card, move_from_library},
+        inspect::offered_targets,
+        play::spend_colorless,
+    };
+    use managym::state::{game_object::Target, player::ManaPayment};
+    #[derive(Clone, Copy, PartialEq)]
+    enum Response {
+        None,
+        ControlChange,
+        TheirsLeaves,
+    }
+    let mut s = five_color_setup(&["Run Away Together", "Gray Ogre"]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let spell = move_from_library(&mut s, 0, "Run Away Together", ZoneType::Hand);
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let other_mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert!(!castable(&mut s, spell));
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let root = s.snapshot();
+    for response in [
+        Response::None,
+        Response::ControlChange,
+        Response::TheirsLeaves,
+    ] {
+        s.restore(&root);
+        cast_card(&mut s, spell);
+        let mut first = offered_targets(&s);
+        first.sort();
+        let mut all = [mine, other_mine, theirs].map(Target::Permanent).to_vec();
+        all.sort();
+        assert_eq!(first, all);
+        assert!(s.choose_target(Target::Permanent(mine)));
+        assert_eq!(offered_targets(&s), [Target::Permanent(theirs)]);
+        assert!(s.choose_target(Target::Permanent(theirs)));
+        spend_colorless(&mut s);
+        match response {
+            Response::None => {}
+            // The scenario seam models a completed control change in response.
+            Response::ControlChange => {
+                s.game_mut().state.permanents[theirs]
+                    .as_mut()
+                    .unwrap()
+                    .controller = PlayerId(0);
+            }
+            Response::TheirsLeaves => {
+                let object = s.game().permanent_object(theirs).unwrap();
+                move_card(&mut s, object, ZoneType::Graveyard);
+            }
+        }
+        let hands = [0, 1].map(|player| s.zone_size(player, ZoneType::Hand));
+        settle(&mut s);
+        let mine_returns = response != Response::ControlChange;
+        let theirs_returns = response == Response::None;
+        assert_eq!(
+            s.zone_size(0, ZoneType::Hand),
+            hands[0] + usize::from(mine_returns)
+        );
+        assert_eq!(
+            s.zone_size(1, ZoneType::Hand),
+            hands[1] + usize::from(theirs_returns)
+        );
+        assert_eq!(s.game().state.permanents[mine].is_none(), mine_returns);
+        assert!(s.game().state.permanents[other_mine].is_some());
+    }
+}

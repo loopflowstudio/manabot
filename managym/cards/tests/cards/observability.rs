@@ -68,8 +68,8 @@ use managym::{
             Ability, Actor, AttackSize, Condition, DamageKind, DamageRecipientFilter, DelayedEvent,
             DelayedExpiry, DelayedFrequency, DistinctSearchEnd, Effect, EffectValue, Except,
             KeywordAction, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
-            Per, PlayWindow, PlayerSelector, Scope, SpellTargetFilter, TargetRequirement,
-            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+            Per, PlayWindow, PlayerSelector, Scope, SpellTargetFilter, TargetRelation,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardType, Keyword,
@@ -839,6 +839,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Earthbend { .. } => "Effect::Earthbend",
         Effect::AddMana { .. } => "Effect::AddMana",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
+        Effect::Simultaneously { .. } => "Effect::Simultaneously",
         Effect::Airbend { .. } => "Effect::Airbend",
         Effect::GrantGraveyardCastThisTurn { .. } => "Effect::GrantGraveyardCastThisTurn",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
@@ -882,7 +883,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 100;
+const EFFECT_VARIANTS: usize = 101;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -1039,6 +1040,7 @@ fn effect_witnesses() -> Vec<Effect> {
             until_end_of_combat: true,
         },
         Effect::ForEachTarget { effects: draw() },
+        Effect::Simultaneously { effects: draw() },
         Effect::Airbend {
             what: ObjectSelector::Each {
                 of: Scope::Battlefield,
@@ -2793,6 +2795,29 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     let attached = tokens_of(&spell(vec![Effect::exile(ObjectSelector::Attached)]));
     assert_ne!(this, attached);
     assert_eq!(this.len(), attached.len(), "the verb's shape is shared");
+}
+
+#[test]
+fn every_target_relation_reaches_the_learning_tokens() {
+    for relation in [
+        TargetRelation::DistinctFromEarlier,
+        TargetRelation::AttachedToEarlier(0),
+        TargetRelation::DifferentControllerFrom(0),
+    ] {
+        let name = format!("TargetRelation::{relation:?}");
+        let name = name.split('(').next().unwrap();
+        let clause = Effect::TargetClause {
+            requirement: TargetRequirement {
+                relation: Some(relation),
+                ..TargetRequirement::one(TargetSpec::Creature)
+            },
+            effects: vec![Effect::gain_life(1)],
+        };
+        assert!(
+            tokens_of(&spell(vec![clause])).contains(&(TokenKind::Variant, name_value(name))),
+            "{name}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

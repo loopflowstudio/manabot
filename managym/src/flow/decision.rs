@@ -804,13 +804,15 @@ pub enum Decision {
         limit: KeepLimit,
         kept: Vec<PermanentId>,
     },
-    /// `player` chooses a new target for slot `slot` of the stack object
-    /// (CR 115.7), or keeps the current one when `may_keep` ("you may
-    /// choose new targets for the copy"); later slots follow.
+    /// `player` chooses a new target for the next slot of the stack object
+    /// (CR 115.7), after the targets `chosen` for the earlier slots, or
+    /// keeps the current one when `may_keep` ("you may choose new targets
+    /// for the copy"); later slots follow. The object's targets change only
+    /// once every slot is decided.
     Retarget {
         player: PlayerId,
         object: Target,
-        slot: usize,
+        chosen: Vec<Target>,
         may_keep: bool,
     },
     /// "Starting with you, each player chooses up to one [predicate]
@@ -1968,22 +1970,24 @@ impl Game {
             Decision::Retarget {
                 player,
                 object,
-                slot,
+                chosen,
                 may_keep,
-            } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::ChooseTarget,
-                actions: self
-                    .retarget_candidates(*object, *slot)
-                    .into_iter()
-                    .map(|target| Action::ChooseTarget {
-                        player: *player,
-                        target,
-                    })
-                    .chain(may_keep.then_some(Action::Decline { player: *player }))
-                    .collect(),
-                focus: source_focus,
-            },
+            } => {
+                let (changes, keep) = self.retarget_offer(*object, chosen, *may_keep);
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::ChooseTarget,
+                    actions: changes
+                        .into_iter()
+                        .map(|target| Action::ChooseTarget {
+                            player: *player,
+                            target,
+                        })
+                        .chain(keep.then_some(Action::Decline { player: *player }))
+                        .collect(),
+                    focus: source_focus,
+                }
+            }
             Decision::ChooseToExile {
                 player,
                 controller,
@@ -2810,25 +2814,23 @@ impl Game {
                 Decision::Retarget {
                     player,
                     object,
-                    slot,
+                    chosen,
                     may_keep,
                 },
                 Action::ChooseTarget { target, .. },
             ) => {
-                let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
-                if !self.retarget_candidates(object, slot).contains(target) {
+                let (player, object, may_keep) = (*player, *object, *may_keep);
+                if !self
+                    .retarget_offer(object, chosen, may_keep)
+                    .0
+                    .contains(target)
+                {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("illegal new target".into()));
                 }
-                let index = self.stack_index_of(object).expect("validated retarget");
-                let controller = self.state.stack_objects[index].controller();
-                self.state.stack_objects[index].targets_mut()[slot] = *target;
-                let next = if may_keep {
-                    self.next_copy_target(player, object, slot + 1)
-                } else {
-                    self.emit_permanents_targeted(&[*target], object, controller);
-                    None
-                };
+                let mut chosen = std::mem::take(chosen);
+                chosen.push(*target);
+                let next = self.retarget_after(player, object, chosen, may_keep);
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }
@@ -2836,12 +2838,21 @@ impl Game {
                 Decision::Retarget {
                     player,
                     object,
-                    slot,
+                    chosen,
                     may_keep: true,
                 },
                 Action::Decline { .. },
             ) => {
-                let next = self.next_copy_target(*player, *object, *slot + 1);
+                let (player, object) = (*player, *object);
+                if !self.retarget_offer(object, chosen, true).1 {
+                    *self.state.suspended_decision_mut() = Some(suspended);
+                    return Err(AgentError("this target cannot stay".into()));
+                }
+                let mut chosen = std::mem::take(chosen);
+                let kept = self.state.stack_objects[self.stack_index_of(object).expect("retarget")]
+                    .targets()[chosen.len()];
+                chosen.push(kept);
+                let next = self.retarget_after(player, object, chosen, true);
                 self.continue_resolution(suspended.frame, next);
                 Ok(())
             }

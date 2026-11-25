@@ -690,6 +690,8 @@ then overruns into the next priority. Read a new card's printing with `curl`
 from `api.scryfall.com` (the framework Python has no CA bundle), two seconds
 apart on `cards/search`, and append its row to
 `managym/tests/fixtures/scryfall_cards.json` with the fixture's eight fields.
+Append the text: the fixture repeats some names, so loading and re-dumping
+the JSON silently drops rows.
 
 Funded fixtures must finish native spending decisions before passing priority
 or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve

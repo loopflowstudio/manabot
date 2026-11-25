@@ -1,8 +1,8 @@
 //! Throne of Eldraine.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, Per, TargetRelation,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes,
@@ -18,6 +18,7 @@ use managym_state::{
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        run_away_together(),
         charming_prince(),
         heraldic_banner(),
         syr_alin_the_lions_claw(),
@@ -424,6 +425,35 @@ fn charming_prince() -> CardDefinition {
                         )],
                     ],
                 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn run_away_together() -> CardDefinition {
+    let text_box = "Choose two target creatures controlled by different players. Return those creatures to their owners' hands.";
+    CardDefinition {
+        key: "eld.run_away_together",
+        scryfall_id: "aeffc3c0-567c-442f-ba06-b7d9617c5789",
+        printed: PrintedCharacteristics {
+            name: "Run Away Together".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::Creature),
+                TargetRequirement {
+                    relation: Some(TargetRelation::DifferentControllerFrom(0)),
+                    ..TargetRequirement::one(TargetSpec::Creature)
+                },
+            ],
+            spell_effects: vec![Effect::Simultaneously {
+                effects: vec![
+                    Effect::return_to_hand(ObjectSelector::ClauseTarget(0)),
+                    Effect::return_to_hand(ObjectSelector::ClauseTarget(1)),
+                ],
             }],
             text_box: text_box.into(),
             ..Default::default()

@@ -1787,12 +1787,12 @@ pub(crate) fn project_decision(
         }
         Decision::Retarget {
             object,
-            slot,
+            chosen,
             may_keep,
             ..
         } => {
             out.target("retargeted stack object", *object);
-            out.field("retarget", &(slot, may_keep));
+            out.field("retarget", &(chosen.len(), may_keep));
         }
         Decision::ExileLinked {
             owner,

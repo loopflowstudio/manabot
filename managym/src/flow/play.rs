@@ -982,14 +982,20 @@ impl Game {
         object: ObjectId,
         mut cast: CastChoices,
     ) -> Option<CastChoices> {
-        for requirement in cast.spell(&self.state[object]).target_requirements() {
+        let requirements = cast.spell(&self.state[object]).target_requirements();
+        for (index, requirement) in requirements.iter().enumerate() {
             if requirement.min == 0 || (cast.kicked && requirement.up_to_if_kicked.is_some()) {
                 continue;
             }
-            if self
-                .legal_targets_for_requirement(player, object, &requirement)
-                .is_empty()
-            {
+            // A clause with its own relation is checked from the clause it
+            // names, whose candidates must leave it a partner.
+            let candidates = |requirement: &TargetRequirement| {
+                self.legal_targets_for_requirement(player, object, requirement)
+            };
+            if !candidates(requirement).into_iter().any(|target| {
+                requirement.relation.is_some()
+                    || self.relations_admit(&requirements, index, target, &[], candidates)
+            }) {
                 requirement.up_to_if_kicked?;
                 cast.kicked = true;
             }
@@ -1184,13 +1190,10 @@ impl Game {
                 .remaining_legal_targets(
                     player,
                     object,
-                    requirement,
-                    &chosen
-                        .iter()
-                        .zip(&chosen_req_indices)
-                        .filter(|(_, index)| **index == requirement_index)
-                        .map(|(target, _)| *target)
-                        .collect::<Vec<_>>(),
+                    &requirements,
+                    requirement_index,
+                    &chosen,
+                    &chosen_req_indices,
                     cast.x,
                 )
                 .into_iter()
@@ -1240,18 +1243,36 @@ impl Game {
         self.can_pay_cast_with_targets(player, object, cast, Some(&targets))
     }
 
+    /// Candidates for clause `clause` of a spell being cast, given every
+    /// target chosen so far and the clause each went to.
+    #[allow(clippy::too_many_arguments)]
     fn remaining_legal_targets(
         &self,
         player: PlayerId,
         object: ObjectId,
-        requirement: &TargetRequirement,
+        requirements: &[TargetRequirement],
+        clause: usize,
         chosen: &[Target],
+        chosen_req_indices: &[usize],
         x: u8,
     ) -> Vec<Target> {
+        let requirement = &requirements[clause];
+        let pairs: Vec<(usize, Target)> = chosen_req_indices
+            .iter()
+            .copied()
+            .zip(chosen.iter().copied())
+            .collect();
+        let in_clause = pairs
+            .iter()
+            .filter(|(index, _)| *index == clause)
+            .map(|(_, target)| *target);
         self.legal_targets_for_requirement(player, object, requirement)
             .into_iter()
             .filter(|target| {
-                self.can_add_clause_target(requirement, x, chosen.iter().copied(), *target)
+                self.can_add_clause_target(requirement, x, in_clause.clone(), *target)
+                    && self.relations_admit(requirements, clause, *target, &pairs, |later| {
+                        self.legal_targets_for_requirement(player, object, later)
+                    })
             })
             .collect()
     }
@@ -1334,13 +1355,10 @@ impl Game {
         let legal = self.remaining_legal_targets(
             player,
             object,
-            requirement,
-            &chosen
-                .iter()
-                .zip(&chosen_req_indices)
-                .filter(|(_, index)| **index == requirement_index)
-                .map(|(target, _)| *target)
-                .collect::<Vec<_>>(),
+            &requirements,
+            requirement_index,
+            &chosen,
+            &chosen_req_indices,
             cast.x,
         );
         if legal.is_empty() {
@@ -2002,10 +2020,25 @@ impl Game {
         let Some(ability_source) = self.activation_ability_source(source) else {
             return Vec::new();
         };
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return Vec::new();
+        };
+        let requirements = ability.target_requirements();
+        let pairs: Vec<(usize, Target)> = ability
+            .target_clause_indices(chosen.len())
+            .into_iter()
+            .zip(chosen.iter().copied())
+            .collect();
         let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
             .legal_clause_targets(&clause, player, ability_source)
             .filter(|target| !chosen.contains(target))
+            .filter(|target| {
+                self.relations_admit(&requirements, requirement, *target, &pairs, |later| {
+                    self.legal_clause_targets(later, player, ability_source)
+                        .collect()
+                })
+            })
             .collect();
         if !clause.shares_creature_type {
             return candidates;

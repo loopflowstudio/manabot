@@ -738,7 +738,47 @@ impl Game {
                 self.require_shared_creature_type(&mut slots, index);
             }
         }
+        self.require_target_relations(&mut slots, &requirements);
         slots.iter().any(|slot| slot.legal).then_some(slots)
+    }
+
+    /// Clause relations at resolution (CR 608.2b). "Attached to that
+    /// creature" also needs that creature to remain a legal target. When
+    /// targets "controlled by different players" share a last known
+    /// controller, both sides become illegal: neither alone breaks the rule.
+    fn require_target_relations(
+        &self,
+        slots: &mut [ResolutionTarget],
+        requirements: &[crate::state::ability::TargetRequirement],
+    ) {
+        use crate::state::ability::TargetRelation;
+        for index in 0..slots.len() {
+            let clause = slots[index].requirement;
+            let Some(requirement) = requirements.get(clause) else {
+                continue;
+            };
+            let Some(relation) = requirement.relation else {
+                continue;
+            };
+            let others = |legal_only: bool| -> Vec<(usize, Target)> {
+                slots
+                    .iter()
+                    .enumerate()
+                    .filter(|(other, slot)| *other != index && (!legal_only || slot.legal))
+                    .map(|(_, slot)| (slot.requirement, slot.target))
+                    .collect()
+            };
+            let host_legal = matches!(relation, TargetRelation::AttachedToEarlier(_));
+            if self.relation_admits(requirement, clause, slots[index].target, others(host_legal)) {
+                continue;
+            }
+            slots[index].legal = false;
+            if let TargetRelation::DifferentControllerFrom(host) = relation {
+                for slot in slots.iter_mut().filter(|slot| slot.requirement == host) {
+                    slot.legal = false;
+                }
+            }
+        }
     }
 
     /// "That share a creature type" (CR 608.2b): a target stays legal only
@@ -886,9 +926,22 @@ impl Game {
         if *what == ObjectSelector::You {
             return vec![Affected::Player(frame.controller)];
         }
-        if matches!(what, ObjectSelector::Targets(_)) {
-            return frame
-                .active_targets()
+        let slots: Option<Vec<ResolutionTarget>> = match what {
+            ObjectSelector::Targets(_) => Some(frame.active_targets().collect()),
+            ObjectSelector::ClauseTarget(index) => Some(
+                frame
+                    .targets
+                    .iter()
+                    .copied()
+                    .filter(|slot| slot.requirement == *index && slot.legal)
+                    .collect(),
+            ),
+            _ => None,
+        };
+        if let Some(slots) = slots {
+            // Target slots name players as well as objects.
+            return slots
+                .into_iter()
                 .filter(|slot| self.target_is_present(slot.target))
                 .filter_map(|slot| match slot.target {
                     Target::Player(player) => Some(Affected::Player(player)),
@@ -1402,11 +1455,14 @@ impl Game {
             }
             Effect::CopyTriggeringObject => {
                 let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
-                self.next_copy_target(frame.controller, copy, 0)
+                self.next_copy_target(frame.controller, copy, Vec::new())
             }
             Effect::ChangeTarget { .. } => {
                 let object = self.present_primary_target(frame)?;
-                self.next_retarget(frame.controller, object, 0, false)
+                match self.next_retarget(frame.controller, object, Vec::new(), false)? {
+                    super::retarget::RetargetStep::Decide(decision) => Some(decision),
+                    super::retarget::RetargetStep::Finished(_) => None,
+                }
             }
             Effect::AdditionalCombatPhase { attackers } => {
                 self.state
@@ -2613,6 +2669,37 @@ impl Game {
                 );
                 None
             }
+            Effect::Simultaneously { effects } => {
+                let mut merged: Option<super::proposed_event::EventBatch> = None;
+                for effect in effects {
+                    let decision = self.execute_frame_effect(effect, frame);
+                    debug_assert!(decision.is_none(), "a simultaneous instruction decided");
+                    let Some(batch) = frame.batch.take() else {
+                        continue;
+                    };
+                    match &mut merged {
+                        None => merged = Some(batch),
+                        Some(merged) => {
+                            debug_assert_eq!(merged.binding, batch.binding);
+                            // Proposal ordinals stay distinct across instructions.
+                            let offset = merged
+                                .events
+                                .iter()
+                                .map(|event| event.ordinal + 1)
+                                .max()
+                                .unwrap_or(0);
+                            merged
+                                .events
+                                .extend(batch.events.into_iter().map(|mut event| {
+                                    event.ordinal += offset;
+                                    event
+                                }));
+                        }
+                    }
+                }
+                frame.batch = merged;
+                None
+            }
             Effect::ForEachTarget { effects } => {
                 frame.iteration = Some(TargetIteration {
                     remaining: frame.active_targets().collect(),
@@ -2691,10 +2778,9 @@ impl Game {
             ObjectSelector::ClauseTarget(index) => frame
                 .targets
                 .iter()
-                .find(|slot| slot.requirement == *index && slot.legal)
+                .filter(|slot| slot.requirement == *index && slot.legal)
                 .filter(|slot| self.target_is_present(slot.target))
-                .and_then(|slot| self.target_object(slot.target))
-                .into_iter()
+                .filter_map(|slot| self.target_object(slot.target))
                 .collect(),
             ObjectSelector::Targets(_) => frame
                 .active_targets()

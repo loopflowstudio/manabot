@@ -1163,7 +1163,7 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
-    /// The legal target of a specified single-target clause, independent of the cursor.
+    /// The legal targets of a specified clause, independent of the cursor.
     ClauseTarget(usize),
     /// All eligible targets of the active clause, acted on by one instruction
     /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
@@ -2071,6 +2071,13 @@ pub enum Effect {
     ForEachTarget {
         effects: Vec<Effect>,
     },
+    /// The inner instructions happen at once, as one event (CR 608.2c:
+    /// Drakuseth "deals 4 damage to any target and 3 damage to each of up
+    /// to two other targets"). Each inner instruction proposes its events
+    /// without a decision, and all share an event binding.
+    Simultaneously {
+        effects: Vec<Effect>,
+    },
 }
 
 /// How long a player may play cards an effect exiled.
@@ -2223,6 +2230,30 @@ pub struct TargetRequirement {
     /// is still from the controller's side (CR 115.4).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub opponent_chooses: bool,
+    /// How each target of this clause must stand to the targets of an
+    /// earlier clause ("other targets", "attached to that creature",
+    /// "controlled by different players").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relation: Option<TargetRelation>,
+}
+
+/// A rule joining a clause's targets to an earlier clause's (CR 115.3).
+/// Clauses otherwise admit the same object twice, once per word "target"
+/// (CR 115.3); a relation is how a card says otherwise. The clause index
+/// counts the program's targeting clauses from zero and is always earlier
+/// than the clause that carries the relation. Choosing targets, changing
+/// them (CR 115.7) and resolution (CR 608.2b) all check it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TargetRelation {
+    /// "Other targets": no object chosen for any earlier clause.
+    DistinctFromEarlier,
+    /// "Target Equipment attached to that creature": attached to the
+    /// clause's target; illegal at resolution once that target is.
+    AttachedToEarlier(usize),
+    /// "Target creatures controlled by different players": a controller
+    /// other than that of the clause's targets. At resolution both sides
+    /// become illegal together, read from last known information.
+    DifferentControllerFrom(usize),
 }
 
 impl ObjectSelector {
@@ -2275,6 +2306,7 @@ impl TargetRequirement {
             total_mana_value_x: false,
             same_graveyard: false,
             opponent_chooses: false,
+            relation: None,
         }
     }
 
@@ -2465,6 +2497,7 @@ impl Effect {
             } => then.iter().chain(otherwise).any(test),
             Self::OptionalManaPaymentX { if_paid: effects }
             | Self::ForEachTarget { effects }
+            | Self::Simultaneously { effects }
             | Self::TargetClause { effects, .. }
             | Self::ForPlayer { effects, .. }
             | Self::MayOnceEachTurn { effects } => effects.iter().any(test),
@@ -2723,6 +2756,7 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
+            | Effect::Simultaneously { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget
             | Effect::AttachSourceTo { .. } => None,
         }

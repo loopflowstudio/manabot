@@ -875,6 +875,23 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
     }
 }
 
+fn relation_description(relation: Option<crate::state::ability::TargetRelation>) -> String {
+    use crate::state::ability::TargetRelation;
+    match relation {
+        None => String::new(),
+        Some(TargetRelation::DistinctFromEarlier) => ", other than the earlier targets".into(),
+        Some(TargetRelation::AttachedToEarlier(clause)) => {
+            format!(" attached to the target of clause {}", clause + 1)
+        }
+        Some(TargetRelation::DifferentControllerFrom(clause)) => {
+            format!(
+                " controlled by a different player than the target of clause {}",
+                clause + 1
+            )
+        }
+    }
+}
+
 fn target_description(t: &TargetSpec) -> String {
     let noun = match t {
         TargetSpec::PermanentYouOwn { predicate } => {
@@ -954,7 +971,7 @@ fn player_description(player: &PlayerSelector) -> String {
 
 fn selector_description(triggering: TriggerText, selector: &ObjectSelector) -> String {
     match selector {
-        ObjectSelector::ClauseTarget(index) => format!("the target of clause {}", index + 1),
+        ObjectSelector::ClauseTarget(index) => format!("the targets of clause {}", index + 1),
         ObjectSelector::ExactSource => "this object".into(),
         ObjectSelector::This => "this".into(),
         ObjectSelector::Target(target) => target_description(target),
@@ -1446,7 +1463,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         MillCards { count, target: Some(target), .. } => format!("{} mills {} cards", target_description(target), value_description(triggering, count)),
         MillUntil { player, predicate } => format!("{} reveals cards from the top of their library until they reveal {}, then puts those cards into their graveyard", player_description(player), predicate_description(predicate, "card")),
         SelectCards { from, predicate, min, max, effects, if_declined } => format!("Choose {min}–{} {} from {}: {}. If none chosen: {}", value_description(triggering, max), predicate_description(predicate, "cards"), selector_description(triggering, from), effects_description_in(triggering, effects), effects_description_in(triggering, if_declined)),
-        TargetClause { requirement, effects } => format!("Choose {}–{} {}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },effects_description_in(triggering, effects)),
+        TargetClause { requirement, effects } => format!("Choose {}–{} {}{}{} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),if requirement.same_graveyard { " from a single graveyard" } else { "" },relation_description(requirement.relation),effects_description_in(triggering, effects)),
         Discard { what: ObjectSelector::You, count: 1 } => "Discard a card".into(),
         Discard { what, count } => format!("{} discards {count} card{}", selector_subject(triggering, what), if *count == 1 { "" } else { "s" }),
         Destroy { what } => format!("Destroy {}",selector_description(triggering, what)),
@@ -1611,6 +1628,7 @@ fn effect_description(triggering: TriggerText, effect: &Effect) -> Option<String
         AttachSourceTo { what } => format!("Attach this to {}",selector_description(triggering, what)),
         DistributeCountersToTappedOpponentCreatures { kind, count } => format!("Distribute {count} {} counters among any number of tapped creatures your opponents control",counter_description(*kind)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description_in(triggering, effects)),
+        Simultaneously { effects } => format!("At the same time: {}",effects_description_in(triggering, effects)),
     })
 }
 

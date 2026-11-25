@@ -17,8 +17,8 @@ use crate::{
     state::{
         ability::{
             Ability, Actor, DamageRecipientFilter, DelayedFrequency, Effect, EffectiveTrigger,
-            KeywordAction, Per, SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject, TurnStep,
+            KeywordAction, Per, SpellTargetFilter, TargetRelation, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{CardDefId, PrintedCharacteristics},
         effect::{EffectDuration, Modification},
@@ -370,6 +370,101 @@ impl Game {
                 || self.targets_share_creature_type(chosen.chain([target])))
     }
 
+    /// Whether `target`, in clause `clause`, keeps the clause's relation to
+    /// the targets `others` holds as `(clause, target)` pairs. Controllers
+    /// are last known (CR 608.2h) so a departed target still compares.
+    pub(crate) fn relation_admits(
+        &self,
+        requirement: &TargetRequirement,
+        clause: usize,
+        target: Target,
+        others: impl IntoIterator<Item = (usize, Target)>,
+    ) -> bool {
+        let Some(relation) = requirement.relation else {
+            return true;
+        };
+        let mut others = others.into_iter();
+        match relation {
+            TargetRelation::DistinctFromEarlier => {
+                others.all(|(other, chosen)| other >= clause || chosen != target)
+            }
+            TargetRelation::AttachedToEarlier(host) => others
+                .filter(|(other, _)| *other == host)
+                .any(|(_, chosen)| self.target_attached_to(target, chosen)),
+            TargetRelation::DifferentControllerFrom(other_clause) => {
+                let mine = self.target_last_known_controller(target);
+                mine.is_some()
+                    && others
+                        .filter(|(other, _)| *other == other_clause)
+                        .all(|(_, chosen)| self.target_last_known_controller(chosen) != mine)
+            }
+        }
+    }
+
+    /// Adding `target` to clause `clause` while choosing: it relates to the
+    /// earlier `chosen` targets, and every later required clause whose
+    /// relation reads this one keeps a candidate (`candidates`) relating to
+    /// the choice. Lookahead is one clause deep, as relations name one
+    /// earlier clause.
+    pub(crate) fn relations_admit(
+        &self,
+        requirements: &[TargetRequirement],
+        clause: usize,
+        target: Target,
+        chosen: &[(usize, Target)],
+        candidates: impl Fn(&TargetRequirement) -> Vec<Target>,
+    ) -> bool {
+        let Some(requirement) = requirements.get(clause) else {
+            return true;
+        };
+        if !self.relation_admits(requirement, clause, target, chosen.iter().copied()) {
+            return false;
+        }
+        let with: Vec<(usize, Target)> = chosen.iter().copied().chain([(clause, target)]).collect();
+        requirements
+            .iter()
+            .enumerate()
+            .skip(clause + 1)
+            .filter(|(_, later)| {
+                later.min > 0
+                    && match later.relation {
+                        Some(TargetRelation::DistinctFromEarlier) => true,
+                        Some(
+                            TargetRelation::AttachedToEarlier(host)
+                            | TargetRelation::DifferentControllerFrom(host),
+                        ) => host == clause,
+                        None => false,
+                    }
+            })
+            .all(|(index, later)| {
+                candidates(later).into_iter().any(|candidate| {
+                    self.relation_admits(later, index, candidate, with.iter().copied())
+                })
+            })
+    }
+
+    /// Whether permanent target `attachment` is attached to permanent
+    /// target `host` now.
+    fn target_attached_to(&self, attachment: Target, host: Target) -> bool {
+        let (Target::Permanent(attachment), Target::Permanent(host)) = (attachment, host) else {
+            return false;
+        };
+        let Some(host) = self.permanent_object(host) else {
+            return false;
+        };
+        self.state.permanents[attachment]
+            .as_ref()
+            .is_some_and(|permanent| permanent.attached_to == Some(host))
+    }
+
+    /// A permanent target's controller, or its last known controller.
+    fn target_last_known_controller(&self, target: Target) -> Option<PlayerId> {
+        match target {
+            Target::Permanent(id) => self.last_known_controller(id),
+            _ => None,
+        }
+    }
+
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
         match target {
             Target::GraveyardCard(object) => u32::from(self.object_mana_value(object)),
@@ -379,6 +474,30 @@ impl Game {
             Target::StackSpell(object_id) => u32::from(self.object_mana_value(object_id)),
             _ => 0,
         }
+    }
+
+    fn trigger_relations_admit(
+        &self,
+        trigger: &PendingTrigger,
+        requirements: &[TargetRequirement],
+        target: Target,
+    ) -> bool {
+        let chosen: Vec<(usize, Target)> = trigger
+            .target_req_indices
+            .iter()
+            .copied()
+            .zip(trigger.targets.iter().copied())
+            .collect();
+        self.relations_admit(
+            requirements,
+            trigger.requirement_index,
+            target,
+            &chosen,
+            |later| {
+                self.legal_clause_targets(later, trigger.controller, trigger.source_identity)
+                    .collect()
+            },
+        )
     }
 
     pub(crate) fn choose_trigger_target(
@@ -398,6 +517,7 @@ impl Game {
         if trigger.controller != player
             || !self.target_fits_clause(target, requirement, player, trigger.source_identity)
             || !self.can_add_clause_target(requirement, trigger.x, trigger.clause_targets(), target)
+            || !self.trigger_relations_admit(trigger, &requirements, target)
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -510,7 +630,7 @@ impl Game {
                             trigger.x,
                             trigger.clause_targets(),
                             *target,
-                        )
+                        ) && self.trigger_relations_admit(&trigger, &requirements, *target)
                     })
                     .map(|target| Action::ChooseTarget {
                         player: controller,

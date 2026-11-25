@@ -2,8 +2,8 @@
 use managym_state::ability::{
     Ability, Actor, Aggregate, AttackSize, CompareOp, Condition, DamageKind, DamageRecipientFilter,
     Effect, EffectValue, EntryCounters, KeywordAction, ObjectProperty, ObjectSelector, PaymentCost,
-    Per, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
-    TriggerSubject, TurnStep,
+    Per, PlayWindow, PlayerSelector, Scope, TargetRelation, TargetRequirement, TargetSpec,
+    TriggerCondition, TriggerSubject, TurnStep,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, ActivationZone, AdditionalCost, CardDefinition, CardType,
@@ -19,6 +19,7 @@ use managym_state::zone::ZoneType;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        fiery_annihilation(),
         divine_resilience(),
         curator_of_destinies(),
         fishing_pole(),
@@ -4074,6 +4075,45 @@ fn divine_resilience() -> CardDefinition {
                 ObjectSelector::Targets(TargetSpec::CreatureYouControl),
                 Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fiery_annihilation() -> CardDefinition {
+    let text_box = "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.";
+    CardDefinition {
+        key: "fdn.fiery_annihilation",
+        scryfall_id: "54fe00aa-d284-48f9-b5a2-1bd4c5fa8e58",
+        printed: PrintedCharacteristics {
+            name: "Fiery Annihilation".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::Creature),
+                TargetRequirement {
+                    relation: Some(TargetRelation::AttachedToEarlier(0)),
+                    ..TargetRequirement::up_to(
+                        1,
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                subtype: Some("Equipment".into()),
+                                ..Default::default()
+                            },
+                        },
+                    )
+                },
+            ],
+            spell_effects: vec![
+                Effect::deal_damage(5, ObjectSelector::ClauseTarget(0)),
+                Effect::exile(ObjectSelector::ClauseTarget(1)),
+                Effect::until_end_of_turn(
+                    ObjectSelector::ClauseTarget(0),
+                    Modification::ExileIfWouldDie,
+                ),
+            ],
             text_box: text_box.into(),
             ..Default::default()
         },

@@ -1696,7 +1696,7 @@ mod tests {
             Decision::Retarget {
                 player,
                 object: Target::Player(player),
-                slot: 0,
+                chosen: Vec::new(),
                 may_keep: false,
             },
             Decision::LegendRule {

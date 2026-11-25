@@ -1,7 +1,8 @@
 //! Core Set 2020.
 use managym_state::ability::{
-    Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
-    SpellTargetFilter, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
+    Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, Per, PlayerSelector,
+    SpellTargetFilter, TargetRelation, TargetRequirement, TargetSpec, TriggerCondition,
+    TriggerSubject, TurnStep,
 };
 use managym_state::card::{
     ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -14,6 +15,7 @@ use managym_state::predicate::CardPredicate;
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        drakuseth_maw_of_flames(),
         cryptic_caves(),
         agent_of_treachery(),
         brought_back(),
@@ -363,6 +365,49 @@ fn twinblade_paladin() -> CardDefinition {
                     Keyword::DoubleStrike,
                 ]))],
             )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn drakuseth_maw_of_flames() -> CardDefinition {
+    let text_box = "Flying\nWhenever Drakuseth attacks, Drakuseth deals 4 damage to any target and 3 damage to each of up to two other targets.";
+    CardDefinition {
+        key: "m20.drakuseth_maw_of_flames",
+        scryfall_id: "d09af78f-efde-4107-8406-cb12fd11c686",
+        printed: PrintedCharacteristics {
+            name: "Drakuseth, Maw of Flames".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{R}{R}")),
+            supertypes: vec!["Legendary".into()],
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::AnyTarget),
+                        effects: vec![],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            relation: Some(TargetRelation::DistinctFromEarlier),
+                            ..TargetRequirement::up_to(2, TargetSpec::AnyTarget)
+                        },
+                        effects: vec![Effect::Simultaneously {
+                            effects: vec![
+                                Effect::deal_damage(4, ObjectSelector::ClauseTarget(0)),
+                                Effect::deal_damage(3, ObjectSelector::ClauseTarget(1)),
+                            ],
+                        }],
+                    },
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

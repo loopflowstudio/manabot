@@ -12974,5 +12974,43 @@
     "colors": [
       "B"
     ]
+  },
+  "Fiery Annihilation": {
+    "name": "Fiery Annihilation",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Fiery Annihilation deals 5 damage to target creature. Exile up to one target Equipment attached to that creature. If that creature would die this turn, exile it instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Run Away Together": {
+    "name": "Run Away Together",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose two target creatures controlled by different players. Return those creatures to their owners' hands.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Drakuseth, Maw of Flames": {
+    "name": "Drakuseth, Maw of Flames",
+    "mana_cost": "{4}{R}{R}{R}",
+    "type_line": "Legendary Creature — Dragon",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever Drakuseth attacks, Drakuseth deals 4 damage to any target and 3 damage to each of up to two other targets.",
+    "colors": [
+      "R"
+    ]
   }
 }

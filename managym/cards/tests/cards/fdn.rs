@@ -8904,3 +8904,69 @@ fn divine_resilience_targets_one_creature_or_any_number_when_kicked() {
         }
     }
 }
+
+/// Fiery Annihilation offers only Equipment attached to its creature
+/// target, exiles it with the damage, and exiles the creature if it would
+/// die. Equipment moved to another creature in response is an illegal
+/// target and stays, while the damage still resolves.
+#[test]
+fn fiery_annihilation_exiles_only_equipment_still_attached_to_its_target() {
+    use crate::support::{
+        game::move_from_library,
+        inspect::{offered_targets, top_spell, zone_of},
+        play::cast_card,
+    };
+    use managym::{
+        agent::action::Action,
+        state::{game_object::PermanentId, player::ManaPayment},
+    };
+    let mut s = five_color_setup(&[
+        "Fiery Annihilation",
+        "Hill Giant",
+        "Gray Ogre",
+        "Trusty Boomerang",
+    ]);
+    s.game_mut().mana_payment[0] = ManaPayment::Auto;
+    let spell = move_from_library(&mut s, 0, "Fiery Annihilation", ZoneType::Hand);
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let on_giant = s.force_permanent_on_battlefield(1, "Trusty Boomerang");
+    let on_ogre = s.force_permanent_on_battlefield(1, "Trusty Boomerang");
+    let attach = |s: &mut Scenario, equipment: PermanentId, host: PermanentId| {
+        let host = s.game().permanent_object(host);
+        s.game_mut().state.permanents[equipment]
+            .as_mut()
+            .unwrap()
+            .attached_to = host;
+    };
+    attach(&mut s, on_giant, giant);
+    attach(&mut s, on_ogre, ogre);
+    let giant_card = s.game().permanent_object(giant).unwrap();
+    let root = s.snapshot();
+    for moved in [false, true] {
+        s.restore(&root);
+        cast_card(&mut s, spell);
+        assert!(s.choose_target(Target::Permanent(giant)));
+        assert_eq!(offered_targets(&s), [Target::Permanent(on_giant)]);
+        assert!(s.choose_target(Target::Permanent(on_giant)));
+        spend_colorless(&mut s);
+        assert_eq!(top_spell(&s).targets.len(), 2);
+        if moved {
+            attach(&mut s, on_giant, ogre);
+        }
+        settle(&mut s);
+        assert_eq!(zone_of(&s, giant_card), Some(ZoneType::Exile));
+        assert_eq!(s.game().state.permanents[on_giant].is_some(), moved);
+        assert!(s.game().state.permanents[on_ogre].is_some());
+    }
+    // A creature without Equipment leaves only the declined second clause.
+    s.restore(&root);
+    let bare = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(bare)));
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|action| matches!(action, Action::ChooseTarget { .. })));
+}
