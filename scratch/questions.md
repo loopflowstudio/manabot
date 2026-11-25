@@ -12,9 +12,6 @@
 - Perforating Artist: the opponent's three-way choice is a nested optional
   (discard? else sacrifice? else lose 3). The choice is complete but takes two
   steps rather than one three-way pick.
-- Abyssal Harvester waits for MTG-420 (PR #593, auto-merge requested at
-  2026-11-25T01:31Z). If it has not merged when Slices 1–9 are done, publish
-  without Harvester and leave its row pending.
 - Build the independent stack-copy cohort first. The entry-choice cohort needs
   a complete CR 205.3m vocabulary before its prompt can offer every legal type.
   For repeated copies, compose a counted instruction with the existing copy

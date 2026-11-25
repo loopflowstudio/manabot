@@ -18,10 +18,11 @@ Sorting (checked against `managym/state/` and the engine, 2026-11-24, base `cf73
   by Example in Slice 5).
 - **28 wait on a shared primitive** (Slices 1–8; Curator and Biogenic Upgrade
   each need a new decision shape, the rest are small).
-- **Abyssal Harvester** builds on MTG-420's copiable-snapshot authority (PR #593,
-  auto-merge requested). Sync main after it lands (`lf sync main`), then
-  build Slice 10. It is not a shortcut candidate: if #593 does not land,
-  Harvester stays pending in the ledger with "MTG-420 copiable snapshots".
+- **Abyssal Harvester** builds on MTG-420's copiable-snapshot authority. PR #593
+  merged 2026-11-25T03:17Z (`45ddf3bca7`) and this branch merged it at
+  `72c35dc5bc`, so Slice 10 is unblocked. Its ledger row still names
+  `blocked_by: MTG-418` (graveyard arrivals from any zone); Slice 10's
+  per-turn graveyard record is that query, so clear the field when delivered.
 
 No card here waits on authority owned by MTG-430 (planeswalkers) or MTG-432
 (characteristics, replacements and combat constraints). Fiery Annihilation
@@ -407,7 +408,7 @@ The remaining 23 compose-only cards land as one pass with one directed test
 each in their set files. Add `observability.rs` rows where a card is the first
 real user of a static or cost row.
 
-### Slice 10 — Abyssal Harvester (after MTG-420 lands)
+### Slice 10 — Abyssal Harvester (MTG-420 merged)
 
 - A per-turn "put into a graveyard this turn" record that generalizes
   `from_battlefield_this_turn` (`turn.rs:282`, `statics.rs:573`), exposed as a
