@@ -81,10 +81,16 @@ fn empty_statics() -> Arc<Vec<StaticEntry>> {
     Arc::clone(EMPTY.get_or_init(|| Arc::new(Vec::new())))
 }
 
-#[derive(Clone, Debug, PartialEq)]
+const DIRTY_TYPES_SUBTYPES: u8 = 1;
+const DIRTY_ACTIVATIONS: u8 = 2;
+const DIRTY_STATICS: u8 = 4;
+const DIRTY_ALL: u8 = DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS | DIRTY_STATICS;
+
+#[derive(Clone, Debug)]
 pub(super) struct LayerObject {
     pub view: Arc<Characteristics>,
     statics: Arc<Vec<StaticEntry>>,
+    dirty: u8,
 }
 #[derive(Clone)]
 pub(super) struct Context<'a> {
@@ -582,13 +588,15 @@ impl<'a> Context<'a> {
             }
         }
         for (&id, object) in &mut context.objects {
-            let unchanged = retain_sources && {
-                let seed = &seeds[id.0].as_ref().unwrap().object;
-                Arc::ptr_eq(&object.view, &seed.view) && Arc::ptr_eq(&object.statics, &seed.statics)
+            let dirty = if retain_sources {
+                object.dirty
+            } else {
+                DIRTY_ALL
             };
-            if !unchanged {
+            if dirty != 0 {
                 let record = &game.state[game.live_permanent(id).object];
-                Self::finish_object(object, record);
+                Self::finish_object(object, record, dirty);
+                object.dirty = 0;
             }
         }
         context
@@ -646,8 +654,9 @@ impl<'a> Context<'a> {
                 ..Default::default()
             }),
             statics,
+            dirty: 0,
         };
-        Self::finish_object(&mut object, source);
+        Self::finish_object(&mut object, source, DIRTY_ALL);
         let nodes = object
             .statics
             .iter()
@@ -662,26 +671,33 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn finish_object(object: &mut LayerObject, record: &Object) {
-        let view = Arc::make_mut(&mut object.view);
-        view.is_animated = view.is_creature() && !record.types.is_creature();
-        // During the pass `CreatureTypes::All` marks a record granting all
-        // creature types; a listed set is derived from the final subtypes.
-        let creature_types = if !view.is_creature() {
-            CreatureTypes::default()
-        } else if view.creature_types.is_all() {
-            CreatureTypes::All
-        } else {
-            CreatureTypes::among(&view.subtypes)
-        };
-        if view.creature_types != creature_types {
-            view.details_mut().creature_types = creature_types;
+    fn finish_object(object: &mut LayerObject, record: &Object, dirty: u8) {
+        if dirty & DIRTY_TYPES_SUBTYPES != 0 {
+            let is_animated = object.view.is_creature() && !record.types.is_creature();
+            if object.view.is_animated != is_animated {
+                Arc::make_mut(&mut object.view).is_animated = is_animated;
+            }
+            // During the pass `CreatureTypes::All` marks a record granting all
+            // creature types; a listed set is derived from the final subtypes.
+            let creature_types = if !object.view.is_creature() {
+                CreatureTypes::default()
+            } else if object.view.creature_types.is_all() {
+                CreatureTypes::All
+            } else {
+                CreatureTypes::among(&object.view.subtypes)
+            };
+            if object.view.creature_types != creature_types {
+                Arc::make_mut(&mut object.view).details_mut().creature_types = creature_types;
+            }
         }
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
-        if !view.activated_abilities.is_empty() {
-            let shared = view
+        if dirty & (DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS) != 0
+            && !object.view.activated_abilities.is_empty()
+        {
+            let shared = object
+                .view
                 .activated_abilities
                 .iter()
                 .map(|ability| &ability.mana_cost.purpose)
@@ -689,40 +705,47 @@ impl<'a> Context<'a> {
                     matches!(purpose, SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes, view.creature_types.is_all()))
+                    } if source.describes(&object.view.subtypes, object.view.creature_types.is_all()))
                 })
                 .cloned();
             let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
                 zone: ZoneType::Battlefield,
                 source: SpendingObject::new(
-                    view.subtypes.iter().map(String::as_str),
-                    view.creature_types.is_all(),
+                    object.view.subtypes.iter().map(String::as_str),
+                    object.view.creature_types.is_all(),
                 ),
             });
-            if view
+            if object
+                .view
                 .activated_abilities
                 .iter()
                 .any(|ability| ability.mana_cost.purpose != purpose)
             {
-                for ability in &mut view.details_mut().activated_abilities {
+                for ability in &mut Arc::make_mut(&mut object.view)
+                    .details_mut()
+                    .activated_abilities
+                {
                     if ability.mana_cost.purpose != purpose {
                         ability.mana_cost.purpose = purpose.clone();
                     }
                 }
             }
         }
-        let statics_differ = view.static_abilities.len() != object.statics.len()
-            || view
-                .static_abilities
-                .iter()
-                .zip(object.statics.iter())
-                .any(|(ability, entry)| ability != &entry.ability);
-        if statics_differ {
-            view.details_mut().static_abilities = object
-                .statics
-                .iter()
-                .map(|entry| entry.ability.clone())
-                .collect();
+        if dirty & DIRTY_STATICS != 0 {
+            let statics_differ = object.view.static_abilities.len() != object.statics.len()
+                || object
+                    .view
+                    .static_abilities
+                    .iter()
+                    .zip(object.statics.iter())
+                    .any(|(ability, entry)| ability != &entry.ability);
+            if statics_differ {
+                Arc::make_mut(&mut object.view).details_mut().static_abilities = object
+                    .statics
+                    .iter()
+                    .map(|entry| entry.ability.clone())
+                    .collect();
+            }
         }
     }
     fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
@@ -1360,26 +1383,30 @@ impl<'a> Context<'a> {
                     if !object.view.is_land() {
                         continue;
                     }
-                    let view = Arc::make_mut(&mut object.view);
                     {
-                        let details = view.details_mut();
+                        let details = Arc::make_mut(&mut object.view).details_mut();
                         details
                             .subtypes
                             .retain(|s| !BASIC_LANDS.iter().any(|(name, _)| s == name));
                         details.subtypes.push(subtype.clone());
                         details.added_subtypes.push(subtype.clone());
                     }
-                    lose_all_abilities(view, &mut object.statics);
-                    view.details_mut()
+                    lose_all_abilities(object);
+                    Arc::make_mut(&mut object.view)
+                        .details_mut()
                         .activated_abilities
                         .extend(intrinsic_mana_ability(|name| name == subtype));
+                    object.dirty |= DIRTY_TYPES_SUBTYPES | DIRTY_ACTIVATIONS;
                 }
                 Operation::Inherit => {
                     if let Some(definition) = self.game.inherited_definition(id) {
                         let details = Arc::make_mut(&mut object.view).details_mut();
-                        details
-                            .activated_abilities
-                            .extend(definition.activated_abilities.clone());
+                        if !definition.activated_abilities.is_empty() {
+                            details
+                                .activated_abilities
+                                .extend(definition.activated_abilities.clone());
+                            object.dirty |= DIRTY_ACTIVATIONS;
+                        }
                         details.triggered_abilities.extend(
                             definition.abilities.iter().cloned().enumerate().map(
                                 |(index, ability)| EffectiveTrigger {
@@ -1417,6 +1444,7 @@ impl<'a> Context<'a> {
                         view.creature_types_set = false;
                         if !view.creature_types.is_all() {
                             view.details_mut().creature_types = CreatureTypes::All;
+                            object.dirty |= DIRTY_TYPES_SUBTYPES;
                         }
                     }
                     Modification::SetCreatureTypes(types) => {
@@ -1427,6 +1455,7 @@ impl<'a> Context<'a> {
                         details.subtypes.retain(|s| !is_creature_type(s));
                         details.subtypes.extend(types.iter().cloned());
                         details.added_subtypes.retain(|s| !is_creature_type(s));
+                        object.dirty |= DIRTY_TYPES_SUBTYPES;
                     }
                     Modification::AddSubtypes(types) => {
                         let gained = if object.view.is_land() {
@@ -1449,6 +1478,7 @@ impl<'a> Context<'a> {
                                     details.added_subtypes.push(subtype.clone());
                                 }
                             }
+                            object.dirty |= DIRTY_TYPES_SUBTYPES;
                         }
                     }
                     Modification::AddTypes(types) => {
@@ -1458,6 +1488,7 @@ impl<'a> Context<'a> {
                                 .types
                                 .types
                                 .extend(types.iter().copied());
+                            object.dirty |= DIRTY_TYPES_SUBTYPES;
                         }
                     }
                     Modification::SetTypes { types, subtypes } => {
@@ -1492,6 +1523,7 @@ impl<'a> Context<'a> {
                                 }
                             }
                         }
+                        object.dirty |= DIRTY_TYPES_SUBTYPES;
                     }
                     Modification::BecomeCreature => {
                         if !object.view.types.types.contains(&CardType::Creature) {
@@ -1500,6 +1532,7 @@ impl<'a> Context<'a> {
                                 .types
                                 .types
                                 .insert(CardType::Creature);
+                            object.dirty |= DIRTY_TYPES_SUBTYPES;
                         }
                     }
                     Modification::Nonlegendary => {
@@ -1555,12 +1588,10 @@ impl<'a> Context<'a> {
                         }
                     }
                     Modification::LoseNonManaAbilities => {
-                        let view = Arc::make_mut(&mut object.view);
-                        lose_nonmana_abilities(view, &mut object.statics);
+                        lose_nonmana_abilities(object);
                     }
                     Modification::LoseAllAbilities => {
-                        let view = Arc::make_mut(&mut object.view);
-                        lose_all_abilities(view, &mut object.statics);
+                        lose_all_abilities(object);
                     }
                     Modification::Firebending(n) => {
                         let view = Arc::make_mut(&mut object.view);
@@ -1579,6 +1610,7 @@ impl<'a> Context<'a> {
                             .details_mut()
                             .activated_abilities
                             .push((**ability).clone());
+                        object.dirty |= DIRTY_ACTIVATIONS;
                     }
                     Modification::GrantTriggered(ability) => {
                         Arc::make_mut(&mut object.view)
@@ -1610,6 +1642,7 @@ impl<'a> Context<'a> {
                             timestamp: node.timestamp.max(self.game.live_permanent(id).timestamp),
                             ability: (**ability).clone(),
                         });
+                        object.dirty |= DIRTY_STATICS;
                     }
                     Modification::SetBasePt { power, toughness } => {
                         let new_power = match power {
@@ -1658,7 +1691,8 @@ impl Game {
     }
 }
 
-fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Arc<Vec<StaticEntry>>) {
+fn lose_nonmana_abilities(object: &mut LayerObject) {
+    let view = Arc::make_mut(&mut object.view);
     view.abilities_lost = true;
     view.keywords = Keywords::default();
     view.keyword_grants.clear();
@@ -1677,22 +1711,23 @@ fn lose_nonmana_abilities(view: &mut Characteristics, statics: &mut Arc<Vec<Stat
             .retain(ActivatedAbilityDefinition::is_mana_ability);
         details.triggered_abilities.clear();
     }
-    if !statics.is_empty() {
-        *statics = empty_statics();
+    if !object.statics.is_empty() {
+        object.statics = empty_statics();
+        object.dirty |= DIRTY_STATICS;
     }
 }
 
-fn lose_all_abilities(view: &mut Characteristics, statics: &mut Arc<Vec<StaticEntry>>) {
-    if !view.mana_abilities.is_empty()
-        || !view.triggered_mana_abilities.is_empty()
-        || !view.activated_abilities.is_empty()
+fn lose_all_abilities(object: &mut LayerObject) {
+    if !object.view.mana_abilities.is_empty()
+        || !object.view.triggered_mana_abilities.is_empty()
+        || !object.view.activated_abilities.is_empty()
     {
-        let details = view.details_mut();
+        let details = Arc::make_mut(&mut object.view).details_mut();
         details.mana_abilities.clear();
         details.triggered_mana_abilities.clear();
         details.activated_abilities.clear();
     }
-    lose_nonmana_abilities(view, statics);
+    lose_nonmana_abilities(object);
 }
 
 fn tap_for_mana(effect: Effect) -> ActivatedAbilityDefinition {
