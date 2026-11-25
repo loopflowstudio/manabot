@@ -493,7 +493,9 @@
   .recording .turns { gap: 0; }
   .recording .turn { min-width: 0; }
   .gutter { flex: none; width: 16px; font-variant-numeric: tabular-nums; color: var(--text); }
-  .move.jump .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .move.jump .what { flex: 1 1 5em; min-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Marks never squeeze the move away: in a narrow rail they wrap under it, kept to the right. */
+  .move.jump .reading, .move.jump .shown { margin-left: auto; }
   /* An analysis's reading of your move: neutral ink, never a grade. */
   .reading { flex: none; display: inline-flex; gap: 4px; align-items: center; }
   .mark { font-family: var(--font-sans); color: var(--text-tertiary); }
@@ -507,7 +509,7 @@
   .who-chose { margin-left: 6px; font: 400 12px/16px var(--font-sans); color: var(--text-tertiary); white-space: nowrap; }
   .estimate { flex: none; font: 400 12px/16px var(--font-sans); font-variant-numeric: tabular-nums; color: var(--text-tertiary); min-width: 2ch; text-align: right; }
   /* Dense rows: a 24 px target (WCAG 2.5.8) rather than the 32 px control height. */
-  .move.jump button { width: 100%; min-width: 0; min-height: 24px; display: flex; align-items: baseline; gap: 6px; padding: 2px 4px 2px 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+  .move.jump button { width: 100%; min-width: 0; min-height: 24px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 2px 4px 2px 4px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
   .move.jump button:hover { background: var(--bg-field); }
   .move.jump button[aria-current='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 2px 0 0 var(--accent); }
 </style>

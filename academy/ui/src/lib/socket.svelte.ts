@@ -681,6 +681,7 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       gameStore.tableUnavailable = false;
+      const seatBefore = gameStore.observation?.agent.player_index ?? null;
       if (!this.pendingResume || !currentGame.href) rememberCurrentGame('/');
       if (this.pendingResume) {
         try {
@@ -736,6 +737,12 @@ export class GameSocketController {
       // belongs to the recovered frame and must survive that reset.
       if ('work' in message) gameStore.work = message.work ?? null;
       if ('mirror_retry' in message) gameStore.searchRetry = message.mirror_retry ?? null;
+      // Live scores are read from one seat's view; after Swap sides the line
+      // starts again from the new seat, whose earlier decisions arrive as history.
+      const seatAfter = gameStore.observation?.agent.player_index ?? null;
+      if (seatBefore !== null && seatAfter !== null && seatAfter !== seatBefore) {
+        gameStore.liveAnalysis = { ...gameStore.liveAnalysis, points: [], reading: null };
+      }
       this.flushQueue();
       return;
     }

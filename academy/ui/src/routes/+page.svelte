@@ -252,7 +252,10 @@
   $effect(() => {
     const config = gameStore.playSession?.config;
     if (!config || demoName || !gameStore.observation || !tableIdentity) return;
-    const decks = gameStore.deckNames ? { hero: gameStore.deckNames.hero, villain: gameStore.deckNames.villain } : null;
+    // The session's setup keeps its seats after Swap sides, which changes only this game; name its decks the same way.
+    const swapped = gameStore.observation.agent.player_index !== (config.human_seat === 1 ? 1 : 0);
+    const names = gameStore.deckNames;
+    const decks = names ? (swapped ? { hero: names.villain, villain: names.hero } : { hero: names.hero, villain: names.villain }) : null;
     untrack(() => saveLastMatchup({ config, opponent: opponentName, decks }));
   });
   const deckLabel = (key: unknown): string => {

@@ -528,3 +528,37 @@ it('ignores work from another table, revision or earlier operation', () => {
   expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
   gameStore.work = null;
 });
+
+describe('live analysis across Swap sides', () => {
+  const point = { event: 3, at: 1, score: 70, semantic: 'signed_outcome' };
+
+  function recoveryAt(revision: number, swapped: boolean): RecoveryEnvelope {
+    const frame = frameAt(revision);
+    if (swapped) {
+      const { agent, opponent } = frame.projection;
+      frame.projection = { ...frame.projection, agent: opponent, opponent: agent };
+    }
+    return { ...structuredClone(boltProtocolFixture.recovery), frame };
+  }
+
+  function showing(): void {
+    gameStore.prepareForNewGame();
+    gameStore.applyFrame(frameAt(42));
+    gameStore.liveAnalysis = { ...gameStore.liveAnalysis, shown: true, points: [point] };
+  }
+
+  it('starts the line again from the new seat', () => {
+    showing();
+    const recovery = recoveryAt(43, true);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.observation?.agent.player_index).toBe(1);
+    expect(gameStore.liveAnalysis.points).toEqual([]);
+  });
+
+  it('keeps the line while the seat stays', () => {
+    showing();
+    const recovery = recoveryAt(43, false);
+    deliver(new GameSocketController(), { type: 'observation', data: recovery.frame.projection, actions: [], recovery });
+    expect(gameStore.liveAnalysis.points).toEqual([point]);
+  });
+});

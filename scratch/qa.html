@@ -1,5 +1,52 @@
-<!doctype html><meta charset="utf-8"><title>MTG-389 QA</title>
+<!doctype html><meta charset="utf-8"><title>MTG-482 / MTG-389 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc;margin:.5em 0}h2{margin-top:2em}code{background:#f3f3f3;padding:0 3px}</style>
+<h1>MTG-482 Swap sides — QA, 2026-11-25</h1>
+<p>The real product: <code>managym academy --policy qa_bot.json play --opponent qa_bot --deck ur_lessons --opponent-deck gw_allies</code> on the static build, with a checkpoint trained at this checkout (<code>etude train manabot/recipes/local.py</code>). Headless Chromium, one persistent profile, 1280×800, origin <code>automated_validation</code>, everything under ignored <code>.runs/qa/</code>. Host load was 80–130 throughout.</p>
+
+<h2>1. A whole game with two swaps</h2>
+<p>Played as seat 2 (UR Lessons, on the draw) to turn 10, turned on <b>Show analysis</b>, opened Settings → Game and pressed <b>Swap sides</b> in <i>This game</i>.</p>
+<ul>
+<li>The board flipped: "You · GW Allies vs policies/00000002-raw · UR Lessons", the near plate became seat 1, the hand became GW's, life totals were carried across (you 18, the bot 20). The bot played the UR turn you left at once (discarded, played Mountain, attacked), and you faced its attack as GW. The move list showed "Swapped sides". Analysis stayed on.</li>
+<li>Twelve decisions later, swapped back. Played to the end at turn 20–23. The game saved once: <code>status=completed</code>, <code>seat_swaps=[49,88]</code>, players in their final seats.</li>
+<li>Reloading after a swap kept the seat, decks, revision and pending decision; the next Command was accepted. A second tab did not resume the game.</li>
+<li>A swap at the opening mulligan worked: the bot kept for the seat you left, and you inherited GW's London-mulligan bottom choice.</li>
+<li>Only one <code>swap_sides</code> request is sent per press: the button disables while it is pending.</li>
+</ul>
+<img src="shots/qa-swap-03-settings.png"><img src="shots/qa-swap-03-after.png">
+
+<h2>2. Found and fixed: the live line mixed both seats</h2>
+<p>After swapping back, the expected-score line under the board said "35 decisions read" and joined, as one line "from your seat", the readings taken while you held GW with the server's history of your UR decisions. A swap keeps the same analysing policy, so the client kept its points. A score from the other seat reads as its complement. Now a frame whose viewer seat changed starts the line again, and the server's history for the new seat fills it in. Re-run: 20 readings → 1 after the swap → 12 → 22 after swapping back, all UR. A test in <code>socket.svelte.test.ts</code> fails without the fix.</p>
+<img src="shots/qa-swap-05-back-later.png">
+
+<h2>3. Found and fixed: Review's move rail hid moves marked "analysis shown"</h2>
+<p>In the ~245 px rail, a move that differed from the policy and was chosen with analysis shown had no visible name. The row showed only "You · differs ●— analysis showr", because the marks kept their full width and squeezed the move name to zero. Now a move name keeps at least 5em, and marks that don't fit wrap under it, aligned right. (This comes from MTG-389's rail and shows up as soon as you use analysis.)</p>
+<img src="shots/qa-swap-11-review-rail-fixed.png"><img src="shots/qa-swap-12-review-rail-dark.png">
+
+<h2>4. Found and fixed: "Your last matchup" named the wrong deck</h2>
+<p>After a swap, the home page's "Your last matchup" read "You · GW Allies, on the draw vs … UR Lessons". Its config (which <b>Play again</b> sends) keeps the session's original setup, UR Lessons on the draw, because Swap sides changes this game only. The label took the deck names from the swapped frame. It now orients them to the config: "You · UR Lessons, on the draw vs … GW Allies".</p>
+
+<h2>5. Games, My record, Review</h2>
+<ul>
+<li>Games lists each swapped game once, with each player in their final seat and deck, and the right winner.</li>
+<li>My record: ur lessons vs gw allies, 2 games, 1–1–0, both with analysis. Each finished game counted once, under the deck held at the end.</li>
+<li>Review: "Swapped sides at turn 12, turn 15.", <b>Swapped sides · Turn 12</b> / <b>Turn 15</b> dividers in Moves, dotted breaks in the chart, and all 66 of your decisions across both seats analysed.</li>
+</ul>
+<img src="shots/qa-swap-07-games.png"><img src="shots/qa-swap-08-review.png">
+
+<h2>Swap latency</h2>
+<p>The swap's answer arrives after the bot has played the seat you left: 2.7–9 s in the browser at load 80–130. Timed on the server at load ~114: <code>swap_sides</code> 5.6 s = policy build 1.2 s + the new runner's first decision 4.3 s. A fresh game's first bot decision also takes 3.1 s; later ones take ~0.3 s. So the wait is a fresh policy warming up. The button reads "Swapping sides…" meanwhile. It is not the "almost instantaneous" of the plan under this load; reusing a warm runner, or answering with the flipped board before the bot moves, would be a design change and is not made here.</p>
+
+<h2>Checks</h2>
+<p><code>npx vitest run</code> 679 passed, plus 2 new; <code>svelte-check</code> 0 errors. Default config <code>swap-sides.spec.ts</code> passed; policy config <code>study-review.spec.ts</code> 2 passed; release config <code>game-history</code> / <code>unified-replay</code> passed. <code>play-session.spec.ts</code> fails 6 tests both with and without this pass's changes: it looks for a "Seat 1 controller" select that no GameSetup on this branch renders. <code>game-history.spec.ts:85</code> also fails in the release run, waiting for a setup-page "Browse decks and cards" control; this pass does not touch the setup page.</p>
+
+<h2>Still wrong or unreached, worst first</h2>
+<ul>
+<li>Swap latency, as above (seconds under load, mostly the replacement policy's first decision).</li>
+<li><code>play-session.spec.ts</code> (6) and <code>game-history.spec.ts:85</code> fail in the release config; both fail on setup-page controls that this pass does not touch. Neither is fixed here.</li>
+<li>The Games row does not say a game was swapped; Review does.</li>
+<li>Not reached: a recurrent (decision-memory) policy opponent in the browser (the server test covers its warm-up), a Search opponent swap, and swapping during a pending Search retry or a Study branch (the server refuses both; the button's disabled state was not exercised).</li>
+</ul>
+<hr>
 <h1>MTG-389 Study — QA after the Review rail pass, 2026-11-25</h1>
 <p>The real product again: <code>managym academy --policy qa_bot.json play --opponent qa_bot</code> on the static build, the same persistent browser profile and game store as the first pass below (so earlier games were present), 1280×800. A new 23-turn game against the trained bot (145 steps, 63 of your decisions) was played to the end, then opened from Games.</p>
 <h2>5. Review rail at a real decision</h2>

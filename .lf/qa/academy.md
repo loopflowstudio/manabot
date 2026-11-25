@@ -282,3 +282,23 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   branch's base protocol ("Study source omitted its participant
   credential") and runs in no CI job; do not read its failure as a
   regression without reverting the change first.
+- Swap sides (Play → Settings → This game, `[data-testid=swap-sides]`): a
+  policy launched from `etude train manabot/recipes/local.py` needs
+  `--deck ur_lessons --opponent-deck gw_allies` (otherwise `setup.invalid`).
+  Each fresh browser launch of the same `?launch=` URL starts a new game as a
+  new player, so drive the whole game, swaps and reloads in one script. The
+  swap's answer arrives after the bot has played the seat you left, so expect
+  seconds: at load ~110 a swap took 5.6 s (policy build 1.2 s, the new
+  runner's first decision 4.3 s, which a fresh game's first bot move also
+  costs). To time the server path, start the CLI from a small script that
+  wraps `GameSession.swap_sides`, `_build_swap_policy` and `_advance` with
+  `perf_counter` and then calls `managym.cli.main()`. The live line's caption
+  (`/decisions? read/`) shows how many readings it holds; after a swap it must
+  restart from the new seat. In browser scripts, read optional elements with
+  `count()`: `innerText().catch()` on an absent one waits the full 30 s
+  timeout and looks like a slow server. For a dark screenshot, pass
+  `colorScheme: 'dark'` when launching the context; `emulateMedia` after load
+  can capture the theme's transition with unreadable text.
+  `play-session.spec.ts` (release and default configs) fails six tests on
+  this branch's base, looking for a "Seat 1 controller" select no GameSetup
+  renders; compare against a revert before reading it as a regression.
