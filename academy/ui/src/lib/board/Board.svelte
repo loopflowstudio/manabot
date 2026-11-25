@@ -1165,10 +1165,10 @@
     border-right: 1px solid var(--border);
     background: var(--bg-surface);
   }
-  /* The inspect pane takes the height of its card, to two fifths of the column; the trackers share the rest and scroll inside. */
+  /* The inspect pane holds two fifths of the column whatever card it shows, so the trackers under it never move as you hover; they share the rest and scroll inside. */
   .sidebar > :global(*) { flex: 1 1 0; min-height: 0; }
   .sidebar > :global(* + *) { border-top: 1px solid var(--border-strong); }
-  .sidebar > .dock { flex: none; max-height: 40%; padding: 10px 14px; }
+  .sidebar > .dock { flex: none; height: 40%; padding: 10px 14px; }
   .topbar {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px;
     border-bottom: 1px solid var(--border); background: var(--bg-surface); min-width: 0;
