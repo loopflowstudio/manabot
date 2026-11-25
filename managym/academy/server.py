@@ -56,7 +56,6 @@ from managym.experience import (
     Command,
     ExperienceFrame,
     InteractionOffer,
-    LegacyHeroObservation,
     PresentationEvent,
 )
 from managym.experience_projection import (
@@ -944,6 +943,9 @@ class GameSession:
         self._pending_action_log: list[LogEntry] = []
         # The person's board after each step since the last surfaced message (`step_boards`).
         self._step_boards: list[StepBoard] = []
+        # The engine's positions inside the step being committed, by index
+        # (`Env.take_presentation`); read-only.
+        self._step_positions: list[managym.Env] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -1724,8 +1726,9 @@ class GameSession:
                 semantic_events,
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
+        facts, self._step_positions = self.env.take_presentation()
         self.presentation.observe(
-            read_facts(self.env.take_presentation_facts_json()),
+            read_facts(facts),
             event_subjects=event_subjects,
             definition_names=definition_names(self.env),
         )
@@ -2083,23 +2086,34 @@ class GameSession:
         return authority_events
 
     def _keep_step_board(self, events: list[dict[str, Any]]) -> None:
-        """Keep the person's board after a step that added `events` to their track.
+        """Keep the person's board after each line of a step's `events`.
 
-        Live play only: Watch and Replay have their own transport.
+        Each event names the engine position showing the board just after it
+        (`PresentationProjector.position`); a run of events on one position
+        shares its board, and events after the last position are on the
+        step's own board. Live play only: Watch and Replay have their own
+        transport.
         """
+        positions = self._step_positions
+        self._step_positions = []
         if self.watch_mode or self.env is None:
             return
-        # Validated as the frame's projection is, so it patches cleanly against it.
-        board = LegacyHeroObservation.model_validate(
-            decision_surface_view(self.env, self.human_seat)
-        ).model_dump(mode="json")
-        self._step_boards.append(
-            StepBoard(
-                first=int(events[0]["seq"]),
-                last=int(events[-1]["seq"]),
-                projection=board,
+        runs: list[tuple[int | None, list[dict[str, Any]]]] = []
+        for event in events:
+            position = self.presentation.position(int(event["seq"]))
+            if runs and runs[-1][0] == position:
+                runs[-1][1].append(event)
+            else:
+                runs.append((position, [event]))
+        for position, run in runs:
+            env = self.env if position is None else positions[position]
+            self._step_boards.append(
+                StepBoard(
+                    first=int(run[0]["seq"]),
+                    last=int(run[-1]["seq"]),
+                    projection=decision_surface_view(env, self.human_seat),
+                )
             )
-        )
         del self._step_boards[:-MAX_STEP_BOARDS]
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:

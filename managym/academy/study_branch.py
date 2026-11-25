@@ -120,7 +120,8 @@ class StudyBranch:
     def presentation_facts(self) -> list[SinkFact]:
         """The facts the branch told since the last read."""
         env, _ = self._require_open()
-        return read_facts(env.take_presentation_facts_json())
+        facts, _positions = env.take_presentation()
+        return read_facts(facts)
 
     def definition_names(self) -> dict[int, str]:
         """The branch game's card definitions by id (`definition_names`)."""

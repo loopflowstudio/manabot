@@ -893,14 +893,22 @@ impl Env {
         Ok(())
     }
 
-    pub fn take_presentation_facts(
+    /// The facts told since the last take and the positions they name, each
+    /// a read-only branch to project as the current game is; then cleared.
+    #[allow(clippy::type_complexity)]
+    pub fn take_presentation(
         &mut self,
-    ) -> Result<Vec<crate::flow::presentation::PresentationFact>, AgentError> {
-        Ok(self
+    ) -> Result<(Vec<crate::flow::presentation::PresentationFact>, Vec<Env>), AgentError> {
+        let (facts, positions) = self
             .game
             .as_mut()
             .ok_or_else(|| AgentError("no active game".into()))?
-            .take_presentation_facts())
+            .take_presentation();
+        let positions = positions
+            .into_iter()
+            .map(|game| self.branch_from_game(game))
+            .collect();
+        Ok((facts, positions))
     }
 
     /// Public event identities used to explain a committed transition.
@@ -1649,7 +1657,7 @@ impl Env {
         let game = self.scenario_game_mut("scenario_refresh")?;
         game.scenario_refresh_priority()?;
         // A constructed position tells nothing: it starts with no events.
-        game.take_presentation_facts();
+        game.take_presentation();
         Ok(Observation::new(game, &[]))
     }
 

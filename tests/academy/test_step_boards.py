@@ -1,11 +1,13 @@
-"""The person's board after each step of a batch travels with the frame as patches."""
+"""The person's board after each told line travels with the frame as patches."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from managym.academy import server
 from managym.academy.step_boards import StepBoard, patch, wire_boards
+from tests.academy.test_explained_changes import _command, _reaper_scenario
 
 
 def apply(base: Any, node: dict[str, Any]) -> Any:
@@ -84,8 +86,9 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
     keep = game._keep_step_board
 
     def recording(events: list[dict[str, Any]]) -> None:
+        before = len(game._step_boards)
         keep(events)
-        kept.append(game._step_boards[-1])
+        kept.extend(game._step_boards[before:])
 
     game._keep_step_board = recording  # type: ignore[method-assign]
     rebuilt_any = differed = 0
@@ -115,7 +118,7 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
         boards = rebuild(update["frame"]["projection"], sent)
         seqs = {event["seq"] for event in update["presentation"]}
         for entry, board in zip(sent, boards, strict=True):
-            # The board after the step that made the range's last event, exactly.
+            # The board after the line that made the range's last event, exactly.
             assert board == next(k.projection for k in kept if k.last == entry["last"])
             assert entry["first"] in seqs and entry["last"] in seqs
             # The person's view: the opponent's hand is never named.
@@ -124,3 +127,55 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
         rebuilt_any += bool(sent)
     assert rebuilt_any >= 5
     assert differed >= 5
+
+
+def _opponent_creature(board: dict[str, Any], name: str) -> dict[str, Any] | None:
+    return next(
+        (card for card in board["opponent"]["battlefield"] if card["name"] == name),
+        None,
+    )
+
+
+def test_a_burn_spell_is_seen_on_the_stack_then_as_damage_then_as_a_death(
+    tmp_path: Path,
+) -> None:
+    """One step resolves the Bolt, kills the Ogre and stacks the Reaper's trigger;
+    each of those lines has the board as it was just after it."""
+    session = _reaper_scenario(tmp_path)
+    _command(session, "Cast Lightning Bolt", "cast")
+    update = _command(session, "Target Gray Ogre", "target")["update"]
+    sent = update["boards"]
+    boards = rebuild(update["frame"]["projection"], sent)
+    kinds = {event["seq"]: event["kind"]["kind"] for event in update["presentation"]}
+
+    def board_of(kind: str) -> dict[str, Any]:
+        seq = next(seq for seq, told in kinds.items() if told == kind)
+        return next(
+            board
+            for entry, board in zip(sent, boards, strict=True)
+            if entry["first"] <= seq <= entry["last"]
+        )
+
+    cast = board_of("cast")
+    assert board_of("targeted") is cast
+    assert [item["label"] for item in cast["stack_objects"]] == ["Lightning Bolt"]
+    ogre = _opponent_creature(cast, "Gray Ogre")
+    assert ogre is not None and ogre["damage"] == 0
+
+    damaged = board_of("damage")
+    assert board_of("resolved") is damaged
+    assert damaged["stack_objects"] == []
+    ogre = _opponent_creature(damaged, "Gray Ogre")
+    assert ogre is not None and ogre["damage"] == 3
+
+    died = board_of("died")
+    assert _opponent_creature(died, "Gray Ogre") is None
+    assert died["stack_objects"] == []
+
+    triggered = board_of("triggered")
+    assert [item["kind"] for item in triggered["stack_objects"]] == [
+        "triggered_ability"
+    ]
+    # A historical board holds no decision: none was published there.
+    assert "decision_context" not in cast
+    assert "decision_context" not in died

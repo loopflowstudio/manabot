@@ -27,12 +27,16 @@ impl Game {
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }
+                self.presentation_cut();
             }
             self.collect_waiting_triggers();
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
             let progress = self.perform_state_based_actions();
+            if progress == SbaProgress::Changed {
+                self.presentation_cut();
+            }
             if cleanup && progress != SbaProgress::Stable {
                 self.state.set_cleanup_priority(true);
             }
@@ -54,6 +58,7 @@ impl Game {
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }
+                self.presentation_cut();
                 continue;
             }
             self.state.release_resolved_forms();

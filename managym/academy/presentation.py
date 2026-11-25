@@ -31,6 +31,7 @@ class _PresentationFact:
     kind: dict[str, Any]
     fact: int
     rule: str | None = None
+    position: int | None = None
 
 
 @dataclass(frozen=True)
@@ -66,10 +67,13 @@ class SinkFact:
     rule: str | None
     events: tuple[EventRow, ...]
     note: dict[str, Any] | None
+    # Index of the step's position showing the board after this fact, or
+    # None for the board the step ends with (``Env.take_presentation``).
+    position: int | None = None
 
 
 def read_facts(payload: str) -> list[SinkFact]:
-    """Decode ``Env.take_presentation_facts_json``."""
+    """Decode the facts of ``Env.take_presentation``."""
     return [
         SinkFact(
             id=int(fact["id"]),
@@ -77,6 +81,7 @@ def read_facts(payload: str) -> list[SinkFact]:
             rule=fact["rule"],
             events=tuple(EventRow(**row) for row in fact["events"]),
             note=fact["note"],
+            position=fact["position"],
         )
         for fact in json.loads(payload)
     ]
@@ -119,6 +124,15 @@ class PresentationProjector:
         self._causes: dict[int, int | None] = {}
         self._told: dict[int, int] = {}
         self._roots: dict[int, int] = {}
+        self._positions: dict[int, int | None] = {}
+
+    def position(self, seq: int) -> int | None:
+        """The step position showing the board after event ``seq``.
+
+        An index into the positions ``Env.take_presentation`` returned with
+        the step's facts, or None for the board the step ended with.
+        """
+        return self._positions.get(seq)
 
     @property
     def next_seq(self) -> int:
@@ -168,8 +182,8 @@ class PresentationProjector:
         """
         played = self._pending_land
         self._pending_land = False
-        discarded: dict[int, tuple[int, list[dict[str, int]]]] = {}
-        revealed: dict[int, tuple[int, list[str]]] = {}
+        discarded: dict[int, tuple[SinkFact, list[dict[str, int]]]] = {}
+        revealed: dict[int, tuple[SinkFact, list[str]]] = {}
         for fact in facts:
             self._causes[fact.id] = fact.cause
             if fact.note is not None:
@@ -213,14 +227,14 @@ class PresentationProjector:
                     )
                 elif moved == (int(ZoneEnum.HAND), int(ZoneEnum.GRAVEYARD)):
                     first, objects = discarded.setdefault(
-                        int(row.controller_id), (fact.id, [])
+                        int(row.controller_id), (fact, [])
                     )
                     objects.append(subject["id"])
             elif event_type == "CARD_REVEALED":
                 name = definition_names.get(int(rows[0].source_id))
                 if name is not None:
                     _, cards = revealed.setdefault(
-                        int(rows[0].controller_id), (fact.id, [])
+                        int(rows[0].controller_id), (fact, [])
                     )
                     cards.append(name)
             else:
@@ -232,7 +246,8 @@ class PresentationProjector:
                     suggested_ms=450,
                     sound=None,
                     kind={"kind": "discarded", "objects": objects, "player": player},
-                    fact=first,
+                    fact=first.id,
+                    position=first.position,
                 )
             )
         for player, (first, cards) in revealed.items():
@@ -242,7 +257,8 @@ class PresentationProjector:
                     suggested_ms=450,
                     sound=None,
                     kind={"kind": "revealed", "cards": cards, "player": player},
-                    fact=first,
+                    fact=first.id,
+                    position=first.position,
                 )
             )
 
@@ -262,6 +278,7 @@ class PresentationProjector:
                 kind=kind,
                 fact=fact.id,
                 rule=fact.rule,
+                position=fact.position,
             )
         )
 
@@ -349,6 +366,7 @@ class PresentationProjector:
                 cause = None if ancestor is None else self._told[ancestor]
             group = seq if cause is None else self._roots[cause]
             self._roots[seq] = group
+            self._positions[seq] = fact.position
             event = PresentationEvent.model_validate(
                 {
                     "seq": seq,

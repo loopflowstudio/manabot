@@ -513,6 +513,7 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    self.presentation_cut();
                     if !self.state.turn.step_initialized || self.is_game_over() {
                         // A turn-ending resolution leaves this priority round.
                         return None;

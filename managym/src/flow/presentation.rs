@@ -14,6 +14,16 @@
 //! it, every fact follows from that resolution; a trigger follows from the
 //! event that triggered it; anything else is a root. The resolution cause
 //! ends when stabilization reaches priority (`sba_done`).
+//!
+//! Positions: the sink keeps a copy of the game (a *position*) each time the
+//! game reaches a whole state after at least one new fact: an action finished
+//! (and before the next one starts), a stack object finished resolving, a
+//! state-based batch was performed, a round of triggers reached the stack.
+//! Each fact names the position cut after it, so a person can see the board
+//! as it was after each told line; facts after the last cut are on the board
+//! the step ends with. A position has no presentation sink and no published
+//! decision, so it shows a board and never a stale choice. A priority pass
+//! notes no fact and so never cuts one.
 
 use serde::Serialize;
 
@@ -78,6 +88,8 @@ struct Fact {
     cause: Option<FactId>,
     rule: Option<Rule>,
     note: Note,
+    /// Index of the position cut after this fact, once one is.
+    position: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -92,6 +104,10 @@ pub struct PresentationSink {
     trigger_causes: Vec<(TriggerId, FactId)>,
     /// State-based reasons for the batch being performed.
     rules: Vec<(ObjectEventRef, Rule)>,
+    /// Positions cut since the last take, oldest first.
+    positions: Vec<Game>,
+    /// Some fact has no position yet.
+    uncut: bool,
 }
 
 impl PresentationSink {
@@ -104,7 +120,9 @@ impl PresentationSink {
             cause,
             rule,
             note,
+            position: None,
         });
+        self.uncut = true;
         id
     }
 
@@ -131,6 +149,10 @@ pub struct PresentationFact {
     #[serde(serialize_with = "serialize_rows")]
     pub events: Vec<crate::agent::observation::EventData>,
     pub note: Option<PresentationNote>,
+    /// The position (index into [`Game::take_presentation`]'s positions)
+    /// showing the board after this fact, or `None` for the board the step
+    /// ends with.
+    pub position: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -171,6 +193,27 @@ impl Game {
     /// Start telling this game's facts; Academy alone turns it on.
     pub fn enable_presentation(&mut self) {
         self.presentation = Some(Box::default());
+    }
+
+    /// Keep the board as it is now if a fact was told since the last cut;
+    /// called only where the game is a whole state (see the module docs).
+    pub(crate) fn presentation_cut(&mut self) {
+        if !self.presentation.as_deref().is_some_and(|sink| sink.uncut) {
+            return;
+        }
+        // `Game::clone` omits the sink, as for search.
+        let mut position = self.clone();
+        position.current_action_space = None;
+        let sink = self.presentation.as_deref_mut().expect("checked above");
+        let index = sink.positions.len() as u32;
+        sink.positions.push(position);
+        for fact in sink.facts.iter_mut().rev() {
+            if fact.position.is_some() {
+                break;
+            }
+            fact.position = Some(index);
+        }
+        sink.uncut = false;
     }
 
     pub(crate) fn presentation_event(&mut self, event: &GameEvent) {
@@ -283,15 +326,18 @@ impl Game {
         }
     }
 
-    /// The facts since the last take as any viewer may read them, then
-    /// cleared. A mirrored event the observation does not tell keeps its id
-    /// with no rows, so causes through it still resolve.
-    pub fn take_presentation_facts(&mut self) -> Vec<PresentationFact> {
+    /// The facts since the last take as any viewer may read them, and the
+    /// positions they name, then cleared. A mirrored event the observation
+    /// does not tell keeps its id with no rows, so causes through it still
+    /// resolve.
+    pub fn take_presentation(&mut self) -> (Vec<PresentationFact>, Vec<Game>) {
         let Some(sink) = self.presentation.as_deref_mut() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let facts = std::mem::take(&mut sink.facts);
-        facts
+        let positions = std::mem::take(&mut sink.positions);
+        sink.uncut = false;
+        let facts = facts
             .into_iter()
             .map(|fact| {
                 let (events, note) = match &fact.note {
@@ -340,9 +386,11 @@ impl Game {
                     rule: fact.rule,
                     events,
                     note,
+                    position: fact.position,
                 }
             })
-            .collect()
+            .collect();
+        (facts, positions)
     }
 
     fn event_note(&self, event: &GameEvent) -> Option<PresentationNote> {

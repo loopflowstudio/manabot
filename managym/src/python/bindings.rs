@@ -4499,15 +4499,26 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
-    /// The facts told since the last take, as JSON, then cleared.
-    fn take_presentation_facts_json(&self) -> PyResult<String> {
-        let facts = self
+    /// The facts told since the last take, as JSON, and the positions they
+    /// name (read-only envs, by each fact's `position`); then cleared.
+    fn take_presentation(&self) -> PyResult<(String, Vec<PyEnv>)> {
+        let (facts, positions) = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
-            .take_presentation_facts()
+            .take_presentation()
             .map_err(map_agent_err)?;
-        serde_json::to_string(&facts).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+        let facts = serde_json::to_string(&facts)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let positions = positions
+            .into_iter()
+            .map(|env| PyEnv {
+                inner: Arc::new(Mutex::new(env)),
+                selected_guard: false,
+                prepared_lease: None,
+            })
+            .collect();
+        Ok((facts, positions))
     }
 
     /// Public event identities used to explain a committed transition.
