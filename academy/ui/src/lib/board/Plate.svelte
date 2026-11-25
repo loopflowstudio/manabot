@@ -20,13 +20,14 @@
     /** Set while this player is choosing: "choosing…". */
     choosing?: boolean;
     side: 'you' | 'opponent';
+    drop?: boolean;
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
     ondeck?: () => void;
     deckOpen?: boolean;
   }
 
-  let { player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { drop = false, player, name, caption, offers, live, damage = 0, choosing = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   // An opponent's hand cards this viewer may see (Show both hands, or a card
@@ -61,6 +62,7 @@
     aria-disabled={!offers.length}
     data-offer-count={offers.length}
     aria-label={label}
+    data-drop={drop || undefined}
     data-testid="player-target"
     onclick={event => onactivate(event.currentTarget)}
   >
