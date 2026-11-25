@@ -42,6 +42,15 @@ describe('Lightning Bolt presentation fixture', () => {
     ]);
   });
 
+  it('recovers exact names from the event when the card has left the board', () => {
+    const event = structuredClone(LIGHTNING_BOLT_PRESENTATION.events[0]);
+    event.kind = { kind: 'drew', player: 1, object: { entity: 14, incarnation: 3 } };
+    event.labels = { objects: { '14:3': 'Island' } };
+    const player = createPresentationPlayer();
+    player.recover([event], { objects: { '14:3': 'Mountain' }, players: {}, stacks: {} });
+    expect(player.labelsAt(0).objects).toEqual({ '14:3': 'Island' });
+  });
+
   it('rejects unordered input instead of silently inventing an order', () => {
     const reversed = [...LIGHTNING_BOLT_PRESENTATION.events].reverse();
     expect(() => validatePresentationEvents(reversed)).toThrow(/strictly ordered/);

@@ -110,8 +110,9 @@ fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
 #[test]
 fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
     use managym::{
-        agent::observation::EventType,
+        experience::PresentationKind,
         flow::presentation::{PresentationFact, Rule},
+        state::game_object::PlayerId,
     };
 
     let mut scenario = Scenario::new(
@@ -130,18 +131,24 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
     scenario.advance_to_active_step(0, StepKind::CombatDamage);
     scenario.advance_to_active_step(1, StepKind::Main);
 
-    let (facts, positions) = scenario.game_mut().take_presentation();
-    let is = |fact: &PresentationFact, kind: EventType| {
-        fact.events.first().map(|row| row.event_type) == Some(kind as i32)
-    };
+    let facts = scenario.game().presentation_facts(PlayerId(0));
+    let positions = scenario.game_mut().take_presentation_positions();
     let deaths: Vec<&PresentationFact> = facts
         .iter()
-        .filter(|fact| is(fact, EventType::PermanentsDied))
+        .filter(|fact| {
+            fact.lines
+                .iter()
+                .any(|line| matches!(line.kind, PresentationKind::Died { .. }))
+        })
         .collect();
     assert!(!deaths.is_empty(), "no death told: {facts:#?}");
-    assert!(
-        !facts.iter().any(|fact| is(fact, EventType::DamageDealt)),
-        "combat damage told twice: {facts:#?}"
+    assert_eq!(
+        facts
+            .iter()
+            .flat_map(|fact| &fact.lines)
+            .filter(|line| matches!(line.kind, PresentationKind::Damage { .. }))
+            .count(),
+        2
     );
     for death in deaths {
         assert_eq!(death.rule, Some(Rule::LethalDamage));
@@ -150,7 +157,10 @@ fn a_combat_death_follows_from_the_damage_and_each_line_keeps_its_board() {
             .find(|fact| Some(fact.id) == death.cause)
             .expect("the death names a told cause");
         // Combat damage is told once, as combat damage.
-        assert!(is(cause, EventType::CombatDamageDealt), "cause: {cause:#?}");
+        assert!(
+            cause.lines.iter().any(|line| line.combat),
+            "cause: {cause:#?}"
+        );
         // The damage is seen before the death: the creature is still there.
         let (Some(damage_board), Some(death_board)) = (cause.position, death.position) else {
             panic!("combat lines keep their boards: {cause:#?} {death:#?}");

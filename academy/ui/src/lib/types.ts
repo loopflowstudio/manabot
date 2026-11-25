@@ -518,6 +518,7 @@ export const PRESENTATION_KIND_NAMES = [
   'blocked',
   'turn_started',
   'land_played',
+  'drew',
   'discarded',
   'revealed',
   'activated',
@@ -528,6 +529,7 @@ export const PRESENTATION_KIND_NAMES = [
 ] as const;
 
 export const PRESENTATION_RULES = [
+  'draw_step',
   'lethal_damage',
   'zero_toughness',
   'zero_loyalty',
@@ -544,6 +546,7 @@ export type PresentationRule = (typeof PRESENTATION_RULES)[number];
  * spell leaving the stack must not be reconstructed from snapshot diffs.
  */
 export type PresentationKind =
+  | { kind: 'drew'; player: number; object?: ObjectRenderId }
   | {
       kind: 'cast';
       object: ObjectRenderId;
@@ -644,6 +647,7 @@ export interface PresentationEvent {
   /** The earlier event on this track this one follows from; absent for a root. */
   cause?: number;
   rule?: PresentationRule;
+  labels?: Partial<Pick<PresentationLabels, 'objects' | 'stacks'>>;
 }
 
 export interface FrameUpdate {

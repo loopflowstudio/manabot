@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from managym.academy.server import INTERACTIVE_DECK, GameSession
+from managym.experience_projection import decision_surface_view
 
 # The opponent's Midnight Reaper draws and deals 1 damage to it when Gray
 # Ogre dies.
@@ -143,3 +144,97 @@ def test_rules_and_causes_reach_the_persisted_replay(tmp_path: Path) -> None:
     ]
     assert replay == live
     assert _first(replay, "died")["rule"] == "lethal_damage"
+
+
+def test_each_seat_gets_its_own_labels_for_the_reapers_draw(tmp_path: Path) -> None:
+    session = _reaper_scenario(tmp_path)
+    live = _bolt_the_ogre(session)
+    for viewer, track in session.canonical_presentation.items():
+        cast = _first(track, "cast")
+        targeted = _first(track, "targeted")
+        died = _first(track, "died")
+        resolved = _first(track, "resolved")
+        assert resolved["labels"] == {
+            "stacks": {str(cast["kind"]["stack"]): "Lightning Bolt"}
+        }
+        target = targeted["kind"]["target"]["id"]
+        key = f"{target['entity']}:{target['incarnation']}"
+        assert targeted["labels"] == {
+            "objects": {key: "Gray Ogre"},
+            "stacks": {str(cast["kind"]["stack"]): "Lightning Bolt"},
+        }
+        assert died["labels"] == {"objects": {key: "Gray Ogre"}}
+
+        ability = _first(track, "ability_resolved")
+        draw = next(
+            e
+            for e in track
+            if e["kind"]["kind"] == "drew" and e.get("cause") == ability["seq"]
+        )
+        assert draw["kind"]["player"] == 1
+        if viewer == 0:
+            assert draw["kind"] == {"kind": "drew", "player": 1}
+            assert "labels" not in draw
+            assert draw in live
+            assert (
+                draw
+                in session.current_recovery(
+                    "reconnect", presentation_cursor=draw["seq"]
+                )["presentation_tail"]
+            )
+        else:
+            card = draw["kind"]["object"]
+            assert session.env is not None
+            hand = decision_surface_view(session.env, 1)["agent"]["hand"]
+            card_name = next(c["name"] for c in hand if c["id"] == card["entity"])
+            assert draw["labels"] == {
+                "objects": {f"{card['entity']}:{card['incarnation']}": card_name}
+            }
+
+
+def test_real_game_tracks_stay_private_per_seat(tmp_path: Path) -> None:
+    session = GameSession(trace_dir=tmp_path)
+    session.new_game({"villain_type": "random", "seed": 11, "auto_pass": False})
+    for index in range(40):
+        frame = session.current_message()["frame"]
+        if frame["status"] != "ready":
+            break
+        offer = next(
+            (o for o in frame["offers"] if o["verb"] in ("play", "cast")),
+            next(
+                (o for o in frame["offers"] if o["verb"] == "pass_priority"),
+                frame["offers"][0],
+            ),
+        )
+        session.hero_command(
+            {
+                "command_id": f"privacy-{index}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": offer["id"],
+                "answers": [],
+            }
+        )
+
+    seat0 = session.canonical_presentation[0]
+    seat1 = session.canonical_presentation[1]
+    assert len(seat0) == len(seat1) and len(seat0) > 0
+    draws_by_player = {0: 0, 1: 0}
+    for viewer, track in ((0, seat0), (1, seat1)):
+        for event in track:
+            kind = event["kind"]
+            if kind["kind"] != "drew":
+                continue
+            drawer = kind["player"]
+            if viewer == 0:
+                draws_by_player[drawer] += 1
+            if drawer == viewer:
+                card = kind["object"]
+                key = f"{card['entity']}:{card['incarnation']}"
+                assert event["labels"]["objects"][key]
+            else:
+                assert "object" not in kind
+                assert "labels" not in event
+    assert draws_by_player[0] >= 1 and draws_by_player[1] >= 1
+    assert seat0 != seat1

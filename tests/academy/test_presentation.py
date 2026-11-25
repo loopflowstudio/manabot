@@ -51,7 +51,6 @@ def _bolt_scenario(trace_dir) -> GameSession:
     session.env.scenario_force_battlefield(1, "Gray Ogre", True)
     session.obs = session.env.scenario_refresh()
     session.published_prompt = None
-    session.presentation.reset()
     return session
 
 
@@ -61,7 +60,7 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     cast = _command(session, "Cast Lightning Bolt", "command-cast")
     assert cast["update"]["presentation"] == []
 
-    recovery_cursor = session.presentation.next_seq
+    recovery_cursor = session.presentation[session.human_seat].next_seq
     target_command = _command_payload(session, "Target Gray Ogre", "command-target")
     # Neither player can respond, so native skipping resolves Bolt within the
     # targeting Command.
@@ -131,7 +130,7 @@ def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
     latest = _command(session, "Target Gray Ogre", "command-target")
     events = list(session.presentation_events)
     assert session.presentation_events == events
-    head = session.presentation.next_seq
+    head = session.presentation[session.human_seat].next_seq
 
     partial = session.current_recovery("reconnect", presentation_cursor=3)
     assert partial["presentation_cursor"] == 3
@@ -162,7 +161,8 @@ def test_scenario_snapshot_changes_do_not_invent_presentation(tmp_path):
     # Scenario setup changed several zones, but no spell domain event has
     # committed. Snapshot state alone must never become semantic theater.
     assert (
-        session.presentation.drain(
+        session.presentation[session.human_seat].project(
+            session.env.presentation_facts_json(session.human_seat),
             from_revision=session.revision,
             to_revision=session.revision,
             caused_by=None,

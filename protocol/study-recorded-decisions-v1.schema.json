@@ -2135,6 +2135,16 @@
         "kind": {
           "$ref": "#/$defs/PresentationKind"
         },
+        "labels": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationLabels"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "rule": {
           "anyOf": [
             {
@@ -2425,6 +2435,37 @@
           ]
         },
         {
+          "description": "The card is named only for a viewer who saw it enter the hand.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "drew"
+            },
+            "object": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ObjectRenderId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player"
+          ]
+        },
+        {
           "description": "Cards a player discarded (CR 701.9a), named as the graveyard objects\nthey became.",
           "type": "object",
           "properties": {
@@ -2620,10 +2661,29 @@
         }
       ]
     },
+    "PresentationLabels": {
+      "type": "object",
+      "properties": {
+        "objects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "stacks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "PresentationRule": {
       "description": "The state-based action (CR 704.5) that did what an event tells, when no\nplayer chose it.",
       "type": "string",
       "enum": [
+        "draw_step",
         "lethal_damage",
         "zero_toughness",
         "zero_loyalty",

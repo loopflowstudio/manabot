@@ -365,6 +365,12 @@ class Recording:
         # Names come from the event's own retained transition. A later board,
         # including spectator analysis, must never fill historical private facts.
         labels: dict[str, dict[str, str]] = {"objects": {}, "players": {}, "stacks": {}}
+        if event.labels is not None:
+            return {
+                "objects": dict(event.labels.objects),
+                "players": {"0": "Seat 1", "1": "Seat 2"},
+                "stacks": dict(event.labels.stacks),
+            }
         index = self.event_by_revision.get(event.from_revision)
         if index is None:
             return labels

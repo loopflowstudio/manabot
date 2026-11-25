@@ -63,7 +63,10 @@ def test_a_patch_turns_one_board_into_the_next() -> None:
     assert apply(before, node) == after
     assert patch(after, after) is None
     # The unchanged parts are named, not sent: Ogre left, Elf is patched in place.
-    assert node["o"]["battlefield"]["a"][0] == {"k": 2, "p": {"o": {"tapped": {"=": True}}}}
+    assert node["o"]["battlefield"]["a"][0] == {
+        "k": 2,
+        "p": {"o": {"tapped": {"=": True}}},
+    }
 
 
 def test_equal_boards_merge_and_a_board_equal_to_the_frame_is_not_sent() -> None:
@@ -85,10 +88,10 @@ def test_each_opponent_step_reaches_the_table_on_its_own_board() -> None:
     kept: list[StepBoard] = []
     keep = game._keep_step_board
 
-    def recording(events: list[dict[str, Any]]) -> None:
+    def recording(events: list[dict[str, Any]], positions: list[Any]) -> None:
         # The list is capped (oldest dropped), so new boards are found by identity.
         before = {id(board) for board in game._step_boards}
-        keep(events)
+        keep(events, positions)
         kept.extend(board for board in game._step_boards if id(board) not in before)
 
     game._keep_step_board = recording  # type: ignore[method-assign]

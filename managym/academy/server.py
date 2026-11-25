@@ -55,12 +55,10 @@ from managym.experience import (
     UNVERSIONED_CONTENT_HASH,
     Command,
     ExperienceFrame,
-    InteractionOffer,
     PresentationEvent,
 )
 from managym.experience_projection import (
     decision_surface_view,
-    definition_names,
     describe_actions,
     enum_name,
     object_records,
@@ -117,7 +115,7 @@ from .play_session import (
     request_fingerprint,
     setup_draft,
 )
-from .presentation import PresentationProjector, read_facts
+from .presentation import PresentationProjector
 from .recording import Recording, narrate_move, own_steps, person_board, read_cache
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -943,9 +941,6 @@ class GameSession:
         self._pending_action_log: list[LogEntry] = []
         # The person's board after each step since the last surfaced message (`step_boards`).
         self._step_boards: list[StepBoard] = []
-        # The engine's positions inside the step being committed, by index
-        # (`Env.take_presentation`); read-only.
-        self._step_positions: list[managym.Env] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
         self.stops: dict[str, list[str]] = {
             side: list(steps) for side, steps in DEFAULT_STOPS.items()
@@ -965,7 +960,7 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
-        self.presentation = PresentationProjector()
+        self.presentation = (PresentationProjector(), PresentationProjector())
         self.presentation_events: list[dict[str, Any]] = []
         self._last_presentation_cursor = 0
         # Durable replay truth is unbounded by the live reconnect ledger.
@@ -1167,7 +1162,7 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt = None
         self.accepted_commands = {}
-        self.presentation.reset()
+        self.presentation = (PresentationProjector(), PresentationProjector())
         self.presentation_events = []
         self._last_presentation_cursor = 0
         self.canonical_decisions = []
@@ -1188,14 +1183,6 @@ class GameSession:
         self._close_study_attempts()
         self._study_attempt_seq = 0
 
-        # Setup itself is an authority snapshot. Clear staged facts before any
-        # auto-play transition so each subsequent drain belongs to one exact
-        # engine action/revision pair.
-        self.presentation.drain(
-            from_revision=self.revision,
-            to_revision=self.revision,
-            caused_by=None,
-        )
         self.trace_id = self.match_id
         if not self.watch_mode:
             session_id = player_config.get("play_session_id")
@@ -1216,7 +1203,7 @@ class GameSession:
         self._preparing_demo = demo is not None
         try:
             self._advance()
-            self._last_presentation_cursor = self.presentation.next_seq
+            self._last_presentation_cursor = self.presentation[self.human_seat].next_seq
             update = self._wire_message(reason="initial_connect")
             if demo is not None:
                 replay_checked_prefix(self, update, demo, demo_name)
@@ -1323,7 +1310,7 @@ class GameSession:
         self.authority_fallback_counters["legacy_fixed_action"] += 1
         self.authority_fallback_counters["client_legality"] += 1
         command = self._authority_command(context, selected, "compat")
-        batch_cursor = self.presentation.next_seq
+        batch_cursor = self.presentation[self.human_seat].next_seq
         self._apply_bound_command(context, command, source="client")
         self._advance()
         self._last_presentation_cursor = batch_cursor
@@ -1386,7 +1373,7 @@ class GameSession:
             return self._reject_command(raw, "invalid_command", recover=False)
 
         base_revision = context.revision
-        batch_cursor = self.presentation.next_seq
+        batch_cursor = self.presentation[self.human_seat].next_seq
         self._apply_bound_command(context, command, source="client")
         # The receipt names the human transition, before any opponent proposal.
         # A later failure must not make an accepted Command appear unexecuted.
@@ -1405,7 +1392,7 @@ class GameSession:
         if committed is not None:
             committed(self._accepted_outcome(base_revision, batch_cursor, receipt))
             base_revision = self.revision
-            batch_cursor = self.presentation.next_seq
+            batch_cursor = self.presentation[self.human_seat].next_seq
         self._advance()
         self._last_presentation_cursor = batch_cursor
         return self._accepted_outcome(base_revision, batch_cursor, receipt)
@@ -1489,7 +1476,7 @@ class GameSession:
         # Stop configuration is versioned authority state even though it is not
         # a player decision and therefore never receives a replay ordinal.
         self._advance_protocol_revision()
-        batch_cursor = self.presentation.next_seq
+        batch_cursor = self.presentation[self.human_seat].next_seq
         self._advance()
         self._last_presentation_cursor = batch_cursor
         return self._wire_message()
@@ -1503,7 +1490,7 @@ class GameSession:
             raise ValueError("Game is already over. Start a new game.")
 
         if _is_hero_turn(self.obs, self.human_seat) and _is_priority_space(self.obs):
-            batch_cursor = self.presentation.next_seq
+            batch_cursor = self.presentation[self.human_seat].next_seq
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
             self._last_presentation_cursor = batch_cursor
@@ -1595,7 +1582,6 @@ class GameSession:
             analysis_observation["opponent"]["hand"] = other["agent"]["hand"]
             analysis_observation["opponent"]["hand_hidden_count"] = 0
         before_observation = self.obs
-        event_subjects = json.loads(self.env.presentation_subjects_json())
         state_before = (
             self.env.state_digest() if self._capture_authority_evidence else None
         )
@@ -1675,7 +1661,6 @@ class GameSession:
             self._study_roots[int(row.ordinal)] = retained_root
             self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
-        self.presentation.note_action(InteractionOffer.model_validate(selected_offer))
         from_revision = self.revision
         semantic_frame = json.loads(self.env.semantic_decision_frame_json())
         if (
@@ -1725,13 +1710,6 @@ class GameSession:
                 actions[action_index],
                 semantic_events,
             )
-        event_subjects.update(json.loads(self.env.presentation_subjects_json()))
-        facts, self._step_positions = self.env.take_presentation()
-        self.presentation.observe(
-            read_facts(facts),
-            event_subjects=event_subjects,
-            definition_names=definition_names(self.env),
-        )
         # The turn a logged move was made in is the one before the step.
         turn = int(before_observation.turn.turn_number)
         if auto:
@@ -2053,26 +2031,23 @@ class GameSession:
         caused_by: str | None,
     ) -> list[dict[str, Any]]:
         """Commit one engine step into both authorized semantic tracks."""
-        authority_events = self.presentation.drain(
-            from_revision=from_revision,
-            to_revision=self.revision,
-            caused_by=caused_by,
-        )
-        viewer_events: dict[int, list[dict[str, Any]]] = {}
-        for viewer in (0, 1):
-            projected: list[dict[str, Any]] = []
-            for event in authority_events:
-                copy = deepcopy(event)
-                if viewer != actor:
-                    copy["caused_by"] = None
-                projected.append(copy)
-            self.canonical_presentation[viewer].extend(projected)
-            viewer_events[viewer] = projected
+        assert self.env is not None
+        viewer_events = [
+            projector.project(
+                self.env.presentation_facts_json(viewer),
+                from_revision=from_revision,
+                to_revision=self.revision,
+                caused_by=caused_by if viewer == actor else None,
+            )
+            for viewer, projector in enumerate(self.presentation)
+        ]
+        positions = self.env.take_presentation_positions()
+        for viewer, events in enumerate(viewer_events):
+            self.canonical_presentation[viewer].extend(events)
 
         live_events = viewer_events[self.human_seat]
         self.presentation_events.extend(live_events)
-        if live_events:
-            self._keep_step_board(live_events)
+        self._keep_step_board(live_events, positions)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
@@ -2083,9 +2058,11 @@ class GameSession:
                 self.trace.events[index],
                 presentation=deepcopy(live_events),
             )
-        return authority_events
+        return live_events
 
-    def _keep_step_board(self, events: list[dict[str, Any]]) -> None:
+    def _keep_step_board(
+        self, events: list[dict[str, Any]], positions: list[managym.Env]
+    ) -> None:
         """Keep the person's board after each line of a step's `events`.
 
         Each event names the engine position showing the board just after it
@@ -2094,13 +2071,11 @@ class GameSession:
         step's own board. Live play only: Watch and Replay have their own
         transport.
         """
-        positions = self._step_positions
-        self._step_positions = []
         if self.watch_mode or self.env is None:
             return
         runs: list[tuple[int | None, list[dict[str, Any]]]] = []
         for event in events:
-            position = self.presentation.position(int(event["seq"]))
+            position = self.presentation[self.human_seat].position(int(event["seq"]))
             if runs and runs[-1][0] == position:
                 runs[-1][1].append(event)
             else:
@@ -2330,7 +2305,7 @@ class GameSession:
         event instead of guessing at missing semantics.
         """
 
-        head = self.presentation.next_seq
+        head = self.presentation[self.human_seat].next_seq
         oldest = (
             int(self.presentation_events[0]["seq"])
             if self.presentation_events
@@ -2774,27 +2749,14 @@ class GameSession:
         restored: RestoredReplayDecision,
         command: Command,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        canonical_offer = next(
-            (offer for offer in restored.frame.offers if offer.id == command.offer_id),
-            None,
-        )
-        if canonical_offer is None:
+        if not any(offer.id == command.offer_id for offer in restored.frame.offers):
             raise StudyCommandUnavailableError("study_command_offer_missing")
-
-        event_subjects = branch.presentation_subjects()
-        projector = PresentationProjector()
-        projector.note_action(canonical_offer)
         try:
             branch.submit_semantic(command)
         except (managym.AgentError, StudyBranchUnavailableError) as exc:
             raise StudyCommandUnavailableError("study_command_rejected") from exc
-        event_subjects.update(branch.presentation_subjects())
-        projector.observe(
+        presentation = PresentationProjector().project(
             branch.presentation_facts(),
-            event_subjects=event_subjects,
-            definition_names=branch.definition_names(),
-        )
-        presentation = projector.drain(
             from_revision=restored.revision,
             to_revision=restored.revision + 1,
             caused_by=command.command_id,

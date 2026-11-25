@@ -354,7 +354,9 @@ class PlayerTurnHistoryView(ProtocolModel):
     life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
-    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
@@ -592,7 +594,9 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
-    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    creature_died_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     turn_number: UInt32
     phase: str
     step: str
@@ -810,6 +814,12 @@ class LandPlayedPresentation(ProtocolModel):
     player: UInt8
 
 
+class DrewPresentation(ProtocolModel):
+    kind: Literal["drew"]
+    player: UInt8
+    object: ObjectRenderId | None = Field(default=None, exclude_if=lambda v: v is None)
+
+
 class DiscardedPresentation(ProtocolModel):
     kind: Literal["discarded"]
     objects: list[ObjectRenderId]
@@ -866,6 +876,7 @@ PresentationKind: TypeAlias = Annotated[
     | BlockedPresentation
     | TurnStartedPresentation
     | LandPlayedPresentation
+    | DrewPresentation
     | DiscardedPresentation
     | RevealedPresentation
     | ActivatedPresentation
@@ -877,6 +888,7 @@ PresentationKind: TypeAlias = Annotated[
 ]
 
 PresentationRule: TypeAlias = Literal[
+    "draw_step",
     "lethal_damage",
     "zero_toughness",
     "zero_loyalty",
@@ -886,7 +898,15 @@ PresentationRule: TypeAlias = Literal[
 ]
 
 
+class PresentationLabels(ProtocolModel):
+    objects: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+    stacks: dict[str, str] = Field(default_factory=dict, exclude_if=lambda v: not v)
+
+
 class PresentationEvent(ProtocolModel):
+    labels: PresentationLabels | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     seq: UInt64
     from_revision: UInt64
     to_revision: UInt64

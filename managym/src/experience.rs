@@ -912,6 +912,12 @@ pub enum PresentationKind {
         object: ObjectRenderId,
         player: PlayerId,
     },
+    /// The card is named only for a viewer who saw it enter the hand.
+    Drew {
+        player: PlayerId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        object: Option<ObjectRenderId>,
+    },
     /// Cards a player discarded (CR 701.9a), named as the graveyard objects
     /// they became.
     Discarded {
@@ -960,12 +966,22 @@ pub enum PresentationKind {
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PresentationRule {
+    DrawStep,
     LethalDamage,
     ZeroToughness,
     ZeroLoyalty,
     ZeroDefense,
     LegendRule,
     UnattachedAura,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PresentationLabels {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub objects: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub stacks: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -988,6 +1004,8 @@ pub struct PresentationEvent {
     pub cause: Option<PresentationSeq>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule: Option<PresentationRule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<PresentationLabels>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

@@ -4499,17 +4499,24 @@ impl PyEnv {
             .map_err(map_agent_err)
     }
 
-    /// The facts told since the last take, as JSON, and the positions they
-    /// name (read-only envs, by each fact's `position`); then cleared.
-    fn take_presentation(&self) -> PyResult<(String, Vec<PyEnv>)> {
-        let (facts, positions) = self
+    /// Read this viewer's committed lines without consuming the step.
+    fn presentation_facts_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let facts = env.presentation_facts(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&facts).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Clear the step and take its boards after reading both viewers.
+    fn take_presentation_positions(&self) -> PyResult<Vec<PyEnv>> {
+        let positions = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
-            .take_presentation()
+            .take_presentation_positions()
             .map_err(map_agent_err)?;
-        let facts = serde_json::to_string(&facts)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         let positions = positions
             .into_iter()
             .map(|env| PyEnv {
@@ -4518,7 +4525,7 @@ impl PyEnv {
                 prepared_lease: None,
             })
             .collect();
-        Ok((facts, positions))
+        Ok(positions)
     }
 
     /// Public event identities used to explain a committed transition.

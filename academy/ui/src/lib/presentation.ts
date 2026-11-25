@@ -210,6 +210,10 @@ function validatePresentationKind(value: unknown, seq: number): void {
       validateObjectRenderId(value.object, 'kind.object', seq);
       requireInteger(value.player, 'kind.player', seq);
       return;
+    case 'drew':
+      requireInteger(value.player, 'kind.player', seq);
+      if (value.object !== undefined) validateObjectRenderId(value.object, 'kind.object', seq);
+      return;
     case 'discarded':
       if (!Array.isArray(value.objects)) {
         throw new Error(`Presentation event ${seq} has invalid kind.objects`);
@@ -279,6 +283,12 @@ export function validatePresentationEvents(events: readonly PresentationEvent[])
     }
     if (event.rule !== undefined && !(PRESENTATION_RULES as readonly string[]).includes(event.rule)) {
       throw new Error(`Presentation event ${event.seq} has invalid rule`);
+    }
+    if (event.labels !== undefined && (!isRecord(event.labels) || Object.entries(event.labels).some(
+      ([table, names]) => !['objects', 'stacks'].includes(table) || !isRecord(names)
+        || Object.values(names).some(name => typeof name !== 'string'),
+    ))) {
+      throw new Error(`Presentation event ${event.seq} has invalid labels`);
     }
     previousSeq = event.seq;
   }
@@ -414,6 +424,12 @@ export function presentationBeat(
       detail = `${player} plays ${objectLabel(event.kind.object, labels)}.`;
       break;
     }
+    case 'drew': {
+      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
+      heading = 'Draw';
+      detail = `${player} draws ${event.kind.object ? objectLabel(event.kind.object, labels) : 'a card'}.`;
+      break;
+    }
     case 'discarded': {
       const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
       heading = 'Discard';
@@ -462,6 +478,7 @@ export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
     case 'blocked': return [object(kind.attacker), ...kind.blockers.map(object)];
     case 'turn_started': return [{ kind: 'player', id: kind.player }];
     case 'land_played': return [object(kind.object), { kind: 'player', id: kind.player }];
+    case 'drew': return [...(kind.object ? [object(kind.object)] : []), { kind: 'player', id: kind.player }];
     case 'discarded': return [...kind.objects.map(object), { kind: 'player', id: kind.player }];
     case 'revealed': return [{ kind: 'player', id: kind.player }];
     case 'activated': case 'triggered': return [object(kind.source), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
@@ -477,7 +494,7 @@ export function presentationEventLabels(event: PresentationEvent, labels: Presen
   for (const subject of presentationSubjects(event)) {
     const table = subject.kind === 'object' ? 'objects' : subject.kind === 'player' ? 'players' : 'stacks';
     const key = subject.kind === 'object' ? objectLabelKey(subject.id) : String(subject.id);
-    const value = labels[table][key];
+    const value = event.labels && table !== 'players' ? event.labels[table]?.[key] : labels[table][key];
     if (value !== undefined) retained[table][key] = value;
   }
   return retained;

@@ -31,14 +31,14 @@
 use serde::Serialize;
 
 use crate::{
-    agent::observation::Observation,
+    experience::{PresentationKind, PresentationLabels},
     flow::{
         event::{DamageTarget, GameEvent, ObjectEventRef},
         game::Game,
         trigger::TriggerId,
     },
     state::{
-        game_object::{ObjectId, PlayerId, PublicId},
+        game_object::{ObjectId, PlayerId},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -53,6 +53,7 @@ pub type FactId = u32;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rule {
+    DrawStep,
     /// CR 704.5g.
     LethalDamage,
     /// CR 704.5f.
@@ -76,19 +77,7 @@ enum Note {
         dealt: GameEvent,
         told: GameEvent,
     },
-    /// An activated ability was put on the stack (CR 602.2).
-    Activated {
-        source: ObjectId,
-        controller: PlayerId,
-        ability: PublicId,
-    },
-    /// The top stack object began to resolve (CR 608.2) with legal targets.
-    Resolving {
-        stack: PublicId,
-        source: ObjectId,
-        controller: PlayerId,
-        spell: bool,
-    },
+    Stack,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +86,7 @@ struct Fact {
     cause: Option<FactId>,
     rule: Option<Rule>,
     note: Note,
+    lines: [Vec<PresentationLine>; 2],
     /// Index of the position cut after this fact, once one is.
     position: Option<u32>,
 }
@@ -104,6 +94,7 @@ struct Fact {
 #[derive(Clone, Debug, Default)]
 pub struct PresentationSink {
     facts: Vec<Fact>,
+    pub(super) land_play: Option<ObjectId>,
     next_id: FactId,
     /// The resolution every fact follows from until stabilization ends.
     resolution: Option<FactId>,
@@ -122,13 +113,15 @@ pub struct PresentationSink {
 }
 
 impl PresentationSink {
-    fn push(&mut self, rule: Option<Rule>, note: Note) -> FactId {
-        self.push_caused(None, rule, note)
-    }
-
     /// Push a fact whose cause, absent a trigger's or a resolution's, is
     /// `fallback`.
-    fn push_caused(&mut self, fallback: Option<FactId>, rule: Option<Rule>, note: Note) -> FactId {
+    fn push_caused(
+        &mut self,
+        fallback: Option<FactId>,
+        rule: Option<Rule>,
+        note: Note,
+        lines: [Vec<PresentationLine>; 2],
+    ) -> FactId {
         let id = self.next_id;
         self.next_id += 1;
         let cause = self.next_cause.take().or(self.resolution).or(fallback);
@@ -137,6 +130,7 @@ impl PresentationSink {
             cause,
             rule,
             note,
+            lines,
             position: None,
         });
         self.uncut = true;
@@ -170,54 +164,22 @@ impl PresentationSink {
     }
 }
 
-/// One viewer-safe fact: the observation's own event rows for a mirrored
-/// event, or a note no event carries.
+/// Committed lines for one viewer. An untold fact still binds its cause.
 #[derive(Clone, Debug, Serialize)]
 pub struct PresentationFact {
     pub id: FactId,
     pub cause: Option<FactId>,
     pub rule: Option<Rule>,
-    #[serde(serialize_with = "serialize_rows")]
-    pub events: Vec<crate::agent::observation::EventData>,
-    pub note: Option<PresentationNote>,
-    /// The position (index into [`Game::take_presentation`]'s positions)
-    /// showing the board after this fact, or `None` for the board the step
-    /// ends with.
+    pub lines: Vec<PresentationLine>,
     pub position: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum PresentationNote {
-    Activated {
-        source: Option<ObjectEventRef>,
-        controller: usize,
-        stack: u32,
-    },
-    Triggered {
-        source: Option<ObjectEventRef>,
-        controller: usize,
-        stack: u32,
-    },
-    Resolving {
-        stack: u32,
-        source: Option<ObjectEventRef>,
-        controller: usize,
-        spell: bool,
-    },
-    Counters {
-        object: ObjectEventRef,
-        counter: crate::state::permanent::CounterKind,
-        count: i32,
-        total: i32,
-    },
-}
-
-fn serialize_rows<S: serde::Serializer>(
-    rows: &[crate::agent::observation::EventData],
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    crate::agent::observation_json::EventsJson(rows).serialize(serializer)
+pub struct PresentationLine {
+    pub kind: PresentationKind,
+    pub labels: PresentationLabels,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub combat: bool,
 }
 
 impl Game {
@@ -258,6 +220,7 @@ impl Game {
             } => self.permanent_event_ref(*permanent),
             _ => None,
         };
+        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.event_lines(event, viewer));
         let sink = self.presentation.as_deref_mut().expect("checked above");
         // Combat damage is one fact: the observation tells it by the
         // `CombatDamageDealt` emitted right after its `DamageDealt`.
@@ -269,50 +232,70 @@ impl Game {
                         dealt: dealt.clone(),
                         told: event.clone(),
                     };
+                    last.lines = lines;
                     return;
                 }
             }
         }
         let (rule, damage) = sink.event_rule(event);
-        let id = sink.push_caused(damage, rule, Note::Event(event.clone()));
+        if matches!(
+            event,
+            GameEvent::CardMoved {
+                departed: Some(departed),
+                to: ZoneType::Battlefield,
+                ..
+            } if sink.land_play == Some(*departed)
+        ) {
+            sink.land_play = None;
+        }
+        let id = sink.push_caused(damage, rule, Note::Event(event.clone()), lines);
         if let Some(object) = damaged {
             sink.damaged.push((object, id));
         }
     }
 
     pub(crate) fn presentation_activated(&mut self, ability: &StackObject) {
-        let Some(sink) = self.presentation.as_deref_mut() else {
+        if self.presentation.is_none() {
             return;
-        };
-        if let StackObject::ActivatedAbility(ability) = ability {
-            sink.push(
-                None,
-                Note::Activated {
-                    source: ability.source_object,
-                    controller: ability.controller,
-                    ability: ability.id,
-                },
-            );
         }
+        let lines =
+            [PlayerId(0), PlayerId(1)].map(|viewer| self.stack_line(ability, viewer, false));
+        self.presentation
+            .as_deref_mut()
+            .unwrap()
+            .push_caused(None, None, Note::Stack, lines);
     }
 
-    /// The top of the stack begins resolving; facts until priority follow
-    /// from it.
     pub(crate) fn presentation_resolving(&mut self, stacked: &StackObject) {
-        let Some(sink) = self.presentation.as_deref_mut() else {
+        if self.presentation.is_none() {
             return;
-        };
+        }
+        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.stack_line(stacked, viewer, true));
+        let sink = self.presentation.as_deref_mut().unwrap();
         sink.resolution = None;
-        let id = sink.push(
-            None,
-            Note::Resolving {
-                stack: stacked.id(),
-                source: stacked.source_object(),
-                controller: stacked.controller(),
-                spell: matches!(stacked, StackObject::Spell(_)),
-            },
-        );
+        let id = sink.push_caused(None, None, Note::Stack, lines);
         sink.resolution = Some(id);
+    }
+
+    /// Attach the hand appearance to the CardDrawn fact before another effect can move it.
+    pub(super) fn presentation_drawn(&mut self, player: PlayerId, card: ObjectId, draw_step: bool) {
+        if self.presentation.is_none() {
+            return;
+        }
+        let lines = [PlayerId(0), PlayerId(1)].map(|viewer| self.draw_line(player, card, viewer));
+        let fact = self
+            .presentation
+            .as_deref_mut()
+            .unwrap()
+            .facts
+            .last_mut()
+            .unwrap();
+        debug_assert!(matches!(
+            fact.note,
+            Note::Event(GameEvent::CardDrawn { .. })
+        ));
+        fact.lines = lines;
+        fact.rule = draw_step.then_some(Rule::DrawStep);
     }
 
     /// Stabilization reached priority: the resolution's consequences end.
@@ -388,98 +371,30 @@ impl Game {
         }
     }
 
-    /// The facts since the last take as any viewer may read them, and the
-    /// positions they name, then cleared. A mirrored event the observation
-    /// does not tell keeps its id with no rows, so causes through it still
-    /// resolve.
-    pub fn take_presentation(&mut self) -> (Vec<PresentationFact>, Vec<Game>) {
-        let Some(sink) = self.presentation.as_deref_mut() else {
-            return (Vec::new(), Vec::new());
+    pub fn presentation_facts(&self, viewer: PlayerId) -> Vec<PresentationFact> {
+        let Some(sink) = self.presentation.as_deref() else {
+            return Vec::new();
         };
-        let facts = std::mem::take(&mut sink.facts);
-        let positions = std::mem::take(&mut sink.positions);
-        sink.uncut = false;
-        let facts = facts
-            .into_iter()
-            .map(|fact| {
-                let (events, note) = match &fact.note {
-                    Note::Event(event) | Note::CombatDamage { told: event, .. } => {
-                        (Observation::event_data(self, event), self.event_note(event))
-                    }
-                    Note::Activated {
-                        source,
-                        controller,
-                        ability,
-                    } => (
-                        Vec::new(),
-                        Some(PresentationNote::Activated {
-                            source: self.object_event_ref(*source),
-                            controller: controller.0,
-                            stack: ability.0,
-                        }),
-                    ),
-                    Note::Resolving {
-                        stack,
-                        source,
-                        controller,
-                        spell,
-                    } => (
-                        // A spell's resolution reads as the observation
-                        // names a resolved spell, before its effects.
-                        if *spell {
-                            Observation::event_data(
-                                self,
-                                &GameEvent::SpellResolved { object_id: *source },
-                            )
-                        } else {
-                            Vec::new()
-                        },
-                        Some(PresentationNote::Resolving {
-                            stack: stack.0,
-                            source: self.object_event_ref(*source),
-                            controller: controller.0,
-                            spell: *spell,
-                        }),
-                    ),
-                };
-                PresentationFact {
-                    id: fact.id,
-                    cause: fact.cause,
-                    rule: fact.rule,
-                    events,
-                    note,
-                    position: fact.position,
-                }
+        sink.facts
+            .iter()
+            .map(|fact| PresentationFact {
+                id: fact.id,
+                cause: fact.cause,
+                rule: fact.rule,
+                lines: fact.lines[viewer.0].clone(),
+                position: fact.position,
             })
-            .collect();
-        (facts, positions)
+            .collect()
     }
 
-    fn event_note(&self, event: &GameEvent) -> Option<PresentationNote> {
-        match event {
-            GameEvent::AbilityTriggered {
-                source_object,
-                controller,
-                ability,
-                ..
-            } => Some(PresentationNote::Triggered {
-                source: self.object_event_ref(*source_object),
-                controller: controller.0,
-                stack: ability.0,
-            }),
-            GameEvent::CountersPut {
-                permanent,
-                kind,
-                count,
-                total,
-                ..
-            } => Some(PresentationNote::Counters {
-                object: self.permanent_event_ref(*permanent)?,
-                counter: *kind,
-                count: *count,
-                total: *total,
-            }),
-            _ => None,
-        }
+    /// Release one step after all viewers have read their tracks.
+    pub fn take_presentation_positions(&mut self) -> Vec<Game> {
+        let Some(sink) = self.presentation.as_deref_mut() else {
+            return Vec::new();
+        };
+        sink.facts.clear();
+        sink.land_play = None;
+        sink.uncut = false;
+        std::mem::take(&mut sink.positions)
     }
 }

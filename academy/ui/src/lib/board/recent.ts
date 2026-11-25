@@ -56,7 +56,7 @@ export interface ResolvedSpell {
 }
 
 /** What a fact reports; beats group consecutive facts of one kind. */
-export type FactKind = 'cast' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded' | 'revealed';
+export type FactKind = 'cast' | 'damage' | 'died' | 'destroyed' | 'attacked' | 'blocked' | 'land' | 'discarded' | 'revealed' | 'drew';
 
 export interface RecentFact {
   seq: number;
@@ -325,6 +325,12 @@ export function recentView(
         const by = playerSide(frame, kind.player);
         const cards = kind.objects.map(object => objectName(object, labels, book) ?? 'a card');
         fact(by, 'discarded', `${sideName(by)} discarded ${list(cards)}`, null, kind.objects.map(object => object.entity));
+        break;
+      }
+      case 'drew': {
+        const by = playerSide(frame, kind.player);
+        const card = kind.object && labels.objects[key(kind.object)];
+        fact(by, 'drew', `${sideName(by)} drew ${card || 'a card'}`, null, kind.object ? [kind.object.entity] : []);
         break;
       }
       case 'revealed': {

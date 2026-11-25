@@ -320,7 +320,7 @@ impl Game {
                 let is_first_player_first_turn =
                     self.state.turn.turn_number == 1 && active == PlayerId(0);
                 if !is_first_player_first_turn {
-                    self.draw_cards(active, 1);
+                    self.draw(active, 1, true);
                 }
                 None
             }

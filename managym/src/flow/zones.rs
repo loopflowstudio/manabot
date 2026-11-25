@@ -311,7 +311,7 @@ impl Game {
         }
     }
 
-    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) {
+    pub(super) fn put_library_top_in_hand(&mut self, object: ObjectId) -> ObjectId {
         self.move_object_with_entry(
             object,
             ZoneType::Hand,
@@ -319,10 +319,14 @@ impl Game {
                 library_top_departure: true,
                 ..Default::default()
             },
-        );
+        )
     }
 
     pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
+        self.draw(player, amount, false);
+    }
+
+    pub(super) fn draw(&mut self, player: PlayerId, amount: usize, draw_step: bool) {
         for _ in 0..amount {
             let Some(object) = self.state.zones.top(ZoneType::Library, player) else {
                 self.state.players[player.0].drew_when_empty = true;
@@ -331,13 +335,14 @@ impl Game {
             if self.card_capture.is_some() || self.statistics.is_some() {
                 self.capture_drawing = Some(object);
             }
-            self.put_library_top_in_hand(object);
+            let drawn = self.put_library_top_in_hand(object);
             self.capture_drawing = None;
             self.state.turn.history[player.0].cards_drawn += 1;
             self.emit(GameEvent::CardDrawn {
                 player,
                 nth_this_turn: self.state.turn.history[player.0].cards_drawn,
             });
+            self.presentation_drawn(player, drawn, draw_step);
         }
     }
 
