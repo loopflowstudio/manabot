@@ -2069,7 +2069,7 @@ impl PrintedCharacteristics {
     #[inline]
     pub fn color_bits(&self) -> u8 {
         if let Some(colors) = &self.color_override {
-            return colors.iter().fold(0u8, |mask, &color| mask | color.bit());
+            return Color::bits(colors);
         }
         self.mana_cost.as_ref().map_or(0, ManaCost::color_bits)
     }

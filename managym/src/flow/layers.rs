@@ -65,6 +65,11 @@ impl Layer {
         Self::ModifyPower,
         Self::SwitchPower,
     ];
+
+    #[inline]
+    const fn bit(self) -> u16 {
+        1u16 << (self as u8)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,6 +131,7 @@ struct SourcePlan {
     scope: StaticScope,
     condition: Option<Condition>,
     parts: Vec<(Layer, Operation)>,
+    layers: u16,
     reads: ReadSet,
 }
 
@@ -144,11 +150,17 @@ impl Node {
         }
     }
 
-    fn has_layer(&self, layer: Layer) -> bool {
+    #[inline]
+    fn layers(&self) -> u16 {
         match &self.kind {
-            NodeKind::Static { plan, .. } => plan.parts.iter().any(|(part, _)| *part == layer),
-            NodeKind::Resolved { layer: part, .. } => *part == layer,
+            NodeKind::Static { plan, .. } => plan.layers,
+            NodeKind::Resolved { layer, .. } => layer.bit(),
         }
+    }
+
+    #[inline]
+    fn has_layer(&self, layer: Layer) -> bool {
+        self.layers() & layer.bit() != 0
     }
 
     fn is_static_unbound(&self) -> bool {
@@ -330,6 +342,7 @@ impl SourcePlan {
             scope: StaticScope::This,
             condition: None,
             parts: Vec::new(),
+            layers: 0,
             reads: ReadSet::default(),
         }
     }
@@ -347,7 +360,9 @@ impl SourcePlan {
         if let Some(condition) = &self.condition {
             reads.condition(condition);
         }
-        for (_, operation) in &self.parts {
+        let mut layers = 0u16;
+        for (part_layer, operation) in &self.parts {
+            layers |= part_layer.bit();
             if let Operation::Modify(modification) = operation {
                 match modification {
                     Modification::Control => reads.fields |= CONTROL,
@@ -364,6 +379,7 @@ impl SourcePlan {
                 }
             }
         }
+        self.layers = layers;
         self.reads = reads;
         self
     }
@@ -500,6 +516,7 @@ impl<'a> Context<'a> {
             reads_life: false,
         };
         let mut nodes = Vec::new();
+        let mut active_layers = 0u16;
         let mut known = BTreeSet::new();
         seeds.resize(game.state.permanents.len(), None);
         for (slot, permanent) in game.state.permanents.iter().enumerate() {
@@ -520,7 +537,6 @@ impl<'a> Context<'a> {
             }
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
-            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
             // A phased-out permanent's static abilities apply to nothing
             // (CR 702.26b); its own view still takes the records on it.
             if !game.is_phased_out(id) {
@@ -529,11 +545,13 @@ impl<'a> Context<'a> {
                     context.reads_mana |= reads.mana;
                     context.reads_tapped |= reads.tapped;
                     context.reads_life |= reads.life;
+                    active_layers |= node.layers();
                     nodes.push(node.clone());
                 }
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
+                    active_layers |= Layer::Ability.bit();
                     nodes.push(Node::resolved(
                         id,
                         vec![slot, usize::MAX - 1, kind as usize],
@@ -557,6 +575,7 @@ impl<'a> Context<'a> {
                 } else {
                     Operation::Modify(record.modification.clone())
                 };
+                active_layers |= layer.bit();
                 nodes.push(Node::resolved(
                     id,
                     vec![slot, usize::MAX, i],
@@ -569,51 +588,84 @@ impl<'a> Context<'a> {
         if !retain_sources {
             seeds.clear();
         }
+        let mut pending = Vec::new();
+        let mut applied = Vec::new();
         for layer in Layer::ALL {
-            let mut applied = BTreeSet::new();
-            loop {
-                let pending: Vec<_> = nodes
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, node)| {
-                        !applied.contains(i) && node.has_layer(layer) && context.exists(node)
-                    })
-                    .map(|(i, _)| i)
-                    .collect();
-                if pending.is_empty() {
-                    break;
-                }
-                let instructions: Vec<_> = pending
-                    .iter()
-                    .map(|&i| context.instructions(&nodes[i], layer))
-                    .collect();
-                for selected in context.next_effects(&nodes, &pending, &instructions, layer) {
-                    let index = pending[selected];
-                    if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
-                        if targets.is_none()
-                            && plan.parts.iter().any(|(part, _)| *part > layer)
-                            && !instructions[selected].is_empty()
+            if active_layers & layer.bit() != 0 {
+                applied.clear();
+                loop {
+                    pending.clear();
+                    for (i, node) in nodes.iter().enumerate() {
+                        if !applied.get(i).copied().unwrap_or(false)
+                            && node.has_layer(layer)
+                            && context.exists(node)
                         {
-                            // Instructions already resolved the affected set. Retain
-                            // it only for effects that continue into a later layer.
-                            let mut bound: Vec<_> = instructions[selected]
-                                .iter()
-                                .map(|instruction| instruction.target)
-                                .collect();
-                            bound.dedup();
-                            *targets = Some(bound);
+                            pending.push(i);
                         }
                     }
-                    context.apply(&nodes[index], &instructions[selected]);
-                    // Only a static grant introduces layer nodes. Removing abilities
-                    // changes existence, which the pending filter checks directly.
-                    if instructions[selected].iter().any(|i| {
-                        matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
-                    }) {
-                        context.discover(&mut nodes, &mut known);
+                    if pending.is_empty() {
+                        break;
                     }
-                    applied.insert(index);
+                    let instructions: Vec<_> = pending
+                        .iter()
+                        .map(|&i| context.instructions(&nodes[i], layer))
+                        .collect();
+                    let selected = context.next_effects(&nodes, &pending, &instructions, layer);
+                    let all_applied = selected.len() == pending.len();
+                    let mut discovered_this_layer = false;
+                    for slot in selected {
+                        let index = pending[slot];
+                        if let NodeKind::Static { plan, targets } = &mut nodes[index].kind {
+                            if targets.is_none()
+                                && plan.parts.iter().any(|(part, _)| *part > layer)
+                                && !instructions[slot].is_empty()
+                            {
+                                // Instructions already resolved the affected set. Retain
+                                // it only for effects that continue into a later layer.
+                                let mut bound: Vec<_> = instructions[slot]
+                                    .iter()
+                                    .map(|instruction| instruction.target)
+                                    .collect();
+                                bound.dedup();
+                                *targets = Some(bound);
+                            }
+                        }
+                        context.apply(&nodes[index], &instructions[slot]);
+                        // Only a static grant introduces layer nodes. Removing abilities
+                        // changes existence, which the pending filter checks directly.
+                        if instructions[slot].iter().any(|i| {
+                            matches!(i.operation, Operation::Modify(Modification::GrantStatic(_)))
+                        }) {
+                            let added = context.discover(&mut nodes, &mut active_layers, &mut known);
+                            discovered_this_layer |= added & layer.bit() != 0;
+                        }
+                        if !all_applied {
+                            if applied.len() <= index {
+                                applied.resize(nodes.len(), false);
+                            }
+                            applied[index] = true;
+                        }
+                    }
+                    if all_applied {
+                        if !discovered_this_layer {
+                            debug_assert!(nodes.iter().enumerate().all(|(i, node)| {
+                                applied.get(i).copied().unwrap_or(false)
+                                    || pending.contains(&i)
+                                    || !node.has_layer(layer)
+                                    || !context.exists(node)
+                            }));
+                            break;
+                        }
+                        if applied.len() < nodes.len() {
+                            applied.resize(nodes.len(), false);
+                        }
+                        for &index in &pending {
+                            applied[index] = true;
+                        }
+                    }
                 }
+            } else {
+                debug_assert!(!nodes.iter().any(|node| node.has_layer(layer)));
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
@@ -766,25 +818,35 @@ impl<'a> Context<'a> {
             }
         }
     }
-    fn discover(&mut self, nodes: &mut Vec<Node>, known: &mut BTreeSet<Vec<usize>>) {
-        // Occurrence provenance preserves duplicate grants, including statics
-        // discovered during layer 6 that start applying in a later layer.
+    fn discover(
+        &mut self,
+        nodes: &mut Vec<Node>,
+        active_layers: &mut u16,
+        known: &mut BTreeSet<Vec<usize>>,
+    ) -> u16 {
+        // Seed statics use two-element keys `[slot, index]` and are already in
+        // `nodes`; granted statics extend the granting node's key so length > 2.
+        let mut added_layers = 0u16;
         for (&id, object) in &self.objects {
             if self.game.is_phased_out(id) {
                 continue;
             }
             for entry in &object.statics {
-                if known.insert(entry.key.clone()) {
+                if entry.key.len() > 2 && known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
                         let reads = node.reads();
                         self.reads_mana |= reads.mana;
                         self.reads_tapped |= reads.tapped;
                         self.reads_life |= reads.life;
+                        let layers = node.layers();
+                        added_layers |= layers;
+                        *active_layers |= layers;
                         nodes.push(node);
                     }
                 }
             }
         }
+        added_layers
     }
 
     /// Select a pending effect under CR 613.8: dependencies first, then

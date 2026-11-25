@@ -68,20 +68,24 @@ impl Game {
         let _scan = self.board_scan();
         let combat = self.state.combat.as_ref().expect("declaring blockers");
         let attackers = &combat.attackers;
-        let options = attackers
+        let options: Vec<_> = attackers
             .iter()
             .enumerate()
             .filter(|(_, &a)| self.blocker_can_block_attacker(blocker, a))
             .map(|(i, _)| Some(i))
-            .chain([None]);
+            .chain([None])
+            .collect();
         let rules: Vec<_> = attackers
             .iter()
             .map(|&id| self.block_requirements(id))
             .collect();
         if rules.iter().all(|r| !r.menace && r.first + r.each == 0) {
-            return options.map(|choice| choice.map(|i| attackers[i])).collect();
+            return options
+                .into_iter()
+                .map(|choice| choice.map(|i| attackers[i]))
+                .collect();
         }
-        let mut counts: Vec<_> = attackers
+        let counts: Vec<_> = attackers
             .iter()
             .map(|a| combat.attacker_to_blockers.get(a).map_or(0, Vec::len))
             .collect();
@@ -96,32 +100,190 @@ impl Game {
                     .collect()
             })
             .collect();
-        let mut best = None;
-        let mut legal = Vec::new();
-        for choice in options {
-            if let Some(i) = choice {
-                counts[i] += 1;
+        let chosen = if rules.iter().all(|r| !r.menace) {
+            let fast = non_menace_best_choices(&rules, &edges, remaining.len(), &counts, &options);
+            #[cfg(debug_assertions)]
+            if attackers.len() <= 16 {
+                let mut counts_check = counts.clone();
+                let slow = general_best_choices(
+                    &rules,
+                    &edges,
+                    remaining.len(),
+                    &mut counts_check,
+                    &options,
+                );
+                debug_assert_eq!(
+                    fast, slow,
+                    "non-menace residual solver diverged from general bound"
+                );
             }
-            let bound = block_requirement_bound(
-                &rules,
-                &edges,
-                remaining.len(),
-                &counts,
-                &mut vec![None; rules.len()],
-            );
-            if let Some(i) = choice {
-                counts[i] -= 1;
+            fast
+        } else {
+            let mut counts = counts;
+            general_best_choices(&rules, &edges, remaining.len(), &mut counts, &options)
+        };
+        chosen
+            .into_iter()
+            .map(|choice| choice.map(|i| attackers[i]))
+            .collect()
+    }
+}
+
+fn general_best_choices(
+    rules: &[BlockRequirements],
+    edges: &[Vec<usize>],
+    blockers: usize,
+    counts: &mut [usize],
+    options: &[Option<usize>],
+) -> Vec<Option<usize>> {
+    let mut best = None;
+    let mut legal = Vec::new();
+    let mut blocked = vec![None; rules.len()];
+    for &choice in options {
+        if let Some(i) = choice {
+            counts[i] += 1;
+        }
+        let bound = block_requirement_bound(rules, edges, blockers, counts, &mut blocked);
+        if let Some(i) = choice {
+            counts[i] -= 1;
+        }
+        if bound.is_some() && bound >= best {
+            if bound > best {
+                legal.clear();
+                best = bound;
             }
-            if bound.is_some() && bound >= best {
-                if bound > best {
-                    legal.clear();
-                    best = bound;
+            legal.push(choice);
+        }
+    }
+    legal
+}
+
+/// Evaluate all candidate choices for the current blocker when no attacker has
+/// menace. Solve one baseline transversal-matroid matching for `remaining`
+/// blockers (corresponding to `choice = None`), then evaluate every `Some(a)`
+/// via a single residual reachability pass.
+///
+/// Assigning the current blocker to attacker `a` increases committed score by
+/// `direct = r.each + [c == 0] * r.first` and decreases the weight of at most
+/// one baseline slot on `a` (from `first + each` to `0` if `limited`, or to
+/// `each` if unblocked with `first > 0`). By matroid sensitivity analysis,
+/// lowering a matched slot's weight replaces it with the highest-weight
+/// unmatched slot reachable to `a` in the residual graph (`u -> v` when some
+/// `b in edges[u]` is assigned to `v`), or keeps the slot at its new weight.
+fn non_menace_best_choices(
+    rules: &[BlockRequirements],
+    edges: &[Vec<usize>],
+    blockers: usize,
+    counts: &[usize],
+    options: &[Option<usize>],
+) -> Vec<Option<usize>> {
+    let mut slot_groups = Vec::with_capacity(rules.len() * 2);
+    let mut capacity = Vec::with_capacity(rules.len());
+    for (i, r) in rules.iter().enumerate() {
+        let cap = if r.limited {
+            1usize.saturating_sub(counts[i]).min(edges[i].len())
+        } else {
+            edges[i].len()
+        };
+        capacity.push(cap);
+        if cap == 0 {
+            continue;
+        }
+        let first_reward = r.each + usize::from(counts[i] == 0) * r.first;
+        if first_reward > 0 {
+            if first_reward == r.each {
+                slot_groups.push((r.each, i, cap));
+            } else {
+                slot_groups.push((first_reward, i, 1));
+                if r.each > 0 && cap > 1 {
+                    slot_groups.push((r.each, i, cap - 1));
                 }
-                legal.push(choice.map(|i| attackers[i]));
             }
         }
-        legal
     }
+    slot_groups.sort_unstable_by(|a, b| b.cmp(a));
+
+    let mut assigned = vec![None; blockers];
+    let mut matched = vec![0usize; rules.len()];
+    let mut saturated = vec![false; rules.len()];
+    let mut seen = vec![false; blockers];
+    for (_, attacker, count) in slot_groups {
+        if saturated[attacker] {
+            continue;
+        }
+        for _ in 0..count {
+            seen.fill(false);
+            if augment(attacker, edges, &mut assigned, &mut seen) {
+                matched[attacker] += 1;
+            } else {
+                saturated[attacker] = true;
+                break;
+            }
+        }
+    }
+
+    // Highest-weight unmatched slot on each attacker, then one descending-weight
+    // traversal in the residual graph to find the best replacement for every
+    // matched attacker simultaneously in O(A log A + E).
+    let mut sources = Vec::new();
+    for (j, r) in rules.iter().enumerate() {
+        if matched[j] < capacity[j] {
+            let weight = r.each + usize::from(counts[j] == 0 && matched[j] == 0) * r.first;
+            if weight > 0 {
+                sources.push((weight, j));
+            }
+        }
+    }
+    sources.sort_unstable_by(|a, b| b.cmp(a));
+
+    let mut best_repl = vec![0usize; rules.len()];
+    let mut visited = vec![false; rules.len()];
+    let mut stack = Vec::new();
+    for (weight, start) in sources {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        best_repl[start] = weight;
+        stack.push(start);
+        while let Some(u) = stack.pop() {
+            for &b in &edges[u] {
+                if let Some(v) = assigned[b] {
+                    if !visited[v] {
+                        visited[v] = true;
+                        best_repl[v] = weight;
+                        stack.push(v);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut best_delta = 0;
+    let mut legal = Vec::new();
+    for &choice in options {
+        let delta = match choice {
+            None => 0,
+            Some(a) => {
+                let r = &rules[a];
+                let c = counts[a];
+                if c == 0 && (r.limited || r.first > 0) && matched[a] > 0 {
+                    let new_weight = if r.limited { 0 } else { r.each };
+                    best_repl[a].max(new_weight)
+                } else {
+                    r.each + usize::from(c == 0) * r.first
+                }
+            }
+        };
+        if delta >= best_delta {
+            if delta > best_delta {
+                legal.clear();
+                best_delta = delta;
+            }
+            legal.push(choice);
+        }
+    }
+    legal
 }
 
 /// Match remaining blockers to slots on attackers. The first slot earns all
@@ -221,12 +383,20 @@ fn augment(
     seen: &mut [bool],
 ) -> bool {
     for &blocker in &edges[attacker] {
+        if assigned[blocker].is_none() {
+            assigned[blocker] = Some(attacker);
+            return true;
+        }
+    }
+    for &blocker in &edges[attacker] {
         if std::mem::replace(&mut seen[blocker], true) {
             continue;
         }
-        if assigned[blocker].is_none_or(|other| augment(other, edges, assigned, seen)) {
-            assigned[blocker] = Some(attacker);
-            return true;
+        if let Some(other) = assigned[blocker] {
+            if augment(other, edges, assigned, seen) {
+                assigned[blocker] = Some(attacker);
+                return true;
+            }
         }
     }
     false
@@ -281,6 +451,88 @@ mod tests {
                         block_requirement_bound(&rules, &edges, 3, &counts, &mut [None; 2]),
                         expected,
                         "edges={mask}, rules={flags}, counts={counts:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Exhaust three-attacker / three-blocker non-menace declarations across
+    /// mixed first/each weights, limited flags, prefixes, and current-blocker
+    /// option subsets to verify the residual solver against general re-solving.
+    #[test]
+    fn non_menace_residual_solver_agrees_with_general_bound() {
+        let rule_profiles = [
+            BlockRequirements {
+                first: 0,
+                each: 0,
+                menace: false,
+                limited: false,
+            },
+            BlockRequirements {
+                first: 1,
+                each: 0,
+                menace: false,
+                limited: false,
+            },
+            BlockRequirements {
+                first: 2,
+                each: 0,
+                menace: false,
+                limited: true,
+            },
+            BlockRequirements {
+                first: 0,
+                each: 1,
+                menace: false,
+                limited: false,
+            },
+            BlockRequirements {
+                first: 1,
+                each: 1,
+                menace: false,
+                limited: false,
+            },
+            BlockRequirements {
+                first: 2,
+                each: 1,
+                menace: false,
+                limited: true,
+            },
+        ];
+        // Test all 2^9 = 512 bipartite edge graphs on 3 attackers x 3 remaining blockers.
+        for mask in 0..512usize {
+            let edges: Vec<Vec<_>> = (0..3)
+                .map(|i| (0..3).filter(|b| mask & (1 << (3 * i + b)) != 0).collect())
+                .collect();
+            for &(r0, r1, r2) in &[
+                (1, 1, 1),
+                (1, 2, 3),
+                (2, 4, 5),
+                (0, 4, 5),
+                (3, 4, 2),
+                (5, 5, 1),
+            ] {
+                let rules = [
+                    BlockRequirements { ..rule_profiles[r0] },
+                    BlockRequirements { ..rule_profiles[r1] },
+                    BlockRequirements { ..rule_profiles[r2] },
+                ];
+                for counts in [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 0, 1], [2, 0, 0]] {
+                    if rules.iter().zip(counts).any(|(r, c)| r.limited && c > 1) {
+                        continue;
+                    }
+                    let options: Vec<_> = (0..3)
+                        .filter(|&i| !(rules[i].limited && counts[i] >= 1))
+                        .map(Some)
+                        .chain([None])
+                        .collect();
+                    let fast = non_menace_best_choices(&rules, &edges, 3, &counts, &options);
+                    let mut counts_copy = counts;
+                    let slow = general_best_choices(&rules, &edges, 3, &mut counts_copy, &options);
+                    assert_eq!(
+                        fast, slow,
+                        "mask={mask}, rules=({r0},{r1},{r2}), counts={counts:?}, options={options:?}"
                     );
                 }
             }

@@ -19,7 +19,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
-        mana::{Mana, ManaCost, ManaRestriction, SpendPredicate},
+        mana::{Color, Mana, ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -1702,7 +1702,7 @@ impl Observation {
                 .is_some_and(|faces| faces.back_up && !faces.front.1.modal_back)
                 || game.state.zones.melded_card(permanent.object).is_some())
             .then(|| game.object_mana_value(permanent.object)),
-            colors: (characteristics.colors != object.colors()).then(|| {
+            colors: (Color::bits(&characteristics.colors) != object.color_bits()).then(|| {
                 characteristics
                     .colors
                     .iter()

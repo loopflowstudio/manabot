@@ -35,6 +35,11 @@ impl Color {
         1u8 << (self as u8)
     }
 
+    #[inline]
+    pub fn bits(colors: &Colors) -> u8 {
+        colors.iter().fold(0u8, |mask, &color| mask | color.bit())
+    }
+
     pub fn symbol(self) -> &'static str {
         match self {
             Color::White => "W",

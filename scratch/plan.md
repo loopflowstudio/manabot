@@ -35,15 +35,18 @@ Prime Speaker Zegana, Giada, Banner of Kinship, Angel of Vitality.
   (`338f79de16`). Review at `d1887e600c`: composition holds, no card-keyed engine code.
 - Performance P1–P4 (`8fa265d0a8`): layer dirty bits, inlined subtype checks, direct
   control scan, `Operation<i32>` resolution and bitmask `TargetingSource`.
+- Performance P5–P7: single baseline matching + residual reachability for non-menace
+  `block_options`, allocation-free `Color::bits` comparison in `Observation::add_permanent`,
+  and `active_layers: u16` bitmask skipping + reusable buffers + single-batch exit +
+  length-based `discover` filtering in `Context::evaluate`.
 
 Findings that still explain the code:
 
 - Menace after ordinary matching can reject a legal tied completion. The solver reserves
   a partner for a committed singleton and branches on ambiguous menace attackers; work
-  grows exponentially in the number of ambiguous menace attackers. Separately,
-  `joraga-blocks` has zero menace creatures; its superlinear growth comes from
-  `block_options` re-solving the full matching from scratch for each of the `A + 1`
-  candidate choices.
+  grows exponentially in the number of ambiguous menace attackers. Non-menace coupled
+  declarations solve one baseline transversal-matroid matching and evaluate all `A + 1`
+  choices via one descending-weight residual reachability pass (`O(A log A + E)`).
 - Search determinization must bind private discard payments to matching hand cards
   (`selection_sampling.rs`); whole-hand batches preserve committed hand slots.
 - Retiring newtype enum variants needs both the variant and its closing `/Enum::Variant`
@@ -85,13 +88,22 @@ assertions active): `rules_tests`, `scenario_tests`, `conformance_tests`, `manag
   - `Arc<Characteristics>::make_mut` (`7.06%` search, `3.16%` steps vs base `6.56%` / `4.03%`) is pre-existing MTG-420 architecture — open engine-wide bottleneck outside MTG-432.
   - `myojin-discard` (`characteristics` `0.005 / 0.012 / 0.039 ms`, `7.9x` 4→16) and `quality-targets` (`characteristics` `0.003 / 0.006 / 0.012 / 0.034 ms`, `2.8x` 16→32) reflect inherent `O(N^2)` rules work (`N` lords × `N` creatures; `N` Knights checking `N` permanents).
 
+### Performance pass P5–P7 (Apple M4 Max, uninstrumented release, digests identical)
+
+Digests remain identical to `managym/perf/baseline.json` (`bench_steps` `10601622128491155944`; `bench_search` seeds 1–3 digests and `score_digest_blake3` unchanged).
+
+- `bench_steps` instructions retired (3-run median): `45.194B` (`-2.19%` vs `9b73df7caa` `46.205B`, `-3.30%` vs base `3be5a0cfb2` `46.737B`).
+- `bench_search` instructions retired / cycles / wall: `959.523B` instructions (`-2.43%` vs `9b73df7caa` `983.443B`, `-6.61%` vs base `3be5a0cfb2` `1,027.450B`), `215.023B` cycles (`-2.84%` vs `9b73df7caa`, `-8.02%` vs base), `54.161 s` total / `1.315 s` worst (`-9.72%` / `-7.39%` vs base).
+- `bench_states --features benchmark joraga-blocks --sizes 4,8,16,32`:
+  - `block-0 / actions`: `0.0028 / 0.0064 / 0.0183 / 0.0580 ms` (sz 32 `-51.7%` vs `0.120 ms`; `16→32` `5.6x → 3.16x`).
+  - `block-1 / actions`: `0.0018 / 0.0055 / 0.0141 / 0.0521 ms` (sz 32 `-69.4%` vs `0.170 ms`; `16→32` `6.6x → 3.69x`).
+  - `block-0 / step:block`: `0.0193 / 0.0273 / 0.0406 / 0.0932 ms` (sz 32 `-55.8%` vs `0.211 ms`; `16→32` `4.6x → 2.30x`).
+  - `block-0 / search`: `0.6816 / 0.7017 / 2.9633 / 19.6450 ms` (sz 32 `-58.6%` vs `47.400 ms`; `16→32` `11.7x → 6.63x`; `block-8 / search` `20.5x → 13.67x`).
+- Debug verification: `block_requirements` unit tests (including exhaustive 3-attacker/3-blocker non-menace residual solver vs general bound), 41 CR 613 / block / combat / structured-offer `rules_tests`, 9 FDN card tests (`joraga`, `vampire_soulcaller`, `confiscate`), and `bench_states` unit tests (2/2) all passed with debug cross-checks and `active_layers` / `finish_object` assertions enabled.
+
 ## Remaining
 
-1. **Performance pass P5–P7** (profile- and `bench_states`-backed, unchanged semantics & digests):
-   - **P5** (`managym/src/flow/block_requirements.rs`): For non-menace coupled declarations, compute the baseline matching on `remaining` blockers once and evaluate all `A + 1` choices via incremental/residual reachability instead of re-solving from scratch per choice (`O(A^2 * E) → O(A * E)`). Verify against exhaustive small-declaration tests and flatten `joraga-blocks` `actions` / `step:block` / `search` at sizes 16–32.
-   - **P6** (`managym/src/agent/observation.rs`): Compare `characteristics.colors` against `object.color_bits()` in `Observation::add_permanent` without allocating `BTreeSet<Color>` via `object.colors()`, recovering `~1.0–1.2%` on `bench_steps`.
-   - **P7** (`managym/src/flow/layers.rs`): Track an `active_layers: u16` bitmask across `nodes` (updated on population and `discover`) so `Context::evaluate` skips empty layers (such as `Layer::Control`, `Layer::Copy`, `Layer::Text`) in O(1) without scanning `nodes` or allocating `pending`, targeting `~1.5–2.5%` on `bench_search` and `~0.8–1.2%` on `bench_steps` while preserving debug cache assertions.
-2. Gate: full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`, `--test-threads 2`),
+1. Gate: full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`, `--test-threads 2`),
    Python text tests on a rebuilt extension, and Engine Budget on `ubuntu-24.04`:
    `gh workflow run ci.yml --ref jack-heart/df83ea-close-foundations-characteristic -f measure=<commit>`
    (record a new reference only with its reason). No x86-64 wall-time claim before then.
