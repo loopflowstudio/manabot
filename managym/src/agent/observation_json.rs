@@ -136,9 +136,6 @@ impl Serialize for ActionJson<'_> {
             map.serialize_entry("description", description)?;
         }
         map.serialize_entry("focus", &value.focus)?;
-        if value.is_mana_ability {
-            map.serialize_entry("is_mana_ability", &true)?;
-        }
         map.serialize_entry("mode_index", &value.mode_index)?;
         if let Some(name_definition) = &value.name_definition {
             map.serialize_entry("name_definition", name_definition)?;

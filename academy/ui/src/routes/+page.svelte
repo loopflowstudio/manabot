@@ -298,19 +298,25 @@
   // A stop set to hold once holds the game for you and is spent when you leave
   // its window (`nextHeldOnce`): the client clears it and the move list says
   // so (automation, not your move).
-  let onceChecked = -1;
+  let onceChecked = '';
   let heldOnce: OncePlace | null = null;
   $effect(() => {
     const frame = gameStore.protocolFrame;
-    if (!frame || frame.revision === onceChecked) return;
-    onceChecked = frame.revision;
+    if (!frame) return;
+    const frameKey = `${frame.match_id}:${frame.revision}`;
+    if (frameKey === onceChecked) return;
+    onceChecked = frameKey;
     if (gameStore.watchMode) return;
     const turn = frame.projection.turn;
     const side: StopSide = turn.active_player_id === frame.projection.agent.id ? 'my' : 'opponent';
     untrack(() => {
       const yours = frame.status !== 'game_over' && frame.prompt?.actor === frame.projection.agent.player_index;
       const arrived = yours ? onceHeldAt(turn, side === 'my', gameStore.stops, gameStore.onceStops, frame.action_space) : null;
-      const next = nextHeldOnce(heldOnce, { match: frame.match_id, side, step: stopStepOf(turn.step) }, arrived);
+      const next = nextHeldOnce(
+        heldOnce,
+        { match: frame.match_id, turn: turn.turn_number, side, step: stopStepOf(turn.step) },
+        arrived,
+      );
       heldOnce = next.held;
       if (next.spend && gameStore.onceStops[next.spend.side].includes(next.spend.step)) {
         gameStore.spendOnce(next.spend.side, next.spend.step);

@@ -43,7 +43,7 @@ describe('stops per step, for both turns', () => {
   });
 
   it('spends a held once stop when the person leaves its window, not on arrival', () => {
-    const attackers = { match: 'm', side: 'my' as const, step: 'declare_attackers' };
+    const attackers = { match: 'm', turn: 3, side: 'my' as const, step: 'declare_attackers' };
     const arrived = { side: 'my' as const, step: 'declare_attackers' };
     // Arriving holds it; nothing is spent while the person is still there.
     let next = nextHeldOnce(null, attackers, arrived);
@@ -54,8 +54,9 @@ describe('stops per step, for both turns', () => {
     // Leaving for blockers spends it.
     next = nextHeldOnce(next.held, { ...attackers, step: 'declare_blockers' }, null);
     expect(next).toEqual({ held: null, spend: arrived });
-    // A new match or the other side's turn also leaves the window.
+    // A new match, later turn, or the other side's turn also leaves the window.
     expect(nextHeldOnce(attackers, { ...attackers, match: 'n' }, null).spend).toEqual(arrived);
+    expect(nextHeldOnce(attackers, { ...attackers, turn: 5 }, null).spend).toEqual(arrived);
     expect(nextHeldOnce(attackers, { ...attackers, side: 'opponent' }, null).spend).toEqual(arrived);
   });
 

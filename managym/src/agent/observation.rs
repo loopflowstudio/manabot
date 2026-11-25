@@ -2976,9 +2976,7 @@ mod characteristics_tests {
         let _treasure = game
             .create_token("token.treasure", PlayerId(0), false)
             .unwrap();
-        let _clue = game
-            .create_token("token.clue", PlayerId(0), false)
-            .unwrap();
+        let _clue = game.create_token("token.clue", PlayerId(0), false).unwrap();
         let actions = game.compute_player_actions(PlayerId(0));
         game.publish_action_space(crate::agent::action::ActionSpace {
             player: Some(PlayerId(0)),
@@ -3014,7 +3012,7 @@ mod characteristics_tests {
         assert!(!pass_actions[0].is_mana_ability);
 
         let json = observation.to_json();
-        assert!(json.contains("\"is_mana_ability\":true"));
+        assert!(!json.contains("\"is_mana_ability\""));
         let parsed = crate::agent::observation_json::parse(&json).unwrap();
         assert_eq!(parsed.to_json(), json);
     }

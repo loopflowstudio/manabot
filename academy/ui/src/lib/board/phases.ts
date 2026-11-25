@@ -114,17 +114,18 @@ export function onceHeldAt(
   return { side, step };
 }
 
-/** Where a frame is, as a once stop sees it: a match, a side, a stop window. */
+/** Where a frame is, as a once stop sees it: a match, turn, side, and stop window. */
 export interface OncePlace {
   match: string;
+  turn: number;
   side: StopSide;
   step: string | null;
 }
 
 /**
  * The once stop held after a frame at `here`, and the one it spends. A held
- * stop is spent when the person leaves its window (another match, side or
- * window); acting within it (casting, targeting, paying) keeps it held.
+ * stop is spent when the person leaves its window (another match, turn, side
+ * or window); acting within it (casting, targeting, paying) keeps it held.
  * Spending on arrival would tell the server the window no longer stops, and
  * the server passes off such a window. `arrived` is `onceHeldAt` for a priority
  * window the game stopped at for the person, else null.
@@ -134,9 +135,17 @@ export function nextHeldOnce(
   here: OncePlace,
   arrived: { side: StopSide; step: string } | null,
 ): { held: OncePlace | null; spend: { side: StopSide; step: string } | null } {
-  const left = held !== null && (held.match !== here.match || held.side !== here.side || held.step !== here.step);
+  const left =
+    held !== null &&
+    (held.match !== here.match ||
+      held.turn !== here.turn ||
+      held.side !== here.side ||
+      held.step !== here.step);
   const spend = left && held.step !== null ? { side: held.side, step: held.step } : null;
-  return { held: arrived ? { match: here.match, ...arrived } : left ? null : held, spend };
+  return {
+    held: arrived ? { match: here.match, turn: here.turn, ...arrived } : left ? null : held,
+    spend,
+  };
 }
 
 export function stopLabel(step: string): string {
