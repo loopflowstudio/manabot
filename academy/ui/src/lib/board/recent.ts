@@ -28,6 +28,7 @@ import type {
   PlayerState,
   PresentationEvent,
   PresentationLabels,
+  StackEntryView,
   SubjectRef,
 } from '$lib/types';
 import { inspectableCards } from './view';
@@ -37,7 +38,9 @@ export type Endpoint =
   | { kind: 'object'; id: number }
   | { kind: 'player'; index: number }
   /** A spell on (or just off) the stack, by its card id. */
-  | { kind: 'stack'; id: number };
+  | { kind: 'stack'; id: number }
+  /** A spell or ability on the stack, by its stack entry id. */
+  | { kind: 'entry'; id: number };
 
 export interface BoardLine {
   from: Endpoint;
@@ -169,7 +172,24 @@ function endpoint(subject: SubjectRef, frame: ExperienceFrame, onBoard: Set<numb
   return null;
 }
 
-/** Standing lines: spells on the stack to their targets, blockers to attackers. */
+/**
+ * What a stack entry targets, in words: "you", the opponent's name, a
+ * permanent's or a stack entry's name. A target that has left the board
+ * since it was chosen reads as its zone-free description.
+ */
+export function targetNames(entry: StackEntryView, frame: ExperienceFrame, names: { you: string; opponent: string }): string[] {
+  const permanents = [...frame.projection.agent.battlefield, ...frame.projection.opponent.battlefield];
+  return (entry.targets ?? []).map(target => {
+    if (target.kind === 'player') {
+      const side = playerSide(frame, target.id);
+      return !side ? 'a player' : names[side] === 'You' ? 'you' : names[side];
+    }
+    if (target.kind === 'stack') return frame.projection.stack_objects?.find(other => other.id === target.id)?.label ?? 'a spell';
+    return permanents.find(permanent => permanent.id === target.id.entity)?.name ?? 'a card no longer there';
+  });
+}
+
+/** Standing lines: stack entries to their targets, blockers to attackers. */
 export function boardLines(
   frame: ExperienceFrame,
   events: readonly PresentationEvent[],
@@ -184,8 +204,21 @@ export function boardLines(
     const id = JSON.stringify(line);
     if (!seen.has(id)) { seen.add(id); lines.push(line); }
   };
+  // Everything on the stack, spell or ability, points at the targets its entry records.
+  const entries = frame.projection.stack_objects ?? [];
+  const entryIds = new Set(entries.map(entry => entry.id));
+  for (const entry of entries) {
+    for (const target of entry.targets ?? []) {
+      const to = target.kind === 'stack'
+        ? (entryIds.has(target.id) ? { kind: 'entry', id: target.id } as const : null)
+        : endpoint(target, frame, onBoard, onStack);
+      if (to) add({ from: { kind: 'entry', id: entry.id }, to, kind: 'target' });
+    }
+  }
+  // Frames recorded before entries carried targets draw a spell's line from its cast events instead.
+  const entriesSayTargets = entries.some(entry => entry.targets?.length);
   // A spell that just resolved is drawn beside the stack; its line stays while its target does.
-  const shown = new Set([...onStack, ...resolved.map(spell => spell.id)]);
+  const shown = new Set([...(entriesSayTargets ? [] : onStack), ...resolved.map(spell => spell.id)]);
   for (const event of events) {
     if (event.kind.kind !== 'targeted' || event.kind.source.kind !== 'stack' || !shown.has(event.kind.source.id)) continue;
     const to = endpoint(event.kind.target, frame, onBoard, onStack);

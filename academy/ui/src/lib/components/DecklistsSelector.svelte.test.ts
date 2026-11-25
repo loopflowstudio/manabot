@@ -9,22 +9,23 @@ function optionTag(body: string, value: string): string {
   return match[0];
 }
 
-it('closed decklists disable the search opponents with the reason', () => {
+it('omits standalone rollout Search opponents from the default picker while retaining legacy selections', () => {
   const { body } = render(PlayerPicker, {
     props: { value: 'random', decklists: 'closed' },
   });
-  for (const value of ['search-16', 'search-64', 'search-256']) {
-    const option = optionTag(body, value);
-    expect(option).toContain('disabled');
-    expect(option).toContain('— needs open decklists');
-  }
-  for (const value of ['random', 'passive']) {
+  expect(body).not.toContain('value="search-64"');
+  for (const value of ['policy', 'random', 'passive']) {
     expect(optionTag(body, value)).not.toContain('disabled');
   }
+  const legacyClosed = render(PlayerPicker, {
+    props: { value: 'search-64', decklists: 'closed' },
+  }).body;
+  expect(optionTag(legacyClosed, 'search-64')).toContain('disabled');
+  expect(optionTag(legacyClosed, 'search-64')).toContain('— needs open decklists');
 });
 
-it('open decklists offer the search opponents', () => {
-  const { body } = render(PlayerPicker, { props: { decklists: 'open' } });
+it('retains a legacy search selection enabled on open decklists', () => {
+  const { body } = render(PlayerPicker, { props: { value: 'search-64', decklists: 'open' } });
   const option = optionTag(body, 'search-64');
   expect(option).not.toContain('disabled');
   expect(option).not.toContain('needs open decklists');

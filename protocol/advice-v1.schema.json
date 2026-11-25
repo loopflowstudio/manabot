@@ -4386,6 +4386,13 @@
           "default": null,
           "title": "Source Permanent"
         },
+        "targets": {
+          "description": "What the spell or ability targets, in the order chosen. A target the\nviewer cannot name as a public object, stack entry or player is left out.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubjectRef"
+          }
+        },
         "x": {
           "anyOf": [
             {

@@ -4,6 +4,11 @@ import positionsJson from '../../../managym/academy/fixtures/choice-navigation-o
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
+// Retained openings pay by hand; Auto-tap would submit their payments before the test reads them.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('academy.auto-tap', 'off'));
+});
+
 test.beforeEach(({ page }) => { page.on('dialog', dialog => dialog.accept()); });
 
 const positions = positionsJson.positions;

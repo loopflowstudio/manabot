@@ -354,7 +354,9 @@ class PlayerTurnHistoryView(ProtocolModel):
     life_gained: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     creatures_died: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
-    nonland_permanents_left: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    nonland_permanents_left: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
     warped_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
     loyalty_abilities_activated: UInt32 = Field(
         default=0, exclude_if=lambda value: not value
@@ -610,7 +612,9 @@ class LegacyPlayerView(ProtocolModel):
 
 
 class LegacyTurnView(ProtocolModel):
-    creature_died_this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    creature_died_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     turn_number: UInt32
     phase: str
     step: str
@@ -636,6 +640,10 @@ class StackEntryView(ProtocolModel):
     )
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    # What the spell or ability targets, in the order chosen.
+    targets: list[SubjectRef] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
     # A spell cast from a prepared copy; its stack copies are not.

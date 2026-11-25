@@ -292,6 +292,8 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** What the spell or ability targets, in the order chosen. */
+  targets?: SubjectRef[];
   /** The announced value of X, when above zero. */
   x?: number;
   /** A spell cast from a prepared copy; its stack copies are not. */
@@ -738,19 +740,40 @@ export interface TrainedOpponent {
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
-  /** How it decides: "scripted", "checkpoint w17", "search". */
+  /** How it decides: "scripted", "checkpoint", "search". */
   kind?: string;
   producer: string;
   group: string;
   details: { label: string; value: string }[];
   available: boolean;
   reason: string | null;
+  recommended?: boolean;
+  summary?: string | null;
+  trained_settings?: Record<string, number> | null;
+  aliases?: string[];
+}
+
+export interface BuiltinOpponentEntry {
+  id: string;
+  name: string;
+  kind: string;
+  group: string;
+  summary: string;
+  requires_open_decklists: boolean;
+}
+
+export interface SettingsFitReport {
+  status: 'match' | 'mismatch' | 'unknown';
+  summary: string | null;
+  warnings: string[];
 }
 
 export interface OpponentCatalog {
   advice_available?: boolean;
   extension?: string | null;
   watch_players?: string[];
+  default_opponent?: string;
+  builtins?: BuiltinOpponentEntry[];
   opponents: TrainedOpponent[];
   catalog_error: string | null;
 }
