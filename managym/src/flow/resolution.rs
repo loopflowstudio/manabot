@@ -1046,6 +1046,7 @@ impl Game {
                 if let Some(entry) = with_counter {
                     counters.change(entry.kind, self.effect_value(&entry.count, frame).max(0));
                 }
+                let library_top_departure = matches!(what, ObjectSelector::LibraryTop(_));
                 let mut events = Vec::new();
                 for object in selected {
                     let from = self.state.zones.zone_of(object);
@@ -1067,28 +1068,21 @@ impl Game {
                     {
                         continue;
                     }
-                    let library_top_departure = matches!(what, ObjectSelector::LibraryTop(_));
-                    let entry = if *to == ZoneType::Battlefield {
-                        ZoneEntry {
-                            tapped: *tapped,
-                            face: if *transformed {
-                                EntryFace::Transformed
-                            } else {
-                                EntryFace::Front
-                            },
-                            counters: counters.clone(),
-                            controller,
-                            library_top_departure,
-                            ..ZoneEntry::default()
-                        }
-                    } else {
-                        // "exile it with a stash counter on it" (CR 122.1).
-                        ZoneEntry {
-                            counters: counters.clone(),
-                            library_top_departure,
-                            ..ZoneEntry::default()
-                        }
+                    // Non-battlefield moves can still carry counters ("exile it with a stash counter", CR 122.1).
+                    let mut entry = ZoneEntry {
+                        counters: counters.clone(),
+                        library_top_departure,
+                        ..ZoneEntry::default()
                     };
+                    if *to == ZoneType::Battlefield {
+                        entry.tapped = *tapped;
+                        entry.face = if *transformed {
+                            EntryFace::Transformed
+                        } else {
+                            EntryFace::Front
+                        };
+                        entry.controller = controller;
+                    }
                     events.push(self.zone_move_proposal(object, *to, entry));
                 }
                 frame.batch = Some(self.event_batch(

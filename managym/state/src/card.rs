@@ -1245,9 +1245,9 @@ pub enum StaticAbility {
         predicate: crate::predicate::CardPredicate,
         cost: AdditionalCost,
     },
-    /// "[Scope] aren't put into their owners' graveyards for [state]": the
-    /// one state-based action stops applying to what the scope covers; every
-    /// other state-based action, destruction and the legend rule still do.
+    /// "[Scope] aren't subject to [action]": that state-based action stops
+    /// applying to permanents `scope` covers; every other state-based action
+    /// and destruction still do.
     StateBasedActionDoesntApply {
         action: StateBasedAction,
         scope: StaticScope,

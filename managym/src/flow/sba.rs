@@ -603,8 +603,7 @@ mod tests {
         let opp_a = game
             .scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
             .unwrap();
-        let opp_b = game
-            .scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
+        game.scenario_force_battlefield(PlayerId(1), "Rhys the Redeemed", false)
             .unwrap();
 
         assert!(game
@@ -636,6 +635,5 @@ mod tests {
             .exempt_sbas
             .contains(StateBasedAction::LegendRule));
         assert_eq!(game.legend_groups().len(), 2);
-        let _ = opp_b;
     }
 }

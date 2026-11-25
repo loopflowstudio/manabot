@@ -284,7 +284,7 @@ fn kitesail_corsair() -> CardDefinition {
 }
 
 fn etali_primal_storm() -> CardDefinition {
-    use managym_state::ability::{Ability, AttackSize, Per, TriggerCondition, TriggerSubject};
+    use managym_state::ability::Per;
     CardDefinition {
         key: "rix.etali_primal_storm",
         scryfall_id: "1d3d8bb4-0430-45bb-930d-5d6db6521945",
@@ -298,14 +298,7 @@ fn etali_primal_storm() -> CardDefinition {
             toughness: Some(6),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                    per: Per::Object,
-                    attackers: AttackSize::Any,
-                    attacked: managym_state::ability::Actor::AnyPlayer,
-                    attacked_kind: Default::default(),
-                    nth: None,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::ExileEachLibraryTopCastFree],
             }],
             text_box: "Whenever Etali attacks, exile the top card of each player's library, then you may cast any number of spells from among those cards without paying their mana costs.".into(),

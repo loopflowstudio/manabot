@@ -8939,27 +8939,31 @@ fn chandra_flameshaper_loyalty_abilities() {
     }
 
     // +2 with 1 card in library offers the forced 1-card choice (no decline); with 0 cards offers none.
+    let exile_library_except = |s: &mut Scenario, keep: Option<&str>| {
+        let lib: Vec<_> = s
+            .game()
+            .state
+            .zones
+            .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
+            .to_vec();
+        let kept = keep.map(|name| {
+            *lib.iter()
+                .find(|&&obj| s.game().state[obj].name == name)
+                .unwrap()
+        });
+        for obj in lib {
+            if Some(obj) != kept {
+                s.game_mut().state.place_object(
+                    obj,
+                    PlayerId(0),
+                    managym::state::zone::ZoneType::Exile,
+                );
+            }
+        }
+    };
     let mut s = five_color_setup(&["Chandra, Flameshaper", "Lightning Bolt"]);
     let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
-    let lib: Vec<_> = s
-        .game()
-        .state
-        .zones
-        .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
-        .to_vec();
-    let keep = *lib
-        .iter()
-        .find(|&&obj| s.game().state[obj].name == "Lightning Bolt")
-        .unwrap();
-    for obj in lib {
-        if obj != keep {
-            s.game_mut().state.place_object(
-                obj,
-                PlayerId(0),
-                managym::state::zone::ZoneType::Exile,
-            );
-        }
-    }
+    exile_library_except(&mut s, Some("Lightning Bolt"));
     activate(&mut s, chandra, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(s.action_space().actions.len(), 1, "forced 1-card choice");
@@ -8976,17 +8980,7 @@ fn chandra_flameshaper_loyalty_abilities() {
     // Empty library: +2 resolves straight to priority with no selection prompt.
     let mut s = five_color_setup(&["Chandra, Flameshaper"]);
     let chandra = enter_battlefield(&mut s, "Chandra, Flameshaper");
-    let lib: Vec<_> = s
-        .game()
-        .state
-        .zones
-        .zone_objects(managym::state::zone::ZoneType::Library, PlayerId(0))
-        .to_vec();
-    for obj in lib {
-        s.game_mut()
-            .state
-            .place_object(obj, PlayerId(0), managym::state::zone::ZoneType::Exile);
-    }
+    exile_library_except(&mut s, None);
     activate(&mut s, chandra, 0);
     settle(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
