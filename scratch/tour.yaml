@@ -1,25 +1,29 @@
-at: a0194b34414a6392a5b320cac863a30ef3908f93
+at: 384e717f6a836190c2ac1be0f585139d54e08be1
 first:
   - path: managym/README.md
     why: Find the player choices and their observable outcomes.
   - path: .lf/wave/coverage/research/standard-2026-11/sets/fdn.jsonl
     why: Follow each cohort card to its definition and fixture.
   - path: managym/state/src/card.rs
-    why: Read shared characteristics, replacements, and SourceQuality wire names.
+    why: Read unified LayerCount/LayerValue, DamageSource/DamageRecipient, EntersWithCounters, and SourceQuality.
   - path: managym/state/src/ability.rs
-    why: See the unified CastFrom condition.
+    why: See the unified CastFrom condition and EffectValue::bind_chosen_type.
+  - path: managym/src/flow/layers.rs
+    why: Follow unified layer-7 count evaluation and dependency summaries.
+  - path: managym/src/flow/statics.rs
+    why: Follow control, creature types, off-battlefield CDA reading, and CastFrom.
   - path: managym/src/flow/combat.rs
     why: Track blocked attackers directly in CombatState.
-  - path: managym/cards/src/psnc.rs
-    why: See how Giada counts Angels before entry.
-  - path: managym/src/flow/statics.rs
-    why: Follow control, creature types, counted bonuses, and CastFrom.
   - path: managym/src/flow/block_requirements.rs
     why: Find legal blocks satisfying the most requirements.
   - path: managym/src/flow/proposed_event.rs
-    why: Trace replacement choices through a simultaneous batch.
+    why: Trace entry EffectValue counters, unified ModifyDamage axes, and simultaneous batches.
   - path: managym/src/flow/effects.rs
     why: Remove phased-out permanents from combat on record creation.
+  - path: managym/src/cards/token_renames.rs
+    why: Verify retired learning-token dispositions keeping pinned v9/v11 pilots compatible.
+  - path: managym/cards/src/psnc.rs
+    why: See how Giada counts Angels before entry with EffectValue::BattlefieldMatching.
   - path: managym/cards/tests/cards/mor.rs
     why: Watch four differently typed effects apply to one Mauler.
   - path: managym/cards/tests/cards/psnc.rs

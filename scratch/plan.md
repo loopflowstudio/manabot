@@ -260,46 +260,42 @@ pinned pilot's card changes shape, a `scripts/pinned_pilot.py record --reason`.
 
 ### Slices
 
-**D1 · One layer quantity on one static carrier.** `LayerValue::Count(LayerCount)`
-with `LayerCount::{YouControl(pred), Graveyard { who, predicate },
-ColorsAmong(pred), CreatureTypes { max }, SourceCounters(kind),
-CountersOn { kind, predicate }}`, evaluated only by `Context::value` (affected
-object and source both in hand). Every `PtBuff` caller (26: tla 14, fdn 4, eoe 2,
-tle 2, dom, m10, usg, zen) becomes `StaticAbility::continuous(scope, condition,
-[Modification::pump(..)])`; the six CDA callers become a
-`characteristic_defining` `SetBasePt`. Off-battlefield CDA
-(`printing.pt_cda()`) reads the same `LayerCount` through the settled-board
-reader; that second reader is inherent (layers cannot call the public view) and
-is the only one left. Dependency read summaries (`layers.rs:291-306`) move to
-one match on `LayerCount`. Directed tests stay where they are: dom, usg, fdn
-(Banner), tla (Zookeeper, Earthen Ally, Avatar Destiny, Suki, Dragonfly Swarm),
-gtc/m13/akh CDA cards. All existing counted bonuses use ±1 or 0 per count, so no
-multiplier is added.
+**D1 · Built** (`1eec144255`, closing `Structure` token dispositions in `384e717f6a`):
+`LayerValue::Count(Box<LayerCount>)` with `LayerCount::{YouControl, Graveyard,
+ColorsAmong, CreatureTypes, SourceCounters, CountersOn}` evaluated by `Context::value`
+(one `ReadSet::layer_value` summary in `layers.rs`); all 26 `PtBuff` callers moved to
+`StaticAbility::continuous` and all 6 CDA callers to `StaticAbility::cda` (`SetBasePt`).
+`PrintedCharacteristics::pt_cda` returns `(Option<&LayerValue>, Option<&LayerValue>)`
+for the settled-board reader (`off_battlefield_layer_value` in `statics.rs`). Deleted
+`PtCount`, `PowerCda`, `StaticPtBuff`, `StaticAbility::{PtBuff, CharacteristicPower,
+CharacteristicPt}`, `Operation::{Cda, Buff}`, `Context::{buff, cda}` and `Game::cda_value`.
 
-**D2 · Entry counters count with `EffectValue`.** `EntersWithCounters.count:
-EffectValue`, evaluated by `effect_value` on an `EffectFrame::new(entering
-controller, vec![])` carrying the spell's X. The entering object is not on the
-battlefield, so `BattlefieldMatching` is already "other … you control" for
-Giada and Banner. Banner's type lives on the pending entry: bind it into the
-value's predicate (`chosen_type_of_source` → the chosen subtype) before
-evaluating. Callers: the twelve `EntersWithCounters` cards. Tests: psnc, fdn
-(Banner, Mossborn), m21, gtc, chk, pjou and the Pass 6 Mauler/Confiscate
-positions.
+**D2 · Built** (`1eedafb796`): `EntersWithCounters.count: EffectValue`, evaluated by
+`effect_value` on a pending entry `EffectFrame` carrying `x`, with
+`CardPredicate::bind_chosen_type` / `EffectValue::bind_chosen_type` binding Banner's
+pending choice before evaluation. Deleted `EntryValue` and `Game::entry_value`.
 
-**D3 · Damage replacements are source × recipient × kind × transform.** A
-`DamageSource { by, predicate, this }` mirrors `DamageRecipient` (which gains
-`this` for "to it"); `DamageTransform::Add(EffectValue)` reads the source
-permanent's counters. `PreventCombatDamageToOrFromSelf` becomes two
-`ModifyDamage` entries (from this, to this; `combat: Some(true)`,
-`PreventAll`); `OpponentDamagePlusCounters` becomes one with `Add`. Protection
-keeps synthesizing its `PreventAll` candidate through the same arm. Callers:
-Crystal Barricade, fdn.rs:2033, ons.rs:50, usg.rs:55, tla.rs:3596 and the two
-`resolution_tests.rs` fixtures. Tests: `cr_614_replacement.rs`, fdn, usg, ons,
-tla.
+**D3 · Built** (`1eedafb796`): `DamageSource { by, predicate, this }`,
+`DamageRecipient.this`, and `DamageTransform::Add(Box<EffectValue>)` evaluated via
+`effect_value` with the replacement source bound. `Fog Bank` uses two `ModifyDamage`
+entries, `Fated Firepower` uses `DamageTransform::add(...)`, and protection keeps
+synthesizing `PreventAll` through `ModifyDamage`. Deleted
+`ReplacementEffect::{PreventCombatDamageToOrFromSelf, OpponentDamagePlusCounters}`,
+`ModifyDamage.{creature_source, source_by}`, and `Game::damage_source_facts`.
 
-Order D1, D2, D3; they share no code. D1 is the widest (pinned pilots read
-TLA's counted bonuses); stop there and fix the contract first if a pilot replay
-changes behaviour rather than only token names.
+**Finding from D1–D3.** Newtype enum variants (`StaticAbility::PtBuff`,
+`StaticAbility::CharacteristicPower`, `StaticAbility::CharacteristicPt`,
+`PowerCda::GraveyardMatching`) emit closing `Structure` tokens (`/Enum::Variant`)
+alongside their `Variant` token; retiring both in `token_renames.rs` let both `v9`
+and `v11` pinned pilots replay with unchanged probabilities and ranks without
+re-recording.
+
+Verified on the rebuilt release extension: directed card tests (D1: 136 tests across
+dom, usg, fdn, m13, gtc, akh, tla, definitions, observability; D2+D3: 243 tests across
+psnc, fdn, m21, gtc, chk, pjou, usg, ons, eoe, mor, tla, observability), `rules_tests`
+(30 tests across `cr_613_continuous_effects` and `cr_614_replacement`), `managym` unit
+tests (`token_renames` and 3 `resolution_tests`), pinned `v9`/`v11` pilots (u1952
+skipped), and `tests/semantic/test_text_observation.py` (105 passed).
 
 ### Left as they are
 
@@ -324,6 +320,5 @@ card needs no engine edit when X, A and B are existing predicates and values.
 
 ## Remaining
 
-D1–D3, then gate: the full debug nextest suite (CI profile,
-`CARGO_BUILD_JOBS=2`, `--test-threads 2`) and the Engine Budget reference
-record with its reason.
+Gate: the full debug nextest suite (CI profile, `CARGO_BUILD_JOBS=2`,
+`--test-threads 2`) and the Engine Budget reference record with its reason.
