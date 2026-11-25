@@ -4270,6 +4270,8 @@ def get_recording_index(
         if offset + limit < len(recording.positions)
         else None,
         "revision": metadata.get("revision"),
+        "started_at": metadata.get("started_at"),
+        "ended_at": metadata.get("ended_at"),
         "status": "finished"
         if finished
         else "waiting"

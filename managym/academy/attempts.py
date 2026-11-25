@@ -604,7 +604,7 @@ class AttemptStore:
     def metadata(self, attempt: str) -> dict[str, Any]:
         with self.connect() as db:
             row = db.execute(
-                "SELECT record_version,origin,revision,status,ending_reason FROM attempts WHERE id=?",
+                "SELECT record_version,origin,revision,status,ending_reason,started_at,ended_at FROM attempts WHERE id=?",
                 (attempt,),
             ).fetchone()
             if row is None:

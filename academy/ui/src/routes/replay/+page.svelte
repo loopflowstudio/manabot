@@ -32,6 +32,7 @@
     analysedEvidence, analysedMarks, bottomSeat, entryPosition, moveAt, moveMarks, offerEvidence, perspectiveOf, positionHeading, recordedFrame, replayLog, sinceRevision, stripMarks, type Perspective,
   } from '$lib/board/replay';
   import { analysisStatus, byEvent, scoreName, type Analysis, type AnalysisChoices } from '$lib/analysis';
+  import { agreement, duration, estimateArc, numberRows, playOrDraw, type GameNumbers } from '$lib/numbers';
   import { createReplayStore } from '$lib/replay.svelte';
   import type { RecordedPosition } from '$lib/recording';
   import { createStudyStore } from '$lib/study.svelte';
@@ -133,6 +134,23 @@
     : null);
   const canRetry = $derived(studyStore.phase === 'restored' && !studyStore.busy);
 
+  // ———————————————— The game in numbers
+
+  let numbers = $state.raw<GameNumbers | null>(null);
+  const numbersRows = $derived(numbers ? numberRows(numbers, heroSeat) : []);
+  const agreed = $derived(analysis ? agreement(analysis) : null);
+  const arc = $derived(analysis ? estimateArc(analysis) : null);
+  const played = $derived(!!index?.players.some(player => player.kind === 'human') && !index?.watch);
+
+  async function loadNumbers(id: string): Promise<void> {
+    numbers = null;
+    if (!played || replayStore.index?.status === 'waiting') return;
+    try {
+      const read = await replayStore.api<{ numbers: GameNumbers | null }>(`/api/traces/${encodeURIComponent(id)}/numbers`);
+      if (replayStore.index?.id === id) numbers = read.numbers;
+    } catch { /* Review stands without its numbers. */ }
+  }
+
   const entries = $derived(replayLog(positions, heroSeat, saidOf));
   const moves = $derived(moveList(entries, { you: saidOf(heroSeat), opponent: saidOf(1 - heroSeat) }, new Map(), []));
   const currentMove = $derived(moveAt(entries, positions, replayStore.selected));
@@ -141,7 +159,7 @@
   const since = $derived(studying ? studyStore.restored?.revision ?? null : sinceRevision(positions, replayStore.selected));
 
   const ending = $derived(frame && !studying && frame.projection.game_over && index
-    ? gameResult(frame, replayLog(positions, viewerSeat, saidOf), { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
+    ? gameResult(frame, { you: saidOf(viewerSeat), opponent: saidOf(1 - viewerSeat) }, index.winner)
     : null);
 
   const status = $derived(!index ? ''
@@ -189,7 +207,7 @@
     const near = params.get('near') ?? (saved.near === undefined ? null : String(saved.near));
     perspective = perspectiveOf(near, replayStore.index ?? { players: [] });
     if (!currentGame.href || replayStore.index?.can_produce) rememberCurrentGame(`/replay?trace=${encodeURIComponent(id)}`);
-    await loadAnalyses(id, true);
+    await Promise.all([loadAnalyses(id, true), loadNumbers(id)]);
   }
 
   /**
@@ -531,6 +549,23 @@
           {/if}
         </section>
       {/if}
+      {#if played && index}
+        <section class="numbers type-caption" aria-label="This game in numbers" data-testid="game-numbers">
+          <p class="type-label text-ink-2">This game</p>
+          <p class="text-ink-2">{[numbers ? `${numbers.turns} ${numbers.turns === 1 ? 'turn' : 'turns'}` : null, playOrDraw(heroSeat), duration(index.started_at, index.ended_at)].filter(Boolean).join(' · ')}</p>
+          {#if numbersRows.length}
+            <table>
+              <thead><tr><th scope="col"><span class="sr-only">Count</span></th><th scope="col">{saidOf(heroSeat)}</th><th scope="col">{saidOf(1 - heroSeat)}</th></tr></thead>
+              <tbody>{#each numbersRows as row (row.label)}<tr><th scope="row">{row.label}</th><td>{row.you}</td><td>{row.opponent}</td></tr>{/each}</tbody>
+            </table>
+            {#if numbers && !numbers.complete}<p class="text-ink-3">Counted to where the game stopped.</p>{/if}
+          {:else if index.status !== 'waiting'}<p class="text-ink-3">Counts need the build that recorded this game.</p>{/if}
+          {#if analysis && agreed}
+            <p data-testid="agreement">Decisions with a choice: {agreed.of} · chose as {analysisName} would: {agreed.same} of {agreed.of}</p>
+            {#if arc && analysisScale}<p class="text-ink-2" data-testid="estimate-arc">{analysisName}'s {scoreName(analysis.decisions[0]?.semantic ?? null)?.toLowerCase()} from your seat: {arc.start} at the start · {arc.peak} at its highest · {arc.end} at the end</p>{/if}
+          {/if}
+        </section>
+      {/if}
       {#each [0, 1] as seat (seat)}
         {@const who = identity(seat)}
         {@const runtime = who.runtime ?? who.provenance?.policy}
@@ -673,6 +708,10 @@
   .analysis-menu { display: grid; gap: 4px; }
   .analysis-menu select { border: 1px solid var(--border); border-radius: 4px; background: var(--bg-field); padding: 2px 4px; color: var(--text); max-width: 220px; }
   .analyse-with { display: flex; gap: 6px; align-items: center; }
+  .numbers { display: grid; gap: 4px; }
+  .numbers table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .numbers th, .numbers td { padding: 1px 8px 1px 0; text-align: right; font-weight: normal; }
+  .numbers th[scope='row'] { text-align: left; color: var(--text-secondary); }
   .player-status summary { cursor: pointer; }
   .identity { padding: 4px 0 0 12px; overflow-wrap: anywhere; color: var(--text-secondary); }
 </style>

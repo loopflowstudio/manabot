@@ -60,6 +60,12 @@ def test_a_finished_game_saves_its_numbers(tmp_path: Path) -> None:
     assert client.get(f"/api/traces/{game.match_id}/numbers").json() == {
         "numbers": numbers
     }
+    # Review reads how long the game took from its recording index.
+    index = client.get(
+        f"/api/traces/{game.match_id}/recording", headers=HEADERS
+    ).json()
+    assert index["started_at"] == row["timestamp"]
+    assert index["ended_at"] == row["ended_at"] is not None
 
 
 def test_an_older_game_gets_its_numbers_on_first_read(tmp_path: Path) -> None:

@@ -25,6 +25,7 @@
   import { builtinOpponentName, shortName } from '$lib/opponent-name';
   import { loadLastMatchup, matchupSeat, saveLastMatchup, type LastMatchup } from '$lib/last-matchup';
   import { gameResult } from '$lib/board/result';
+  import { numbersLine, type GameNumbers } from '$lib/numbers';
   import { BEAT_PACES, loadBeatPace, saveBeatPace, type BeatPace } from '$lib/board/beats';
   import { logMarks } from '$lib/board/replay';
   import { spentOnce } from '$lib/board/phases';
@@ -329,7 +330,18 @@
       : gameStore.commandPending || gameStore.work?.state === 'running' ? 'The board is working' : null);
 
   const ending = $derived(gameStore.gameOver && boardFrame
-    ? gameResult(boardFrame, gameStore.actionLog, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
+    ? gameResult(boardFrame, { you: 'You', opponent: shortName(opponentName) }, gameStore.winner) : null);
+  // The game's numbers, read once it is over: the server re-executes it.
+  let numbers = $state<{ id: string; value: GameNumbers | null } | null>(null);
+  $effect(() => {
+    const id = gameStore.gameOver ? gameStore.recordingId : null;
+    if (!id || numbers?.id === id) return;
+    numbers = { id, value: null };
+    void recordFetch(`/api/traces/${encodeURIComponent(id)}/numbers`)
+      .then(async response => (response.ok ? (await response.json() as { numbers: GameNumbers | null }).numbers : null))
+      .then(value => { if (numbers?.id === id) numbers = { id, value }; })
+      .catch(() => { /* The result card stands without its numbers. */ });
+  });
   // The game so far as a strip of decisions, folded unless opened. Live play
   // shows no past position yet: positions open in Review once the game ends.
   let stripOpen = $state(false);
@@ -369,7 +381,7 @@
     {#if ending}
       <p class="text-ink-2" data-testid="game-result-how">{ending.how}</p>
       <p class="type-caption text-ink-2">{ending.life}</p>
-      <p class="type-caption text-ink-3" data-testid="game-result-summary">{ending.summary}</p>
+      {#if numbers?.value && heroSeat !== null}<p class="type-caption text-ink-3" data-testid="game-result-summary">{numbersLine(numbers.value, heroSeat, { you: 'You', opponent: shortName(opponentName) })}</p>{/if}
     {/if}
     <div class="result-actions">
       {#if demoName}

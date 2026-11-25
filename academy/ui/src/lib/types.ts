@@ -1,3 +1,4 @@
+import type { GameNumbers } from './numbers';
 export interface CardTypes {
   is_creature: boolean;
   is_land: boolean;
@@ -713,6 +714,8 @@ export interface GameSummary extends TraceSummary {
   game_number?: number | null;
   feedback_truncated?: boolean;
   feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
+  /** The game's numbers once it is over and has been counted (`$lib/numbers`). */
+  numbers?: GameNumbers | null;
 }
 
 export interface TraceSummary {

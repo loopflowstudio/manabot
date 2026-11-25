@@ -56,6 +56,9 @@ export interface RecordingIndex {
   total: number;
   next_offset: number | null;
   revision: number | null;
+  /** When the game started and, once over, ended (ISO 8601; absent from legacy records). */
+  started_at?: string | null;
+  ended_at?: string | null;
   status: 'finished' | 'waiting' | 'interrupted';
   can_produce: boolean;
   mirror?: (SearchConfig | null)[];
