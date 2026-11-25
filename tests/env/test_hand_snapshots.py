@@ -18,7 +18,7 @@ from manabot.env.observation import (
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.decision import Command, DecisionFrame
 from managym.disclosure import DecklistDisclosure
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 
 def _players(
@@ -132,23 +132,30 @@ def test_hand_snapshots_mask_reset_and_failure_replacement(captured: bool) -> No
         else managym.VectorEnv(2, seed=42)
     )
     space = ObservationSpace()
-    buffers = {**space.layout.allocate(2), **step_buffers(2)}
-    vector.set_buffers(buffers, layout=space.layout)
+    buffers = step_buffers(2)
+    vector.set_observation_layout(buffers, layout=space.layout)
     try:
         vector.reset_each_into_buffers([_players(), _players()[::-1]])
         before = vector.hand_snapshots([1, 0])
-        frozen = {key: value[1].copy() for key, value in buffers.items()}
+        frozen = {
+            key: value[1].copy()
+            for key, value in vector_arrays(space, vector.observation_rows()).items()
+        }
         for key in ("rewards", "terminated", "truncated"):
             buffers[key][1] = 1
-            frozen[key] = np.zeros_like(frozen[key])
+            frozen[key] = np.zeros_like(buffers[key][1])
         vector.step_into_buffers([0, -999], [True, False])
+        current = {
+            **vector_arrays(space, vector.observation_rows()),
+            **buffers,
+        }
         after = vector.hand_snapshots([1, 0])
         assert _identity(before[1]) == _identity(after[1])
         assert before[1].cards == after[1].cards
         assert before[0].game_id == after[0].game_id
         assert after[0].revision > before[0].revision
         for key, expected in frozen.items():
-            np.testing.assert_array_equal(buffers[key][1], expected)
+            np.testing.assert_array_equal(current[key][1], expected, err_msg=key)
         vector.reset_seeds_into_buffers([42, 43])
         reset = vector.hand_snapshots([1, 0])
         assert [t.cards for t in reset] == [t.cards for t in before]

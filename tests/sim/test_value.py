@@ -9,7 +9,7 @@ from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_che
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace, step_buffers
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.sim.search.value import (
@@ -19,11 +19,6 @@ from manabot.sim.search.value import (
 )
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
-
-
-def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    """Caller-owned buffers for the native dense observation transport."""
-    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 def make_env(seed: int = 3) -> tuple[Env, managym.Observation]:
@@ -65,10 +60,8 @@ class TestPoolPerspective:
         # (world, action, rollout) lexicographic layout
         expect = [a for _ in range(3) for a in range(num_actions) for _ in range(2)]
         assert roots == expect
-        space = ObservationSpace()
-        buffers = vector_buffers(space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-        active = pool.encode_active()
+        pool.set_observation_layout(ObservationSpace().layout)
+        active, _ = pool.encode_active_batch()
         acting = pool.acting_players()
         for slot, player in enumerate(acting):
             if slot in active:

@@ -31,11 +31,7 @@ from managym.recording import (
     read_record,
 )
 from managym.replay import replay_failure_inputs
-
-
-def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    """Caller-owned buffers for the native dense observation transport."""
-    return {**space.layout.allocate(n), **step_buffers(n)}
+from tests.fixtures.observation_rows import vector_arrays
 
 
 def _cursors(directory: Path) -> Iterator[Path]:
@@ -70,7 +66,7 @@ _SPACE = ObservationSpace()
 
 
 def _buffers(count: int) -> dict[str, np.ndarray]:
-    return vector_buffers(_SPACE, count)
+    return step_buffers(count)
 
 
 class _ExitNative:
@@ -109,7 +105,7 @@ def _interrupt_child(directory: str, mode: str, phase: str) -> None:
                 capture.step(wrapped, 0)
         else:
             vector = RecordedVectorEnv(num_envs=2, seed=24)
-            vector.set_buffers(_buffers(2), layout=_SPACE.layout)
+            vector.set_observation_layout(_buffers(2), layout=_SPACE.layout)
             if phase == "sampled_reset":
                 vector.set_uniform_roster(_roster())
             vector.reset_all_into_buffers(_players())
@@ -244,7 +240,7 @@ def _interrupt_reset_child(directory: str, operation: str, first: str) -> None:
             capture.reset(_ExitNative(env, "reset"), list(reversed(_players())))
         else:
             vector = RecordedVectorEnv(num_envs=2, seed=24)
-            vector.set_buffers(_buffers(2), layout=_SPACE.layout)
+            vector.set_observation_layout(_buffers(2), layout=_SPACE.layout)
             vector.set_uniform_roster(_roster())
             if first != "first":
                 vector.reset_all_into_buffers(_players())
@@ -332,7 +328,7 @@ def test_disabled_logging_has_no_writer_or_extra_native_reads(
     )
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=1)
-        vector.set_buffers(_buffers(1), layout=_SPACE.layout)
+        vector.set_observation_layout(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
         vector.close()
@@ -351,7 +347,7 @@ def test_executing_replay_requires_active_fresh_step_binding(
     )
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=1, seed=24)
-        vector.set_buffers(_buffers(1), layout=_SPACE.layout)
+        vector.set_observation_layout(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         frame = vector.semantic_decision_frames_json()[0]
         vector.step_into_buffers([0])
@@ -398,7 +394,7 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
         with capture_scope(scope):
             vector = RecordedVectorEnv(num_envs=2, seed=seed)
             buffers = _buffers(2)
-            vector.set_buffers(buffers, layout=_SPACE.layout)
+            vector.set_observation_layout(buffers, layout=_SPACE.layout)
             if sampled:
                 vector.set_uniform_roster(_roster())
             vector.reset_all_into_buffers(_players())
@@ -407,7 +403,10 @@ def test_enabled_logging_preserves_buffers_prefixes_and_reset_identity(
             vector.step_into_buffers([0, 0])
             snapshots.append(
                 (
-                    {key: value.copy() for key, value in buffers.items()},
+                    {
+                        **vector_arrays(_SPACE, vector.observation_rows()),
+                        **{key: value.copy() for key, value in buffers.items()},
+                    },
                     [game.model_dump() for game in vector.games],
                 )
             )
@@ -464,7 +463,7 @@ def test_pending_storage_error_prevents_native_step(tmp_path: Path) -> None:
     )
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=1, seed=24)
-        vector.set_buffers(_buffers(1), layout=_SPACE.layout)
+        vector.set_observation_layout(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         before = vector.native.semantic_decision_frames_json()
         cursor = next(_cursors(scope.journal_directory))
@@ -522,7 +521,7 @@ def test_return_acknowledgment_storage_error_names_executed_call(
     )
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=1, seed=24)
-        vector.set_buffers(_buffers(1), layout=_SPACE.layout)
+        vector.set_observation_layout(_buffers(1), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         frame = vector.native.semantic_decision_frames_json()
         write = DurableJournal.append
@@ -552,7 +551,7 @@ def test_reassignment_and_failed_replacement_retain_current_inputs(
     )
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=2, seed=24)
-        vector.set_buffers(_buffers(2), layout=_SPACE.layout)
+        vector.set_observation_layout(_buffers(2), layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         vector.load_slots_into_buffers(
             [managym.SlotLoad.fresh(0, list(reversed(_players())))]
@@ -585,7 +584,7 @@ def test_explicit_refill_replaces_prefix_and_bounds_retained_files(
     with capture_scope(scope):
         vector = RecordedVectorEnv(num_envs=1, seed=24)
         buffers = _buffers(1)
-        vector.set_buffers(buffers, layout=_SPACE.layout)
+        vector.set_observation_layout(buffers, layout=_SPACE.layout)
         vector.reset_all_into_buffers(_players())
         for _ in range(80):
             vector.step_into_buffers([0])

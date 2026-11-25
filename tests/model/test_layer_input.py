@@ -41,7 +41,7 @@ from manabot.training.loops.self_play import SelfPlay
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.verify.representation import kellan_trigger_root, kellan_upgrade_root
 import managym
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 from tests.fixtures.rollout_arrays import trajectory_field
 from tests.model.prepared_routes import (
     device_input,
@@ -145,26 +145,23 @@ def test_layer_colors_counter_order_and_signed_program_payload_encode() -> None:
     assert encoded["facts"][encoded["facts"][:, 1] == 13, 9].min() > 0
 
 
-def test_vector_buffers_match_scalar_encoding() -> None:
+def test_vector_rows_match_scalar_encoding() -> None:
     space = ObservationSpace(ObservationConfig())
-    # Native dense vector transport, until it is removed.
-    vector_buffers = {**space.layout.allocate(1), **step_buffers(1)}
     players = [
         managym.PlayerConfig(name, {"Mountain": 20, "Gray Ogre": 20})
         for name in ("a", "b")
     ]
     vector = managym.VectorEnv(num_envs=1, seed=23)
-    vector.set_buffers(vector_buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.reset_all(players)
     vector.reset_seeds_into_buffers([23])
     scalar = managym.Env(seed=23)
     scalar.reset(players)
     observed = scalar.observation_for_player(scalar.current_agent_index())
     expected = observation_arrays(space, observed)
+    published = vector_arrays(space, vector.observation_rows())
     for key in expected:
-        np.testing.assert_array_equal(
-            vector_buffers[key][0], expected[key], err_msg=key
-        )
+        np.testing.assert_array_equal(published[key][0], expected[key], err_msg=key)
 
 
 def test_captured_continuation_program_reaches_input_and_policy() -> None:

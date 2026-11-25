@@ -14,10 +14,7 @@ import pytest
 
 from manabot.env import observation
 from manabot.env.decision_memory import MEMORY_WIDTHS
-from manabot.env.observation import (
-    ObservationSpace,
-    step_buffers,
-)
+from manabot.env.observation import ObservationSpace
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.verify.representation import kellan_upgrade_root
@@ -45,71 +42,6 @@ def test_column_constants_are_read_from_the_native_layout() -> None:
         assert tuple(layout[key]["shape"]) == shape, key
     memory = managym.observation_layout(decision_memory=True)
     assert MEMORY_WIDTHS.keys() == {k for k in memory if k.startswith("decision_")}
-
-
-def test_axis_extents_use_the_configured_layout() -> None:
-    layout = managym.ObservationLayout()
-    obs = layout.allocate(3)
-    # Reverse the row and column strides and broadcast the batch stride.
-    deck = obs["decklists"][:, :, ::-1, ::-1]
-    deck[0, 1, 9, 0] = np.nan
-    obs["decklists"] = np.broadcast_to(deck[:1], deck.shape)
-    obs["action_focus"].fill(-1)
-    obs["actions_valid"][1, 2] = 1
-    obs["action_focus"][:, 2, 0] = 11
-    obs["action_focus"][:, 3, 0] = 31  # beyond every mask prefix
-    obs["actions"][2, 4, 0] = 1  # extends action rows, never eligible focus
-    extents = layout.axis_extents(obs)
-    assert extents is not None and "stack" in extents
-    np.testing.assert_array_equal(
-        extents["cards"], np.array([0, 10, 0], np.int64), strict=True
-    )
-    np.testing.assert_array_equal(extents["actions"], [0, 3, 5])
-    np.testing.assert_array_equal(extents["decklists"], [10, 10, 10])
-    empty = layout.axis_extents(layout.allocate(0))
-    assert empty is not None and all(value.shape == (0,) for value in empty.values())
-
-
-def test_axis_buffers_locate_each_measured_row_dimension() -> None:
-    layout = managym.ObservationLayout()
-    buffers = layout.axis_buffers
-    rows = layout.allocate(1)
-    extents = layout.axis_extents(rows)
-    assert extents is not None and extents.keys() == buffers.keys()
-    shapes = layout.shapes
-    # Plant only the final row of each companion, including seat-major buffers.
-    for axis, companions in buffers.items():
-        for key, dim in companions:
-            row = rows[key]
-            capacity = shapes[key][dim]
-            last = [0] * row.ndim
-            last[dim + 1] = capacity - 1
-            row[tuple(last)] = 1
-            if key == "action_focus":
-                rows["actions_valid"][0, -1] = 1
-            measured = layout.axis_extents(rows)
-            assert measured is not None and measured[axis][0] == capacity, key
-            row[tuple(last)] = 0
-            rows["actions_valid"][0, -1] = 0
-
-
-def test_axis_extents_require_matching_batched_arrays() -> None:
-    layout = managym.ObservationLayout(
-        max_decision_records=2,
-        max_decision_references=2,
-        max_decision_reference_details=2,
-        max_decision_members=2,
-    )
-    obs = layout.allocate(1)
-    del obs["decision_records"]
-    assert layout.axis_extents(obs) is None
-    assert layout.axis_extents(obs, omit_decision_memory=True) is not None
-    obs["extra"] = obs["facts"]
-    assert layout.axis_extents(obs, omit_decision_memory=True) is None
-    del obs["extra"]
-    obs["decision_members"] = obs["decision_members"][:, :1]
-    assert layout.axis_extents(obs, omit_decision_memory=True) is None
-    assert layout.axis_extents(layout.allocate()) is None
 
 
 def test_fact_kinds_are_named_native_row_kinds() -> None:
@@ -273,48 +205,16 @@ def test_world_version_warns_and_names_its_removal() -> None:
     assert set(managym.world_identity()) == {"card_digest"}
 
 
-def test_managym_layout_rejects_missing_and_extra_memory_before_writing(
-    board: tuple[managym.Env, managym.Observation],
-) -> None:
-    env, obs = board
-    plain = managym.ObservationLayout(max_events=7)
-    memory = managym.ObservationLayout(
-        max_events=7,
-        max_decision_records=8,
-        max_decision_references=16,
-        max_decision_reference_details=32,
-        max_decision_members=16,
-    )
-    for layout, other in ((plain, memory), (memory, plain)):
-        scalar = other.allocate()
-        batch = other.allocate(2)
-        for arrays in (scalar, batch):
-            for array in arrays.values():
-                array.fill(17)
-        with pytest.raises(ValueError, match="decision_"):
-            managym.encode_observation_into(obs, layout, scalar)
-        with pytest.raises(ValueError, match="decision_"):
-            managym.encode_observations_into([env], layout, batch, 2)
-        assert all(
-            (array == 17).all()
-            for arrays in (scalar, batch)
-            for array in arrays.values()
-        )
-
-
 def test_public_history_round_trips_for_both_viewers() -> None:
     env = priority_root(("Mountain",), ())
     env.step(0)  # Play the only land. Its arrival has a public object reference.
-    layout = managym.ObservationLayout(policy_history=True)
+    space = ObservationSpace(ObservationConfig(policy_history_version=1))
     source_definition = observation.column("events", "source_definition")
     for viewer in (0, 1):
         obs = env.observation_for_player(viewer)
-        live, restored = layout.allocate(), layout.allocate()
-        managym.encode_observation_into(obs, layout, live)
+        live = observation_arrays(space, obs)
         text = obs.toJSON()
-        managym.encode_observation_into(
-            managym.Observation.from_json(text), layout, restored
-        )
+        restored = observation_arrays(space, managym.Observation.from_json(text))
         assert live["events_valid"].sum() == 1
         for field in ("events", "events_valid"):
             np.testing.assert_array_equal(live[field], restored[field])
@@ -327,73 +227,35 @@ def test_public_history_round_trips_for_both_viewers() -> None:
         oversized = {**historical, "policy_history": historical["policy_history"] * 33}
         with pytest.raises(ValueError, match="public policy history exceeds"):
             managym.Observation.from_json(json.dumps(oversized))
-        historical["policy_history"][0]["source"]["Card"]["definition"] = 2**32 - 1
-        managym.encode_observation_into(
-            managym.Observation.from_json(json.dumps(historical)), layout, restored
+        historical["policy_history"][0]["source"]["Card"]["definition"] = 2**31 - 2
+        restored = observation_arrays(
+            space, managym.Observation.from_json(json.dumps(historical))
         )
-        assert restored["events"][0, source_definition] == 2**32
+        assert restored["events"][0, source_definition] == 2**31 - 1
+        # Batch words are int32: a definition id past that range is rejected.
+        historical["policy_history"][0]["source"]["Card"]["definition"] = 2**32 - 1
+        with pytest.raises(ValueError, match="cannot represent"):
+            observation_arrays(
+                space, managym.Observation.from_json(json.dumps(historical))
+            )
+        historical["policy_history"][0]["source"]["Card"]["definition"] = 0
         del historical["policy_history"]
-        managym.encode_observation_into(
-            managym.Observation.from_json(json.dumps(historical)), layout, restored
+        restored = observation_arrays(
+            space, managym.Observation.from_json(json.dumps(historical))
         )
         assert not restored["events_valid"].any()
 
 
-def test_dense_vector_and_batch_encoders_emit_deprecation_warning() -> None:
+def test_batch_encoder_accepts_observations_and_envs() -> None:
     space = ObservationSpace()
-    vector = managym.VectorEnv(1)
-    with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
-        vector.set_buffers(
-            {**space.layout.allocate(1), **step_buffers(1)}, layout=space.layout
-        )
-
     env = managym.Env(seed=7)
     obs, _ = env.reset(
         [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
     )
-    with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
-        managym.encode_observation_into(obs, space.layout, space.layout.allocate())
-    with pytest.warns(DeprecationWarning, match=r"encode_observation_batch.*0\.3\.0"):
-        managym.encode_observations_into(
-            [env], space.layout, space.layout.allocate(1), 1
-        )
     # Standalone Observation items encode directly into an ObservationBatch.
     batch = managym.encode_observation_batch([obs, env], space.layout)
     assert batch.batch_size == 2
     assert batch.action_counts[0] == batch.action_counts[1]
-
-    pool = env.rollout_pool(1, 1, 7, 100)
-    with pytest.warns(DeprecationWarning, match=r"set_observation_layout.*0\.3\.0"):
-        pool.set_buffers(
-            {**space.layout.allocate(pool.num_slots), **step_buffers(pool.num_slots)},
-            pool.num_slots,
-            layout=space.layout,
-        )
-
-    with pytest.warns(DeprecationWarning, match=r"axis_extents.*0\.3\.0"):
-        space.layout.axis_extents(space.layout.allocate(1))
-    with pytest.warns(DeprecationWarning, match=r"object_references.*0\.3\.0"):
-        _ = space.layout.object_references
-
-
-def test_layoutless_vector_registration_warns_and_preserves_memory_configuration() -> (
-    None
-):
-    buffers = {**ObservationSpace().layout.allocate(1), **step_buffers(1)}
-    plain = managym.VectorEnv(1)
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        plain.set_buffers(buffers)
-    with (
-        pytest.warns(DeprecationWarning, match="0.3.0"),
-        pytest.raises(ValueError, match="unexpected buffer"),
-    ):
-        plain.set_buffers(dict(buffers, unknown=buffers["rewards"]))
-    memory = managym.VectorEnv(1, decision_memory=True)
-    with (
-        pytest.warns(DeprecationWarning, match="0.3.0"),
-        pytest.raises(ValueError, match="decision memory"),
-    ):
-        memory.set_buffers(buffers)
 
 
 def test_effect_detail_kinds_publish_the_catalog_token_the_encoder_writes() -> None:

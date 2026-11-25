@@ -1,4 +1,4 @@
-"""Controlled Drill games cross the pilot capacity boundaries through native buffers."""
+"""Controlled Drill games cross the pilot capacity boundaries through native observation rows."""
 
 import json
 
@@ -19,7 +19,7 @@ from manabot.verify.representation import (
 )
 import managym
 from tests.current_capacity import capacity_position
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 EFFECTS = managym.observation_layout()["effects"]["columns"]
 
@@ -51,13 +51,12 @@ def test_controlled_drill_prefix_admits_shared_effects(
     scalar_obs, _ = scalar.reset(players)
     assert scalar_obs.decklists_closed is closed
     space = ObservationSpace()
-    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     vector = managym.VectorEnv(
         num_envs=1,
         seed=game.seed,
         skip_trivial=True,
     )
-    vector.set_buffers(buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     ((vector_obs, _),) = vector.reset_all(players)
     assert vector_obs.decklists_closed is closed
     vector.reset_seeds_into_buffers([game.seed])
@@ -74,6 +73,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
     )
     acting_observation, *_ = scalar.step(game.actions[-1])
     vector.step_into_buffers([game.actions[-1]])
+    published = vector_arrays(space, vector.observation_rows())
     actor = scalar.current_agent_index()
     assert actor is not None
     for viewer in (0, 1):
@@ -94,7 +94,7 @@ def test_controlled_drill_prefix_admits_shared_effects(
         if viewer == actor:
             for key in encoded:
                 np.testing.assert_array_equal(
-                    encoded[key], buffers[key][0], err_msg=key
+                    encoded[key], published[key][0], err_msg=key
                 )
         assert np.count_nonzero(encoded["effects"][:, -1]) == payloads
         assert np.count_nonzero(encoded["effect_members"][:, 0]) == memberships

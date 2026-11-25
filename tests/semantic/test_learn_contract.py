@@ -26,7 +26,7 @@ from managym.possible_worlds import (
     PossibleWorldSpace,
     WorldQuery,
 )
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 
 @pytest.fixture(scope="module")
@@ -347,28 +347,28 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
             observation_arrays(ObservationSpace(config), obs)
 
 
-def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
+def test_learn_vector_rows_match_scalar_at_every_prefix_step():
     import numpy as np
 
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ObservationConfig
 
     space = ObservationSpace(ObservationConfig())
-    buffers = {**space.layout.allocate(1), **step_buffers(1)}
     configs = [
         managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
         for key in ("ur_lessons", "gw_allies")
     ]
     vector = managym.VectorEnv(1, seed=0, skip_trivial=False)
-    vector.set_buffers(buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.reset_all_into_buffers(configs)
     scalar = managym.Env(seed=0, skip_trivial=False)
     obs, _ = scalar.reset(configs)
     rng = random.Random(0)
     for _ in range(2000):
         encoded = observation_arrays(space, obs)
+        published = vector_arrays(space, vector.observation_rows())
         for key, value in encoded.items():
-            np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
+            np.testing.assert_array_equal(published[key][0], value, err_msg=key)
         retrievals = [
             i
             for i, action in enumerate(obs.action_space.actions)
@@ -378,8 +378,9 @@ def test_learn_vector_buffers_match_scalar_at_every_prefix_step():
             selected = retrievals[-1]
             after, *_ = scalar.step(selected)
             vector.step_into_buffers([selected])
+            published = vector_arrays(space, vector.observation_rows())
             for key, value in observation_arrays(space, after).items():
-                np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
+                np.testing.assert_array_equal(published[key][0], value, err_msg=key)
             return
         assert not obs.game_over
         selected = rng.randrange(len(obs.action_space.actions))

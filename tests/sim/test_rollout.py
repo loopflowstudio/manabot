@@ -13,10 +13,7 @@ from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import (
-    ObservationSpace,
-    step_buffers,
-)
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim.rollout import (
     BatchedSampler,
@@ -27,11 +24,6 @@ from manabot.sim.rollout import (
 from manabot.sim.search.flat_mc import aggregate_records
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
-
-
-def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    """Caller-owned buffers for the native dense observation transport."""
-    return {**space.layout.allocate(n), **step_buffers(n)}
 
 
 def make_env(seed: int = 3) -> tuple[Env, managym.Observation]:
@@ -57,23 +49,21 @@ class TestRolloutPool:
         assert pool.num_actions == num_actions
         assert pool.num_slots == 2 * 3 * num_actions
 
-        obs_space = ObservationSpace()
-        buffers = vector_buffers(obs_space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots, layout=obs_space.layout)
+        pool.set_observation_layout(ObservationSpace().layout)
 
         rng = np.random.default_rng(0)
-        active = pool.encode_active()
+        active, batch = pool.encode_active_batch()
         plies = 0
         while active:
             plies += 1
             assert plies < 5000, "rollouts failed to drain"
-            rows = np.asarray(active)
-            valid = buffers["actions_valid"][rows] > 0
-            assert valid.any(axis=1).all(), "active slot with no valid action"
+            assert batch.batch_size == len(active)
+            counts = np.asarray(batch.action_counts)
+            assert (counts > 0).all(), "active slot with no valid action"
             actions = np.zeros(pool.num_slots, dtype=np.int64)
-            for r, v in zip(rows, valid):
-                actions[r] = rng.choice(np.flatnonzero(v))
-            active = pool.step_active(actions.tolist())
+            for slot, count in zip(active, counts, strict=True):
+                actions[slot] = rng.integers(count)
+            active, batch = pool.step_active_batch(actions.tolist())
 
         scores, simulations, cap_hits = pool.scores()
         assert len(scores) == num_actions
@@ -81,60 +71,19 @@ class TestRolloutPool:
         assert all(0.0 <= s <= 1.0 for s in scores)
         assert cap_hits == 0
 
-    def test_buffer_capacity_can_exceed_slots(self):
-        env, _ = make_env(seed=5)
-        pool = env._engine.rollout_pool(1, 1, 7, 2000)
-        capacity = pool.num_slots + 8
-        space = ObservationSpace()
-        buffers = vector_buffers(space, capacity)
-        pool.set_buffers(buffers, capacity, layout=space.layout)
-        assert pool.encode_active() is not None
-
     def test_pool_does_not_mutate_source_env(self):
         env, _ = make_env(seed=9)
         before = env._engine.action_count()
         pool = env._engine.rollout_pool(2, 2, 11, 2000)
-        space = ObservationSpace()
-        buffers = vector_buffers(space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-        active = pool.encode_active()
+        pool.set_observation_layout(ObservationSpace().layout)
+        active, _ = pool.encode_active_batch()
         guard = 0
         while active and guard < 3000:
             guard += 1
             actions = np.zeros(pool.num_slots, dtype=np.int64)
-            active = pool.step_active(actions.tolist())
+            active, _ = pool.step_active_batch(actions.tolist())
         assert env._engine.action_count() == before
         assert not env._engine.is_game_over()
-
-    def test_rollout_pool_batch_matches_dense_scores(self):
-        env, _ = make_env(seed=11)
-        space = ObservationSpace()
-        dense_pool = env._engine.rollout_pool(2, 2, 42, 2000)
-        batch_pool = env._engine.rollout_pool(2, 2, 42, 2000)
-        buffers = vector_buffers(space, dense_pool.num_slots)
-        dense_pool.set_buffers(buffers, dense_pool.num_slots, layout=space.layout)
-        batch_pool.set_observation_layout(space.layout)
-
-        rng_dense = np.random.default_rng(0)
-        rng_batch = np.random.default_rng(0)
-        dense_active = dense_pool.encode_active()
-        batch_active, batch = batch_pool.encode_active_batch()
-        while dense_active:
-            assert batch_active == dense_active
-            assert batch.batch_size == len(batch_active)
-            dense_actions = np.zeros(dense_pool.num_slots, dtype=np.int64)
-            batch_actions = np.zeros(batch_pool.num_slots, dtype=np.int64)
-            for idx, (slot, count) in enumerate(
-                zip(batch_active, batch.action_counts, strict=True)
-            ):
-                valid = np.flatnonzero(buffers["actions_valid"][slot] > 0)
-                assert len(valid) == count
-                dense_actions[slot] = rng_dense.choice(valid)
-                batch_actions[slot] = rng_batch.choice(np.arange(count))
-            dense_active = dense_pool.step_active(dense_actions.tolist())
-            batch_active, batch = batch_pool.step_active_batch(batch_actions.tolist())
-        assert batch_active == []
-        assert batch_pool.scores() == dense_pool.scores()
 
 
 class TestBatchedSampler:

@@ -107,11 +107,6 @@ from tests.fixtures.training_records import recording
 from tests.model.prepared_routes import device_input
 
 
-def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    """Caller-owned buffers for the native dense observation transport."""
-    return {**space.layout.allocate(n), **step_buffers(n)}
-
-
 @pytest.fixture(autouse=True)
 def bounded_torch() -> Iterator[None]:
     previous = torch.get_num_threads()
@@ -529,7 +524,7 @@ def test_replay_prefix_records_only_the_supplied_root(tmp_path: Path) -> None:
         num_envs=1, seed=900, games_path=games, statistics_path=statistics
     )
     try:
-        vector.set_buffers(vector_buffers(space, 1), layout=space.layout)
+        vector.set_observation_layout(step_buffers(1), layout=space.layout)
         replay_prefix(vector, recipe, None)
         assert vector.state_digests() == [scalar.state_digest()]
         assert vector.current_agent_indices() == [scalar.current_agent_index()]

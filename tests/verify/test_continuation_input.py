@@ -31,7 +31,7 @@ from manabot.verify.text_observation import collision_branches, native_fixtures
 from manabot.verify.trigger_order import ordering_root
 import managym
 from managym.decision_capture import DecisionInput
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input, native_rows
 
@@ -243,23 +243,18 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
-def test_preallocated_and_vector_buffers_match_scalar_encoding() -> None:
+def test_vector_rows_match_scalar_encoding() -> None:
     space = ObservationSpace()
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     scalar = managym.Env(seed=608, skip_trivial=False)
     observation, _ = scalar.reset(players)
     expected = observation_arrays(space, observation)
-    # Every element is written, padding included.
-    out = {key: np.full_like(value, -7) for key, value in expected.items()}
-    managym.encode_observation_into(observation, space.layout, out)
-    for key in out:
-        np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
     vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
-    buffers = {**space.layout.allocate(1), **step_buffers(1)}
-    vector.set_buffers(buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.reset_all_into_buffers(players)
+    published = vector_arrays(space, vector.observation_rows())
     for key in expected:
-        np.testing.assert_array_equal(buffers[key][0], expected[key], err_msg=key)
+        np.testing.assert_array_equal(published[key][0], expected[key], err_msg=key)
 
 
 @pytest.mark.parametrize("difference", ["ability", "context"])

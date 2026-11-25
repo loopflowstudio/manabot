@@ -13,7 +13,7 @@ from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.text_observation import keep_opening_hands
 import managym
 from managym.possible_worlds import PossibleWorldSpace
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 from tests.model.prepared_routes import device_input
 
 
@@ -45,14 +45,14 @@ def test_library_facts_encode_for_their_owner_and_remain_private(owner: int) -> 
     assert not encoded[1].any()
     assert sum(own.agent.unseen_counts.values()) == own.agent.zone_counts[0] - 1
 
-    # The shared native writer infers its layout from these supplied buffers.
-    buffers = space.layout.allocate(1)
-    managym.encode_observations_into([env], space.layout, buffers, 1)
+    # Batch encoding of a live env reads its acting viewer's projection.
+    batch = managym.encode_observation_batch([env], space.layout)
+    rows = vector_arrays(space, [(batch, 0)])
     acting = observation_arrays(
         space, env.observation_for_player(env.current_agent_index())
     )
     for key in acting:
-        np.testing.assert_array_equal(buffers[key][0], acting[key], err_msg=key)
+        np.testing.assert_array_equal(rows[key][0], acting[key], err_msg=key)
 
 
 def test_library_facts_reach_text_and_the_actual_torch_policy() -> None:

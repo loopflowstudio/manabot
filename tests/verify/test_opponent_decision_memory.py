@@ -18,7 +18,7 @@ from manabot.infra.config import ObservationConfig
 from manabot.policy.spans import ObservationSelection
 import managym
 from managym.decision_memory import read_records
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 
 
 def _root(disclosure: Literal["open", "closed"] = "open") -> managym.Env:
@@ -139,13 +139,9 @@ def test_decision_memory_scalar_overflow_and_companion_validation() -> None:
     )
     with pytest.raises(managym.ObservationCapacity, match="capacity exceeded"):
         observation_arrays(space, obs)
-    buffers = space.layout.allocate()
-    del buffers["decision_members"]
-    with pytest.raises(ValueError, match="decision_members"):
-        managym.encode_observation_into(obs, space.layout, buffers)
 
 
-def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> None:
+def test_decision_memory_vector_rows_and_builtin_choices_match_scalar() -> None:
     space = ObservationSpace(
         ObservationConfig(
             max_decision_records=32,
@@ -161,14 +157,14 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
     hot = managym.VectorEnv(
         2, seed=111, decision_memory=True, player_policies=("agent", "heuristic")
     )
-    buffers = {**space.layout.allocate(2), **step_buffers(2)}
-    hot.set_buffers(buffers, layout=space.layout)
+    hot.set_observation_layout(step_buffers(2), layout=space.layout)
     reference.reset_all(configs)
     hot.reset_all_into_buffers(configs)
     retained = []
     for _ in range(8):
         rows = reference.step([0, 0])
         hot.step_into_buffers([0, 0])
+        published = vector_arrays(space, hot.observation_rows())
         for index, (obs, _, _, _, _) in enumerate(rows):
             expected = observation_arrays(space, obs)
             retained.extend(read_records(obs.decision_memory_json()))
@@ -178,7 +174,7 @@ def test_decision_memory_buffered_vector_and_builtin_choices_match_scalar() -> N
                 "decision_references",
                 "decision_members",
             ):
-                np.testing.assert_array_equal(buffers[key][index], expected[key])
+                np.testing.assert_array_equal(published[key][index], expected[key])
     assert retained, "built-in opponent choices must reach the external viewer"
 
 

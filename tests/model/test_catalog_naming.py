@@ -32,7 +32,7 @@ from manabot.policy.spans import ObservationSelection
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.choice_inputs import reorder_offers
 import managym
-from tests.fixtures.observation_rows import observation_arrays
+from tests.fixtures.observation_rows import observation_arrays, vector_arrays
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.model.prepared_routes import device_input
 
@@ -101,9 +101,11 @@ def _acting(env: managym.Env) -> managym.Observation:
     return env.observation_for_player(env.current_agent_index())
 
 
-def _buffers(space: ObservationSpace) -> dict[str, np.ndarray]:
-    """Native dense vector transport, until it is removed."""
-    return {**space.layout.allocate(1), **step_buffers(1)}
+def _published(
+    vector: managym.VectorEnv, space: ObservationSpace
+) -> dict[str, np.ndarray]:
+    """The padded fields of the vector's current native rows."""
+    return vector_arrays(space, vector.observation_rows())
 
 
 def _offer_toward(env: managym.Env, name: str) -> tuple[int, bool]:
@@ -257,17 +259,17 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     # The mean shares one group gradient equally among members; padding is inert.
     torch.testing.assert_close(members, members[:1].expand_as(members))
     assert not grad[0].any()
-    # The policy's choices execute through scalar Commands and vector buffers,
+    # The policy's choices execute through scalar Commands and vector rows,
     # one ordinary decision per level.
     vector = managym.VectorEnv(num_envs=1, seed=165)
     vector.reset_all(_players())
     for action in naming_trace.actions:
         vector.step([action])
-    buffers = _buffers(space)
-    vector.set_buffers(buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.scenario_naming_vocabulary_into_buffers()
+    published = _published(vector, space)
     for key, expected in values.items():
-        np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        np.testing.assert_array_equal(published[key][0], expected, err_msg=key)
     frame = json.loads(root.semantic_decision_frame_json())
     assert json.loads(vector.semantic_decision_frames_json()[0]) == frame
     leaf = root.clone_env()
@@ -277,8 +279,9 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     leaf_frame = json.loads(leaf.semantic_decision_frame_json())
     assert json.loads(vector.semantic_decision_frames_json()[0]) == leaf_frame
     leaf_values = _acting_input(leaf, space)
+    published = _published(vector, space)
     for key, expected in leaf_values.items():
-        np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+        np.testing.assert_array_equal(published[key][0], expected, err_msg=key)
     with pytest.raises(Exception, match="revision|stale"):
         leaf.step_semantic_command(group_command)
     leaf_tensors = _acting(leaf)
@@ -337,8 +340,9 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
             assert json.loads(vector.semantic_decision_frames_json()[0]) == json.loads(
                 branch.semantic_decision_frame_json()
             )
+            published = _published(vector, space)
             for key, expected in observation_arrays(space, pending).items():
-                np.testing.assert_array_equal(buffers[key][0], expected, err_msg=key)
+                np.testing.assert_array_equal(published[key][0], expected, err_msg=key)
         if searching:
             stop = next(
                 i
@@ -495,14 +499,13 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         torch.testing.assert_close(value, expected[1])
 
 
-def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
+def test_catalog_naming_vector_rows_match_scalar_and_clear_after_choice(
     naming_trace: NamingTrace,
 ) -> None:
     space = ObservationSpace()
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
-    buffers = _buffers(space)
-    vector.set_buffers(buffers, layout=space.layout)
+    vector.set_observation_layout(step_buffers(1), layout=space.layout)
     vector.reset_all_into_buffers(_players())
     raw = scalar.reset(_players())[0]
     # Replay one Command trace through both step APIs so their per-step events
@@ -511,13 +514,14 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
         raw = scalar.step(index)[0]
         vector.step_into_buffers([index])
     catalog = managym.naming_catalog()
-    assert buffers["name_candidates"][0, :, 3].max() == len(catalog)
-    assert not buffers["name_candidates"][0, :, :2].any()
+    assert _published(vector, space)["name_candidates"][0, :, 3].max() == len(catalog)
+    assert not _published(vector, space)["name_candidates"][0, :, :2].any()
     # Group prompt, then leaf prompt, then the private search without names.
     for stage in ("group", "leaf"):
+        published = _published(vector, space)
         for key, expected in observation_arrays(space, raw).items():
             np.testing.assert_allclose(
-                buffers[key][0], expected, atol=1e-6, err_msg=f"{stage}:{key}"
+                published[key][0], expected, atol=1e-6, err_msg=f"{stage}:{key}"
             )
         index = next(
             i
@@ -532,9 +536,10 @@ def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
         )
         raw = scalar.step(index)[0]
         vector.step_into_buffers([index])
-    assert not buffers["name_candidates"].any()
+    assert not _published(vector, space)["name_candidates"].any()
+    published = _published(vector, space)
     for key, expected in observation_arrays(space, raw).items():
-        np.testing.assert_allclose(buffers[key][0], expected, atol=1e-6, err_msg=key)
+        np.testing.assert_allclose(published[key][0], expected, atol=1e-6, err_msg=key)
 
 
 def _mixed_naming_batch(

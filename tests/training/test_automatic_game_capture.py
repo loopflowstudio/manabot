@@ -39,11 +39,6 @@ from managym.decision import Command
 from managym.recording import ScalarCapture, read_record
 
 
-def vector_buffers(space: ObservationSpace, n: int) -> dict[str, np.ndarray]:
-    """Caller-owned buffers for the native dense observation transport."""
-    return {**space.layout.allocate(n), **step_buffers(n)}
-
-
 def _model() -> ActorCritic:
     torch.set_num_threads(1)
     return ActorCritic(
@@ -157,12 +152,10 @@ def test_bounded_replay_separates_binding_and_error_agreement(
             env.reset()
             if mode == "search":
                 pool = env.rollout_pool(1, 1, 197, 100)
-                space = ObservationSpace()
-                buffers = vector_buffers(space, pool.num_slots)
-                pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-                pool.encode_active()
+                pool.set_observation_layout(ObservationSpace().layout)
+                pool.encode_active_batch()
                 with pytest.raises(managym.AgentError):
-                    pool.step_active([-1] * pool.num_slots)
+                    pool.step_active_batch([-1] * pool.num_slots)
             else:
                 with pytest.raises(managym.AgentError):
                     env.step(-1)
@@ -323,12 +316,11 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
         env.failure_context.update(game_index=11)
         env.reset(seed=24)
         pool = env.rollout_pool(1, 1, 197, 100)
-        space = ObservationSpace()
-        buffers = vector_buffers(space, pool.num_slots)
-        pool.set_buffers(buffers, pool.num_slots, layout=space.layout)
-        assert pool.encode_active()
+        pool.set_observation_layout(ObservationSpace().layout)
+        active, _ = pool.encode_active_batch()
+        assert active
         with pytest.raises(managym.AgentError):
-            pool.step_active([-1] * pool.num_slots)
+            pool.step_active_batch([-1] * pool.num_slots)
         with pytest.raises(managym.AgentError):
             env.step(-1)
     assert read_record(scope.paths[0]).mode == "search"
@@ -380,9 +372,9 @@ def test_value_search_failure_keeps_sampled_pool_actions(
         agent = None
 
     def invalid_actions(
-        buffers: dict[str, np.ndarray], rows: np.ndarray, rng: np.random.Generator
+        batch: managym.ObservationBatch, rng: np.random.Generator
     ) -> np.ndarray:
-        return np.full(len(rows), -1, dtype=np.int64)
+        return np.full(batch.batch_size, -1, dtype=np.int64)
 
     monkeypatch.setattr(value, "_random_valid_actions", invalid_actions)
     scope = CaptureScope(tmp_path)
@@ -402,7 +394,7 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
 ) -> None:
     class InvalidController:
         def select(
-            self, buffers: dict[str, np.ndarray], rows: np.ndarray
+            self, batch: managym.ObservationBatch, rows: np.ndarray
         ) -> np.ndarray:
             return np.full(len(rows), -1, dtype=np.int64)
 
