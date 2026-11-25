@@ -144,9 +144,8 @@ cache parity assertions run.
   once-per-turn, non-mana suffix, output-altering triggered mana bonus): remain
   explicit activations with `"Activate ability: <Name>"`.
 - Extending `autotapper.rs`'s full hand-followup scoring to choice sources.
-- `manabot/semantic/text_observation.py:658` (frozen LLM prompt wording).
-- Academy Moves log raw `{G}/{W}` brace rendering / recording post-modal color
-  (pre-existing for basics; separate UI polish).
+- Open multi-source color modal deferral (e.g. 2 Guildgates + Forest + Mountain
+  for `{2}{R}` stays faithful to CR 605.3b).
 - Merging identical sources into one offer; undo; any change to `Auto`.
 - Frozen replays and experiment evidence are not regenerated.
 
@@ -155,12 +154,74 @@ cache parity assertions run.
 `managym/README.md` (`### Automatic source preference`, `### Manual mana
 sources`, `### Inspecting automatic payment`) and `docs/academy.md`
 (`### Previewing payments`). 
-## Remaining
+## Remaining — Pass 5 (ship-review decisions, 2026-11-25)
 
-1. **Gate/CI only:** After the PR's CI run, download its `engine-budget`
-   artifact (`measurement.json`) and run `uv run scripts/engine_budget.py record
-   --reason "<skipped identical-source payments move bench_steps>"` to adopt the
-   moved digest in `managym/perf/baseline.json`.
+Recorded verbatim in `scratch/ship-review-notes.md` from Jack Heart:
+- On Pass 2 & Engine Budget (`search total` +13.5%, `bench_steps` +0.7% wall
+  time despite −3.1% steps): *"We should investigate this. this should make
+  search go FASTER if done right"* + *"yes"* (keep Pass 2 for basics + duals).
+- On ship-review questions 2–5: `2a 3b 4b change 2 to Tap Kyoshi Village for {G}/{W 5c`.
+
+Concrete Pass 5 scope to implement in `build`:
+
+1. **Hot-path performance in `interchangeable.rs`, `mana.rs`, and `payment.rs`
+   (keep Pass 2 for basics + duals):**
+   - Eliminate the duplicate `announced_mana_actions` / `determined_source_counts`
+     work on every payment that stops (`payment.rs:782` checks whether to stop,
+     then `action.rs:1142` recomputes the exact same list).
+   - In `interchangeable.rs::determined_source_counts`, check whether any two
+     taps share `definition_id` / `same_payment_profile` (fast cheap check)
+     *before* calling `unbound_mana_source` (which scans `permanents`,
+     `effects`, `cast_permissions`, `exile_links`, `stack_objects`,
+     `pending_triggers`, and `delayed_triggers` per tap).
+   - Avoid full `Characteristics` struct equality in `same_mana_permanent` when
+     no continuous effects apply (or cache/short-circuit on unaffected identical
+     permanents).
+   - In `determined_source_counts`, avoid `model.payable_after_tap` +
+     `pool.clone()` + `obligations.to_vec()` per class when `fixed_only`
+     arithmetic answers mandatory-class membership directly.
+   - Verify with local `bench_steps` that skipping −3.1% decisions yields lower
+     total wall time for 512 games, and check `bench_search` per-sim speed.
+2. **Resolution payments (`3b`) — per-source manual taps for both basics and
+   duals in `Decision::Payment` (`TurnFaceUp`, `Ward`, etc.):**
+   - Extend `Decision::Payment` (`managym/src/flow/decision.rs`, `payment.rs`,
+     `mana.rs`) so when a resolution payment has a real source choice under
+     `ManaPayment::Manual`, it offers per-source manual taps (`TapForMana` and
+     simple choice `ActivateAbility`, with the same forced/interchangeable skip
+     and color-modal skip rules) for *both* basics and duals — instead of
+     omitting simple taps whenever `can_pay`.
+   - Keep `2a` (plain non-creature, non-animating lands interchangeable across
+     turns; manlands, creatures, non-lands, and `power_up` stay distinct).
+   - Add engine tests covering real-choice vs forced `TurnFaceUp` / `Ward`
+     resolution payments with both basics and duals.
+3. **LLM text observation wording (`4b`, item 2):**
+   - Update `manabot/semantic/text_observation.py` (around line 658) so simple
+     choice-of-color mana taps follow native `action.description` (e.g.
+     `"Tap Kyoshi Village for {G}/{W}"`, `"Tap Birds of Paradise for any color"`)
+     instead of `"Activate ability of <Name>"`.
+   - Keep verbatim `ManaRestriction::describe()` on restricted simple taps and
+     keep `"Activate ability: <Name>"` on non-simple mana abilities (Treasure,
+     pain/filter lands).
+4. **Academy Moves log mana-pip rendering & resolved color (`5c`, Finding B):**
+   - Render mana symbols (`{W}`, `{G}/{W}`, etc.) properly as pips instead of
+     literal braces in Academy's Moves log, and record/display the resolved mana
+     color actually produced for choice-of-color mana taps rather than only the
+     raw offer label. Add frontend/Academy tests covering both basics and duals.
+5. **Clear the 7 failing CI jobs on PR #616:**
+   - Update the 3 Rust card tests (`ori::pyromancers_goggles_does_not_copy_other_spells_or_without_its_mana`,
+     `tla::zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers`,
+     `woe::archons_glory_gains_flying_and_lifelink_only_when_bargained`) that
+     assumed exact/identical-basic manual payments stopped.
+   - Update the affected Python integration tests (`tests/semantic/test_text_observation.py`,
+     `tests/semantic/test_casting_profiles.py`, `tests/env/test_game_snapshot.py`,
+     `tests/model/test_input_scales.py`, `tests/sim/test_heuristic.py`,
+     `tests/training/test_snapshot_rollouts.py`,
+     `tests/verify/test_shared_effect_transport.py`), the authored match parity
+     receipt (`tests/academy/test_authored_match_parity.py`), and the Academy UI
+     Playwright E2E expectation (`Tap Llanowar Elves for {G}`).
+   - **Gate/CI:** After the optimized PR's CI run, verify `Engine Budget`
+     timings and adopt the moved digest in `managym/perf/baseline.json` via
+     `uv run scripts/engine_budget.py record --reason "..."`.
 
 ## Acceptance check at gate
 
@@ -185,14 +246,22 @@ Kyoshi Village for {G}/{W}"` skips the color modal and finishes directly.
 - A dual land + basic paying an exact cost casts (and turns face up) with no
   prompt under manual payment, in the engine and in an Academy session.
 - Simple choice taps read `"Tap <Name> for {G}/{W}"` / `"Tap <Name> for any color"`
-  (with unit/restriction detail when needed), and never `"Activate ability: <Name>"`.
+  (with unit/restriction detail when needed) in Academy and in LLM text
+  observations (`manabot/semantic/text_observation.py`), and never
+  `"Activate ability: <Name>"`.
 - `automatic_choice_taps` never over-taps surplus lands.
 - A color modal appears only when its colors lead to different states — including
   after playing a basic land for turn.
 - Identical, unreferenced plain lands (including one played this turn) alone no
   longer stop a payment, while any distinguished, targeted, self-animating
   (manland), creature, or `power_up` source restores the prompt.
-- Resolution payments (`TurnFaceUp`, `Ward`) treat simple choice taps
-  identically to fixed sources.
+- Resolution payments (`TurnFaceUp`, `Ward`) offer per-source manual taps for
+  both basics and duals whenever there is a real choice, and skip when forced
+  or interchangeable.
+- Academy's Moves log renders mana symbols as pips (no literal `{G}/{W}` /
+  `{W}` braces) and records the resolved mana color added.
+- Hot-path overhead in `interchangeable.rs` / `mana.rs` / `payment.rs` is
+  removed so skipping redundant payments makes `bench_steps` faster per game,
+  and all failing PR #616 CI tests/parity fixtures are updated.
 - Real source, color, float, convoke, improvise, delve, and special mana
   ability choices stay offered, with observation and protocol shapes unchanged.
