@@ -1,5 +1,41 @@
 <!doctype html><meta charset="utf-8"><title>MTG-482 / MTG-389 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:1000px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc;margin:.5em 0}h2{margin-top:2em}code{background:#f3f3f3;padding:0 3px}</style>
+<h1>MTG-482 Swap sides — QA after Pass 3, 2026-11-25</h1>
+<p>Same setup as below (static build of this checkout, <code>managym academy --policy qa_bot.json play --opponent qa_bot --deck ur_lessons --opponent-deck gw_allies</code>, headless Chromium 1280×800). Host load 60–135 throughout. Focus: what Pass 3 changed — the immediate flip, Review's seat-vs-pilot attribution, Play's <code>/decisions</code> API and closed decklists.</p>
+
+<h2>1. Returning user: a game swapped before Pass 3 opens truthfully in Review</h2>
+<p>Opened <code>hSpNOinPH3Xx6cnhMGPgDA</code> (swaps at events 49 and 88, recorded by Pass 2 code) in Review and clicked each <b>Swapped sides</b> divider, then the next choice. At the start the bot is named on seat 1 (GW) and the human on seat 2 (UR); after the first divider the human's next choice is on GW; after the second, on UR again. Plates, deck header and "…'s choice" heading agree at every stop. Perspective lists "Seat 1 at the bottom · GW Allies" / "Seat 2 at the bottom · UR Lessons".</p>
+<p><code>GET /api/traces/{id}/decisions</code>: 53 decisions, all <code>client</code>, 15 from seat 1 and 38 from seat 2; all 53 addresses restore with 200.</p>
+<img src="shots/old-start.png"><img src="shots/old-div0-next.png">
+
+<h2>2. A new game: two swaps with analysis on, a reload, played to the end</h2>
+<ul>
+<li>Swap 1: the board flipped 1.0–2.6 s after the press (6.6 s in one run at load ~130). The sheet closed in the same frame, and the bot's plate showed "Choosing…" with "… is choosing" in the rail. The new hand was there; your next offer came 5–7 s later, once the bot had played the seat you left.</li>
+<li>Swap 2: the board flipped in 0.8–2.8 s; the next offer came 1–8 s later.</li>
+<li><b>Show analysis</b> stayed checked and <b>Analysis on</b> stayed in the top bar across both swaps. The live line restarts from the new seat: it is empty until the new seat's first decision has been read ("1 decision read" after 0–5 s), then fills in. After swapping back, it includes your earlier decisions in that seat.</li>
+<li>Reloading after swap 2 kept seat 2. The game ended normally: <code>seat_swaps=[32,95]</code>, players listed in their final seats, Games shows it once ("policies/… won · 17 turns · analysis shown at 2 decisions").</li>
+<li>Review: each divider and the choice after it name the right pilot. <code>/decisions</code>: 36 <code>client</code> rows (20 seat 1, 16 seat 2), no <code>policy</code> rows.</li>
+</ul>
+<img src="shots/new-swap1-flip.png"><img src="shots/new-swap1-ready.png"><img src="shots/new-div1.png">
+
+<h2>3. Closed decklists</h2>
+<p>Ran <code>--decklists closed</code> and swapped at turn 3. The board flipped in 0.6 s. The opponent stays "Closed decklist" from either seat, including your own former deck after the swap, because the engine decides disclosure per seat. I interrupted the game by restarting the server, then read <code>/api/traces/{id}</code>, <code>/recording</code> and <code>/decisions</code> with the player's credentials. All three returned 200 and named both decks, which is consistent: you piloted both. Decisions: 6 <code>client</code> rows across both seats.</p>
+<img src="shots/closed-swap-ready.png">
+
+<h2>Fixed</h2>
+<ul><li>The person's plate was announced to screen readers as "You's plate". It is now "Your plate" (<code>Plate.svelte</code>), and <code>swap-sides.spec.ts</code> checks it. Verified on the rebuilt static build.</li></ul>
+
+<h2>Checks</h2>
+<p><code>npm test</code> 704 passed; <code>svelte-check</code> 0 errors; Playwright <code>e2e/swap-sides.spec.ts</code> 1 passed.</p>
+
+<h2>Still wrong or unreached, worst first</h2>
+<ol>
+<li>After a swap into a seat where you have not decided yet, the live chart is blank ("Review the game once it ends…") until the new seat's first reading arrives, which took up to ~5 s here. The switch does not turn off; this is the Pass 2 restart design.</li>
+<li>Keyboard: after closing Settings with its button, Space toggles Settings again rather than taking the primary action ("No attack", "To combat"), because focus stays on the summary button. This predates this change. Not fixed.</li>
+<li>Swap sides is only enabled while you have a pending decision (<code>inputReady</code>), so it is greyed out while the bot thinks. This is intended, but the button gives no reason.</li>
+<li>Not reached: a recurrent or Search opponent swap in the browser, or swapping during a Study branch (the server refuses).</li>
+</ol>
+<hr>
 <h1>MTG-482 Swap sides — QA, 2026-11-25</h1>
 <p>The real product: <code>managym academy --policy qa_bot.json play --opponent qa_bot --deck ur_lessons --opponent-deck gw_allies</code> on the static build, with a checkpoint trained at this checkout (<code>etude train manabot/recipes/local.py</code>). Headless Chromium, one persistent profile, 1280×800, origin <code>automated_validation</code>, everything under ignored <code>.runs/qa/</code>. Host load was 80–130 throughout.</p>
 

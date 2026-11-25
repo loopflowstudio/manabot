@@ -79,7 +79,7 @@ test('swapping sides mid-game flips seat, hand, and deck names, keeps move log, 
   const reviewNear = page.locator('[data-testid="player-plate"][data-plate-side="you"]');
   const reviewFar = page.locator('[data-testid="player-plate"][data-plate-side="opponent"]');
   await expect(reviewNear).toHaveAttribute('data-player-index', '0', { timeout: 15_000 });
-  await expect(reviewNear).toHaveAttribute('aria-label', "You's plate");
+  await expect(reviewNear).toHaveAttribute('aria-label', 'Your plate');
   await expect(reviewFar).toHaveAttribute('data-player-index', '1');
   await expect(reviewFar).toHaveAttribute('aria-label', "Passive's plate");
   await expect(page.getByTestId('deck-names')).toContainText('You · UR Lessons');
@@ -100,7 +100,7 @@ test('swapping sides mid-game flips seat, hand, and deck names, keeps move log, 
   await expect(reviewNear).toHaveAttribute('aria-label', "Passive's plate", { timeout: 15_000 });
   await page.keyboard.press('Shift+ArrowRight');
   await expect(reviewNear).toHaveAttribute('data-player-index', '1', { timeout: 15_000 });
-  await expect(reviewNear).toHaveAttribute('aria-label', "You's plate");
+  await expect(reviewNear).toHaveAttribute('aria-label', 'Your plate');
   await expect(page.getByTestId('deck-names')).toContainText('You · GW Allies');
   await expect(page.locator('p.whose')).toHaveText('Your choice');
 

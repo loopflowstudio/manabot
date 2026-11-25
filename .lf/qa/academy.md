@@ -364,6 +364,17 @@ Read when the change touches Academy (`managym/academy`, `academy/ui`): the tabl
   timeout and looks like a slow server. For a dark screenshot, pass
   `colorScheme: 'dark'` when launching the context; `emulateMedia` after load
   can capture the theme's transition with unreadable text.
+  A driver that clicks offers must filter with
+  `[data-testid=action-option]:enabled:not([aria-disabled]) >> visible=true`:
+  during a live combat draft the per-creature offers sit hidden under a
+  collapsed disclosure and the decision commits with the `No attack`/confirm
+  button, whose `kbd` reads `Space` (press Space when no offer is visible).
+  `/api/traces/{id}`, `/recording` and `/decisions` refuse an unfinished game
+  with `participant_credential_required`; fetch them inside the player's
+  browser profile with headers `x-etude-participant-tokens` (localStorage
+  `etude.play.record-credentials` plus `etude.play.player-credential`).
+  `--decklists closed` works with swaps; restart the server to interrupt a
+  game rather than waiting for it to end.
   `play-session.spec.ts` (release and default configs) fails six tests on
   this branch's base, looking for a "Seat 1 controller" select no GameSetup
   renders; compare against a revert before reading it as a regression.
