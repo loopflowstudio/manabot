@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-434 Concept Review — managym 0.3.0 Public &amp; Wire Surface (Built)</title>
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --surface-alt: #f3efe6;
+    --border: #dcd5c7;
+    --text: #1f1d1a;
+    --muted: #5f5a50;
+    --accent: #2c5f8a;
+    --yes-bg: #e7f4ea;
+    --yes-fg: #1d6435;
+    --no-bg: #fbeaea;
+    --no-fg: #9c2b2b;
+    --prop-bg: #eef4fb;
+    --prop-border: #6b9bc7;
+    --prop-fg: #1e4b73;
+    --warn-bg: #fdf5e2;
+    --warn-border: #cfa041;
+    --warn-fg: #6b4e0b;
+    --code-bg: #f0ece3;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513;
+      --surface: #201e1b;
+      --surface-alt: #282521;
+      --border: #3a352f;
+      --text: #ebe6dd;
+      --muted: #a9a193;
+      --accent: #7ab3e6;
+      --yes-bg: #173020;
+      --yes-fg: #7de09c;
+      --no-bg: #3b1c1c;
+      --no-fg: #f58c8c;
+      --prop-bg: #172738;
+      --prop-border: #4d82b3;
+      --prop-fg: #9ecaf2;
+      --warn-bg: #332914;
+      --warn-border: #b88b2e;
+      --warn-fg: #f0cf80;
+      --code-bg: #2a2723;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+  }
+  main { max-width: 1080px; margin: 0 auto; }
+  header {
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .eyebrow {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+  h1 { margin: 0 0 0.5rem; font-size: 1.85rem; line-height: 1.2; }
+  h2 {
+    margin: 2.5rem 0 0.85rem;
+    font-size: 1.3rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.35rem;
+  }
+  h3 { margin: 1.4rem 0 0.5rem; font-size: 1.05rem; }
+  p { margin: 0.5rem 0 0.9rem; }
+  .lead { font-size: 1.05rem; color: var(--muted); max-width: 80ch; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.1rem 0.32rem;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.84rem;
+    line-height: 1.45;
+    margin: 0.75rem 0 1rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .badge-yes { background: var(--yes-bg); color: var(--yes-fg); }
+  .badge-no { background: var(--no-bg); color: var(--no-fg); }
+  .badge-existing {
+    background: var(--surface-alt);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .badge-built {
+    background: var(--yes-bg);
+    color: var(--yes-fg);
+    border: 1px solid var(--yes-fg);
+  }
+  .badge-proposed {
+    background: var(--prop-bg);
+    color: var(--prop-fg);
+    border: 1px solid var(--prop-border);
+  }
+  .badge-outside {
+    background: var(--warn-bg);
+    color: var(--warn-fg);
+    border: 1px solid var(--warn-border);
+  }
+  .callout {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0 1.4rem;
+  }
+  .callout-yes {
+    background: var(--yes-bg);
+    border-color: var(--yes-fg);
+    border-left: 4px solid var(--yes-fg);
+  }
+  .callout-proposed {
+    background: var(--prop-bg);
+    border-color: var(--prop-border);
+    border-left: 4px solid var(--prop-border);
+  }
+  .callout-warn {
+    background: var(--warn-bg);
+    border-color: var(--warn-border);
+    border-left: 4px solid var(--warn-border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface-alt);
+    font-weight: 600;
+    font-size: 0.83rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  tr:last-child td { border-bottom: none; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.15rem;
+  }
+  .card.built {
+    background: var(--prop-bg);
+    border-color: var(--prop-border);
+  }
+  .card h3 { margin-top: 0; }
+  .timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.75rem 0 1rem;
+  }
+  .step-pill {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    padding: 0.25rem 0.45rem;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+  }
+  .step-pill.hot {
+    background: var(--no-bg);
+    border-color: var(--no-fg);
+    color: var(--no-fg);
+    font-weight: 700;
+  }
+  .step-pill.fixed {
+    background: var(--yes-bg);
+    border-color: var(--yes-fg);
+    color: var(--yes-fg);
+    font-weight: 700;
+  }
+  .questions ol { padding-left: 1.35rem; }
+  .questions li { margin-bottom: 1rem; }
+  .choices { list-style: none; padding-left: 0.5rem; margin: 0.35rem 0 0; }
+  .choices li { margin: 0.2rem 0; }
+  .small { font-size: 0.86rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Concept Review &middot; Task MTG-434 &middot; Post-implementation (<code>HEAD 88a73d3a8f</code> vs. <code>main</code>)</div>
+    <h1>Do <code>managym</code> 0.3.0's public concepts and code concepts line up?</h1>
+    <p class="lead">
+      <strong>Area reviewed:</strong> <code>managym</code>'s 0.3.0 public engine, wire-JSON, observation,
+      decision-memory, recording, Academy launch/API, and release-packaging contract — reviewed as a single
+      built diff against <code>main</code> across Rust rules/encoders, PyO3 bindings, Python adapters,
+      conformance receipts, Academy UI, and release scripts.
+    </p>
+  </header>
+
+  <section class="callout callout-yes">
+    <strong>Outcome: nothing to change.</strong>
+    Every conceptual mismatch targeted by MTG-434 is cleanly resolved in <code>HEAD</code> without leaking
+    into stored checkpoints, frozen 0.2.x observation captures, retained replays, or sibling Tasks
+    (MTG-433 dense/v9-v10 and MTG-435 <code>manabot.*</code> shims). Turn step identity now separates
+    its three distinct roles cleanly: rules order (<code>StepKind</code>/<code>StepEnum</code> <code>0..=12</code>),
+    named viewer JSON with decode-only 0.2.x integer recovery (<code>turn_wire_names!</code> + <code>TurnField</code>),
+    and the frozen <code>0..=11</code> policy/decision-memory index shared by <code>observation_encoder</code>
+    and <code>decision_memory::capture</code>.
+  </section>
+
+  <h2>1. Concept Alignment: Product / Caller vs. Code</h2>
+  <p class="small">
+    Badges distinguish <span class="badge badge-existing">Base (main)</span>,
+    <span class="badge badge-built">Built (HEAD)</span>, and
+    <span class="badge badge-outside">Outside MTG-434</span> (separate future Tasks; no proposed changes remain inside this branch).
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%">Product / Caller Concept</th>
+        <th style="width: 30%">Code Concept (Types, Records, APIs)</th>
+        <th style="width: 10%">Aligned?</th>
+        <th>Assessment</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Turn step order</strong><br><span class="small">First-strike combat damage precedes regular combat damage (CR 510.4); step values sort in turn order.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> <code>StepKind</code> / <code>StepEnum</code> / <code>enums.py</code> / <code>_STEPS</code> appended <code>FirstStrike = 12</code> after <code>Cleanup = 11</code>.<br>
+          <span class="badge badge-built">Built</span> <code>StepKind</code> (<code>flow/turn.rs</code>, <code>#[derive(PartialOrd, Ord)]</code>), PyO3 <code>StepEnum</code> (<code>bindings.rs</code>), <code>managym.enums.StepEnum</code> (<code>IntEnum</code>), <code>_STEPS</code> (<code>text_observation.py</code>), and <code>phases.ts</code> all place <code>FirstStrike = 7</code> before <code>CombatDamage = 8</code> through <code>Cleanup = 12</code>.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>One rules order across Rust, Python, text rendering, and UI. <em>Existing PyO3 caveat (outside MTG-434):</em> all 7 PyO3 enums use <code>eq, eq_int</code> without <code>ord</code>, so native <code>managym.StepEnum</code> compares via <code>int(...)</code> while <code>managym.enums.StepEnum</code> and Rust <code>StepKind</code> compare directly.</td>
+      </tr>
+      <tr>
+        <td><strong>Wire JSON turn step &amp; phase</strong><br><span class="small">One canonical spelling across Observation JSON, Experience protocol, and Academy UI; 0.2.x integer captures still load.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> <code>Observation.toJSON()</code> emitted integers (<code>"phase": 2, "step": 12</code>) while protocol schemas and Academy UI used <code>StepEnum</code> names.<br>
+          <span class="badge badge-built">Built</span> <code>TurnJson</code> writes <code>PhaseKind::name()</code> / <code>StepKind::name()</code> (<code>"COMBAT"</code>, <code>"COMBAT_FIRST_STRIKE_DAMAGE"</code>). <code>TurnField</code> (<code>#[serde(untagged)]</code>) decodes names or 0.2.x integer codes; <code>parse_observation</code> normalizes only integer <code>turn.phase</code>/<code>turn.step</code> before canonical equality. Conformance records <code>-named-turns.json</code> for the 174-Command tape.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Single string vocabulary across engine JSON, protocol, and UI. All 11 frozen baseline captures keep exact bytes/hashes and round-trip identically; malformed ints (<code>-1</code>, <code>13</code>), floats (<code>1.0</code>), bools, nulls, and PascalCase names fail with typed errors.</td>
+      </tr>
+      <tr>
+        <td><strong>Decision-memory &amp; policy step index</strong><br><span class="small">Stored checkpoints and <code>0..=11</code> memory validators stay monotonic and bit-identical across the enum reorder.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> <code>decision_memory::capture</code> cast <code>current_step_kind() as u8</code>, accidentally coupling stored records to <code>StepKind</code> discriminants.<br>
+          <span class="badge badge-built">Built</span> <code>observation_encoder::{phase_index, step_index}</code> (<code>0..=4</code>, <code>0..=11</code> with <code>FirstStrike | CombatDamage =&gt; 7</code>, <code>Cleanup =&gt; 11</code>) is the single owner called by both the policy encoder and <code>decision_memory::capture</code>.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td><strong>Biggest mismatch fixed.</strong> Decoupling stored neural/memory indices from rules discriminants eliminates both the <code>Cleanup == 12</code> validator crash and silent step-7–11 checkpoint drift. Verified live through double-strike damage and cleanup discard + <code>admit_chunk</code> + pinned pilots.</td>
+      </tr>
+      <tr>
+        <td><strong>Observation object characteristics</strong><br><span class="small">Every visible game object exposes one read-only <code>.characteristics</code> snapshot; permanents and spells are not cards.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> Deprecated flat getters/setters on <code>Card</code> &amp; <code>Permanent</code>, <code>Permanent.card</code>, <code>StackObject.card</code>, <code>warn_observation_alias</code>, and Rust <code>Observation::card_records</code>.<br>
+          <span class="badge badge-built">Built</span> All flat characteristic aliases, synthetic <code>.card</code> accessors, and <code>card_records</code> removed; callers read <code>.characteristics</code> and direct object metadata (<code>object_id</code>, <code>owner_id</code>, <code>is_token</code>, <code>is_copy</code>).
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Finishes the v11 one-row-per-object model in Python and Rust while keeping frozen historical JSON captures readable via <code>upgrade_historical</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Permanent name vs. name override</strong><br><span class="small">Reading effective name vs. checking whether a continuous effect overwrote a permanent's name.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> &amp; <span class="badge badge-outside">Outside MTG-434</span> <code>permanent.characteristics.name</code> is the effective name (<code>"Gray Ogre"</code>); <code>permanent.name</code> is the optional effect override (<code>None</code> when unchanged).
+        </td>
+        <td><span class="badge badge-no">No</span></td>
+        <td><strong>One name for two ideas (deferred).</strong> Un-deprecated schema-8 wire field; intentionally kept in 0.3.0 and documented in <code>docs/observation-and-model.md</code>. Renaming to <code>name_override</code> needs its own deprecation cycle.</td>
+      </tr>
+      <tr>
+        <td><strong>Card cast permissions</strong><br><span class="small">A card carries a list of zero, one, or more <code>PlayGrant</code> / <code>CastPermission</code> entries.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> Deprecated Rust <code>ExileCastGrant</code> alias and Python singular <code>Card.cast_permission</code> alongside <code>cast_permissions</code>.<br>
+          <span class="badge badge-built">Built</span> Both aliases deleted; schema-8 JSON single-grant <code>"cast_permission"</code> wire key preserved for retained captures, protocol schemas, and Academy UI.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>One Rust type (<code>PlayGrant</code>) and one Python property (<code>card.cast_permissions</code>), with zero wire breakage.</td>
+      </tr>
+      <tr>
+        <td><strong>Game setup, seat policies &amp; Env options</strong><br><span class="small">Disclosure belongs to <code>GameSetup.decklists</code>; choosers belong to <code>player_policies</code>; statistics use <code>Behaviour</code> reducers.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> <code>PlayerConfig.disclosure</code> + conflict checks; <code>opponent_policy</code> on <code>VectorEnv</code> / <code>RecordedVectorEnv</code> / <code>manabot.env.VectorEnv</code> + <code>resolve_player_policies</code>; no-op <code>enable_behavior_tracking</code> on <code>Env</code>.<br>
+          <span class="badge badge-built">Built</span> All three removed across Rust, PyO3, stubs, and pass-through wrappers. <code>GameRecord.resolved_player_policies</code> still decodes historical <code>opponent_policy</code> receipts read-only.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Single owner for every setup knob. Retained failure/game receipts decode without warnings; historical slow-step fixture keeps its original SHA-256.</td>
+      </tr>
+      <tr>
+        <td><strong>Engine catalog, world identity &amp; recording API</strong><br><span class="small">Engine names describe what <code>managym</code> produces; no world label exists.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> <code>learning_catalog</code>, <code>learning_token_value</code>, <code>learning_record_names</code>, <code>LearningCatalog</code>, <code>WORLD_VERSION</code>; <code>evidence()</code>, <code>FailureEvidence</code>, <code>read_failure</code>, <code>CapturedVector</code>.<br>
+          <span class="badge badge-built">Built</span> All aliases and module <code>__getattr__</code> shims deleted from <code>managym/__init__.py</code>, <code>managym/__init__.pyi</code>, and <code>managym/recording.py</code>.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Clean engine-owned vocabulary (<code>catalog_tokens</code>, <code>record_vocabulary</code>, <code>GameRecord</code>, <code>RecordedVectorEnv</code>, <code>snapshot()</code>, <code>read_record()</code>). Remaining <code>0.3.0</code> tags in <code>managym/</code> belong strictly to MTG-433.</td>
+      </tr>
+      <tr>
+        <td><strong>Academy package, launch listings &amp; opponent types</strong><br><span class="small">Academy ships under <code>managym.academy</code>; <code>RecordedGame</code> uses <code>seed</code>/<code>stream</code>/<code>digest</code>; opponents are <code>policy</code>, not <code>checkpoint</code>.</span></td>
+        <td>
+          <span class="badge badge-existing">Base</span> Top-level <code>academy/__init__.py</code> shim + <code>prepare.py</code> / <code>pyproject.toml</code> / <code>Dockerfile</code> / <code>validate.py</code> allowances; <code>RecordedGame.{deal_seed, leg, game_trace_sha256, decks}</code>; <code>villain_type == "checkpoint"</code>.<br>
+          <span class="badge badge-built">Built</span> Shim deleted; <code>prepare.py</code>, <code>pyproject.toml</code>, and <code>deploy/play/Dockerfile</code> ship only <code>managym</code>; <code>validate.py</code> rejects any <code>academy/</code> entry in wheels or sdists; all four legacy <code>RecordedGame</code> properties removed (while retained trace JSON keys still parse into <code>seed</code>/<code>stream</code>/<code>digest</code>); <code>"checkpoint"</code> rejected cleanly.
+        </td>
+        <td><span class="badge badge-yes">Yes</span></td>
+        <td>Verified in an isolated CPython 3.13 wheel install (<code>import academy</code> &rarr; <code>ModuleNotFoundError</code>), release artifact validator (0 <code>academy/</code> entries), live <code>POST /api/policies/check</code>, and 66 retained SQLite games.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Before &amp; After: Biggest Mismatch Resolved (Turn Step Identity)</h2>
+  <p>
+    Walk the critical path across every layer: a double-strike creature deals first-strike combat damage,
+    regular combat damage, and forces a cleanup discard with decision memory on; later, a 0.2.x integer
+    capture and a pinned checkpoint both load.
+  </p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3><span class="badge badge-existing">Before (main)</span></h3>
+      <p><strong>One out-of-order discriminant leaked into three layers:</strong></p>
+      <div class="timeline">
+        <span class="step-pill">0 Untap</span>
+        <span class="step-pill">…</span>
+        <span class="step-pill">6 Blockers</span>
+        <span class="step-pill">7 CombatDmg</span>
+        <span class="step-pill">8 EndCombat</span>
+        <span class="step-pill">…</span>
+        <span class="step-pill">11 Cleanup</span>
+        <span class="step-pill hot">12 FirstStrike</span>
+      </div>
+      <pre>// 1) Rules enum (flow/turn.rs): FirstStrike = 12 sorted after Cleanup = 11.
+// 2) Viewer JSON (observation_json.rs): wrote raw ints ("phase": 2, "step": 12),
+//    disagreeing with Experience protocol &amp; Academy UI names.
+// 3) Decision memory (decision_memory.rs:1114):
+//    step: game.state.turn.current_step_kind() as u8
+//    Naive reorder would write 12 for Cleanup (crashing 0..=11 validators)
+//    and shift steps 7..11 by +1 (breaking stored checkpoints).</pre>
+    </div>
+
+    <div class="card built">
+      <h3><span class="badge badge-built">After (HEAD 88a73d3a8f)</span></h3>
+      <p><strong>Each role owns its own representation:</strong></p>
+      <div class="timeline">
+        <span class="step-pill">0 Untap</span>
+        <span class="step-pill">…</span>
+        <span class="step-pill">6 Blockers</span>
+        <span class="step-pill fixed">7 FirstStrike</span>
+        <span class="step-pill">8 CombatDmg</span>
+        <span class="step-pill">…</span>
+        <span class="step-pill">12 Cleanup</span>
+      </div>
+      <pre>// 1) Rules &amp; Python enums (flow/turn.rs, bindings.rs, enums.py):
+//    FirstStrikeCombatDamage = 7 .. Cleanup = 12 (#[derive(PartialOrd, Ord)])
+//
+// 2) Viewer JSON (flow/turn.rs turn_wire_names!, observation_json.rs):
+//    Writes:  "phase": "COMBAT", "step": "COMBAT_FIRST_STRIKE_DAMAGE"
+//    Reads:   TurnField::Name(s) | TurnField::LegacyCode(i) (12 -&gt; FirstStrike)
+//    Check:   normalizes only integer turn.phase / turn.step before value != roundtrip
+//
+// 3) Policy &amp; Decision Memory (observation_encoder.rs -&gt; decision_memory.rs):
+//    Shared phase_index (0..=4) and step_index (0..=11: FirstStrike|CombatDamage =&gt; 7,
+//    Cleanup =&gt; 11). Zero checkpoint drift, zero validator failures.</pre>
+    </div>
+  </div>
+
+  <h3>Verification Matrix (Normal, Failure, Recovery)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 24%">Path</th>
+        <th style="width: 38%">What Was Exercised</th>
+        <th>Observed Result at <code>HEAD</code></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Normal path</strong></td>
+        <td>Live Mindsparker first-strike attack in Academy Play &amp; Replay; live Drogskol Reaver double-strike through cleanup discard with decision memory enabled.</td>
+        <td>WebSocket and replay carry <code>COMBAT_FIRST_STRIKE_DAMAGE</code> (&ldquo;To regular damage&rdquo;); decision memory writes <code>7</code> for both damage steps and <code>11</code> for cleanup; <code>read_records()</code> and <code>admit_chunk()</code> pass.</td>
+      </tr>
+      <tr>
+        <td><strong>Failure path</strong></td>
+        <td>Invalid turn JSON (<code>13</code>, <code>-1</code>, <code>1.0</code>, <code>True</code>, <code>None</code>, <code>"FirstStrikeCombatDamage"</code>); removed Python kwargs/attrs; <code>villain_type="checkpoint"</code>; <code>import academy</code> in clean wheel venv.</td>
+        <td>Every malformed JSON input fails with typed <code>ValueError</code>; removed kwargs raise <code>TypeError</code>; removed attrs return <code>False</code> for <code>hasattr</code>; <code>checkpoint</code> returns <code>compatible: false</code>; clean install raises <code>ModuleNotFoundError</code>.</td>
+      </tr>
+      <tr>
+        <td><strong>Recovery path</strong></td>
+        <td>All 11 frozen 0.2.x integer observation captures (plus integer step <code>12</code>); 66 SQLite games saved 2026-11-19; 174-Command parity tape; pinned pilots.</td>
+        <td>All 11 captures keep untouched bytes/hashes and round-trip equal; 66 retained games open cleanly; all 174 Commands match across live/headless/replay in <code>-named-turns.json</code>; pinned pilots match without a break record.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>3. Choices Made for Review (Built as Chosen)</h2>
+  <div class="callout callout-proposed">
+    <ol>
+      <li>
+        <strong>Observation JSON writes public enum names</strong> (<code>COMBAT_FIRST_STRIKE_DAMAGE</code>, <code>PRECOMBAT_MAIN</code>), matching <code>StepEnum</code>, Experience protocol schemas, and Academy UI.
+        <em>Passed over:</em> Rust serde PascalCase names, which would create a second string vocabulary.
+      </li>
+      <li>
+        <strong><code>decision_memory::capture</code> shares <code>observation_encoder::step_index</code> (<code>0..=11</code>, First Strike &rarr; 7)</strong>, preserving stored checkpoints and <code>le=11</code> validators without drift.
+        <em>Passed over:</em> shifting <code>DecisionContext.step</code> to <code>0..=12</code> (breaks stored memory checkpoints) or emitting <code>12</code> (crashes validators and sorts first strike after Cleanup).
+      </li>
+      <li>
+        <strong><code>Card</code> flat characteristic accessors removed alongside <code>Permanent</code>'s and <code>StackObject.card</code></strong> so the entire 0.3.0 observation alias family retires together.
+      </li>
+      <li>
+        <strong><code>RecordedGame.deal_seed</code> removed alongside <code>leg</code>, <code>game_trace_sha256</code>, and <code>decks</code></strong>, and <code>academy/</code> stripped from <code>scripts/release/prepare.py</code>, <code>managym/pyproject.toml</code>, and <code>deploy/play/Dockerfile</code>.
+      </li>
+      <li>
+        <strong><code>enable_behavior_tracking</code> and <code>opponent_policy</code> also removed from thin <code>manabot.env</code> forwarding wrappers</strong> (<code>manabot/env/env.py</code>, <code>manabot/env/vector_env.py</code>) so they do not fail on removed engine kwargs.
+      </li>
+    </ol>
+  </div>
+
+  <h2>4. Separate Outcomes (Outside MTG-434)</h2>
+  <div class="callout callout-warn">
+    <ul>
+      <li><strong>Rename <code>Permanent.name</code> &rarr; <code>name_override</code>:</strong> un-deprecated schema-8 wire and Python field; requires its own deprecation cycle.</li>
+      <li><strong>Ordering operators on PyO3 enums (<code>managym.StepEnum &lt; ...</code>):</strong> all 7 PyO3 enums currently derive <code>eq, eq_int</code> only (while <code>managym/__init__.pyi</code> types them as <code>IntEnum</code>); aligning native PyO3 enum comparison with <code>managym.enums</code> is a separate cleanup.</li>
+      <li><strong>Distinguish first-strike damage inside <code>DecisionContext</code> &amp; render step names in <code>text_observation.py:1495–1496</code>:</strong> representation/model change outside a deprecation cleanup.</li>
+      <li><strong>Dense observation transport &amp; policy input v9/v10 removal:</strong> sibling Task <strong>MTG-433</strong> (all remaining <code>0.3.0</code> notices in <code>managym/</code> belong there).</li>
+      <li><strong><code>manabot.*</code> compatibility shims and CLI aliases:</strong> sibling Task <strong>MTG-435</strong> (documented in <code>docs/academy.md:419</code> and <code>docs/training-loop.md:223</code>).</li>
+      <li><strong>Pytest deprecation-as-error policy (<code>-W error</code>):</strong> separate test-harness Task noted in <code>scratch/questions.md</code>.</li>
+    </ul>
+  </div>
+
+  <section class="questions">
+    <h2>5. Review Questions (Reply with e.g. <code>1a, 2a</code> to Override)</h2>
+    <ol>
+      <li>
+        <strong>Decision-memory step encoding during First-Strike Combat Damage:</strong>
+        <ul class="choices">
+          <li><code>1a</code> (<strong>Built</strong>) Keep the frozen <code>0..=11</code> <code>step_index</code> (First Strike &rarr; 7, Cleanup &rarr; 11) so stored checkpoints and validators stay untouched.</li>
+          <li><code>1b</code> Break decision-memory checkpoints now to distinguish First Strike on <code>0..=12</code>.</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Observation JSON turn field spelling:</strong>
+        <ul class="choices">
+          <li><code>2a</code> (<strong>Built</strong>) Public enum names (<code>COMBAT_FIRST_STRIKE_DAMAGE</code>, <code>PRECOMBAT_MAIN</code>) with decode-only 0.2.x integer support.</li>
+          <li><code>2b</code> Rust serde PascalCase names (<code>FirstStrikeCombatDamage</code>, <code>PrecombatMain</code>).</li>
+        </ul>
+      </li>
+      <li>
+        <strong><code>Card</code> flat characteristic accessors:</strong>
+        <ul class="choices">
+          <li><code>3a</code> (<strong>Built</strong>) Removed alongside <code>Permanent</code>'s flat accessors and <code>.card</code> aliases in 0.3.0.</li>
+          <li><code>3b</code> Restore <code>Card</code> flat accessors until 0.4.0.</li>
+        </ul>
+      </li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>
