@@ -37,7 +37,7 @@ Review the whole card batch once across concepts, composability, simplification 
 5. **Write one batched fix pass in `scratch/plan.md`.** Replace earlier review
    findings rather than appending a second report. Group every defect,
    composability refactor and deletion into **one concrete fix pass** (with
-   narrowest reproductions and exact file/symbol targets) so `implement`
+   narrowest reproductions and exact file/symbol targets) so `card-implement`
    resolves them together in one ~30–50 minute session. Don't edit code here.
 
 When deciding whether to continue:
