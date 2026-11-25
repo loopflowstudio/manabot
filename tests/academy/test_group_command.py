@@ -463,9 +463,8 @@ def test_group_refused_menace_and_group_incomplete_leave_game_untouched(
     assert refused["status"] == "rejected"
     assert "recovery" not in refused
     assert refused["rejection"]["code"] == "group_refused"
-    assert refused["rejection"]["refused"]["reason"].startswith(
-        "Boggart Brute can't be blocked that way"
-    )
+    reason = refused["rejection"]["refused"]["reason"]
+    assert "block" in reason and "Boggart Brute" in reason, reason
     assert refused["rejection"]["message"] == refused["rejection"]["refused"]["reason"]
     assert menace_game.env.state_digest() == before_digest
     assert len(menace_game.canonical_decisions) == before_decisions

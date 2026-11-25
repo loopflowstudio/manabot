@@ -226,6 +226,7 @@ impl Game {
             .ok_or_else(|| {
                 AgentError("scenario_refresh_priority: priority space has no player".to_string())
             })?;
+        self.refresh_control();
         self.publish_action_space(self.priority_action_space(player));
         Ok(())
     }

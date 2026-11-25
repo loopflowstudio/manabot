@@ -478,6 +478,11 @@ Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
 
+A `ForPlayer` instruction changes who performs its effects. The resolving
+spell or ability keeps its controller across that scope and any choice in
+it. Discard replacements use that controller to determine who caused the
+discard, including a discard paid during resolution.
+
 Native `semantic_decision_frame_json` and `execute_semantic_command_json`
 use action-aligned `structured_search_offers`: these offers have no choices
 and reject nonempty `Command.answers`. Compound submissions belong to the

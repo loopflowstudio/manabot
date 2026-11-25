@@ -74,8 +74,7 @@ pub struct CombatPreview {
     /// `refused` is absent; otherwise the steps before the refusal.
     pub steps: Vec<DeclarationStep>,
     pub refused: Option<DeclarationRefusal>,
-    /// What the engine declared once the sequence ended (after, for
-    /// example, removing a lone block of a creature with menace).
+    /// What the engine declared once the sequence ended.
     pub declared_attackers: Vec<ObjectRenderId>,
     pub declared_blocks: Vec<PlannedBlock>,
 }
@@ -133,7 +132,6 @@ impl Game {
             ActionSpaceKind::DeclareBlocker => DeclarationKind::Blockers,
             _ => return Err(AgentError("not a combat declaration".into())),
         };
-
         // Preserve cross-field refusal messages from the flat `CombatPlan` shape.
         let wrong_field = match kind {
             DeclarationKind::Attackers => plan

@@ -467,8 +467,12 @@ pub enum Condition {
     CreatureDiedThisTurn,
     /// The spell or the spell that became this permanent was kicked (CR 702.33).
     Kicked,
-    /// The resolving spell was cast from a graveyard. A spell copy was never cast.
-    CastFromGraveyard,
+    /// The entering or resolving spell was cast (not a copy), optionally from
+    /// a particular zone and/or a zone owned by `owner`.
+    CastFrom {
+        zone: Option<ZoneType>,
+        owner: Option<Actor>,
+    },
     /// Resolution only: the frame's primary target is still a permanent and
     /// matches [predicate] ("if that creature is an Ally").
     TargetMatches(CardPredicate),
@@ -667,7 +671,7 @@ impl Condition {
             Condition::Compare { left, right, .. } => {
                 left.is_resolution_only() || right.is_resolution_only()
             }
-            Condition::CastFromGraveyard
+            Condition::CastFrom { .. }
             | Condition::TargetMatches(_)
             | Condition::AtMostHalfStartingLife
             | Condition::TargetDealtDamageThisTurn
@@ -898,6 +902,8 @@ pub enum PlayerSelector {
     TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
+    /// The legal player target of a separately declared (zero-based) clause.
+    TargetClause(usize),
     /// The controller of the frame's primary target permanent or spell, as
     /// it is or last existed ("its controller").
     TargetController,
@@ -915,6 +921,7 @@ impl PlayerSelector {
             | Self::EachPlayer
             | Self::TriggeringPlayer
             | Self::TriggeringPlayersOpponents
+            | Self::TargetClause(_)
             | Self::TargetController
             | Self::Owner => None,
         }
@@ -1574,6 +1581,10 @@ pub enum Effect {
         what: ObjectSelector,
         #[serde(skip_serializing_if = "is_one")]
         count: usize,
+    },
+    /// Discard the selected hands as one simultaneous event.
+    DiscardHand {
+        who: PlayerSelector,
     },
     /// Destroy each permanent `what` names (CR 701.7), as one simultaneous
     /// event: leave-the-battlefield abilities look back at the permanents
@@ -2551,7 +2562,8 @@ impl Effect {
             return Some(spec);
         }
         match self {
-            Effect::GivePlayerCounters { player, .. }
+            Effect::DiscardHand { who: player }
+            | Effect::GivePlayerCounters { player, .. }
             | Effect::LoseLife { player, .. }
             | Effect::DealDamageToPlayer { player, .. } => player.target_spec(),
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),

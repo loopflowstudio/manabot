@@ -1568,14 +1568,14 @@ opponent’s next turn using that opponent’s resources.
 
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
-Replacement and prevention definitions from the immutable card definitions
-apply once each in `(source ObjectId, definition index)` order; the surviving
-event commits and emits the ordinary facts, so triggers, observations and
-presentation consume only committed events. Supported replacements are
-prevent N damage, double damage, enters tapped and enters with counters. The
-choice CR 616 gives a player among several replacements is not offered: the
-order is deterministic so replay, training and search stay exact, and a card
-that needs more stays unsupported rather than approximated.
+The affected player or object's controller chooses among competing applicable
+replacements (CR 616.1). The engine retains the batch and its caller through
+each choice, rechecks applicability, then commits the results together.
+Triggers and observations see the committed events. For example, a player
+chooses whether Crystal Barricade prevents a Bolt on another of their creatures
+before a damage doubler applies. Lifelink uses the damage actually dealt by
+each source. Angels of Vitality replace that source's gain before the damage
+batch commits.
 
 **Optional payments.** A resolving optional cost is `Effect::OptionalPayment`
 with a `PaymentCost` (mana, waterbend taps against a generic obligation, or

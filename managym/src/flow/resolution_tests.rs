@@ -1,7 +1,6 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
-use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
@@ -12,10 +11,10 @@ use crate::{
     flow::{event::GameEvent, game::Game, turn::StepKind},
     state::{
         ability::{
-            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, ObjectSelector,
-            TargetRequirement, TargetSpec,
+            DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, LibraryEnd,
+            ObjectSelector, TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
+        card::{ActivatedAbilityDefinition, CardType, EntryScope, Keyword, Keywords},
         effect::{CopyException, EffectDuration, Modification},
         game_object::{ObjectId, ObjectKind, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -764,7 +763,7 @@ fn counter_ability_counters_an_ability_and_cannot_target_a_spell() {
         panic!("the counter is a spell");
     };
     let counter = counter.object;
-    assert!(!game.target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
+    assert!(!game.test_target_is_legal(Target::StackSpell(counter), &spec, PlayerId(0)));
     assert!(!game
         .legal_targets_for_spec(&spec, PlayerId(0))
         .contains(&Target::StackSpell(counter)));
@@ -795,7 +794,7 @@ fn counter_spell_cannot_target_an_ability() {
     assert!(game
         .legal_targets_for_spec(&TargetSpec::Spell, PlayerId(0))
         .is_empty());
-    assert!(!game.target_is_legal(
+    assert!(!game.test_target_is_legal(
         Target::StackAbility(ability),
         &TargetSpec::Spell,
         PlayerId(0)
@@ -939,7 +938,14 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
         game.resolve_top_of_stack();
         let source = game.state.delayed_triggers[0].source_object();
         let source_permanent = game.state.permanent_of(game.state.now(source)).unwrap();
-        game.change_control(source_permanent, PlayerId(1 - controller.0));
+        let affected = game.affected_permanent(source_permanent);
+        game.apply_continuous(
+            None,
+            PlayerId(1 - controller.0),
+            affected,
+            crate::state::effect::Modification::Control,
+            crate::state::effect::EffectDuration::Indefinite,
+        );
         game.move_object(source, ZoneType::Graveyard);
         stack(&mut game, Entry::Spell, controller, vec![], vec![], vec![]);
         let StackObject::Spell(spell) = game.state.stack_objects.last().unwrap() else {
@@ -2726,9 +2732,11 @@ fn exiled_counter_entry(game: &mut Game, player: PlayerId) -> ObjectId {
         .unwrap()
         .0;
     let object = game.move_object(object, ZoneType::Exile);
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters {
+        on: EntryScope::This,
+        count: 1.into(),
         condition: None,
+        kind: CounterKind::PlusOnePlusOne,
     }];
     object
 }
@@ -2968,21 +2976,21 @@ fn retained_batch_combat_defers_every_hit_until_all_replacements_are_chosen() {
     use crate::flow::combat::CombatState;
     use crate::state::{
         ability::Actor,
-        card::{DamageTransform, ReplacementEffect},
+        card::{DamageRecipient, DamageSource, DamageTransform, ReplacementEffect},
     };
     let defender = PlayerId(1);
     let (mut root, first, second) = fixture(defender);
     for effect in [
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            source: DamageSource::any(Actor::AnyPlayer),
+            recipient: DamageRecipient::any(Actor::You),
+            combat: None,
             transform: DamageTransform::Prevent(1),
         },
         ReplacementEffect::ModifyDamage {
-            creature_source: false,
-            source_by: Actor::AnyPlayer,
-            recipient_by: Actor::You,
+            source: DamageSource::any(Actor::AnyPlayer),
+            recipient: DamageRecipient::any(Actor::You),
+            combat: None,
             transform: DamageTransform::Double,
         },
     ] {
@@ -3777,9 +3785,11 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         .scenario_force_battlefield(player, "Gray Ogre", true)
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
-    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithPlusOneCounters {
-        count: 1,
+    game.state[object].replacement_effects = vec![ReplacementEffect::EntersWithCounters {
+        on: EntryScope::This,
+        count: 1.into(),
         condition: None,
+        kind: CounterKind::PlusOnePlusOne,
     }];
     for multiplier in [2, 3] {
         let id = game
@@ -5837,7 +5847,14 @@ fn transferred_seed_suture_keeps_owner_and_follows_source_controller() {
             );
         }
     }
-    game.change_control(angel, caster);
+    let affected = game.affected_permanent(angel);
+    game.apply_continuous(
+        None,
+        caster,
+        affected,
+        crate::state::effect::Modification::Control,
+        crate::state::effect::EffectDuration::Indefinite,
+    );
     game.finish_action_step();
     assert!(cast_offer(&game, copies[0]).is_none());
     assert!(cast_offer(&game, copies[1]).is_some());

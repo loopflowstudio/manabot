@@ -72,12 +72,16 @@ impl GroupKind for CombatGroup {
                 declarable: order
                     .iter()
                     .map(|creature| {
-                        let (can_block, must_block) = game.block_options(*creature);
+                        let others: Vec<_> =
+                            order.iter().copied().filter(|id| *id != *creature).collect();
+                        let options = game.block_options(*creature, &others);
+                        let must_block = !options.contains(&None);
                         BlockerItem {
                             item: game.permanent_render_id(*creature),
                             label: game.permanent_label(*creature),
-                            can_block: can_block
+                            can_block: options
                                 .into_iter()
+                                .flatten()
                                 .map(|id| game.permanent_render_id(id))
                                 .collect(),
                             must_block,
@@ -284,29 +288,6 @@ impl Game {
             .map_or_else(String::new, |object| self.observed_object_name(object))
     }
 
-    /// The attackers `blocker` may block now, and whether it must block.
-    fn block_options(&self, blocker: PermanentId) -> (Vec<PermanentId>, bool) {
-        let Some(combat) = self.state.combat.as_ref() else {
-            return (Vec::new(), false);
-        };
-        let options: Vec<_> = combat
-            .attackers
-            .iter()
-            .copied()
-            .filter(|attacker| self.blocker_can_block_attacker(blocker, *attacker))
-            .collect();
-        let required: Vec<_> = options
-            .iter()
-            .copied()
-            .filter(|attacker| self.must_be_blocked_by_all_able(*attacker))
-            .collect();
-        if required.is_empty() {
-            (options, false)
-        } else {
-            (required, true)
-        }
-    }
-
     /// Attackers already declared in this combat, before the current
     /// decision (a creature that must attack and was offered no choice).
     fn declared_attackers(&self) -> Vec<ObjectRenderId> {
@@ -452,8 +433,7 @@ impl Game {
     }
 
     /// The engine finished the declaration but did not declare the plan:
-    /// a requirement answered a skipped creature, or a restriction such as
-    /// menace (CR 702.110b) removed a block once every blocker was declared.
+    /// the engine answered a forced declaration for a skipped creature.
     fn combat_undeclared(
         &self,
         role: CombatRole,
@@ -522,9 +502,7 @@ impl Game {
                     let attacker = named(block.attacker);
                     return Some(GroupRefusal {
                         item: Some(block.blocker),
-                        reason: format!(
-                            "{attacker} can't be blocked that way (menace or a blocking limit), so the engine removes {label}'s block."
-                        ),
+                        reason: format!("{label} can't block {attacker} in this declaration."),
                         label,
                     });
                 }

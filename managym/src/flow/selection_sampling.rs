@@ -18,13 +18,14 @@ use crate::{
             SuspendedResolution,
         },
         game::{Game, GameState},
-        proposed_event::EventBatch,
+        proposed_event::{EventBatch, ProposedEvent},
     },
     state::{
         ability::ObjectSelector,
         binding::{ObjectBinding, ZoneSelection},
         card::CardDefId,
         game_object::{ObjectId, PlayerId},
+        predicate::CardPredicate,
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -450,6 +451,16 @@ impl Game {
             })
             .map(|(object, ..)| object)
             .collect();
+        for (evaluated, object_id, discard) in self.pending_hand_discards() {
+            if evaluated
+                && self
+                    .hand_replacements(object_id, discard)
+                    .iter()
+                    .any(|candidate| candidate.names_card(object_id))
+            {
+                pinned.push(object_id);
+            }
+        }
         pinned.extend(
             self.captured_bindings()
                 .filter(|binding| {
@@ -459,6 +470,15 @@ impl Game {
                 .map(|binding| binding.object),
         );
         if let Some(suspended) = &self.state.suspended_decision {
+            // The announced spell is public and already committed to its cost.
+            // Its hand slot cannot become another sampled card while paying.
+            for part in suspended.continuation() {
+                if let ResolutionRef::Frame(frame) = part {
+                    if let FrameCompletion::DiscardPayment(payment) = &frame.completion {
+                        pinned.extend(payment.operation.spell());
+                    }
+                }
+            }
             for (owner, object_ids) in suspended
                 .decisions()
                 .filter_map(Decision::inspected_library_objects)
@@ -495,6 +515,65 @@ impl Game {
                 ResolutionRef::Frame(frame) => frame.batch.as_ref(),
                 ResolutionRef::Decision(_) => None,
             })
+    }
+
+    /// Hand discards still pending in any suspended batch, with whether their
+    /// replacement options have already been evaluated (at or before cursor).
+    fn pending_hand_discards(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            bool,
+            ObjectId,
+            Option<crate::flow::proposed_event::DiscardCause>,
+        ),
+    > + '_ {
+        self.pending_batches().flat_map(|batch| {
+            batch
+                .events
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, pending)| match &pending.event {
+                    ProposedEvent::ZoneMove {
+                        from: Some(ZoneType::Hand),
+                        object_id,
+                        entry,
+                        ..
+                    } if entry.discard.is_some() => {
+                        Some((index <= batch.cursor, *object_id, entry.discard))
+                    }
+                    _ => None,
+                })
+        })
+    }
+
+    fn discard_replacement_predicate(
+        &self,
+        object: ObjectId,
+        discard: Option<crate::flow::proposed_event::DiscardCause>,
+        owner: PlayerId,
+        viewer: PlayerId,
+        pinned: &[ObjectId],
+    ) -> CardPredicate {
+        let original = self.hand_replacements(object, discard);
+        let mut tested = std::collections::BTreeSet::new();
+        let mut names = std::collections::BTreeSet::new();
+        for candidate in unseen_objects(self, owner, viewer, pinned) {
+            let (definition, printing) = self.state[candidate].retained_base();
+            if tested.insert(definition) && self.hand_replacements(candidate, discard) == original {
+                names.insert(printing.name.clone());
+            }
+        }
+        CardPredicate {
+            any_of: names
+                .into_iter()
+                .map(|name| CardPredicate {
+                    named: Some(name),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
     }
 
     /// Prospective face-up battlefield entries are public even while their
@@ -578,6 +657,31 @@ impl Game {
                     }
                     ResolutionRef::Decision(_) => {}
                 }
+            }
+            // Every not-yet-committed discard needs a distinct hand slot.
+            // At and before the cursor its replacement options have already
+            // been evaluated. A substitute must reproduce those options; later
+            // members will be evaluated using their newly assigned printing.
+            for (evaluated, object_id, discard) in self.pending_hand_discards() {
+                let owner = self.state[object_id].owner;
+                if self.shares_information(viewer, owner)
+                    || pinned.binary_search(&object_id).is_ok()
+                {
+                    continue;
+                }
+                let predicate = if evaluated {
+                    self.discard_replacement_predicate(object_id, discard, owner, viewer, &pinned)
+                } else {
+                    CardPredicate::default()
+                };
+                retain(
+                    &Some(ZoneSelection {
+                        owner,
+                        zone: ZoneType::Hand,
+                        predicate,
+                    }),
+                    std::slice::from_ref(&object_id),
+                );
             }
             for decision in suspended.decisions() {
                 let Some((owner, object_ids)) = decision.library_inspection() else {
@@ -971,6 +1075,13 @@ impl Game {
         // A selection from Remembered has no zone marker of its own, and a
         // child may remember or otherwise alias a selected exact object.
         let objects = &rebinding.objects;
+        if let Some(batch) = &mut frame.batch {
+            for pending in &mut batch.events {
+                if let ProposedEvent::ZoneMove { object_id, .. } = &mut pending.event {
+                    rebind(std::iter::once(object_id), objects);
+                }
+            }
+        }
         rebind(frame.selected.iter_mut(), objects);
         rebind(
             frame
@@ -990,7 +1101,10 @@ impl Game {
             FrameCompletion::Frame(parent) | FrameCompletion::Event { frame: parent, .. } => {
                 self.rebind_frame_selection(parent, rebinding)
             }
-            FrameCompletion::Decision(parent) => self.rebind_suspended_selection(parent, rebinding),
+            FrameCompletion::Decision(parent)
+            | FrameCompletion::DiscardDuringResolution(parent) => {
+                self.rebind_suspended_selection(parent, rebinding)
+            }
             FrameCompletion::StateBased { next } => {
                 self.rebind_completion_selection(next, rebinding)
             }
