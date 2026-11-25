@@ -401,7 +401,8 @@ def require_replay_runtime(
             != runtime_identities()["engine_recording_source_sha256"]
         ):
             raise ValueError(
-                "engine source differs or legacy source verification requires manabot; explicit --allow-changed-runtime required"
+                "engine source differs or record uses a legacy source digest; "
+                "use the original revision or pass --allow-changed-runtime"
             )
     return native
 

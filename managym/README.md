@@ -136,10 +136,9 @@ version that recorded it. `managym academy replay <recording-id>` reopens a
 game from **Games** in the same browser and address (including port), or when
 it is shared and finished.
 
-Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and games
-exported by `manabot export-game`, both written by earlier releases, still
-open; those two are verified by manabot, installed at the same release
-version. The
+Evaluation command traces (`traces/<cell-id>.commands.jsonl.gz`) and exported
+training games written by earlier releases still open; those two are verified
+by manabot, installed at the same release version. The
 [replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#open-a-replay-directly)
 covers selection, privacy and troubleshooting.
 

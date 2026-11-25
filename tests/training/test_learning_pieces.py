@@ -200,10 +200,3 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
     torch.testing.assert_close(averaged.weight, start + 1.0)
     with pytest.raises(ValueError):
         update_ema(averaged, model, rate=1.0)
-
-
-def test_legacy_torch_step_recorder_names_shared_protocol() -> None:
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        from manabot.backends.torch.learner import StepRecorder as LegacyRecorder
-
-    assert LegacyRecorder is StepRecorder

@@ -290,11 +290,11 @@ it. The same world on another engine build opens and says the build differs.
 A record whose two players had different decklist disclosure, or that was
 played without skipping forced decisions, is refused with the reason.
 
-Files written before this record still open: an evaluation's command trace
-(`traces/<cell-id>.commands.jsonl.gz`), a game exported by
-`manabot export-game`, and a training exposure receipt. Command traces and
-exported games are verified by manabot and need it installed beside Academy at
-the same release version; everything else does not.
+Files written by earlier releases still open: an evaluation's command trace
+(`traces/<cell-id>.commands.jsonl.gz`), an exported training game, and a
+training exposure receipt. Command traces and earlier exported games are
+verified by manabot and need it installed beside Academy at the same release
+version; everything else does not.
 
 ### Launch from Python
 
@@ -416,9 +416,7 @@ other. Statistics over a recorded fraction describe that fraction
 | **Stopped at decision N** | This build does not play the game as the run did. The message names both builds; open it with the one that recorded it. |
 | `replay.rejected` | The games were recorded in another world or with other card content; the message names the build to use. |
 
-`record_games(...)`, `TrainingGames` and `manabot export-game` still work,
-warn, and are removed in 0.3.0. Receipts and
-exported games they already wrote keep opening.
+Receipts and exported training games written by earlier releases keep opening.
 
 ### Play a game
 
@@ -1446,7 +1444,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use a run's `games/` directory or one of its files, not a metrics or summary file. |
 | `replay.ambiguous` | The file or directory holds several games and none was selected. Select one by index or digest: `--game` in the CLI, or `game=` in Python. |
 | `replay.game_unknown` | The selection is past the end of the file, or matches no digest or more than one. A recording id already names one game; omit `--game` (Python `game=`) when opening it. Selection applies only within a file or directory. |
-| `replay.needs_manabot` | The file is an evaluation command trace or a game exported by `manabot export-game`, which manabot verifies. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. Games recorded by managym need no manabot. |
+| `replay.needs_manabot` | The file is an evaluation command trace or an exported training game from an earlier release, which manabot verifies. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. Games recorded by managym need no manabot. |
 | `replay.rejected` | The game was recorded in another world or with other card content, mixes decklist disclosure, or was played without skipping forced decisions. The message says which and names the recording and running builds. |
 | `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
 | `server.closed` | (Python) This Academy has already closed. Call `serve` again. |

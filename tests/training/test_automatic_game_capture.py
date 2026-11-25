@@ -17,15 +17,9 @@ from manabot.backends.torch.collection import (
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
-from manabot.env.failures import (
-    CaptureScope,
-    RecordedVectorEnv,
-    capture_scope,
-    runtime_identities,
-)
+from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace, step_buffers
-from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim import rollout
 from manabot.training.rollout import selection_data
@@ -36,7 +30,7 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.selection_data import SelectionGameSpec
 import managym
 from managym.decision import Command
-from managym.recording import ScalarCapture, read_record
+from managym.recording import RecordedVectorEnv, ScalarCapture, read_record
 
 
 def _model() -> ActorCritic:
@@ -72,39 +66,6 @@ def _bounded(path: Path) -> dict[str, Any]:
     assert path.read_bytes() == before
     assert path.stat().st_mode & 0o777 == 0o600
     return json.loads(result.stdout)
-
-
-@pytest.mark.parametrize("field", ["world", "engine_extension_sha256", "source_sha256"])
-@pytest.mark.parametrize("allow_changed_runtime", [False, True])
-def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> None:
-    identities = {**runtime_identities(), field: "changed"}
-    if field == "world" or not allow_changed_runtime:
-        with pytest.raises(ValueError, match="differs|bytes differ"):
-            require_replay_runtime(
-                identities,
-                allow_changed_runtime=allow_changed_runtime,
-                require_source=True,
-            )
-    else:
-        assert (
-            require_replay_runtime(
-                identities, allow_changed_runtime=True, require_source=True
-            )
-            == runtime_identities()["engine_extension_sha256"]
-        )
-
-
-def test_replay_requires_source_only_for_automatic_records() -> None:
-    identities = runtime_identities().copy()
-    del identities["source_sha256"]
-    assert (
-        require_replay_runtime(identities, allow_changed_runtime=False)
-        == identities["engine_extension_sha256"]
-    )
-    with pytest.raises(KeyError, match="source_sha256"):
-        require_replay_runtime(
-            identities, allow_changed_runtime=False, require_source=True
-        )
 
 
 def test_scalar_prefix_and_reset_capture(tmp_path: Path) -> None:
@@ -530,12 +491,3 @@ def test_search_construction_failure_retains_original_error(tmp_path: Path) -> N
     assert failed.value is original
     evidence = read_record(scope.paths[0])
     assert evidence.mode == "search" and evidence.error == str(original)
-
-
-@pytest.mark.parametrize("name", ["GameRecord", "GameInputs", "PlayerSetup"])
-def test_portable_record_names_warn_before_removal(name: str) -> None:
-    from manabot.env import failures
-    from managym import recording
-
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        assert getattr(failures, name) is getattr(recording, name)

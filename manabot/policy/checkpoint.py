@@ -518,7 +518,7 @@ def read_saved_container(path: str | Path) -> PolicyCheckpoint:
     remedy = "convert the PyTorch .pt with `uv run python -m manabot.backends.convert`"
     try:
         arrays, metadata = read_safetensors(path)
-    except (struct.error, ValueError, KeyError) as error:
+    except ValueError as error:
         raise NotAContainer(f"{path} is not a safetensors file; {remedy}") from error
     missing = [key for key in _METADATA_KEYS if key not in metadata]
     if missing:
@@ -649,17 +649,32 @@ def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]
 
 
 def decode_safetensors(data: bytes) -> tuple[dict[str, np.ndarray], dict[str, str]]:
+    if len(data) < 8:
+        raise ValueError("truncated safetensors header")
     (length,) = struct.unpack("<Q", data[:8])
+    if length > len(data) - 8:
+        raise ValueError("invalid safetensors header length")
     header = json.loads(data[8 : 8 + length])
+    if not isinstance(header, dict):
+        raise ValueError("invalid safetensors header")
     metadata = header.pop("__metadata__", None) or {}
+    if not isinstance(metadata, dict) or any(
+        not isinstance(k, str) or not isinstance(v, str) for k, v in metadata.items()
+    ):
+        raise ValueError("invalid safetensors metadata")
     body = memoryview(data)[8 + length :]
     arrays = {}
     for name, entry in header.items():
-        start, end = entry["data_offsets"]
-        dtype = np.dtype(_DTYPES[entry["dtype"]]).newbyteorder("<")
-        arrays[name] = (
-            np.frombuffer(body[start:end], dtype=dtype)
-            .reshape(entry["shape"])
-            .astype(dtype.newbyteorder("="))
-        )
+        if not isinstance(entry, dict):
+            raise ValueError(f"invalid safetensors entry {name!r}")
+        try:
+            start, end = entry["data_offsets"]
+            dtype = np.dtype(_DTYPES[entry["dtype"]]).newbyteorder("<")
+            arrays[name] = (
+                np.frombuffer(body[start:end], dtype=dtype)
+                .reshape(entry["shape"])
+                .astype(dtype.newbyteorder("="))
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(f"invalid safetensors tensor {name!r}") from error
     return arrays, metadata

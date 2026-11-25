@@ -69,7 +69,6 @@ from manabot.training.rollout.collection import (
 from manabot.training.rollout.producers import ShardedVectorEnv
 from manabot.training.rollout.snapshot_vector import (
     CapturedSnapshot,
-    InMemorySnapshotVector,
     SlotInstall,
     SnapshotBranch,
     SnapshotRecipe,
@@ -95,6 +94,7 @@ from manabot.training.state.game_errors import (
     settle,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.objective import damped_policy_loss
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.targets import BatchTargets, compute_batch_targets
 import managym
@@ -966,7 +966,8 @@ def test_weighted_steps_match_hand_weighted_actor_and_critic(rule: str) -> None:
         value_loss *= 0.5 * learning.value_weight
     else:
         rate, tau = learning.rates(1)
-        policy_loss = backend.rl.damped_policy_loss(
+        policy_loss = damped_policy_loss(
+            backend.rl,
             logits,
             actions,
             advantages,
@@ -1060,7 +1061,8 @@ def test_damped_minibatches_preserve_source_and_root_weights(framework: str) -> 
         magnet = torch.tensor(
             reference_distribution(rows.observation, learning.reference)
         )
-        actor_loss = backend.rl.damped_policy_loss(
+        actor_loss = damped_policy_loss(
+            backend.rl,
             logits,
             torch.tensor(batch.actions[ids, 0]),
             targets.advantages[ids, 0],
@@ -2122,22 +2124,6 @@ def test_self_play_rejects_unavailable_signals_without_custom_scorer(
         snapshot_scorer=lambda signals: 1.0,
     )
     close_collector(collector)
-
-
-@pytest.mark.parametrize("use_factory", [True, False])
-def test_deprecated_snapshot_factory_uses_native_deferred_slots(
-    use_factory: bool,
-) -> None:
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        vector = (
-            InMemorySnapshotVector.factory(ObservationSpace(), Match(), 1, 42)
-            if use_factory
-            else InMemorySnapshotVector(ObservationSpace(), 1, 42)
-        )
-    try:
-        assert vector.next_fresh_seeds() == [42]
-    finally:
-        vector.close()
 
 
 def test_snapshot_callbacks_require_settings() -> None:

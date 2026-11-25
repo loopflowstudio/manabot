@@ -22,9 +22,10 @@ from manabot.infra.config import (
     UnsupportedPolicyInput,
 )
 from manabot.model.catalog import inspect_checkpoint
+from manabot.sim.policy_provider import provider
 from manabot.sim.replay import replay_environment
-from manabot.sim.table_bots import CheckpointVillain
 import managym
+from managym.policy import PolicyRegistry, PolicySpec
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 SETUP = "ur-lessons-vs-gw-allies"
@@ -109,8 +110,11 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
     summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert not summary.compatible and summary.incompatibility is not None
     _assert_names_the_recording_revision(summary.incompatibility, recorded)
-    with pytest.raises(UnsupportedPolicyInput):
-        CheckpointVillain(str(path), player_configs=_match().to_rust())
+    registry = PolicyRegistry(providers={"manabot": provider})
+    key = registry.register(PolicySpec("manabot", str(path)))
+    with pytest.raises(UnsupportedPolicyInput) as refused:
+        registry.admit(key, _match().to_rust())
+    _assert_names_the_recording_revision(str(refused.value), recorded)
 
 
 @pytest.mark.parametrize("version", [6, 9, 10])

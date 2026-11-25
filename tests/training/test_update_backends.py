@@ -109,31 +109,6 @@ def _assert_close(actual: object, expected: object) -> None:
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))
-def test_published_damped_loss_calls_the_shared_rule(name: str) -> None:
-    backend = installed_backend(name)
-    array = backend.arrays.from_numpy
-    reference = np.array([[0.5, 0.5]], np.float32)
-    rows = (
-        array(np.array([[0.7, -0.2]], np.float32)),
-        array(np.array([0], np.int64)),
-        array(np.array([-0.4], np.float32)),
-        array(np.log(reference)),
-        array(reference),
-        array(np.ones((1, 2), bool)),
-    )
-    expected = damped_policy_loss(
-        backend.rl, *rows, clip=0.2, collection_kl=0.1, tau=0.05
-    )
-    with pytest.warns(DeprecationWarning, match="0.3.0"):
-        actual = backend.rl.damped_policy_loss(
-            *rows, clip=0.2, collection_kl=0.1, tau=0.05
-        )
-    np.testing.assert_array_equal(
-        backend.arrays.to_numpy(actual), backend.arrays.to_numpy(expected)
-    )
-
-
-@pytest.mark.parametrize("name", sorted(BACKENDS))
 def test_nonfinite_advantage_keeps_the_failed_rows_and_legal_support(name: str) -> None:
     backend = installed_backend(name)
     array = backend.arrays.from_numpy

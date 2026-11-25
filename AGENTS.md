@@ -182,7 +182,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py`, `manabot/sim/policy_provider.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/policy_provider.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` enforces roots and named entry-point scopes
   in mixed CLI/library modules ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
@@ -379,7 +379,7 @@ change already touches it; do not rewrite a module only for style. Rust in
   `legacy_readings`, which is never extended. The native kinds of buffers with
   their own preparation (decision memory, history events) are not used. A
   run's saved state records its model settings and readings. Resume checks both before
-  restoring weights. Older runs supply their model settings from the initial raw policy.
+  restoring weights.
 - Model and name rules state and observation fields directly after the
   Comprehensive Rules, not derived consequence flags; new state reaches policy
   input, LLM text and learning tokens together. To extend an enum that crosses
@@ -537,7 +537,7 @@ admission. Admission-rejection fixtures must mark the config as submitted
   class names are `PyAgentError` / `PanicException`. Catch the former through
   its public export `managym.AgentError` (there is no `managym.PyAgentError`).
   Replay compares these through
-  `manabot.env.replay.matches_retained_error`, retaining original class names and
+  `managym.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
 - An observation that does not fit its buffers raises
   `managym.ObservationCapacity` (a `ValueError`, message

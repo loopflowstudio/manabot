@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 
 class SamplerCodec(Protocol):
-    def decode_legacy_sampler(self, data: bytes) -> dict[str, Any]: ...
     def sampler_parameters(
         self, model: LearnedDistribution
     ) -> Mapping[str, np.ndarray]: ...

@@ -263,8 +263,7 @@ and adaptive matchup sampling each own the episode schedule.
 Save this recipe as `snapshot_recipe.py`. Plain and snapshot collection support
 `1 <= workers <= streams`. Adaptive collection uses one worker. Single-worker
 snapshot collection also accepts a buffered `SnapshotVector` or a factory taking
-`(observation_space, match, num_envs, seed)`. The deprecated
-`InMemorySnapshotVector.factory` alias will be removed in 0.3.0.
+`(observation_space, match, num_envs, seed)`.
 
 ```python
 from typing import Literal
@@ -459,7 +458,7 @@ At a save boundary, the collector opens the fresh game that the next allocation
 would install in each slot awaiting a fresh root. Portable resume reconstructs
 those live streams and restores the host RNGs from `continuation.json`. Policy
 sampling RNGs restore within the same sampling domain and reseed when it
-changes. A legacy Torch `.pt` save starts fresh games and sampling streams.
+changes.
 
 Native vectors leave finished and failed slots parked until the collector
 refills active streams via `load_slots_into_buffers`, avoiding unused

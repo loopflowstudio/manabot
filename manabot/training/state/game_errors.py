@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace, encode_policy_batch
-from manabot.env.replay import require_replay_runtime
 from manabot.infra.config import MatchConfig, ObservationConfig
 import managym
 from managym.recording import Intervention, read_record
@@ -36,6 +35,7 @@ from managym.replay import (
     interventions_by_offset,
     matches_retained_error,
     replay_failure_inputs,
+    require_replay_runtime,
     run_bounded_replay,
 )
 

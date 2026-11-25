@@ -523,8 +523,7 @@ def test_exported_game_source_label_and_import_rejection_messages(
 
     source = tmp_path / "source.game.jsonl.gz"
     write_example_trace(source)
-    # This synthetic source-kind fixture checks transport; test_recording owns
-    # actual collector provenance and the browser proof exports a training game.
+    # Earlier releases exported training games in this Command trace format.
     game = read_trace(source)[0]
     game["source"] = {"kind": "training"}
     game.pop("game_trace_sha256")

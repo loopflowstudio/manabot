@@ -98,6 +98,7 @@ from manabot.training.state.backend import (
 )
 from manabot.training.state.continuation import (
     RestoredContinuation,
+    admit_save_format,
     export_continuation,
     restore_continuation,
     restore_host_rng,
@@ -1034,11 +1035,11 @@ def resume_training(
     backend: SelfPlayBackend,
     learner: SelfPlayLearner,
     ema: BackendPolicy | None,
-) -> tuple[Counts, RestoredContinuation]:
+) -> tuple[Counts, RestoredContinuation | None]:
     """Register the counts and admit saved tensors before opening the collector."""
     state = require_continuation(backend)
     counts = Counts()
-    restored = RestoredContinuation()
+    restored: RestoredContinuation | None = None
     model = settings.model.checkpoint_payload()
     readings = resume_readings(
         counts, learner.agent.readings, learner.agent.observation_space
@@ -1046,15 +1047,8 @@ def resume_training(
 
     def restore(folder: Path) -> None:
         nonlocal restored, readings
-        saved_model = counts.model
-        if (
-            saved_model is None
-            and counts.updates > 0
-            and (folder / "learner.pt").is_file()
-        ):
-            initial = run.out / "policies/00000000-raw.safetensors"
-            saved_model = backend.metadata(initial)["hypers"]["agent_hypers"]
-        resume_model(saved_model, settings.model)
+        admit_save_format(folder)
+        resume_model(counts.model, settings.model)
         readings = resume_readings(
             counts, learner.agent.readings, learner.agent.observation_space
         )
@@ -1103,14 +1097,13 @@ def self_play(
     with device_settings(settings, backend=backend):
         learner, ema = create(settings, seed=run.seed, backend=backend)
         counts, restored = resume_training(settings, run, backend, learner, ema)
-        host = restored.host
         rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
         with self_play_games(
             settings,
             run,
             counts,
             backend=backend,
-            snapshot=host.collector if host is not None else None,
+            snapshot=restored.host.collector if restored is not None else None,
             snapshot_vector=snapshot_vector,
             snapshot_bank=snapshot_bank,
             snapshot_scorer=snapshot_scorer,
@@ -1131,10 +1124,10 @@ def self_play(
                     updates=0,
                     **clocks(counts),
                 )
-            if host is not None:
-                restore_host_rng(host, rng)
-            if restored.sampling is not None:
-                state.restore_sampling(collector.numerics, restored.sampling)
+            if restored is not None:
+                restore_host_rng(restored.host, rng)
+                if restored.sampling is not None:
+                    state.restore_sampling(collector.numerics, restored.sampling)
 
             def export(folder: Path) -> None:
                 export_continuation(
@@ -1161,7 +1154,7 @@ def self_play(
                     out=run.out,
                     backend=backend,
                 )
-                if update == first_update:
+                if update == first_update and restored is not None:
                     if restored.sampling_reseeded:
                         row["run/sampling_reseeded"] = 1
                     if restored.adam_steps_aligned:
