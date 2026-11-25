@@ -925,12 +925,10 @@ def test_mlx_selection_draw_uses_reported_logits_and_private_seed(
     policy = backend.runtime.create_policy(space, baseline_model)
     env = managym.Env(seed=7)
     env.reset(lesson_match().to_rust())
-    obs = encode_observation(
-        space, env.observation_for_player(env.current_agent_index())
+    obs = managym.encode_observation_batch(
+        [env.observation_for_player(env.current_agent_index())], space.layout
     )
-    logits, values = policy.evaluate(
-        policy.prepare({key: row[None] for key, row in obs.items()}, inference=True)
-    )
+    logits, values = policy.evaluate(policy.prepare(obs, inference=True))
     scores = mx.array(logits[0])
     predictor = backend.collection.SelectionPredictor(policy, seed=17)
     key = mx.random.key(17)
