@@ -2,38 +2,91 @@
 
 All 56 scoped Foundations rows are `implemented` in the FDN ledger with directed
 evidence (Demonic Pact and Maze's End already had working definitions;
-Abyssal Harvester's `blocked_by` is cleared). Slices 1–17 are built. PR #605 is
-published at `f05f1c57ac`; CI was pending at the 2026-11-25 realign.
+Abyssal Harvester's `blocked_by` is cleared). Slices 1–17 and `lf compress`
+(`558cc971b8`) are built.
 
-**Next: gate — watch PR #605 CI (`Engine Budget`, `Academy UI`, `Integration`,
-`Academy Integration`, `Rust Tests`), fix forward, then demo.** No unbuilt slices.
+**Next: gate — fix `CI/Academy Integration (ubuntu-latest, play)` failure on PR
+#605 (`558cc971b8`), re-verify green CI, then demo.** No unbuilt slices and no
+further engine-performance iteration needed (`CI/Engine Budget` and `CI/Rust
+Tests` already passed on `558cc971b8`; all `baseline.json` digests matched
+without needing `engine_budget.py record`).
 
-Deferred to CI (not run locally under high host load): release
-`bench_steps`/`bench_search` on the Ubuntu x86_64 Engine Budget runner, full
-workspace debug `nextest` after Slice 17, Playwright `Academy UI`. If CI is
-missing the measure, run
-`gh workflow run ci.yml --ref jack/mtg-431-close-foundations-stack-copies-choices-costs -f measure=<commit>`.
-Hash version 33 moves match-state digests: adopt with
-`scripts/engine_budget.py record --reason` if Engine Budget reports a digest change.
+## Measured performance (`558cc971b8`, post-Slice-17 + compress)
 
-## Measured performance (Apple M4 Max, contended host; vs base `fcc96be003`)
+**Same-machine uninstrumented release (Apple M4 Max, contended host; vs merge-base `63bdfc0356`):**
 
-- `bench_steps` −2.19% instructions (45.707B vs 46.731B), `bench_search` −5.34%
-  (972.6B vs 1,027.6B); all digests, counts and `score_digest_blake3` match
-  `managym/perf/baseline.json`. Pre-Slice-17 profile at `ff0f872c3e` agreed.
-- `bench_states`: `entry-choices --sizes 4,8,16` 29.9B → 10.1B; `changeling-anthems`
-  80.6B → 9.35B; `storm-copies`, `genesis-wave`, `ventmaw-pools` flat with 0
-  payment search calls. `mixed-pools` (added in `bench_states.rs`) profiled
-  `PaymentModel::witness` 54% at size 16 — the target of Slice 17 item 1; its
-  post-Slice-17 number was not re-measured.
-- Residuals ruled out for this Task (0% curated-deck impact): `changeling-anthems`
-  cast-choice search (inherent layer board + `automatic_upfront_path`) and
-  `entry-choices` cast-choice search (needs cross-step payment-model reuse).
+- `bench_steps`: `45.543B, 45.494B` (mean **45.518B** instructions, `13.975B` cycles)
+  vs base `47.182B, 47.109B` (mean **47.145B**, `14.917B` cycles) → **−3.45%
+  instructions** (−6.32% cycles); `512` games, `0` capped, `118,559` steps,
+  digest `10601622128491155944` identical.
+- `bench_search`: **967.342B** instructions (`267.498B` cycles) vs base
+  **1,033.723B** (`272.810B` cycles) → **−6.42% instructions** (and −5.3B vs
+  pre-Slice-17 `972.648B`); seeds 1–3 digests (`13638875039089371439`,
+  `5466143068363283977`, `9998925852575961750`), `score_digest_blake3`,
+  `simulations` (`7,680 / 8,064 / 7,424`), `cap_hits` (`0`), and every
+  `action_counts` array match base and `managym/perf/baseline.json` identically.
+- **CI cross-check (`Engine Budget` on `558cc971b8`, Ubuntu 24.04 x86_64 AMD EPYC 9V45 vs reference `7d3ac1eb1`):**
+  `steps` **32,207.8/s** vs `30,980.5/s` (**+3.96%**), `search total`
+  **81.854 s** vs `87.583 s` (**−6.54%**), `search worst` **1.992 s** vs
+  `2.141 s` (**−6.96%**), all digests identical (`PASS`).
+- **CPU profiles (`/usr/bin/sample`, 1 ms):**
+  - `bench_steps` (4,100 samples): `Observation::new` `39.66%` (`populate_permanents`
+    `14.22%`, `player_data` `8.78%`, `populate_cards` `7.27%`), `layer_board`
+    `19.10%` (`layers::Context::evaluate` `15.44%`), `indexed_sources` `16.85%` /
+    `drain_pending_events` `16.49%`, `priority_action_space` `16.10%`,
+    `payment_model` `5.39%`, `finish_mana_payment` `4.78%`. All MTG-431 / Slice 17
+    mana paths are `< 0.8%`.
+  - `bench_search` (23,163 samples): `layer_board` `35.17%` (`layers::Context::evaluate`
+    `28.73%`, `Context::apply` `9.55%`), `indexed_sources` `32.37%` /
+    `drain_pending_events` `31.87%`, `priority_action_space` `24.59%`,
+    `advance_event_batch` `20.93%`, `payment_model` `8.83%`,
+    `finish_mana_payment` `8.30%`, `advance_mana_spend` `5.98%`. Zero MTG-431
+    regressions or bottlenecks.
+- **`bench_states` (release `--features benchmark`, touched MTG-431 shapes):**
+  - `mixed-pools`: `--sizes 2,3,4` **1.265B** inst (vs pre-Slice-17 `1.328B`,
+    **−4.74%**); `--sizes 4,8,16` **4.172B** inst (vs pre-Slice-17 `4.497B`,
+    **−7.23%**); linear single-step `pooled/actions` (`62 → 94 → 158` calls,
+    `42 → 66 → 114` states) and `priority/search` (`5,392 → 11,520 → 24,026`
+    calls); `pooled/search` `plans 638 → 668 → 825` (down from `680 → 710 → 879`
+    via unified `SourceClassCache`), `calls 9,043 → 15,328 → 33,291`,
+    `states 6,029 → 10,651 → 23,801`. Multi-run size-16 profile (5,063 samples):
+    `SearchEquivalence::insert_projected` `0.00% → 8.33%`,
+    `Mana::spending_choices` `7.59% → 0.06%` (`pop_next_pip` `0.10%`,
+    `spend_one` `0.02%`), `[(ManaClass, [u8; 6])]::hash_slice` `8.33% → 3.99%`,
+    `CardPredicate::hash` `4.89% → 2.51%`. Digest moved (`3ad67dc7` → `fe24b40f`)
+    solely because `bench_states` folds `payment.witness_digest` and fewer
+    redundant `plan()` calls ran; debug oracles confirm unchanged legality.
+  - `entry-choices --sizes 4,8,16`: **10.342B** inst (29.93B pre-Slice-15),
+    linear `priority/step:activate` (`69 → 110 → 188`) and `priority/search`
+    (`6,543 → 9,513 → 14,311`).
+  - `changeling-anthems --sizes 4,8,16`: **9.393B** inst (80.6B pre-Slice-15),
+    0 payment calls on all single-step layers.
+  - `storm-copies --sizes 4,8` (**1.576B**), `genesis-wave --sizes 4,8,16`
+    (**0.490B**), `ventmaw-pools --sizes 4,8,16` (**0.223B**): all flat with 0
+    payment search calls; `float-origins --sizes 4,8` (**2.165B**).
+- **Debug invariants & semantics:** `61/61` debug `flow::mana::` tests, `14/14`
+  debug `managym-state` `mana` tests, full `CI/Rust Tests`, and debug
+  `bench_states` with search/dedup oracles (`mixed-pools --sizes 2,3`,
+  `entry-choices --sizes 4,8`, `changeling-anthems --sizes 4,8`,
+  `ventmaw-pools --sizes 4,8`, `float-origins --sizes 4`) all passed with zero
+  assertions. Audited `fd3596f409`'s unified `SourceClassCache`: both callers
+  (`mana_ability_actions`, `useful_payment_taps`) cache only pure feasibility
+  results while emitting every source's own `Action`.
+- **Negative results / open bottlenecks ruled out for MTG-431 (0% curated-deck impact):**
+  - `mixed-pools` remaining `CardPredicate::hash` (`2.51%` of `mixed-pools`
+    size 16) occurs only inside small pre-`GROWTH` plans before feasibility
+    projection triggers; total `mixed-pools --sizes 4,8,16` is `0.40 s` user.
+  - `changeling-anthems` `cast-choice/search` (`1,384 → 6,061 → 19,158` calls:
+    inherent layer board + `automatic_upfront_path`) and `entry-choices`
+    `cast-choice/search` (`8,999 → 24,891 → 55,810` calls: requires cross-step
+    payment-model reuse).
 
-Review note for gate: Slices 16–17 grew `managym/src/flow/mana.rs`
-(`fixed_sufficient` with debug oracle, `SourceClassCache` dedup oracle, sibling
-pruning, `ProjectedClasses`). Check each fast path still earns its place against
-the numbers above; delete any the numbers do not support.
+Review note for gate: Slices 16–17 and `lf compress` (`fd3596f409`, which
+already deleted ~125 lines of duplicate exact-rider projection) left
+`fixed_sufficient`, unified `SourceClassCache`, sibling pruning, and
+`PurposeProjection` in `managym/src/flow/mana.rs`; all four are supported by
+the measured `bench_steps`/`bench_search`/`bench_states` gains above and
+verified by debug oracles.
 
 Behavior review: no open defects. Nits, not blocking: Academy shows Retarget
 as "Choose a target for …" and `KeepPermanents` as "Choose from the revealed
