@@ -16,7 +16,6 @@ from typing import (
 )
 
 import numpy as np
-from typing_extensions import deprecated
 
 from managym.disclosure import DecklistDisclosure, DecklistSampling
 
@@ -166,8 +165,6 @@ class CatalogTokens(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
-
 def catalog_tokens() -> CatalogTokens:
     """Tokenized rules text of every catalog definition, rows by CardDefId."""
 
@@ -186,13 +183,6 @@ def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same
     concept. Namespaces: `token`, `name`, `restriction`."""
-
-@deprecated("use catalog_tokens; removed in 0.3.0")
-def learning_catalog() -> CatalogTokens: ...
-@deprecated("use catalog_token_value; removed in 0.3.0")
-def learning_token_value(name: str) -> int: ...
-@deprecated("use record_vocabulary; removed in 0.3.0")
-def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]: ...
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -1325,8 +1315,6 @@ class ObservationCapacity(ValueError):
     """An observation does not fit its buffers (message
     ``observation capacity exceeded: <field> <actual> > <capacity>``)."""
 
-# Deprecated: the label of the last numbered world; removed in 0.3.0.
-WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 # Most options one naming prompt offers; larger scopes publish groups first.

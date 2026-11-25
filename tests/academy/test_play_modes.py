@@ -189,12 +189,12 @@ def _write_tiny_checkpoint(path) -> None:
     )
 
 
-def test_new_game_rejects_bad_villain_configs(isolated_traces):
+def test_new_game_rejects_bad_villain_configs(isolated_traces: Path) -> None:
     cases = [
-        ({"villain_type": "nonsense"}, "villain_type"),
-        ({"villain_type": "checkpoint"}, "opponent_sha256"),
+        ({"villain_type": "checkpoint"}, "villain_type must be one of"),
+        ({"villain_type": "policy"}, "opponent_sha256"),
         (
-            {"villain_type": "checkpoint", "villain_checkpoint": "/no/such/file.pt"},
+            {"villain_type": "policy", "villain_checkpoint": "/no/such/file.pt"},
             "opponent_sha256",
         ),
         ({"villain_type": "search", "villain_sims": 0}, "villain_sims"),

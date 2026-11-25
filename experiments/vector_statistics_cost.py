@@ -22,7 +22,7 @@ def cell(arm: str) -> dict[str, Any]:
 
     from manabot.env.observation import ObservationSpace
     import managym
-    from managym.recording import CapturedVector
+    from managym.recording import RecordedVectorEnv
     from managym.statistics import Behaviour, CardPerformance, Reducer
 
     class Choices(Reducer[int]):
@@ -39,7 +39,7 @@ def cell(arm: str) -> dict[str, Any]:
     questions = (
         [CardPerformance(), Behaviour(), Choices()] if arm == "edited-hooks" else []
     )
-    vector = CapturedVector(
+    vector = RecordedVectorEnv(
         num_envs=count, seed=7, **({"reducers": questions} if questions else {})
     )
     arrays = ObservationSpace().encoder.allocate(count)

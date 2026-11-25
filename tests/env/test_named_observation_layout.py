@@ -308,25 +308,7 @@ assert 'torch' not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize(
-    "old,new,args",
-    [
-        ("learning_catalog", "catalog_tokens", ()),
-        ("learning_token_value", "catalog_token_value", ("Ally",)),
-        ("learning_record_names", "record_vocabulary", ()),
-    ],
-)
-def test_deprecated_catalog_names_warn_and_delegate(
-    old: str, new: str, args: tuple[str, ...]
-) -> None:
-    with pytest.warns(DeprecationWarning, match=rf"0\.3\.0.*managym\.{new}"):
-        assert getattr(managym, old)(*args) == getattr(managym, new)(*args)
-
-
-def test_world_version_warns_and_names_its_removal() -> None:
-    assert "WORLD_VERSION" not in vars(managym)
-    with pytest.warns(DeprecationWarning, match=r"WORLD_VERSION.*0\.3\.0"):
-        assert managym.WORLD_VERSION == "w17"
+def test_world_identity_names_the_installed_cards() -> None:
     assert set(managym.world_identity()) == {"card_digest"}
 
 

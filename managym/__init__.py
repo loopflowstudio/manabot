@@ -6,11 +6,10 @@ shared decision/protocol adapters live beside this module.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 import sys
-from typing import Literal, ParamSpec, TypeVar, overload
-import warnings
+from typing import Literal, overload
 
 from managym.disclosure import DecklistSampling
 
@@ -22,40 +21,6 @@ from ._managym import format
 # native ``format`` lets ``import managym.format`` and ``from managym.format
 # import Limited`` resolve to the same object as ``managym.format``.
 sys.modules[f"{__name__}.format"] = format
-
-# ---------------------------------------------------------------------------
-# Deprecated spellings, removed in 0.3.0. Engine names describe what managym
-# produces; these older names described how manabot's policy consumes it.
-# ---------------------------------------------------------------------------
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-
-
-def _deprecated_alias(old: str, new: Callable[_P, _R]) -> Callable[_P, _R]:
-    def alias(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-        warnings.warn(
-            f"managym.{old} is deprecated and removed in 0.3.0; "
-            f"use managym.{new.__name__}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return new(*args, **kwargs)
-
-    alias.__name__ = old
-    alias.__qualname__ = old
-    alias.__doc__ = f"Deprecated alias of :func:`{new.__name__}`, removed in 0.3.0."
-    return alias
-
-
-learning_catalog = _deprecated_alias("learning_catalog", _managym.catalog_tokens)
-learning_token_value = _deprecated_alias(
-    "learning_token_value", _managym.catalog_token_value
-)
-learning_record_names = _deprecated_alias(
-    "learning_record_names", _managym.record_vocabulary
-)
-
 
 ManaPayment = Literal["auto", "manual"]
 ManaFloats = Literal["off", "usable", "all"]
@@ -142,17 +107,3 @@ class GameSetup(Sequence[_managym.PlayerConfig]):
                 mana_floats=(seats + ("off", "off"))[:2],
             )
         return self.players[index]
-
-
-def __getattr__(name: str) -> str:
-    # The engine carries no world label; the last one it carried was w17.
-    if name == "WORLD_VERSION":
-        warnings.warn(
-            "managym.WORLD_VERSION is deprecated and removed in 0.3.0; the "
-            "engine has no world label, and managym.world_identity() names "
-            "its cards",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return "w17"
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

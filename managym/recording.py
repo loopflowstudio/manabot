@@ -632,15 +632,6 @@ class _Capture:
     def _snapshot(self) -> GameRecord:
         raise NotImplementedError
 
-    def evidence(self) -> GameRecord:
-        """Deprecated spelling of snapshot, removed in 0.3.0."""
-        warnings.warn(
-            "evidence() is deprecated; use snapshot(); removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.snapshot()
-
     def snapshot(self) -> GameRecord:
         """Copy replay inputs without accessing a live native game from a watchdog."""
         evidence = self._snapshot()
@@ -2317,36 +2308,3 @@ def read_record(path: Path) -> GameRecord:
     if record is None or next(records, None) is not None:
         raise ValueError("expected exactly one game record")
     return record
-
-
-class FailureEvidence(GameRecord):
-    """Deprecated name of GameRecord, removed in 0.3.0."""
-
-    def __init__(self, **data: Any) -> None:
-        warnings.warn(
-            "FailureEvidence is deprecated; use GameRecord; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        super().__init__(**data)
-
-
-def read_failure(path: Path) -> GameRecord:
-    warnings.warn(
-        "read_failure is deprecated; use read_record; removal in 0.3.0",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return read_record(path)
-
-
-def __getattr__(name: str) -> Any:
-    if name == "CapturedVector":
-        warnings.warn(
-            "managym.recording.CapturedVector is deprecated; "
-            "use RecordedVectorEnv; removal in 0.3.0",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return RecordedVectorEnv
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

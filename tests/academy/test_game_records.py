@@ -235,10 +235,6 @@ def test_journal_listing_projects_the_complete_file(tmp_path: Path) -> None:
         "interrupted",
     )
     assert row.digest == read_record(path).sha256
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        assert row.deal_seed == row.seed
-    with pytest.warns(DeprecationWarning, match="removal in 0.3.0"):
-        assert row.game_trace_sha256 == row.digest
     checkpoint = json.loads(path.read_text().splitlines()[0])
     with pytest.raises(ValueError, match="complete file"):
         records_from_source(checkpoint)
