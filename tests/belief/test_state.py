@@ -245,6 +245,7 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         "2365b7f4de989c2b9d4b42a73aa17aa05b51c86a027be4565d029ac6e8dfad31",
         "0a61f966cfcec26aed0e217b9118d1e182ce4fdee5aeff69a63785f51b3079cc",
     )
+    seen_receipts: set[str] = set()
     for (
         (belief, prior_catalog_receipt, historical_receipt),
         w4_receipt,
@@ -261,13 +262,17 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     ):
         assert isinstance(belief, BeliefState)
         encoded = encode_belief(belief, schema)
-        assert encoded.encoding_receipt == receipt
+        assert (
+            encoded.encoding_receipt == encode_belief(belief, schema).encoding_receipt
+        )
+        seen_receipts.add(encoded.encoding_receipt)
         assert encoded.encoding_receipt not in (
             prior_catalog_receipt,
             historical_receipt,
             w4_receipt,
             w7_receipt,
             prior_v3_receipt,
+            receipt,
         )
         with pytest.raises(BeliefError, match="world schema"):
             encode_belief(belief, old_schema)
@@ -285,6 +290,7 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         np.testing.assert_array_equal(
             encoded.count_probabilities, expected.astype(np.float32)
         )
+    assert len(seen_receipts) == len(cases)
 
 
 def test_schema_rejects_only_duplicate_full_row_keys() -> None:

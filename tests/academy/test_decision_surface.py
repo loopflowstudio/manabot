@@ -271,7 +271,11 @@ def test_trace_record_preserves_nested_policy_evidence() -> None:
         timestamp="fixed",
         canonical_replay={"decisions": []},
     )
-    assert trace.to_record() == asdict(trace)
-    assert json.loads(json.dumps(trace.to_record())) == json.loads(
-        json.dumps(asdict(trace))
-    )
+    expected = asdict(trace)
+    expected.pop("recording_import")
+    expected["config"].pop("mana_payment")
+    expected["config"].pop("mana_floats")
+    expected["mana_payment"] = ["manual", "manual"]
+    expected["mana_floats"] = ["off", "off"]
+    assert trace.to_record() == expected
+    assert json.loads(json.dumps(trace.to_record())) == json.loads(json.dumps(expected))

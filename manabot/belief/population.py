@@ -406,9 +406,11 @@ def _pack_inputs(
         raise BeliefError("belief training batch must be non-empty")
     vocabulary = _card_vocabulary(schema)
     names = tuple(name for _, name in vocabulary)
-    count_rows: list[list[int]] = []
-    log_p0: list[float] = []
-    world_batch: list[int] = []
+    name_columns = {name: index for index, name in enumerate(names)}
+    count_blocks: list[np.ndarray] = []
+    log_p0_blocks: list[np.ndarray] = []
+    world_batch_blocks: list[np.ndarray] = []
+    space_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     offsets = [0]
     history_actor_roles: list[int] = []
     history_kinds: list[int] = []
@@ -418,11 +420,25 @@ def _pack_inputs(
     card_ids = {name: index + 1 for index, name in enumerate(names)}
     for decision_index, (space, history) in enumerate(inputs):
         _validate_input(space, history, schema)
-        for world in space.worlds:
-            count_rows.append([world.count(name) for name in names])
-            log_p0.append(math.log(world.weight) - math.log(space.total_weight))
-            world_batch.append(decision_index)
-        offsets.append(len(count_rows))
+        cached = space_cache.get(space.identity)
+        if cached is None:
+            support = len(space.worlds)
+            counts = np.zeros((support, len(names)), dtype=np.int64)
+            log_total = math.log(space.total_weight)
+            log_weights = np.empty(support, dtype=np.float64)
+            for row_index, world in enumerate(space.worlds):
+                for card_name, count in world.hand:
+                    col = name_columns.get(card_name)
+                    if col is not None:
+                        counts[row_index, col] = count
+                log_weights[row_index] = math.log(world.weight) - log_total
+            cached = (counts, log_weights)
+            space_cache[space.identity] = cached
+        counts, log_weights = cached
+        count_blocks.append(counts)
+        log_p0_blocks.append(log_weights)
+        world_batch_blocks.append(np.full(len(counts), decision_index, dtype=np.int64))
+        offsets.append(offsets[-1] + len(counts))
         encoded_events: list[tuple[int, int, int]] = []
         for event in history.semantic_events:
             if event.actor_role_id not in {
@@ -460,9 +476,9 @@ def _pack_inputs(
         if target < -1 or target >= support_size:
             raise BeliefError("belief target world is outside its local support")
     return PackedBeliefBatch(
-        world_counts=torch.tensor(count_rows, dtype=torch.int64),
-        log_p0=torch.tensor(log_p0, dtype=torch.float64),
-        world_batch=torch.tensor(world_batch, dtype=torch.int64),
+        world_counts=torch.from_numpy(np.concatenate(count_blocks, axis=0)),
+        log_p0=torch.from_numpy(np.concatenate(log_p0_blocks, axis=0)),
+        world_batch=torch.from_numpy(np.concatenate(world_batch_blocks, axis=0)),
         offsets=torch.tensor(offsets, dtype=torch.int64),
         target_world=torch.tensor(target_values, dtype=torch.int64),
         history_actor_role_ids=torch.tensor(history_actor_roles, dtype=torch.int64),

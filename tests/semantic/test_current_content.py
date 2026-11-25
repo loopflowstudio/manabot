@@ -113,6 +113,8 @@ def test_set_filter_narrows_the_world_pool_by_key_prefix() -> None:
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
     None
 ):
+    from manabot.verify.text_observation import keep_opening_hands
+
     env = managym.Env(seed=28, skip_trivial=False)
     obs, _ = env.reset(
         [
@@ -120,6 +122,7 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
             for key in ("tla_red", "tla_white")
         ]
     )
+    obs = keep_opening_hands(env, obs)
     for _ in range(20):
         if int(obs.turn.step) == 3:
             break

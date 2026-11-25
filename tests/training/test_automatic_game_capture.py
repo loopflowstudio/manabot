@@ -69,11 +69,11 @@ def _bounded(path: Path) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
-@pytest.mark.parametrize("field", ["world", "engine_extension_sha256", "source_sha256"])
+@pytest.mark.parametrize("field", ["engine_extension_sha256", "source_sha256"])
 @pytest.mark.parametrize("allow_changed_runtime", [False, True])
 def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> None:
     identities = {**runtime_identities(), field: "changed"}
-    if field == "world" or not allow_changed_runtime:
+    if not allow_changed_runtime:
         with pytest.raises(ValueError, match="differs|bytes differ"):
             require_replay_runtime(
                 identities,
@@ -87,6 +87,14 @@ def test_replay_runtime_admission(field: str, allow_changed_runtime: bool) -> No
             )
             == runtime_identities()["engine_extension_sha256"]
         )
+    # Historical records may carry a world label; current readers ignore it.
+    with_world = {**runtime_identities(), "world": "changed"}
+    assert (
+        require_replay_runtime(
+            with_world, allow_changed_runtime=False, require_source=True
+        )
+        == runtime_identities()["engine_extension_sha256"]
+    )
 
 
 def test_replay_requires_source_only_for_automatic_records() -> None:
@@ -369,9 +377,9 @@ def test_value_search_failure_keeps_sampled_pool_actions(
         agent = None
 
     def invalid_actions(
-        buffers: dict[str, np.ndarray], rows: np.ndarray, rng: np.random.Generator
+        batch: managym.ObservationBatch, rng: np.random.Generator
     ) -> np.ndarray:
-        return np.full(len(rows), -1, dtype=np.int64)
+        return np.full(len(batch.action_counts), -1, dtype=np.int64)
 
     monkeypatch.setattr(value, "_random_valid_actions", invalid_actions)
     scope = CaptureScope(tmp_path)
