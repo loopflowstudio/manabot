@@ -415,9 +415,39 @@ pub struct ContinuousEffectView {
     pub timestamp: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeywordAbilityView {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub granted: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermanentRestriction {
+    CantBeBlocked,
+    CantBlock,
+    CantAttackOrBlock,
+    DoesntUntap,
+    MustAttack,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+pub struct PermanentDetails {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keyword_abilities: Vec<KeywordAbilityView>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacks_despite_defender: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restrictions: Vec<PermanentRestriction>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(flatten)]
+    pub details: PermanentDetails,
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]

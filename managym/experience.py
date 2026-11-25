@@ -413,7 +413,29 @@ class CopyView(ProtocolModel):
     )
 
 
+class KeywordAbilityView(ProtocolModel):
+    label: str
+    granted: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class PermanentRestriction(str, Enum):
+    CANT_BE_BLOCKED = "cant_be_blocked"
+    CANT_BLOCK = "cant_block"
+    CANT_ATTACK_OR_BLOCK = "cant_attack_or_block"
+    DOESNT_UNTAP = "doesnt_untap"
+    MUST_ATTACK = "must_attack"
+
+
 class LegacyPermanentView(ProtocolModel):
+    keyword_abilities: list[KeywordAbilityView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    attacks_despite_defender: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    restrictions: list[PermanentRestriction] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

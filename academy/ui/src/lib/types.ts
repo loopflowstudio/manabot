@@ -94,7 +94,22 @@ export interface ContinuousEffect {
   timestamp: number;
 }
 
+export interface KeywordAbilityView {
+  label: string;
+  granted?: boolean;
+}
+
+export type PermanentRestriction =
+  | 'cant_be_blocked'
+  | 'cant_block'
+  | 'cant_attack_or_block'
+  | 'doesnt_untap'
+  | 'must_attack';
+
 export interface PermanentState {
+  keyword_abilities?: KeywordAbilityView[];
+  attacks_despite_defender?: boolean;
+  restrictions?: PermanentRestriction[];
   types?: CardTypes;
   is_token?: boolean;
   temp_subtypes?: string[];

@@ -1029,6 +1029,21 @@
         "focus"
       ]
     },
+    "KeywordAbilityView": {
+      "type": "object",
+      "properties": {
+        "granted": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "label"
+      ]
+    },
     "LegacyCardTypesView": {
       "type": "object",
       "properties": {
@@ -1363,6 +1378,9 @@
           "description": "Attacking in the current combat.",
           "type": "boolean"
         },
+        "attacks_despite_defender": {
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
@@ -1486,6 +1504,12 @@
             "null"
           ]
         },
+        "keyword_abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeywordAbilityView"
+          }
+        },
         "keywords": {
           "description": "Keywords it has after continuous effects, in keyword declaration order.",
           "type": "array",
@@ -1509,6 +1533,12 @@
         },
         "power": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "restrictions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PermanentRestriction"
+          }
         },
         "summoning_sick": {
           "type": "boolean"
@@ -1989,6 +2019,16 @@
       "additionalProperties": false,
       "required": [
         "phrase"
+      ]
+    },
+    "PermanentRestriction": {
+      "type": "string",
+      "enum": [
+        "cant_be_blocked",
+        "cant_block",
+        "cant_attack_or_block",
+        "doesnt_untap",
+        "must_attack"
       ]
     },
     "PlayerControlView": {

@@ -149,3 +149,26 @@ fn checked_in_schema_is_generated_from_the_rust_authority() {
     generated.push('\n');
     assert_eq!(CHECKED_IN_SCHEMA, generated);
 }
+
+#[test]
+fn permanent_details_round_trip_alongside_historical_permanents() {
+    use managym::experience::LegacyPermanentView;
+    use serde_json::{from_value, json, to_value};
+
+    let mut row = json!({
+        "id": 7, "name": "Platypus-Bear", "controller_id": 1, "damage": 0,
+        "summoning_sick": false, "tapped": false, "power": 3, "toughness": 3,
+        "base_power": 3, "base_toughness": 3, "plus1_counters": 0,
+        "keywords": ["defender"],
+    });
+    let round_trip = |row: &serde_json::Value| {
+        to_value(from_value::<LegacyPermanentView>(row.clone()).unwrap()).unwrap()
+    };
+    assert_eq!(round_trip(&row), row);
+    row["attacks_despite_defender"] = json!(true);
+    row["restrictions"] = json!(["cant_block"]);
+    row["keyword_abilities"] = json!([{"label": "Prowess", "granted": true}]);
+    assert_eq!(round_trip(&row), row);
+    row["unknown_detail"] = json!(true);
+    assert!(from_value::<LegacyPermanentView>(row).is_err());
+}

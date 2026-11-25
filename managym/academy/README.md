@@ -140,11 +140,14 @@ world identities, tensor inputs and frozen evidence are unchanged. Native
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
 incarnation and board display ID; `permanent_details_json` attaches effective
 battlefield details (Layer 6 keyword abilities, overridden Defender and active
-combat/untap restrictions) to `decision_surface_view` without altering
+combat/untap restrictions) by public permanent ID. Each keyword ability
+instance has a label and an optional `granted` flag, so a creature can carry
+two different Ward costs. Firebending X keeps its printed X because its trigger
+determines the amount on resolution. The details travel with `decision_surface_view` without altering
 `Observation` or default `serialize_observation()`. These read-only projections
 introduce no legal actions or editable payment transaction. Other viewers
-receive only public ownership/kind and committed facts. Retained frames omit
-these optional fields.
+receive only public ownership/kind and committed facts. Earlier recordings
+can omit these optional fields.
 
 For Precision, click **Start game**, inspect **Deadly Precision**, then explicitly
 choose its cast offer and an Inspector target. In the Treasure demo, reserve that
