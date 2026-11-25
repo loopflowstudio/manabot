@@ -363,12 +363,20 @@ def load_python_policy(ref: str, *, name: str | None = None) -> Policy:
         if spec is None or spec.loader is None:
             raise ValueError(f"Could not import Python policy file: {target}")
         module = importlib.util.module_from_spec(spec)
+        previous_module = sys.modules.get(mod_name)
+        sys.modules[mod_name] = module
         parent_dir = str(resolved.parent)
         added = parent_dir not in sys.path
         if added:
             sys.path.insert(0, parent_dir)
         try:
             spec.loader.exec_module(module)
+        except BaseException:
+            if previous_module is None:
+                sys.modules.pop(mod_name, None)
+            else:
+                sys.modules[mod_name] = previous_module
+            raise
         finally:
             if added and parent_dir in sys.path:
                 sys.path.remove(parent_dir)

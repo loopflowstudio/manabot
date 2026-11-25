@@ -29,7 +29,7 @@ export type Endpoint =
   | { kind: 'player'; index: number }
   /** A spell or ability on (or just off) the stack, by its card or stack-object id. */
   | { kind: 'stack'; id: number }
-  /** A spell or ability on the stack, by its stack entry id. */
+  /** A live spell or ability on the stack, by its stack entry id (including abilities with no card). */
   | { kind: 'entry'; id: number };
 
 export interface BoardLine {

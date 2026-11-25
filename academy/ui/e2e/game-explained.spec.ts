@@ -8,6 +8,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { selectDeck } from './deck-selection';
+import { showEachCreaturesChoice } from './fixtures/combat';
 import { tableSnapshot } from './fixtures/table';
 import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { PresentationEvent, RecoveryEnvelope } from '../src/lib/types';
@@ -20,6 +21,7 @@ async function playToDeath(page: Page): Promise<boolean> {
     const deathLines = page.locator('[data-testid=game-log] [data-testid=history-consequence]').filter({ hasText: /died · lethal damage/ });
     if (await deathLines.count() > 0) return true;
     if (await page.getByTestId('result-card').isVisible()) break;
+    await showEachCreaturesChoice(page);
     const rows = page.getByTestId('action-option');
     const labels = await rows.allTextContents();
     // Prefer casting burn/creatures, targeting creatures, and attacking/blocking so combat or burn kills a creature.

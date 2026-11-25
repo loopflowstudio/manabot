@@ -600,6 +600,32 @@ with several actions opens them beside the card; choose one, or press Escape to
 close the list without acting. A card with no action sends nothing when
 clicked.
 
+You can also play or cast from hand by dragging (mouse, pen or touch). Press a
+playable land or castable spell and drag it onto the battlefield: the full card
+follows the pointer — even when lifted from a covered fan — while its slot stays
+stepped back in your hand. Any lands the automatic payer would tap stay outlined
+on the board, and a dashed frame over the battlefield names what releasing does
+(**Play Island**, **Cast Lightning Bolt**, or **Choose how to play …** when the
+card has several legal offers). Over your hand, the rail or the bars, the frame
+softens and reads **Release to cancel**. Release over the battlefield to commit
+a single offer — the card travels from where you dropped it onto the stack or
+battlefield — or to open the card's choices at the drop point when it has
+several; choosing an offer commits it, while **Cancel** or Escape returns the
+card to your hand and restores focus to it. Release outside the battlefield, or
+press Escape while dragging, to return the card with nothing sent. If the server
+rejects a dropped play, the card returns to your hand and the notice explains
+why. Discard and "choose a card" prompts in hand, and choices in an out-of-board
+tray, stay click-only, and casting a spell stays separate from choosing its
+target.
+
+When a spell or ability asks for a target, click a legal target or pull a line
+from the source — the casting spell or ability on the stack, or the asked
+permanent on the battlefield — onto any legal permanent, player plate or stack
+entry (including non-spell abilities). A dashed outline marks each legal
+permanent while you drag. The outline turns solid when the line snaps to it.
+When the line snaps to a target, the board previews any lands it would tap.
+Release to choose that target, or release elsewhere or press Escape to cancel.
+
 The board is split at the centre line: the opponent's creatures face yours,
 with each side's lands and other permanents behind them. A plate at the left of
 each half shows the player, life, zone counts and floating mana as mana
@@ -732,7 +758,8 @@ The rail holds:
   buttons, so a click on a card never declines.
 - **All legal choices**: every offer of the decision, numbered, with the total
   count. It is the complete list; press a number key to choose one of the first
-  nine.
+  nine. During a live combat draft the per-creature answers fold under a closed
+  disclosure (see combat below).
 - **History**: everything that happened, in the order it happened, grouped by
   turn. A move names the player who made it, and what followed from it is
   indented beneath it with the rule that did it. Select a line to see the
@@ -760,11 +787,24 @@ opaque and sit above the lines between targets, so a line never crosses them.
 
 Combat is drafted whole. At an attack, every creature that can attack is
 outlined; click one (or focus it and press Enter) to add it to the attack or
-leave it out. Drafted attackers are ringed with a dashed line and lean in, and
-a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
-rail. At a block, click a blocker, then the attacker it blocks; a blocker
-that can block only one attacker takes it at once, and the block's line is
-drawn. The prompt reads the whole plan ("Attack with 3 · not with
+leave it out, or press inside the battlefield rows and drag a box across the
+creatures you want. Every declarable creature touching the box highlights as you
+sweep and joins the drafted attack on release; dragging a box only adds (click a
+creature or **Clear the draft** to remove one), and box selection starts only
+inside the battlefield rows during an attack draft — never on player plates,
+your hand, the rail or the bars, and never for lands or cards that commit one
+action at a time. Drafted attackers are ringed with a dashed line and lean in,
+and a pile of identical creatures takes a count ("2 of 3 Tiger-Seal") in the
+rail. At a block, drag a declarable blocker onto an attacker it can block, or
+click the blocker and then the attacker. Dragging draws a live blocking line,
+lights up legal attackers and hides an already-assigned blocker's old line while
+you move it; release on a legal attacker to assign or move the block, or release
+elsewhere or press Escape to put it back without disturbing a blocker you
+clicked. On click, a blocker that can block only one attacker still takes it at
+once, and clicking still takes a block back. When combat preview is unavailable
+and blocks are asked one creature at a time, dragging from the blocker onto an
+attacker still draws a blocking line and submits that block. The prompt reads
+the whole plan ("Attack with 3 · not with
 Tiger-Seal", "Badgermole Cub and Ally on Invasion Reinforcements") and
 nothing is declared while drafting. The engine still asks about one creature
 at a time: Academy's read-only combat preview replays the draft on a copy of
@@ -772,15 +812,30 @@ the game and returns the exact answers that declare it, or the first one it
 refuses and why (a lone blocker of a creature with menace, a creature that
 cannot attack). Confirm (Space) sends those answers one by one; if the game
 asks anything the preview did not predict, sending stops and the board shows
-where the game stands. Escape stops a confirmed plan between answers. A
-reload keeps the draft for the same decision in that tab. Each creature's own
-answers stay in the full list of legal choices. **Pass turn** (F6) passes
+where the game stands. While a priority stop updates, your draft and selected
+blocker stay in place. If the first declaration is refused at the same
+decision, you can edit the draft and confirm again. If a later declaration
+is refused, the board keeps the accepted declarations and lets you draft
+from that decision. Escape stops a confirmed plan between answers. A
+reload keeps the draft for the same decision in that tab. While a draft is
+open in live play it is the only way to declare: each creature's own answers
+stay in the list of legal choices under a closed **Each creature's choice**
+disclosure and are not numbered keys. Replay and Study keep them listed, since
+recorded policy probabilities attach to them. **Pass turn** (F6) passes
 priority until the turn ends.
 
 Keys: `1`–`9` choose a numbered choice, Space presses the primary button (or
 returns the board to now while looking back, unless a control with its own
-action has focus), F6 passes the turn, ← and → step through the history, and
-Escape closes an open list or, with none open, returns the board to now.
+action has focus), F6 passes the turn, ← and → step through the history, `?`
+opens the shortcuts sheet (which also lists drag gestures), and Escape cancels
+an active drag, closes an open list or, with none open, returns the board to
+now — cancelling a drag does not also close a menu or clear a click-selected
+blocker. Dragging adds no actions a click or key cannot take: short clicks
+still act as clicks, floating card inspection stays closed mid-drag, a new
+frame, disconnect or looking back cancels a drag with nothing sent, and
+read-only recordings and Watch never start a drag. With reduced motion, dragged
+cards, lines and selection boxes still follow the pointer directly, without the
+return-to-hand or post-drop travel transitions.
 **Menu** holds the session controls, priority stops, the sharing and Study
 tools and feedback.
 
@@ -802,14 +857,16 @@ outputs are not reconstructed. See [Inspect a replay](#inspect-a-replay).
 ### Previewing payments
 
 You control two Mountains and a Forest, all untapped, and hold Badgermole Cub
-(`{1}{G}`). Point at the Cub in your hand, or focus it. The lands the
+(`{1}{G}`). Point at the Cub in your hand, focus it, or drag it toward the
+battlefield. The lands the
 automatic payer would tap get a dashed outline and a mark with their order and
 what each adds: the first Mountain `1 {R}`, the Forest `2 {G}`. A planned land
 in a pile of identical lands leaves the pile while the plan is shown, so each
 planned land has its own outline and its mark sits at the same corner of its
 art. Nothing has
-happened yet; pointing and focusing send no action. Pointing at a row of **All
-legal choices** previews that choice the same way.
+happened yet; pointing, focusing and dragging before release send no action.
+Pointing at a row of **All legal choices**, or snapping a targeting line onto a
+target that previews a payment, previews that choice the same way.
 
 Cast the Cub. At the payment prompt the same lands stay dashed and the primary
 button reads **Pay {1}{G}**; its accessible name reads the plan, "Pay {1}{G} ·

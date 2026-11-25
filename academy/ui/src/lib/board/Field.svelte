@@ -43,11 +43,14 @@
     draft?: { places: Map<number, 'can' | 'in' | 'armed'>; notes: Map<number, string> } | null;
     /** Departed creatures shown as dashed ghost slots on a death stop so no surviving card slides under their rule tag. */
     deaths?: readonly DeathMark[];
+    sources?: ReadonlySet<number>;
+    connectTargets?: ReadonlySet<number>;
+    drop?: ReadonlySet<number>;
     onactivate: (item: PermanentItem, element: HTMLElement) => void;
     onpreview: (item: PermanentItem | null, element: HTMLElement | null) => void;
   }
 
-  let { piles, label, limits, live, asked, touched, beat = new Set(), damage, stopDeltas, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, deaths = [], onactivate, onpreview }: Props = $props();
+  let { sources, connectTargets, drop, piles, label, limits, live, asked, touched, beat = new Set(), damage, stopDeltas, planned, unpiled, toward, align = 'start', names, acting = false, targeted = new Set(), draft = null, deaths = [], onactivate, onpreview }: Props = $props();
 
   const shown = $derived(unpiled === null ? piles : unpilePlanned(piles, unpiled));
 
@@ -109,6 +112,7 @@
               {live}
               draft={draft?.places.get(item.permanent.id) ?? null}
               note={draft?.notes.get(item.permanent.id) ?? null}
+              connectSource={sources?.has(item.permanent.id)} connectTarget={connectTargets?.has(item.permanent.id)} drop={drop?.has(item.permanent.id)}
               asked={asked.has(item.permanent.id)}
               touched={touched.has(item.permanent.id)}
               beat={beat.has(item.permanent.id)}

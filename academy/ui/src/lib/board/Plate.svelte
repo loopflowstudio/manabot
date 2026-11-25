@@ -24,13 +24,14 @@
     /** Highlighted while hovering a target choice naming this player. */
     pointed?: boolean;
     side: 'you' | 'opponent';
+    drop?: boolean;
     onactivate: (element: HTMLElement) => void;
     onzone: (zone: string, cards: CardState[], element: HTMLElement) => void;
     ondeck?: () => void;
     deckOpen?: boolean;
   }
 
-  let { player, name, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
+  let { drop = false, player, name, caption, offers, live, damage = 0, stopLifeDelta = 0, choosing = false, pointed = false, side, onactivate, onzone, ondeck, deckOpen = false }: Props = $props();
 
   const hand = $derived(player.zone_counts.HAND ?? player.hand.length + (player.hand_hidden_count ?? 0));
   // An opponent's hand cards this viewer may see (Show both hands, or a card
@@ -66,6 +67,7 @@
     aria-disabled={!offers.length}
     data-offer-count={offers.length}
     aria-label={label}
+    data-drop={drop || undefined}
     data-testid="player-target"
     onclick={event => onactivate(event.currentTarget)}
   >
