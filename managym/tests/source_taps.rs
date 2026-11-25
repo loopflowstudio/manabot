@@ -751,6 +751,156 @@ fn ward_offers_per_source_taps_on_real_choice_and_skips_when_forced() {
 }
 
 #[test]
+fn partial_multi_tap_resolution_payments_skip_redundant_color_modals() {
+    let player = PlayerId(0);
+    // TurnFaceUp {2}{W} with Plains + Kyoshi Village + Mountain + Forest:
+    // tapping Plains ({W} in pool) then Kyoshi Village leaves {1} under either
+    // {G} or {W}, so the {G}/{W} modal skips and Mountain vs Forest stays open.
+    let mut turn_up = payment_position(
+        "Cat Collector",
+        &["Plains", "Kyoshi Village", "Mountain", "Forest"],
+    );
+    let card = turn_up
+        .state
+        .zones
+        .zone_objects(managym::state::zone::ZoneType::Hand, player)
+        .iter()
+        .copied()
+        .next()
+        .unwrap();
+    let face_down = turn_up.manifest(card, player);
+    turn_up.scenario_refresh_priority().unwrap();
+    let index = turn_up
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+        .unwrap();
+    turn_up.step(index).unwrap();
+    tap(&mut turn_up, "Plains");
+    let dual = payment_labels(&turn_up)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    turn_up.step(dual).unwrap();
+    // Skipped the color modal; Mountain and Forest remain offered beside PayCost.
+    let offers = taps(&turn_up);
+    assert_eq!(offers.len(), 2, "{offers:?}");
+    tap(&mut turn_up, "Mountain");
+    assert!(!turn_up.state[face_down].is_face_down());
+    assert_eq!(turn_up.state.players[0].mana_pool.total(), 0);
+    assert_eq!(
+        untapped(&turn_up)
+            .into_iter()
+            .filter(|name| name != "Cat Collector")
+            .collect::<Vec<_>>(),
+        ["Forest"]
+    );
+
+    // Multi-unit remaining source (Sol Ring) can overshoot into floating mana,
+    // so tapping Kyoshi Village beside Plains + Sol Ring keeps the color modal.
+    let mut with_sol_ring =
+        payment_position("Cat Collector", &["Plains", "Kyoshi Village", "Sol Ring"]);
+    let card = with_sol_ring
+        .state
+        .zones
+        .zone_objects(managym::state::zone::ZoneType::Hand, player)
+        .iter()
+        .copied()
+        .next()
+        .unwrap();
+    let face_down = with_sol_ring.manifest(card, player);
+    with_sol_ring.scenario_refresh_priority().unwrap();
+    let index = with_sol_ring
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| matches!(a, Action::TurnFaceUp { object, .. } if *object == face_down))
+        .unwrap();
+    with_sol_ring.step(index).unwrap();
+    tap(&mut with_sol_ring, "Plains");
+    let dual = payment_labels(&with_sol_ring)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    with_sol_ring.step(dual).unwrap();
+    assert_eq!(payment_labels(&with_sol_ring), ["Add {G}", "Add {W}"]);
+
+    // Optional resolution payment {4} (Mystic Remora trigger) with Plains +
+    // Kyoshi Village + Mountain + Forest + Island: tapping Plains then Kyoshi
+    // Village skips the {G}/{W} modal and keeps the remaining land choice open.
+    let deck = [
+        ("Mountain", 12),
+        ("Forest", 8),
+        ("Island", 8),
+        ("Plains", 8),
+        ("Kyoshi Village", 4),
+        ("Lightning Bolt", 4),
+        ("Mystic Remora", 4),
+    ];
+    let mut remora = position(
+        &["Plains", "Kyoshi Village", "Mountain", "Forest", "Island"],
+        &deck,
+        "Lightning Bolt",
+    );
+    remora
+        .scenario_force_battlefield(PlayerId(1), "Mystic Remora", true)
+        .unwrap();
+    remora.state.players[0].mana_pool = Mana::parse("R").into();
+    remora.scenario_refresh_priority().unwrap();
+    cast(&mut remora);
+    let target = remora
+        .action_space()
+        .unwrap()
+        .actions
+        .iter()
+        .position(|a| {
+            matches!(
+                a,
+                Action::ChooseTarget {
+                    target: managym::state::game_object::Target::Player(PlayerId(1)),
+                    ..
+                }
+            )
+        })
+        .unwrap();
+    remora.step(target).unwrap();
+    // Pass priority twice to resolve Mystic Remora's trigger into the {4} payment.
+    for _ in 0..4 {
+        if remora
+            .action_space()
+            .unwrap()
+            .actions
+            .contains(&Action::Decline { player })
+        {
+            break;
+        }
+        let pass = remora
+            .action_space()
+            .unwrap()
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PassPriority { .. }))
+            .unwrap();
+        remora.step(pass).unwrap();
+    }
+    tap(&mut remora, "Plains");
+    let dual = payment_labels(&remora)
+        .iter()
+        .position(|l| l == "Tap Kyoshi Village for {G}/{W}")
+        .unwrap();
+    remora.step(dual).unwrap();
+    assert_eq!(taps(&remora).len(), 3);
+    assert!(remora
+        .action_space()
+        .unwrap()
+        .actions
+        .contains(&Action::Decline { player }));
+}
+
+#[test]
 fn granted_mana_does_not_double_count_a_forest_and_treasure_stays_explicit() {
     let deck = [
         ("Forest", 20),

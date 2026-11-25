@@ -762,6 +762,7 @@ impl Game {
         player: PlayerId,
         payment: Payment,
     ) -> Result<(), AgentError> {
+        self.clear_staged_announced_actions();
         let paying = payment.paying_mana();
         let paid = paying && payment.mana().0.mana_value == 0;
         let chooses = !paying || payment.waterbends();
@@ -775,17 +776,16 @@ impl Game {
             player,
             payment: Box::new(payment),
         });
-        let finishes = paid
-            || waterbent
-            || !chooses && {
-                matches!(
-                    self.announced_mana_actions(player, self.pending_payment(player)?)
-                        .as_slice(),
-                    [Action::PayCost { .. }]
-                )
-            };
-        if finishes {
+        if paid || waterbent {
             return self.finish_mana_payment(player);
+        }
+        if !chooses {
+            let actions =
+                self.compute_announced_mana_actions(player, self.pending_payment(player)?);
+            if matches!(actions.as_slice(), [Action::PayCost { .. }]) {
+                return self.finish_mana_payment(player);
+            }
+            self.stage_announced_mana_actions(player, actions);
         }
         Ok(())
     }
@@ -1487,7 +1487,7 @@ impl Game {
         let Some((payer, payment, CostComponent::Mana { cost, help })) = self.paying() else {
             return Vec::new();
         };
-        if payer != player {
+        if payer != player || *help == Help::default() {
             return Vec::new();
         }
         let (_, waterbend) = payment.mana();

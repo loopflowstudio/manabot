@@ -1143,7 +1143,7 @@ impl Game {
                 (ActionSpaceKind::LookAndSelect, actions, Vec::new())
             }
             CostComponent::Mana { .. } => {
-                let actions = self.announced_mana_actions(player, payment);
+                let actions = self.take_announced_mana_actions(player, payment);
                 if payment.waterbends() {
                     (ActionSpaceKind::Waterbend, actions, source_focus())
                 } else {
@@ -1212,6 +1212,7 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
+        self.clear_staged_announced_actions();
         if self.state.opening().is_some() {
             return self.choose_opening(action);
         }

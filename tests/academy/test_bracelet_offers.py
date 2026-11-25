@@ -43,7 +43,6 @@ def equip_both() -> managym.Env:
                 env, managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY, [permanent.id]
             )
             step_action(env, managym.ActionEnum.CHOOSE_TARGET, [ogre])
-            step_action(env, managym.ActionEnum.PAY_COST)
             step_action(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
             step_action(env, managym.ActionEnum.PRIORITY_PASS_PRIORITY)
     return env
@@ -102,7 +101,6 @@ def test_bracelet_cost_labels_bind_the_selected_permanent(
     assert session.env.state_digest() == env.state_digest() == indexed.state_digest()
     for branch in (indexed, env, session.env):
         step_action(branch, managym.ActionEnum.CHOOSE_TARGET)
-        step_action(branch, managym.ActionEnum.PAY_COST)
         paid = branch.observation_for_player(0)
         assert paid.stack_objects[-1].source_permanent_id == ogre.id
         assert {

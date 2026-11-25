@@ -1911,13 +1911,7 @@ impl Game {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
                 focus: source_focus,
-                actions: (0..choices.len())
-                    .filter(|mode| self.mana_choice_completes_payment(*player, &choices[*mode]))
-                    .map(|mode| Action::ChooseMode {
-                        player: *player,
-                        mode,
-                    })
-                    .collect(),
+                actions: self.mana_choice_actions(*player, choices),
             },
             Decision::ChooseObject {
                 player, optional, ..
